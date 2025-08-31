@@ -1,9 +1,9 @@
-import type {Route} from "./+types/home";
-import {Welcome} from "~/welcome/welcome";
+import type { Route } from "./+types/home";
+import { Welcome } from "~/welcome/welcome";
 
 export function meta({}: Route.MetaArgs) {
     return [
-        {title: "Sekai Beyond"},
+        {title: "Sekai Beyond ✨彼世界"},
         {name: "description", content: "Where Anime Dreams Find Their Home!"},
     ];
 }
