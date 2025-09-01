@@ -1,13 +1,13 @@
 import React from 'react';
-import { Hero } from "@/../components/Hero";
-import { Stats } from "@/../components/Stats";
-import { About } from "@/../components/About";
-import { Events } from "@/../components/Events";
-import { Convention } from "@/../components/Convention";
-import { Team } from "@/../components/Team";
-import { Contact } from "@/../components/Contact";
-import { Footer } from "@/../components/Footer";
-import { Navigation } from "@/../components/Navigation";
+import { Hero } from "@/../components/main/Hero";
+import { Stats } from "@/../components/main/Stats";
+import { About } from "@/../components/main/About";
+import { Events } from "@/../components/main/Events";
+import { Convention } from "@/../components/main/Convention";
+import { Team } from "@/../components/main/Team";
+import { Contact } from "@/../components/main/Contact";
+import { Footer } from "@/../components/main/Footer";
+import { Navigation } from "@/../components/main/Navigation";
 
 export const Welcome = () => {
     return (

@@ -4,8 +4,8 @@ import { LINKS } from "./Constants";
 export const Convention = () => (
     <section id="convention" className="convention-section section">
         <div className="section-header">
-            <h2 className="section-title">Annual Convention</h2>
-            <h3 className="section-title-cn">年度动漫展</h3>
+            <h2 className="section-title">Annual Anime Convention</h2>
+            <h3 className="section-title-cn">年度漫展</h3>
         </div>
         <div className="convention-banner">
             <div className="con-decorations">
