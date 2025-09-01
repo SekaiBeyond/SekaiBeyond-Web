@@ -1,7 +1,7 @@
 import { SiDiscord, SiInstagram, SiLinkedin, SiXiaohongshu } from "react-icons/si";
 import { MdMail } from "react-icons/md";
 import React from "react";
-import { LINKS } from "./Constants";
+import { LINKS } from "../Constants";
 
 export const Contact = () => (
     <section id="contact" className="contact-section section">

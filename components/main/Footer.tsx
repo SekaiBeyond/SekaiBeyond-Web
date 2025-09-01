@@ -1,6 +1,6 @@
 import { HashLink } from "react-router-hash-link";
 import React from "react";
-import { LINKS } from "./Constants";
+import { LINKS } from "../Constants";
 
 export const Footer = () => (
     <footer>
@@ -8,7 +8,7 @@ export const Footer = () => (
         <div className="footer-links">
             <HashLink to="#about" className="footer-link">About 关于</HashLink>
             <HashLink to="#events" className="footer-link">Events 活动</HashLink>
-            <HashLink to="#convention" className="footer-link">Convention 年会</HashLink>
+            <HashLink to="#convention" className="footer-link">Convention 漫展</HashLink>
             <HashLink to="#team" className="footer-link">Team 团队</HashLink>
             <a href={LINKS.huskylink} className="footer-link">HuskyLink</a>
         </div>

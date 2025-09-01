@@ -1,5 +1,5 @@
 import React from "react";
-import { OFFICERS } from "./Constants"
+import { OFFICERS } from "../Constants"
 
 export const Team = () => (
     <section id="team" className="section">

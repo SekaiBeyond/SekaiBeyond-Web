@@ -1,5 +1,5 @@
 import React from "react";
-import { LINKS } from "./Constants";
+import { LINKS } from "../Constants";
 
 export const Convention = () => (
     <section id="convention" className="convention-section section">
@@ -65,7 +65,7 @@ export const Convention = () => (
                 </div>
                 <div className="hero-buttons" style={{marginTop: '40px'}}>
                     <a href={LINKS.buyTicket} className="btn btn-primary">Get Tickets 购票</a>
-                    <a href="#" className="btn btn-secondary">Learn More 了解更多</a>
+                    <a href="/con" className="btn btn-secondary">Learn More 了解更多</a>
                 </div>
             </div>
         </div>

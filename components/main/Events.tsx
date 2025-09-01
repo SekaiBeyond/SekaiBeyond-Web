@@ -1,5 +1,5 @@
 import React from "react";
-import { ALL_EVENTS } from "./Constants";
+import { ALL_EVENTS } from "../Constants";
 
 export const Events = () => (
     <section id="events" className="section">

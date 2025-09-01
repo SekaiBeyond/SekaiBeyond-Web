@@ -26,7 +26,7 @@ export const Navigation = () => {
                     <li><HashLink to="#home" className="nav-link">Home</HashLink></li>
                     <li><HashLink to="#about" className="nav-link">About 关于</HashLink></li>
                     <li><HashLink to="#events" className="nav-link">Events 活动</HashLink></li>
-                    <li><HashLink to="#convention" className="nav-link">Convention 年会</HashLink></li>
+                    <li><HashLink to="#convention" className="nav-link">Convention 漫展</HashLink></li>
                     <li><HashLink to="#team" className="nav-link">Team 团队</HashLink></li>
                     <li><HashLink to="#contact" className="nav-link">Contact 联系</HashLink></li>
                 </ul>
