@@ -14,7 +14,7 @@ export const Footer = () => (
         </div>
         <p className="footer-text">
             © 2025 Sekai Beyond 彼世界动漫社<br/>
-            A Registered Student Organization at the University of Washington<br/>
+            A Registered Student Organization at University of Washington<br/>
             华盛顿大学注册学生组织
         </p>
     </footer>

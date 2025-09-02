@@ -1,8 +1,8 @@
 import React from "react";
-import { LINKS } from "../Constants";
+import { CONVENTION_DATE, LINKS } from "../Constants";
 
 export const Convention = () => (
-    <section id="convention" className="convention-section section">
+    <section id="convention" className="section">
         <div className="section-header">
             <h2 className="section-title">Annual Anime Convention</h2>
             <h3 className="section-title-cn">年度漫展</h3>
@@ -24,10 +24,18 @@ export const Convention = () => (
             </div>
             <div style={{position: 'relative', zIndex: 2}}>
                 <span className="convention-label">Coming Soon 即将到来</span>
-                <h2 className="convention-title">SEKAI BEYOND CON 2025</h2>
-                <p className="convention-title-cn">彼世界动漫游戏展 2025</p>
+                <h2 className="convention-title">SEKAI BEYOND CON {CONVENTION_DATE.getFullYear()}</h2>
+                <p className="convention-title-cn">彼世界动漫游戏展 {CONVENTION_DATE.getFullYear()}</p>
                 <p style={{fontSize: '24px', color: '#ff8e53', fontWeight: '700', marginBottom: '20px'}}>
-                    October 11, 2025 • 2025年10月11日
+                    {CONVENTION_DATE.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    })} • {CONVENTION_DATE.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                })}
                 </p>
                 <p style={{
                     fontSize: '18px',
@@ -65,7 +73,7 @@ export const Convention = () => (
                 </div>
                 <div className="hero-buttons" style={{marginTop: '40px'}}>
                     <a href={LINKS.buyTicket} className="btn btn-primary">Get Tickets 购票</a>
-                    <a href="/con" className="btn btn-secondary">Learn More 了解更多</a>
+                    <a href={LINKS.buyTicket} className="btn btn-secondary">Learn More 了解更多</a>
                 </div>
             </div>
         </div>

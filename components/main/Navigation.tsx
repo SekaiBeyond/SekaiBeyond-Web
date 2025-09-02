@@ -30,7 +30,7 @@ export const Navigation = () => {
                     <li><HashLink to="#team" className="nav-link">Team 团队</HashLink></li>
                     <li><HashLink to="#contact" className="nav-link">Contact 联系</HashLink></li>
                 </ul>
-                <HashLink to="#contact" className="join-btn">
+                <HashLink to="#contact" className="join-btn common-btn">
                     <span>Join 加入我们</span>
                     <span>✨</span>
                 </HashLink>

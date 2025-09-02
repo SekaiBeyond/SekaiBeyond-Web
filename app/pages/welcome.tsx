@@ -1,12 +1,12 @@
 import { Hero } from "~/../components/main/Hero";
 import { Stats } from "~/../components/main/Stats";
 import { About } from "~/../components/main/About";
-import { Events } from "~/../components/main/Events";
 import { Convention } from "~/../components/main/Convention";
 import { Team } from "~/../components/main/Team";
 import { Contact } from "~/../components/main/Contact";
 import { Footer } from "~/../components/main/Footer";
 import { Navigation } from "~/../components/main/Navigation";
+import { PastEvents } from "../../components/main/PastEvents";
 
 export const Welcome = () => (
     <>
@@ -23,7 +23,7 @@ export const Welcome = () => (
         <About/>
 
         {/* Events Section */}
-        <Events/>
+        <PastEvents/>
 
         {/* Convention Section */}
         <Convention/>

@@ -9,7 +9,7 @@ export const Stats = () => (
                 <div className="stat-label-cn">活跃成员</div>
             </div>
             <div className="stat-item">
-                <div className="stat-number">50+</div>
+                <div className="stat-number">20+</div>
                 <div className="stat-label">Events Per Year</div>
                 <div className="stat-label-cn">年度活动</div>
             </div>
@@ -19,7 +19,7 @@ export const Stats = () => (
                 <div className="stat-label-cn">成立年数</div>
             </div>
             <div className="stat-item">
-                <div className="stat-number">500+</div>
+                <div className="stat-number">200+</div>
                 <div className="stat-label">Convention Attendees</div>
                 <div className="stat-label-cn">年会参与者</div>
             </div>

@@ -14,25 +14,25 @@ export const Contact = () => (
         </div>
         <div style={{maxWidth: '800px', margin: '0 auto'}}>
             <div className="social-links-grid">
-                <a className="social-card" href={LINKS.discord}>
+                <a className="social-card" href={LINKS.discord} target="_blank">
                     <SiDiscord className="social-icon"/>
                     <div className="social-name">Discord</div>
                 </a>
-                <a className="social-card" href={LINKS.instagram}>
+                <a className="social-card" href={LINKS.instagram} target="_blank">
                     <SiInstagram className="social-icon"/>
                     <div className="social-name">Instagram</div>
                 </a>
-                <a className="social-card" href={LINKS.xiaohongshu}>
+                <a className="social-card" href={LINKS.xiaohongshu} target="_blank">
                     <SiXiaohongshu className="social-icon"/>
                     <div className="social-name">小红书</div>
                 </a>
-                <a className="social-card" href={LINKS.linkedin}>
+                <a className="social-card" href={LINKS.linkedin} target="_blank">
                     <SiLinkedin className="social-icon"/>
-                    <div className="social-name">LinkedIn</div>
+                    <div className="social-name">LinkedIn 领英</div>
                 </a>
-                <a className="social-card" href={LINKS.email}>
+                <a className="social-card" href={LINKS.email} target="_blank">
                     <MdMail className="social-icon"/>
-                    <div className="social-name">邮件</div>
+                    <div className="social-name">Email 邮件</div>
                 </a>
             </div>
         </div>
