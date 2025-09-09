@@ -2,42 +2,46 @@ export const Tickets = () => {
 
     const ticketTypes = [
         {
-            type: 'Single Day',
-            typeCn: '单日票',
-            price: '$25',
-            priceCn: '约￥180',
+            type: 'UW Student Admission',
+            typeCn: '华大学生票',
+            price: '$13',
+            priceCn: '约￥95',
             features: [
-                'Access to all events for one day 单日所有活动',
+                'Valid UW student ID required 需出示有效华大学生证',
+                'Access to all events 所有活动入场',
                 'Vendor hall access 商贩大厅入场',
-                'Panel attendance 参加讨论会',
-                'Gaming zone access 游戏区入场'
+                'Cosplay contest participation Cosplay大赛参与',
+                'Guest meet & greets 嘉宾见面会',
+                'Student networking opportunities 学生社交机会'
             ]
         },
         {
-            type: 'Weekend Pass',
-            typeCn: '周末通票',
-            price: '$60',
-            priceCn: '约￥430',
+            type: 'General Public Admission',
+            typeCn: '大众票',
+            price: '$21',
+            priceCn: '约￥150',
             featured: true,
             features: [
-                'All 3 days access 三天通票',
-                'Priority seating at panels 讨论会优先座位',
-                'Exclusive con badge 独家徽章',
-                'Early vendor hall entry 提前进入商贩大厅',
-                '10% merchandise discount 周边9折优惠'
+                'Full convention access 全馆通行',
+                'Access to all events 所有活动入场',
+                'Vendor hall access 商贩大厅入场',
+                'Cosplay contest participation Cosplay大赛参与',
+                'Guest meet & greets 嘉宾见面会',
+                'Networking opportunities 社交机会'
             ]
         },
         {
-            type: 'VIP Pass',
-            typeCn: 'VIP通票',
-            price: '$120',
-            priceCn: '约￥860',
+            type: 'Vendor',
+            typeCn: '摊贩',
+            price: 'Closed',
+            priceCn: '已关闭',
             features: [
-                'All weekend pass benefits 所有周末通票福利',
-                'Guest meet & greet 嘉宾见面会',
-                'VIP lounge access VIP休息室',
-                'Exclusive merchandise 独家周边',
-                'Front row concert seats 演唱会前排座位'
+                'Registration closed 报名已截止',
+                'Contact us for waitlist 候补名单请联系我们',
+                'Access to all events 所有活动入场',
+                'Cosplay contest participation Cosplay大赛参与',
+                'Guest meet & greets 嘉宾见面会',
+                'Networking opportunities 社交机会'
             ]
         }
     ];
@@ -63,7 +67,7 @@ export const Tickets = () => {
                             <li key={i}>{feature}</li>
                         ))}
                     </ul>
-                    <button className="ticket-btn">Select 选择</button>
+                    <button className="ticket-btn common-btn">Select 选择</button>
                 </div>
             ))}
         </div>

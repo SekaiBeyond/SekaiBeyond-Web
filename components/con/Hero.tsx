@@ -44,7 +44,8 @@ export const Hero = () => {
             <div className="hero-content">
                 <div className="con-badge">
                     <span>🌸</span>
-                    <span className="con-badge-text">Pacific Northwest's Biggest Student Con</span>
+                    <span
+                        className="con-badge-text">One of the Biggest Pacific Northwest's Student Anime Conventions</span>
                     <span>🌸</span>
                 </div>
                 <h1 className="hero-title">SEKAI BEYOND CON</h1>

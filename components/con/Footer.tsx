@@ -1,5 +1,7 @@
-export const Footer = () => {
-    return (<footer>
+import { RSO_EMAIL } from "../Constants";
+
+export const Footer = () => (
+    <footer>
         <div className="footer-content">
             <div className="footer-logo">SEKAI BEYOND CON 2025</div>
             <div className="social-links">
@@ -10,10 +12,10 @@ export const Footer = () => {
                 <a href="#" className="social-link">📱</a>
             </div>
             <p className="footer-info">
-                Organized by Sekai Beyond RSO • University of Washington<br/>
-                由华盛顿大学世界之外社团主办<br/>
+                Organized by Sekai Beyond, a RSO @ University of Washington<br/>
+                由华盛顿大学的彼世界动漫社主办<br/>
                 <br/>
-                Contact: sekaicon@uw.edu | 联系: sekaicon@uw.edu
+                Contact: {RSO_EMAIL} | 联系: {RSO_EMAIL}
             </p>
             <div className="footer-links">
                 <a href="#" className="footer-link">FAQ 常见问题</a>
@@ -21,9 +23,7 @@ export const Footer = () => {
                 <a href="#" className="footer-link">Vendors 商家</a>
                 <a href="#" className="footer-link">Volunteers 志愿者</a>
                 <a href="#" className="footer-link">Sponsors 赞助商</a>
-                <a href="#" className="footer-link">小红书</a>
-                <a href="#" className="footer-link">Bilibili</a>
             </div>
         </div>
-    </footer>)
-}
+    </footer>
+)

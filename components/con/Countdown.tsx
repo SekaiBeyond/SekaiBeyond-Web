@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CONVENTION_DATE } from "../Constants"
 
 export const Countdown = () => {
 
@@ -12,7 +13,7 @@ export const Countdown = () => {
     useEffect(() => {
 
         // Countdown timer
-        const eventDate = new Date('2025-10-11T12:00:00').getTime();
+        const eventDate = CONVENTION_DATE.getTime();
         const timer = setInterval(() => {
             const now = new Date().getTime();
             const distance = eventDate - now;
