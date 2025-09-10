@@ -95,3 +95,141 @@ export const PAST_EVENTS = [
         icon: '/images/events/husky_expo_2025.jpg',
     }
 ];
+
+export const TICKET_TYPES = [
+    {
+        type: 'UW Student Admission',
+        typeCn: '华大学生票',
+        price: '$13',
+        priceCn: '约￥95',
+        features: [
+            'Valid UW student ID required 需出示有效华大学生证',
+            'Access to all events 所有活动入场',
+            'Vendor hall access 商贩大厅入场',
+            'Cosplay contest participation Cosplay大赛参与',
+            'Guest meet & greets 嘉宾见面会',
+            'Student networking opportunities 学生社交机会'
+        ]
+    },
+    {
+        type: 'General Public Admission',
+        typeCn: '大众票',
+        price: '$21',
+        priceCn: '约￥150',
+        featured: true,
+        features: [
+            'Full convention access 全馆通行',
+            'Access to all events 所有活动入场',
+            'Vendor hall access 商贩大厅入场',
+            'Cosplay contest participation Cosplay大赛参与',
+            'Guest meet & greets 嘉宾见面会',
+            'Networking opportunities 社交机会'
+        ]
+    },
+    {
+        type: 'Vendor',
+        typeCn: '摊贩',
+        price: 'Closed',
+        priceCn: '已关闭',
+        features: [
+            'Registration closed 报名已截止',
+            'Contact us for waitlist 候补名单请联系我们',
+            'Access to all events 所有活动入场',
+            'Cosplay contest participation Cosplay大赛参与',
+            'Guest meet & greets 嘉宾见面会',
+            'Networking opportunities 社交机会'
+        ]
+    }
+];
+
+export const CON_GUESTS = [
+    {
+        name: 'Gavin',
+        title: 'Bilibili Ambassador 哔站大使',
+        bio: 'Famous for hosting bilibili events',
+        icon: '/images/guests/Gavin.jpg',
+    },
+    {
+        name: 'Yuzhi',
+        title: 'Furry 毛茸茸',
+        bio: 'Creator of amazing furry suit and furry content',
+        icon: '/images/guests/Yuzhi.jpg',
+    },
+    {
+        name: 'DJ Miku',
+        title: 'J-Pop Artist 歌手',
+        bio: 'Performs anime songs and Vocaloid covers',
+        icon: ''
+    },
+    {
+        name: 'Luna Chen',
+        title: 'Cosplay Queen Cosplay达人',
+        bio: 'International cosplay competition champion',
+        icon: ''
+    },
+    {
+        name: 'Ken Zhang',
+        title: 'Game Developer 游戏开发者',
+        bio: 'Director of popular anime-style games',
+        icon: ''
+    },
+    {
+        name: 'Amy Wang',
+        title: 'Donghua Creator 国漫创作者',
+        bio: 'Rising star in Chinese animation',
+        icon: ''
+    }
+];
+
+export interface ConSchedule {
+    time: string;
+    title: string;
+    titleCn: string;
+    description: string;
+    descriptionCn: string;
+}
+
+export const CON_SCHEDULES: ConSchedule[] = [
+    {
+        time: '11:00 AM',
+        title: 'Door Open',
+        titleCn: '开门入场',
+        description: 'Welcome to Sekai Beyond Con! Registration and check-in begins.',
+        descriptionCn: '欢迎来到彼世界动漫展！报到和签到开始。'
+    },
+    {
+        time: '12:00 - 1:00 PM',
+        title: 'Band Performance',
+        titleCn: '乐队表演',
+        description: 'Opening ceremony featuring live J-Pop and anime song performances by local bands.',
+        descriptionCn: '开幕式现场J-Pop和动漫歌曲表演，由本地乐队演出。'
+    },
+    {
+        time: '1:30 – 4:10 PM',
+        title: 'Kirakira IdolFest',
+        titleCn: '闪闪偶像节',
+        description: 'Main event featuring idol performances, dance battles, and audience interaction activities.',
+        descriptionCn: '主要活动包括偶像表演、舞蹈对决和观众互动环节。'
+    },
+    {
+        time: '4:15 – 4:45 PM',
+        title: 'Cosplay Contest',
+        titleCn: 'Cosplay大赛',
+        description: 'Annual cosplay competition with prizes for best costume, craftsmanship, and performance.',
+        descriptionCn: '年度Cosplay比赛，设有最佳服装、工艺和表演奖项。'
+    },
+    {
+        time: '4:45 – 5:45 PM',
+        title: 'Random Dance',
+        titleCn: '随机舞蹈',
+        description: 'Join the crowd for spontaneous K-Pop and J-Pop dance sessions. All skill levels welcome!',
+        descriptionCn: '加入人群进行即兴K-Pop和J-Pop舞蹈。欢迎所有水平的参与者！'
+    },
+    {
+        time: '5:45 – 6:00 PM',
+        title: 'Door close',
+        titleCn: '闭门离场',
+        description: 'Thank you for attending! Safe travels and see you next year.',
+        descriptionCn: '感谢您的参与！一路平安，明年再见。'
+    }
+]

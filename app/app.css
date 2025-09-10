@@ -1596,7 +1596,7 @@ footer {
     font-family: 'Bubblegum Sans', cursive;
     font-size: 20px;
     color: #ff8e53;
-    min-width: 110px;
+    min-width: 150px;
     padding-top: 5px;
 }
 
@@ -1966,34 +1966,34 @@ footer {
         gap: 30px;
         padding: 0 20px 40px;
     }
-    
+
     .venue-item {
         padding: 20px;
         flex-direction: column;
         text-align: center;
         gap: 15px;
     }
-    
+
     .venue-item:hover {
         transform: translateY(-5px);
     }
-    
+
     .venue-icon {
         font-size: 40px;
     }
-    
+
     .venue-name {
         font-size: 28px;
     }
-    
+
     .venue-name-cn {
         font-size: 16px;
     }
-    
+
     .venue-map-container {
         min-height: 300px;
     }
-    
+
     .venue-map {
         min-height: 300px;
     }
@@ -2003,11 +2003,11 @@ footer {
     .venue-header {
         padding: 20px;
     }
-    
+
     .venue-name {
         font-size: 24px;
     }
-    
+
     .venue-name-cn {
         font-size: 14px;
     }
