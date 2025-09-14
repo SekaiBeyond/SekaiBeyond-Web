@@ -1,5 +1,4 @@
 import { Hero } from "~/../components/main/Hero";
-import { Stats } from "~/../components/main/Stats";
 import { About } from "~/../components/main/About";
 import { Convention } from "~/../components/main/Convention";
 import { Team } from "~/../components/main/Team";
@@ -15,9 +14,6 @@ export const Welcome = () => (
 
         {/* Hero Section */}
         <Hero/>
-
-        {/* Stats Section */}
-        <Stats/>
 
         {/* About Section */}
         <About/>
