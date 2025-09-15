@@ -14,16 +14,23 @@ export const CONVENTION_DATE = new Date('2025-10-11T12:00:00');
 
 interface Officer {
     name: string;
+    nameCn?: string;
     role: string;
     roleCn: string;
     src: string;
 }
 
 export const OFFICERS: Officer[] = [
-    {name: 'Buzzly 小布', role: 'President', roleCn: '社长', src: '/images/officers/Officer_Avatar_Angel.jpg'},
-    {name: 'Jason Chen', role: 'Secretary', roleCn: '秘书', src: '/images/officers/Officer_Avatar_JasonChen.jpg'},
     {
-        name: 'Ernin Meng',
+        name: 'Buzzly',
+        nameCn: "小布",
+        role: 'President',
+        roleCn: '社长',
+        src: '/images/officers/Officer_Avatar_Angel.jpg'
+    },
+    {name: 'Jason', role: 'Secretary', roleCn: '秘书', src: '/images/officers/Officer_Avatar_JasonChen.jpg'},
+    {
+        name: 'Ernin',
         role: 'External Relations',
         roleCn: '对外关系',
         src: '/images/officers/Officer_Avatar_ErninMeng.jpg'
@@ -31,12 +38,12 @@ export const OFFICERS: Officer[] = [
     {name: 'Alina', role: 'Art', roleCn: '美术', src: '/images/officers/Officer_Avatar_AlinaYuan.jpg'},
     {name: 'DEMO', role: 'Art', roleCn: '美术', src: '/images/officers/Officer_Avatar_EvaChen.jpg'},
     {
-        name: 'Winter',
+        name: 'Wynter',
         role: 'Events Planning & Technical Advisor',
         roleCn: '活动策划 & 技术顾问',
         src: '/images/officers/Officer_Avatar_WynterLin.jpg'
     },
-    {name: 'Anne He', role: 'Social Media', roleCn: '社交媒体', src: '/images/officers/Officer_Avatar_Anne.jpg'}
+    {name: 'Anne', role: 'Social Media', roleCn: '社交媒体', src: '/images/officers/Officer_Avatar_Anne.jpg'}
 ];
 
 export interface PastEvent {
@@ -59,8 +66,8 @@ export const PAST_EVENTS: PastEvent[] = [
         titleCn: '迷宫饭Paaaarty!',
         date: '2025-8-8',
         location: '4801 24th Ave NE',
-        description: 'An immersive culinary adventure inspired by the beloved manga and anime series. Guests enjoyed themed dishes recreating iconic recipes from the dungeon, interactive cooking demonstrations, and a cozy atmosphere perfect for fans to gather and share their love for both food and fantasy adventures.',
-        descriptionCn: '受到热门漫画和动画启发的沉浸式美食冒险。客人们品尝了重现地牢中标志性食谱的主题菜肴，观看了互动烹饪演示，并在完美的舒适氛围中聚集，分享对美食和奇幻冒险的热爱。',
+        description: 'Hosting a wide variety of anime-themed events has always been at the core of the Another World planning team\'s mission. This Delicious in Dungeon-themed event successfully brought together many fans of the series. Everyone enjoyed the official board game and enthusiastically participated in a cooking competition. Amidst the aroma of delicious food, guests lost themselves in role-playing, strategic board games, and thrilling RPG sessions…',
+        descriptionCn: '举办丰富多样的动漫主题活动，始终是彼世界策划团队的核心目标。本次迷宫饭主题活动成功聚集了许多热爱这部作品的同好，大家一同体验了官方正版桌游，并积极参与了趣味十足的厨艺比赛。一边品尝香气四溢的美食，一边在跑团、战略桌游，和角色扮演中迷失自我……',
         icon: "/images/events/delicious_in_dungeon_party.jpg",
     },
     {
@@ -70,8 +77,8 @@ export const PAST_EVENTS: PastEvent[] = [
         titleCn: '旅鸟X彼世界 快闪女仆咖啡',
         date: '2025-7-26',
         location: 'Hobo Bird 旅烏, University District',
-        description: 'Collaborative maid cafe experience bringing together authentic Japanese service culture with local fusion flavors. Featuring special themed menu items, interactive performances, and immersive moe atmosphere that transported guests to the heart of Akihabara.',
-        descriptionCn: '融合正宗日式服务文化与本地创新口味的女仆咖啡体验。特色主题菜单、互动表演和沉浸式萌系氛围，让宾客仿佛置身秋叶原的中心。',
+        description: 'In the summer of 2025, to provide our guests with more detailed service and a better experience, we offered another pop-up maid cafe with better experience. Our maids performed j-pop dances, and did their magic, making the Basque cheesecake and matcha latte taste even more delicious. At Hobo Bird Anime Store, we spent a chill afternoon altogether.',
+        descriptionCn: '在2025的暑期，为给大家提供更加细致的服务和更好的体验，我们举办了第二次pop-up cafe，并与Hobo Bird动漫店合作。这一次，我们为参与者提供更长时间的陪伴并给予更多的服务项目。女仆们表演了精彩的节目，还给顾客的食品中施了魔法。巴斯克蛋糕配上抹茶拿铁变得更加美味！动漫店摇身一变成了下午茶餐厅，大家一同度过了一个愉快的下午。',
         icon: "/images/events/maid_cafe_hobo_bird_popup_2025.jpg",
     },
     {
@@ -136,8 +143,8 @@ export const PAST_EVENTS: PastEvent[] = [
         titleCn: 'Husky Expo',
         date: '2025-2-5',
         location: 'Husky Union Building, University of Washington',
-        description: 'University-wide celebration of anime and gaming culture featuring vendor booths, artist alley, cosplay contests, and panel discussions. This student-organized expo showcased the vibrant otaku community on campus with activities ranging from rhythm game tournaments to manga drawing workshops.',
-        descriptionCn: '全校范围的动漫游戏文化庆典，设有摊贩展位、艺术家巷、cosplay比赛和讨论小组。这个学生组织的展览通过从音游锦标赛到漫画绘画工作坊等各种活动，展示了校园里充满活力的御宅文化社区。',
+        description: 'The Husky Expo was the first convention event that Sekai Beyond participated in since its establishment. We promoted our original character Mika and helped ACGN enthusiasts connect with peers with similar hobbies. We also launched our social media channels to the public, which laid a crucial foundation for the community’s future growth.',
+        descriptionCn: 'Husky Expo是彼世界社团建立后参与的首次展会活动。我们大力宣传了自己的原创角色米卡，也让热爱ACGN的伙伴们成功找到了同好。彼世界社交媒体建立，也为后续的社团发展奠定了重要的基础。',
         icon: '/images/events/husky_expo_2025.jpg',
     },
     {

@@ -41,7 +41,7 @@ export const Navigation = () => {
                         {isEnglish ? 'Team' : '幕后团队'}
                     </HashLink></li>
                     <li><HashLink to="#contact" className="nav-link">
-                        {isEnglish ? 'Contact Us' : '联系我们'}
+                        {isEnglish ? 'Follow Us' : '关注我们'}
                     </HashLink></li>
                 </ul>
                 <div className="nav-actions">

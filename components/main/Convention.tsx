@@ -47,6 +47,12 @@ export const Convention = () => {
                     }}>
                         {isEnglish ? "The first-ever student-organized anime convention at UW!" : "华盛顿大学首届学生自主举办的漫展!"}
                     </p>
+                    <div className="convention-poster" style={{marginTop: '40px'}}>
+                        <img
+                            src="/images/convention-poster.jpg"
+                            alt={isEnglish ? "SEKAI BEYOND CON Official Poster" : "彼世界动漫游戏展官方海报"}
+                        />
+                    </div>
                     <div className="convention-features">
                         <div className="con-feature">
                             <div className="con-feature-icon">🎵</div>
@@ -66,8 +72,9 @@ export const Convention = () => {
                         </div>
                     </div>
                     <div className="hero-buttons" style={{marginTop: '40px'}}>
-                        <a href={LINKS.buyTicket} className="btn btn-primary">{isEnglish ? "Get Tickets" : "购票"}</a>
-                        <a href="/con" className="btn btn-secondary">{isEnglish ? "Learn More" : "了解更多"}</a>
+                        <a href={LINKS.buyTicket}
+                           className="btn btn-primary con-btn">{isEnglish ? "Get Tickets" : "购票"}</a>
+                        <a href="/con" className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>
                     </div>
                 </div>
             </div>

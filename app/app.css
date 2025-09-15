@@ -262,6 +262,10 @@ body {
     transform: translateY(-3px);
 }
 
+.con-btn {
+    height: 4rem;
+}
+
 /* Cute mascots */
 .mascot-container {
     position: absolute;
@@ -1759,6 +1763,19 @@ footer {
     color: #7a7a7a;
     line-height: 1.6;
     font-size: 14px;
+}
+
+/* Convention poster styles */
+.convention-poster img {
+    transition: transform 0.3s ease;
+    width: 50%;
+    height: auto;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3)
+}
+
+.convention-poster img:hover {
+    transform: scale(1.05);
 }
 
 /* Schedule Section */

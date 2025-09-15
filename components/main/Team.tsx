@@ -15,7 +15,7 @@ export const Team = () => {
                 {OFFICERS.map((officer, index) => (
                     <div key={index} className="team-card">
                         <img className="team-avatar" src={officer.src} alt={officer.name}/>
-                        <h3 className="team-name">{officer.name}</h3>
+                        <h3 className="team-name">{!isEnglish && officer.nameCn ? officer.nameCn : officer.name}</h3>
                         <p className="team-role">{isEnglish ? officer.role : officer.roleCn}</p>
                     </div>
                 ))}

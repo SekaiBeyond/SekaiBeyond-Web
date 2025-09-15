@@ -41,20 +41,20 @@ export const About = () => {
                     }
                     <div className="about-features">
                         <div className="feature-item">
-                            <span className="feature-icon">🎬</span>
-                            <span className="feature-text">{isEnglish ? "Weekly Anime" : "每周放映"}</span>
-                        </div>
-                        <div className="feature-item">
                             <span className="feature-icon">🎮</span>
-                            <span className="feature-text">{isEnglish ? "Gaming Nights" : "游戏之夜"}</span>
+                            <span className="feature-text">{isEnglish ? "Game Dev" : "游戏开发"}</span>
                         </div>
                         <div className="feature-item">
-                            <span className="feature-icon">🎨</span>
-                            <span className="feature-text">{isEnglish ? "Art Workshop" : "绘画工坊"}</span>
+                            <span className="feature-icon">⛏️</span>
+                            <span className="feature-text">{isEnglish ? "Minecraft Server" : "我的世界"}</span>
                         </div>
                         <div className="feature-item">
-                            <span className="feature-icon">🍱</span>
-                            <span className="feature-text">{isEnglish ? "Cultural Events" : "文化活动"}</span>
+                            <span className="feature-icon">🎤</span>
+                            <span className="feature-text">{isEnglish ? "Idol Performance" : "地偶表演"}</span>
+                        </div>
+                        <div className="feature-item">
+                            <span className="feature-icon">☕</span>
+                            <span className="feature-text">{isEnglish ? "Maid Cafe" : "女仆咖啡"}</span>
                         </div>
                     </div>
                 </div>

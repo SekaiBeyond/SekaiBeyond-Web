@@ -9,7 +9,7 @@ export const Contact = () => {
 
     return (<section id="contact" className="contact-section section">
         <div className="section-header">
-            <h2 className="section-title">{isEnglish ? "Contact Us" : "联系我们"}</h2>
+            <h2 className="section-title">{isEnglish ? "Follow Us" : "关注我们"}</h2>
             <p className="section-subtitle">
                 {isEnglish ? "Follow us on social media for the latest updates and announcements!" : "关注我们的社交媒体，获取最新动态和公告！"}
             </p>
