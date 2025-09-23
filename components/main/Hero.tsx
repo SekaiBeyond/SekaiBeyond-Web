@@ -24,7 +24,7 @@ export const Hero = () => {
             </div>
             <div className="hero-content">
                 <span
-                    className="hero-badge">{isEnglish ? 'An ACG Student Organization @ UW' : '一个华盛顿大学的ACG学生社团'}</span>
+                    className="hero-badge">{isEnglish ? 'Registered Student Organization @ University of Washington' : '华盛顿大学的学生社团'}</span>
                 <div className="hero-title-wrapper">
                     {isEnglish ?
                         (<h1 className="hero-title" data-text="Welcome to Sekai Beyond!">Welcome to Sekai
@@ -36,10 +36,13 @@ export const Hero = () => {
                     <span className="sparkle">✨</span>
                     <span className="sparkle">💫</span>
                 </div>
-                <p className="hero-subtitle">{isEnglish ? "University of Washington's Biggest Chinese Anime & Culture Club" : '华盛顿大学最大的华人动漫社团'}
+                <p className="hero-subtitle">{isEnglish ? "A creative community for anime, gaming, cosplay, and creation." : '一个面向动漫、游戏、Cosplay 与开发的创作社区'}
                 </p>
                 <p className="hero-description">
-                    {isEnglish ? "Join 100+ members in celebrating anime, games, and ACG culture! From video games to anime, from cosplay to conventions, we're your home for all things otaku at UW." : '加入我们100+成员的大家庭，一起享受动漫、游戏和ACG文化的乐趣！'}
+                    {isEnglish
+                        ? "Join us to explore anime, games, cosplay, and creative projects—from game nights to game dev, from J‑pop to conventions—everyone’s welcome"
+                        : '加入我们一起参与动漫、游戏、Cosplay与创作活动：从游戏夜到游戏开发，从舞台表演到展会，欢迎所有同学参与'
+                    }
                 </p>
                 <div className="hero-buttons">
                     <HashLink to="#contact" className="btn btn-primary">

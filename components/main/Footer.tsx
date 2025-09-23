@@ -1,6 +1,6 @@
 import { HashLink } from "react-router-hash-link";
 import React from "react";
-import { LINKS } from "../Constants";
+import { FOOTER_LINKS, type FooterLink } from "../Constants";
 import { useLanguage } from "../LanguageContextProvider";
 
 export const Footer = () => {
@@ -10,11 +10,17 @@ export const Footer = () => {
         <footer>
             <div className="footer-logo">{isEnglish ? "SEKAI BEYOND" : "彼世界动漫社"}</div>
             <div className="footer-links">
-                <HashLink to="#about" className="footer-link">{isEnglish ? "About Us" : "关于我们"}</HashLink>
-                <HashLink to="#events" className="footer-link">{isEnglish ? "Past Events" : "往期活动"}</HashLink>
-                <HashLink to="#convention" className="footer-link">{isEnglish ? "Convention" : "漫展"}</HashLink>
-                <HashLink to="#team" className="footer-link">{isEnglish ? "Team" : "幕后团队"}</HashLink>
-                <a href={LINKS.huskylink} className="footer-link">HuskyLink</a>
+                {FOOTER_LINKS.map((link: FooterLink) => (
+                    link.isHashLink ? (
+                        <HashLink key={link.id} to={link.href} className="footer-link">
+                            {isEnglish ? link.labelEn : link.labelCn}
+                        </HashLink>
+                    ) : (
+                        <a key={link.id} href={link.href} className="footer-link">
+                            {isEnglish ? link.labelEn : link.labelCn}
+                        </a>
+                    )
+                ))}
             </div>
             <p className="footer-text">
                 © 2025 {isEnglish ? "Sekai Beyond" : "彼世界动漫社"}<br/>
