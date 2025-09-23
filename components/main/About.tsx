@@ -22,8 +22,8 @@ export const About = () => {
                             cosplayer, a creative artist, or an energetic dancer.<br/>
                             Sekai Beyond offers you a short escape from the original world. From manga and anime to films
                             and games, we enjoy it all. You might find yourself watching a Lovelive dance performance,
-                            enjoying J-pop music in a live house, or chatting with cosplayers at one of our conventions. We
-                            bridge the gap between stories and reality.<br/>
+                            enjoying J-pop music in a live house, or chatting with cosplayers at one of our events. We
+                            bridge the gap between dream and reality.<br/>
                             While we focus on recreating and cosplaying, we also encourage you to create brand-new stories.
                             Let your imagination run wild! Whether it’s designing new IPs, crafting original characters, or
                             even making a game, Sekai Beyond is where dream and reality merge together. The portal to a
