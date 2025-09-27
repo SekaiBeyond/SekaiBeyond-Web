@@ -12,7 +12,7 @@ export const Convention = () => {
             </div>
             <div className="convention-banner">
                 <div className="con-decorations">
-                    {['🌸', '⭐', '🎌', '🎮', '🎨'].map((emoji, i) => (
+                    {['🌸', '⭐', '👘', '🎮', '🎨', '✨'].map((emoji, i) => (
                         <div
                             key={i}
                             className="con-deco"
@@ -74,7 +74,8 @@ export const Convention = () => {
                     <div className="hero-buttons" style={{marginTop: '40px'}}>
                         <a href={LINKS.buyTicket}
                            className="btn btn-primary con-btn">{isEnglish ? "Get Tickets" : "购票"}</a>
-                        <a href="https://sites.google.com/uw.edu/sekaibeyondcon" className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>
+                        <a href={LINKS.convention}
+                           className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>
                     </div>
                 </div>
             </div>

@@ -8,6 +8,7 @@ export const LINKS = {
     xiaohongshu: "https://www.xiaohongshu.com/user/profile/62d4eefd000000000e00ed42",
     linkedin: "https://www.linkedin.com/company/sekai-beyond/",
     email: `mailto:${RSO_EMAIL}`,
+    convention: process.env.NODE_ENV === 'development' ? "/con" : "https://sites.google.com/uw.edu/sekaibeyondcon",
 }
 
 export const CONVENTION_DATE = new Date('2025-10-11T12:00:00');
