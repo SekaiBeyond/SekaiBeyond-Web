@@ -1,6 +1,5 @@
 import { Hero } from "~/../components/main/Hero";
 import { About } from "~/../components/main/About";
-import { Convention } from "~/../components/main/Convention";
 import { Team } from "~/../components/main/Team";
 import { Contact } from "~/../components/main/Contact";
 import { Footer } from "~/../components/main/Footer";
@@ -20,9 +19,6 @@ export const Welcome = () => (
 
         {/* Events Section */}
         <PastEvents/>
-
-        {/* Convention Section */}
-        <Convention/>
 
         {/* Team Section */}
         <Team/>

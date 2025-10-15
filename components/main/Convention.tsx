@@ -49,7 +49,7 @@ export const Convention = () => {
                     </p>
                     <div className="convention-poster" style={{marginTop: '40px'}}>
                         <img
-                            src="/images/convention-poster.jpg"
+                            src="/images/mika.png"
                             alt={isEnglish ? "SEKAI BEYOND CON Official Poster" : "彼世界动漫游戏展官方海报"}
                         />
                     </div>
