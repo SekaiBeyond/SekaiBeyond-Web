@@ -5,6 +5,7 @@ import { Contact } from "~/../components/main/Contact";
 import { Footer } from "~/../components/main/Footer";
 import { Navigation } from "~/../components/main/Navigation";
 import { PastEvents } from "../../components/main/PastEvents";
+import { UpcomingEvent } from "../../components/main/UpcomingEvent";
 
 export const Welcome = () => (
     <>
@@ -17,8 +18,11 @@ export const Welcome = () => (
         {/* About Section */}
         <About/>
 
-        {/* Events Section */}
+        {/* Past Events Section */}
         <PastEvents/>
+
+        {/* Upcoming Event Section */}
+        <UpcomingEvent/>
 
         {/* Team Section */}
         <Team/>

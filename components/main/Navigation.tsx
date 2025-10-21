@@ -2,7 +2,7 @@ import { HashLink } from "react-router-hash-link";
 import React from "react";
 import { LanguageSwitcher } from "../LanguageSwitcher";
 import { useLanguage } from "../LanguageContextProvider";
-import { NAVIGATION_LINKS, type NavigationLink } from "../Constants";
+import { NAVIGATION_LINKS, type NavLink } from "../Constants";
 
 
 export const Navigation = () => {
@@ -13,7 +13,7 @@ export const Navigation = () => {
             <div className="nav-container">
                 <HashLink to="#home" className="logo">{isEnglish ? "SEKAI BEYOND" : "彼世界动漫社"}</HashLink>
                 <ul className="nav-links">
-                    {NAVIGATION_LINKS.map((link: NavigationLink) => (
+                    {NAVIGATION_LINKS.map((link: NavLink) => (
                         <li key={link.id}>
                             <HashLink to={link.href} className="nav-link">
                                 {isEnglish ? link.labelEn : link.labelCn}

@@ -1,6 +1,6 @@
 import { HashLink } from "react-router-hash-link";
 import React from "react";
-import { FOOTER_LINKS, type FooterLink } from "../Constants";
+import { FOOTER_LINKS, type NavLink } from "../Constants";
 import { useLanguage } from "../LanguageContextProvider";
 
 export const Footer = () => {
@@ -10,13 +10,13 @@ export const Footer = () => {
         <footer>
             <div className="footer-logo">{isEnglish ? "SEKAI BEYOND" : "彼世界动漫社"}</div>
             <div className="footer-links">
-                {FOOTER_LINKS.map((link: FooterLink) => (
-                    link.isHashLink ? (
+                {FOOTER_LINKS.map((link: NavLink) => (
+                    link.href.startsWith("#") ? (
                         <HashLink key={link.id} to={link.href} className="footer-link">
                             {isEnglish ? link.labelEn : link.labelCn}
                         </HashLink>
                     ) : (
-                        <a key={link.id} href={link.href} className="footer-link">
+                        <a key={link.id} href={link.href} className="footer-link" target="_blank">
                             {isEnglish ? link.labelEn : link.labelCn}
                         </a>
                     )

@@ -2,16 +2,23 @@ export const RSO_EMAIL: string = "sekaibeyond@outlook.com"
 
 export const LINKS = {
     discord: "https://discord.gg/4xPFPmwsW3",
-    buyTicket: "https://events.hometownticketing.com/boxoffice/uofwashington/L2VtYmVkL2V2ZW50LzI3P3NpbmdsZT0x",
     huskylink: "https://huskylink.washington.edu/organization/sekaibeyond",
     instagram: "https://www.instagram.com/sekai_beyond/",
     xiaohongshu: "https://www.xiaohongshu.com/user/profile/62d4eefd000000000e00ed42",
     linkedin: "https://www.linkedin.com/company/sekai-beyond/",
-    email: `mailto:${RSO_EMAIL}`,
-    convention: process.env.NODE_ENV === 'development' ? "/con" : "https://sites.google.com/uw.edu/sekaibeyondcon",
+    email: `mailto:${RSO_EMAIL}`
 }
 
-export const CONVENTION_DATE = new Date('2025-10-11T12:00:00');
+export const UPCOMING_EVENT = {
+    DATE: new Date('2025-10-25T14:00:00'),
+    NAME: "Halloween Pop-Up LIVE!",
+    NAME_CN: "万圣节快闪 LIVE!",
+    DESCRIPTION: "Brought to you by Kirameki Palettes and ACGN Club at UW",
+    DESCRIPTION_CN: "由华盛顿大学Kirameki Palettes与ACGN学生会联合呈现",
+    BUY_TICKET: "https://kirameki-palettes.square.site/product/-ticket-10-25-halloween-pop-up-live/EB5WWL2O6PE3KXYDOK4T7A7W?cp=true&sa=false&sbp=false&q=false&category_id=3SY6ZSXHW4Q7UHQ6IF4EKKTD",
+    LEARN_MORE: "https://www.kiramekipalettes.com",
+    POSTER: "/images/events/HalloweenPopUp.webp"
+}
 
 interface Officer {
     name: string;
@@ -161,77 +168,58 @@ export const PAST_EVENTS: PastEvent[] = [
     }
 ];
 
-export interface FooterLink {
+export interface NavLink {
     id: string;
     href: string;
     labelEn: string;
     labelCn: string;
-    isHashLink: boolean;
 }
 
-export const FOOTER_LINKS: FooterLink[] = [
+const SHARED_LINKS: NavLink[] = [
     {
         id: 'about',
         href: '#about',
         labelEn: 'About Us',
         labelCn: '关于我们',
-        isHashLink: true
     },
     {
         id: 'events',
         href: '#events',
         labelEn: 'Past Events',
         labelCn: '往期活动',
-        isHashLink: true
+    },
+    {
+        id: 'upcoming',
+        href: '#upcoming',
+        labelEn: 'Upcoming Event',
+        labelCn: '活动预告',
     },
     {
         id: 'team',
         href: '#team',
         labelEn: 'Team',
         labelCn: '幕后团队',
-        isHashLink: true
     },
+]
+
+export const FOOTER_LINKS: NavLink[] = [
+    ...SHARED_LINKS,
     {
         id: 'huskylink',
         href: LINKS.huskylink,
         labelEn: 'HuskyLink',
         labelCn: 'HuskyLink',
-        isHashLink: false
     }
 ];
 
-export interface NavigationLink {
-    id: string;
-    href: string;
-    labelEn: string;
-    labelCn: string;
-}
-
-export const NAVIGATION_LINKS: NavigationLink[] = [
+export const NAVIGATION_LINKS: NavLink[] = [
     {
         id: 'home',
         href: '#home',
         labelEn: 'Home',
         labelCn: '首页'
     },
-    {
-        id: 'about',
-        href: '#about',
-        labelEn: 'About Us',
-        labelCn: '关于我们'
-    },
-    {
-        id: 'events',
-        href: '#events',
-        labelEn: 'Past Events',
-        labelCn: '往期活动'
-    },
-    {
-        id: 'team',
-        href: '#team',
-        labelEn: 'Team',
-        labelCn: '幕后团队'
-    },
+    ...SHARED_LINKS,
     {
         id: 'contact',
         href: '#contact',
