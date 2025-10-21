@@ -17,7 +17,8 @@ export const UPCOMING_EVENT = {
     DESCRIPTION_CN: "由华盛顿大学Kirameki Palettes与ACGN学生会联合呈现",
     BUY_TICKET: "https://kirameki-palettes.square.site/product/-ticket-10-25-halloween-pop-up-live/EB5WWL2O6PE3KXYDOK4T7A7W?cp=true&sa=false&sbp=false&q=false&category_id=3SY6ZSXHW4Q7UHQ6IF4EKKTD",
     LEARN_MORE: "https://www.kiramekipalettes.com",
-    POSTER: "/images/events/HalloweenPopUp.webp"
+    POSTER: "/images/events/HalloweenPopUp.webp",
+    POSTER_CREDIT: "Oscar"
 }
 
 interface Officer {

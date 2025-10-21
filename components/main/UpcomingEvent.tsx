@@ -99,6 +99,14 @@ export const UpcomingEvent = () => {
                             src={UPCOMING_EVENT.POSTER}
                             alt={isEnglish ? "Event Poster" : "活动海报"}
                         />
+                        <p style={{
+                            fontSize: '14px',
+                            color: '#999',
+                            marginTop: '14px',
+                            fontStyle: 'italic'
+                        }}>
+                            {isEnglish ? `Poster by ${UPCOMING_EVENT.POSTER_CREDIT}` : `海报由 ${UPCOMING_EVENT.POSTER_CREDIT} 制作`}
+                        </p>
                     </div>
                     {/* Countdown Timer */}
                     <div className="convention-features" style={{
