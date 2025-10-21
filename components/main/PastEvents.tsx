@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { PAST_EVENTS, type PastEvent } from "../Constants";
 import { useLanguage } from "../LanguageContextProvider";
 
 export const PastEvents = () => {
     const {isEnglish} = useLanguage();
+    const [showAll, setShowAll] = useState(false);
+
+    const displayedEvents = showAll ? PAST_EVENTS : PAST_EVENTS.slice(0, 6);
 
     return (
         <section id="events" className="section">
@@ -12,7 +16,7 @@ export const PastEvents = () => {
             </div>
 
             <div className="events-grid">
-                {PAST_EVENTS.map((event: PastEvent, index: number) => (
+                {displayedEvents.map((event: PastEvent, index: number) => (
                     <div key={index} className="event-card">
                         <img className="event-image" src={event.icon} alt={isEnglish ? event.title : event.titleCn}/>
                         <div className="event-content">
@@ -36,6 +40,19 @@ export const PastEvents = () => {
                         </div>
                     </div>
                 ))}
+            </div>
+            <div style={{display: 'flex', justifyContent: 'center', marginTop: '3rem'}}>
+                <button
+                    onClick={() => setShowAll(!showAll)}
+                    className="show-more-btn"
+                >
+                    <span className="show-more-text">
+                        {showAll
+                            ? (isEnglish ? "Show Less" : "收起")
+                            : (isEnglish ? "Show More Events" : "查看更多活动")
+                        }
+                    </span>
+                </button>
             </div>
         </section>
 
