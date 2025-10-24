@@ -27,7 +27,8 @@ export const PastEvents = () => {
                                 <span>{new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : "zh-CN", {
                                     year: 'numeric',
                                     month: 'long',
-                                    day: 'numeric'
+                                    day: 'numeric',
+                                    timeZone: 'UTC'
                                 })}</span>
                             </div>
                             <div className="event-date">

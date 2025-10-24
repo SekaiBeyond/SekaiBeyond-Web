@@ -69,6 +69,17 @@ export interface PastEvent {
 
 export const PAST_EVENTS: PastEvent[] = [
     {
+        badge: 'Anime Con',
+        badgeCn: "漫展",
+        title: 'Sekai Beyond Con',
+        titleCn: '彼世界动漫游戏展',
+        date: '2025-10-11',
+        location: 'Husky Union Building',
+        description: 'Sekai Beyond’s first convention brought anime, comics, games, and novel fans together for a full day of creativity and celebration. From the dazzling KiraKira IdolFest and spirited cosplay competition to the bustling artist alley and energetic band performances, guests cheered, connected, and shared their passions in a vibrant community atmosphere.',
+        descriptionCn: 'Sekai Beyond 首届漫展汇聚了动漫、漫画、游戏与小说（ACGN）爱好者，共度充满创意与热情的一天。从闪耀的 KiraKira 偶像祭、热血的角色扮演比赛，到热闹的艺术家街与活力四射的乐队演出，现场观众为之欢呼、交流，共同在充满活力的社区氛围中分享他们的热爱。',
+        icon: "/images/events/sekai_beyond_con_2025.jpg",
+    },
+    {
         badge: 'Food',
         badgeCn: "美食",
         title: 'Delicious in Dungeon Paaaarty!',
