@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { UPCOMING_EVENT } from "../Constants";
+import { ANY_UPCOMING_EVENT, UPCOMING_EVENT } from "../Constants";
 import { useLanguage } from "../LanguageContextProvider";
 
 export const UpcomingEvent = () => {
@@ -49,7 +49,7 @@ export const UpcomingEvent = () => {
     }, []);
 
     return (
-        <section id="upcoming" className="section">
+        <section id="upcoming" className="section" hidden={ANY_UPCOMING_EVENT}>
             <div className="section-header">
                 <h2 className="section-title">{isEnglish ? "Upcoming Event" : "活动预告"}</h2>
             </div>

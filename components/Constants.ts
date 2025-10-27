@@ -21,6 +21,8 @@ export const UPCOMING_EVENT = {
     POSTER_CREDIT: "Oscar"
 }
 
+export const ANY_UPCOMING_EVENT: boolean = UPCOMING_EVENT.DATE.getDay() > new Date().getDay();
+
 interface Officer {
     name: string;
     nameCn?: string;
@@ -185,6 +187,7 @@ export interface NavLink {
     href: string;
     labelEn: string;
     labelCn: string;
+    disabled?: boolean;
 }
 
 const SHARED_LINKS: NavLink[] = [
@@ -205,6 +208,7 @@ const SHARED_LINKS: NavLink[] = [
         href: '#upcoming',
         labelEn: 'Upcoming Event',
         labelCn: '活动预告',
+        disabled: ANY_UPCOMING_EVENT,
     },
     {
         id: 'team',
