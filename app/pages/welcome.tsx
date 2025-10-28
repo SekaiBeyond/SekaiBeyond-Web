@@ -1,11 +1,11 @@
 import { Hero } from "~/../components/main/Hero";
 import { About } from "~/../components/main/About";
-import { Convention } from "~/../components/main/Convention";
 import { Team } from "~/../components/main/Team";
 import { Contact } from "~/../components/main/Contact";
 import { Footer } from "~/../components/main/Footer";
 import { Navigation } from "~/../components/main/Navigation";
 import { PastEvents } from "../../components/main/PastEvents";
+import { UpcomingEvent } from "../../components/main/UpcomingEvent";
 
 export const Welcome = () => (
     <>
@@ -18,11 +18,11 @@ export const Welcome = () => (
         {/* About Section */}
         <About/>
 
-        {/* Events Section */}
+        {/* Past Events Section */}
         <PastEvents/>
 
-        {/* Convention Section */}
-        <Convention/>
+        {/* Upcoming Event Section */}
+        <UpcomingEvent/>
 
         {/* Team Section */}
         <Team/>

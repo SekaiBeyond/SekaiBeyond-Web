@@ -2,15 +2,26 @@ export const RSO_EMAIL: string = "sekaibeyond@outlook.com"
 
 export const LINKS = {
     discord: "https://discord.gg/4xPFPmwsW3",
-    buyTicket: "https://events.hometownticketing.com/boxoffice/uofwashington/L2VtYmVkL2V2ZW50LzI3P3NpbmdsZT0x",
     huskylink: "https://huskylink.washington.edu/organization/sekaibeyond",
     instagram: "https://www.instagram.com/sekai_beyond/",
     xiaohongshu: "https://www.xiaohongshu.com/user/profile/62d4eefd000000000e00ed42",
     linkedin: "https://www.linkedin.com/company/sekai-beyond/",
-    email: `mailto:${RSO_EMAIL}`,
+    email: `mailto:${RSO_EMAIL}`
 }
 
-export const CONVENTION_DATE = new Date('2025-10-11T12:00:00');
+export const UPCOMING_EVENT = {
+    DATE: new Date('2025-10-25T14:00:00'),
+    NAME: "Halloween Pop-Up LIVE!",
+    NAME_CN: "万圣节快闪 LIVE!",
+    DESCRIPTION: "Brought to you by Kirameki Palettes and ACGN Club at UW",
+    DESCRIPTION_CN: "由华盛顿大学Kirameki Palettes与ACGN学生会联合呈现",
+    BUY_TICKET: "https://kirameki-palettes.square.site/product/-ticket-10-25-halloween-pop-up-live/EB5WWL2O6PE3KXYDOK4T7A7W?cp=true&sa=false&sbp=false&q=false&category_id=3SY6ZSXHW4Q7UHQ6IF4EKKTD",
+    LEARN_MORE: "https://www.kiramekipalettes.com",
+    POSTER: "/images/events/HalloweenPopUp.webp",
+    POSTER_CREDIT: "Oscar"
+}
+
+export const ANY_UPCOMING_EVENT: boolean = UPCOMING_EVENT.DATE.getDay() > new Date().getDay();
 
 interface Officer {
     name: string;
@@ -59,6 +70,17 @@ export interface PastEvent {
 }
 
 export const PAST_EVENTS: PastEvent[] = [
+    {
+        badge: 'Anime Con',
+        badgeCn: "漫展",
+        title: 'Sekai Beyond Con',
+        titleCn: '彼世界动漫游戏展',
+        date: '2025-10-11',
+        location: 'Husky Union Building',
+        description: 'Sekai Beyond’s first convention brought anime, comics, games, and novel fans together for a full day of creativity and celebration. From the dazzling KiraKira IdolFest and spirited cosplay competition to the bustling artist alley and energetic band performances, guests cheered, connected, and shared their passions in a vibrant community atmosphere.',
+        descriptionCn: 'Sekai Beyond 首届漫展汇聚了动漫、漫画、游戏与小说（ACGN）爱好者，共度充满创意与热情的一天。从闪耀的 KiraKira 偶像祭、热血的角色扮演比赛，到热闹的艺术家街与活力四射的乐队演出，现场观众为之欢呼、交流，共同在充满活力的社区氛围中分享他们的热爱。',
+        icon: "/images/events/sekai_beyond_con_2025.jpg",
+    },
     {
         badge: 'Food',
         badgeCn: "美食",
@@ -160,228 +182,60 @@ export const PAST_EVENTS: PastEvent[] = [
     }
 ];
 
-export const TICKET_TYPES = [
-    {
-        type: 'UW Student Admission',
-        typeCn: '华大学生票',
-        price: '$13',
-        priceCn: '约￥95',
-        features: [
-            'Valid UW student ID required 需出示有效华大学生证',
-            'Access to all events 所有活动入场',
-            'Vendor hall access 商贩大厅入场',
-            'Cosplay contest participation Cosplay大赛参与',
-            'Guest meet & greets 嘉宾见面会',
-            'Student networking opportunities 学生社交机会'
-        ]
-    },
-    {
-        type: 'General Public Admission',
-        typeCn: '大众票',
-        price: '$21',
-        priceCn: '约￥150',
-        featured: true,
-        features: [
-            'Full convention access 全馆通行',
-            'Access to all events 所有活动入场',
-            'Vendor hall access 商贩大厅入场',
-            'Cosplay contest participation Cosplay大赛参与',
-            'Guest meet & greets 嘉宾见面会',
-            'Networking opportunities 社交机会'
-        ]
-    },
-    {
-        type: 'Vendor',
-        typeCn: '摊贩',
-        price: 'Closed',
-        priceCn: '已关闭',
-        features: [
-            'Registration closed 报名已截止',
-            'Contact us for waitlist 候补名单请联系我们',
-            'Access to all events 所有活动入场',
-            'Cosplay contest participation Cosplay大赛参与',
-            'Guest meet & greets 嘉宾见面会',
-            'Networking opportunities 社交机会'
-        ]
-    }
-];
-
-export const CON_GUESTS = [
-    {
-        name: 'Gavin',
-        title: 'Bilibili Ambassador 哔站大使',
-        bio: 'Famous for hosting bilibili events',
-        icon: '/images/guests/Gavin.jpg',
-    },
-    {
-        name: 'Yuzhi',
-        title: 'Furry 毛茸茸',
-        bio: 'Creator of amazing furry suit and furry content',
-        icon: '/images/guests/Yuzhi.jpg',
-    },
-    {
-        name: 'DJ Miku',
-        title: 'J-Pop Artist 歌手',
-        bio: 'Performs anime songs and Vocaloid covers',
-        icon: ''
-    },
-    {
-        name: 'Luna Chen',
-        title: 'Cosplay Queen Cosplay达人',
-        bio: 'International cosplay competition champion',
-        icon: ''
-    },
-    {
-        name: 'Ken Zhang',
-        title: 'Game Developer 游戏开发者',
-        bio: 'Director of popular anime-style games',
-        icon: ''
-    },
-    {
-        name: 'Amy Wang',
-        title: 'Donghua Creator 国漫创作者',
-        bio: 'Rising star in Chinese animation',
-        icon: ''
-    }
-];
-
-export interface ConSchedule {
-    time: string;
-    title: string;
-    titleCn: string;
-    description: string;
-    descriptionCn: string;
-}
-
-export const CON_SCHEDULES: ConSchedule[] = [
-    {
-        time: '11:00 AM',
-        title: 'Door Open',
-        titleCn: '开门入场',
-        description: 'Welcome to Sekai Beyond Con! Registration and check-in begins.',
-        descriptionCn: '欢迎来到彼世界动漫展！报到和签到开始。'
-    },
-    {
-        time: '12:00 - 1:00 PM',
-        title: 'Band Performance',
-        titleCn: '乐队表演',
-        description: 'Opening ceremony featuring live J-Pop and anime song performances by local bands.',
-        descriptionCn: '开幕式现场J-Pop和动漫歌曲表演，由本地乐队演出。'
-    },
-    {
-        time: '1:30 – 4:10 PM',
-        title: 'Kirakira IdolFest',
-        titleCn: '闪闪偶像节',
-        description: 'Main event featuring idol performances, dance battles, and audience interaction activities.',
-        descriptionCn: '主要活动包括偶像表演、舞蹈对决和观众互动环节。'
-    },
-    {
-        time: '4:15 – 4:45 PM',
-        title: 'Cosplay Contest',
-        titleCn: 'Cosplay大赛',
-        description: 'Annual cosplay competition with prizes for best costume, craftsmanship, and performance.',
-        descriptionCn: '年度Cosplay比赛，设有最佳服装、工艺和表演奖项。'
-    },
-    {
-        time: '4:45 – 5:45 PM',
-        title: 'Random Dance',
-        titleCn: '随机舞蹈',
-        description: 'Join the crowd for spontaneous K-Pop and J-Pop dance sessions. All skill levels welcome!',
-        descriptionCn: '加入人群进行即兴K-Pop和J-Pop舞蹈。欢迎所有水平的参与者！'
-    },
-    {
-        time: '5:45 – 6:00 PM',
-        title: 'Door close',
-        titleCn: '闭门离场',
-        description: 'Thank you for attending! Safe travels and see you next year.',
-        descriptionCn: '感谢您的参与！一路平安，明年再见。'
-    }
-]
-
-export interface FooterLink {
+export interface NavLink {
     id: string;
     href: string;
     labelEn: string;
     labelCn: string;
-    isHashLink: boolean;
+    disabled?: boolean;
 }
 
-export const FOOTER_LINKS: FooterLink[] = [
+const SHARED_LINKS: NavLink[] = [
     {
         id: 'about',
         href: '#about',
         labelEn: 'About Us',
         labelCn: '关于我们',
-        isHashLink: true
     },
     {
         id: 'events',
         href: '#events',
         labelEn: 'Past Events',
         labelCn: '往期活动',
-        isHashLink: true
     },
     {
-        id: 'convention',
-        href: '#convention',
-        labelEn: 'Convention',
-        labelCn: '漫展',
-        isHashLink: true
+        id: 'upcoming',
+        href: '#upcoming',
+        labelEn: 'Upcoming Event',
+        labelCn: '活动预告',
+        disabled: ANY_UPCOMING_EVENT,
     },
     {
         id: 'team',
         href: '#team',
         labelEn: 'Team',
         labelCn: '幕后团队',
-        isHashLink: true
     },
+]
+
+export const FOOTER_LINKS: NavLink[] = [
+    ...SHARED_LINKS,
     {
         id: 'huskylink',
         href: LINKS.huskylink,
         labelEn: 'HuskyLink',
         labelCn: 'HuskyLink',
-        isHashLink: false
     }
 ];
 
-export interface NavigationLink {
-    id: string;
-    href: string;
-    labelEn: string;
-    labelCn: string;
-}
-
-export const NAVIGATION_LINKS: NavigationLink[] = [
+export const NAVIGATION_LINKS: NavLink[] = [
     {
         id: 'home',
         href: '#home',
         labelEn: 'Home',
         labelCn: '首页'
     },
-    {
-        id: 'about',
-        href: '#about',
-        labelEn: 'About Us',
-        labelCn: '关于我们'
-    },
-    {
-        id: 'events',
-        href: '#events',
-        labelEn: 'Past Events',
-        labelCn: '往期活动'
-    },
-    {
-        id: 'convention',
-        href: '#convention',
-        labelEn: 'Convention',
-        labelCn: '漫展'
-    },
-    {
-        id: 'team',
-        href: '#team',
-        labelEn: 'Team',
-        labelCn: '幕后团队'
-    },
+    ...SHARED_LINKS,
     {
         id: 'contact',
         href: '#contact',

@@ -13,8 +13,8 @@ export const Hero = () => {
                         key={i}
                         className="bubble"
                         style={{
-                            width: Math.random() * 200 + 100 + 'px',
-                            height: Math.random() * 200 + 100 + 'px',
+                            width: Math.random() * 25 + 10 + 'em',
+                            height: Math.random() * 25 + 10 + 'em',
                             left: Math.random() * 100 + '%',
                             top: Math.random() * 100 + '%',
                             animationDelay: Math.random() * 5 + 's'
@@ -26,15 +26,7 @@ export const Hero = () => {
                 <span
                     className="hero-badge">{isEnglish ? 'Registered Student Organization @ University of Washington' : '华盛顿大学的学生社团'}</span>
                 <div className="hero-title-wrapper">
-                    {isEnglish ?
-                        (<h1 className="hero-title" data-text="Welcome to Sekai Beyond!">Welcome to Sekai
-                            Beyond!</h1>) :
-                        (<h1 className="hero-title" data-text="欢迎来到彼世界!">欢迎来到<br/>彼世界!</h1>)
-                    }
-                    <span className="sparkle">✨</span>
-                    <span className="sparkle">⭐</span>
-                    <span className="sparkle">✨</span>
-                    <span className="sparkle">💫</span>
+                    <h1 className="hero-title">{isEnglish ? "Welcome to Sekai Beyond!" : "欢迎来到彼世界!"}</h1>
                 </div>
                 <p className="hero-subtitle">{isEnglish ? "A creative community for anime, gaming, cosplay, and creation." : '一个面向动漫、游戏、Cosplay 与开发的创作社区'}
                 </p>
@@ -68,15 +60,10 @@ export const Hero = () => {
                         <div className="stat-label">{isEnglish ? "Years Active" : "成立年数"}</div>
                     </div>
                     <div className="stat-item">
-                        <div className="stat-number">300+</div>
+                        <div className="stat-number">400+</div>
                         <div className="stat-label">{isEnglish ? "Followers" : "社交媒体粉丝"}</div>
                     </div>
                 </div>
-            </div>
-            <div className="mascot-container">
-                <div className="mascot">🐰</div>
-                <div className="mascot">🐼</div>
-                <div className="mascot">🦊</div>
             </div>
         </section>
     )

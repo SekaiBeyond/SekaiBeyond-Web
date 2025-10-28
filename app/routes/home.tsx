@@ -3,7 +3,7 @@ import { Welcome } from "~/pages/welcome";
 
 export function meta({}: Route.MetaArgs) {
     return [
-        {title: "Sekai Beyond ✨彼世界"},
+        {title: "Sekai Beyond ✨ 彼世界"},
         {name: "description", content: "Where Anime Dreams Find Their Home!"},
     ];
 }
