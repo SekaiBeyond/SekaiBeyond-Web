@@ -24,11 +24,6 @@ npm run dev
 npm run build
 ```
 
-## Tech Stack
-
-- React
-- TypeScript
-
 ## Contributing
 
 Contributions are welcome! Please follow these steps:

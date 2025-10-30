@@ -10,18 +10,19 @@ export const LINKS = {
 }
 
 export const UPCOMING_EVENT = {
-    DATE: new Date('2025-10-25T14:00:00'),
-    NAME: "Halloween Pop-Up LIVE!",
-    NAME_CN: "万圣节快闪 LIVE!",
-    DESCRIPTION: "Brought to you by Kirameki Palettes and ACGN Club at UW",
-    DESCRIPTION_CN: "由华盛顿大学Kirameki Palettes与ACGN学生会联合呈现",
-    BUY_TICKET: "https://kirameki-palettes.square.site/product/-ticket-10-25-halloween-pop-up-live/EB5WWL2O6PE3KXYDOK4T7A7W?cp=true&sa=false&sbp=false&q=false&category_id=3SY6ZSXHW4Q7UHQ6IF4EKKTD",
-    LEARN_MORE: "https://www.kiramekipalettes.com",
-    POSTER: "/images/events/HalloweenPopUp.webp",
+    START_AT: new Date('2025-10-31T18:00:00'),
+    END_AT: new Date('2025-10-31T21:00:00'),
+    NAME: "Halloween Party 2025",
+    NAME_CN: "万圣节晚会 2025",
+    DESCRIPTION: "Enjoy the sweet night of candies with us!",
+    DESCRIPTION_CN: "一起度过一个糖分过量的万圣节吧！",
+    BUY_TICKET: "",
+    LEARN_MORE: "",
+    POSTER: "/images/events/Halloween2025.png",
     POSTER_CREDIT: "Oscar"
 }
 
-export const ANY_UPCOMING_EVENT: boolean = UPCOMING_EVENT.DATE.getDay() > new Date().getDay();
+export const NO_UPCOMING_EVENT: boolean = UPCOMING_EVENT.END_AT <= new Date();
 
 interface Officer {
     name: string;
@@ -208,7 +209,7 @@ const SHARED_LINKS: NavLink[] = [
         href: '#upcoming',
         labelEn: 'Upcoming Event',
         labelCn: '活动预告',
-        disabled: ANY_UPCOMING_EVENT,
+        disabled: NO_UPCOMING_EVENT,
     },
     {
         id: 'team',

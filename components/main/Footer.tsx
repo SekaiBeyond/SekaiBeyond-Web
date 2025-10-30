@@ -10,7 +10,7 @@ export const Footer = () => {
         <footer>
             <div className="footer-logo">{isEnglish ? "SEKAI BEYOND" : "彼世界动漫社"}</div>
             <div className="footer-links">
-                {FOOTER_LINKS.map((link: NavLink) => (
+                {FOOTER_LINKS.map((link: NavLink) => link.disabled ? null : (
                     link.href.startsWith("#") ? (
                         <HashLink key={link.id} to={link.href} className="footer-link">
                             {isEnglish ? link.labelEn : link.labelCn}

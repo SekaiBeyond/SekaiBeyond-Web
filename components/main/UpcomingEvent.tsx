@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ANY_UPCOMING_EVENT, UPCOMING_EVENT } from "../Constants";
+import { NO_UPCOMING_EVENT, UPCOMING_EVENT } from "../Constants";
 import { useLanguage } from "../LanguageContextProvider";
 
 export const UpcomingEvent = () => {
@@ -23,7 +23,7 @@ export const UpcomingEvent = () => {
 
     useEffect(() => {
         const calculateTimeLeft = () => {
-            const difference = UPCOMING_EVENT.DATE.getTime() - new Date().getTime();
+            const difference = UPCOMING_EVENT.START_AT.getTime() - new Date().getTime();
 
             if (difference > 0) {
                 setTimeLeft({
@@ -49,7 +49,7 @@ export const UpcomingEvent = () => {
     }, []);
 
     return (
-        <section id="upcoming" className="section" hidden={ANY_UPCOMING_EVENT}>
+        <section id="upcoming" className="section" hidden={NO_UPCOMING_EVENT}>
             <div className="section-header">
                 <h2 className="section-title">{isEnglish ? "Upcoming Event" : "活动预告"}</h2>
             </div>
@@ -76,7 +76,7 @@ export const UpcomingEvent = () => {
                         color: '#ff8e53',
                         fontWeight: '700',
                         marginBottom: '20px'
-                    }}>{UPCOMING_EVENT.DATE.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                    }}>{UPCOMING_EVENT.START_AT.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric',
@@ -149,12 +149,13 @@ export const UpcomingEvent = () => {
                             </div>
                         ))}
                     </div>
-                    <div className="hero-buttons" style={{marginTop: '40px'}}>
-                        <a href={UPCOMING_EVENT.BUY_TICKET}
-                           className="btn btn-primary con-btn">{isEnglish ? "Get Tickets" : "购票"}</a>
-                        <a href={UPCOMING_EVENT.LEARN_MORE}
-                           className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>
-                    </div>
+                    {UPCOMING_EVENT.BUY_TICKET || UPCOMING_EVENT.LEARN_MORE ? (
+                        <div className="hero-buttons" style={{marginTop: '40px'}}>
+                            {UPCOMING_EVENT.BUY_TICKET ? (<a href={UPCOMING_EVENT.BUY_TICKET}
+                                                             className="btn btn-primary con-btn">{isEnglish ? "Get Tickets" : "购票"}</a>) : null}
+                            {UPCOMING_EVENT.LEARN_MORE ? (<a href={UPCOMING_EVENT.LEARN_MORE}
+                                                             className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>) : null}
+                        </div>) : null}
                 </div>
             </div>
 
