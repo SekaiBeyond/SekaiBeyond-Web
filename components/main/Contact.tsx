@@ -1,5 +1,4 @@
-import { SiDiscord, SiInstagram, SiLinkedin, SiXiaohongshu } from "react-icons/si";
-import { MdMail } from "react-icons/md";
+import { SiBilibili, SiDiscord, SiInstagram, SiLinkedin, SiXiaohongshu } from "react-icons/si";
 import React from "react";
 import { LINKS } from "../Constants";
 import { useLanguage } from "../LanguageContextProvider";
@@ -14,7 +13,7 @@ export const Contact = () => {
                 {isEnglish ? "Follow us on social media for the latest updates and announcements!" : "关注我们的社交媒体，获取最新动态和公告！"}
             </p>
         </div>
-        <div style={{maxWidth: '800px', margin: '0 auto'}}>
+        <div style={{maxWidth: '70%', margin: '0 auto'}}>
             <div className="social-links-grid">
                 <a className="social-card" href={LINKS.discord} target="_blank">
                     <SiDiscord className="social-icon"/>
@@ -24,6 +23,10 @@ export const Contact = () => {
                     <SiInstagram className="social-icon"/>
                     <div className="social-name">Instagram</div>
                 </a>
+                <a className="social-card" href={LINKS.bilibili} target="_blank">
+                    <SiBilibili className="social-icon"/>
+                    <div className="social-name">{isEnglish ? "Bilibili" : "哔哩哔哩"}</div>
+                </a>
                 <a className="social-card" href={LINKS.xiaohongshu} target="_blank">
                     <SiXiaohongshu className="social-icon"/>
                     <div className="social-name">{isEnglish ? "Xiaohongshu" : "小红书"}</div>
@@ -31,10 +34,6 @@ export const Contact = () => {
                 <a className="social-card" href={LINKS.linkedin} target="_blank">
                     <SiLinkedin className="social-icon"/>
                     <div className="social-name">{isEnglish ? "LinkedIn" : "领英"}</div>
-                </a>
-                <a className="social-card" href={LINKS.email} target="_blank">
-                    <MdMail className="social-icon"/>
-                    <div className="social-name">{isEnglish ? "Email" : "邮件"}</div>
                 </a>
             </div>
         </div>

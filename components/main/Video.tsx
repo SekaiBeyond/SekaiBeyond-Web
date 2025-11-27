@@ -1,5 +1,6 @@
 import React from "react";
 import { useLanguage } from "../LanguageContextProvider";
+import { LINKS } from "../Constants";
 
 export const Video = () => {
     const {isEnglish} = useLanguage();
@@ -38,7 +39,7 @@ export const Video = () => {
                             : "观看我们活动、表演和社区聚会的精彩集锦！"}
                     </p>
                     <a
-                        href="https://space.bilibili.com/3546779589020292"
+                        href={LINKS.bilibili}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="video-cta"

@@ -4,6 +4,7 @@ export const LINKS = {
     discord: "https://discord.gg/4xPFPmwsW3",
     huskylink: "https://huskylink.washington.edu/organization/sekaibeyond",
     instagram: "https://www.instagram.com/sekai_beyond/",
+    bilibili: "https://space.bilibili.com/3546779589020292",
     xiaohongshu: "https://www.xiaohongshu.com/user/profile/62d4eefd000000000e00ed42",
     linkedin: "https://www.linkedin.com/company/sekai-beyond/",
     email: `mailto:${RSO_EMAIL}`
@@ -240,6 +241,12 @@ export const FOOTER_LINKS: NavLink[] = [
         href: LINKS.huskylink,
         labelEn: 'HuskyLink',
         labelCn: 'HuskyLink',
+    },
+    {
+        id: 'email',
+        href: LINKS.email,
+        labelEn: 'Contact Us',
+        labelCn: '联系我们',
     }
 ];
 
