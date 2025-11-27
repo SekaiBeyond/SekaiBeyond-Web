@@ -699,22 +699,6 @@ body {
     box-shadow: 0 15px 35px rgba(255, 150, 200, 0.25);
 }
 
-.event-image {
-    width: 100%;
-    height: 200px;
-    background: linear-gradient(135deg, rgba(255, 182, 193, 0.2), rgba(255, 142, 83, 0.1));
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: 60px;
-    position: relative;
-    overflow: hidden;
-    object-fit: cover;
-    object-position: center;
-    flex-shrink: 0;
-}
-
 .event-content {
     padding: 25px;
     flex: 1;
@@ -2902,7 +2886,7 @@ footer {
 .show-more-text {
     position: relative;
     z-index: 1;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
 }
 
 /* Mobile responsiveness for show more button */
@@ -2923,5 +2907,169 @@ footer {
 
     .show-more-text {
         font-size: 14px;
+    }
+}
+
+.video-section {
+    margin-top: 40px;
+    margin-bottom: 40px;
+    padding: 60px 40px;
+}
+
+.video-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+}
+
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 900px;
+    padding-bottom: 50.625%; /* 16:9 aspect ratio */
+    height: 0;
+    overflow: hidden;
+    border-radius: 20px;
+    box-shadow: 0 15px 40px rgba(255, 107, 157, 0.2);
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+}
+
+.video-wrapper::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    right: -3px;
+    bottom: -3px;
+    background: linear-gradient(135deg, #ff6b9d, #ff8e53, #feca57, #ace9ce, #ff6b9d);
+    background-size: 400% 400%;
+    border-radius: 23px;
+    z-index: -1;
+    animation: gradient-border 8s ease infinite;
+}
+
+@keyframes gradient-border {
+    0%, 100% {
+        background-position: 0 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+.video-wrapper iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 20px;
+}
+
+.video-info {
+    text-align: center;
+    max-width: 600px;
+}
+
+.video-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    background: linear-gradient(135deg, rgba(255, 107, 157, 0.15), rgba(255, 142, 83, 0.15));
+    border-radius: 20px;
+    color: #ff6b9d;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 15px;
+    border: 2px solid rgba(255, 107, 157, 0.2);
+}
+
+.badge-icon {
+    font-size: 16px;
+}
+
+.video-caption {
+    color: #7a7a7a;
+    font-size: 16px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+.video-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 28px;
+    background: linear-gradient(135deg, #ff6b9d, #ff8e53);
+    color: white;
+    text-decoration: none;
+    border-radius: 25px;
+    font-weight: 700;
+    font-size: 15px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 25px rgba(255, 107, 157, 0.3);
+}
+
+.video-cta:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 12px 35px rgba(255, 107, 157, 0.4);
+}
+
+.cta-arrow {
+    transition: transform 0.3s ease;
+}
+
+.video-cta:hover .cta-arrow {
+    transform: translateX(5px);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .video-section {
+        padding: 40px 20px;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        border-radius: 20px;
+    }
+
+    .video-wrapper {
+        border-radius: 15px;
+    }
+
+    .video-wrapper::before {
+        border-radius: 18px;
+    }
+
+    .video-wrapper iframe {
+        border-radius: 15px;
+    }
+
+    .video-caption {
+        font-size: 14px;
+        padding: 0 10px;
+    }
+
+    .video-cta {
+        padding: 10px 24px;
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .video-section {
+        padding: 30px 15px;
+    }
+
+    .video-badge {
+        font-size: 12px;
+        padding: 6px 16px;
+    }
+
+    .video-caption {
+        font-size: 13px;
     }
 }

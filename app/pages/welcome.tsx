@@ -1,5 +1,6 @@
 import { Hero } from "~/../components/main/Hero";
 import { About } from "~/../components/main/About";
+import { Video } from "~/../components/main/Video";
 import { Team } from "~/../components/main/Team";
 import { Contact } from "~/../components/main/Contact";
 import { Footer } from "~/../components/main/Footer";
@@ -14,6 +15,9 @@ export const Welcome = () => (
 
         {/* Hero Section */}
         <Hero/>
+
+        {/* Video Section */}
+        <Video/>
 
         {/* About Section */}
         <About/>
