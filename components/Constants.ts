@@ -47,15 +47,29 @@ export const OFFICERS: Officer[] = [
         roleCn: '对外关系',
         src: '/images/officers/Officer_Avatar_ErninMeng.jpg'
     },
-    {name: 'Alina', role: 'Art', roleCn: '美术', src: '/images/officers/Officer_Avatar_AlinaYuan.jpg'},
-    {name: 'DEMO', role: 'Art', roleCn: '美术', src: '/images/officers/Officer_Avatar_EvaChen.jpg'},
+    {name: 'Alina', role: 'Artist', roleCn: '美术', src: '/images/officers/Officer_Avatar_AlinaYuan.jpg'},
+    {name: 'DEMO', role: 'Artist', roleCn: '美术', src: '/images/officers/Officer_Avatar_EvaChen.jpg'},
     {
         name: 'Wynter',
-        role: 'Events Planning & Technical Advisor',
-        roleCn: '活动策划 & 技术顾问',
+        role: 'Technical Advisor',
+        roleCn: '技术顾问',
         src: '/images/officers/Officer_Avatar_WynterLin.jpg'
     },
-    {name: 'Anne', role: 'Social Media', roleCn: '社交媒体', src: '/images/officers/Officer_Avatar_Anne.jpg'}
+    {name: 'Anne', role: 'Social Media', roleCn: '社交媒体', src: '/images/officers/Officer_Avatar_Anne.jpg'},
+    {
+        name: 'Aaron',
+        nameCn: "笹兰",
+        role: 'Events Planning',
+        roleCn: '活动策划',
+        src: '/images/officers/Officer_Avatar_Aaron.jpg'
+    },
+    {
+        name: 'Gavin',
+        nameCn: "嘎嘎",
+        role: 'Bilibili Ambassador',
+        roleCn: 'B站大使',
+        src: '/images/officers/Officer_Avatar_Gavin.jpeg'
+    }
 ];
 
 export interface PastEvent {
