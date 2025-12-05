@@ -48,7 +48,7 @@ export const Hero = () => {
                 </div>
                 <div className="stats-container">
                     <div className="stat-item">
-                        <div className="stat-number">100+</div>
+                        <div className="stat-number">400+</div>
                         <div className="stat-label">{isEnglish ? "Active Members" : "活跃成员"}</div>
                     </div>
                     <div className="stat-item">
@@ -60,7 +60,7 @@ export const Hero = () => {
                         <div className="stat-label">{isEnglish ? "Years Active" : "成立年数"}</div>
                     </div>
                     <div className="stat-item">
-                        <div className="stat-number">400+</div>
+                        <div className="stat-number">600+</div>
                         <div className="stat-label">{isEnglish ? "Followers" : "社交媒体粉丝"}</div>
                     </div>
                 </div>
