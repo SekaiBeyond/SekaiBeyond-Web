@@ -7,3 +7,4 @@
 /.idea
 package-lock.json
 /.firebase
+/.claude

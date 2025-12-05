@@ -93,13 +93,38 @@ def main():
                     print(f"• Skipped (<= target width): {image_file} ({img.width}px)")
                     continue
 
+                # Get original file size
+                original_size = os.path.getsize(image_path)
+                original_format = img.format
+
                 aspect_ratio = img.height / img.width
                 target_height = int(args.width * aspect_ratio)
                 resized_img = img.resize(
                     (args.width, target_height), Image.Resampling.LANCZOS
                 )
-                resized_img.save(image_path, quality=100, optimize=True)
-                print(f"✓ Resized (overwritten): {image_file}")
+
+                # Save to temporary file first (preserve extension for format detection)
+                temp_path = image_path + ".tmp"
+                resized_img.save(
+                    temp_path, format=original_format, quality=100, optimize=True
+                )
+
+                # Check if resized file is larger
+                resized_size = os.path.getsize(temp_path)
+
+                if resized_size >= original_size:
+                    # Resized file is larger, skip and remove temp file
+                    os.remove(temp_path)
+                    print(
+                        f"• Skipped (larger after resize): {image_file} ({original_size} -> {resized_size} bytes)"
+                    )
+                else:
+                    # Resized file is smaller, replace original
+                    os.replace(temp_path, image_path)
+                    saved_bytes = original_size - resized_size
+                    print(
+                        f"✓ Resized (overwritten): {image_file} (saved {saved_bytes} bytes)"
+                    )
         except Exception as e:
             print(f"✗ Error processing {image_file}: {str(e)}")
 
