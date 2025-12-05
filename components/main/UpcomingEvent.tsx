@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NO_UPCOMING_EVENT, UPCOMING_EVENT } from "../Constants";
 import { useLanguage } from "../LanguageContextProvider";
+import { EventImageModal } from "../EventImageModal";
 
 export const UpcomingEvent = () => {
     const {isEnglish} = useLanguage();
@@ -161,22 +162,11 @@ export const UpcomingEvent = () => {
 
             {/* Poster Modal */}
             {isPosterModalOpen && (
-                <div className="modal-overlay" onClick={() => setIsPosterModalOpen(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <button
-                            className="modal-close"
-                            onClick={() => setIsPosterModalOpen(false)}
-                        >
-                            ×
-                        </button>
-                        <div className="modal-body">
-                            <img
-                                src={UPCOMING_EVENT.POSTER}
-                                alt={isEnglish ? "Event Poster" : "活动海报"}
-                            />
-                        </div>
-                    </div>
-                </div>
+                <EventImageModal
+                    imageUrl={UPCOMING_EVENT.POSTER}
+                    onClose={() => setIsPosterModalOpen(false)}
+                    altText={isEnglish ? "Event Poster" : "活动海报"}
+                />
             )}
         </section>
     )

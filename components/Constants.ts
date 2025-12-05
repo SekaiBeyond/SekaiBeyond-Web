@@ -19,7 +19,7 @@ export const UPCOMING_EVENT = {
     DESCRIPTION_CN: "一起度过一个糖分过量的万圣节吧！",
     BUY_TICKET: "",
     LEARN_MORE: "",
-    POSTER: "/images/events/Halloween2025.png",
+    POSTER: "/images/events/halloween_2025.jpg",
     POSTER_CREDIT: "Oscar"
 }
 
