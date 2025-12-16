@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&family=Bubblegum+Sans&family=Fredoka:wght@700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;700&family=Bubblegum+Sans&family=Fredoka:wght@700&display=swap');
 
 * {
     margin: 0;
@@ -164,7 +164,7 @@ body {
 }
 
 .hero-title {
-    font-family: 'Bubblegum Sans', cursive;
+    font-family: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
     font-size: clamp(3.5rem, 8vw, 6rem);
     margin-bottom: 10px;
     background: linear-gradient(135deg, #ffbbd7, #ace9ce, #ffed92, #ffbbd7);
@@ -186,7 +186,7 @@ body {
 }
 
 .hero-title-cn {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: clamp(2rem, 5vw, 3.5rem);
     color: #ace9ce;
     margin-bottom: 20px;
@@ -326,7 +326,7 @@ body {
 }
 
 .stat-number {
-    font-family: 'Bubblegum Sans', cursive;
+    font-family: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
     font-size: 42px;
     background: linear-gradient(135deg, #ff6b9d, #ff8e53);
     -webkit-background-clip: text;
@@ -344,7 +344,7 @@ body {
 .stat-label-cn {
     font-size: 12px;
     color: #aaa;
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
 }
 
 /* Section styles */
@@ -370,7 +370,7 @@ body {
 }
 
 .section-title-cn {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: 1.5rem;
     color: #ff8e53;
     margin-bottom: 20px;
@@ -403,7 +403,7 @@ body {
 }
 
 .about-text h3 {
-    font-family: 'Bubblegum Sans', cursive;
+    font-family: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
     font-size: 32px;
     margin-bottom: 20px;
     color: #ff6b9d;
@@ -495,7 +495,7 @@ body {
 }
 
 .culture-title {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: 18px;
     color: #ff6b9d;
     font-weight: 700;
@@ -636,7 +636,7 @@ body {
 }
 
 .event-title-cn {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: 14px;
     color: #ff8e53;
     margin-bottom: 12px;
@@ -796,7 +796,7 @@ body {
 }
 
 .convention-title {
-    font-family: 'Bubblegum Sans', cursive;
+    font-family: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
     font-size: clamp(3rem, 6vw, 4.5rem);
     margin-bottom: 10px;
     background: linear-gradient(135deg, #ff6b9d, #ff8e53, #feca57);
@@ -806,7 +806,7 @@ body {
 }
 
 .convention-title-cn {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: 2rem;
     color: #ff8e53;
     margin-bottom: 20px;
@@ -921,7 +921,7 @@ body {
 }
 
 .team-role-cn {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: 12px;
     color: #ff8e53;
     margin-bottom: 15px;
@@ -1430,7 +1430,7 @@ footer {
     color: #333333;
     font-size: 28px;
     margin-bottom: 10px;
-    font-family: 'Bubblegum Sans', cursive;
+    font-family: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
     background: linear-gradient(135deg, #ff6b9d, #ff8e53);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -1564,7 +1564,7 @@ footer {
 }
 
 .logo {
-    font-family: 'Bubblegum Sans', cursive;
+    font-family: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
     font-size: 32px;
     font-weight: 700;
     background: linear-gradient(135deg, #ff6b9d, #feca57, #ff6b9d);
@@ -1727,7 +1727,7 @@ footer {
 }
 
 .hero-title {
-    font-family: 'Bubblegum Sans', cursive;
+    font-family: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
     font-size: clamp(3.5rem, 8vw, 6rem);
     margin-bottom: 10px;
     background: linear-gradient(135deg, #ff6b9d, #ff8e53, #feca57, #48dbfb, #ff6b9d);
@@ -1750,7 +1750,7 @@ footer {
 }
 
 .hero-title-cn {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: clamp(2rem, 5vw, 3.5rem);
     color: #ff8e53;
     margin-bottom: 20px;
@@ -1897,7 +1897,7 @@ footer {
 .countdown-label-cn {
     font-size: 12px;
     color: #aaa;
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
 }
 
 /* Special Guests Section */
@@ -1912,7 +1912,7 @@ footer {
 }
 
 .section-title {
-    font-family: 'Bubblegum Sans', cursive;
+    font-family: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
     font-size: clamp(2.5rem, 5vw, 3.5rem);
     margin-bottom: 10px;
     background: linear-gradient(135deg, #ff6b9d, #ff8e53, #feca57);
@@ -1941,7 +1941,7 @@ footer {
 }
 
 .section-title-cn {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: 1.5rem;
     color: #ff8e53;
     margin-bottom: 20px;
@@ -2143,7 +2143,7 @@ footer {
 }
 
 .schedule-details-cn {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: 14px;
     color: #ff8e53;
     margin-bottom: 10px;
@@ -2228,7 +2228,7 @@ footer {
 }
 
 .activity-title-cn {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: 16px;
     color: #ff8e53;
     margin-bottom: 15px;
@@ -2382,7 +2382,7 @@ footer {
 }
 
 .venue-name-cn {
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: 'ZCOOL XiaoWei', sans-serif;
     font-size: 18px;
     color: #ff8e53;
     margin: 0;
@@ -2561,7 +2561,7 @@ footer {
 }
 
 .footer-logo {
-    font-family: 'Bubblegum Sans', cursive;
+    font-family: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
     font-size: 36px;
     background: linear-gradient(135deg, #ff6b9d, #ff8e53);
     -webkit-background-clip: text;
