@@ -141,7 +141,11 @@ We welcome contributions from the community! Here's how you can help:
 
 ## License
 
-This project is licensed under the [GPL-3.0 License](LICENSE).
+This project is licensed under the [AGPL-3.0 License](LICENSE).
+
+## Trademarks
+
+Please see [Trademarks.md](Trademarks.md) for information regarding the use of project trademarks, logos, and branding.
 
 ---
 
