@@ -11,16 +11,21 @@ export const LINKS = {
 }
 
 export const UPCOMING_EVENT = {
-    START_AT: new Date('2025-10-31T18:00:00'),
-    END_AT: new Date('2025-10-31T21:00:00'),
-    NAME: "Halloween Party 2025",
-    NAME_CN: "万圣节晚会 2025",
-    DESCRIPTION: "Enjoy the sweet night of candies with us!",
-    DESCRIPTION_CN: "一起度过一个糖分过量的万圣节吧！",
+    START_AT: new Date('2026-01-24T17:00:00'),
+    END_AT: new Date('2026-01-24T20:00:00'),
+    NAME: "Arknights: Columbia-themed Gathering",
+    NAME_CN: "明日方舟: 哥伦比亚主题活动",
+    DESCRIPTION: "An unofficial event organized by ACGN Club and UW students to bring Doktahs together and have a great time.",
+    DESCRIPTION_CN: "由ACGN动漫社和UW的博士们自发组织的非官方活动，让来自各地的博士们结识彼此，享受一段美好的时光！",
+    LOCATION: "University of Washington, Spratlen hall 311&313",
+    LOCATION_CN: "华盛顿大学北区 Spratlen hall 311&313",
     BUY_TICKET: "",
     LEARN_MORE: "",
-    POSTER: "/images/events/halloween_2025.jpg",
-    POSTER_CREDIT: "Oscar"
+    CUSTOM_BUTTON_TEXT: "Registration Form",
+    CUSTOM_BUTTON_TEXT_CN: "报名问卷",
+    CUSTOM_BUTTON_LINK: "https://forms.gle/ynEmkFpEwgbKNbRf7",
+    POSTER: "/images/events/acgn_arknights_2026.png",
+    POSTER_CREDIT: "ACGN Club"
 }
 
 export const NO_UPCOMING_EVENT: boolean = UPCOMING_EVENT.END_AT <= new Date();

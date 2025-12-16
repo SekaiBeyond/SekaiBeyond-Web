@@ -72,8 +72,9 @@ export const UpcomingEvent = () => {
                 <div style={{position: 'relative', zIndex: 2}}>
                     <span className="convention-label">{isEnglish ? "Coming Soon" : "即将到来"}</span>
                     <h2 className="convention-title">{isEnglish ? UPCOMING_EVENT.NAME : UPCOMING_EVENT.NAME_CN}</h2>
+                    {/* Event Date & Time */}
                     <p style={{
-                        fontSize: '24px',
+                        fontSize: '30px',
                         color: '#ff8e53',
                         fontWeight: '700',
                         marginBottom: '20px'
@@ -84,7 +85,11 @@ export const UpcomingEvent = () => {
                         hour: 'numeric',
                         minute: 'numeric',
                     })}</p>
-
+                    {/* Event Location */}
+                    <div className="convention-location">
+                        {isEnglish ? UPCOMING_EVENT.LOCATION : UPCOMING_EVENT.LOCATION_CN}
+                    </div>
+                    {/* Event Description */}
                     <p style={{
                         fontSize: '18px',
                         color: '#7a7a7a',
@@ -94,16 +99,16 @@ export const UpcomingEvent = () => {
                     }}>
                         {isEnglish ? UPCOMING_EVENT.DESCRIPTION : UPCOMING_EVENT.DESCRIPTION_CN}
                     </p>
-                    <div className="convention-poster" style={{marginTop: '40px'}}
+                    <div className="convention-poster" style={{marginTop: '2rem'}}
                          onClick={() => setIsPosterModalOpen(true)}>
                         <img
                             src={UPCOMING_EVENT.POSTER}
                             alt={isEnglish ? "Event Poster" : "活动海报"}
                         />
                         <p style={{
-                            fontSize: '14px',
+                            fontSize: '1rem',
                             color: '#999',
-                            marginTop: '14px',
+                            marginTop: '2rem',
                             fontStyle: 'italic'
                         }}>
                             {isEnglish ? `Poster by ${UPCOMING_EVENT.POSTER_CREDIT}` : `海报由 ${UPCOMING_EVENT.POSTER_CREDIT} 制作`}
@@ -157,6 +162,11 @@ export const UpcomingEvent = () => {
                             {UPCOMING_EVENT.LEARN_MORE ? (<a href={UPCOMING_EVENT.LEARN_MORE}
                                                              className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>) : null}
                         </div>) : null}
+                    {UPCOMING_EVENT.CUSTOM_BUTTON_LINK ? (
+                        <a href={UPCOMING_EVENT.CUSTOM_BUTTON_LINK}
+                           className="btn btn-secondary con-btn">{isEnglish ? UPCOMING_EVENT.CUSTOM_BUTTON_TEXT : UPCOMING_EVENT.CUSTOM_BUTTON_TEXT_CN}</a>
+                    ) : null
+                    }
                 </div>
             </div>
 
