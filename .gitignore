@@ -5,6 +5,5 @@
 /.react-router/
 /build/
 /.idea
-package-lock.json
 /.firebase
 /.claude

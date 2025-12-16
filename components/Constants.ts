@@ -46,7 +46,12 @@ export const OFFICERS: Officer[] = [
         roleCn: '社长',
         src: '/images/officers/Officer_Avatar_Angel.jpg'
     },
-    {name: 'Jason', role: 'Secretary', roleCn: '秘书', src: '/images/officers/Officer_Avatar_JasonChen.jpg'},
+    {
+        name: 'Jason',
+        role: 'Secretary',
+        roleCn: '秘书',
+        src: '/images/officers/Officer_Avatar_JasonChen.jpg'
+    },
     {
         name: 'Ernin',
         role: 'External Relations',
@@ -61,7 +66,12 @@ export const OFFICERS: Officer[] = [
         roleCn: '技术顾问',
         src: '/images/officers/Officer_Avatar_WynterLin.jpg'
     },
-    {name: 'Anne', role: 'Social Media', roleCn: '社交媒体', src: '/images/officers/Officer_Avatar_Anne.jpg'},
+    {
+        name: 'Anne',
+        role: 'Social Media',
+        roleCn: '社交媒体',
+        src: '/images/officers/Officer_Avatar_Anne.jpg'
+    },
     {
         name: 'Aaron',
         nameCn: "笹兰",
@@ -100,7 +110,7 @@ export const PAST_EVENTS: PastEvent[] = [
         location: 'McMahon Hall Pompeii Room',
         description: 'A spooky night of anime‑inspired Halloween fun! Members dressed up as their favorite characters, played mini games with Halloween twists, and celebrated the season together. From creative cosplay to themed activities, everyone enjoyed treats, tricks, and plenty of photo ops in a festive atmosphere.',
         descriptionCn: '充满动漫元素的万圣节派对！成员们装扮成自己最喜爱的角色，参与带有万圣节元素的迷你游戏，一起庆祝这个欢乐的节日。从创意角色扮演到主题活动，每个人都享受了糖果、惊喜以及大量的合影机会，度过了一个充满节日气氛的夜晚。',
-        icon: "/images/events/halloween_2025.jpg",
+        icon: '/images/events/halloween_2025.jpg',
     },
     {
         badge: 'Anime Con',
@@ -111,7 +121,7 @@ export const PAST_EVENTS: PastEvent[] = [
         location: 'Husky Union Building',
         description: 'Sekai Beyond\'s first convention brought anime, comics, games, and novel fans together for a full day of creativity and celebration. From the dazzling KiraKira IdolFest and spirited cosplay competition to the bustling artist alley and energetic band performances, guests cheered, connected, and shared their passions in a vibrant community atmosphere.',
         descriptionCn: 'Sekai Beyond 首届漫展汇聚了动漫、漫画、游戏与小说（ACGN）爱好者，共度充满创意与热情的一天。从闪耀的 KiraKira 偶像祭、热血的角色扮演比赛，到热闹的艺术家街与活力四射的乐队演出，现场观众为之欢呼、交流，共同在充满活力的社区氛围中分享他们的热爱。',
-        icon: "/images/events/sekai_beyond_con_2025.jpg",
+        icon: '/images/events/sekai_beyond_con_2025.jpg',
     },
     {
         badge: 'Food',
@@ -122,7 +132,7 @@ export const PAST_EVENTS: PastEvent[] = [
         location: '4801 24th Ave NE',
         description: 'A Delicious in Dungeon–themed social where fans dove into the official board game, a lively cooking challenge, and lighthearted role‑play. Between strategy, storytelling, and plenty of tasty dishes, guests traded tips, shared laughs, and adventured together all evening.',
         descriptionCn: '本次迷宫饭主题活动成功聚集了许多热爱这部作品的同好，大家一同体验了官方正版桌游，并积极参与了趣味十足的厨艺比赛。一边品尝香气四溢的美食，一边在跑团、战略桌游，和角色扮演中迷失自我……',
-        icon: "/images/events/delicious_in_dungeon_party.jpg",
+        icon: '/images/events/delicious_in_dungeon_party.jpg',
     },
     {
         badge: 'Food',
@@ -131,9 +141,9 @@ export const PAST_EVENTS: PastEvent[] = [
         titleCn: '旅鸟X彼世界 快闪女仆咖啡',
         date: '2025-7-26',
         location: 'Hobo Bird 旅烏, University District',
-        description: 'Our second pop‑up maid café featured longer seating, warmer service, and a smoother flow. Maids charmed guests with J‑pop dance stages and playful “magic,” while Basque cheesecake and matcha lattes set a sweet afternoon vibe. A cozy, unhurried day at Hobo Bird for chats, photos, and treats.',
+        description: 'Our second pop‑up maid café featured longer seating, warmer service, and a smoother flow. Maids charmed guests with J‑pop dance stages and playful "magic," while Basque cheesecake and matcha lattes set a sweet afternoon vibe. A cozy, unhurried day at Hobo Bird for chats, photos, and treats.',
         descriptionCn: '我们与Hobo Bird动漫店合作举办了第二次pop-up cafe，为参与者提供更长时间的陪伴并给予更多的服务项目。女仆们表演了精彩的节目，还给顾客的食品中施了魔法。巴斯克蛋糕配上抹茶拿铁变得更加美味！动漫店摇身一变成了下午茶餐厅，大家一同度过了一个愉快的下午。',
-        icon: "/images/events/maid_cafe_hobo_bird_popup_2025.jpg",
+        icon: '/images/events/maid_cafe_hobo_bird_popup_2025.jpg',
     },
     {
         badge: 'Gaming',
@@ -142,7 +152,7 @@ export const PAST_EVENTS: PastEvent[] = [
         titleCn: '龙与地下城桌游大会',
         date: '2025-5-24',
         location: 'Alder Hall 107, University of Washington',
-        description: 'A beginner‑friendly D&D one‑shot led by veteran DMs. Players picked iconic classes, role‑played through the Baldur’s Gate setting, and teamed up for tactical encounters—perfect for first‑timers and returning adventurers alike.',
+        description: "A beginner‑friendly D&D one‑shot led by veteran DMs. Players picked iconic classes, role‑played through the Baldur's Gate setting, and teamed up for tactical encounters—perfect for first‑timers and returning adventurers alike.",
         descriptionCn: '《龙与地下城》主题特别活动是一场适合新手入坑的冒险体验⚔。在几位出色DM的带领之下，参与者可以选择自己喜欢的角色，进入D&D的奇幻世界进行合作冒险。本冒险篇章以《博德之门》的世界观为背景，鼓励玩家角色扮演、合作战斗。',
         icon: '/images/events/DND_Special_Epic_2025.jpg',
     },
@@ -153,8 +163,8 @@ export const PAST_EVENTS: PastEvent[] = [
         titleCn: '三国杀校园赛',
         date: '2025-5-24',
         location: 'Alder Hall 107, University of Washington',
-        description: 'An on‑campus showdown for fans of the classic strategy card game. Prelims ran in standard “Landlord” format, leading into tense 2v2 semi‑finals and finals—12 two‑player teams battling for campus glory.',
-        descriptionCn: '「《三国杀》校园赛」是一项为UW喜爱中国传统桌面游戏的同学们打造的校内赛事。比赛从初赛的标准“斗地主”模式（1v2）开始，逐渐升级为半决赛及决赛中激烈的2v2对战。现场有12支队伍参与比赛，每队均由2名选手组成‍‍。',
+        description: 'An on‑campus showdown for fans of the classic strategy card game. Prelims ran in standard "Landlord" format, leading into tense 2v2 semi‑finals and finals—12 two‑player teams battling for campus glory.',
+        descriptionCn: '「《三国杀》校园赛」是一项为UW喜爱中国传统桌面游戏的同学们打造的校内赛事。比赛从初赛的标准"斗地主"模式（1v2）开始，逐渐升级为半决赛及决赛中激烈的2v2对战。现场有12支队伍参与比赛，每队均由2名选手组成‍‍。',
         icon: '/images/events/SanGuoSha_Tournament_2025.jpg',
     },
     {
@@ -177,7 +187,7 @@ export const PAST_EVENTS: PastEvent[] = [
         location: 'Madrona Hall 313, University of Washington',
         description: 'A tea‑time social hosted by maids in themed outfits. Guests enjoyed coffee, pastries, photos, and board games in a warm, cozy atmosphere—perfect for unwinding and making new friends.',
         descriptionCn: '「UW女仆咖啡厅」是一场在UW校内举办的中型茶会活动。我们的工作人员身着各式主题服饰，通过桌游和合影与来宾热情互动。客人们可以享用咖啡、酥脆糕点和下午茶，沉浸在愉悦而轻松的氛围中。',
-        icon: "/images/events/Maid_Cafe_2025_Spring.jpg",
+        icon: '/images/events/Maid_Cafe_2025_Spring.jpg',
     },
     {
         badge: 'Music',
