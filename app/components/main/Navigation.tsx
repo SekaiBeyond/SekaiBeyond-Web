@@ -1,8 +1,8 @@
 import { HashLink } from "react-router-hash-link";
 import React from "react";
-import { LanguageSwitcher } from "../LanguageSwitcher";
-import { useLanguage } from "../LanguageContextProvider";
-import { NAVIGATION_LINKS, type NavLink } from "../Constants";
+import { LanguageSwitcher } from "~/components/LanguageSwitcher";
+import { useLanguage } from "~/components/LanguageContextProvider";
+import { NAVIGATION_LINKS, type NavLink } from "~/constants";
 
 
 export const Navigation = () => {

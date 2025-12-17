@@ -1,6 +1,6 @@
 import React from "react";
-import { useLanguage } from "../LanguageContextProvider";
-import { LINKS } from "../Constants";
+import { useLanguage } from "~/components/LanguageContextProvider";
+import { LINKS } from "~/constants";
 
 export const Video = () => {
     const {isEnglish} = useLanguage();

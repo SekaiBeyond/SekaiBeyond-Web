@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useLanguage } from "../LanguageContextProvider";
+import { useLanguage } from "~/components/LanguageContextProvider";
 
 export const About = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);

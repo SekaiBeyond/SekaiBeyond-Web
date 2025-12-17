@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { NO_UPCOMING_EVENT, UPCOMING_EVENT } from "../Constants";
-import { useLanguage } from "../LanguageContextProvider";
-import { EventImageModal } from "../EventImageModal";
+import { NO_UPCOMING_EVENT, UPCOMING_EVENT } from "~/constants";
+import { useLanguage } from "~/components/LanguageContextProvider";
+import { EventImageModal } from "~/components/EventImageModal";
 
 export const UpcomingEvent = () => {
     const {isEnglish} = useLanguage();

@@ -1,7 +1,7 @@
 import { HashLink } from "react-router-hash-link";
 import React from "react";
-import { FOOTER_LINKS, type NavLink } from "../Constants";
-import { useLanguage } from "../LanguageContextProvider";
+import { FOOTER_LINKS, type NavLink } from "~/constants";
+import { useLanguage } from "~/components/LanguageContextProvider";
 
 export const Footer = () => {
     const {isEnglish} = useLanguage();

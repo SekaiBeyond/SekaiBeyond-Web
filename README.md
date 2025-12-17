@@ -27,7 +27,7 @@ This repository contains the source code for the official **Sekai Beyond** websi
 | Technology | Purpose |
 |------------|---------|
 | [React](https://react.dev/) | UI Framework |
-| [React Router](https://reactrouter.com/) | Routing & SSR |
+| [React Router](https://reactrouter.com/) | Framework & SSR |
 | [TypeScript](https://www.typescriptlang.org/) | Type Safety |
 | [TailwindCSS](https://tailwindcss.com/) | Styling |
 | [Vite](https://vitejs.dev/) | Build Tool |
@@ -80,8 +80,8 @@ This repository contains the source code for the official **Sekai Beyond** websi
 | `npm run dev` | Start development server with HMR |
 | `npm run build` | Build for production |
 | `npm run start` | Run production server |
-| `npm run lint` | Run ESLint |
 | `npm run typecheck` | Run TypeScript compiler check |
+| `npm run deploy` | Build and deploy to GitHub Pages |
 
 ## Project Structure
 
@@ -89,12 +89,17 @@ This repository contains the source code for the official **Sekai Beyond** websi
 SekaiBeyond-Web/
 ├── app/                    # Application source code
 │   ├── components/         # Reusable UI components
-│   ├── routes/             # Route components
-│   └── styles/             # Global styles
+│   ├── pages/              # Page components
+│   ├── routes/             # Route definitions
+│   ├── app.css             # Global styles
+│   ├── constants.ts        # Application constants
+│   ├── root.tsx            # Root component
+│   └── routes.ts           # Route configuration
 ├── public/                 # Static assets
+│   └── images/             # Image assets
 ├── package.json
 ├── tsconfig.json
-├── tailwind.config.ts
+├── react-router.config.ts  # React Router configuration
 └── vite.config.ts
 ```
 

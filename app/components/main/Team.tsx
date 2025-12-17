@@ -1,6 +1,6 @@
 import React from "react";
-import { OFFICERS } from "../Constants"
-import { useLanguage } from "../LanguageContextProvider";
+import { OFFICERS } from "~/constants"
+import { useLanguage } from "~/components/LanguageContextProvider";
 
 export const Team = () => {
     const {isEnglish} = useLanguage();

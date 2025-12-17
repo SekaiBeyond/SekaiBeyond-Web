@@ -1,7 +1,7 @@
 import { SiBilibili, SiDiscord, SiInstagram, SiLinkedin, SiXiaohongshu } from "react-icons/si";
 import React from "react";
-import { LINKS } from "../Constants";
-import { useLanguage } from "../LanguageContextProvider";
+import { LINKS } from "~/constants";
+import { useLanguage } from "~/components/LanguageContextProvider";
 
 export const Contact = () => {
     const {isEnglish} = useLanguage();

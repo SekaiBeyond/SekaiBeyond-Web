@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { PAST_EVENTS, type PastEvent } from "../Constants";
-import { useLanguage } from "../LanguageContextProvider";
-import { EventImageModal } from "../EventImageModal";
+import { PAST_EVENTS, type PastEvent } from "~/constants";
+import { useLanguage } from "~/components/LanguageContextProvider";
+import { EventImageModal } from "~/components/EventImageModal";
 
 export const PastEvents = () => {
     const {isEnglish} = useLanguage();

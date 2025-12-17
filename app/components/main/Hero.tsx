@@ -1,6 +1,6 @@
 import { HashLink } from "react-router-hash-link";
 import React from "react";
-import { useLanguage } from "../LanguageContextProvider";
+import { useLanguage } from "~/components/LanguageContextProvider";
 
 export const Hero = () => {
     const {isEnglish} = useLanguage();
