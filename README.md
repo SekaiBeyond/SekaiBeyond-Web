@@ -98,30 +98,6 @@ SekaiBeyond-Web/
 └── vite.config.ts
 ```
 
-## Deployment
-
-### Docker
-
-Build and run the application using Docker:
-
-```bash
-# Build the Docker image
-docker build -t sekaibeyond-web .
-
-# Run the container
-docker run -p 3000:3000 sekaibeyond-web
-```
-
-### Production Build
-
-Create an optimized production build:
-
-```bash
-npm run build
-```
-
-The build output will be in the `build/` directory
-
 ## Contributing
 
 We welcome contributions from the community! Here's how you can help:
