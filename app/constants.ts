@@ -24,7 +24,7 @@ export const UPCOMING_EVENT = {
     CUSTOM_BUTTON_TEXT: "Registration Form",
     CUSTOM_BUTTON_TEXT_CN: "报名问卷",
     CUSTOM_BUTTON_LINK: "https://forms.gle/ynEmkFpEwgbKNbRf7",
-    POSTER: "/images/events/acgn_arknights_2026.png",
+    POSTER: "/images/acgn_arknights_2026.png",
     POSTER_CREDIT: "ACGN Club"
 }
 
@@ -88,6 +88,38 @@ export const OFFICERS: Officer[] = [
     }
 ];
 
+export interface ConEdition {
+    year: number;
+    date: string;
+    location: string;
+    locationCn?: string;
+    description: string;
+    descriptionCn: string;
+    image: string;
+    highlights: {
+        labelEn: string;
+        labelCn: string;
+        icon: string;
+    }[];
+}
+
+export const SEKAI_BEYOND_CON: ConEdition[] = [
+    {
+        year: 2025,
+        date: '2025-10-11',
+        location: 'Husky Union Building',
+        description: 'Sekai Beyond\'s first convention brought anime, comics, games, and novel fans together for a full day of creativity and celebration. From the dazzling KiraKira IdolFest and spirited cosplay competition to the bustling artist alley and energetic band performances, guests cheered, connected, and shared their passions in a vibrant community atmosphere.',
+        descriptionCn: 'Sekai Beyond 首届漫展汇聚了动漫、漫画、游戏与小说（ACGN）爱好者，共度充满创意与热情的一天。从闪耀的 KiraKira 偶像祭、热血的角色扮演比赛，到热闹的艺术家街与活力四射的乐队演出，现场观众为之欢呼、交流，共同在充满活力的社区氛围中分享他们的热爱。',
+        image: '/images/sekai_beyond_con_2025.jpg',
+        highlights: [
+            {labelEn: 'KiraKira IdolFest', labelCn: '闪耀偶像祭', icon: '🎤'},
+            {labelEn: 'Cosplay Competition', labelCn: '角色扮演比赛', icon: '🌸'},
+            {labelEn: 'Artist Alley', labelCn: '艺术家街', icon: '🎨'},
+            {labelEn: 'Band Performances', labelCn: '乐队演出', icon: '🎸'},
+        ],
+    },
+];
+
 export interface PastEvent {
     badge: string;
     badgeCn: string;
@@ -111,17 +143,6 @@ export const PAST_EVENTS: PastEvent[] = [
         description: 'A spooky night of anime‑inspired Halloween fun! Members dressed up as their favorite characters, played mini games with Halloween twists, and celebrated the season together. From creative cosplay to themed activities, everyone enjoyed treats, tricks, and plenty of photo ops in a festive atmosphere.',
         descriptionCn: '充满动漫元素的万圣节派对！成员们装扮成自己最喜爱的角色，参与带有万圣节元素的迷你游戏，一起庆祝这个欢乐的节日。从创意角色扮演到主题活动，每个人都享受了糖果、惊喜以及大量的合影机会，度过了一个充满节日气氛的夜晚。',
         icon: '/images/events/halloween_2025.jpg',
-    },
-    {
-        badge: 'Anime Con',
-        badgeCn: "漫展",
-        title: 'Sekai Beyond Con',
-        titleCn: '彼世界动漫游戏展',
-        date: '2025-10-11',
-        location: 'Husky Union Building',
-        description: 'Sekai Beyond\'s first convention brought anime, comics, games, and novel fans together for a full day of creativity and celebration. From the dazzling KiraKira IdolFest and spirited cosplay competition to the bustling artist alley and energetic band performances, guests cheered, connected, and shared their passions in a vibrant community atmosphere.',
-        descriptionCn: 'Sekai Beyond 首届漫展汇聚了动漫、漫画、游戏与小说（ACGN）爱好者，共度充满创意与热情的一天。从闪耀的 KiraKira 偶像祭、热血的角色扮演比赛，到热闹的艺术家街与活力四射的乐队演出，现场观众为之欢呼、交流，共同在充满活力的社区氛围中分享他们的热爱。',
-        icon: '/images/events/sekai_beyond_con_2025.jpg',
     },
     {
         badge: 'Food',
@@ -238,6 +259,12 @@ const SHARED_LINKS: NavLink[] = [
         href: '#about',
         labelEn: 'About Us',
         labelCn: '关于我们',
+    },
+    {
+        id: 'con',
+        href: '#con',
+        labelEn: 'Sekai Beyond Con',
+        labelCn: '彼世界漫展',
     },
     {
         id: 'events',

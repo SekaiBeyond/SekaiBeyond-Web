@@ -633,6 +633,22 @@ body {
     transform: scale(1.05);
 }
 
+.con-editions {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+}
+
+.con-description {
+    color: #7a7a7a;
+    line-height: 1.8;
+    font-weight: 500;
+    font-size: 15px;
+    max-width: 800px;
+    margin: 30px auto 0;
+    text-align: center;
+}
+
 /* Team Section */
 .team-grid {
     display: grid;
@@ -1322,6 +1338,15 @@ footer {
         grid-template-columns: repeat(2, 1fr);
     }
 
+    .convention-poster img {
+        width: 80%;
+    }
+
+    .con-description {
+        font-size: 14px;
+        padding: 0 15px;
+    }
+
     .stats-container {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -1587,5 +1612,32 @@ footer {
 
     .video-caption {
         font-size: 13px;
+    }
+
+    .convention-banner {
+        padding: 40px 20px;
+        border-radius: 20px;
+    }
+
+    .convention-title {
+        font-size: 2rem;
+    }
+
+    .convention-location {
+        font-size: 1rem;
+    }
+
+    .convention-features {
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+
+    .convention-poster img {
+        width: 90%;
+    }
+
+    .con-description {
+        font-size: 13px;
+        padding: 0 10px;
     }
 }

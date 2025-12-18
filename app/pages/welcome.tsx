@@ -7,6 +7,7 @@ import { Footer } from "~/components/main/Footer";
 import { Navigation } from "~/components/main/Navigation";
 import { PastEvents } from "~/components/main/PastEvents";
 import { UpcomingEvent } from "~/components/main/UpcomingEvent";
+import { SekaiBeyondCon } from "~/components/main/SekaiBeyondCon";
 
 export const Welcome = () => (
     <>
@@ -16,11 +17,14 @@ export const Welcome = () => (
         {/* Hero Section */}
         <Hero/>
 
+        {/* About Section */}
+        <About/>
+
         {/* Video Section */}
         <Video/>
 
-        {/* About Section */}
-        <About/>
+        {/* Sekai Beyond Con Section */}
+        <SekaiBeyondCon/>
 
         {/* Past Events Section */}
         <PastEvents/>
