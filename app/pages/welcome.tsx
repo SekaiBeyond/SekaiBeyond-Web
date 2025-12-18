@@ -8,6 +8,7 @@ import { Navigation } from "~/components/main/Navigation";
 import { PastEvents } from "~/components/main/PastEvents";
 import { UpcomingEvent } from "~/components/main/UpcomingEvent";
 import { SekaiBeyondCon } from "~/components/main/SekaiBeyondCon";
+import { GoToTop } from "~/components/GoToTop";
 
 export const Welcome = () => (
     <>
@@ -40,5 +41,8 @@ export const Welcome = () => (
 
         {/* Footer */}
         <Footer/>
+
+        {/* Go to Top Button */}
+        <GoToTop/>
     </>
 );
