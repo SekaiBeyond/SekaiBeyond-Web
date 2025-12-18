@@ -23,9 +23,6 @@ export const Navigation = () => {
                 </ul>
                 <div className="nav-actions">
                     <LanguageSwitcher/>
-                    <HashLink to="#contact" className="join-btn common-btn desktop-only">
-                        <span>{isEnglish ? 'Join Us' : '加入我们'}</span>
-                    </HashLink>
                 </div>
             </div>
         </nav>
