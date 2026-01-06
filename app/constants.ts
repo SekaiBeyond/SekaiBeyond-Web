@@ -10,25 +10,75 @@ export const LINKS = {
     email: `mailto:${RSO_EMAIL}`
 }
 
-export const UPCOMING_EVENT = {
-    START_AT: new Date('2026-01-24T17:00:00'),
-    END_AT: new Date('2026-01-24T20:00:00'),
-    NAME: "Arknights: Columbia-themed Gathering",
-    NAME_CN: "明日方舟: 哥伦比亚主题活动",
-    DESCRIPTION: "An unofficial event organized by ACGN Club and UW students to bring Doktahs together and have a great time.",
-    DESCRIPTION_CN: "由ACGN动漫社和UW的博士们自发组织的非官方活动，让来自各地的博士们结识彼此，享受一段美好的时光！",
-    LOCATION: "University of Washington, Spratlen hall 311&313",
-    LOCATION_CN: "华盛顿大学北区 Spratlen hall 311&313",
-    BUY_TICKET: "",
-    LEARN_MORE: "",
-    CUSTOM_BUTTON_TEXT: "Registration Form",
-    CUSTOM_BUTTON_TEXT_CN: "报名问卷",
-    CUSTOM_BUTTON_LINK: "https://forms.gle/ynEmkFpEwgbKNbRf7",
-    POSTER: "/images/acgn_arknights_2026.png",
-    POSTER_CREDIT: "ACGN Club"
+/** Configuration for an upcoming event displayed on the website */
+export interface UpcomingEventType {
+    /** Event start date and time */
+    START_AT: Date;
+    /** Event end date and time (event hidden after this) */
+    END_AT: Date;
+    /** Event name in English */
+    NAME: string;
+    /** Event name in Chinese */
+    NAME_CN: string;
+    /** Event description in English */
+    DESCRIPTION: string;
+    /** Event description in Chinese */
+    DESCRIPTION_CN: string;
+    /** Event location in English */
+    LOCATION: string;
+    /** Event location in Chinese */
+    LOCATION_CN: string;
+    /** URL for ticket purchase (optional) */
+    BUY_TICKET?: string;
+    /** URL for more information (optional) */
+    LEARN_MORE?: string;
+    /** Custom button text in English (optional) */
+    CUSTOM_BUTTON_TEXT?: string;
+    /** Custom button text in Chinese (optional) */
+    CUSTOM_BUTTON_TEXT_CN?: string;
+    /** Custom button URL (optional) */
+    CUSTOM_BUTTON_LINK?: string;
+    /** Path to event poster image */
+    POSTER: string;
+    /** Credit for poster creator (optional) */
+    POSTER_CREDIT?: string;
 }
 
-export const NO_UPCOMING_EVENT: boolean = UPCOMING_EVENT.END_AT <= new Date();
+export const UPCOMING_EVENTS: UpcomingEventType[] = [
+    {
+        START_AT: new Date('2026-01-24T17:00:00'),
+        END_AT: new Date('2026-01-24T20:00:00'),
+        NAME: "Arknights: Columbia-themed Gathering",
+        NAME_CN: "明日方舟: 哥伦比亚主题活动",
+        DESCRIPTION: "An unofficial event organized by ACGN Club and UW students to bring Doktahs together and have a great time.",
+        DESCRIPTION_CN: "由ACGN动漫社和UW的博士们自发组织的非官方活动，让来自各地的博士们结识彼此，享受一段美好的时光！",
+        LOCATION: "University of Washington, Spratlen hall 311&313",
+        LOCATION_CN: "华盛顿大学北区 Spratlen hall 311&313",
+        CUSTOM_BUTTON_TEXT: "Registration Form",
+        CUSTOM_BUTTON_TEXT_CN: "报名问卷",
+        CUSTOM_BUTTON_LINK: "https://forms.gle/ynEmkFpEwgbKNbRf7",
+        POSTER: "/images/acgn_arknights_2026.png",
+        POSTER_CREDIT: "ACGN Club"
+    },
+    {
+        START_AT: new Date('2026-02-14T17:00:00'),
+        END_AT: new Date('2026-02-14T20:00:00'),
+        NAME: "Sekai Beyond x HCCA: Spring Festival 2026",
+        NAME_CN: "彼世界 x 汉承: 2026 拜年纪",
+        DESCRIPTION: "Celebrate the Year of the Horse with Sekai Beyond and Han Culture Club! Join us for an evening of traditional performances, games, and festivities as we ring in the Spring Festival together.",
+        DESCRIPTION_CN: "与彼世界动漫社和汉承文化社一起欢庆马年！加入我们，共度一个充满传统表演、游戏和欢乐的新春之夜，一起迎接农历新年的到来。",
+        LOCATION: "University of Washington, HUB Lyceum",
+        LOCATION_CN: "华盛顿大学, HUB Lyceum",
+        POSTER: "/images/sekai_beyond_fes_2026.jpg"
+    }
+].filter(event => event.END_AT > new Date()); // Filter to only show events that haven't ended yet
+
+// Validate that END_AT is always later than START_AT
+UPCOMING_EVENTS.forEach((event, index) => {
+    if (event.END_AT <= event.START_AT) {
+        throw new Error(`Invalid event at index ${index} ("${event.NAME}"): END_AT must be later than START_AT`);
+    }
+});
 
 interface Officer {
     name: string;
@@ -275,9 +325,9 @@ const SHARED_LINKS: NavLink[] = [
     {
         id: 'upcoming',
         href: '#upcoming',
-        labelEn: 'Upcoming Event',
+        labelEn: UPCOMING_EVENTS.length > 1 ? 'Upcoming Events' : 'Upcoming Event',
         labelCn: '活动预告',
-        disabled: NO_UPCOMING_EVENT,
+        disabled: UPCOMING_EVENTS.length === 0,
     },
     {
         id: 'team',
