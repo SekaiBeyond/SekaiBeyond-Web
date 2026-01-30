@@ -62,13 +62,14 @@ export const UPCOMING_EVENTS: UpcomingEventType[] = [
     },
     {
         START_AT: new Date('2026-02-14T17:00:00'),
-        END_AT: new Date('2026-02-14T20:00:00'),
+        END_AT: new Date('2026-02-14T21:00:00'),
         NAME: "Sekai Beyond x HCCA: Spring Festival 2026",
         NAME_CN: "彼世界 x 汉承: 2026 拜年纪",
         DESCRIPTION: "Celebrate the Year of the Horse with Sekai Beyond and Han Culture Club! Join us for an evening of traditional performances, games, and festivities as we ring in the Spring Festival together.",
         DESCRIPTION_CN: "与彼世界动漫社和汉承文化社一起欢庆马年！加入我们，共度一个充满传统表演、游戏和欢乐的新春之夜，一起迎接农历新年的到来。",
         LOCATION: "University of Washington, HUB Lyceum",
         LOCATION_CN: "华盛顿大学, HUB Lyceum",
+        BUY_TICKET: "https://events.hometownticketing.com/boxoffice/uofwashington/L2VtYmVkL2V2ZW50LzM2P3NpbmdsZT0x",
         POSTER: "/images/sekai_beyond_fes_2026.jpg"
     }
 ].filter(event => event.END_AT > new Date()); // Filter to only show events that haven't ended yet
