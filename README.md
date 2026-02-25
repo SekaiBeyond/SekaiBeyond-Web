@@ -113,6 +113,36 @@ We welcome contributions from the community! Here's how you can help:
 4. **Push** to the branch (`git push origin feature/amazing-feature`)
 5. **Open** a Pull Request
 
+### Adding Upcoming Events
+
+Upcoming events are managed in `app/constants.ts` via the `UPCOMING_EVENTS` array. Each event is automatically hidden after its `END_AT` time passes. To add a new event:
+
+1. Place the event poster image in `public/images/`
+2. Add a new entry to the `UPCOMING_EVENTS` array in `app/constants.ts`:
+
+```ts
+{
+    START_AT: new Date('2026-06-01T14:00:00'),
+    END_AT: new Date('2026-06-01T18:00:00'),
+    NAME: "Event Name",
+    NAME_CN: "活动名称",
+    DESCRIPTION: "English description of the event.",
+    DESCRIPTION_CN: "活动的中文描述。",
+    LOCATION: "Event Location",
+    LOCATION_CN: "活动地点",
+    POSTER: "/images/your_poster.png",
+    // Optional fields:
+    BUY_TICKET: "https://ticket-link.com",
+    LEARN_MORE: "https://more-info.com",
+    CUSTOM_BUTTON_TEXT: "Sign Up",
+    CUSTOM_BUTTON_TEXT_CN: "报名",
+    CUSTOM_BUTTON_LINK: "https://signup-link.com",
+    POSTER_CREDIT: "Artist Name",
+}
+```
+
+> **Note:** Events are automatically filtered out once `END_AT` has passed. A validation check ensures `END_AT` is always later than `START_AT`.
+
 ### Development Guidelines
 
 - Follow the existing code style
