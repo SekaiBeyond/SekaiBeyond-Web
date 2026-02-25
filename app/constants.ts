@@ -46,31 +46,37 @@ export interface UpcomingEventType {
 
 export const UPCOMING_EVENTS: UpcomingEventType[] = [
     {
-        START_AT: new Date('2026-01-24T17:00:00'),
-        END_AT: new Date('2026-01-24T20:00:00'),
-        NAME: "Arknights: Columbia-themed Gathering",
-        NAME_CN: "明日方舟: 哥伦比亚主题活动",
-        DESCRIPTION: "An unofficial event organized by ACGN Club and UW students to bring Doktahs together and have a great time.",
-        DESCRIPTION_CN: "由ACGN动漫社和UW的博士们自发组织的非官方活动，让来自各地的博士们结识彼此，享受一段美好的时光！",
-        LOCATION: "University of Washington, Spratlen hall 311&313",
-        LOCATION_CN: "华盛顿大学北区 Spratlen hall 311&313",
-        CUSTOM_BUTTON_TEXT: "Registration Form",
-        CUSTOM_BUTTON_TEXT_CN: "报名问卷",
-        CUSTOM_BUTTON_LINK: "https://forms.gle/ynEmkFpEwgbKNbRf7",
-        POSTER: "/images/acgn_arknights_2026.png",
-        POSTER_CREDIT: "ACGN Club"
+        START_AT: new Date('2026-03-14T14:00:00'),
+        END_AT: new Date('2026-03-14T18:00:00'),
+        NAME: "D&D Special Epic 2026",
+        NAME_CN: "哈欠之门",
+        DESCRIPTION: "As warm as rye beer and legends, this is where stories and adventures converge. Sitting at the table could be heroes or the beginning of the next legend.",
+        DESCRIPTION_CN: "欢迎来到哈欠之门。黑麦酒与传说同样滚烫，这里是故事和冒险的交汇处。餐桌旁坐着的，可能是英雄，也可能是下一段传奇的开端。",
+        LOCATION: "4249 Little Canoe Channel NE",
+        LOCATION_CN: "4249 Little Canoe Channel NE",
+        POSTER: "/images/dnd_2026.png"
     },
     {
-        START_AT: new Date('2026-02-14T17:00:00'),
-        END_AT: new Date('2026-02-14T21:00:00'),
-        NAME: "Sekai Beyond x HCCA: Spring Festival 2026",
-        NAME_CN: "彼世界 x 汉承: 2026 拜年纪",
-        DESCRIPTION: "Celebrate the Year of the Horse with Sekai Beyond and Han Culture Club! Join us for an evening of traditional performances, games, and festivities as we ring in the Spring Festival together.",
-        DESCRIPTION_CN: "与彼世界动漫社和汉承文化社一起欢庆马年！加入我们，共度一个充满传统表演、游戏和欢乐的新春之夜，一起迎接农历新年的到来。",
-        LOCATION: "University of Washington, HUB Lyceum",
-        LOCATION_CN: "华盛顿大学, HUB Lyceum",
-        BUY_TICKET: "https://events.hometownticketing.com/boxoffice/uofwashington/L2VtYmVkL2V2ZW50LzM2P3NpbmdsZT0x",
-        POSTER: "/images/sekai_beyond_fes_2026.jpg"
+        START_AT: new Date('2026-03-21T15:00:00'),
+        END_AT: new Date('2026-03-21T18:00:00'),
+        NAME: "Bowtea Maid Café",
+        NAME_CN: "Bowtea 女仆咖啡",
+        DESCRIPTION: "Our beloved maid café returns for a second year! Enjoy an afternoon of themed drinks, sweet treats, and charming maid service across two cozy rooms. With interactive games, photo ops, and heartfelt hospitality, it's the perfect way to unwind and make new friends.",
+        DESCRIPTION_CN: "广受好评的UW女仆咖啡厅再度回归！在两间精心布置的房间里，品尝主题饮品与精致甜点，感受女仆们温馨贴心的服务。互动小游戏、合影留念与满满的元气，带你度过一个治愈又欢乐的下午。",
+        LOCATION: "Spratlen Hall 311 & 313",
+        LOCATION_CN: "Spratlen Hall 311 & 313",
+        POSTER: "/images/maid_cafe_2026.png"
+    },
+    {
+        START_AT: new Date('2026-05-23T15:00:00'),
+        END_AT: new Date('2026-05-23T19:00:00'),
+        NAME: "Sekai Band Con",
+        NAME_CN: "少女乐队Only",
+        DESCRIPTION: "Bringing the community together through Girls Band  themed live performances, fan-zine marketplaces, and rhythm game challenges.",
+        DESCRIPTION_CN: "少女乐队主题的热血乐队Live、同人制品售卖及趣味音游竞赛，为西雅图同好打造一场沉浸式的音乐与二次元文化盛宴。",
+        LOCATION: "UW Denny Room",
+        LOCATION_CN: "UW Denny Room",
+        POSTER: "/images/sekai_ban_con_2026.png"
     }
 ].filter(event => event.END_AT > new Date()); // Filter to only show events that haven't ended yet
 
