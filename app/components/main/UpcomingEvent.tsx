@@ -74,12 +74,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                 </span>
                 <h2 className="convention-title">{isEnglish ? event.NAME : event.NAME_CN}</h2>
                 {/* Event Date & Time */}
-                <p style={{
-                    fontSize: '30px',
-                    color: '#ff8e53',
-                    fontWeight: '700',
-                    marginBottom: '20px'
-                }}>{event.START_AT.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                <p className="event-date-text">{event.START_AT.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
@@ -91,13 +86,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     {isEnglish ? event.LOCATION : event.LOCATION_CN}
                 </div>
                 {/* Event Description */}
-                <p style={{
-                    fontSize: '18px',
-                    color: '#7a7a7a',
-                    maxWidth: '700px',
-                    margin: '0 auto 40px',
-                    lineHeight: '1.6'
-                }}>
+                <p className="event-description-text">
                     {isEnglish ? event.DESCRIPTION : event.DESCRIPTION_CN}
                 </p>
                 <div className="convention-poster" style={{marginTop: '2rem'}}
@@ -105,52 +94,27 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     <img
                         src={event.POSTER}
                         alt={isEnglish ? "Event Poster" : "活动海报"}
+                        loading="lazy"
                     />
-                    {event.POSTER_CREDIT ? (<p style={{
-                        fontSize: '1rem',
-                        color: '#999',
-                        marginTop: '2rem',
-                        fontStyle: 'italic'
-                    }}>
-                        {isEnglish ? `Poster by ${event.POSTER_CREDIT}` : `海报由 ${event.POSTER_CREDIT} 制作`}
-                    </p>) : null}
+                    {event.POSTER_CREDIT ? (
+                        <p className="poster-credit">
+                            {isEnglish ? `Poster by ${event.POSTER_CREDIT}` : `海报由 ${event.POSTER_CREDIT} 制作`}
+                        </p>
+                    ) : null}
                 </div>
                 {/* Countdown Timer */}
-                <div className="convention-features" style={{
-                    display: 'flex',
-                    gap: '20px',
-                    justifyContent: 'center',
-                    marginBottom: '30px',
-                    flexWrap: 'wrap'
-                }}>
+                <div className="countdown-container">
                     {[
                         {value: timeLeft.days, label: isEnglish ? 'Days' : '天'},
                         {value: timeLeft.hours, label: isEnglish ? 'Hours' : '时'},
                         {value: timeLeft.minutes, label: isEnglish ? 'Minutes' : '分'},
                         {value: timeLeft.seconds, label: isEnglish ? 'Seconds' : '秒'}
                     ].map((item, index) => (
-                        <div key={index} style={{
-                            backgroundColor: isInProgress ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 142, 83, 0.1)',
-                            borderRadius: '12px',
-                            padding: '15px 25px',
-                            minWidth: '90px',
-                            border: isInProgress ? '2px solid rgba(76, 175, 80, 0.3)' : '2px solid rgba(255, 142, 83, 0.3)'
-                        }}>
-                            <div style={{
-                                fontSize: '36px',
-                                fontWeight: 'bold',
-                                color: isInProgress ? '#4CAF50' : '#ff8e53',
-                                lineHeight: '1'
-                            }}>
+                        <div key={index} className={`countdown-item${isInProgress ? ' countdown-item--progress' : ''}`}>
+                            <div className="countdown-value">
                                 {String(item.value).padStart(2, '0')}
                             </div>
-                            <div style={{
-                                fontSize: '14px',
-                                color: '#7a7a7a',
-                                marginTop: '5px',
-                                textTransform: 'uppercase',
-                                fontWeight: '600'
-                            }}>
+                            <div className="countdown-label">
                                 {item.label}
                             </div>
                         </div>
@@ -214,13 +178,15 @@ export const UpcomingEvent = () => {
 
             {/* Current Event */}
             {currentEvent && (
-                <div style={{
-                    opacity: isTransitioning ? 0 : 1,
-                    transform: isTransitioning
-                        ? `translateX(${slideDirection === 'left' ? '-30px' : '30px'})`
-                        : 'translateX(0)',
-                    transition: 'opacity 0.3s ease, transform 0.3s ease'
-                }}>
+                <div
+                    className="carousel-slide"
+                    style={{
+                        opacity: isTransitioning ? 0 : 1,
+                        transform: isTransitioning
+                            ? `translateX(${slideDirection === 'left' ? '-30px' : '30px'})`
+                            : 'translateX(0)',
+                    }}
+                >
                     <EventCard
                         event={currentEvent}
                         isEnglish={isEnglish}
@@ -231,81 +197,30 @@ export const UpcomingEvent = () => {
 
             {/* Event Navigation - only show if multiple events */}
             {hasMultipleEvents && (
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    gap: '1rem',
-                    marginTop: '2rem'
-                }}>
+                <div className="carousel-nav">
                     <button
+                        className="carousel-nav-btn"
                         onClick={goToPrevious}
-                        style={{
-                            background: 'linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%)',
-                            border: 'none',
-                            borderRadius: '50%',
-                            width: '40px',
-                            height: '40px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'white',
-                            fontSize: '18px',
-                            fontWeight: 'bold',
-                            transition: 'transform 0.2s, box-shadow 0.2s',
-                            boxShadow: '0 2px 8px rgba(255, 107, 107, 0.3)'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                         aria-label={isEnglish ? "Previous event" : "上一个活动"}
                     >
                         ‹
                     </button>
 
                     {/* Dot indicators */}
-                    <div style={{display: 'flex', gap: '8px'}}>
+                    <div className="carousel-dots">
                         {UPCOMING_EVENTS.map((_, index) => (
                             <button
                                 key={index}
+                                className={`carousel-dot${currentIndex === index ? ' carousel-dot--active' : ''}`}
                                 onClick={() => switchEvent(index, index > currentIndex ? 'left' : 'right')}
-                                style={{
-                                    width: currentIndex === index ? '24px' : '10px',
-                                    height: '10px',
-                                    borderRadius: '5px',
-                                    border: 'none',
-                                    background: currentIndex === index
-                                        ? 'linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%)'
-                                        : 'rgba(255, 142, 83, 0.3)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s ease',
-                                    padding: 0
-                                }}
                                 aria-label={`${isEnglish ? "Go to event" : "前往活动"} ${index + 1}`}
                             />
                         ))}
                     </div>
 
                     <button
+                        className="carousel-nav-btn"
                         onClick={goToNext}
-                        style={{
-                            background: 'linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%)',
-                            border: 'none',
-                            borderRadius: '50%',
-                            width: '40px',
-                            height: '40px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'white',
-                            fontSize: '18px',
-                            fontWeight: 'bold',
-                            transition: 'transform 0.2s, box-shadow 0.2s',
-                            boxShadow: '0 2px 8px rgba(255, 107, 107, 0.3)'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                         aria-label={isEnglish ? "Next event" : "下一个活动"}
                     >
                         ›

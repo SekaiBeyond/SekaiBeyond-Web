@@ -1,5 +1,12 @@
 export const RSO_EMAIL: string = "sekaibeyond@outlook.com"
 
+export const BILIBILI_VIDEO = {
+    aid: "116106639514970",
+    bvid: "BV1GsfjB7E6J",
+    cid: "36189832448",
+    p: "1",
+}
+
 export const LINKS = {
     discord: "https://discord.gg/4xPFPmwsW3",
     huskylink: "https://huskylink.washington.edu/organization/sekaibeyond",

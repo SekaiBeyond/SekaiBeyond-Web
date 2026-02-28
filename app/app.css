@@ -595,6 +595,126 @@ body {
     transform: scale(1.05);
 }
 
+/* Upcoming Event - date, description, poster credit */
+.event-date-text {
+    font-size: 30px;
+    color: #ff8e53;
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+
+.event-description-text {
+    font-size: 18px;
+    color: #7a7a7a;
+    max-width: 700px;
+    margin: 0 auto 40px;
+    line-height: 1.6;
+}
+
+.poster-credit {
+    font-size: 1rem;
+    color: #999;
+    margin-top: 2rem;
+    font-style: italic;
+}
+
+/* Countdown timer */
+.countdown-container {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 2rem;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
+.countdown-item {
+    background-color: rgba(255, 142, 83, 0.1);
+    border-radius: 12px;
+    padding: 15px 25px;
+    min-width: 90px;
+    border: 2px solid rgba(255, 142, 83, 0.3);
+}
+
+.countdown-item--progress {
+    background-color: rgba(76, 175, 80, 0.1);
+    border-color: rgba(76, 175, 80, 0.3);
+}
+
+.countdown-value {
+    font-size: 36px;
+    font-weight: bold;
+    color: #ff8e53;
+    line-height: 1;
+}
+
+.countdown-item--progress .countdown-value {
+    color: #4CAF50;
+}
+
+.countdown-label {
+    font-size: 14px;
+    color: #7a7a7a;
+    margin-top: 5px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+/* Carousel */
+.carousel-slide {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.carousel-nav {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.carousel-nav-btn {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
+
+.carousel-nav-btn:hover {
+    transform: scale(1.1);
+}
+
+.carousel-dots {
+    display: flex;
+    gap: 8px;
+}
+
+.carousel-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+    border: none;
+    background: rgba(255, 142, 83, 0.3);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+}
+
+.carousel-dot--active {
+    width: 24px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+}
+
 .con-editions {
     display: flex;
     flex-direction: column;

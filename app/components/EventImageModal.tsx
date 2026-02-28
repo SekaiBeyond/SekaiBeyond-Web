@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 interface EventImageModalProps {
     imageUrl: string;
@@ -7,12 +7,21 @@ interface EventImageModalProps {
 }
 
 export const EventImageModal: React.FC<EventImageModalProps> = ({imageUrl, onClose, altText}) => {
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <button
                     className="modal-close"
                     onClick={onClose}
+                    aria-label="Close"
                 >
                     ×
                 </button>

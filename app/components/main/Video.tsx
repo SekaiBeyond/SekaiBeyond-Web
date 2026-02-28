@@ -1,15 +1,9 @@
 import React from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
-import { LINKS } from "~/constants";
+import { BILIBILI_VIDEO, LINKS } from "~/constants";
 
 export const Video = () => {
     const {isEnglish} = useLanguage();
-    const videoSrc = {
-        aid: "116106639514970", // 替换为实际的AV号
-        bvid: "BV1GsfjB7E6J", // 替换为实际的BV号
-        cid: "36189832448", // 替换为实际的CID号
-        p: "1", // 替换为实际的P号，如果有多个分P的话
-    }
 
     return (
         <section id="video" className="video-section section">
@@ -27,7 +21,7 @@ export const Video = () => {
             <div className="video-content">
                 <div className="video-wrapper">
                     <iframe
-                        src={`//player.bilibili.com/player.html?isOutside=true&aid=${videoSrc.aid}&bvid=${videoSrc.bvid}&cid=${videoSrc.cid}&p=${videoSrc.p}&autoplay=0`}
+                        src={`//player.bilibili.com/player.html?isOutside=true&aid=${BILIBILI_VIDEO.aid}&bvid=${BILIBILI_VIDEO.bvid}&cid=${BILIBILI_VIDEO.cid}&p=${BILIBILI_VIDEO.p}&autoplay=0`}
                         allowFullScreen={true}
                         title={isEnglish ? "Sekai Beyond Video" : "彼世界视频"}
                         autoFocus={false}

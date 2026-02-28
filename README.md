@@ -143,6 +143,27 @@ Upcoming events are managed in `app/constants.ts` via the `UPCOMING_EVENTS` arra
 
 > **Note:** Events are automatically filtered out once `END_AT` has passed. A validation check ensures `END_AT` is always later than `START_AT`.
 
+### Adding Past Events
+
+Past events are managed in `app/constants.ts` via the `PAST_EVENTS` array. To add a new past event:
+
+1. Place the event image in `public/images/events/`
+2. Add a new entry to the **top** of the `PAST_EVENTS` array (most recent first):
+
+```ts
+{
+    badge: "Festival",       // Short category label in English (e.g. "Gaming", "Music", "Food", "Cosplay", "Vendor")
+    badgeCn: "节日",          // Category label in Chinese
+    title: "Event Name",
+    titleCn: "活动名称",
+    date: "2026-06-01",      // Format: YYYY-MM-DD
+    location: "Venue Name, University of Washington",
+    description: "English description of the event.",
+    descriptionCn: "活动的中文描述。",
+    icon: "/images/events/your_event_image.jpg",
+}
+```
+
 ### Development Guidelines
 
 - Follow the existing code style
