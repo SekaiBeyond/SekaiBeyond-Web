@@ -1,4 +1,3 @@
-import { HashLink } from "react-router-hash-link";
 import React from "react";
 import { LanguageSwitcher } from "~/components/LanguageSwitcher";
 import { useLanguage } from "~/components/LanguageContextProvider";
@@ -11,13 +10,19 @@ export const Navigation = () => {
     return (
         <nav className="navbar">
             <div className="nav-container">
-                <HashLink to="#home" className="logo">{isEnglish ? "SEKAI BEYOND" : "彼世界动漫社"}</HashLink>
+                <a href="#home" className="logo" onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById("home")?.scrollIntoView({behavior: "smooth"});
+                }}>{isEnglish ? "SEKAI BEYOND" : "彼世界动漫社"}</a>
                 <ul className="nav-links">
                     {NAVIGATION_LINKS.map((link: NavLink) => link.disabled ? null : (
                         <li key={link.id}>
-                            <HashLink to={link.href} className="nav-link">
+                            <a href={link.href} className="nav-link" onClick={(e) => {
+                                e.preventDefault();
+                                document.querySelector(link.href)?.scrollIntoView({behavior: "smooth"});
+                            }}>
                                 {isEnglish ? link.labelEn : link.labelCn}
-                            </HashLink>
+                            </a>
                         </li>
                     ))}
                 </ul>

@@ -1,4 +1,3 @@
-import { HashLink } from "react-router-hash-link";
 import React from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
 
@@ -37,14 +36,20 @@ export const Hero = () => {
                     }
                 </p>
                 <div className="hero-buttons">
-                    <HashLink to="#contact" className="btn btn-primary">
+                    <a href="#contact" className="btn btn-primary" onClick={(e) => {
+                        e.preventDefault();
+                        document.getElementById("contact")?.scrollIntoView({behavior: "smooth"});
+                    }}>
                         <span>{isEnglish ? "Become a Member" : "成为会员"}</span>
                         <span>🌸</span>
-                    </HashLink>
-                    <HashLink to="#events" className="btn btn-secondary">
+                    </a>
+                    <a href="#events" className="btn btn-secondary" onClick={(e) => {
+                        e.preventDefault();
+                        document.getElementById("events")?.scrollIntoView({behavior: "smooth"});
+                    }}>
                         <span>{isEnglish ? "Explore Events" : "探索活动"}</span>
                         <span>✨</span>
-                    </HashLink>
+                    </a>
                 </div>
                 <div className="stats-container">
                     <div className="stat-item">

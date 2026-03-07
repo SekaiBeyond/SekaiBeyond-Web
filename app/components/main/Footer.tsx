@@ -1,4 +1,3 @@
-import { HashLink } from "react-router-hash-link";
 import React from "react";
 import { FOOTER_LINKS, type NavLink } from "~/constants";
 import { useLanguage } from "~/components/LanguageContextProvider";
@@ -12,9 +11,12 @@ export const Footer = () => {
             <div className="footer-links">
                 {FOOTER_LINKS.map((link: NavLink) => link.disabled ? null : (
                     link.href.startsWith("#") ? (
-                        <HashLink key={link.id} to={link.href} className="footer-link">
+                        <a key={link.id} href={link.href} className="footer-link" onClick={(e) => {
+                            e.preventDefault();
+                            document.querySelector(link.href)?.scrollIntoView({behavior: "smooth"});
+                        }}>
                             {isEnglish ? link.labelEn : link.labelCn}
-                        </HashLink>
+                        </a>
                     ) : (
                         <a key={link.id} href={link.href} className="footer-link" target="_blank">
                             {isEnglish ? link.labelEn : link.labelCn}
