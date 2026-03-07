@@ -72,7 +72,10 @@ export const UPCOMING_EVENTS: UpcomingEventType[] = [
         DESCRIPTION_CN: "广受好评的UW女仆咖啡厅再度回归！在两间精心布置的房间里，品尝主题饮品与精致甜点，感受女仆们温馨贴心的服务。互动小游戏、合影留念与满满的元气，带你度过一个治愈又欢乐的下午。",
         LOCATION: "Spratlen Hall 311 & 313",
         LOCATION_CN: "Spratlen Hall 311 & 313",
-        POSTER: "/images/maid_cafe_2026.png"
+        POSTER: "/images/maid_cafe_2026.png",
+        CUSTOM_BUTTON_TEXT: "Reserve",
+        CUSTOM_BUTTON_TEXT_CN: "预约",
+        CUSTOM_BUTTON_LINK: "https://forms.gle/99nmMywkLCyaxXPg6"
     },
     {
         START_AT: new Date('2026-05-23T15:00:00'),
