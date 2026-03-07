@@ -14,6 +14,7 @@ export const LINKS = {
     bilibili: "https://space.bilibili.com/3546779589020292",
     xiaohongshu: "https://www.xiaohongshu.com/user/profile/62d4eefd000000000e00ed42",
     linkedin: "https://www.linkedin.com/company/sekai-beyond/",
+    github: "https://github.com/SekaiBeyond",
     email: `mailto:${RSO_EMAIL}`
 }
 
@@ -383,6 +384,12 @@ export const FOOTER_LINKS: NavLink[] = [
         href: LINKS.huskylink,
         labelEn: 'HuskyLink',
         labelCn: 'HuskyLink',
+    },
+    {
+        id: 'github',
+        href: LINKS.github,
+        labelEn: 'GitHub',
+        labelCn: 'GitHub',
     },
     {
         id: 'email',
