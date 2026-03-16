@@ -54,17 +54,6 @@ export interface UpcomingEventType {
 
 export const UPCOMING_EVENTS: UpcomingEventType[] = [
     {
-        START_AT: new Date('2026-03-14T14:00:00'),
-        END_AT: new Date('2026-03-14T18:00:00'),
-        NAME: "D&D Special Epic 2026",
-        NAME_CN: "哈欠之门",
-        DESCRIPTION: "As warm as rye beer and legends, this is where stories and adventures converge. Sitting at the table could be heroes or the beginning of the next legend.",
-        DESCRIPTION_CN: "欢迎来到哈欠之门。黑麦酒与传说同样滚烫，这里是故事和冒险的交汇处。餐桌旁坐着的，可能是英雄，也可能是下一段传奇的开端。",
-        LOCATION: "4249 Little Canoe Channel NE",
-        LOCATION_CN: "4249 Little Canoe Channel NE",
-        POSTER: "/images/dnd_2026.png"
-    },
-    {
         START_AT: new Date('2026-03-21T15:00:00'),
         END_AT: new Date('2026-03-21T18:00:00'),
         NAME: "Bowtea Maid Café",
@@ -201,6 +190,17 @@ export interface PastEvent {
 }
 
 export const PAST_EVENTS: PastEvent[] = [
+    {
+        badge: 'Gaming',
+        badgeCn: "游戏",
+        title: 'D&D Special Epic - Yawning Portal',
+        titleCn: '龙与地下城 - 哈欠之门',
+        date: '2026-3-14',
+        location: 'Intellectual House, University of Washington',
+        description: 'Adventurers gathered at the Yawning Portal for an afternoon of tabletop roleplay and camaraderie. Guided by experienced DMs, players forged alliances, battled fearsome foes, and wove tales of heroism—proving that every seat at the table holds the spark of a new legend.',
+        descriptionCn: '冒险者们齐聚哈欠之门，共度了一个充满桌游角色扮演与欢声笑语的下午。在经验丰富的DM带领下，玩家们结成同盟、迎战强敌，编织出属于自己的英雄传说——证明了餐桌旁的每一个座位，都可能是下一段传奇的开端。',
+        icon: '/images/events/dnd_yawning_portal_2026.jpg',
+    },
     {
         badge: 'Festival',
         badgeCn: "节日",
