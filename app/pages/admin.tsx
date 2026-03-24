@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { arrayRemove, arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { useAuth } from '~/components/AuthProvider';
+import {
+    canAssignGroup,
+    getAssignableGroups,
+    GROUP_LABELS,
+    hasPermission,
+    useAuth,
+    type UserGroup,
+} from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { PAST_EVENTS } from '~/constants';
@@ -12,12 +19,13 @@ interface UserRecord {
     photoURL: string;
     joinedAt: Date;
     attendedEvents: string[];
+    group: UserGroup;
 }
 
 type Tab = 'users' | 'events';
 
 export const AdminPage = () => {
-    const {user, isAdmin, loading} = useAuth();
+    const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
 
     const [activeTab, setActiveTab] = useState<Tab>('users');
@@ -37,12 +45,12 @@ export const AdminPage = () => {
         );
     }
 
-    if (!user || !isAdmin) {
+    if (!user || !profile || !hasPermission(profile.group, 'core-staff')) {
         return (
             <div className="profile-login-prompt">
                 <div className="profile-login-card">
                     <h2>{isEnglish ? 'Access Denied' : '无权访问'}</h2>
-                    <p>{isEnglish ? 'This page is for administrators only.' : '此页面仅限管理员访问。'}</p>
+                    <p>{isEnglish ? 'This page is for staff members only.' : '此页面仅限工作人员访问。'}</p>
                     <a href="/" className="profile-back-link">
                         {isEnglish ? 'Back to Home' : '返回首页'}
                     </a>
@@ -71,6 +79,7 @@ export const AdminPage = () => {
                 photoURL: data.photoURL ?? '',
                 joinedAt: data.joinedAt?.toDate() ?? new Date(),
                 attendedEvents: data.attendedEvents ?? [],
+                group: data.group ?? 'visitor',
             });
         });
 
@@ -102,6 +111,23 @@ export const AdminPage = () => {
         setUpdating(false);
     };
 
+    const changeUserGroup = async (userRecord: UserRecord, newGroup: UserGroup) => {
+        if (!canAssignGroup(profile.group, newGroup)) return;
+        setUpdating(true);
+
+        const db = getFirebaseDb();
+        const userRef = doc(db, 'users', userRecord.uid);
+        await updateDoc(userRef, {group: newGroup});
+
+        const updated = {...userRecord, group: newGroup};
+        if (selectedUser?.uid === userRecord.uid) {
+            setSelectedUser(updated);
+        }
+        setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+        setEventAttendees(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+        setUpdating(false);
+    };
+
     const loadEventAttendees = async (eventTitle: string) => {
         setSelectedEvent(eventTitle);
         setSearching(true);
@@ -121,12 +147,15 @@ export const AdminPage = () => {
                 photoURL: data.photoURL ?? '',
                 joinedAt: data.joinedAt?.toDate() ?? new Date(),
                 attendedEvents: data.attendedEvents ?? [],
+                group: data.group ?? 'visitor',
             });
         });
 
         setEventAttendees(attendees);
         setSearching(false);
     };
+
+    const assignableGroups = getAssignableGroups(profile.group);
 
     return (
         <>
@@ -186,9 +215,12 @@ export const AdminPage = () => {
                                             <div className="admin-user-name">{u.displayName}</div>
                                             <div className="admin-user-email">{u.email}</div>
                                         </div>
+                                        <span className="admin-user-group-tag" data-group={u.group}>
+                                            {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
+                                        </span>
                                         <span className="admin-user-badge-count">
-                                        {u.attendedEvents.length} {isEnglish ? 'badges' : '徽章'}
-                                    </span>
+                                            {u.attendedEvents.length} {isEnglish ? 'badges' : '徽章'}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -218,6 +250,35 @@ export const AdminPage = () => {
                                             })}
                                         </p>
                                     </div>
+                                </div>
+
+                                {/* User Group Management */}
+                                <div className="admin-group-section">
+                                    <h4 className="admin-badges-title">
+                                        {isEnglish ? 'User Group' : '用户组'}
+                                    </h4>
+                                    <div className="admin-group-current">
+                                        <span className="admin-group-label">
+                                            {isEnglish ? 'Current group: ' : '当前用户组：'}
+                                        </span>
+                                        <span className="admin-user-group-tag" data-group={selectedUser.group}>
+                                            {isEnglish ? GROUP_LABELS[selectedUser.group].en : GROUP_LABELS[selectedUser.group].zh}
+                                        </span>
+                                    </div>
+                                    {assignableGroups.length > 0 && (
+                                        <div className="admin-group-actions">
+                                            {assignableGroups.map((g) => (
+                                                <button
+                                                    key={g}
+                                                    className={`admin-group-btn ${selectedUser.group === g ? 'admin-group-btn-active' : ''}`}
+                                                    onClick={() => changeUserGroup(selectedUser, g)}
+                                                    disabled={updating || selectedUser.group === g}
+                                                >
+                                                    {isEnglish ? GROUP_LABELS[g].en : GROUP_LABELS[g].zh}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <h4 className="admin-badges-title">
@@ -293,6 +354,9 @@ export const AdminPage = () => {
                                             <div className="admin-user-name">{u.displayName}</div>
                                             <div className="admin-user-email">{u.email}</div>
                                         </div>
+                                        <span className="admin-user-group-tag" data-group={u.group}>
+                                            {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
+                                        </span>
                                     </div>
                                 ))}
                             </div>

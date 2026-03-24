@@ -1,8 +1,8 @@
-import { useAuth } from '~/components/AuthProvider';
+import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 
 export const LoginButton = () => {
-    const {user, isAdmin, loading, signIn, signOut} = useAuth();
+    const {user, profile, loading, signIn, signOut} = useAuth();
     const {isEnglish} = useLanguage();
 
     if (loading) return null;
@@ -25,7 +25,7 @@ export const LoginButton = () => {
                     <a href="/profile" className="user-dropdown-item">
                         {isEnglish ? 'My Profile' : '我的主页'}
                     </a>
-                    {isAdmin && (
+                    {profile && hasPermission(profile.group, 'core-staff') && (
                         <a href="/admin" className="user-dropdown-item">
                             {isEnglish ? 'Admin Panel' : '管理面板'}
                         </a>

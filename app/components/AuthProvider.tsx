@@ -8,18 +8,50 @@ import {
     signOut as firebaseSignOut
 } from '~/lib/firebase';
 
-interface UserProfile {
+export type UserGroup = 'visitor' | 'member' | 'staff' | 'core-staff' | 'president';
+
+export const USER_GROUPS: UserGroup[] = ['visitor', 'member', 'staff', 'core-staff', 'president'];
+
+const GROUP_LEVEL: Record<UserGroup, number> = {
+    'visitor': 0,
+    'member': 1,
+    'staff': 2,
+    'core-staff': 3,
+    'president': 4,
+};
+
+export const GROUP_LABELS: Record<UserGroup, { en: string; zh: string }> = {
+    'visitor': {en: 'Visitor', zh: '访客'},
+    'member': {en: 'Member', zh: '成员'},
+    'staff': {en: 'Staff', zh: '工作人员'},
+    'core-staff': {en: 'Core Staff', zh: '核心成员'},
+    'president': {en: 'President', zh: '社长'},
+};
+
+export function hasPermission(userGroup: UserGroup, requiredGroup: UserGroup): boolean {
+    return GROUP_LEVEL[userGroup] >= GROUP_LEVEL[requiredGroup];
+}
+
+export function canAssignGroup(assignerGroup: UserGroup, targetGroup: UserGroup): boolean {
+    return GROUP_LEVEL[assignerGroup] > GROUP_LEVEL[targetGroup];
+}
+
+export function getAssignableGroups(assignerGroup: UserGroup): UserGroup[] {
+    return USER_GROUPS.filter(g => GROUP_LEVEL[assignerGroup] > GROUP_LEVEL[g]);
+}
+
+export interface UserProfile {
     displayName: string;
     email: string;
     photoURL: string;
     joinedAt: Date;
     attendedEvents: string[];
+    group: UserGroup;
 }
 
 interface AuthContextType {
     user: User | null;
     profile: UserProfile | null;
-    isAdmin: boolean;
     loading: boolean;
     signIn: () => Promise<void>;
     signOut: () => Promise<void>;
@@ -42,7 +74,6 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
     const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -50,10 +81,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
             setUser(firebaseUser);
 
             if (firebaseUser) {
-                const adminRef = doc(getFirebaseDb(), 'admins', firebaseUser.uid);
-                const adminSnap = await getDoc(adminRef);
-                setIsAdmin(adminSnap.exists());
-
                 const userRef = doc(getFirebaseDb(), 'users', firebaseUser.uid);
                 const userSnap = await getDoc(userRef);
 
@@ -65,6 +92,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
                         photoURL: data.photoURL,
                         joinedAt: data.joinedAt?.toDate() ?? new Date(),
                         attendedEvents: data.attendedEvents ?? [],
+                        group: data.group ?? 'visitor',
                     });
                 } else {
                     const newProfile = {
@@ -73,6 +101,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
                         photoURL: firebaseUser.photoURL ?? '',
                         joinedAt: serverTimestamp(),
                         attendedEvents: [],
+                        group: 'visitor' as UserGroup,
                     };
                     await setDoc(userRef, newProfile);
                     setProfile({
@@ -82,7 +111,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
                 }
             } else {
                 setProfile(null);
-                setIsAdmin(false);
             }
 
             setLoading(false);
@@ -103,7 +131,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
     const value: AuthContextType = {
         user,
         profile,
-        isAdmin,
         loading,
         signIn,
         signOut,

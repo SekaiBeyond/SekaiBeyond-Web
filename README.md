@@ -97,6 +97,7 @@ SekaiBeyond-Web/
 │   └── routes.ts           # Route configuration
 ├── public/                 # Static assets
 │   └── images/             # Image assets
+├── firestore.rules         # Firestore security rules
 ├── package.json
 ├── tsconfig.json
 ├── react-router.config.ts  # React Router configuration
@@ -115,28 +116,7 @@ The site deploys automatically to GitHub Pages when you push to `main` via GitHu
 2. Add a **Web app** and copy the Firebase config values
 3. Enable **Google sign-in** under Authentication > Sign-in method
 4. Create a **Cloud Firestore** database (choose a nearby region)
-5. Set Firestore **Security Rules**:
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function isAdmin() {
-      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-
-    match /users/{userId} {
-      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
-    }
-
-    match /admins/{adminId} {
-      allow read: if request.auth != null && request.auth.uid == adminId;
-      allow write: if false;
-    }
-  }
-}
-```
+5. Set Firestore **Security Rules** — copy the contents of [`firestore.rules`](firestore.rules) into the Firestore Rules editor
 
 #### 2. GitHub Repository Secrets
 
@@ -163,10 +143,25 @@ cp .env.example .env
 
 Then run `npm run dev` to start the dev server.
 
-#### 4. Adding Admins
+#### 4. User Groups
 
-1. Find the user's **UID** in Firebase Console > Authentication > Users
-2. In Firestore, create a document in the `admins` collection with the **Document ID** set to that UID (fields can be empty)
+The site uses a role-based group system instead of a simple admin flag. Users are assigned one of the following groups (lowest to highest):
+
+| Group        | Description                                          |
+|--------------|------------------------------------------------------|
+| `visitor`    | Default for newly signed-in users                    |
+| `member`     | Registered club members                              |
+| `staff`      | Staff members                                        |
+| `core-staff` | Core staff — can access the admin panel              |
+| `president`  | Club president — can access the admin panel           |
+
+**Bootstrapping the first president:**
+
+1. Sign in to the site so your user document is created in Firestore
+2. In Firebase Console > Firestore > `users` collection, find your document
+3. Add or edit the `group` field and set it to `president`
+
+Once the first president is set up, they can assign groups to other users through the **Admin Panel** on the site. Only `core-staff` and `president` can access the admin panel and assign groups below their own level.
 
 ### Deploy Workflow
 

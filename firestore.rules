@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function getUserGroup() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.group;
+    }
+
+    function isCoreStaffOrAbove() {
+      return getUserGroup() in ['core-staff', 'president'];
+    }
+
+    match /users/{userId} {
+      // Authenticated users can read any profile
+      allow read: if request.auth != null;
+
+      // Users can create their own profile (group must be 'visitor')
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.group == 'visitor';
+
+      // Users can update their own profile, but cannot change their group
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.group == resource.data.group;
+
+      // Core-staff and president can update any user (including group)
+      allow update: if request.auth != null
+                    && isCoreStaffOrAbove();
+    }
+  }
+}

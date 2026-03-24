@@ -2626,3 +2626,136 @@ footer {
         width: 100%;
     }
 }
+
+/* User Group Tags */
+.admin-user-group-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    margin-left: auto;
+}
+
+.admin-user-badge-count {
+    margin-left: 8px;
+}
+
+.admin-user-group-tag[data-group="visitor"] {
+    background: rgba(158, 158, 158, 0.15);
+    color: #757575;
+}
+
+.admin-user-group-tag[data-group="member"] {
+    background: rgba(33, 150, 243, 0.12);
+    color: #1976d2;
+}
+
+.admin-user-group-tag[data-group="staff"] {
+    background: rgba(76, 175, 80, 0.12);
+    color: #388e3c;
+}
+
+.admin-user-group-tag[data-group="core-staff"] {
+    background: rgba(255, 152, 0, 0.12);
+    color: #e65100;
+}
+
+.admin-user-group-tag[data-group="president"] {
+    background: rgba(255, 107, 157, 0.15);
+    color: #d81b60;
+}
+
+/* Group Management Section */
+.admin-group-section {
+    margin-bottom: 24px;
+    padding: 18px;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 107, 157, 0.1);
+}
+
+.admin-group-current {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.admin-group-label {
+    font-size: 14px;
+    color: #7a8190;
+}
+
+.admin-group-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-group-btn {
+    padding: 8px 16px;
+    border: 2px solid rgba(255, 107, 157, 0.2);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.8);
+    color: #4a5160;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.admin-group-btn:hover:not(:disabled) {
+    border-color: #ff6b9d;
+    background: rgba(255, 107, 157, 0.08);
+    color: #ff6b9d;
+}
+
+.admin-group-btn-active {
+    border-color: #ff6b9d;
+    background: rgba(255, 107, 157, 0.12);
+    color: #ff6b9d;
+}
+
+.admin-group-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Profile Group Tag */
+.profile-group-tag {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    margin-top: 6px;
+}
+
+.profile-group-tag[data-group="visitor"] {
+    background: rgba(158, 158, 158, 0.15);
+    color: #757575;
+}
+
+.profile-group-tag[data-group="member"] {
+    background: rgba(33, 150, 243, 0.12);
+    color: #1976d2;
+}
+
+.profile-group-tag[data-group="staff"] {
+    background: rgba(76, 175, 80, 0.12);
+    color: #388e3c;
+}
+
+.profile-group-tag[data-group="core-staff"] {
+    background: rgba(255, 152, 0, 0.12);
+    color: #e65100;
+}
+
+.profile-group-tag[data-group="president"] {
+    background: rgba(255, 107, 157, 0.15);
+    color: #d81b60;
+}

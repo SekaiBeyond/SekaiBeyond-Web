@@ -1,4 +1,4 @@
-import { useAuth } from '~/components/AuthProvider';
+import { GROUP_LABELS, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { PAST_EVENTS, type PastEvent } from '~/constants';
 
@@ -60,13 +60,16 @@ export const ProfilePage = () => {
                         <h1 className="profile-name">{profile.displayName}</h1>
                         <p className="profile-email">{profile.email}</p>
                         <p className="profile-joined">
-                            {isEnglish ? 'Member since ' : '加入时间：'}
+                            {isEnglish ? 'Joined ' : '加入时间：'}
                             {profile.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
                                 year: 'numeric',
                                 month: 'long',
                                 day: 'numeric',
                             })}
                         </p>
+                        <span className="profile-group-tag" data-group={profile.group}>
+                            {isEnglish ? GROUP_LABELS[profile.group].en : GROUP_LABELS[profile.group].zh}
+                        </span>
                     </div>
                 </div>
 
