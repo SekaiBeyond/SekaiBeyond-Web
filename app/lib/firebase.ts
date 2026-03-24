@@ -1,6 +1,7 @@
 import { type FirebaseApp, initializeApp } from "firebase/app";
 import { type Auth, getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { type Firestore, getFirestore } from "firebase/firestore";
+import { type FirebaseStorage, getStorage } from "firebase/storage";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -14,6 +15,7 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
+let storage: FirebaseStorage;
 
 function getFirebaseApp() {
     if (!app) {
@@ -34,6 +36,13 @@ export function getFirebaseDb() {
         db = getFirestore(getFirebaseApp());
     }
     return db;
+}
+
+export function getFirebaseStorage() {
+    if (!storage) {
+        storage = getStorage(getFirebaseApp());
+    }
+    return storage;
 }
 
 const googleProvider = new GoogleAuthProvider();

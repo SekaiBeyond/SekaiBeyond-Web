@@ -11,14 +11,14 @@ export const LoginButton = () => {
         return (
             <div className="user-dropdown-wrapper">
                 <img
-                    src={user.photoURL ?? ''}
+                    src={profile?.photoURL ?? user.photoURL ?? ''}
                     alt={isEnglish ? 'Profile' : '个人主页'}
                     className="login-avatar"
                     referrerPolicy="no-referrer"
                 />
                 <div className="user-dropdown">
                     <div className="user-dropdown-header">
-                        <span className="user-dropdown-name">{user.displayName}</span>
+                        <span className="user-dropdown-name">{profile?.displayName ?? user.displayName}</span>
                         <span className="user-dropdown-email">{user.email}</span>
                     </div>
                     <div className="user-dropdown-divider"/>

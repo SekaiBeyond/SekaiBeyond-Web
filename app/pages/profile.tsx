@@ -1,10 +1,54 @@
+import { useRef, useState } from 'react';
 import { GROUP_LABELS, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { PAST_EVENTS, type PastEvent } from '~/constants';
 
 export const ProfilePage = () => {
-    const {user, profile, loading, signIn, signOut} = useAuth();
+    const {user, profile, loading, signIn, signOut, updateProfile} = useAuth();
     const {isEnglish} = useLanguage();
+    const [editing, setEditing] = useState(false);
+    const [editName, setEditName] = useState('');
+    const [previewURL, setPreviewURL] = useState<string | null>(null);
+    const [photoFile, setPhotoFile] = useState<File | null>(null);
+    const [saving, setSaving] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const startEditing = () => {
+        if (!profile) return;
+        setEditName(profile.displayName);
+        setPreviewURL(null);
+        setPhotoFile(null);
+        setEditing(true);
+    };
+
+    const cancelEditing = () => {
+        setEditing(false);
+        setPreviewURL(null);
+        setPhotoFile(null);
+    };
+
+    const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setPhotoFile(file);
+        setPreviewURL(URL.createObjectURL(file));
+    };
+
+    const handleSave = async () => {
+        if (!profile) return;
+        setSaving(true);
+        try {
+            await updateProfile({
+                displayName: editName !== profile.displayName ? editName : undefined,
+                photoFile: photoFile ?? undefined,
+            });
+            setEditing(false);
+            setPreviewURL(null);
+            setPhotoFile(null);
+        } finally {
+            setSaving(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -50,14 +94,43 @@ export const ProfilePage = () => {
             <div className="profile-page">
 
                 <div className="profile-header">
-                    <img
-                        src={profile.photoURL}
-                        alt={profile.displayName}
-                        className="profile-avatar"
-                        referrerPolicy="no-referrer"
-                    />
+                    <div className="profile-avatar-wrapper">
+                        <img
+                            src={previewURL ?? profile.photoURL}
+                            alt={profile.displayName}
+                            className="profile-avatar"
+                            referrerPolicy="no-referrer"
+                        />
+                        {editing && profile.group !== 'visitor' && (
+                            <>
+                                <button
+                                    className="profile-avatar-edit"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    type="button"
+                                >
+                                    {isEnglish ? 'Change' : '更换'}
+                                </button>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handlePhotoSelect}
+                                    hidden
+                                />
+                            </>
+                        )}
+                    </div>
                     <div className="profile-info">
-                        <h1 className="profile-name">{profile.displayName}</h1>
+                        {editing ? (
+                            <input
+                                className="profile-name-input"
+                                value={editName}
+                                onChange={e => setEditName(e.target.value)}
+                                maxLength={50}
+                            />
+                        ) : (
+                            <h1 className="profile-name">{profile.displayName}</h1>
+                        )}
                         <p className="profile-email">{profile.email}</p>
                         <p className="profile-joined">
                             {isEnglish ? 'Joined ' : '加入时间：'}
@@ -70,6 +143,32 @@ export const ProfilePage = () => {
                         <span className="profile-group-tag" data-group={profile.group}>
                             {isEnglish ? GROUP_LABELS[profile.group].en : GROUP_LABELS[profile.group].zh}
                         </span>
+                        <div className="profile-edit-actions">
+                            {editing ? (
+                                <>
+                                    <button
+                                        className="profile-save-btn"
+                                        onClick={handleSave}
+                                        disabled={saving || !editName.trim()}
+                                    >
+                                        {saving
+                                            ? (isEnglish ? 'Saving...' : '保存中...')
+                                            : (isEnglish ? 'Save' : '保存')}
+                                    </button>
+                                    <button
+                                        className="profile-cancel-btn"
+                                        onClick={cancelEditing}
+                                        disabled={saving}
+                                    >
+                                        {isEnglish ? 'Cancel' : '取消'}
+                                    </button>
+                                </>
+                            ) : (
+                                <button className="profile-edit-btn" onClick={startEditing}>
+                                    {isEnglish ? 'Edit Profile' : '编辑资料'}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 

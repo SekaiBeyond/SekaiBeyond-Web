@@ -2759,3 +2759,96 @@ footer {
     background: rgba(255, 107, 157, 0.15);
     color: #d81b60;
 }
+
+.profile-avatar-wrapper {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.profile-avatar-edit {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: none;
+    padding: 6px 0;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 0 0 50px 50px;
+}
+
+.profile-name-input {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: #4a5160;
+    border: 2px solid #ff6b9d;
+    border-radius: 10px;
+    padding: 6px 12px;
+    width: 100%;
+    max-width: 300px;
+    outline: none;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.profile-name-input:focus {
+    border-color: #ff4081;
+    box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.2);
+}
+
+.profile-edit-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.profile-edit-btn,
+.profile-save-btn,
+.profile-cancel-btn {
+    padding: 8px 20px;
+    border-radius: 20px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.profile-edit-btn {
+    background: rgba(255, 107, 157, 0.12);
+    color: #ff6b9d;
+}
+
+.profile-edit-btn:hover {
+    background: rgba(255, 107, 157, 0.25);
+}
+
+.profile-save-btn {
+    background: #ff6b9d;
+    color: #fff;
+}
+
+.profile-save-btn:hover {
+    background: #ff4081;
+}
+
+.profile-save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.profile-cancel-btn {
+    background: rgba(158, 158, 158, 0.15);
+    color: #757575;
+}
+
+.profile-cancel-btn:hover {
+    background: rgba(158, 158, 158, 0.3);
+}
+
+.profile-cancel-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

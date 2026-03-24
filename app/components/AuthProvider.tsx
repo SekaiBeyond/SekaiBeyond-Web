@@ -1,9 +1,11 @@
 import React, { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import {
     getFirebaseAuth,
     getFirebaseDb,
+    getFirebaseStorage,
     signInWithGoogle as firebaseSignIn,
     signOut as firebaseSignOut
 } from '~/lib/firebase';
@@ -55,6 +57,7 @@ interface AuthContextType {
     loading: boolean;
     signIn: () => Promise<void>;
     signOut: () => Promise<void>;
+    updateProfile: (updates: { displayName?: string; photoFile?: File }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -128,12 +131,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
         setProfile(null);
     };
 
+    const updateProfile = async (updates: { displayName?: string; photoFile?: File }) => {
+        if (!user || !profile) return;
+
+        const userRef = doc(getFirebaseDb(), 'users', user.uid);
+        const docUpdates: Record<string, string> = {};
+
+        if (updates.displayName !== undefined) {
+            docUpdates.displayName = updates.displayName;
+        }
+
+        if (updates.photoFile) {
+            const storageRef = ref(getFirebaseStorage(), `avatars/${user.uid}`);
+            await uploadBytes(storageRef, updates.photoFile);
+            docUpdates.photoURL = await getDownloadURL(storageRef);
+        }
+
+        if (Object.keys(docUpdates).length > 0) {
+            await updateDoc(userRef, docUpdates);
+            setProfile(prev => prev ? {...prev, ...docUpdates} : prev);
+        }
+    };
+
     const value: AuthContextType = {
         user,
         profile,
         loading,
         signIn,
         signOut,
+        updateProfile,
     };
 
     return (
