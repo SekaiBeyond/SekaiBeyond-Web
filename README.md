@@ -24,13 +24,13 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
 ## Tech Stack
 
-| Technology | Purpose |
-|------------|---------|
-| [React](https://react.dev/) | UI Framework |
-| [React Router](https://reactrouter.com/) | Framework & SSR |
-| [TypeScript](https://www.typescriptlang.org/) | Type Safety |
-| [TailwindCSS](https://tailwindcss.com/) | Styling |
-| [Vite](https://vitejs.dev/) | Build Tool |
+| Technology                                    | Purpose         |
+|-----------------------------------------------|-----------------|
+| [React](https://react.dev/)                   | UI Framework    |
+| [React Router](https://reactrouter.com/)      | Framework & SSR |
+| [TypeScript](https://www.typescriptlang.org/) | Type Safety     |
+| [TailwindCSS](https://tailwindcss.com/)       | Styling         |
+| [Vite](https://vitejs.dev/)                   | Build Tool      |
 
 ## Features
 
@@ -75,13 +75,13 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server with HMR |
-| `npm run build` | Build for production |
-| `npm run start` | Run production server |
-| `npm run typecheck` | Run TypeScript compiler check |
-| `npm run deploy` | Build and deploy to GitHub Pages |
+| Command             | Description                       |
+|---------------------|-----------------------------------|
+| `npm run dev`       | Start development server with HMR |
+| `npm run build`     | Build for production              |
+| `npm run start`     | Run production server             |
+| `npm run typecheck` | Run TypeScript compiler check     |
+| `npm run deploy`    | Build and deploy to GitHub Pages  |
 
 ## Project Structure
 
@@ -102,6 +102,82 @@ SekaiBeyond-Web/
 ├── react-router.config.ts  # React Router configuration
 └── vite.config.ts
 ```
+
+## Deployment
+
+The site deploys automatically to GitHub Pages when you push to `main` via GitHub Actions.
+
+### First-Time Setup
+
+#### 1. Firebase Project
+
+1. Go to [console.firebase.google.com](https://console.firebase.google.com) and create a project
+2. Add a **Web app** and copy the Firebase config values
+3. Enable **Google sign-in** under Authentication > Sign-in method
+4. Create a **Cloud Firestore** database (choose a nearby region)
+5. Set Firestore **Security Rules**:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /users/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /admins/{adminId} {
+      allow read: if request.auth != null && request.auth.uid == adminId;
+      allow write: if false;
+    }
+  }
+}
+```
+
+#### 2. GitHub Repository Secrets
+
+Go to your repo > **Settings** > **Secrets and variables** > **Actions**, and add these secrets:
+
+| Secret                              | Value                          |
+|-------------------------------------|--------------------------------|
+| `VITE_FIREBASE_API_KEY`             | Your Firebase API key          |
+| `VITE_FIREBASE_AUTH_DOMAIN`         | `your-project.firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID`          | Your project ID                |
+| `VITE_FIREBASE_STORAGE_BUCKET`      | `your-project.appspot.com`     |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Your sender ID                 |
+| `VITE_FIREBASE_APP_ID`              | Your app ID                    |
+
+These are injected during the GitHub Actions build step.
+
+#### 3. Local Development
+
+Copy `.env.example` to `.env` and fill in the same Firebase config values:
+
+```bash
+cp .env.example .env
+```
+
+Then run `npm run dev` to start the dev server.
+
+#### 4. Adding Admins
+
+1. Find the user's **UID** in Firebase Console > Authentication > Users
+2. In Firestore, create a document in the `admins` collection with the **Document ID** set to that UID (fields can be empty)
+
+### Deploy Workflow
+
+Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deploy.yml`):
+
+1. Installs dependencies
+2. Builds the site with Firebase env vars from secrets
+3. Copies `index.html` to `404.html` (SPA fallback routing)
+4. Deploys to GitHub Pages
+
+You can also trigger a deploy manually from the **Actions** tab > **Deploy to GitHub Pages** > **Run workflow**.
 
 ## Contributing
 

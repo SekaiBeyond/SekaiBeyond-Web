@@ -1,5 +1,6 @@
 import React from "react";
 import { LanguageSwitcher } from "~/components/LanguageSwitcher";
+import { LoginButton } from "~/components/LoginButton";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { NAVIGATION_LINKS, type NavLink } from "~/constants";
 
@@ -28,6 +29,7 @@ export const Navigation = () => {
                 </ul>
                 <div className="nav-actions">
                     <LanguageSwitcher/>
+                    <LoginButton/>
                 </div>
             </div>
         </nav>

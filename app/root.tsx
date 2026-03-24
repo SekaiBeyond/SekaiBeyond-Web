@@ -3,6 +3,7 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, 
 import type { Route } from "./+types/root";
 import "./app.css";
 import { LanguageProvider } from "~/components/LanguageContextProvider";
+import { AuthProvider } from "~/components/AuthProvider";
 import React from "react";
 
 export function Layout({children}: { children: React.ReactNode }) {
@@ -16,7 +17,9 @@ export function Layout({children}: { children: React.ReactNode }) {
         </head>
         <body>
         <LanguageProvider>
-            {children}
+            <AuthProvider>
+                {children}
+            </AuthProvider>
         </LanguageProvider>
         <ScrollRestoration/>
         <Scripts/>

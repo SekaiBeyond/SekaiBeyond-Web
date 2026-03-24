@@ -1,0 +1,133 @@
+import { useAuth } from '~/components/AuthProvider';
+import { useLanguage } from '~/components/LanguageContextProvider';
+import { PAST_EVENTS, type PastEvent } from '~/constants';
+
+export const ProfilePage = () => {
+    const {user, profile, loading, signIn, signOut} = useAuth();
+    const {isEnglish} = useLanguage();
+
+    if (loading) {
+        return (
+            <div className="profile-loading">
+                <div className="profile-spinner"/>
+            </div>
+        );
+    }
+
+    if (!user || !profile) {
+        return (
+            <div className="profile-login-prompt">
+                <div className="profile-login-card">
+                    <h2>{isEnglish ? 'Sign in to view your profile' : '登录以查看你的个人主页'}</h2>
+                    <p>{isEnglish
+                        ? 'Track your event attendance and collect badges!'
+                        : '记录你的活动参与情况，收集徽章！'}
+                    </p>
+                    <button onClick={signIn} className="profile-sign-in-btn">
+                        {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
+                    </button>
+                    <a href="/" className="profile-back-link">
+                        {isEnglish ? 'Back to Home' : '返回首页'}
+                    </a>
+                </div>
+            </div>
+        );
+    }
+
+    const attendedSet = new Set(profile.attendedEvents);
+    const attendedCount = PAST_EVENTS.filter(e => attendedSet.has(e.title)).length;
+
+    return (
+        <>
+            <nav className="profile-nav">
+                <a href="/" className="profile-nav-home">
+                    {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
+                </a>
+                <button onClick={signOut} className="profile-sign-out-btn">
+                    {isEnglish ? 'Sign Out' : '退出登录'}
+                </button>
+            </nav>
+            <div className="profile-page">
+
+                <div className="profile-header">
+                    <img
+                        src={profile.photoURL}
+                        alt={profile.displayName}
+                        className="profile-avatar"
+                        referrerPolicy="no-referrer"
+                    />
+                    <div className="profile-info">
+                        <h1 className="profile-name">{profile.displayName}</h1>
+                        <p className="profile-email">{profile.email}</p>
+                        <p className="profile-joined">
+                            {isEnglish ? 'Member since ' : '加入时间：'}
+                            {profile.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                            })}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="profile-stats">
+                    <div className="profile-stat">
+                        <span className="profile-stat-number">{attendedCount}</span>
+                        <span className="profile-stat-label">{isEnglish ? 'Events Attended' : '参与活动'}</span>
+                    </div>
+                    <div className="profile-stat">
+                        <span className="profile-stat-number">{PAST_EVENTS.length}</span>
+                        <span className="profile-stat-label">{isEnglish ? 'Total Events' : '总活动数'}</span>
+                    </div>
+                </div>
+
+                <section className="badge-section">
+                    <h2 className="badge-section-title">
+                        {isEnglish ? 'Badge Collection' : '徽章收藏'}
+                    </h2>
+                    <p className="badge-section-subtitle">
+                        {isEnglish
+                            ? 'Badges are awarded for events you attend'
+                            : '参加活动即可获得对应徽章'}
+                    </p>
+
+                    <div className="badge-grid">
+                        {PAST_EVENTS.map((event: PastEvent, index: number) => {
+                            const attended = attendedSet.has(event.title);
+                            return (
+                                <div
+                                    key={index}
+                                    className={`badge-card ${attended ? 'badge-earned' : 'badge-locked'}`}
+                                >
+                                    <div className="badge-icon-wrapper">
+                                        <img
+                                            src={event.icon}
+                                            alt={isEnglish ? event.title : event.titleCn}
+                                            className="badge-icon"
+                                            loading="lazy"
+                                        />
+                                        {attended && <span className="badge-check">&#10003;</span>}
+                                        {!attended && <span className="badge-lock">&#128274;</span>}
+                                    </div>
+                                    <div className="badge-info">
+                                        <span
+                                            className="badge-category">{isEnglish ? event.badge : event.badgeCn}</span>
+                                        <h3 className="badge-title">{isEnglish ? event.title : event.titleCn}</h3>
+                                        <p className="badge-date">
+                                            {new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                                                year: 'numeric',
+                                                month: 'short',
+                                                day: 'numeric',
+                                                timeZone: 'UTC',
+                                            })}
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            </div>
+        </>
+    );
+};
