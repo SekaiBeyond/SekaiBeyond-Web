@@ -8,6 +8,7 @@ import {
     useAuth,
     type UserGroup,
 } from '~/components/AuthProvider';
+import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { PAST_EVENTS } from '~/constants';
@@ -164,9 +165,7 @@ export const AdminPage = () => {
                     {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
                 </a>
                 <span className="admin-nav-title">{isEnglish ? 'Admin Panel' : '管理面板'}</span>
-                <a href="/profile" className="profile-sign-out-btn">
-                    {isEnglish ? 'My Profile' : '我的主页'}
-                </a>
+                <LoginButton/>
             </nav>
             <div className="profile-page">
 

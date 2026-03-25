@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { GROUP_LABELS, useAuth } from '~/components/AuthProvider';
+import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { PAST_EVENTS, type PastEvent } from '~/constants';
 
@@ -87,9 +88,7 @@ export const ProfilePage = () => {
                 <a href="/" className="profile-nav-home">
                     {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
                 </a>
-                <button onClick={signOut} className="profile-sign-out-btn">
-                    {isEnglish ? 'Sign Out' : '退出登录'}
-                </button>
+                <LoginButton/>
             </nav>
             <div className="profile-page">
 

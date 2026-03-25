@@ -113,6 +113,8 @@ body {
 
 .user-dropdown-wrapper {
     position: relative;
+    display: flex;
+    align-items: center;
 }
 
 .login-avatar {
@@ -2005,23 +2007,6 @@ footer {
     text-decoration: none;
 }
 
-.profile-sign-out-btn {
-    padding: 8px 20px;
-    border: 2px solid #ff6b9d;
-    border-radius: 20px;
-    background: transparent;
-    color: #ff6b9d;
-    font-family: 'Quicksand', sans-serif;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.profile-sign-out-btn:hover {
-    background: #ff6b9d;
-    color: white;
-}
 
 /* Profile Header */
 .profile-page {

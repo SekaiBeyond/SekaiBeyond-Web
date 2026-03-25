@@ -22,6 +22,9 @@ export const LoginButton = () => {
                         <span className="user-dropdown-email">{user.email}</span>
                     </div>
                     <div className="user-dropdown-divider"/>
+                    <a href="/" className="user-dropdown-item">
+                        {isEnglish ? 'Home' : '首页'}
+                    </a>
                     <a href="/profile" className="user-dropdown-item">
                         {isEnglish ? 'My Profile' : '我的主页'}
                     </a>
