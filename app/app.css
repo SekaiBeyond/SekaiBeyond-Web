@@ -3092,6 +3092,97 @@ footer {
     }
 }
 
+/* Records Tab */
+.record-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    transition: all 0.15s ease;
+}
+
+.record-row:hover {
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.record-type-tag {
+    flex-shrink: 0;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.record-type-group-assign {
+    background: rgba(255, 152, 0, 0.12);
+    color: #e65100;
+}
+
+.record-type-code-create {
+    background: rgba(155, 89, 182, 0.12);
+    color: #9b59b6;
+}
+
+.record-type-badge-grant {
+    background: rgba(76, 175, 80, 0.12);
+    color: #388e3c;
+}
+
+.record-type-badge-revoke {
+    background: rgba(244, 67, 54, 0.12);
+    color: #c62828;
+}
+
+.record-content {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    color: #4a5160;
+}
+
+.record-actor {
+    font-weight: 700;
+}
+
+.record-description {
+    color: #7a8190;
+}
+
+.record-clickable-name {
+    color: #ff6b9d;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.record-clickable-name:hover {
+    text-decoration: underline;
+}
+
+.record-time {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: #a0a8b8;
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .record-row {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .record-time {
+        width: 100%;
+        text-align: right;
+    }
+}
+
 /* Profile Group Tag */
 .profile-group-tag {
     display: inline-block;

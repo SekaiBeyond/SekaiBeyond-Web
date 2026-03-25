@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     addDoc,
     arrayRemove,
@@ -6,7 +6,10 @@ import {
     collection,
     deleteDoc,
     doc,
+    getDoc,
     getDocs,
+    limit,
+    orderBy,
     query,
     serverTimestamp,
     updateDoc,
@@ -45,7 +48,23 @@ interface UserRecord {
     group: UserGroup;
 }
 
-type Tab = 'users' | 'events';
+type Tab = 'users' | 'events' | 'records';
+
+type RecordType = 'group-assign' | 'code-create' | 'badge-grant' | 'badge-revoke';
+
+interface ActivityRecord {
+    id: string;
+    type: RecordType;
+    performedBy: string;
+    performedByName: string;
+    targetUid?: string;
+    targetName?: string;
+    eventTitle?: string;
+    code?: string;
+    oldGroup?: UserGroup;
+    newGroup?: UserGroup;
+    timestamp: Date;
+}
 
 export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
@@ -64,6 +83,65 @@ export const AdminPage = () => {
     const [generatingCode, setGeneratingCode] = useState(false);
     const [newCodeFrom, setNewCodeFrom] = useState('');
     const [newCodeUntil, setNewCodeUntil] = useState('');
+    const [recentUsers, setRecentUsers] = useState<UserRecord[]>([]);
+    const [loadingRecent, setLoadingRecent] = useState(false);
+    const [records, setRecords] = useState<ActivityRecord[]>([]);
+    const [loadingRecords, setLoadingRecords] = useState(false);
+
+    useEffect(() => {
+        if (loading || !user || !profile || !hasPermission(profile.group, 'core-staff')) return;
+        const loadRecentUsers = async () => {
+            setLoadingRecent(true);
+            const db = getFirebaseDb();
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, orderBy('joinedAt', 'desc'), limit(10));
+            const snapshot = await getDocs(q);
+
+            const users: UserRecord[] = [];
+            snapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                users.push({
+                    uid: docSnap.id,
+                    displayName: data.displayName ?? '',
+                    email: data.email ?? '',
+                    photoURL: data.photoURL ?? '',
+                    joinedAt: data.joinedAt?.toDate() ?? new Date(),
+                    attendedEvents: data.attendedEvents ?? [],
+                    group: data.group ?? 'visitor',
+                });
+            });
+            setRecentUsers(users);
+            setLoadingRecent(false);
+        };
+        loadRecentUsers();
+    }, [loading, user, profile]);
+
+    const loadRecords = async () => {
+        setLoadingRecords(true);
+        const db = getFirebaseDb();
+        const q = query(collection(db, 'records'), orderBy('timestamp', 'desc'), limit(20));
+        const snapshot = await getDocs(q);
+
+        const items: ActivityRecord[] = [];
+        snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            items.push({
+                id: docSnap.id,
+                type: data.type,
+                performedBy: data.performedBy,
+                performedByName: data.performedByName ?? '',
+                targetUid: data.targetUid,
+                targetName: data.targetName,
+                eventTitle: data.eventTitle,
+                code: data.code,
+                oldGroup: data.oldGroup,
+                newGroup: data.newGroup,
+                timestamp: data.timestamp?.toDate() ?? new Date(),
+            });
+        });
+        setRecords(items);
+        setLoadingRecords(false);
+    };
 
     if (loading) {
         return (
@@ -86,6 +164,26 @@ export const AdminPage = () => {
             </div>
         );
     }
+
+    const lookupUserByUid = async (uid: string) => {
+        const db = getFirebaseDb();
+        const userSnap = await getDoc(doc(db, 'users', uid));
+        if (!userSnap.exists()) return;
+        const data = userSnap.data();
+        const userRecord: UserRecord = {
+            uid: userSnap.id,
+            displayName: data.displayName ?? '',
+            email: data.email ?? '',
+            photoURL: data.photoURL ?? '',
+            joinedAt: data.joinedAt?.toDate() ?? new Date(),
+            attendedEvents: data.attendedEvents ?? [],
+            group: data.group ?? 'visitor',
+        };
+        setSelectedUser(userRecord);
+        setSearchResults([]);
+        setSearchQuery('');
+        setActiveTab('users');
+    };
 
     const searchUsers = async () => {
         if (!searchQuery.trim()) return;
@@ -125,6 +223,16 @@ export const AdminPage = () => {
             attendedEvents: has ? arrayRemove(eventTitle) : arrayUnion(eventTitle),
         });
 
+        await addDoc(collection(db, 'records'), {
+            type: has ? 'badge-revoke' : 'badge-grant',
+            performedBy: user.uid,
+            performedByName: profile.displayName,
+            targetUid: userRecord.uid,
+            targetName: userRecord.displayName,
+            eventTitle,
+            timestamp: serverTimestamp(),
+        });
+
         const updatedEvents = has
             ? userRecord.attendedEvents.filter(e => e !== eventTitle)
             : [...userRecord.attendedEvents, eventTitle];
@@ -146,6 +254,17 @@ export const AdminPage = () => {
         const db = getFirebaseDb();
         const userRef = doc(db, 'users', userRecord.uid);
         await updateDoc(userRef, {group: newGroup});
+
+        await addDoc(collection(db, 'records'), {
+            type: 'group-assign',
+            performedBy: user.uid,
+            performedByName: profile.displayName,
+            targetUid: userRecord.uid,
+            targetName: userRecord.displayName,
+            oldGroup: userRecord.group,
+            newGroup,
+            timestamp: serverTimestamp(),
+        });
 
         const updated = {...userRecord, group: newGroup};
         if (selectedUser?.uid === userRecord.uid) {
@@ -229,6 +348,15 @@ export const AdminPage = () => {
             activeUntil,
         });
 
+        await addDoc(collection(db, 'records'), {
+            type: 'code-create',
+            performedBy: user.uid,
+            performedByName: profile.displayName,
+            eventTitle,
+            code,
+            timestamp: serverTimestamp(),
+        });
+
         setBadgeCodes(prev => [...prev, {id: docRef.id, code, eventTitle, active: true, activeFrom, activeUntil}]);
         setNewCodeFrom('');
         setNewCodeUntil('');
@@ -252,6 +380,45 @@ export const AdminPage = () => {
     };
 
     const assignableGroups = getAssignableGroups(profile.group);
+
+    const clickableName = (uid: string, name: string) => (
+        <span className="record-clickable-name" onClick={() => lookupUserByUid(uid)}>{name}</span>
+    );
+
+    const getRecordLabel = (r: ActivityRecord) => {
+        const target = r.targetUid ? clickableName(r.targetUid, r.targetName ?? '') : r.targetName;
+        switch (r.type) {
+            case 'group-assign':
+                return isEnglish
+                    ? <>assigned {target} from {GROUP_LABELS[r.oldGroup!].en} to {GROUP_LABELS[r.newGroup!].en}</>
+                    : <>将 {target} 从 {GROUP_LABELS[r.oldGroup!].zh} 改为 {GROUP_LABELS[r.newGroup!].zh}</>;
+            case 'code-create':
+                return isEnglish
+                    ? <>created claim code for {r.eventTitle}</>
+                    : <>为 {r.eventTitle} 创建了兑换码</>;
+            case 'badge-grant':
+                return isEnglish
+                    ? <>granted {r.eventTitle} badge to {target}</>
+                    : <>授予 {target} {r.eventTitle} 徽章</>;
+            case 'badge-revoke':
+                return isEnglish
+                    ? <>revoked {r.eventTitle} badge from {target}</>
+                    : <>撤销了 {target} 的 {r.eventTitle} 徽章</>;
+        }
+    };
+
+    const getRecordTypeTag = (type: RecordType) => {
+        switch (type) {
+            case 'group-assign':
+                return isEnglish ? 'Group' : '用户组';
+            case 'code-create':
+                return isEnglish ? 'Code' : '兑换码';
+            case 'badge-grant':
+                return isEnglish ? 'Grant' : '授予';
+            case 'badge-revoke':
+                return isEnglish ? 'Revoke' : '撤销';
+        }
+    };
 
     return (
         <>
@@ -277,6 +444,15 @@ export const AdminPage = () => {
                         onClick={() => setActiveTab('events')}
                     >
                         {isEnglish ? 'Event Management' : '活动管理'}
+                    </button>
+                    <button
+                        className={`admin-tab ${activeTab === 'records' ? 'admin-tab-active' : ''}`}
+                        onClick={() => {
+                            setActiveTab('records');
+                            loadRecords();
+                        }}
+                    >
+                        {isEnglish ? 'Records' : '操作记录'}
                     </button>
                 </div>
 
@@ -322,6 +498,34 @@ export const AdminPage = () => {
 
                         {searchResults.length === 0 && !searching && searchQuery && (
                             <p className="admin-no-results">{isEnglish ? 'No users found.' : '未找到用户。'}</p>
+                        )}
+
+                        {/* Recent Users */}
+                        {!selectedUser && searchResults.length === 0 && (
+                            <div className="admin-recent-users">
+                                <h4 className="admin-badges-title">
+                                    {isEnglish ? 'Recent Users' : '最近加入的用户'}
+                                </h4>
+                                {loadingRecent && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+                                {!loadingRecent && recentUsers.map((u) => (
+                                    <div key={u.uid} className="admin-user-row" onClick={() => setSelectedUser(u)}>
+                                        <img src={u.photoURL} alt="" className="admin-user-avatar"
+                                             referrerPolicy="no-referrer"/>
+                                        <div>
+                                            <div className="admin-user-name">{u.displayName}</div>
+                                            <div className="admin-user-email">{u.email}</div>
+                                        </div>
+                                        <span className="admin-user-group-tag" data-group={u.group}>
+                                            {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
+                                        </span>
+                                        <span className="admin-detail-joined">
+                                            {u.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                                                year: 'numeric', month: 'short', day: 'numeric',
+                                            })}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
                         )}
 
                         {/* Selected User Detail */}
@@ -584,7 +788,8 @@ export const AdminPage = () => {
                                 {/* Attendees Sub-Tab */}
                                 {eventSubTab === 'attendees' && (
                                     <div className="admin-attendees-section">
-                                        {searching && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+                                        {searching &&
+                                            <div className="profile-spinner" style={{margin: '20px auto'}}/>}
                                         {!searching && eventAttendees.length === 0 && (
                                             <p className="admin-no-results">{isEnglish ? 'No attendees yet.' : '暂无参加者。'}</p>
                                         )}
@@ -610,6 +815,37 @@ export const AdminPage = () => {
                                 )}
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* Records Tab */}
+                {activeTab === 'records' && (
+                    <div className="admin-section">
+                        {loadingRecords && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+
+                        {!loadingRecords && records.length === 0 && (
+                            <p className="admin-no-results">{isEnglish ? 'No records yet.' : '暂无记录。'}</p>
+                        )}
+
+                        {!loadingRecords && records.map((r) => (
+                            <div key={r.id} className="record-row">
+                                <span className={`record-type-tag record-type-${r.type}`}>
+                                    {getRecordTypeTag(r.type)}
+                                </span>
+                                <div className="record-content">
+                                    <span
+                                        className="record-actor">{clickableName(r.performedBy, r.performedByName)}</span>
+                                    {' '}
+                                    <span className="record-description">{getRecordLabel(r)}</span>
+                                </div>
+                                <span className="record-time">
+                                    {r.timestamp.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                                        month: 'short', day: 'numeric',
+                                        hour: '2-digit', minute: '2-digit',
+                                    })}
+                                </span>
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>

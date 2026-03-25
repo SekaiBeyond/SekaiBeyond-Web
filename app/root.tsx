@@ -6,7 +6,7 @@ import { LanguageProvider } from "~/components/LanguageContextProvider";
 import { AuthProvider } from "~/components/AuthProvider";
 import React from "react";
 
-export function Layout({children}: { children: React.ReactNode }) {
+export function Layout({children}: {children: React.ReactNode}) {
     return (
         <html lang="en">
         <head>

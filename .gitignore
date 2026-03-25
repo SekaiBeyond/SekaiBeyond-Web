@@ -8,3 +8,6 @@
 /.firebase
 /.claude
 .env
+.firebaserc
+firebase.json
+public/index.html

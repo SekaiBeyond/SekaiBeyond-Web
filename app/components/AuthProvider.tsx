@@ -22,7 +22,7 @@ const GROUP_LEVEL: Record<UserGroup, number> = {
     'president': 4,
 };
 
-export const GROUP_LABELS: Record<UserGroup, { en: string; zh: string }> = {
+export const GROUP_LABELS: Record<UserGroup, {en: string; zh: string}> = {
     'visitor': {en: 'Visitor', zh: '访客'},
     'member': {en: 'Member', zh: '成员'},
     'staff': {en: 'Staff', zh: '工作人员'},
@@ -35,11 +35,11 @@ export function hasPermission(userGroup: UserGroup, requiredGroup: UserGroup): b
 }
 
 export function canAssignGroup(assignerGroup: UserGroup, targetGroup: UserGroup): boolean {
-    return GROUP_LEVEL[assignerGroup] > GROUP_LEVEL[targetGroup];
+    return GROUP_LEVEL[assignerGroup] >= GROUP_LEVEL[targetGroup];
 }
 
 export function getAssignableGroups(assignerGroup: UserGroup): UserGroup[] {
-    return USER_GROUPS.filter(g => GROUP_LEVEL[assignerGroup] > GROUP_LEVEL[g]);
+    return USER_GROUPS.filter(g => GROUP_LEVEL[assignerGroup] >= GROUP_LEVEL[g]);
 }
 
 export interface UserProfile {
@@ -57,7 +57,7 @@ interface AuthContextType {
     loading: boolean;
     signIn: () => Promise<void>;
     signOut: () => Promise<void>;
-    updateProfile: (updates: { displayName?: string; photoFile?: File }) => Promise<void>;
+    updateProfile: (updates: {displayName?: string; photoFile?: File}) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -131,7 +131,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
         setProfile(null);
     };
 
-    const updateProfile = async (updates: { displayName?: string; photoFile?: File }) => {
+    const updateProfile = async (updates: {displayName?: string; photoFile?: File}) => {
         if (!user || !profile) return;
 
         const userRef = doc(getFirebaseDb(), 'users', user.uid);
