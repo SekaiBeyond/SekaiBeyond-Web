@@ -1,0 +1,167 @@
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { useAuth } from '~/components/AuthProvider';
+import { useLanguage } from '~/components/LanguageContextProvider';
+import { getFirebaseDb } from '~/lib/firebase';
+import { PAST_EVENTS } from '~/constants';
+
+type ClaimState =
+    'loading'
+    | 'no-code'
+    | 'invalid'
+    | 'expired'
+    | 'not-logged-in'
+    | 'claiming'
+    | 'success'
+    | 'already-have'
+    | 'error';
+
+export const ClaimPage = () => {
+    const [searchParams] = useSearchParams();
+    const code = searchParams.get('code');
+    const {user, profile, loading: authLoading, signIn} = useAuth();
+    const {isEnglish} = useLanguage();
+
+    const [state, setState] = useState<ClaimState>('loading');
+    const [eventTitle, setEventTitle] = useState<string | null>(null);
+
+    const event = PAST_EVENTS.find(e => e.title === eventTitle);
+
+    useEffect(() => {
+        if (!code) {
+            setState('no-code');
+            return;
+        }
+        if (authLoading) return;
+        if (!user || !profile) {
+            setState('not-logged-in');
+            return;
+        }
+
+        const claimBadge = async () => {
+            setState('loading');
+            const db = getFirebaseDb();
+            const codesRef = collection(db, 'badgeCodes');
+            const q = query(codesRef, where('code', '==', code), where('active', '==', true));
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                setState('invalid');
+                return;
+            }
+
+            const codeDoc = snapshot.docs[0];
+            const data = codeDoc.data();
+            const title = data.eventTitle as string;
+            setEventTitle(title);
+
+            const now = new Date();
+            if (data.activeFrom && new Date(data.activeFrom) > now) {
+                setState('expired');
+                return;
+            }
+            if (data.activeUntil && new Date(data.activeUntil) < now) {
+                setState('expired');
+                return;
+            }
+
+            if (profile.attendedEvents.includes(title)) {
+                setState('already-have');
+                return;
+            }
+
+            setState('claiming');
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+                attendedEvents: arrayUnion(title),
+            });
+            setState('success');
+        };
+
+        claimBadge().catch(() => setState('error'));
+    }, [code, user, profile, authLoading]);
+
+    if (state === 'loading' || authLoading) {
+        return (
+            <div className="profile-loading">
+                <div className="profile-spinner"/>
+            </div>
+        );
+    }
+
+    return (
+        <div className="profile-login-prompt">
+            <div className="claim-card">
+                {state === 'no-code' && (
+                    <>
+                        <h2>{isEnglish ? 'No Claim Code' : '缺少兑换码'}</h2>
+                        <p>{isEnglish ? 'This link is missing a badge claim code.' : '此链接缺少徽章兑换码。'}</p>
+                    </>
+                )}
+
+                {state === 'invalid' && (
+                    <>
+                        <h2>{isEnglish ? 'Invalid Code' : '无效的兑换码'}</h2>
+                        <p>{isEnglish ? 'This claim code is invalid or has been deactivated.' : '此兑换码无效或已被停用。'}</p>
+                    </>
+                )}
+
+                {state === 'expired' && (
+                    <>
+                        <h2>{isEnglish ? 'Code Expired' : '兑换码已过期'}</h2>
+                        <p>{isEnglish ? 'This claim code is no longer within its active time period.' : '此兑换码不在有效时间范围内。'}</p>
+                    </>
+                )}
+
+                {state === 'not-logged-in' && (
+                    <>
+                        <h2>{isEnglish ? 'Sign In to Claim Badge' : '登录以领取徽章'}</h2>
+                        <p>{isEnglish ? 'You need to sign in first to claim this event badge.' : '请先登录以领取此活动徽章。'}</p>
+                        <button onClick={signIn} className="profile-sign-in-btn">
+                            {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
+                        </button>
+                    </>
+                )}
+
+                {state === 'claiming' && (
+                    <>
+                        <div className="profile-spinner" style={{margin: '0 auto 20px'}}/>
+                        <h2>{isEnglish ? 'Claiming Badge...' : '正在领取徽章...'}</h2>
+                    </>
+                )}
+
+                {(state === 'success' || state === 'already-have') && event && (
+                    <>
+                        <div className="claim-badge-icon">
+                            <img src={event.icon} alt={isEnglish ? event.title : event.titleCn}/>
+                        </div>
+                        <h2>
+                            {state === 'success'
+                                ? (isEnglish ? 'Badge Unlocked!' : '徽章已解锁！')
+                                : (isEnglish ? 'Already Collected' : '已拥有此徽章')}
+                        </h2>
+                        <p className="claim-event-title">{isEnglish ? event.title : event.titleCn}</p>
+                        <p className="claim-event-category">{isEnglish ? event.badge : event.badgeCn}</p>
+                    </>
+                )}
+
+                {state === 'error' && (
+                    <>
+                        <h2>{isEnglish ? 'Something Went Wrong' : '出错了'}</h2>
+                        <p>{isEnglish ? 'Could not claim this badge. Please try again.' : '无法领取徽章，请重试。'}</p>
+                    </>
+                )}
+
+                <div className="claim-actions">
+                    <a href="/profile" className="claim-profile-link">
+                        {isEnglish ? 'View My Badges' : '查看我的徽章'}
+                    </a>
+                    <a href="/" className="profile-back-link">
+                        {isEnglish ? 'Back to Home' : '返回首页'}
+                    </a>
+                </div>
+            </div>
+        </div>
+    );
+};

@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { arrayRemove, arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import {
+    addDoc,
+    arrayRemove,
+    arrayUnion,
+    collection,
+    deleteDoc,
+    doc,
+    getDocs,
+    query,
+    serverTimestamp,
+    updateDoc,
+    where
+} from 'firebase/firestore';
 import {
     canAssignGroup,
     getAssignableGroups,
@@ -12,6 +24,16 @@ import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { PAST_EVENTS } from '~/constants';
+import { QRCodeSVG } from 'qrcode.react';
+
+interface BadgeCode {
+    id: string;
+    code: string;
+    eventTitle: string;
+    active: boolean;
+    activeFrom: string | null;
+    activeUntil: string | null;
+}
 
 interface UserRecord {
     uid: string;
@@ -33,10 +55,15 @@ export const AdminPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<UserRecord[]>([]);
     const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
-    const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
     const [searching, setSearching] = useState(false);
     const [updating, setUpdating] = useState(false);
+    const [badgeCodes, setBadgeCodes] = useState<BadgeCode[]>([]);
+    const [managedEvent, setManagedEvent] = useState<string | null>(null);
+    const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees'>('codes');
+    const [generatingCode, setGeneratingCode] = useState(false);
+    const [newCodeFrom, setNewCodeFrom] = useState('');
+    const [newCodeUntil, setNewCodeUntil] = useState('');
 
     if (loading) {
         return (
@@ -129,8 +156,15 @@ export const AdminPage = () => {
         setUpdating(false);
     };
 
+    const selectManagedEvent = async (eventTitle: string) => {
+        setManagedEvent(eventTitle);
+        setEventSubTab('codes');
+        setBadgeCodes([]);
+        setEventAttendees([]);
+        await loadBadgeCodes(eventTitle);
+    };
+
     const loadEventAttendees = async (eventTitle: string) => {
-        setSelectedEvent(eventTitle);
         setSearching(true);
 
         const db = getFirebaseDb();
@@ -154,6 +188,67 @@ export const AdminPage = () => {
 
         setEventAttendees(attendees);
         setSearching(false);
+    };
+
+    const loadBadgeCodes = async (eventTitle: string) => {
+        const db = getFirebaseDb();
+        const codesRef = collection(db, 'badgeCodes');
+        const q = query(codesRef, where('eventTitle', '==', eventTitle));
+        const snapshot = await getDocs(q);
+
+        const codes: BadgeCode[] = [];
+        snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            codes.push({
+                id: docSnap.id,
+                code: data.code,
+                eventTitle: data.eventTitle,
+                active: data.active ?? true,
+                activeFrom: data.activeFrom ?? null,
+                activeUntil: data.activeUntil ?? null,
+            });
+        });
+        setBadgeCodes(codes);
+    };
+
+    const generateBadgeCode = async (eventTitle: string) => {
+        if (!user) return;
+        setGeneratingCode(true);
+
+        const code = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+        const activeFrom = newCodeFrom || null;
+        const activeUntil = newCodeUntil || null;
+        const db = getFirebaseDb();
+        const docRef = await addDoc(collection(db, 'badgeCodes'), {
+            code,
+            eventTitle,
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+            active: true,
+            activeFrom,
+            activeUntil,
+        });
+
+        setBadgeCodes(prev => [...prev, {id: docRef.id, code, eventTitle, active: true, activeFrom, activeUntil}]);
+        setNewCodeFrom('');
+        setNewCodeUntil('');
+        setGeneratingCode(false);
+    };
+
+    const toggleCodeActive = async (codeDoc: BadgeCode) => {
+        const db = getFirebaseDb();
+        await updateDoc(doc(db, 'badgeCodes', codeDoc.id), {active: !codeDoc.active});
+        setBadgeCodes(prev => prev.map(c => c.id === codeDoc.id ? {...c, active: !c.active} : c));
+    };
+
+    const deleteBadgeCode = async (codeDoc: BadgeCode) => {
+        const db = getFirebaseDb();
+        await deleteDoc(doc(db, 'badgeCodes', codeDoc.id));
+        setBadgeCodes(prev => prev.filter(c => c.id !== codeDoc.id));
+    };
+
+    const getClaimUrl = (code: string) => {
+        return `${window.location.origin}/claim?code=${code}`;
     };
 
     const assignableGroups = getAssignableGroups(profile.group);
@@ -181,7 +276,7 @@ export const AdminPage = () => {
                         className={`admin-tab ${activeTab === 'events' ? 'admin-tab-active' : ''}`}
                         onClick={() => setActiveTab('events')}
                     >
-                        {isEnglish ? 'Event Attendance' : '活动出席'}
+                        {isEnglish ? 'Event Management' : '活动管理'}
                     </button>
                 </div>
 
@@ -317,47 +412,202 @@ export const AdminPage = () => {
                     </div>
                 )}
 
-                {/* Event Attendance Tab */}
+                {/* Event Management Tab */}
                 {activeTab === 'events' && (
                     <div className="admin-section">
-                        <div className="admin-event-list">
-                            {PAST_EVENTS.map((event, i) => (
-                                <button
-                                    key={i}
-                                    className={`admin-event-btn ${selectedEvent === event.title ? 'admin-event-btn-active' : ''}`}
-                                    onClick={() => loadEventAttendees(event.title)}
-                                >
-                                    <img src={event.icon} alt="" className="admin-event-thumb" loading="lazy"/>
-                                    <span>{isEnglish ? event.title : event.titleCn}</span>
-                                </button>
-                            ))}
-                        </div>
-
-                        {selectedEvent && (
-                            <div className="admin-attendees">
-                                <h3>
-                                    {selectedEvent}
-                                    <span className="admin-attendee-count">
-                                    {eventAttendees.length} {isEnglish ? 'attendees' : '人参加'}
-                                </span>
-                                </h3>
-                                {searching && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
-                                {!searching && eventAttendees.length === 0 && (
-                                    <p className="admin-no-results">{isEnglish ? 'No attendees yet.' : '暂无参加者。'}</p>
-                                )}
-                                {!searching && eventAttendees.map((u) => (
-                                    <div key={u.uid} className="admin-user-row">
-                                        <img src={u.photoURL} alt="" className="admin-user-avatar"
-                                             referrerPolicy="no-referrer"/>
-                                        <div>
-                                            <div className="admin-user-name">{u.displayName}</div>
-                                            <div className="admin-user-email">{u.email}</div>
+                        {!managedEvent ? (
+                            <div className="admin-event-grid">
+                                {PAST_EVENTS.map((event, i) => (
+                                    <button
+                                        key={i}
+                                        className="admin-event-card"
+                                        onClick={() => selectManagedEvent(event.title)}
+                                    >
+                                        <img src={event.icon} alt="" className="admin-event-card-img" loading="lazy"/>
+                                        <div className="admin-event-card-info">
+                                            <span
+                                                className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
+                                            <span className="admin-event-card-date">{event.date}</span>
                                         </div>
-                                        <span className="admin-user-group-tag" data-group={u.group}>
-                                            {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
-                                        </span>
-                                    </div>
+                                    </button>
                                 ))}
+                            </div>
+                        ) : (
+                            <div className="admin-event-detail">
+                                <button className="admin-back-btn" onClick={() => setManagedEvent(null)}>
+                                    &larr; {isEnglish ? 'All Events' : '所有活动'}
+                                </button>
+
+                                {(() => {
+                                    const evt = PAST_EVENTS.find(e => e.title === managedEvent);
+                                    if (!evt) return null;
+                                    return (
+                                        <div className="admin-event-detail-header">
+                                            <img src={evt.icon} alt="" className="admin-event-detail-img"/>
+                                            <div>
+                                                <h3>{isEnglish ? evt.title : evt.titleCn}</h3>
+                                                <p className="admin-event-detail-meta">
+                                                    <span>{isEnglish ? evt.badge : evt.badgeCn}</span>
+                                                    <span>{evt.date}</span>
+                                                    <span>{evt.location}</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                <div className="admin-sub-tabs">
+                                    <button
+                                        className={`admin-sub-tab ${eventSubTab === 'codes' ? 'admin-sub-tab-active' : ''}`}
+                                        onClick={() => setEventSubTab('codes')}
+                                    >
+                                        {isEnglish ? 'Claim Codes' : '兑换码'}
+                                    </button>
+                                    <button
+                                        className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
+                                        onClick={() => {
+                                            setEventSubTab('attendees');
+                                            if (eventAttendees.length === 0) loadEventAttendees(managedEvent);
+                                        }}
+                                    >
+                                        {isEnglish ? 'Attendees' : '参加者'}
+                                        {eventAttendees.length > 0 && (
+                                            <span className="admin-sub-tab-count">{eventAttendees.length}</span>
+                                        )}
+                                    </button>
+                                </div>
+
+                                {/* Claim Codes Sub-Tab */}
+                                {eventSubTab === 'codes' && (
+                                    <div className="admin-codes-section">
+                                        <div className="admin-code-time-inputs">
+                                            <label>
+                                                <span>{isEnglish ? 'Active from' : '开始时间'}</span>
+                                                <input
+                                                    type="datetime-local"
+                                                    value={newCodeFrom}
+                                                    onChange={(e) => setNewCodeFrom(e.target.value)}
+                                                    className="admin-datetime-input"
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Active until' : '结束时间'}</span>
+                                                <input
+                                                    type="datetime-local"
+                                                    value={newCodeUntil}
+                                                    onChange={(e) => setNewCodeUntil(e.target.value)}
+                                                    className="admin-datetime-input"
+                                                />
+                                            </label>
+                                            <p className="admin-time-hint">
+                                                {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            className="admin-generate-btn"
+                                            onClick={() => generateBadgeCode(managedEvent)}
+                                            disabled={generatingCode}
+                                        >
+                                            {generatingCode
+                                                ? (isEnglish ? 'Generating...' : '生成中...')
+                                                : (isEnglish ? '+ New Claim Code' : '+ 新建兑换码')}
+                                        </button>
+
+                                        {badgeCodes.length === 0 && (
+                                            <p className="admin-no-results">
+                                                {isEnglish ? 'No claim codes yet. Generate one above.' : '暂无兑换码，点击上方按钮生成。'}
+                                            </p>
+                                        )}
+
+                                        {badgeCodes.map((bc) => (
+                                            <div key={bc.id}
+                                                 className={`admin-code-card ${bc.active ? '' : 'admin-code-inactive'}`}>
+                                                <div className="admin-code-qr">
+                                                    <QRCodeSVG value={getClaimUrl(bc.code)} size={160} level="M"/>
+                                                </div>
+                                                <div className="admin-code-details">
+                                                    <div className="admin-code-url">
+                                                        <input
+                                                            readOnly
+                                                            value={getClaimUrl(bc.code)}
+                                                            onClick={(e) => (e.target as HTMLInputElement).select()}
+                                                            className="admin-code-input"
+                                                        />
+                                                        <button
+                                                            className="admin-copy-btn"
+                                                            onClick={() => navigator.clipboard.writeText(getClaimUrl(bc.code))}
+                                                        >
+                                                            {isEnglish ? 'Copy' : '复制'}
+                                                        </button>
+                                                    </div>
+                                                    <div className="admin-code-status">
+                                                        <span
+                                                            className={bc.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
+                                                            {bc.active
+                                                                ? (isEnglish ? 'Active' : '启用')
+                                                                : (isEnglish ? 'Disabled' : '已停用')}
+                                                        </span>
+                                                        {(bc.activeFrom || bc.activeUntil) && (
+                                                            <span className="admin-code-time-range">
+                                                                {bc.activeFrom && (
+                                                                    <span>{isEnglish ? 'From: ' : '开始：'}{new Date(bc.activeFrom).toLocaleString()}</span>
+                                                                )}
+                                                                {bc.activeUntil && (
+                                                                    <span>{isEnglish ? 'Until: ' : '截止：'}{new Date(bc.activeUntil).toLocaleString()}</span>
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="admin-code-actions">
+                                                        <button
+                                                            className="admin-toggle-btn admin-toggle-small"
+                                                            onClick={() => toggleCodeActive(bc)}
+                                                        >
+                                                            {bc.active
+                                                                ? (isEnglish ? 'Disable' : '停用')
+                                                                : (isEnglish ? 'Enable' : '启用')}
+                                                        </button>
+                                                        <button
+                                                            className="admin-toggle-btn admin-toggle-revoke admin-toggle-small"
+                                                            onClick={() => deleteBadgeCode(bc)}
+                                                        >
+                                                            {isEnglish ? 'Delete' : '删除'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Attendees Sub-Tab */}
+                                {eventSubTab === 'attendees' && (
+                                    <div className="admin-attendees-section">
+                                        {searching && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+                                        {!searching && eventAttendees.length === 0 && (
+                                            <p className="admin-no-results">{isEnglish ? 'No attendees yet.' : '暂无参加者。'}</p>
+                                        )}
+                                        {!searching && eventAttendees.length > 0 && (
+                                            <p className="admin-attendees-count">
+                                                {eventAttendees.length} {isEnglish ? 'attendees' : '人参加'}
+                                            </p>
+                                        )}
+                                        {!searching && eventAttendees.map((u) => (
+                                            <div key={u.uid} className="admin-user-row">
+                                                <img src={u.photoURL} alt="" className="admin-user-avatar"
+                                                     referrerPolicy="no-referrer"/>
+                                                <div>
+                                                    <div className="admin-user-name">{u.displayName}</div>
+                                                    <div className="admin-user-email">{u.email}</div>
+                                                </div>
+                                                <span className="admin-user-group-tag" data-group={u.group}>
+                                                    {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
