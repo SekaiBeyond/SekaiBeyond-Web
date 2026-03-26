@@ -171,8 +171,8 @@ export const AdminPage = () => {
             setBadgeDefs(defs);
             setLoadingBadgeDefs(false);
         };
-        loadRecentUsers();
-        loadBadgeDefinitions();
+        loadRecentUsers().then();
+        loadBadgeDefinitions().then();
     }, [loading, user, profile]);
 
     const loadRecords = async () => {
@@ -595,7 +595,7 @@ export const AdminPage = () => {
         return (
             <span className="record-clickable-name" onClick={() => {
                 setActiveTab('badges');
-                selectBadgeDef(bd);
+                selectBadgeDef(bd).then();
             }}>{badgeName}</span>
         );
     };
@@ -689,7 +689,7 @@ export const AdminPage = () => {
                         className={`admin-tab ${activeTab === 'records' ? 'admin-tab-active' : ''}`}
                         onClick={() => {
                             setActiveTab('records');
-                            loadRecords();
+                            loadRecords().then();
                         }}
                     >
                         {isEnglish ? 'Records' : '操作记录'}
@@ -834,8 +834,7 @@ export const AdminPage = () => {
                                                 return (
                                                     <div key={bd.id}
                                                          className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
-                                                        <img src={bd.imageUrl} alt="" className="admin-badge-img"
-                                                             loading="lazy"/>
+                                                        <img src={bd.imageUrl} alt="" className="admin-badge-img"/>
                                                         <div className="admin-badge-info">
                                                             <span
                                                                 className="admin-badge-name">{isEnglish ? bd.name : bd.nameCn}</span>
@@ -870,8 +869,7 @@ export const AdminPage = () => {
                                         const has = selectedUser.attendedEvents.includes(event.title);
                                         return (
                                             <div key={i} className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
-                                                <img src={event.icon} alt="" className="admin-badge-img"
-                                                     loading="lazy"/>
+                                                <img src={event.icon} alt="" className="admin-badge-img"/>
                                                 <div className="admin-badge-info">
                                                     <span
                                                         className="admin-badge-name">{isEnglish ? event.title : event.titleCn}</span>
@@ -906,7 +904,7 @@ export const AdminPage = () => {
                                         className="admin-event-card"
                                         onClick={() => selectManagedEvent(event.title)}
                                     >
-                                        <img src={event.icon} alt="" className="admin-event-card-img" loading="lazy"/>
+                                        <img src={event.icon} alt="" className="admin-event-card-img"/>
                                         <div className="admin-event-card-info">
                                             <span
                                                 className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
@@ -950,7 +948,7 @@ export const AdminPage = () => {
                                         className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
                                         onClick={() => {
                                             setEventSubTab('attendees');
-                                            if (eventAttendees.length === 0) loadEventAttendees(managedEvent);
+                                            if (eventAttendees.length === 0) loadEventAttendees(managedEvent).then();
                                         }}
                                     >
                                         {isEnglish ? 'Attendees' : '参加者'}
@@ -1208,8 +1206,7 @@ export const AdminPage = () => {
                                                 className="admin-event-card"
                                                 onClick={() => selectBadgeDef(bd)}
                                             >
-                                                <img src={bd.imageUrl} alt="" className="admin-event-card-img"
-                                                     loading="lazy"/>
+                                                <img src={bd.imageUrl} alt="" className="admin-event-card-img"/>
                                                 <div className="admin-event-card-info">
                                                     <span className="admin-event-card-title">
                                                         {isEnglish ? bd.name : bd.nameCn}
@@ -1254,7 +1251,7 @@ export const AdminPage = () => {
                                             disabled={updating}
                                             onChange={(e) => {
                                                 const file = e.target.files?.[0];
-                                                if (file) updateBadgeImage(selectedBadgeDef, file);
+                                                if (file) updateBadgeImage(selectedBadgeDef, file).then();
                                             }}
                                         />
                                     </label>

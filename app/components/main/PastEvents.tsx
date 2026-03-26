@@ -26,7 +26,6 @@ export const PastEvents = () => {
                             alt={isEnglish ? event.title : event.titleCn}
                             onClick={() => setSelectedImage(event.icon)}
                             style={{cursor: 'pointer'}}
-                            loading="lazy"
                         />
                         <div className="event-content">
                             <span className="event-badge">{isEnglish ? event.badge : event.badgeCn}</span>

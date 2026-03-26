@@ -91,11 +91,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                 </p>
                 <div className="convention-poster" style={{marginTop: '2rem'}}
                      onClick={onPosterClick}>
-                    <img
-                        src={event.POSTER}
-                        alt={isEnglish ? "Event Poster" : "活动海报"}
-                        loading="lazy"
-                    />
+                    <img src={event.POSTER} alt={isEnglish ? "Event Poster" : "活动海报"}/>
                     {event.POSTER_CREDIT ? (
                         <p className="poster-credit">
                             {isEnglish ? `Poster by ${event.POSTER_CREDIT}` : `海报由 ${event.POSTER_CREDIT} 制作`}

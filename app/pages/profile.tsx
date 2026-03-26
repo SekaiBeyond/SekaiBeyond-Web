@@ -18,7 +18,7 @@ interface BadgeDef {
 }
 
 export const ProfilePage = () => {
-    const {user, profile, loading, signIn, signOut, updateProfile} = useAuth();
+    const {user, profile, loading, signIn, updateProfile} = useAuth();
     const {isEnglish} = useLanguage();
     const [editingName, setEditingName] = useState(false);
     const [editName, setEditName] = useState('');
@@ -49,7 +49,7 @@ export const ProfilePage = () => {
             });
             setBadgeDefs(defs);
         };
-        loadBadges();
+        loadBadges().then();
     }, []);
 
     useEffect(() => {
@@ -70,10 +70,10 @@ export const ProfilePage = () => {
             });
             setEarnedDates(dates);
         };
-        loadEarnedDates();
+        loadEarnedDates().then();
     }, [user]);
 
-    // Preload custom (Firebase Storage) photo in background; show Google photo until ready
+    // Preload a custom (Firebase Storage) photo in the background; show the Google photo until ready
     const hasCustomPhoto = profile?.photoURL.includes('firebasestorage.googleapis.com') ?? false;
 
     useEffect(() => {
@@ -138,7 +138,7 @@ export const ProfilePage = () => {
     };
 
     const handleNameKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') handleSaveName();
+        if (e.key === 'Enter') handleSaveName().then();
         if (e.key === 'Escape') cancelEditingName();
     };
 
@@ -324,12 +324,8 @@ export const ProfilePage = () => {
                                         className={`badge-card ${earned ? 'badge-earned' : 'badge-locked'}`}
                                     >
                                         <div className="badge-icon-wrapper">
-                                            <img
-                                                src={badge.imageUrl}
-                                                alt={isEnglish ? badge.name : badge.nameCn}
-                                                className="badge-icon"
-                                                loading="lazy"
-                                            />
+                                            <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn}
+                                                 className="badge-icon"/>
                                             {earned && <span className="badge-check">&#10003;</span>}
                                             {!earned && <span className="badge-lock">&#128274;</span>}
                                         </div>
@@ -389,12 +385,8 @@ export const ProfilePage = () => {
                                     className={`badge-card ${attended ? 'badge-earned' : 'badge-locked'}`}
                                 >
                                     <div className="badge-icon-wrapper">
-                                        <img
-                                            src={event.icon}
-                                            alt={isEnglish ? event.title : event.titleCn}
-                                            className="badge-icon"
-                                            loading="lazy"
-                                        />
+                                        <img src={event.icon} alt={isEnglish ? event.title : event.titleCn}
+                                             className="badge-icon"/>
                                         {attended && <span className="badge-check">&#10003;</span>}
                                         {!attended && <span className="badge-lock">&#128274;</span>}
                                     </div>
