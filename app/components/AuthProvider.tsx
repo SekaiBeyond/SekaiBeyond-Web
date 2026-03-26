@@ -48,6 +48,7 @@ export interface UserProfile {
     photoURL: string;
     joinedAt: Date;
     attendedEvents: string[];
+    badges: string[];
     group: UserGroup;
 }
 
@@ -95,6 +96,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
                         photoURL: data.photoURL,
                         joinedAt: data.joinedAt?.toDate() ?? new Date(),
                         attendedEvents: data.attendedEvents ?? [],
+                        badges: data.badges ?? [],
                         group: data.group ?? 'visitor',
                     });
                 } else {
@@ -104,6 +106,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
                         photoURL: firebaseUser.photoURL ?? '',
                         joinedAt: serverTimestamp(),
                         attendedEvents: [],
+                        badges: [],
                         group: 'visitor' as UserGroup,
                     };
                     await setDoc(userRef, newProfile);

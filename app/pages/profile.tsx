@@ -1,8 +1,20 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
 import { GROUP_LABELS, useAuth } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { getFirebaseDb } from '~/lib/firebase';
+import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { PAST_EVENTS, type PastEvent } from '~/constants';
+
+interface BadgeDef {
+    id: string;
+    name: string;
+    nameCn: string;
+    description: string;
+    descriptionCn: string;
+    imageUrl: string;
+}
 
 export const ProfilePage = () => {
     const {user, profile, loading, signIn, signOut, updateProfile} = useAuth();
@@ -13,6 +25,28 @@ export const ProfilePage = () => {
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [saving, setSaving] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
+
+    useEffect(() => {
+        const loadBadges = async () => {
+            const db = getFirebaseDb();
+            const snapshot = await getDocs(collection(db, 'badges'));
+            const defs: BadgeDef[] = [];
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                defs.push({
+                    id: docSnap.id,
+                    name: data.name ?? '',
+                    nameCn: data.nameCn ?? '',
+                    description: data.description ?? '',
+                    descriptionCn: data.descriptionCn ?? '',
+                    imageUrl: data.imageUrl ?? '',
+                });
+            });
+            setBadgeDefs(defs);
+        };
+        loadBadges();
+    }, []);
 
     const startEditing = () => {
         if (!profile) return;
@@ -65,8 +99,8 @@ export const ProfilePage = () => {
                 <div className="profile-login-card">
                     <h2>{isEnglish ? 'Sign in to view your profile' : '登录以查看你的个人主页'}</h2>
                     <p>{isEnglish
-                        ? 'Track your event attendance and collect badges!'
-                        : '记录你的活动参与情况，收集徽章！'}
+                        ? 'Track your event attendance and earn badges!'
+                        : '记录你的活动参与、收集徽章！'}
                     </p>
                     <button onClick={signIn} className="profile-sign-in-btn">
                         {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
@@ -88,7 +122,10 @@ export const ProfilePage = () => {
                 <a href="/" className="profile-nav-home">
                     {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
                 </a>
-                <LoginButton/>
+                <div className="nav-actions">
+                    <LanguageSwitcher/>
+                    <LoginButton/>
+                </div>
             </nav>
             <div className="profile-page">
 
@@ -172,24 +209,70 @@ export const ProfilePage = () => {
                 </div>
 
                 <div className="profile-stats">
+                    {badgeDefs.length > 0 && (
+                        <div className="profile-stat">
+                            <span className="profile-stat-number">
+                                {badgeDefs.filter(b => profile.badges.includes(b.id)).length}
+                            </span>
+                            <span className="profile-stat-label">{isEnglish ? 'Badges' : '徽章'}</span>
+                        </div>
+                    )}
                     <div className="profile-stat">
-                        <span className="profile-stat-number">{attendedCount}</span>
+                        <span className="profile-stat-number">{attendedCount}/{PAST_EVENTS.length}</span>
                         <span className="profile-stat-label">{isEnglish ? 'Events Attended' : '参与活动'}</span>
-                    </div>
-                    <div className="profile-stat">
-                        <span className="profile-stat-number">{PAST_EVENTS.length}</span>
-                        <span className="profile-stat-label">{isEnglish ? 'Total Events' : '总活动数'}</span>
                     </div>
                 </div>
 
+                {badgeDefs.length > 0 && (
+                    <section className="badge-section">
+                        <h2 className="badge-section-title">
+                            {isEnglish ? 'Badges' : '徽章'}
+                        </h2>
+                        <p className="badge-section-subtitle">
+                            {isEnglish
+                                ? 'Earn badges through challenges and special events!'
+                                : '通过挑战和特别活动赢取徽章！'}
+                        </p>
+
+                        <div className="badge-grid">
+                            {badgeDefs.map((badge: BadgeDef) => {
+                                const earned = profile.badges.includes(badge.id);
+                                return (
+                                    <div
+                                        key={badge.id}
+                                        className={`badge-card ${earned ? 'badge-earned' : 'badge-locked'}`}
+                                    >
+                                        <div className="badge-icon-wrapper">
+                                            <img
+                                                src={badge.imageUrl}
+                                                alt={isEnglish ? badge.name : badge.nameCn}
+                                                className="badge-icon"
+                                                loading="lazy"
+                                            />
+                                            {earned && <span className="badge-check">&#10003;</span>}
+                                            {!earned && <span className="badge-lock">&#128274;</span>}
+                                        </div>
+                                        <div className="badge-info">
+                                            <h3 className="badge-title">{isEnglish ? badge.name : badge.nameCn}</h3>
+                                            <p className="badge-description">
+                                                {isEnglish ? badge.description : badge.descriptionCn}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                )}
+
                 <section className="badge-section">
                     <h2 className="badge-section-title">
-                        {isEnglish ? 'Badge Collection' : '徽章收藏'}
+                        {isEnglish ? 'Events Attended' : '参与活动'}
                     </h2>
                     <p className="badge-section-subtitle">
                         {isEnglish
-                            ? 'Badges are awarded for events you attend'
-                            : '参加活动即可获得对应徽章'}
+                            ? 'Attend events and scan QR codes to check in'
+                            : '参加活动并扫码签到'}
                     </p>
 
                     <div className="badge-grid">

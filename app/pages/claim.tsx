@@ -96,7 +96,7 @@ export const ClaimPage = () => {
                 {state === 'no-code' && (
                     <>
                         <h2>{isEnglish ? 'No Claim Code' : '缺少兑换码'}</h2>
-                        <p>{isEnglish ? 'This link is missing a badge claim code.' : '此链接缺少徽章兑换码。'}</p>
+                        <p>{isEnglish ? 'This link is missing a claim code.' : '此链接缺少兑换码。'}</p>
                     </>
                 )}
 
@@ -116,8 +116,8 @@ export const ClaimPage = () => {
 
                 {state === 'not-logged-in' && (
                     <>
-                        <h2>{isEnglish ? 'Sign In to Claim Badge' : '登录以领取徽章'}</h2>
-                        <p>{isEnglish ? 'You need to sign in first to claim this event badge.' : '请先登录以领取此活动徽章。'}</p>
+                        <h2>{isEnglish ? 'Sign In to Claim Event' : '登录以签到活动'}</h2>
+                        <p>{isEnglish ? 'You need to sign in first to check in for this event.' : '请先登录以签到此活动。'}</p>
                         <button onClick={signIn} className="profile-sign-in-btn">
                             {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
                         </button>
@@ -127,7 +127,7 @@ export const ClaimPage = () => {
                 {state === 'claiming' && (
                     <>
                         <div className="profile-spinner" style={{margin: '0 auto 20px'}}/>
-                        <h2>{isEnglish ? 'Claiming Badge...' : '正在领取徽章...'}</h2>
+                        <h2>{isEnglish ? 'Checking In...' : '签到中...'}</h2>
                     </>
                 )}
 
@@ -138,8 +138,8 @@ export const ClaimPage = () => {
                         </div>
                         <h2>
                             {state === 'success'
-                                ? (isEnglish ? 'Badge Unlocked!' : '徽章已解锁！')
-                                : (isEnglish ? 'Already Collected' : '已拥有此徽章')}
+                                ? (isEnglish ? 'Event Claimed!' : '签到成功！')
+                                : (isEnglish ? 'Already Checked In' : '已签到此活动')}
                         </h2>
                         <p className="claim-event-title">{isEnglish ? event.title : event.titleCn}</p>
                         <p className="claim-event-category">{isEnglish ? event.badge : event.badgeCn}</p>
@@ -149,13 +149,13 @@ export const ClaimPage = () => {
                 {state === 'error' && (
                     <>
                         <h2>{isEnglish ? 'Something Went Wrong' : '出错了'}</h2>
-                        <p>{isEnglish ? 'Could not claim this badge. Please try again.' : '无法领取徽章，请重试。'}</p>
+                        <p>{isEnglish ? 'Could not check in. Please try again.' : '无法签到，请重试。'}</p>
                     </>
                 )}
 
                 <div className="claim-actions">
                     <a href="/profile" className="claim-profile-link">
-                        {isEnglish ? 'View My Badges' : '查看我的徽章'}
+                        {isEnglish ? 'View My Profile' : '查看个人主页'}
                     </a>
                     <a href="/" className="profile-back-link">
                         {isEnglish ? 'Back to Home' : '返回首页'}

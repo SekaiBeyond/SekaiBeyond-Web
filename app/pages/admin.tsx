@@ -25,7 +25,9 @@ import {
 } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { getFirebaseDb } from '~/lib/firebase';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getFirebaseDb, getFirebaseStorage } from '~/lib/firebase';
+import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { PAST_EVENTS } from '~/constants';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -38,6 +40,17 @@ interface BadgeCode {
     activeUntil: string | null;
 }
 
+interface BadgeDef {
+    id: string;
+    name: string;
+    nameCn: string;
+    description: string;
+    descriptionCn: string;
+    imageUrl: string;
+    createdBy: string;
+    createdAt: Date;
+}
+
 interface UserRecord {
     uid: string;
     displayName: string;
@@ -45,12 +58,13 @@ interface UserRecord {
     photoURL: string;
     joinedAt: Date;
     attendedEvents: string[];
+    badges: string[];
     group: UserGroup;
 }
 
-type Tab = 'users' | 'events' | 'records';
+type Tab = 'users' | 'events' | 'badges' | 'records';
 
-type RecordType = 'group-assign' | 'code-create' | 'badge-grant' | 'badge-revoke';
+type RecordType = 'group-assign' | 'code-create' | 'badge-grant' | 'badge-revoke' | 'achievement-grant' | 'achievement-revoke';
 
 interface ActivityRecord {
     id: string;
@@ -60,6 +74,8 @@ interface ActivityRecord {
     targetUid?: string;
     targetName?: string;
     eventTitle?: string;
+    badgeId?: string;
+    badgeName?: string;
     code?: string;
     oldGroup?: UserGroup;
     newGroup?: UserGroup;
@@ -87,6 +103,19 @@ export const AdminPage = () => {
     const [loadingRecent, setLoadingRecent] = useState(false);
     const [records, setRecords] = useState<ActivityRecord[]>([]);
     const [loadingRecords, setLoadingRecords] = useState(false);
+    const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
+    const [loadingBadgeDefs, setLoadingBadgeDefs] = useState(false);
+    const [selectedBadgeDef, setSelectedBadgeDef] = useState<BadgeDef | null>(null);
+    const [badgeHolders, setBadgeHolders] = useState<UserRecord[]>([]);
+    const [loadingBadgeHolders, setLoadingBadgeHolders] = useState(false);
+    const [showCreateBadge, setShowCreateBadge] = useState(false);
+    const [newBadgeName, setNewBadgeName] = useState('');
+    const [newBadgeNameCn, setNewBadgeNameCn] = useState('');
+    const [newBadgeDesc, setNewBadgeDesc] = useState('');
+    const [newBadgeDescCn, setNewBadgeDescCn] = useState('');
+    const [newBadgeImage, setNewBadgeImage] = useState<File | null>(null);
+    const [newBadgeImagePreview, setNewBadgeImagePreview] = useState<string | null>(null);
+    const [creatingBadgeDef, setCreatingBadgeDef] = useState(false);
 
     useEffect(() => {
         if (loading || !user || !profile || !hasPermission(profile.group, 'core-staff')) return;
@@ -107,13 +136,36 @@ export const AdminPage = () => {
                     photoURL: data.photoURL ?? '',
                     joinedAt: data.joinedAt?.toDate() ?? new Date(),
                     attendedEvents: data.attendedEvents ?? [],
+                    badges: data.badges ?? [],
                     group: data.group ?? 'visitor',
                 });
             });
             setRecentUsers(users);
             setLoadingRecent(false);
         };
+        const loadBadgeDefinitions = async () => {
+            setLoadingBadgeDefs(true);
+            const db = getFirebaseDb();
+            const snapshot = await getDocs(collection(db, 'badges'));
+            const defs: BadgeDef[] = [];
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                defs.push({
+                    id: docSnap.id,
+                    name: data.name ?? '',
+                    nameCn: data.nameCn ?? '',
+                    description: data.description ?? '',
+                    descriptionCn: data.descriptionCn ?? '',
+                    imageUrl: data.imageUrl ?? '',
+                    createdBy: data.createdBy ?? '',
+                    createdAt: data.createdAt?.toDate() ?? new Date(),
+                });
+            });
+            setBadgeDefs(defs);
+            setLoadingBadgeDefs(false);
+        };
         loadRecentUsers();
+        loadBadgeDefinitions();
     }, [loading, user, profile]);
 
     const loadRecords = async () => {
@@ -133,6 +185,8 @@ export const AdminPage = () => {
                 targetUid: data.targetUid,
                 targetName: data.targetName,
                 eventTitle: data.eventTitle,
+                badgeId: data.badgeId,
+                badgeName: data.badgeName,
                 code: data.code,
                 oldGroup: data.oldGroup,
                 newGroup: data.newGroup,
@@ -177,6 +231,7 @@ export const AdminPage = () => {
             photoURL: data.photoURL ?? '',
             joinedAt: data.joinedAt?.toDate() ?? new Date(),
             attendedEvents: data.attendedEvents ?? [],
+            badges: data.badges ?? [],
             group: data.group ?? 'visitor',
         };
         setSelectedUser(userRecord);
@@ -205,6 +260,7 @@ export const AdminPage = () => {
                 photoURL: data.photoURL ?? '',
                 joinedAt: data.joinedAt?.toDate() ?? new Date(),
                 attendedEvents: data.attendedEvents ?? [],
+                badges: data.badges ?? [],
                 group: data.group ?? 'visitor',
             });
         });
@@ -301,6 +357,7 @@ export const AdminPage = () => {
                 photoURL: data.photoURL ?? '',
                 joinedAt: data.joinedAt?.toDate() ?? new Date(),
                 attendedEvents: data.attendedEvents ?? [],
+                badges: data.badges ?? [],
                 group: data.group ?? 'visitor',
             });
         });
@@ -379,11 +436,151 @@ export const AdminPage = () => {
         return `${window.location.origin}/claim?code=${code}`;
     };
 
+    const updateBadgeImage = async (bd: BadgeDef, file: File) => {
+        setUpdating(true);
+        const imageId = crypto.randomUUID();
+        const storageRef = ref(getFirebaseStorage(), `badges/${imageId}`);
+        await uploadBytes(storageRef, file);
+        const imageUrl = await getDownloadURL(storageRef);
+
+        const db = getFirebaseDb();
+        await updateDoc(doc(db, 'badges', bd.id), { imageUrl });
+
+        const updated = { ...bd, imageUrl };
+        setBadgeDefs(prev => prev.map(d => d.id === bd.id ? updated : d));
+        if (selectedBadgeDef?.id === bd.id) {
+            setSelectedBadgeDef(updated);
+        }
+        setUpdating(false);
+    };
+
+    const createBadgeDef = async () => {
+        if (!user) return;
+        setCreatingBadgeDef(true);
+
+        let imageUrl = '/images/mika.png';
+        if (newBadgeImage) {
+            const imageId = crypto.randomUUID();
+            const storageRef = ref(getFirebaseStorage(), `badges/${imageId}`);
+            await uploadBytes(storageRef, newBadgeImage);
+            imageUrl = await getDownloadURL(storageRef);
+        }
+
+        const db = getFirebaseDb();
+        const docRef = await addDoc(collection(db, 'badges'), {
+            name: newBadgeName.trim(),
+            nameCn: newBadgeNameCn.trim(),
+            description: newBadgeDesc.trim(),
+            descriptionCn: newBadgeDescCn.trim(),
+            imageUrl,
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+        });
+
+        setBadgeDefs(prev => [...prev, {
+            id: docRef.id,
+            name: newBadgeName.trim(),
+            nameCn: newBadgeNameCn.trim(),
+            description: newBadgeDesc.trim(),
+            descriptionCn: newBadgeDescCn.trim(),
+            imageUrl,
+            createdBy: user.uid,
+            createdAt: new Date(),
+        }]);
+
+        setNewBadgeName('');
+        setNewBadgeNameCn('');
+        setNewBadgeDesc('');
+        setNewBadgeDescCn('');
+        setNewBadgeImage(null);
+        setNewBadgeImagePreview(null);
+        setShowCreateBadge(false);
+        setCreatingBadgeDef(false);
+    };
+
+    const deleteBadgeDef = async (bd: BadgeDef) => {
+        const db = getFirebaseDb();
+        await deleteDoc(doc(db, 'badges', bd.id));
+        setBadgeDefs(prev => prev.filter(d => d.id !== bd.id));
+        setSelectedBadgeDef(null);
+    };
+
+    const selectBadgeDef = async (bd: BadgeDef) => {
+        setSelectedBadgeDef(bd);
+        setLoadingBadgeHolders(true);
+        const db = getFirebaseDb();
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('badges', 'array-contains', bd.id));
+        const snapshot = await getDocs(q);
+
+        const holders: UserRecord[] = [];
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            holders.push({
+                uid: docSnap.id,
+                displayName: data.displayName ?? '',
+                email: data.email ?? '',
+                photoURL: data.photoURL ?? '',
+                joinedAt: data.joinedAt?.toDate() ?? new Date(),
+                attendedEvents: data.attendedEvents ?? [],
+                badges: data.badges ?? [],
+                group: data.group ?? 'visitor',
+            });
+        });
+        setBadgeHolders(holders);
+        setLoadingBadgeHolders(false);
+    };
+
+    const toggleUserBadge = async (userRecord: UserRecord, badgeId: string, badgeName: string) => {
+        setUpdating(true);
+        const db = getFirebaseDb();
+        const userRef = doc(db, 'users', userRecord.uid);
+        const has = userRecord.badges.includes(badgeId);
+
+        await updateDoc(userRef, {
+            badges: has ? arrayRemove(badgeId) : arrayUnion(badgeId),
+        });
+
+        await addDoc(collection(db, 'records'), {
+            type: has ? 'achievement-revoke' : 'achievement-grant',
+            performedBy: user.uid,
+            performedByName: profile.displayName,
+            targetUid: userRecord.uid,
+            targetName: userRecord.displayName,
+            badgeId,
+            badgeName,
+            timestamp: serverTimestamp(),
+        });
+
+        const updatedBadges = has
+            ? userRecord.badges.filter(id => id !== badgeId)
+            : [...userRecord.badges, badgeId];
+
+        const updated = {...userRecord, badges: updatedBadges};
+
+        if (selectedUser?.uid === userRecord.uid) {
+            setSelectedUser(updated);
+        }
+        setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+        setUpdating(false);
+    };
+
     const assignableGroups = getAssignableGroups(profile.group);
 
     const clickableName = (uid: string, name: string) => (
         <span className="record-clickable-name" onClick={() => lookupUserByUid(uid)}>{name}</span>
     );
+
+    const clickableBadge = (badgeId: string, badgeName: string) => {
+        const bd = badgeDefs.find(d => d.id === badgeId);
+        if (!bd) return <span>{badgeName}</span>;
+        return (
+            <span className="record-clickable-name" onClick={() => {
+                setActiveTab('badges');
+                selectBadgeDef(bd);
+            }}>{badgeName}</span>
+        );
+    };
 
     const getRecordLabel = (r: ActivityRecord) => {
         const target = r.targetUid ? clickableName(r.targetUid, r.targetName ?? '') : r.targetName;
@@ -398,12 +595,24 @@ export const AdminPage = () => {
                     : <>为 {r.eventTitle} 创建了兑换码</>;
             case 'badge-grant':
                 return isEnglish
-                    ? <>granted {r.eventTitle} badge to {target}</>
-                    : <>授予 {target} {r.eventTitle} 徽章</>;
+                    ? <>marked {target} as attended {r.eventTitle}</>
+                    : <>标记 {target} 参加了 {r.eventTitle}</>;
             case 'badge-revoke':
                 return isEnglish
-                    ? <>revoked {r.eventTitle} badge from {target}</>
-                    : <>撤销了 {target} 的 {r.eventTitle} 徽章</>;
+                    ? <>revoked {target}'s attendance for {r.eventTitle}</>
+                    : <>撤销了 {target} 的 {r.eventTitle} 签到</>;
+            case 'achievement-grant': {
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? '') : r.badgeName;
+                return isEnglish
+                    ? <>granted {badge} badge to {target}</>
+                    : <>授予 {target} {badge} 徽章</>;
+            }
+            case 'achievement-revoke': {
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? '') : r.badgeName;
+                return isEnglish
+                    ? <>revoked {badge} badge from {target}</>
+                    : <>撤销了 {target} 的 {badge} 徽章</>;
+            }
         }
     };
 
@@ -414,9 +623,13 @@ export const AdminPage = () => {
             case 'code-create':
                 return isEnglish ? 'Code' : '兑换码';
             case 'badge-grant':
-                return isEnglish ? 'Grant' : '授予';
+                return isEnglish ? 'Attend' : '签到';
             case 'badge-revoke':
-                return isEnglish ? 'Revoke' : '撤销';
+                return isEnglish ? 'Attend' : '签到';
+            case 'achievement-grant':
+                return isEnglish ? 'Badge' : '徽章';
+            case 'achievement-revoke':
+                return isEnglish ? 'Badge' : '徽章';
         }
     };
 
@@ -427,7 +640,10 @@ export const AdminPage = () => {
                     {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
                 </a>
                 <span className="admin-nav-title">{isEnglish ? 'Admin Panel' : '管理面板'}</span>
-                <LoginButton/>
+                <div className="nav-actions">
+                    <LanguageSwitcher/>
+                    <LoginButton/>
+                </div>
             </nav>
             <div className="profile-page">
 
@@ -444,6 +660,12 @@ export const AdminPage = () => {
                         onClick={() => setActiveTab('events')}
                     >
                         {isEnglish ? 'Event Management' : '活动管理'}
+                    </button>
+                    <button
+                        className={`admin-tab ${activeTab === 'badges' ? 'admin-tab-active' : ''}`}
+                        onClick={() => setActiveTab('badges')}
+                    >
+                        {isEnglish ? 'Badges' : '徽章'}
                     </button>
                     <button
                         className={`admin-tab ${activeTab === 'records' ? 'admin-tab-active' : ''}`}
@@ -489,7 +711,7 @@ export const AdminPage = () => {
                                             {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
                                         </span>
                                         <span className="admin-user-badge-count">
-                                            {u.attendedEvents.length} {isEnglish ? 'badges' : '徽章'}
+                                            {u.attendedEvents.length} {isEnglish ? 'events' : '活动'}
                                         </span>
                                     </div>
                                 ))}
@@ -579,8 +801,47 @@ export const AdminPage = () => {
                                     )}
                                 </div>
 
+                                {badgeDefs.length > 0 && (
+                                    <>
+                                        <h4 className="admin-badges-title">
+                                            {isEnglish ? 'Badges' : '徽章'}
+                                            <span className="admin-badges-count">
+                                                {selectedUser.badges.filter(id => badgeDefs.some(bd => bd.id === id)).length}/{badgeDefs.length}
+                                            </span>
+                                        </h4>
+
+                                        <div className="admin-badge-list">
+                                            {badgeDefs.map((bd) => {
+                                                const has = selectedUser.badges.includes(bd.id);
+                                                return (
+                                                    <div key={bd.id}
+                                                         className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
+                                                        <img src={bd.imageUrl} alt="" className="admin-badge-img"
+                                                             loading="lazy"/>
+                                                        <div className="admin-badge-info">
+                                                            <span
+                                                                className="admin-badge-name">{isEnglish ? bd.name : bd.nameCn}</span>
+                                                            <span
+                                                                className="admin-badge-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
+                                                        </div>
+                                                        <button
+                                                            className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                                            onClick={() => toggleUserBadge(selectedUser, bd.id, isEnglish ? bd.name : bd.nameCn)}
+                                                            disabled={updating}
+                                                        >
+                                                            {has
+                                                                ? (isEnglish ? 'Revoke' : '撤销')
+                                                                : (isEnglish ? 'Grant' : '授予')}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                )}
+
                                 <h4 className="admin-badges-title">
-                                    {isEnglish ? 'Event Badges' : '活动徽章'}
+                                    {isEnglish ? 'Events Attended' : '参与活动'}
                                     <span className="admin-badges-count">
                                     {selectedUser.attendedEvents.length}/{PAST_EVENTS.length}
                                 </span>
@@ -813,6 +1074,208 @@ export const AdminPage = () => {
                                         ))}
                                     </div>
                                 )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Badges Tab */}
+                {activeTab === 'badges' && (
+                    <div className="admin-section">
+                        {!selectedBadgeDef ? (
+                            <>
+                                {showCreateBadge ? (
+                                    <div className="admin-create-badge-form">
+                                        <h4 className="admin-badges-title">
+                                            {isEnglish ? 'Create New Badge' : '创建新徽章'}
+                                        </h4>
+                                        <div className="admin-form-grid">
+                                            <label>
+                                                <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
+                                                <input
+                                                    value={newBadgeName}
+                                                    onChange={(e) => setNewBadgeName(e.target.value)}
+                                                    className="admin-search-input"
+                                                    placeholder={isEnglish ? 'Badge name' : '徽章名称'}
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
+                                                <input
+                                                    value={newBadgeNameCn}
+                                                    onChange={(e) => setNewBadgeNameCn(e.target.value)}
+                                                    className="admin-search-input"
+                                                    placeholder={isEnglish ? 'Badge name in Chinese' : '徽章中文名称'}
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
+                                                <textarea
+                                                    value={newBadgeDesc}
+                                                    onChange={(e) => setNewBadgeDesc(e.target.value)}
+                                                    className="admin-search-input admin-textarea"
+                                                    placeholder={isEnglish ? 'Badge description' : '徽章描述'}
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
+                                                <textarea
+                                                    value={newBadgeDescCn}
+                                                    onChange={(e) => setNewBadgeDescCn(e.target.value)}
+                                                    className="admin-search-input admin-textarea"
+                                                    placeholder={isEnglish ? 'Badge description in Chinese' : '徽章中文描述'}
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file) return;
+                                                        setNewBadgeImage(file);
+                                                        setNewBadgeImagePreview(URL.createObjectURL(file));
+                                                    }}
+                                                />
+                                                {newBadgeImagePreview && (
+                                                    <img src={newBadgeImagePreview} alt="" className="admin-badge-image-preview"/>
+                                                )}
+                                            </label>
+                                        </div>
+                                        <div className="admin-form-actions">
+                                            <button
+                                                className="admin-generate-btn"
+                                                onClick={createBadgeDef}
+                                                disabled={creatingBadgeDef || !newBadgeName.trim()}
+                                            >
+                                                {creatingBadgeDef
+                                                    ? (isEnglish ? 'Creating...' : '创建中...')
+                                                    : (isEnglish ? 'Create Badge' : '创建徽章')}
+                                            </button>
+                                            <button
+                                                className="admin-back-btn"
+                                                onClick={() => {
+                                                    setShowCreateBadge(false);
+                                                    setNewBadgeName('');
+                                                    setNewBadgeNameCn('');
+                                                    setNewBadgeDesc('');
+                                                    setNewBadgeDescCn('');
+                                                    setNewBadgeImage(null);
+                                                    setNewBadgeImagePreview(null);
+                                                }}
+                                            >
+                                                {isEnglish ? 'Cancel' : '取消'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button className="admin-generate-btn" onClick={() => setShowCreateBadge(true)}>
+                                        {isEnglish ? '+ Create Badge' : '+ 创建徽章'}
+                                    </button>
+                                )}
+
+                                {loadingBadgeDefs && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+                                {!loadingBadgeDefs && badgeDefs.length === 0 && !showCreateBadge && (
+                                    <p className="admin-no-results">
+                                        {isEnglish ? 'No badges yet. Create one above.' : '暂无徽章，点击上方按钮创建。'}
+                                    </p>
+                                )}
+                                {!loadingBadgeDefs && badgeDefs.length > 0 && (
+                                    <div className="admin-event-grid">
+                                        {badgeDefs.map(bd => (
+                                            <button
+                                                key={bd.id}
+                                                className="admin-event-card"
+                                                onClick={() => selectBadgeDef(bd)}
+                                            >
+                                                <img src={bd.imageUrl} alt="" className="admin-event-card-img" loading="lazy"/>
+                                                <div className="admin-event-card-info">
+                                                    <span className="admin-event-card-title">
+                                                        {isEnglish ? bd.name : bd.nameCn}
+                                                    </span>
+                                                    <span className="admin-event-card-date">
+                                                        {isEnglish ? bd.description : bd.descriptionCn}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="admin-event-detail">
+                                <button className="admin-back-btn" onClick={() => {
+                                    setSelectedBadgeDef(null);
+                                    setBadgeHolders([]);
+                                }}>
+                                    &larr; {isEnglish ? 'All Badges' : '所有徽章'}
+                                </button>
+
+                                <div className="admin-event-detail-header">
+                                    <img src={selectedBadgeDef.imageUrl} alt="" className="admin-event-detail-img"/>
+                                    <div>
+                                        <h3>{isEnglish ? selectedBadgeDef.name : selectedBadgeDef.nameCn}</h3>
+                                        <p className="admin-event-detail-meta">
+                                            {isEnglish ? selectedBadgeDef.description : selectedBadgeDef.descriptionCn}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="admin-form-actions" style={{marginBottom: '20px'}}>
+                                    <label className="admin-generate-btn" style={{cursor: 'pointer'}}>
+                                        {updating
+                                            ? (isEnglish ? 'Uploading...' : '上传中...')
+                                            : (isEnglish ? 'Update Image' : '更换图片')}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            hidden
+                                            disabled={updating}
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) updateBadgeImage(selectedBadgeDef, file);
+                                            }}
+                                        />
+                                    </label>
+                                    <button
+                                        className="admin-toggle-btn admin-toggle-revoke"
+                                        onClick={() => deleteBadgeDef(selectedBadgeDef)}
+                                    >
+                                        {isEnglish ? 'Delete Badge' : '删除徽章'}
+                                    </button>
+                                </div>
+
+                                <h4 className="admin-badges-title">
+                                    {isEnglish ? 'Badge Holders' : '徽章持有者'}
+                                    {badgeHolders.length > 0 && (
+                                        <span className="admin-badges-count">{badgeHolders.length}</span>
+                                    )}
+                                </h4>
+
+                                {loadingBadgeHolders && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+                                {!loadingBadgeHolders && badgeHolders.length === 0 && (
+                                    <p className="admin-no-results">
+                                        {isEnglish ? 'No one has this badge yet.' : '暂无人持有此徽章。'}
+                                    </p>
+                                )}
+                                {!loadingBadgeHolders && badgeHolders.map((u) => (
+                                    <div key={u.uid} className="admin-user-row" onClick={() => {
+                                        setSelectedUser(u);
+                                        setSelectedBadgeDef(null);
+                                        setActiveTab('users');
+                                    }}>
+                                        <img src={u.photoURL} alt="" className="admin-user-avatar"
+                                             referrerPolicy="no-referrer"/>
+                                        <div>
+                                            <div className="admin-user-name">{u.displayName}</div>
+                                            <div className="admin-user-email">{u.email}</div>
+                                        </div>
+                                        <span className="admin-user-group-tag" data-group={u.group}>
+                                            {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
