@@ -1,7 +1,7 @@
 import React, { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import {
     getFirebaseAuth,
     getFirebaseDb,
@@ -58,7 +58,7 @@ interface AuthContextType {
     loading: boolean;
     signIn: () => Promise<void>;
     signOut: () => Promise<void>;
-    updateProfile: (updates: {displayName?: string; photoFile?: File}) => Promise<void>;
+    updateProfile: (updates: {displayName?: string; photoFile?: File; deletePhoto?: boolean}) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -134,7 +134,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
         setProfile(null);
     };
 
-    const updateProfile = async (updates: {displayName?: string; photoFile?: File}) => {
+    const updateProfile = async (updates: {displayName?: string; photoFile?: File; deletePhoto?: boolean}) => {
         if (!user || !profile) return;
 
         const userRef = doc(getFirebaseDb(), 'users', user.uid);
@@ -144,7 +144,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
             docUpdates.displayName = updates.displayName;
         }
 
-        if (updates.photoFile) {
+        if (updates.deletePhoto) {
+            const storageRef = ref(getFirebaseStorage(), `avatars/${user.uid}`);
+            try {
+                await deleteObject(storageRef);
+            } catch { /* may not exist */
+            }
+            docUpdates.photoURL = user.photoURL ?? '';
+        } else if (updates.photoFile) {
             const storageRef = ref(getFirebaseStorage(), `avatars/${user.uid}`);
             await uploadBytes(storageRef, updates.photoFile);
             docUpdates.photoURL = await getDownloadURL(storageRef);

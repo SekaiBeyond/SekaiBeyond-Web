@@ -19,12 +19,13 @@ interface BadgeDef {
 export const ProfilePage = () => {
     const {user, profile, loading, signIn, signOut, updateProfile} = useAuth();
     const {isEnglish} = useLanguage();
-    const [editing, setEditing] = useState(false);
+    const [editingName, setEditingName] = useState(false);
     const [editName, setEditName] = useState('');
-    const [previewURL, setPreviewURL] = useState<string | null>(null);
-    const [photoFile, setPhotoFile] = useState<File | null>(null);
-    const [saving, setSaving] = useState(false);
+    const [savingName, setSavingName] = useState(false);
+    const [savingPhoto, setSavingPhoto] = useState(false);
+    const [customPhotoLoaded, setCustomPhotoLoaded] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const nameInputRef = useRef<HTMLInputElement>(null);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
 
     useEffect(() => {
@@ -48,41 +49,73 @@ export const ProfilePage = () => {
         loadBadges();
     }, []);
 
-    const startEditing = () => {
+    // Preload custom (Firebase Storage) photo in background; show Google photo until ready
+    const hasCustomPhoto = profile?.photoURL.includes('firebasestorage.googleapis.com') ?? false;
+
+    useEffect(() => {
+        if (!hasCustomPhoto || !profile) {
+            setCustomPhotoLoaded(false);
+            return;
+        }
+        const img = new Image();
+        img.onload = () => setCustomPhotoLoaded(true);
+        img.onerror = () => setCustomPhotoLoaded(false);
+        img.src = profile.photoURL;
+    }, [profile?.photoURL, hasCustomPhoto]);
+
+    const startEditingName = () => {
         if (!profile) return;
         setEditName(profile.displayName);
-        setPreviewURL(null);
-        setPhotoFile(null);
-        setEditing(true);
+        setEditingName(true);
+        setTimeout(() => nameInputRef.current?.focus(), 0);
     };
 
-    const cancelEditing = () => {
-        setEditing(false);
-        setPreviewURL(null);
-        setPhotoFile(null);
+    const cancelEditingName = () => {
+        setEditingName(false);
     };
 
-    const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) return;
-        setPhotoFile(file);
-        setPreviewURL(URL.createObjectURL(file));
+        if (!file || !profile || !user) return;
+        setSavingPhoto(true);
+        try {
+            await updateProfile({photoFile: file});
+            setCustomPhotoLoaded(true);
+        } finally {
+            setSavingPhoto(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
     };
 
-    const handleSave = async () => {
-        if (!profile) return;
-        setSaving(true);
+    const handlePhotoDelete = async () => {
+        if (!profile || !user) return;
+        setSavingPhoto(true);
         try {
-            await updateProfile({
-                displayName: editName !== profile.displayName ? editName : undefined,
-                photoFile: photoFile ?? undefined,
-            });
-            setEditing(false);
-            setPreviewURL(null);
-            setPhotoFile(null);
+            await updateProfile({deletePhoto: true});
+            setCustomPhotoLoaded(false);
         } finally {
-            setSaving(false);
+            setSavingPhoto(false);
         }
+    };
+
+    const handleSaveName = async () => {
+        if (!profile || !editName.trim()) return;
+        if (editName === profile.displayName) {
+            setEditingName(false);
+            return;
+        }
+        setSavingName(true);
+        try {
+            await updateProfile({displayName: editName});
+            setEditingName(false);
+        } finally {
+            setSavingName(false);
+        }
+    };
+
+    const handleNameKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') handleSaveName();
+        if (e.key === 'Escape') cancelEditingName();
     };
 
     if (loading) {
@@ -113,6 +146,10 @@ export const ProfilePage = () => {
         );
     }
 
+    const googlePhotoURL = user.photoURL ?? '';
+    const displayedPhoto = hasCustomPhoto
+        ? (customPhotoLoaded ? profile.photoURL : googlePhotoURL)
+        : profile.photoURL;
     const attendedSet = new Set(profile.attendedEvents);
     const attendedCount = PAST_EVENTS.filter(e => attendedSet.has(e.title)).length;
 
@@ -130,43 +167,89 @@ export const ProfilePage = () => {
             <div className="profile-page">
 
                 <div className="profile-header">
-                    <div className="profile-avatar-wrapper">
+                    <div
+                        className={`profile-avatar-wrapper ${profile.group !== 'visitor' ? 'profile-avatar-clickable' : ''}`}>
                         <img
-                            src={previewURL ?? profile.photoURL}
+                            src={displayedPhoto}
                             alt={profile.displayName}
                             className="profile-avatar"
                             referrerPolicy="no-referrer"
+                            onClick={() => profile.group !== 'visitor' && !savingPhoto && fileInputRef.current?.click()}
                         />
-                        {editing && profile.group !== 'visitor' && (
+                        {profile.group !== 'visitor' && (
                             <>
-                                <button
-                                    className="profile-avatar-edit"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    type="button"
+                                <div
+                                    className="profile-avatar-overlay"
+                                    onClick={() => !savingPhoto && fileInputRef.current?.click()}
                                 >
-                                    {isEnglish ? 'Change' : '更换'}
-                                </button>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handlePhotoSelect}
-                                    hidden
-                                />
+                                    {savingPhoto ? (
+                                        <div className="profile-avatar-spinner"/>
+                                    ) : (
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                             strokeLinecap="round" strokeLinejoin="round"
+                                             className="profile-avatar-camera-icon">
+                                            <path
+                                                d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                            <circle cx="12" cy="13" r="4"/>
+                                        </svg>
+                                    )}
+                                </div>
+                                {hasCustomPhoto && !savingPhoto && (
+                                    <button
+                                        className="profile-avatar-delete"
+                                        onClick={handlePhotoDelete}
+                                        type="button"
+                                        aria-label="Remove photo"
+                                    >
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                             strokeLinecap="round" strokeLinejoin="round">
+                                            <line x1="18" y1="6" x2="6" y2="18"/>
+                                            <line x1="6" y1="6" x2="18" y2="18"/>
+                                        </svg>
+                                    </button>
+                                )}
                             </>
                         )}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handlePhotoSelect}
+                            hidden
+                        />
                     </div>
                     <div className="profile-info">
-                        {editing ? (
-                            <input
-                                className="profile-name-input"
-                                value={editName}
-                                onChange={e => setEditName(e.target.value)}
-                                maxLength={50}
-                            />
-                        ) : (
-                            <h1 className="profile-name">{profile.displayName}</h1>
-                        )}
+                        <div className="profile-name-row">
+                            {editingName ? (
+                                <div className="profile-name-edit-group">
+                                    <input
+                                        ref={nameInputRef}
+                                        className="profile-name-input"
+                                        value={editName}
+                                        onChange={e => setEditName(e.target.value)}
+                                        onKeyDown={handleNameKeyDown}
+                                        onBlur={handleSaveName}
+                                        maxLength={50}
+                                        disabled={savingName}
+                                    />
+                                    {savingName && <span
+                                        className="profile-name-saving">{isEnglish ? 'Saving...' : '保存中...'}</span>}
+                                </div>
+                            ) : (
+                                <>
+                                    <h1 className="profile-name">{profile.displayName}</h1>
+                                    {profile.group !== 'visitor' && (
+                                        <button className="profile-name-pencil" onClick={startEditingName} type="button"
+                                                aria-label="Edit name">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                                 strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                                            </svg>
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                        </div>
                         <p className="profile-email">{profile.email}</p>
                         <p className="profile-joined">
                             {isEnglish ? 'Joined ' : '加入时间：'}
@@ -179,32 +262,6 @@ export const ProfilePage = () => {
                         <span className="profile-group-tag" data-group={profile.group}>
                             {isEnglish ? GROUP_LABELS[profile.group].en : GROUP_LABELS[profile.group].zh}
                         </span>
-                        <div className="profile-edit-actions">
-                            {editing ? (
-                                <>
-                                    <button
-                                        className="profile-save-btn"
-                                        onClick={handleSave}
-                                        disabled={saving || !editName.trim()}
-                                    >
-                                        {saving
-                                            ? (isEnglish ? 'Saving...' : '保存中...')
-                                            : (isEnglish ? 'Save' : '保存')}
-                                    </button>
-                                    <button
-                                        className="profile-cancel-btn"
-                                        onClick={cancelEditing}
-                                        disabled={saving}
-                                    >
-                                        {isEnglish ? 'Cancel' : '取消'}
-                                    </button>
-                                </>
-                            ) : (
-                                <button className="profile-edit-btn" onClick={startEditing}>
-                                    {isEnglish ? 'Edit Profile' : '编辑资料'}
-                                </button>
-                            )}
-                        </div>
                     </div>
                 </div>
 

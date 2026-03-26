@@ -64,7 +64,13 @@ interface UserRecord {
 
 type Tab = 'users' | 'events' | 'badges' | 'records';
 
-type RecordType = 'group-assign' | 'code-create' | 'badge-grant' | 'badge-revoke' | 'achievement-grant' | 'achievement-revoke';
+type RecordType =
+    'group-assign'
+    | 'code-create'
+    | 'badge-grant'
+    | 'badge-revoke'
+    | 'achievement-grant'
+    | 'achievement-revoke';
 
 interface ActivityRecord {
     id: string;
@@ -444,9 +450,9 @@ export const AdminPage = () => {
         const imageUrl = await getDownloadURL(storageRef);
 
         const db = getFirebaseDb();
-        await updateDoc(doc(db, 'badges', bd.id), { imageUrl });
+        await updateDoc(doc(db, 'badges', bd.id), {imageUrl});
 
-        const updated = { ...bd, imageUrl };
+        const updated = {...bd, imageUrl};
         setBadgeDefs(prev => prev.map(d => d.id === bd.id ? updated : d));
         if (selectedBadgeDef?.id === bd.id) {
             setSelectedBadgeDef(updated);
@@ -1139,7 +1145,8 @@ export const AdminPage = () => {
                                                     }}
                                                 />
                                                 {newBadgeImagePreview && (
-                                                    <img src={newBadgeImagePreview} alt="" className="admin-badge-image-preview"/>
+                                                    <img src={newBadgeImagePreview} alt=""
+                                                         className="admin-badge-image-preview"/>
                                                 )}
                                             </label>
                                         </div>
@@ -1189,7 +1196,8 @@ export const AdminPage = () => {
                                                 className="admin-event-card"
                                                 onClick={() => selectBadgeDef(bd)}
                                             >
-                                                <img src={bd.imageUrl} alt="" className="admin-event-card-img" loading="lazy"/>
+                                                <img src={bd.imageUrl} alt="" className="admin-event-card-img"
+                                                     loading="lazy"/>
                                                 <div className="admin-event-card-info">
                                                     <span className="admin-event-card-title">
                                                         {isEnglish ? bd.name : bd.nameCn}
@@ -1253,7 +1261,8 @@ export const AdminPage = () => {
                                     )}
                                 </h4>
 
-                                {loadingBadgeHolders && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+                                {loadingBadgeHolders &&
+                                    <div className="profile-spinner" style={{margin: '20px auto'}}/>}
                                 {!loadingBadgeHolders && badgeHolders.length === 0 && (
                                     <p className="admin-no-results">
                                         {isEnglish ? 'No one has this badge yet.' : '暂无人持有此徽章。'}

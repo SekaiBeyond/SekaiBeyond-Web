@@ -2110,6 +2110,7 @@ footer {
 }
 
 .profile-avatar {
+    display: block;
     width: 100px;
     height: 100px;
     border-radius: 50%;
@@ -3298,18 +3299,104 @@ footer {
     flex-shrink: 0;
 }
 
-.profile-avatar-edit {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
-    border: none;
-    padding: 6px 0;
-    font-size: 12px;
+.profile-avatar-clickable {
     cursor: pointer;
-    border-radius: 0 0 50px 50px;
+}
+
+.profile-avatar-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.profile-avatar-clickable:hover .profile-avatar-overlay {
+    opacity: 1;
+}
+
+.profile-avatar-camera-icon {
+    width: 28px;
+    height: 28px;
+    color: #fff;
+}
+
+.profile-avatar-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+.profile-avatar-delete {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #ff4d4f;
+    border: 2px solid #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.profile-avatar-delete svg {
+    width: 12px;
+    height: 12px;
+    stroke: #fff;
+}
+
+.profile-avatar-clickable:hover .profile-avatar-delete {
+    opacity: 1;
+}
+
+.profile-avatar-delete:hover {
+    background: #e03033;
+}
+
+.profile-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-name-pencil {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.profile-name-pencil:hover {
+    opacity: 1;
+}
+
+.profile-name-pencil svg {
+    width: 18px;
+    height: 18px;
+    stroke: #ff6b9d;
+}
+
+.profile-name-edit-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .profile-name-input {
@@ -3331,40 +3418,10 @@ footer {
     box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.2);
 }
 
-.profile-edit-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-}
-
-.profile-edit-btn,
-.profile-save-btn,
-.profile-cancel-btn {
-    padding: 8px 20px;
-    border-radius: 20px;
-    border: none;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s, opacity 0.2s;
-}
-
-.profile-edit-btn {
-    background: rgba(255, 107, 157, 0.12);
+.profile-name-saving {
+    font-size: 13px;
     color: #ff6b9d;
-}
-
-.profile-edit-btn:hover {
-    background: rgba(255, 107, 157, 0.25);
-}
-
-.profile-save-btn {
-    background: #ff6b9d;
-    color: #fff;
-}
-
-.profile-save-btn:hover {
-    background: #ff4081;
+    white-space: nowrap;
 }
 
 .profile-save-btn:disabled {
