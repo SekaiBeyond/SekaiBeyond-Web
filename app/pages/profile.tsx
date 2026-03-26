@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { GROUP_LABELS, useAuth } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
@@ -14,6 +14,7 @@ interface BadgeDef {
     description: string;
     descriptionCn: string;
     imageUrl: string;
+    holderPct?: number;
 }
 
 export const ProfilePage = () => {
@@ -27,6 +28,7 @@ export const ProfilePage = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
+    const [earnedDates, setEarnedDates] = useState<Record<string, Date>>({});
 
     useEffect(() => {
         const loadBadges = async () => {
@@ -42,12 +44,34 @@ export const ProfilePage = () => {
                     description: data.description ?? '',
                     descriptionCn: data.descriptionCn ?? '',
                     imageUrl: data.imageUrl ?? '',
+                    holderPct: data.holderPct,
                 });
             });
             setBadgeDefs(defs);
         };
         loadBadges();
     }, []);
+
+    useEffect(() => {
+        if (!user) return;
+        const loadEarnedDates = async () => {
+            const db = getFirebaseDb();
+            const q = query(
+                collection(db, 'records'),
+                where('targetUid', '==', user.uid)
+            );
+            const snapshot = await getDocs(q);
+            const dates: Record<string, Date> = {};
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                if (data.type === 'achievement-grant' && data.badgeId && data.timestamp) {
+                    dates[data.badgeId] = data.timestamp.toDate();
+                }
+            });
+            setEarnedDates(dates);
+        };
+        loadEarnedDates();
+    }, [user]);
 
     // Preload custom (Firebase Storage) photo in background; show Google photo until ready
     const hasCustomPhoto = profile?.photoURL.includes('firebasestorage.googleapis.com') ?? false;
@@ -314,6 +338,30 @@ export const ProfilePage = () => {
                                             <p className="badge-description">
                                                 {isEnglish ? badge.description : badge.descriptionCn}
                                             </p>
+                                        </div>
+                                        <div className="badge-tooltip">
+                                            <h4 className="badge-tooltip-name">
+                                                {isEnglish ? badge.name : badge.nameCn}
+                                            </h4>
+                                            <p className="badge-tooltip-desc">
+                                                {isEnglish ? badge.description : badge.descriptionCn}
+                                            </p>
+                                            {earned && earnedDates[badge.id] && (
+                                                <p className="badge-tooltip-date">
+                                                    {isEnglish ? 'Earned: ' : '获得于：'}
+                                                    {earnedDates[badge.id].toLocaleDateString(
+                                                        isEnglish ? 'en-US' : 'zh-CN',
+                                                        {year: 'numeric', month: 'short', day: 'numeric'}
+                                                    )}
+                                                </p>
+                                            )}
+                                            {badge.holderPct != null && (
+                                                <p className="badge-tooltip-pct">
+                                                    {isEnglish
+                                                        ? `${badge.holderPct}% of members have this`
+                                                        : `${badge.holderPct}% 的成员拥有此徽章`}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 );

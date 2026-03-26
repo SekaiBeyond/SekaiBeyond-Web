@@ -6,6 +6,7 @@ import {
     collection,
     deleteDoc,
     doc,
+    getCountFromServer,
     getDoc,
     getDocs,
     limit,
@@ -557,6 +558,17 @@ export const AdminPage = () => {
             badgeName,
             timestamp: serverTimestamp(),
         });
+
+        // Update badge holder percentage
+        const usersRef = collection(db, 'users');
+        const [holderSnap, totalSnap] = await Promise.all([
+            getCountFromServer(query(usersRef, where('badges', 'array-contains', badgeId))),
+            getCountFromServer(usersRef),
+        ]);
+        const holderPct = totalSnap.data().count > 0
+            ? Math.round((holderSnap.data().count / totalSnap.data().count) * 100)
+            : 0;
+        await updateDoc(doc(db, 'badges', badgeId), {holderPct});
 
         const updatedBadges = has
             ? userRecord.badges.filter(id => id !== badgeId)
