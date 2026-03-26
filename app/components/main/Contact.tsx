@@ -1,4 +1,5 @@
-import { SiBilibili, SiDiscord, SiInstagram, SiLinkedin, SiXiaohongshu } from "react-icons/si";
+import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from "react-icons/si";
+import { FaLinkedin } from "react-icons/fa";
 import React from "react";
 import { LINKS } from "~/constants";
 import { useLanguage } from "~/components/LanguageContextProvider";
@@ -32,7 +33,7 @@ export const Contact = () => {
                     <div className="social-name">{isEnglish ? "Xiaohongshu" : "小红书"}</div>
                 </a>
                 <a className="social-card" href={LINKS.linkedin} target="_blank">
-                    <SiLinkedin className="social-icon"/>
+                    <FaLinkedin className="social-icon"/>
                     <div className="social-name">{isEnglish ? "LinkedIn" : "领英"}</div>
                 </a>
             </div>

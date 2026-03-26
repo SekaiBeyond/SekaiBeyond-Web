@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     addDoc,
     arrayRemove,
@@ -31,6 +31,7 @@ import { getFirebaseDb, getFirebaseStorage } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { PAST_EVENTS } from '~/constants';
 import { QRCodeSVG } from 'qrcode.react';
+import { useSearchParams } from 'react-router';
 
 interface BadgeCode {
     id: string;
@@ -123,6 +124,22 @@ export const AdminPage = () => {
     const [newBadgeImage, setNewBadgeImage] = useState<File | null>(null);
     const [newBadgeImagePreview, setNewBadgeImagePreview] = useState<string | null>(null);
     const [creatingBadgeDef, setCreatingBadgeDef] = useState(false);
+    const [searchParams] = useSearchParams();
+    const urlParamsHandled = useRef(false);
+
+    useEffect(() => {
+        if (urlParamsHandled.current) return;
+        if (loading || !user || !profile || !hasPermission(profile.group, 'core-staff')) return;
+        const tab = searchParams.get('tab');
+        const event = searchParams.get('event');
+        if (tab === 'events' || tab === 'badges' || tab === 'records' || tab === 'users') {
+            setActiveTab(tab);
+        }
+        if (tab === 'events' && event) {
+            selectManagedEvent(event).then();
+        }
+        urlParamsHandled.current = true;
+    }, [loading, user, profile, searchParams]);
 
     useEffect(() => {
         if (loading || !user || !profile || !hasPermission(profile.group, 'core-staff')) return;
@@ -600,6 +617,13 @@ export const AdminPage = () => {
         );
     };
 
+    const clickableEvent = (eventTitle: string) => (
+        <span className="record-clickable-name" onClick={() => {
+            setActiveTab('events');
+            selectManagedEvent(eventTitle).then();
+        }}>{eventTitle}</span>
+    );
+
     const getRecordLabel = (r: ActivityRecord) => {
         const target = r.targetUid ? clickableName(r.targetUid, r.targetName ?? '') : r.targetName;
         switch (r.type) {
@@ -609,16 +633,16 @@ export const AdminPage = () => {
                     : <>将 {target} 从 {GROUP_LABELS[r.oldGroup!].zh} 改为 {GROUP_LABELS[r.newGroup!].zh}</>;
             case 'code-create':
                 return isEnglish
-                    ? <>created claim code for {r.eventTitle}</>
-                    : <>为 {r.eventTitle} 创建了兑换码</>;
+                    ? <>created claim code for {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
+                    : <>为 {r.eventTitle ? clickableEvent(r.eventTitle) : ''} 创建了兑换码</>;
             case 'badge-grant':
                 return isEnglish
-                    ? <>marked {target} as attended {r.eventTitle}</>
-                    : <>标记 {target} 参加了 {r.eventTitle}</>;
+                    ? <>marked {target} as attended {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
+                    : <>标记 {target} 参加了 {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>;
             case 'badge-revoke':
                 return isEnglish
-                    ? <>revoked {target}'s attendance for {r.eventTitle}</>
-                    : <>撤销了 {target} 的 {r.eventTitle} 签到</>;
+                    ? <>revoked {target}'s attendance for {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
+                    : <>撤销了 {target} 的 {r.eventTitle ? clickableEvent(r.eventTitle) : ''} 签到</>;
             case 'achievement-grant': {
                 const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? '') : r.badgeName;
                 return isEnglish

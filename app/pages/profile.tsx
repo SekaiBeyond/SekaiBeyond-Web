@@ -393,7 +393,12 @@ export const ProfilePage = () => {
                                     <div className="badge-info">
                                         <span
                                             className="badge-category">{isEnglish ? event.badge : event.badgeCn}</span>
-                                        <h3 className="badge-title">{isEnglish ? event.title : event.titleCn}</h3>
+                                        <h3 className="badge-title">
+                                            <a href={`/admin?tab=events&event=${encodeURIComponent(event.title)}`}
+                                               className="badge-title-link">
+                                                {isEnglish ? event.title : event.titleCn}
+                                            </a>
+                                        </h3>
                                         <p className="badge-date">
                                             {new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
                                                 year: 'numeric',
