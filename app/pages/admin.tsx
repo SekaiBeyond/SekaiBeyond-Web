@@ -29,14 +29,14 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { getFirebaseDb, getFirebaseStorage } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
-import { PAST_EVENTS } from '~/constants';
+import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import { QRCodeSVG } from 'qrcode.react';
 import { useSearchParams } from 'react-router';
 
 interface BadgeCode {
     id: string;
     code: string;
-    eventTitle: string;
+    eventId: string;
     active: boolean;
     activeFrom: string | null;
     activeUntil: string | null;
@@ -77,7 +77,10 @@ type RecordType =
     | 'achievement-grant'
     | 'achievement-revoke'
     | 'badge-create'
-    | 'badge-edit';
+    | 'badge-edit'
+    | 'event-create'
+    | 'event-edit'
+    | 'event-delete';
 
 interface ActivityRecord {
     id: string;
@@ -98,6 +101,7 @@ interface ActivityRecord {
 export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
+    const {pastEvents, refresh: refreshEvents} = usePastEvents();
 
     const [activeTab, setActiveTab] = useState<Tab>('users');
     const [searchQuery, setSearchQuery] = useState('');
@@ -148,6 +152,15 @@ export const AdminPage = () => {
     const [creatorSearchQuery, setCreatorSearchQuery] = useState('');
     const [creatorSearchResults, setCreatorSearchResults] = useState<UserRecord[]>([]);
     const [searchingCreator, setSearchingCreator] = useState(false);
+    const [showCreateEvent, setShowCreateEvent] = useState(false);
+    const [editingEvent, setEditingEvent] = useState<PastEvent | null>(null);
+    const [eventForm, setEventForm] = useState({
+        title: '', titleCn: '', badge: '', badgeCn: '', date: '',
+        location: '', description: '', descriptionCn: '', icon: '',
+    });
+    const [savingEvent, setSavingEvent] = useState(false);
+    const [eventImage, setEventImage] = useState<File | null>(null);
+    const [eventImagePreview, setEventImagePreview] = useState<string | null>(null);
     const [searchParams] = useSearchParams();
     const urlParamsHandled = useRef(false);
 
@@ -333,14 +346,15 @@ export const AdminPage = () => {
         setSearching(false);
     };
 
-    const toggleBadge = async (userRecord: UserRecord, eventTitle: string) => {
+    const toggleBadge = async (userRecord: UserRecord, eventId: string) => {
         setUpdating(true);
         const db = getFirebaseDb();
         const userRef = doc(db, 'users', userRecord.uid);
-        const has = userRecord.attendedEvents.includes(eventTitle);
+        const has = userRecord.attendedEvents.includes(eventId);
+        const evt = pastEvents.find(e => e.id === eventId);
 
         await updateDoc(userRef, {
-            attendedEvents: has ? arrayRemove(eventTitle) : arrayUnion(eventTitle),
+            attendedEvents: has ? arrayRemove(eventId) : arrayUnion(eventId),
         });
 
         await addDoc(collection(db, 'records'), {
@@ -349,13 +363,13 @@ export const AdminPage = () => {
             performedByName: profile.displayName,
             targetUid: userRecord.uid,
             targetName: userRecord.displayName,
-            eventTitle,
+            eventTitle: evt?.title ?? eventId,
             timestamp: serverTimestamp(),
         });
 
         const updatedEvents = has
-            ? userRecord.attendedEvents.filter(e => e !== eventTitle)
-            : [...userRecord.attendedEvents, eventTitle];
+            ? userRecord.attendedEvents.filter(e => e !== eventId)
+            : [...userRecord.attendedEvents, eventId];
 
         const updated = {...userRecord, attendedEvents: updatedEvents};
 
@@ -395,20 +409,118 @@ export const AdminPage = () => {
         setUpdating(false);
     };
 
-    const selectManagedEvent = async (eventTitle: string) => {
-        setManagedEvent(eventTitle);
+    const resetEventForm = () => {
+        setEventForm({
+            title: '',
+            titleCn: '',
+            badge: '',
+            badgeCn: '',
+            date: '',
+            location: '',
+            description: '',
+            descriptionCn: '',
+            icon: ''
+        });
+        setEventImage(null);
+        if (eventImagePreview?.startsWith('blob:')) URL.revokeObjectURL(eventImagePreview);
+        setEventImagePreview(null);
+    };
+
+    const openCreateEvent = () => {
+        resetEventForm();
+        setEditingEvent(null);
+        setShowCreateEvent(true);
+    };
+
+    const openEditEvent = (event: PastEvent) => {
+        setEventForm({...event});
+        setEditingEvent(event);
+        setEventImage(null);
+        setEventImagePreview(event.icon || null);
+        setShowCreateEvent(true);
+    };
+
+    const saveEvent = async () => {
+        if (!eventForm.title.trim() || !eventForm.date.trim()) return;
+        setSavingEvent(true);
+        try {
+            const db = getFirebaseDb();
+
+            let iconUrl = eventForm.icon;
+            if (eventImage) {
+                const imageId = crypto.randomUUID();
+                const storageRef = ref(getFirebaseStorage(), `events/${imageId}`);
+                await uploadBytes(storageRef, eventImage);
+                iconUrl = await getDownloadURL(storageRef);
+            }
+
+            const data: Record<string, string> = {
+                badge: eventForm.badge,
+                badgeCn: eventForm.badgeCn,
+                title: eventForm.title,
+                titleCn: eventForm.titleCn,
+                date: eventForm.date,
+                location: eventForm.location,
+                description: eventForm.description,
+                descriptionCn: eventForm.descriptionCn,
+                icon: iconUrl,
+            };
+
+            if (editingEvent) {
+                await updateDoc(doc(db, 'pastEvents', editingEvent.id), data);
+            } else {
+                await addDoc(collection(db, 'pastEvents'), data);
+            }
+
+            await addDoc(collection(db, 'records'), {
+                type: editingEvent ? 'event-edit' : 'event-create',
+                performedBy: user!.uid,
+                performedByName: profile!.displayName,
+                eventTitle: eventForm.title,
+                timestamp: serverTimestamp(),
+            });
+
+            await refreshEvents();
+            setShowCreateEvent(false);
+            resetEventForm();
+            setEditingEvent(null);
+        } finally {
+            setSavingEvent(false);
+        }
+    };
+
+    const deleteEvent = async (event: PastEvent) => {
+        if (!confirm(isEnglish
+            ? `Delete "${event.title}"? This cannot be undone.`
+            : `删除"${event.title}"？此操作不可撤销。`
+        )) return;
+        const db = getFirebaseDb();
+        await deleteDoc(doc(db, 'pastEvents', event.id));
+        await addDoc(collection(db, 'records'), {
+            type: 'event-delete',
+            performedBy: user!.uid,
+            performedByName: profile!.displayName,
+            eventTitle: event.title,
+            timestamp: serverTimestamp(),
+        });
+        await refreshEvents();
+        if (managedEvent === event.id) setManagedEvent(null);
+    };
+
+    const selectManagedEvent = async (eventId: string) => {
+        setManagedEvent(eventId);
         setEventSubTab('codes');
         setBadgeCodes([]);
         setEventAttendees([]);
-        await loadBadgeCodes(eventTitle);
+        await loadBadgeCodes(eventId);
     };
 
-    const loadEventAttendees = async (eventTitle: string) => {
+    const loadEventAttendees = async (eventId: string) => {
         setSearching(true);
 
         const db = getFirebaseDb();
         const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('attendedEvents', 'array-contains', eventTitle));
+        const q = query(usersRef, where('attendedEvents', 'array-contains', eventId));
         const snapshot = await getDocs(q);
 
         const attendees: UserRecord[] = [];
@@ -430,38 +542,48 @@ export const AdminPage = () => {
         setSearching(false);
     };
 
-    const loadBadgeCodes = async (eventTitle: string) => {
+    const loadBadgeCodes = async (eventId: string) => {
         const db = getFirebaseDb();
         const codesRef = collection(db, 'badgeCodes');
-        const q = query(codesRef, where('eventTitle', '==', eventTitle));
-        const snapshot = await getDocs(q);
 
+        // Query new field
+        const q1 = query(codesRef, where('eventId', '==', eventId));
+        const snapshot1 = await getDocs(q1);
+
+        // Also query legacy field for backward compatibility
+        const q2 = query(codesRef, where('eventTitle', '==', eventId));
+        const snapshot2 = await getDocs(q2);
+
+        const seen = new Set<string>();
         const codes: BadgeCode[] = [];
-        snapshot.forEach((docSnap) => {
+        for (const docSnap of [...snapshot1.docs, ...snapshot2.docs]) {
+            if (seen.has(docSnap.id)) continue;
+            seen.add(docSnap.id);
             const data = docSnap.data();
             codes.push({
                 id: docSnap.id,
                 code: data.code,
-                eventTitle: data.eventTitle,
+                eventId: data.eventId ?? data.eventTitle,
                 active: data.active ?? true,
                 activeFrom: data.activeFrom ?? null,
                 activeUntil: data.activeUntil ?? null,
             });
-        });
+        }
         setBadgeCodes(codes);
     };
 
-    const generateBadgeCode = async (eventTitle: string) => {
+    const generateBadgeCode = async (eventId: string) => {
         if (!user) return;
         setGeneratingCode(true);
 
+        const evt = pastEvents.find(e => e.id === eventId);
         const code = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
         const activeFrom = newCodeFrom || null;
         const activeUntil = newCodeUntil || null;
         const db = getFirebaseDb();
         const docRef = await addDoc(collection(db, 'badgeCodes'), {
             code,
-            eventTitle,
+            eventId,
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             active: true,
@@ -473,12 +595,12 @@ export const AdminPage = () => {
             type: 'code-create',
             performedBy: user.uid,
             performedByName: profile.displayName,
-            eventTitle,
+            eventTitle: evt?.title ?? eventId,
             code,
             timestamp: serverTimestamp(),
         });
 
-        setBadgeCodes(prev => [...prev, {id: docRef.id, code, eventTitle, active: true, activeFrom, activeUntil}]);
+        setBadgeCodes(prev => [...prev, {id: docRef.id, code, eventId, active: true, activeFrom, activeUntil}]);
         setNewCodeFrom('');
         setNewCodeUntil('');
         setGeneratingCode(false);
@@ -731,12 +853,17 @@ export const AdminPage = () => {
         );
     };
 
-    const clickableEvent = (eventTitle: string) => (
-        <span className="record-clickable-name" onClick={() => {
-            setActiveTab('events');
-            selectManagedEvent(eventTitle).then();
-        }}>{eventTitle}</span>
-    );
+    const clickableEvent = (eventTitle: string) => {
+        const evt = pastEvents.find(e => e.title === eventTitle);
+        return (
+            <span className="record-clickable-name" onClick={() => {
+                if (evt) {
+                    setActiveTab('events');
+                    selectManagedEvent(evt.id).then();
+                }
+            }}>{eventTitle}</span>
+        );
+    };
 
     const getRecordLabel = (r: ActivityRecord) => {
         const target = r.targetUid ? clickableName(r.targetUid, r.targetName ?? '') : r.targetName;
@@ -781,6 +908,18 @@ export const AdminPage = () => {
                     ? <>edited badge {badge}</>
                     : <>编辑了徽章 {badge}</>;
             }
+            case 'event-create':
+                return isEnglish
+                    ? <>created event {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
+                    : <>创建了活动 {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>;
+            case 'event-edit':
+                return isEnglish
+                    ? <>edited event {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
+                    : <>编辑了活动 {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>;
+            case 'event-delete':
+                return isEnglish
+                    ? <>deleted event {r.eventTitle ?? ''}</>
+                    : <>删除了活动 {r.eventTitle ?? ''}</>;
         }
     };
 
@@ -802,6 +941,12 @@ export const AdminPage = () => {
                 return isEnglish ? 'Badge' : '徽章';
             case 'badge-edit':
                 return isEnglish ? 'Badge' : '徽章';
+            case 'event-create':
+                return isEnglish ? 'Event' : '活动';
+            case 'event-edit':
+                return isEnglish ? 'Event' : '活动';
+            case 'event-delete':
+                return isEnglish ? 'Event' : '活动';
         }
     };
 
@@ -1014,13 +1159,13 @@ export const AdminPage = () => {
                                 <h4 className="admin-badges-title">
                                     {isEnglish ? 'Events Attended' : '参与活动'}
                                     <span className="admin-badges-count">
-                                    {selectedUser.attendedEvents.length}/{PAST_EVENTS.length}
+                                    {selectedUser.attendedEvents.length}/{pastEvents.length}
                                 </span>
                                 </h4>
 
                                 <div className="admin-badge-list">
-                                    {PAST_EVENTS.map((event, i) => {
-                                        const has = selectedUser.attendedEvents.includes(event.title);
+                                    {pastEvents.map((event, i) => {
+                                        const has = selectedUser.attendedEvents.includes(event.id);
                                         return (
                                             <div key={i} className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
                                                 <img src={event.icon} alt="" className="admin-badge-img"/>
@@ -1031,7 +1176,7 @@ export const AdminPage = () => {
                                                 </div>
                                                 <button
                                                     className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                                    onClick={() => toggleBadge(selectedUser, event.title)}
+                                                    onClick={() => toggleBadge(selectedUser, event.id)}
                                                     disabled={updating}
                                                 >
                                                     {has
@@ -1051,22 +1196,174 @@ export const AdminPage = () => {
                 {activeTab === 'events' && (
                     <div className="admin-section">
                         {!managedEvent ? (
-                            <div className="admin-event-grid">
-                                {PAST_EVENTS.map((event, i) => (
-                                    <button
-                                        key={i}
-                                        className="admin-event-card"
-                                        onClick={() => selectManagedEvent(event.title)}
-                                    >
-                                        <img src={event.icon} alt="" className="admin-event-card-img"/>
-                                        <div className="admin-event-card-info">
-                                            <span
-                                                className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
-                                            <span className="admin-event-card-date">{event.date}</span>
+                            <>
+                                {showCreateEvent ? (
+                                    <div className="admin-create-badge-form">
+                                        <h4 className="admin-badges-title">
+                                            {editingEvent
+                                                ? (isEnglish ? 'Edit Event' : '编辑活动')
+                                                : (isEnglish ? 'Create New Event' : '创建新活动')}
+                                        </h4>
+                                        <div className="admin-form-grid">
+                                            <label>
+                                                <span>{isEnglish ? 'Title (English)' : '标题（英文）'}</span>
+                                                <input
+                                                    value={eventForm.title}
+                                                    onChange={e => setEventForm(f => ({...f, title: e.target.value}))}
+                                                    className="admin-search-input"
+                                                    placeholder={isEnglish ? 'Event title' : '活动标题'}
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Title (Chinese)' : '标题（中文）'}</span>
+                                                <input
+                                                    value={eventForm.titleCn}
+                                                    onChange={e => setEventForm(f => ({...f, titleCn: e.target.value}))}
+                                                    className="admin-search-input"
+                                                    placeholder={isEnglish ? 'Event title in Chinese' : '活动中文标题'}
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Badge (English)' : '标签（英文）'}</span>
+                                                <input
+                                                    value={eventForm.badge}
+                                                    onChange={e => setEventForm(f => ({...f, badge: e.target.value}))}
+                                                    className="admin-search-input"
+                                                    placeholder={isEnglish ? 'e.g. Gaming, Music, Food' : '如 游戏、音乐、美食'}
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Badge (Chinese)' : '标签（中文）'}</span>
+                                                <input
+                                                    value={eventForm.badgeCn}
+                                                    onChange={e => setEventForm(f => ({...f, badgeCn: e.target.value}))}
+                                                    className="admin-search-input"
+                                                    placeholder={isEnglish ? 'Badge in Chinese' : '中文标签'}
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Date' : '日期'}</span>
+                                                <input
+                                                    type="date"
+                                                    value={eventForm.date}
+                                                    onChange={e => setEventForm(f => ({...f, date: e.target.value}))}
+                                                    className="admin-search-input"
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Location' : '地点'}</span>
+                                                <input
+                                                    value={eventForm.location}
+                                                    onChange={e => setEventForm(f => ({
+                                                        ...f,
+                                                        location: e.target.value
+                                                    }))}
+                                                    className="admin-search-input"
+                                                    placeholder={isEnglish ? 'Event location' : '活动地点'}
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Event Image' : '活动图片'}</span>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={e => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file) return;
+                                                        setEventImage(file);
+                                                        if (eventImagePreview?.startsWith('blob:')) URL.revokeObjectURL(eventImagePreview);
+                                                        setEventImagePreview(URL.createObjectURL(file));
+                                                    }}
+                                                />
+                                                {eventImagePreview && (
+                                                    <img src={eventImagePreview} alt=""
+                                                         className="admin-badge-image-preview"/>
+                                                )}
+                                            </label>
+                                            <label style={{gridColumn: '1 / -1'}}>
+                                                <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
+                                                <textarea
+                                                    value={eventForm.description}
+                                                    onChange={e => setEventForm(f => ({
+                                                        ...f,
+                                                        description: e.target.value
+                                                    }))}
+                                                    className="admin-search-input admin-textarea"
+                                                    placeholder={isEnglish ? 'Event description' : '活动描述'}
+                                                />
+                                            </label>
+                                            <label style={{gridColumn: '1 / -1'}}>
+                                                <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
+                                                <textarea
+                                                    value={eventForm.descriptionCn}
+                                                    onChange={e => setEventForm(f => ({
+                                                        ...f,
+                                                        descriptionCn: e.target.value
+                                                    }))}
+                                                    className="admin-search-input admin-textarea"
+                                                    placeholder={isEnglish ? 'Event description in Chinese' : '活动中文描述'}
+                                                />
+                                            </label>
                                         </div>
+                                        <div style={{display: 'flex', gap: '10px'}}>
+                                            <button
+                                                className="admin-generate-btn"
+                                                onClick={saveEvent}
+                                                disabled={savingEvent || !eventForm.title.trim() || !eventForm.date.trim()}
+                                            >
+                                                {savingEvent
+                                                    ? (isEnglish ? 'Saving...' : '保存中...')
+                                                    : editingEvent
+                                                        ? (isEnglish ? 'Save Changes' : '保存更改')
+                                                        : (isEnglish ? 'Create Event' : '创建活动')}
+                                            </button>
+                                            <button
+                                                className="admin-back-btn"
+                                                onClick={() => {
+                                                    setShowCreateEvent(false);
+                                                    setEditingEvent(null);
+                                                }}
+                                            >
+                                                {isEnglish ? 'Cancel' : '取消'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button className="admin-generate-btn" onClick={openCreateEvent}
+                                            style={{marginBottom: '16px'}}>
+                                        {isEnglish ? '+ New Event' : '+ 新建活动'}
                                     </button>
-                                ))}
-                            </div>
+                                )}
+                                <div className="admin-event-grid">
+                                    {pastEvents.map((event, i) => (
+                                        <div key={i} className="admin-event-card"
+                                             style={{position: 'relative', cursor: 'pointer'}}
+                                             onClick={() => selectManagedEvent(event.id)}>
+                                            <img src={event.icon} alt="" className="admin-event-card-img"/>
+                                            <div className="admin-event-card-info">
+                                                <span
+                                                    className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
+                                                <span className="admin-event-card-date">{event.date}</span>
+                                            </div>
+                                            <div className="admin-event-card-actions"
+                                                 onClick={e => e.stopPropagation()}>
+                                                <button
+                                                    className="admin-toggle-btn admin-toggle-small"
+                                                    onClick={() => openEditEvent(event)}
+                                                >
+                                                    {isEnglish ? 'Edit' : '编辑'}
+                                                </button>
+                                                <button
+                                                    className="admin-toggle-btn admin-toggle-revoke admin-toggle-small"
+                                                    onClick={() => deleteEvent(event)}
+                                                >
+                                                    {isEnglish ? 'Delete' : '删除'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
                         ) : (
                             <div className="admin-event-detail">
                                 <button className="admin-back-btn" onClick={() => setManagedEvent(null)}>
@@ -1074,7 +1371,7 @@ export const AdminPage = () => {
                                 </button>
 
                                 {(() => {
-                                    const evt = PAST_EVENTS.find(e => e.title === managedEvent);
+                                    const evt = pastEvents.find(e => e.id === managedEvent);
                                     if (!evt) return null;
                                     return (
                                         <div className="admin-event-detail-header">
@@ -1770,6 +2067,9 @@ export const AdminPage = () => {
                                 <option value="achievement-revoke">{isEnglish ? 'Badge Revoke' : '撤销徽章'}</option>
                                 <option value="badge-create">{isEnglish ? 'Badge Create' : '创建徽章'}</option>
                                 <option value="badge-edit">{isEnglish ? 'Badge Edit' : '编辑徽章'}</option>
+                                <option value="event-create">{isEnglish ? 'Event Create' : '创建活动'}</option>
+                                <option value="event-edit">{isEnglish ? 'Event Edit' : '编辑活动'}</option>
+                                <option value="event-delete">{isEnglish ? 'Event Delete' : '删除活动'}</option>
                             </select>
                             <select
                                 className="record-filter-select"

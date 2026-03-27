@@ -5,7 +5,7 @@ import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
-import { PAST_EVENTS, type PastEvent } from '~/constants';
+import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import { useSearchParams } from 'react-router';
 
 interface BadgeDef {
@@ -106,7 +106,7 @@ const EventCard = ({event, attended, isEnglish, showAdminLink}: {
             <span className="badge-category">{isEnglish ? event.badge : event.badgeCn}</span>
             <h3 className="badge-title">
                 {showAdminLink ? (
-                    <a href={`/admin?tab=events&event=${encodeURIComponent(event.title)}`}
+                    <a href={`/admin?tab=events&event=${encodeURIComponent(event.id)}`}
                        className="badge-title-link">
                         {isEnglish ? event.title : event.titleCn}
                     </a>
@@ -126,6 +126,7 @@ const EventCard = ({event, attended, isEnglish, showAdminLink}: {
 export const ProfilePage = () => {
     const {user, profile, loading, signIn, updateProfile} = useAuth();
     const {isEnglish} = useLanguage();
+    const {pastEvents, loading: eventsLoading} = usePastEvents();
     const [searchParams] = useSearchParams();
     const viewUid = searchParams.get('uid');
     const isViewingOther = !!viewUid && viewUid !== user?.uid;
@@ -297,7 +298,7 @@ export const ProfilePage = () => {
         if (e.key === 'Escape') cancelEditingName();
     };
 
-    if (loading || loadingViewed) {
+    if (loading || loadingViewed || eventsLoading) {
         return (
             <div className="profile-loading">
                 <div className="profile-spinner"/>
@@ -307,7 +308,7 @@ export const ProfilePage = () => {
 
     if (isViewingOther && viewedProfile) {
         const vAttendedSet = new Set(viewedProfile.attendedEvents);
-        const vAttendedCount = PAST_EVENTS.filter(e => vAttendedSet.has(e.title)).length;
+        const vAttendedCount = pastEvents.filter(e => vAttendedSet.has(e.id)).length;
         return (
             <>
                 <nav className="profile-nav">
@@ -355,7 +356,7 @@ export const ProfilePage = () => {
                             </div>
                         )}
                         <div className="profile-stat">
-                            <span className="profile-stat-number">{vAttendedCount}/{PAST_EVENTS.length}</span>
+                            <span className="profile-stat-number">{vAttendedCount}/{pastEvents.length}</span>
                             <span className="profile-stat-label">{isEnglish ? 'Events Attended' : '参与活动'}</span>
                         </div>
                     </div>
@@ -380,11 +381,11 @@ export const ProfilePage = () => {
                     <section className="badge-section">
                         <h2 className="badge-section-title">{isEnglish ? 'Events Attended' : '参与活动'}</h2>
                         <div className="badge-grid">
-                            {PAST_EVENTS.map(event => (
+                            {pastEvents.map(event => (
                                 <EventCard
-                                    key={event.title}
+                                    key={event.id}
                                     event={event}
-                                    attended={vAttendedSet.has(event.title)}
+                                    attended={vAttendedSet.has(event.id)}
                                     isEnglish={isEnglish}
                                 />
                             ))}
@@ -433,7 +434,7 @@ export const ProfilePage = () => {
         ? (customPhotoLoaded ? profile.photoURL : googlePhotoURL)
         : profile.photoURL;
     const attendedSet = new Set(profile.attendedEvents);
-    const attendedCount = PAST_EVENTS.filter(e => attendedSet.has(e.title)).length;
+    const attendedCount = pastEvents.filter(e => attendedSet.has(e.id)).length;
     const isStaff = hasPermission(profile.group, 'staff');
 
     return (
@@ -558,7 +559,7 @@ export const ProfilePage = () => {
                         </div>
                     )}
                     <div className="profile-stat">
-                        <span className="profile-stat-number">{attendedCount}/{PAST_EVENTS.length}</span>
+                        <span className="profile-stat-number">{attendedCount}/{pastEvents.length}</span>
                         <span className="profile-stat-label">{isEnglish ? 'Events Attended' : '参与活动'}</span>
                     </div>
                 </div>
@@ -599,11 +600,11 @@ export const ProfilePage = () => {
                     </p>
 
                     <div className="badge-grid">
-                        {PAST_EVENTS.map(event => (
+                        {pastEvents.map(event => (
                             <EventCard
-                                key={event.title}
+                                key={event.id}
                                 event={event}
-                                attended={attendedSet.has(event.title)}
+                                attended={attendedSet.has(event.id)}
                                 isEnglish={isEnglish}
                                 showAdminLink={isStaff}
                             />

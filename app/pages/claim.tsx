@@ -4,7 +4,7 @@ import { arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'f
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
-import { PAST_EVENTS } from '~/constants';
+import { usePastEvents } from '~/lib/pastEvents';
 
 type ClaimState =
     'loading'
@@ -22,11 +22,12 @@ export const ClaimPage = () => {
     const code = searchParams.get('code');
     const {user, profile, loading: authLoading, signIn} = useAuth();
     const {isEnglish} = useLanguage();
+    const {pastEvents} = usePastEvents();
 
     const [state, setState] = useState<ClaimState>('loading');
-    const [eventTitle, setEventTitle] = useState<string | null>(null);
+    const [eventId, setEventId] = useState<string | null>(null);
 
-    const event = PAST_EVENTS.find(e => e.title === eventTitle);
+    const event = pastEvents.find(e => e.id === eventId);
 
     useEffect(() => {
         if (!code) {
@@ -53,8 +54,8 @@ export const ClaimPage = () => {
 
             const codeDoc = snapshot.docs[0];
             const data = codeDoc.data();
-            const title = data.eventTitle as string;
-            setEventTitle(title);
+            const claimedEventId = (data.eventId ?? data.eventTitle) as string;
+            setEventId(claimedEventId);
 
             const now = new Date();
             if (data.activeFrom && new Date(data.activeFrom) > now) {
@@ -66,7 +67,7 @@ export const ClaimPage = () => {
                 return;
             }
 
-            if (profile.attendedEvents.includes(title)) {
+            if (profile.attendedEvents.includes(claimedEventId)) {
                 setState('already-have');
                 return;
             }
@@ -74,7 +75,7 @@ export const ClaimPage = () => {
             setState('claiming');
             const userRef = doc(db, 'users', user.uid);
             await updateDoc(userRef, {
-                attendedEvents: arrayUnion(title),
+                attendedEvents: arrayUnion(claimedEventId),
             });
             setState('success');
         };

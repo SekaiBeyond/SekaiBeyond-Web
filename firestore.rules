@@ -1,12 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function getUserGroup() {
+    function callerGroup() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.group;
     }
 
     function isCoreStaffOrAbove() {
-      return getUserGroup() in ['core-staff', 'president'];
+      return callerGroup() in ['core-staff', 'president'];
+    }
+
+    function isPresident() {
+      return callerGroup() == 'president';
     }
 
     match /users/{userId} {
@@ -16,7 +20,8 @@ service cloud.firestore {
       // Users can create their own profile (group must be 'visitor')
       allow create: if request.auth != null
                     && request.auth.uid == userId
-                    && request.resource.data.group == 'visitor';
+                    && request.resource.data.group == 'visitor'
+                    && request.resource.data.keys().hasOnly(['displayName', 'photoURL', 'group', 'attendedEvents']);
 
       // Users can update their own displayName and photoURL only
       allow update: if request.auth != null
@@ -27,14 +32,20 @@ service cloud.firestore {
       allow update: if request.auth != null
                     && request.auth.uid == userId
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendedEvents'])
-                    && request.resource.data.attendedEvents.toSet().hasAll(resource.data.attendedEvents)
-                    && request.resource.data.attendedEvents.size() == resource.data.attendedEvents.size() + 1;
+                    && request.resource.data.attendedEvents.toSet().hasAll(resource.data.get('attendedEvents', []))
+                    && request.resource.data.attendedEvents.size() == resource.data.get('attendedEvents', []).size() + 1;
 
-      // Core-staff can update any user, but cannot assign president
+      // Core-staff can toggle attendedEvents on any user
+      allow update: if request.auth != null
+                    && isCoreStaffOrAbove()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendedEvents']);
+
+      // Core-staff can update group, but cannot assign president
       // Only president can assign president
       allow update: if request.auth != null
                     && isCoreStaffOrAbove()
-                    && (getUserGroup() == 'president'
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['group'])
+                    && (isPresident()
                         || request.resource.data.group in ['visitor', 'member', 'staff', 'core-staff']);
     }
 
@@ -60,6 +71,13 @@ service cloud.firestore {
     // Achievement badge definitions — created by admins, readable by any logged-in user
     match /badges/{badgeId} {
       allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && isCoreStaffOrAbove();
+    }
+
+    // Past events — publicly readable (used on landing page), core-staff+ can manage
+    match /pastEvents/{eventId} {
+      allow read: if true;
       allow write: if request.auth != null
                    && isCoreStaffOrAbove();
     }

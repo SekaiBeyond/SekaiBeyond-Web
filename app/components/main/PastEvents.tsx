@@ -1,14 +1,17 @@
 import { useState } from "react";
-import { PAST_EVENTS, type PastEvent } from "~/constants";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
+import { usePastEvents } from "~/lib/pastEvents";
 
 export const PastEvents = () => {
     const {isEnglish} = useLanguage();
     const [showAll, setShowAll] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const {pastEvents, loading} = usePastEvents();
 
-    const displayedEvents = showAll ? PAST_EVENTS : PAST_EVENTS.slice(0, 6);
+    if (loading) return null;
+
+    const displayedEvents = showAll ? pastEvents : pastEvents.slice(0, 6);
 
     return (
         <section id="events" className="section">
@@ -18,7 +21,7 @@ export const PastEvents = () => {
             </div>
 
             <div className="events-grid">
-                {displayedEvents.map((event: PastEvent, index: number) => (
+                {displayedEvents.map((event, index) => (
                     <div key={index} className="event-card">
                         <img
                             className="event-image"
