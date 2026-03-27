@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
-import { GROUP_LABELS, useAuth, type UserGroup } from '~/components/AuthProvider';
+import { GROUP_LABELS, hasPermission, useAuth, type UserGroup } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
@@ -31,6 +31,98 @@ interface ViewedProfile {
     group: UserGroup;
 }
 
+const BadgeCard = ({badge, earned, earnedDate, isEnglish}: {
+    badge: BadgeDef;
+    earned: boolean;
+    earnedDate?: Date;
+    isEnglish: boolean;
+}) => (
+    <div className={`badge-card ${earned ? 'badge-earned' : 'badge-locked'}`}>
+        <div className="badge-icon-wrapper">
+            <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn} className="badge-icon"/>
+            {earned && <span className="badge-check">&#10003;</span>}
+            {!earned && <span className="badge-lock">&#128274;</span>}
+        </div>
+        <div className="badge-info">
+            <h3 className="badge-title">{isEnglish ? badge.name : badge.nameCn}</h3>
+            <p className="badge-description">
+                {isEnglish ? badge.description : badge.descriptionCn}
+            </p>
+        </div>
+        <div className="badge-tooltip">
+            <h4 className="badge-tooltip-name">{isEnglish ? badge.name : badge.nameCn}</h4>
+            <p className="badge-tooltip-desc">{isEnglish ? badge.description : badge.descriptionCn}</p>
+            {earned && earnedDate && (
+                <p className="badge-tooltip-date">
+                    {isEnglish ? 'Earned: ' : '获得于：'}
+                    {earnedDate.toLocaleDateString(
+                        isEnglish ? 'en-US' : 'zh-CN',
+                        {year: 'numeric', month: 'short', day: 'numeric'}
+                    )}
+                </p>
+            )}
+            {badge.holderPct != null && (
+                <p className="badge-tooltip-pct">
+                    {isEnglish
+                        ? `${badge.holderPct}% of members have this`
+                        : `${badge.holderPct}% 的成员拥有此徽章`}
+                </p>
+            )}
+            {badge.createdByName && (
+                <p className="badge-tooltip-creator">
+                    {isEnglish ? 'Created by ' : '由 '}
+                    {badge.createdByUid ? (
+                        <a href={`/profile?uid=${badge.createdByUid}`}
+                           className="badge-tooltip-creator-link">
+                            {badge.createdByName}
+                        </a>
+                    ) : badge.createdByLink ? (
+                        <a href={badge.createdByLink} target="_blank"
+                           rel="noopener noreferrer"
+                           className="badge-tooltip-creator-link">
+                            {badge.createdByName}
+                        </a>
+                    ) : badge.createdByName}
+                    {!isEnglish && ' 创建'}
+                </p>
+            )}
+        </div>
+    </div>
+);
+
+const EventCard = ({event, attended, isEnglish, showAdminLink}: {
+    event: PastEvent;
+    attended: boolean;
+    isEnglish: boolean;
+    showAdminLink?: boolean;
+}) => (
+    <div className={`badge-card ${attended ? 'badge-earned' : 'badge-locked'}`}>
+        <div className="badge-icon-wrapper">
+            <img src={event.icon} alt={isEnglish ? event.title : event.titleCn} className="badge-icon"/>
+            {attended && <span className="badge-check">&#10003;</span>}
+            {!attended && <span className="badge-lock">&#128274;</span>}
+        </div>
+        <div className="badge-info">
+            <span className="badge-category">{isEnglish ? event.badge : event.badgeCn}</span>
+            <h3 className="badge-title">
+                {showAdminLink ? (
+                    <a href={`/admin?tab=events&event=${encodeURIComponent(event.title)}`}
+                       className="badge-title-link">
+                        {isEnglish ? event.title : event.titleCn}
+                    </a>
+                ) : (
+                    isEnglish ? event.title : event.titleCn
+                )}
+            </h3>
+            <p className="badge-date">
+                {new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                    year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
+                })}
+            </p>
+        </div>
+    </div>
+);
+
 export const ProfilePage = () => {
     const {user, profile, loading, signIn, updateProfile} = useAuth();
     const {isEnglish} = useLanguage();
@@ -51,27 +143,31 @@ export const ProfilePage = () => {
 
     useEffect(() => {
         const loadBadges = async () => {
-            const db = getFirebaseDb();
-            const snapshot = await getDocs(collection(db, 'badges'));
-            const defs: BadgeDef[] = [];
-            snapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                defs.push({
-                    id: docSnap.id,
-                    name: data.name ?? '',
-                    nameCn: data.nameCn ?? '',
-                    description: data.description ?? '',
-                    descriptionCn: data.descriptionCn ?? '',
-                    imageUrl: data.imageUrl ?? '',
-                    holderPct: data.holderPct,
-                    createdByUid: data.createdByUid ?? '',
-                    createdByName: data.createdByName ?? '',
-                    createdByLink: data.createdByLink ?? '',
+            try {
+                const db = getFirebaseDb();
+                const snapshot = await getDocs(collection(db, 'badges'));
+                const defs: BadgeDef[] = [];
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    defs.push({
+                        id: docSnap.id,
+                        name: data.name ?? '',
+                        nameCn: data.nameCn ?? '',
+                        description: data.description ?? '',
+                        descriptionCn: data.descriptionCn ?? '',
+                        imageUrl: data.imageUrl ?? '',
+                        holderPct: data.holderPct,
+                        createdByUid: data.createdByUid ?? '',
+                        createdByName: data.createdByName ?? '',
+                        createdByLink: data.createdByLink ?? '',
+                    });
                 });
-            });
-            setBadgeDefs(defs);
+                setBadgeDefs(defs);
+            } catch (err) {
+                console.error('Failed to load badges:', err);
+            }
         };
-        loadBadges().then();
+        void loadBadges();
     }, []);
 
     useEffect(() => {
@@ -81,23 +177,28 @@ export const ProfilePage = () => {
         }
         setLoadingViewed(true);
         const loadViewedUser = async () => {
-            const db = getFirebaseDb();
-            const snap = await getDoc(doc(db, 'users', viewUid));
-            if (snap.exists()) {
-                const data = snap.data();
-                setViewedProfile({
-                    displayName: data.displayName ?? '',
-                    email: data.email ?? '',
-                    photoURL: data.photoURL ?? '',
-                    joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                    attendedEvents: data.attendedEvents ?? [],
-                    badges: data.badges ?? [],
-                    group: data.group ?? 'visitor',
-                });
+            try {
+                const db = getFirebaseDb();
+                const snap = await getDoc(doc(db, 'users', viewUid));
+                if (snap.exists()) {
+                    const data = snap.data();
+                    setViewedProfile({
+                        displayName: data.displayName ?? '',
+                        email: data.email ?? '',
+                        photoURL: data.photoURL ?? '',
+                        joinedAt: data.joinedAt?.toDate() ?? new Date(),
+                        attendedEvents: data.attendedEvents ?? [],
+                        badges: data.badges ?? [],
+                        group: data.group ?? 'visitor',
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to load user profile:', err);
+            } finally {
+                setLoadingViewed(false);
             }
-            setLoadingViewed(false);
         };
-        loadViewedUser().then();
+        void loadViewedUser();
     }, [viewUid, isViewingOther]);
 
     const targetUid = isViewingOther ? viewUid : user?.uid;
@@ -105,22 +206,26 @@ export const ProfilePage = () => {
     useEffect(() => {
         if (!targetUid) return;
         const loadEarnedDates = async () => {
-            const db = getFirebaseDb();
-            const q = query(
-                collection(db, 'records'),
-                where('targetUid', '==', targetUid)
-            );
-            const snapshot = await getDocs(q);
-            const dates: Record<string, Date> = {};
-            snapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                if (data.type === 'achievement-grant' && data.badgeId && data.timestamp) {
-                    dates[data.badgeId] = data.timestamp.toDate();
-                }
-            });
-            setEarnedDates(dates);
+            try {
+                const db = getFirebaseDb();
+                const q = query(
+                    collection(db, 'records'),
+                    where('targetUid', '==', targetUid)
+                );
+                const snapshot = await getDocs(q);
+                const dates: Record<string, Date> = {};
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    if (data.type === 'achievement-grant' && data.badgeId && data.timestamp) {
+                        dates[data.badgeId] = data.timestamp.toDate();
+                    }
+                });
+                setEarnedDates(dates);
+            } catch (err) {
+                console.error('Failed to load earned dates:', err);
+            }
         };
-        loadEarnedDates().then();
+        void loadEarnedDates();
     }, [targetUid]);
 
     // Preload a custom (Firebase Storage) photo in the background; show the Google photo until ready
@@ -188,7 +293,7 @@ export const ProfilePage = () => {
     };
 
     const handleNameKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') handleSaveName().then();
+        if (e.key === 'Enter') void handleSaveName();
         if (e.key === 'Escape') cancelEditingName();
     };
 
@@ -259,69 +364,15 @@ export const ProfilePage = () => {
                         <section className="badge-section">
                             <h2 className="badge-section-title">{isEnglish ? 'Badges' : '徽章'}</h2>
                             <div className="badge-grid">
-                                {badgeDefs.map((badge: BadgeDef) => {
-                                    const earned = viewedProfile.badges.includes(badge.id);
-                                    return (
-                                        <div key={badge.id}
-                                             className={`badge-card ${earned ? 'badge-earned' : 'badge-locked'}`}>
-                                            <div className="badge-icon-wrapper">
-                                                <img src={badge.imageUrl}
-                                                     alt={isEnglish ? badge.name : badge.nameCn}
-                                                     className="badge-icon"/>
-                                                {earned && <span className="badge-check">&#10003;</span>}
-                                                {!earned && <span className="badge-lock">&#128274;</span>}
-                                            </div>
-                                            <div className="badge-info">
-                                                <h3 className="badge-title">{isEnglish ? badge.name : badge.nameCn}</h3>
-                                                <p className="badge-description">
-                                                    {isEnglish ? badge.description : badge.descriptionCn}
-                                                </p>
-                                            </div>
-                                            <div className="badge-tooltip">
-                                                <h4 className="badge-tooltip-name">
-                                                    {isEnglish ? badge.name : badge.nameCn}
-                                                </h4>
-                                                <p className="badge-tooltip-desc">
-                                                    {isEnglish ? badge.description : badge.descriptionCn}
-                                                </p>
-                                                {earned && earnedDates[badge.id] && (
-                                                    <p className="badge-tooltip-date">
-                                                        {isEnglish ? 'Earned: ' : '获得于：'}
-                                                        {earnedDates[badge.id].toLocaleDateString(
-                                                            isEnglish ? 'en-US' : 'zh-CN',
-                                                            {year: 'numeric', month: 'short', day: 'numeric'}
-                                                        )}
-                                                    </p>
-                                                )}
-                                                {badge.holderPct != null && (
-                                                    <p className="badge-tooltip-pct">
-                                                        {isEnglish
-                                                            ? `${badge.holderPct}% of members have this`
-                                                            : `${badge.holderPct}% 的成员拥有此徽章`}
-                                                    </p>
-                                                )}
-                                                {badge.createdByName && (
-                                                    <p className="badge-tooltip-creator">
-                                                        {isEnglish ? 'Created by ' : '由 '}
-                                                        {badge.createdByUid ? (
-                                                            <a href={`/profile?uid=${badge.createdByUid}`}
-                                                               className="badge-tooltip-creator-link">
-                                                                {badge.createdByName}
-                                                            </a>
-                                                        ) : badge.createdByLink ? (
-                                                            <a href={badge.createdByLink} target="_blank"
-                                                               rel="noopener noreferrer"
-                                                               className="badge-tooltip-creator-link">
-                                                                {badge.createdByName}
-                                                            </a>
-                                                        ) : badge.createdByName}
-                                                        {!isEnglish && ' 创建'}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                {badgeDefs.map(badge => (
+                                    <BadgeCard
+                                        key={badge.id}
+                                        badge={badge}
+                                        earned={viewedProfile.badges.includes(badge.id)}
+                                        earnedDate={earnedDates[badge.id]}
+                                        isEnglish={isEnglish}
+                                    />
+                                ))}
                             </div>
                         </section>
                     )}
@@ -329,31 +380,14 @@ export const ProfilePage = () => {
                     <section className="badge-section">
                         <h2 className="badge-section-title">{isEnglish ? 'Events Attended' : '参与活动'}</h2>
                         <div className="badge-grid">
-                            {PAST_EVENTS.map((event: PastEvent) => {
-                                const attended = vAttendedSet.has(event.title);
-                                return (
-                                    <div key={event.title}
-                                         className={`badge-card ${attended ? 'badge-earned' : 'badge-locked'}`}>
-                                        <div className="badge-icon-wrapper">
-                                            <img src={event.icon}
-                                                 alt={isEnglish ? event.title : event.titleCn}
-                                                 className="badge-icon"/>
-                                            {attended && <span className="badge-check">&#10003;</span>}
-                                            {!attended && <span className="badge-lock">&#128274;</span>}
-                                        </div>
-                                        <div className="badge-info">
-                                            <span
-                                                className="badge-category">{isEnglish ? event.badge : event.badgeCn}</span>
-                                            <h3 className="badge-title">{isEnglish ? event.title : event.titleCn}</h3>
-                                            <p className="badge-date">
-                                                {new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                                                    year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
-                                                })}
-                                            </p>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            {PAST_EVENTS.map(event => (
+                                <EventCard
+                                    key={event.title}
+                                    event={event}
+                                    attended={vAttendedSet.has(event.title)}
+                                    isEnglish={isEnglish}
+                                />
+                            ))}
                         </div>
                     </section>
                 </div>
@@ -400,6 +434,7 @@ export const ProfilePage = () => {
         : profile.photoURL;
     const attendedSet = new Set(profile.attendedEvents);
     const attendedCount = PAST_EVENTS.filter(e => attendedSet.has(e.title)).length;
+    const isStaff = hasPermission(profile.group, 'staff');
 
     return (
         <>
@@ -540,70 +575,15 @@ export const ProfilePage = () => {
                         </p>
 
                         <div className="badge-grid">
-                            {badgeDefs.map((badge: BadgeDef) => {
-                                const earned = profile.badges.includes(badge.id);
-                                return (
-                                    <div
-                                        key={badge.id}
-                                        className={`badge-card ${earned ? 'badge-earned' : 'badge-locked'}`}
-                                    >
-                                        <div className="badge-icon-wrapper">
-                                            <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn}
-                                                 className="badge-icon"/>
-                                            {earned && <span className="badge-check">&#10003;</span>}
-                                            {!earned && <span className="badge-lock">&#128274;</span>}
-                                        </div>
-                                        <div className="badge-info">
-                                            <h3 className="badge-title">{isEnglish ? badge.name : badge.nameCn}</h3>
-                                            <p className="badge-description">
-                                                {isEnglish ? badge.description : badge.descriptionCn}
-                                            </p>
-                                        </div>
-                                        <div className="badge-tooltip">
-                                            <h4 className="badge-tooltip-name">
-                                                {isEnglish ? badge.name : badge.nameCn}
-                                            </h4>
-                                            <p className="badge-tooltip-desc">
-                                                {isEnglish ? badge.description : badge.descriptionCn}
-                                            </p>
-                                            {earned && earnedDates[badge.id] && (
-                                                <p className="badge-tooltip-date">
-                                                    {isEnglish ? 'Earned: ' : '获得于：'}
-                                                    {earnedDates[badge.id].toLocaleDateString(
-                                                        isEnglish ? 'en-US' : 'zh-CN',
-                                                        {year: 'numeric', month: 'short', day: 'numeric'}
-                                                    )}
-                                                </p>
-                                            )}
-                                            {badge.holderPct != null && (
-                                                <p className="badge-tooltip-pct">
-                                                    {isEnglish
-                                                        ? `${badge.holderPct}% of members have this`
-                                                        : `${badge.holderPct}% 的成员拥有此徽章`}
-                                                </p>
-                                            )}
-                                            {badge.createdByName && (
-                                                <p className="badge-tooltip-creator">
-                                                    {isEnglish ? 'Created by ' : '由 '}
-                                                    {badge.createdByUid ? (
-                                                        <a href={`/profile?uid=${badge.createdByUid}`}
-                                                           className="badge-tooltip-creator-link">
-                                                            {badge.createdByName}
-                                                        </a>
-                                                    ) : badge.createdByLink ? (
-                                                        <a href={badge.createdByLink} target="_blank"
-                                                           rel="noopener noreferrer"
-                                                           className="badge-tooltip-creator-link">
-                                                            {badge.createdByName}
-                                                        </a>
-                                                    ) : badge.createdByName}
-                                                    {!isEnglish && ' 创建'}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            {badgeDefs.map(badge => (
+                                <BadgeCard
+                                    key={badge.id}
+                                    badge={badge}
+                                    earned={profile.badges.includes(badge.id)}
+                                    earnedDate={earnedDates[badge.id]}
+                                    isEnglish={isEnglish}
+                                />
+                            ))}
                         </div>
                     </section>
                 )}
@@ -619,40 +599,15 @@ export const ProfilePage = () => {
                     </p>
 
                     <div className="badge-grid">
-                        {PAST_EVENTS.map((event: PastEvent, index: number) => {
-                            const attended = attendedSet.has(event.title);
-                            return (
-                                <div
-                                    key={index}
-                                    className={`badge-card ${attended ? 'badge-earned' : 'badge-locked'}`}
-                                >
-                                    <div className="badge-icon-wrapper">
-                                        <img src={event.icon} alt={isEnglish ? event.title : event.titleCn}
-                                             className="badge-icon"/>
-                                        {attended && <span className="badge-check">&#10003;</span>}
-                                        {!attended && <span className="badge-lock">&#128274;</span>}
-                                    </div>
-                                    <div className="badge-info">
-                                        <span
-                                            className="badge-category">{isEnglish ? event.badge : event.badgeCn}</span>
-                                        <h3 className="badge-title">
-                                            <a href={`/admin?tab=events&event=${encodeURIComponent(event.title)}`}
-                                               className="badge-title-link">
-                                                {isEnglish ? event.title : event.titleCn}
-                                            </a>
-                                        </h3>
-                                        <p className="badge-date">
-                                            {new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                                                year: 'numeric',
-                                                month: 'short',
-                                                day: 'numeric',
-                                                timeZone: 'UTC',
-                                            })}
-                                        </p>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                        {PAST_EVENTS.map(event => (
+                            <EventCard
+                                key={event.title}
+                                event={event}
+                                attended={attendedSet.has(event.title)}
+                                isEnglish={isEnglish}
+                                showAdminLink={isStaff}
+                            />
+                        ))}
                     </div>
                 </section>
             </div>
