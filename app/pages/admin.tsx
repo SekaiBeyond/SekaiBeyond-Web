@@ -50,6 +50,9 @@ interface BadgeDef {
     descriptionCn: string;
     imageUrl: string;
     createdBy: string;
+    createdByUid: string;
+    createdByName: string;
+    createdByLink: string;
     createdAt: Date;
 }
 
@@ -72,7 +75,9 @@ type RecordType =
     | 'badge-grant'
     | 'badge-revoke'
     | 'achievement-grant'
-    | 'achievement-revoke';
+    | 'achievement-revoke'
+    | 'badge-create'
+    | 'badge-edit';
 
 interface ActivityRecord {
     id: string;
@@ -124,6 +129,23 @@ export const AdminPage = () => {
     const [newBadgeImage, setNewBadgeImage] = useState<File | null>(null);
     const [newBadgeImagePreview, setNewBadgeImagePreview] = useState<string | null>(null);
     const [creatingBadgeDef, setCreatingBadgeDef] = useState(false);
+    const [newBadgeCreatorUser, setNewBadgeCreatorUser] = useState<UserRecord | null>(null);
+    const [newBadgeCreatedByName, setNewBadgeCreatedByName] = useState('');
+    const [newBadgeCreatedByLink, setNewBadgeCreatedByLink] = useState('');
+    const [editingBadgeDef, setEditingBadgeDef] = useState(false);
+    const [editBadgeName, setEditBadgeName] = useState('');
+    const [editBadgeNameCn, setEditBadgeNameCn] = useState('');
+    const [editBadgeDesc, setEditBadgeDesc] = useState('');
+    const [editBadgeDescCn, setEditBadgeDescCn] = useState('');
+    const [editBadgeCreatorUser, setEditBadgeCreatorUser] = useState<UserRecord | null>(null);
+    const [editBadgeCreatedByName, setEditBadgeCreatedByName] = useState('');
+    const [editBadgeCreatedByLink, setEditBadgeCreatedByLink] = useState('');
+    const [editBadgeImage, setEditBadgeImage] = useState<File | null>(null);
+    const [editBadgeImagePreview, setEditBadgeImagePreview] = useState<string | null>(null);
+    const [savingBadgeDef, setSavingBadgeDef] = useState(false);
+    const [creatorSearchQuery, setCreatorSearchQuery] = useState('');
+    const [creatorSearchResults, setCreatorSearchResults] = useState<UserRecord[]>([]);
+    const [searchingCreator, setSearchingCreator] = useState(false);
     const [searchParams] = useSearchParams();
     const urlParamsHandled = useRef(false);
 
@@ -182,6 +204,9 @@ export const AdminPage = () => {
                     descriptionCn: data.descriptionCn ?? '',
                     imageUrl: data.imageUrl ?? '',
                     createdBy: data.createdBy ?? '',
+                    createdByUid: data.createdByUid ?? '',
+                    createdByName: data.createdByName ?? '',
+                    createdByLink: data.createdByLink ?? '',
                     createdAt: data.createdAt?.toDate() ?? new Date(),
                 });
             });
@@ -460,22 +485,28 @@ export const AdminPage = () => {
         return `${window.location.origin}/claim?code=${code}`;
     };
 
-    const updateBadgeImage = async (bd: BadgeDef, file: File) => {
-        setUpdating(true);
-        const imageId = crypto.randomUUID();
-        const storageRef = ref(getFirebaseStorage(), `badges/${imageId}`);
-        await uploadBytes(storageRef, file);
-        const imageUrl = await getDownloadURL(storageRef);
-
+    const searchCreator = async () => {
+        if (!creatorSearchQuery.trim()) return;
+        setSearchingCreator(true);
         const db = getFirebaseDb();
-        await updateDoc(doc(db, 'badges', bd.id), {imageUrl});
-
-        const updated = {...bd, imageUrl};
-        setBadgeDefs(prev => prev.map(d => d.id === bd.id ? updated : d));
-        if (selectedBadgeDef?.id === bd.id) {
-            setSelectedBadgeDef(updated);
-        }
-        setUpdating(false);
+        const q = query(collection(db, 'users'), where('email', '==', creatorSearchQuery.trim().toLowerCase()));
+        const snapshot = await getDocs(q);
+        const results: UserRecord[] = [];
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            results.push({
+                uid: docSnap.id,
+                displayName: data.displayName ?? '',
+                email: data.email ?? '',
+                photoURL: data.photoURL ?? '',
+                joinedAt: data.joinedAt?.toDate() ?? new Date(),
+                attendedEvents: data.attendedEvents ?? [],
+                badges: data.badges ?? [],
+                group: data.group ?? 'visitor',
+            });
+        });
+        setCreatorSearchResults(results);
+        setSearchingCreator(false);
     };
 
     const createBadgeDef = async () => {
@@ -491,6 +522,10 @@ export const AdminPage = () => {
         }
 
         const db = getFirebaseDb();
+        const creatorUid = newBadgeCreatorUser?.uid ?? '';
+        const creatorName = newBadgeCreatorUser?.displayName ?? newBadgeCreatedByName.trim();
+        const creatorLink = newBadgeCreatorUser ? '' : newBadgeCreatedByLink.trim();
+
         const docRef = await addDoc(collection(db, 'badges'), {
             name: newBadgeName.trim(),
             nameCn: newBadgeNameCn.trim(),
@@ -498,7 +533,19 @@ export const AdminPage = () => {
             descriptionCn: newBadgeDescCn.trim(),
             imageUrl,
             createdBy: user.uid,
+            createdByUid: creatorUid,
+            createdByName: creatorName,
+            createdByLink: creatorLink,
             createdAt: serverTimestamp(),
+        });
+
+        await addDoc(collection(db, 'records'), {
+            type: 'badge-create',
+            performedBy: user.uid,
+            performedByName: profile.displayName,
+            badgeId: docRef.id,
+            badgeName: newBadgeName.trim(),
+            timestamp: serverTimestamp(),
         });
 
         setBadgeDefs(prev => [...prev, {
@@ -509,6 +556,9 @@ export const AdminPage = () => {
             descriptionCn: newBadgeDescCn.trim(),
             imageUrl,
             createdBy: user.uid,
+            createdByUid: creatorUid,
+            createdByName: creatorName,
+            createdByLink: creatorLink,
             createdAt: new Date(),
         }]);
 
@@ -518,6 +568,11 @@ export const AdminPage = () => {
         setNewBadgeDescCn('');
         setNewBadgeImage(null);
         setNewBadgeImagePreview(null);
+        setNewBadgeCreatorUser(null);
+        setNewBadgeCreatedByName('');
+        setNewBadgeCreatedByLink('');
+        setCreatorSearchQuery('');
+        setCreatorSearchResults([]);
         setShowCreateBadge(false);
         setCreatingBadgeDef(false);
     };
@@ -527,6 +582,50 @@ export const AdminPage = () => {
         await deleteDoc(doc(db, 'badges', bd.id));
         setBadgeDefs(prev => prev.filter(d => d.id !== bd.id));
         setSelectedBadgeDef(null);
+    };
+
+    const updateBadgeDef = async () => {
+        if (!selectedBadgeDef || !user) return;
+        setSavingBadgeDef(true);
+        const db = getFirebaseDb();
+        const creatorUid = editBadgeCreatorUser?.uid ?? '';
+        const creatorName = editBadgeCreatorUser?.displayName ?? editBadgeCreatedByName.trim();
+        const creatorLink = editBadgeCreatorUser ? '' : editBadgeCreatedByLink.trim();
+        const updates: Record<string, string> = {
+            name: editBadgeName.trim(),
+            nameCn: editBadgeNameCn.trim(),
+            description: editBadgeDesc.trim(),
+            descriptionCn: editBadgeDescCn.trim(),
+            createdByUid: creatorUid,
+            createdByName: creatorName,
+            createdByLink: creatorLink,
+        };
+
+        if (editBadgeImage) {
+            const imageId = crypto.randomUUID();
+            const storageRef = ref(getFirebaseStorage(), `badges/${imageId}`);
+            await uploadBytes(storageRef, editBadgeImage);
+            updates.imageUrl = await getDownloadURL(storageRef);
+        }
+
+        await updateDoc(doc(db, 'badges', selectedBadgeDef.id), updates);
+
+        await addDoc(collection(db, 'records'), {
+            type: 'badge-edit',
+            performedBy: user.uid,
+            performedByName: profile.displayName,
+            badgeId: selectedBadgeDef.id,
+            badgeName: editBadgeName.trim(),
+            timestamp: serverTimestamp(),
+        });
+
+        const updated = {...selectedBadgeDef, ...updates};
+        setBadgeDefs(prev => prev.map(d => d.id === selectedBadgeDef.id ? updated : d));
+        setSelectedBadgeDef(updated);
+        setEditingBadgeDef(false);
+        setEditBadgeImage(null);
+        setEditBadgeImagePreview(null);
+        setSavingBadgeDef(false);
     };
 
     const selectBadgeDef = async (bd: BadgeDef) => {
@@ -655,6 +754,18 @@ export const AdminPage = () => {
                     ? <>revoked {badge} badge from {target}</>
                     : <>撤销了 {target} 的 {badge} 徽章</>;
             }
+            case 'badge-create': {
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? '') : r.badgeName;
+                return isEnglish
+                    ? <>created badge {badge}</>
+                    : <>创建了徽章 {badge}</>;
+            }
+            case 'badge-edit': {
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? '') : r.badgeName;
+                return isEnglish
+                    ? <>edited badge {badge}</>
+                    : <>编辑了徽章 {badge}</>;
+            }
         }
     };
 
@@ -671,6 +782,10 @@ export const AdminPage = () => {
             case 'achievement-grant':
                 return isEnglish ? 'Badge' : '徽章';
             case 'achievement-revoke':
+                return isEnglish ? 'Badge' : '徽章';
+            case 'badge-create':
+                return isEnglish ? 'Badge' : '徽章';
+            case 'badge-edit':
                 return isEnglish ? 'Badge' : '徽章';
         }
     };
@@ -1166,6 +1281,88 @@ export const AdminPage = () => {
                                                     placeholder={isEnglish ? 'Badge description in Chinese' : '徽章中文描述'}
                                                 />
                                             </label>
+                                            <div className="admin-creator-picker">
+                                                <span className="admin-creator-picker-label">
+                                                    {isEnglish ? 'Creator (optional)' : '创建者（可选）'}
+                                                </span>
+                                                {newBadgeCreatorUser ? (
+                                                    <div className="admin-creator-selected">
+                                                        <img src={newBadgeCreatorUser.photoURL} alt=""
+                                                             className="admin-user-avatar"
+                                                             referrerPolicy="no-referrer"/>
+                                                        <div>
+                                                            <div
+                                                                className="admin-user-name">{newBadgeCreatorUser.displayName}</div>
+                                                            <div
+                                                                className="admin-user-email">{newBadgeCreatorUser.email}</div>
+                                                        </div>
+                                                        <button className="admin-back-btn"
+                                                                onClick={() => setNewBadgeCreatorUser(null)}>
+                                                            {isEnglish ? 'Clear' : '清除'}
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="admin-creator-search-row">
+                                                            <input
+                                                                value={creatorSearchQuery}
+                                                                onChange={(e) => setCreatorSearchQuery(e.target.value)}
+                                                                onKeyDown={(e) => e.key === 'Enter' && searchCreator()}
+                                                                className="admin-search-input"
+                                                                placeholder={isEnglish ? 'Search user by email' : '通过邮箱搜索用户'}
+                                                            />
+                                                            <button onClick={searchCreator} disabled={searchingCreator}
+                                                                    className="admin-search-btn">
+                                                                {searchingCreator
+                                                                    ? (isEnglish ? 'Searching...' : '搜索中...')
+                                                                    : (isEnglish ? 'Search' : '搜索')}
+                                                            </button>
+                                                        </div>
+                                                        {creatorSearchResults.map(u => (
+                                                            <div key={u.uid} className="admin-user-row" onClick={() => {
+                                                                setNewBadgeCreatorUser(u);
+                                                                setNewBadgeCreatedByName('');
+                                                                setNewBadgeCreatedByLink('');
+                                                                setCreatorSearchQuery('');
+                                                                setCreatorSearchResults([]);
+                                                            }}>
+                                                                <img src={u.photoURL} alt=""
+                                                                     className="admin-user-avatar"
+                                                                     referrerPolicy="no-referrer"/>
+                                                                <div>
+                                                                    <div
+                                                                        className="admin-user-name">{u.displayName}</div>
+                                                                    <div className="admin-user-email">{u.email}</div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                        {creatorSearchResults.length === 0 && !searchingCreator && (
+                                                            <>
+                                                                <label style={{marginTop: '8px'}}>
+                                                                    <span>{isEnglish ? 'Or enter name manually' : '或手动输入名称'}</span>
+                                                                    <input
+                                                                        value={newBadgeCreatedByName}
+                                                                        onChange={(e) => setNewBadgeCreatedByName(e.target.value)}
+                                                                        className="admin-search-input"
+                                                                        placeholder={isEnglish ? 'Creator name' : '创建者名称'}
+                                                                    />
+                                                                </label>
+                                                                {newBadgeCreatedByName && (
+                                                                    <label>
+                                                                        <span>{isEnglish ? 'Creator Link (optional)' : '创建者链接（可选）'}</span>
+                                                                        <input
+                                                                            value={newBadgeCreatedByLink}
+                                                                            onChange={(e) => setNewBadgeCreatedByLink(e.target.value)}
+                                                                            className="admin-search-input"
+                                                                            placeholder="https://..."
+                                                                        />
+                                                                    </label>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
                                             <label>
                                                 <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
                                                 <input
@@ -1204,6 +1401,11 @@ export const AdminPage = () => {
                                                     setNewBadgeDescCn('');
                                                     setNewBadgeImage(null);
                                                     setNewBadgeImagePreview(null);
+                                                    setNewBadgeCreatorUser(null);
+                                                    setNewBadgeCreatedByName('');
+                                                    setNewBadgeCreatedByLink('');
+                                                    setCreatorSearchQuery('');
+                                                    setCreatorSearchResults([]);
                                                 }}
                                             >
                                                 {isEnglish ? 'Cancel' : '取消'}
@@ -1249,6 +1451,7 @@ export const AdminPage = () => {
                                 <button className="admin-back-btn" onClick={() => {
                                     setSelectedBadgeDef(null);
                                     setBadgeHolders([]);
+                                    setEditingBadgeDef(false);
                                 }}>
                                     &larr; {isEnglish ? 'All Badges' : '所有徽章'}
                                 </button>
@@ -1260,32 +1463,242 @@ export const AdminPage = () => {
                                         <p className="admin-event-detail-meta">
                                             {isEnglish ? selectedBadgeDef.description : selectedBadgeDef.descriptionCn}
                                         </p>
+                                        {selectedBadgeDef.createdByName && (
+                                            <p className="admin-event-detail-meta" style={{marginTop: '4px'}}>
+                                                {isEnglish ? 'Created by: ' : '创建者：'}
+                                                {selectedBadgeDef.createdByUid ? (
+                                                    <a href={`/profile?uid=${selectedBadgeDef.createdByUid}`}
+                                                       style={{color: '#6c63ff'}}>
+                                                        {selectedBadgeDef.createdByName}
+                                                    </a>
+                                                ) : selectedBadgeDef.createdByLink ? (
+                                                    <a href={selectedBadgeDef.createdByLink} target="_blank"
+                                                       rel="noopener noreferrer"
+                                                       style={{color: '#6c63ff'}}>
+                                                        {selectedBadgeDef.createdByName}
+                                                    </a>
+                                                ) : selectedBadgeDef.createdByName}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
-                                <div className="admin-form-actions" style={{marginBottom: '20px'}}>
-                                    <label className="admin-generate-btn" style={{cursor: 'pointer'}}>
-                                        {updating
-                                            ? (isEnglish ? 'Uploading...' : '上传中...')
-                                            : (isEnglish ? 'Update Image' : '更换图片')}
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            hidden
-                                            disabled={updating}
-                                            onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) updateBadgeImage(selectedBadgeDef, file).then();
+                                {editingBadgeDef ? (
+                                    <div className="admin-create-badge-form" style={{marginBottom: '20px'}}>
+                                        <h4 className="admin-badges-title">
+                                            {isEnglish ? 'Edit Badge' : '编辑徽章'}
+                                        </h4>
+                                        <div className="admin-form-grid">
+                                            <label>
+                                                <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
+                                                <input
+                                                    value={editBadgeName}
+                                                    onChange={(e) => setEditBadgeName(e.target.value)}
+                                                    className="admin-search-input"
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
+                                                <input
+                                                    value={editBadgeNameCn}
+                                                    onChange={(e) => setEditBadgeNameCn(e.target.value)}
+                                                    className="admin-search-input"
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
+                                                <textarea
+                                                    value={editBadgeDesc}
+                                                    onChange={(e) => setEditBadgeDesc(e.target.value)}
+                                                    className="admin-search-input admin-textarea"
+                                                />
+                                            </label>
+                                            <label>
+                                                <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
+                                                <textarea
+                                                    value={editBadgeDescCn}
+                                                    onChange={(e) => setEditBadgeDescCn(e.target.value)}
+                                                    className="admin-search-input admin-textarea"
+                                                />
+                                            </label>
+                                            <div className="admin-creator-picker">
+                                                <span className="admin-creator-picker-label">
+                                                    {isEnglish ? 'Creator (optional)' : '创建者（可选）'}
+                                                </span>
+                                                {editBadgeCreatorUser ? (
+                                                    <div className="admin-creator-selected">
+                                                        <img src={editBadgeCreatorUser.photoURL} alt=""
+                                                             className="admin-user-avatar"
+                                                             referrerPolicy="no-referrer"/>
+                                                        <div>
+                                                            <div
+                                                                className="admin-user-name">{editBadgeCreatorUser.displayName}</div>
+                                                            <div
+                                                                className="admin-user-email">{editBadgeCreatorUser.email}</div>
+                                                        </div>
+                                                        <button className="admin-back-btn" onClick={() => {
+                                                            setEditBadgeCreatorUser(null);
+                                                            setEditBadgeCreatedByName('');
+                                                            setEditBadgeCreatedByLink('');
+                                                        }}>
+                                                            {isEnglish ? 'Clear' : '清除'}
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="admin-creator-search-row">
+                                                            <input
+                                                                value={creatorSearchQuery}
+                                                                onChange={(e) => setCreatorSearchQuery(e.target.value)}
+                                                                onKeyDown={(e) => e.key === 'Enter' && searchCreator()}
+                                                                className="admin-search-input"
+                                                                placeholder={isEnglish ? 'Search user by email' : '通过邮箱搜索用户'}
+                                                            />
+                                                            <button onClick={searchCreator} disabled={searchingCreator}
+                                                                    className="admin-search-btn">
+                                                                {searchingCreator
+                                                                    ? (isEnglish ? 'Searching...' : '搜索中...')
+                                                                    : (isEnglish ? 'Search' : '搜索')}
+                                                            </button>
+                                                        </div>
+                                                        {creatorSearchResults.map(u => (
+                                                            <div key={u.uid} className="admin-user-row" onClick={() => {
+                                                                setEditBadgeCreatorUser(u);
+                                                                setEditBadgeCreatedByName('');
+                                                                setEditBadgeCreatedByLink('');
+                                                                setCreatorSearchQuery('');
+                                                                setCreatorSearchResults([]);
+                                                            }}>
+                                                                <img src={u.photoURL} alt=""
+                                                                     className="admin-user-avatar"
+                                                                     referrerPolicy="no-referrer"/>
+                                                                <div>
+                                                                    <div
+                                                                        className="admin-user-name">{u.displayName}</div>
+                                                                    <div className="admin-user-email">{u.email}</div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                        {creatorSearchResults.length === 0 && !searchingCreator && (
+                                                            <>
+                                                                <label style={{marginTop: '8px'}}>
+                                                                    <span>{isEnglish ? 'Or enter name manually' : '或手动输入名称'}</span>
+                                                                    <input
+                                                                        value={editBadgeCreatedByName}
+                                                                        onChange={(e) => setEditBadgeCreatedByName(e.target.value)}
+                                                                        className="admin-search-input"
+                                                                    />
+                                                                </label>
+                                                                {editBadgeCreatedByName && (
+                                                                    <label>
+                                                                        <span>{isEnglish ? 'Creator Link (optional)' : '创建者链接（可选）'}</span>
+                                                                        <input
+                                                                            value={editBadgeCreatedByLink}
+                                                                            onChange={(e) => setEditBadgeCreatedByLink(e.target.value)}
+                                                                            className="admin-search-input"
+                                                                            placeholder="https://..."
+                                                                        />
+                                                                    </label>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
+                                            <label>
+                                                <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file) return;
+                                                        setEditBadgeImage(file);
+                                                        setEditBadgeImagePreview(URL.createObjectURL(file));
+                                                    }}
+                                                />
+                                                {editBadgeImagePreview && (
+                                                    <img src={editBadgeImagePreview} alt=""
+                                                         className="admin-badge-image-preview"/>
+                                                )}
+                                            </label>
+                                        </div>
+                                        <div className="admin-form-actions">
+                                            <button
+                                                className="admin-generate-btn"
+                                                onClick={updateBadgeDef}
+                                                disabled={savingBadgeDef || !editBadgeName.trim()}
+                                            >
+                                                {savingBadgeDef
+                                                    ? (isEnglish ? 'Saving...' : '保存中...')
+                                                    : (isEnglish ? 'Save Changes' : '保存更改')}
+                                            </button>
+                                            <button
+                                                className="admin-back-btn"
+                                                onClick={() => {
+                                                    setEditingBadgeDef(false);
+                                                    setEditBadgeImage(null);
+                                                    setEditBadgeImagePreview(null);
+                                                    setEditBadgeCreatorUser(null);
+                                                    setCreatorSearchQuery('');
+                                                    setCreatorSearchResults([]);
+                                                }}
+                                            >
+                                                {isEnglish ? 'Cancel' : '取消'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="admin-form-actions" style={{marginBottom: '20px'}}>
+                                        <button
+                                            className="admin-generate-btn"
+                                            onClick={async () => {
+                                                setEditBadgeName(selectedBadgeDef.name);
+                                                setEditBadgeNameCn(selectedBadgeDef.nameCn);
+                                                setEditBadgeDesc(selectedBadgeDef.description);
+                                                setEditBadgeDescCn(selectedBadgeDef.descriptionCn);
+                                                setEditBadgeImage(null);
+                                                setEditBadgeImagePreview(null);
+                                                setCreatorSearchQuery('');
+                                                setCreatorSearchResults([]);
+                                                if (selectedBadgeDef.createdByUid) {
+                                                    const db = getFirebaseDb();
+                                                    const snap = await getDoc(doc(db, 'users', selectedBadgeDef.createdByUid));
+                                                    if (snap.exists()) {
+                                                        const data = snap.data();
+                                                        setEditBadgeCreatorUser({
+                                                            uid: snap.id,
+                                                            displayName: data.displayName ?? '',
+                                                            email: data.email ?? '',
+                                                            photoURL: data.photoURL ?? '',
+                                                            joinedAt: data.joinedAt?.toDate() ?? new Date(),
+                                                            attendedEvents: data.attendedEvents ?? [],
+                                                            badges: data.badges ?? [],
+                                                            group: data.group ?? 'visitor',
+                                                        });
+                                                    } else {
+                                                        setEditBadgeCreatorUser(null);
+                                                        setEditBadgeCreatedByName(selectedBadgeDef.createdByName);
+                                                        setEditBadgeCreatedByLink(selectedBadgeDef.createdByLink);
+                                                    }
+                                                } else {
+                                                    setEditBadgeCreatorUser(null);
+                                                    setEditBadgeCreatedByName(selectedBadgeDef.createdByName);
+                                                    setEditBadgeCreatedByLink(selectedBadgeDef.createdByLink);
+                                                }
+                                                setEditingBadgeDef(true);
                                             }}
-                                        />
-                                    </label>
-                                    <button
-                                        className="admin-toggle-btn admin-toggle-revoke"
-                                        onClick={() => deleteBadgeDef(selectedBadgeDef)}
-                                    >
-                                        {isEnglish ? 'Delete Badge' : '删除徽章'}
-                                    </button>
-                                </div>
+                                        >
+                                            {isEnglish ? 'Edit Badge' : '编辑徽章'}
+                                        </button>
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-revoke"
+                                            onClick={() => deleteBadgeDef(selectedBadgeDef)}
+                                        >
+                                            {isEnglish ? 'Delete Badge' : '删除徽章'}
+                                        </button>
+                                    </div>
+                                )}
 
                                 <h4 className="admin-badges-title">
                                     {isEnglish ? 'Badge Holders' : '徽章持有者'}

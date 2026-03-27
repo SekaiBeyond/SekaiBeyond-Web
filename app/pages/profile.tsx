@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { GROUP_LABELS, useAuth } from '~/components/AuthProvider';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { GROUP_LABELS, useAuth, type UserGroup } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { PAST_EVENTS, type PastEvent } from '~/constants';
+import { useSearchParams } from 'react-router';
 
 interface BadgeDef {
     id: string;
@@ -15,11 +16,29 @@ interface BadgeDef {
     descriptionCn: string;
     imageUrl: string;
     holderPct?: number;
+    createdByUid?: string;
+    createdByName?: string;
+    createdByLink?: string;
+}
+
+interface ViewedProfile {
+    displayName: string;
+    email: string;
+    photoURL: string;
+    joinedAt: Date;
+    attendedEvents: string[];
+    badges: string[];
+    group: UserGroup;
 }
 
 export const ProfilePage = () => {
     const {user, profile, loading, signIn, updateProfile} = useAuth();
     const {isEnglish} = useLanguage();
+    const [searchParams] = useSearchParams();
+    const viewUid = searchParams.get('uid');
+    const isViewingOther = !!viewUid && viewUid !== user?.uid;
+    const [viewedProfile, setViewedProfile] = useState<ViewedProfile | null>(null);
+    const [loadingViewed, setLoadingViewed] = useState(false);
     const [editingName, setEditingName] = useState(false);
     const [editName, setEditName] = useState('');
     const [savingName, setSavingName] = useState(false);
@@ -45,6 +64,9 @@ export const ProfilePage = () => {
                     descriptionCn: data.descriptionCn ?? '',
                     imageUrl: data.imageUrl ?? '',
                     holderPct: data.holderPct,
+                    createdByUid: data.createdByUid ?? '',
+                    createdByName: data.createdByName ?? '',
+                    createdByLink: data.createdByLink ?? '',
                 });
             });
             setBadgeDefs(defs);
@@ -53,12 +75,40 @@ export const ProfilePage = () => {
     }, []);
 
     useEffect(() => {
-        if (!user) return;
+        if (!viewUid || !isViewingOther) {
+            setViewedProfile(null);
+            return;
+        }
+        setLoadingViewed(true);
+        const loadViewedUser = async () => {
+            const db = getFirebaseDb();
+            const snap = await getDoc(doc(db, 'users', viewUid));
+            if (snap.exists()) {
+                const data = snap.data();
+                setViewedProfile({
+                    displayName: data.displayName ?? '',
+                    email: data.email ?? '',
+                    photoURL: data.photoURL ?? '',
+                    joinedAt: data.joinedAt?.toDate() ?? new Date(),
+                    attendedEvents: data.attendedEvents ?? [],
+                    badges: data.badges ?? [],
+                    group: data.group ?? 'visitor',
+                });
+            }
+            setLoadingViewed(false);
+        };
+        loadViewedUser().then();
+    }, [viewUid, isViewingOther]);
+
+    const targetUid = isViewingOther ? viewUid : user?.uid;
+
+    useEffect(() => {
+        if (!targetUid) return;
         const loadEarnedDates = async () => {
             const db = getFirebaseDb();
             const q = query(
                 collection(db, 'records'),
-                where('targetUid', '==', user.uid)
+                where('targetUid', '==', targetUid)
             );
             const snapshot = await getDocs(q);
             const dates: Record<string, Date> = {};
@@ -71,7 +121,7 @@ export const ProfilePage = () => {
             setEarnedDates(dates);
         };
         loadEarnedDates().then();
-    }, [user]);
+    }, [targetUid]);
 
     // Preload a custom (Firebase Storage) photo in the background; show the Google photo until ready
     const hasCustomPhoto = profile?.photoURL.includes('firebasestorage.googleapis.com') ?? false;
@@ -142,10 +192,184 @@ export const ProfilePage = () => {
         if (e.key === 'Escape') cancelEditingName();
     };
 
-    if (loading) {
+    if (loading || loadingViewed) {
         return (
             <div className="profile-loading">
                 <div className="profile-spinner"/>
+            </div>
+        );
+    }
+
+    if (isViewingOther && viewedProfile) {
+        const vAttendedSet = new Set(viewedProfile.attendedEvents);
+        const vAttendedCount = PAST_EVENTS.filter(e => vAttendedSet.has(e.title)).length;
+        return (
+            <>
+                <nav className="profile-nav">
+                    <a href="/" className="profile-nav-home">
+                        {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
+                    </a>
+                    <div className="nav-actions">
+                        <LanguageSwitcher/>
+                        <LoginButton/>
+                    </div>
+                </nav>
+                <div className="profile-page">
+                    <div className="profile-header">
+                        <div className="profile-avatar-wrapper">
+                            <img
+                                src={viewedProfile.photoURL}
+                                alt={viewedProfile.displayName}
+                                className="profile-avatar"
+                                referrerPolicy="no-referrer"
+                            />
+                        </div>
+                        <div className="profile-info">
+                            <div className="profile-name-row">
+                                <h1 className="profile-name">{viewedProfile.displayName}</h1>
+                            </div>
+                            <p className="profile-joined">
+                                {isEnglish ? 'Joined ' : '加入时间：'}
+                                {viewedProfile.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                                    year: 'numeric', month: 'long', day: 'numeric',
+                                })}
+                            </p>
+                            <span className="profile-group-tag" data-group={viewedProfile.group}>
+                                {isEnglish ? GROUP_LABELS[viewedProfile.group].en : GROUP_LABELS[viewedProfile.group].zh}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="profile-stats">
+                        {badgeDefs.length > 0 && (
+                            <div className="profile-stat">
+                                <span className="profile-stat-number">
+                                    {badgeDefs.filter(b => viewedProfile.badges.includes(b.id)).length}
+                                </span>
+                                <span className="profile-stat-label">{isEnglish ? 'Badges' : '徽章'}</span>
+                            </div>
+                        )}
+                        <div className="profile-stat">
+                            <span className="profile-stat-number">{vAttendedCount}/{PAST_EVENTS.length}</span>
+                            <span className="profile-stat-label">{isEnglish ? 'Events Attended' : '参与活动'}</span>
+                        </div>
+                    </div>
+
+                    {badgeDefs.length > 0 && (
+                        <section className="badge-section">
+                            <h2 className="badge-section-title">{isEnglish ? 'Badges' : '徽章'}</h2>
+                            <div className="badge-grid">
+                                {badgeDefs.map((badge: BadgeDef) => {
+                                    const earned = viewedProfile.badges.includes(badge.id);
+                                    return (
+                                        <div key={badge.id}
+                                             className={`badge-card ${earned ? 'badge-earned' : 'badge-locked'}`}>
+                                            <div className="badge-icon-wrapper">
+                                                <img src={badge.imageUrl}
+                                                     alt={isEnglish ? badge.name : badge.nameCn}
+                                                     className="badge-icon"/>
+                                                {earned && <span className="badge-check">&#10003;</span>}
+                                                {!earned && <span className="badge-lock">&#128274;</span>}
+                                            </div>
+                                            <div className="badge-info">
+                                                <h3 className="badge-title">{isEnglish ? badge.name : badge.nameCn}</h3>
+                                                <p className="badge-description">
+                                                    {isEnglish ? badge.description : badge.descriptionCn}
+                                                </p>
+                                            </div>
+                                            <div className="badge-tooltip">
+                                                <h4 className="badge-tooltip-name">
+                                                    {isEnglish ? badge.name : badge.nameCn}
+                                                </h4>
+                                                <p className="badge-tooltip-desc">
+                                                    {isEnglish ? badge.description : badge.descriptionCn}
+                                                </p>
+                                                {earned && earnedDates[badge.id] && (
+                                                    <p className="badge-tooltip-date">
+                                                        {isEnglish ? 'Earned: ' : '获得于：'}
+                                                        {earnedDates[badge.id].toLocaleDateString(
+                                                            isEnglish ? 'en-US' : 'zh-CN',
+                                                            {year: 'numeric', month: 'short', day: 'numeric'}
+                                                        )}
+                                                    </p>
+                                                )}
+                                                {badge.holderPct != null && (
+                                                    <p className="badge-tooltip-pct">
+                                                        {isEnglish
+                                                            ? `${badge.holderPct}% of members have this`
+                                                            : `${badge.holderPct}% 的成员拥有此徽章`}
+                                                    </p>
+                                                )}
+                                                {badge.createdByName && (
+                                                    <p className="badge-tooltip-creator">
+                                                        {isEnglish ? 'Created by ' : '由 '}
+                                                        {badge.createdByUid ? (
+                                                            <a href={`/profile?uid=${badge.createdByUid}`}
+                                                               className="badge-tooltip-creator-link">
+                                                                {badge.createdByName}
+                                                            </a>
+                                                        ) : badge.createdByLink ? (
+                                                            <a href={badge.createdByLink} target="_blank"
+                                                               rel="noopener noreferrer"
+                                                               className="badge-tooltip-creator-link">
+                                                                {badge.createdByName}
+                                                            </a>
+                                                        ) : badge.createdByName}
+                                                        {!isEnglish && ' 创建'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    )}
+
+                    <section className="badge-section">
+                        <h2 className="badge-section-title">{isEnglish ? 'Events Attended' : '参与活动'}</h2>
+                        <div className="badge-grid">
+                            {PAST_EVENTS.map((event: PastEvent) => {
+                                const attended = vAttendedSet.has(event.title);
+                                return (
+                                    <div key={event.title}
+                                         className={`badge-card ${attended ? 'badge-earned' : 'badge-locked'}`}>
+                                        <div className="badge-icon-wrapper">
+                                            <img src={event.icon}
+                                                 alt={isEnglish ? event.title : event.titleCn}
+                                                 className="badge-icon"/>
+                                            {attended && <span className="badge-check">&#10003;</span>}
+                                            {!attended && <span className="badge-lock">&#128274;</span>}
+                                        </div>
+                                        <div className="badge-info">
+                                            <span
+                                                className="badge-category">{isEnglish ? event.badge : event.badgeCn}</span>
+                                            <h3 className="badge-title">{isEnglish ? event.title : event.titleCn}</h3>
+                                            <p className="badge-date">
+                                                {new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                                                    year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
+                                                })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                </div>
+            </>
+        );
+    }
+
+    if (isViewingOther && !viewedProfile) {
+        return (
+            <div className="profile-login-prompt">
+                <div className="profile-login-card">
+                    <h2>{isEnglish ? 'User not found' : '未找到用户'}</h2>
+                    <a href="/" className="profile-back-link">
+                        {isEnglish ? 'Back to Home' : '返回首页'}
+                    </a>
+                </div>
             </div>
         );
     }
@@ -356,6 +580,24 @@ export const ProfilePage = () => {
                                                     {isEnglish
                                                         ? `${badge.holderPct}% of members have this`
                                                         : `${badge.holderPct}% 的成员拥有此徽章`}
+                                                </p>
+                                            )}
+                                            {badge.createdByName && (
+                                                <p className="badge-tooltip-creator">
+                                                    {isEnglish ? 'Created by ' : '由 '}
+                                                    {badge.createdByUid ? (
+                                                        <a href={`/profile?uid=${badge.createdByUid}`}
+                                                           className="badge-tooltip-creator-link">
+                                                            {badge.createdByName}
+                                                        </a>
+                                                    ) : badge.createdByLink ? (
+                                                        <a href={badge.createdByLink} target="_blank"
+                                                           rel="noopener noreferrer"
+                                                           className="badge-tooltip-creator-link">
+                                                            {badge.createdByName}
+                                                        </a>
+                                                    ) : badge.createdByName}
+                                                    {!isEnglish && ' 创建'}
                                                 </p>
                                             )}
                                         </div>

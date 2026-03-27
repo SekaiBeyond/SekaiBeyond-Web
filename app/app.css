@@ -2316,8 +2316,17 @@ footer {
     border-radius: 12px;
     z-index: 100;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-    pointer-events: none;
+    pointer-events: auto;
     backdrop-filter: blur(8px);
+}
+
+.badge-tooltip::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 14px;
 }
 
 .badge-tooltip::after {
@@ -2358,6 +2367,24 @@ footer {
 
 .badge-tooltip-pct {
     color: rgba(255, 255, 255, 0.6);
+}
+
+.badge-tooltip-creator {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 4px 0 0;
+}
+
+.badge-tooltip-creator-link {
+    color: #9d97ff;
+    text-decoration: none;
+    pointer-events: auto;
+    transition: color 0.2s;
+}
+
+.badge-tooltip-creator-link:hover {
+    color: #c4bfff;
+    text-decoration: underline;
 }
 
 /* Profile Responsive */
@@ -3218,6 +3245,42 @@ footer {
     border-radius: 12px;
     margin-top: 8px;
     border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.admin-creator-picker {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-creator-picker-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #4a5160;
+}
+
+.admin-creator-search-row {
+    display: flex;
+    gap: 8px;
+}
+
+.admin-creator-search-row .admin-search-input {
+    flex: 1;
+}
+
+.admin-creator-selected {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: rgba(108, 99, 255, 0.06);
+    border: 1px solid rgba(108, 99, 255, 0.2);
+    border-radius: 10px;
+}
+
+.admin-creator-selected .admin-back-btn {
+    margin-left: auto;
 }
 
 @media (max-width: 600px) {
