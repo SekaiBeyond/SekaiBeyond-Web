@@ -12,7 +12,7 @@
   <a href="https://sekaibeyond.com">Website</a> •
   <a href="#features">Features</a> •
   <a href="#getting-started">Getting Started</a> •
-  <a href="#deployment">Deployment</a> •
+  <a href="DEPLOY.md">Deployment</a> •
   <a href="#contributing">Contributing</a>
 </p>
 
@@ -24,13 +24,14 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
 ## Tech Stack
 
-| Technology                                    | Purpose         |
-|-----------------------------------------------|-----------------|
-| [React](https://react.dev/)                   | UI Framework    |
-| [React Router](https://reactrouter.com/)      | Framework & SSR |
-| [TypeScript](https://www.typescriptlang.org/) | Type Safety     |
-| [TailwindCSS](https://tailwindcss.com/)       | Styling         |
-| [Vite](https://vitejs.dev/)                   | Build Tool      |
+| Technology                                    | Purpose                        |
+|-----------------------------------------------|--------------------------------|
+| [React](https://react.dev/)                   | UI Framework                   |
+| [React Router](https://reactrouter.com/)      | Framework & SSR                |
+| [TypeScript](https://www.typescriptlang.org/) | Type Safety                    |
+| [TailwindCSS](https://tailwindcss.com/)       | Styling                        |
+| [Vite](https://vitejs.dev/)                   | Build Tool                     |
+| [Firebase](https://firebase.google.com/)      | Auth, Firestore, Cloud Storage |
 
 ## Features
 
@@ -40,6 +41,8 @@ This repository contains the source code for the official **Sekai Beyond** websi
 - 🔄 **Data Loading & Mutations** — Efficient data handling with React Router
 - 🔒 **TypeScript** — Full type safety out of the box
 - 🎨 **TailwindCSS** — Utility-first CSS for rapid UI development
+- 🔐 **Firebase Auth** — Google sign-in with role-based access control
+- 🛡️ **Admin Panel** — Manage users, events, badges, and audit logs
 
 ## Getting Started
 
@@ -87,92 +90,30 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
 ```
 SekaiBeyond-Web/
-├── app/                    # Application source code
-│   ├── components/         # Reusable UI components
-│   ├── pages/              # Page components
-│   ├── routes/             # Route definitions
-│   ├── app.css             # Global styles
-│   ├── constants.ts        # Application constants
-│   ├── root.tsx            # Root component
-│   └── routes.ts           # Route configuration
-├── public/                 # Static assets
-│   └── images/             # Image assets
-├── firestore.rules         # Firestore security rules
+├── app/                       # Application source code
+│   ├── components/            # Reusable UI components
+│   │   └── main/              # Main page sections
+│   ├── lib/                   # Firebase client & data hooks
+│   ├── pages/                 # Page components (admin, profile, claim, etc.)
+│   ├── routes/                # Route definitions
+│   ├── app.css                # Global styles
+│   ├── constants.ts           # Upcoming events & links
+│   ├── root.tsx               # Root component
+│   └── routes.ts              # Route configuration
+├── public/                    # Static assets
+│   └── images/                # Image assets & event posters
+├── .env.example               # Environment variable template
+├── firestore.rules            # Firestore security rules
+├── storage.rules              # Cloud Storage security rules
 ├── package.json
 ├── tsconfig.json
-├── react-router.config.ts  # React Router configuration
+├── react-router.config.ts     # React Router configuration
 └── vite.config.ts
 ```
 
 ## Deployment
 
-The site deploys automatically to GitHub Pages when you push to `main` via GitHub Actions.
-
-### First-Time Setup
-
-#### 1. Firebase Project
-
-1. Go to [console.firebase.google.com](https://console.firebase.google.com) and create a project
-2. Add a **Web app** and copy the Firebase config values
-3. Enable **Google sign-in** under Authentication > Sign-in method
-4. Create a **Cloud Firestore** database (choose a nearby region)
-5. Set Firestore **Security Rules** — copy the contents of [`firestore.rules`](firestore.rules) into the Firestore Rules editor
-
-#### 2. GitHub Repository Secrets
-
-Go to your repo > **Settings** > **Secrets and variables** > **Actions**, and add these secrets:
-
-| Secret                              | Value                          |
-|-------------------------------------|--------------------------------|
-| `VITE_FIREBASE_API_KEY`             | Your Firebase API key          |
-| `VITE_FIREBASE_AUTH_DOMAIN`         | `your-project.firebaseapp.com` |
-| `VITE_FIREBASE_PROJECT_ID`          | Your project ID                |
-| `VITE_FIREBASE_STORAGE_BUCKET`      | `your-project.appspot.com`     |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Your sender ID                 |
-| `VITE_FIREBASE_APP_ID`              | Your app ID                    |
-
-These are injected during the GitHub Actions build step.
-
-#### 3. Local Development
-
-Copy `.env.example` to `.env` and fill in the same Firebase config values:
-
-```bash
-cp .env.example .env
-```
-
-Then run `npm run dev` to start the dev server.
-
-#### 4. User Groups
-
-The site uses a role-based group system instead of a simple admin flag. Users are assigned one of the following groups (lowest to highest):
-
-| Group        | Description                                          |
-|--------------|------------------------------------------------------|
-| `visitor`    | Default for newly signed-in users                    |
-| `member`     | Registered club members                              |
-| `staff`      | Staff members                                        |
-| `core-staff` | Core staff — can access the admin panel              |
-| `president`  | Club president — can access the admin panel           |
-
-**Bootstrapping the first president:**
-
-1. Sign in to the site so your user document is created in Firestore
-2. In Firebase Console > Firestore > `users` collection, find your document
-3. Add or edit the `group` field and set it to `president`
-
-Once the first president is set up, they can assign groups to other users through the **Admin Panel** on the site. Only `core-staff` and `president` can access the admin panel and assign groups below their own level.
-
-### Deploy Workflow
-
-Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deploy.yml`):
-
-1. Installs dependencies
-2. Builds the site with Firebase env vars from secrets
-3. Copies `index.html` to `404.html` (SPA fallback routing)
-4. Deploys to GitHub Pages
-
-You can also trigger a deploy manually from the **Actions** tab > **Deploy to GitHub Pages** > **Run workflow**.
+See [DEPLOY.md](DEPLOY.md) for full deployment instructions, including Firebase setup, GitHub secrets, user groups, and the deployment workflow.
 
 ## Contributing
 
@@ -184,9 +125,9 @@ We welcome contributions from the community! Here's how you can help:
 4. **Push** to the branch (`git push origin feature/amazing-feature`)
 5. **Open** a Pull Request
 
-### Adding Upcoming Events
+### Managing Events
 
-Upcoming events are managed in `app/constants.ts` via the `UPCOMING_EVENTS` array. Each event is automatically hidden after its `END_AT` time passes. To add a new event:
+**Upcoming events** are managed in `app/constants.ts` via the `UPCOMING_EVENTS` array. Each event is automatically hidden after its `END_AT` time passes. To add a new event:
 
 1. Place the event poster image in `public/images/`
 2. Add a new entry to the `UPCOMING_EVENTS` array in `app/constants.ts`:
@@ -214,26 +155,7 @@ Upcoming events are managed in `app/constants.ts` via the `UPCOMING_EVENTS` arra
 
 > **Note:** Events are automatically filtered out once `END_AT` has passed. A validation check ensures `END_AT` is always later than `START_AT`.
 
-### Adding Past Events
-
-Past events are managed in `app/constants.ts` via the `PAST_EVENTS` array. To add a new past event:
-
-1. Place the event image in `public/images/events/`
-2. Add a new entry to the **top** of the `PAST_EVENTS` array (most recent first):
-
-```ts
-{
-    badge: "Festival",       // Short category label in English (e.g. "Gaming", "Music", "Food", "Cosplay", "Vendor")
-    badgeCn: "节日",          // Category label in Chinese
-    title: "Event Name",
-    titleCn: "活动名称",
-    date: "2026-06-01",      // Format: YYYY-MM-DD
-    location: "Venue Name, University of Washington",
-    description: "English description of the event.",
-    descriptionCn: "活动的中文描述。",
-    icon: "/images/events/your_event_image.jpg",
-}
-```
+**Past events** are stored in Firestore and managed through the admin panel (`/admin`) by users with `core-staff` or `president` roles. The admin panel also handles user management, badges, and audit logging. See [DEPLOY.md](DEPLOY.md) for details on user groups and permissions.
 
 ### Development Guidelines
 
