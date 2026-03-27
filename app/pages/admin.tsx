@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     addDoc,
     arrayRemove,
@@ -101,7 +101,11 @@ interface ActivityRecord {
 export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
-    const {pastEvents, refresh: refreshEvents} = usePastEvents();
+    const {pastEvents: rawPastEvents, refresh: refreshEvents} = usePastEvents();
+    const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => {
+        const pad = (d: string) => d.split('-').map(p => p.padStart(2, '0')).join('-');
+        return pad(b.date).localeCompare(pad(a.date));
+    }), [rawPastEvents]);
 
     const [activeTab, setActiveTab] = useState<Tab>('users');
     const [searchQuery, setSearchQuery] = useState('');
@@ -433,7 +437,11 @@ export const AdminPage = () => {
     };
 
     const openEditEvent = (event: PastEvent) => {
-        setEventForm({...event});
+        const parts = event.date.split('-');
+        const normalizedDate = parts.length === 3
+            ? `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
+            : event.date;
+        setEventForm({...event, date: normalizedDate});
         setEditingEvent(event);
         setEventImage(null);
         setEventImagePreview(event.icon || null);
@@ -449,7 +457,7 @@ export const AdminPage = () => {
             let iconUrl = eventForm.icon;
             if (eventImage) {
                 const imageId = crypto.randomUUID();
-                const storageRef = ref(getFirebaseStorage(), `events/${imageId}`);
+                const storageRef = ref(getFirebaseStorage(), `events/${imageId}.webp`);
                 await uploadBytes(storageRef, eventImage);
                 iconUrl = await getDownloadURL(storageRef);
             }
@@ -653,7 +661,7 @@ export const AdminPage = () => {
         let imageUrl = '/images/mika.png';
         if (newBadgeImage) {
             const imageId = crypto.randomUUID();
-            const storageRef = ref(getFirebaseStorage(), `badges/${imageId}`);
+            const storageRef = ref(getFirebaseStorage(), `badges/${imageId}.webp`);
             await uploadBytes(storageRef, newBadgeImage);
             imageUrl = await getDownloadURL(storageRef);
         }
@@ -740,7 +748,7 @@ export const AdminPage = () => {
 
         if (editBadgeImage) {
             const imageId = crypto.randomUUID();
-            const storageRef = ref(getFirebaseStorage(), `badges/${imageId}`);
+            const storageRef = ref(getFirebaseStorage(), `badges/${imageId}.webp`);
             await uploadBytes(storageRef, editBadgeImage);
             updates.imageUrl = await getDownloadURL(storageRef);
         }
@@ -1266,10 +1274,15 @@ export const AdminPage = () => {
                                                 <span>{isEnglish ? 'Event Image' : '活动图片'}</span>
                                                 <input
                                                     type="file"
-                                                    accept="image/*"
+                                                    accept="image/webp"
                                                     onChange={e => {
                                                         const file = e.target.files?.[0];
                                                         if (!file) return;
+                                                        if (file.type !== 'image/webp') {
+                                                            alert(isEnglish ? 'Please upload a WebP image.' : '请上传 WebP 格式的图片。');
+                                                            e.target.value = '';
+                                                            return;
+                                                        }
                                                         setEventImage(file);
                                                         if (eventImagePreview?.startsWith('blob:')) URL.revokeObjectURL(eventImagePreview);
                                                         setEventImagePreview(URL.createObjectURL(file));
@@ -1336,31 +1349,18 @@ export const AdminPage = () => {
                                 )}
                                 <div className="admin-event-grid">
                                     {pastEvents.map((event, i) => (
-                                        <div key={i} className="admin-event-card"
-                                             style={{position: 'relative', cursor: 'pointer'}}
-                                             onClick={() => selectManagedEvent(event.id)}>
+                                        <button
+                                            key={i}
+                                            className="admin-event-card"
+                                            onClick={() => selectManagedEvent(event.id)}
+                                        >
                                             <img src={event.icon} alt="" className="admin-event-card-img"/>
                                             <div className="admin-event-card-info">
                                                 <span
                                                     className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
                                                 <span className="admin-event-card-date">{event.date}</span>
                                             </div>
-                                            <div className="admin-event-card-actions"
-                                                 onClick={e => e.stopPropagation()}>
-                                                <button
-                                                    className="admin-toggle-btn admin-toggle-small"
-                                                    onClick={() => openEditEvent(event)}
-                                                >
-                                                    {isEnglish ? 'Edit' : '编辑'}
-                                                </button>
-                                                <button
-                                                    className="admin-toggle-btn admin-toggle-revoke admin-toggle-small"
-                                                    onClick={() => deleteEvent(event)}
-                                                >
-                                                    {isEnglish ? 'Delete' : '删除'}
-                                                </button>
-                                            </div>
-                                        </div>
+                                        </button>
                                     ))}
                                 </div>
                             </>
@@ -1374,17 +1374,39 @@ export const AdminPage = () => {
                                     const evt = pastEvents.find(e => e.id === managedEvent);
                                     if (!evt) return null;
                                     return (
-                                        <div className="admin-event-detail-header">
-                                            <img src={evt.icon} alt="" className="admin-event-detail-img"/>
-                                            <div>
-                                                <h3>{isEnglish ? evt.title : evt.titleCn}</h3>
-                                                <p className="admin-event-detail-meta">
-                                                    <span>{isEnglish ? evt.badge : evt.badgeCn}</span>
-                                                    <span>{evt.date}</span>
-                                                    <span>{evt.location}</span>
-                                                </p>
+                                        <>
+                                            <div className="admin-event-detail-header">
+                                                <img src={evt.icon} alt="" className="admin-event-detail-img"/>
+                                                <div>
+                                                    <h3>{isEnglish ? evt.title : evt.titleCn}</h3>
+                                                    <p className="admin-event-detail-meta">
+                                                        <span>{isEnglish ? evt.badge : evt.badgeCn}</span>
+                                                        <span>{evt.date}</span>
+                                                        <span>{evt.location}</span>
+                                                    </p>
+                                                </div>
                                             </div>
-                                        </div>
+                                            <div className="admin-form-actions" style={{marginBottom: '20px'}}>
+                                                <button
+                                                    className="admin-generate-btn"
+                                                    onClick={() => {
+                                                        setManagedEvent(null);
+                                                        openEditEvent(evt);
+                                                    }}
+                                                >
+                                                    {isEnglish ? 'Edit Event' : '编辑活动'}
+                                                </button>
+                                                <button
+                                                    className="admin-toggle-btn admin-toggle-revoke"
+                                                    onClick={() => {
+                                                        deleteEvent(evt);
+                                                        setManagedEvent(null);
+                                                    }}
+                                                >
+                                                    {isEnglish ? 'Delete Event' : '删除活动'}
+                                                </button>
+                                            </div>
+                                        </>
                                     );
                                 })()}
 
@@ -1679,10 +1701,15 @@ export const AdminPage = () => {
                                                 <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
                                                 <input
                                                     type="file"
-                                                    accept="image/*"
+                                                    accept="image/webp"
                                                     onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (!file) return;
+                                                        if (file.type !== 'image/webp') {
+                                                            alert(isEnglish ? 'Please upload a WebP image.' : '请上传 WebP 格式的图片。');
+                                                            e.target.value = '';
+                                                            return;
+                                                        }
                                                         setNewBadgeImage(file);
                                                         setNewBadgeImagePreview(URL.createObjectURL(file));
                                                     }}
@@ -1921,10 +1948,15 @@ export const AdminPage = () => {
                                                 <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
                                                 <input
                                                     type="file"
-                                                    accept="image/*"
+                                                    accept="image/webp"
                                                     onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (!file) return;
+                                                        if (file.type !== 'image/webp') {
+                                                            alert(isEnglish ? 'Please upload a WebP image.' : '请上传 WebP 格式的图片。');
+                                                            e.target.value = '';
+                                                            return;
+                                                        }
                                                         setEditBadgeImage(file);
                                                         setEditBadgeImagePreview(URL.createObjectURL(file));
                                                     }}
