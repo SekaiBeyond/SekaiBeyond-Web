@@ -2191,7 +2191,8 @@ footer {
     gap: 16px;
 }
 
-.badge-card {
+.badge-card,
+.profile-event-card {
     position: relative;
     display: flex;
     gap: 14px;
@@ -2202,33 +2203,40 @@ footer {
     transition: transform 0.2s ease;
 }
 
-.badge-card:hover {
+.badge-card:hover,
+.profile-event-card:hover {
     transform: translateY(-2px);
 }
 
-.badge-earned {
+.badge-earned,
+.profile-event-earned {
     border: 2px solid rgba(255, 107, 157, 0.3);
 }
 
 .badge-locked .badge-icon-wrapper,
-.badge-locked .badge-info {
+.badge-locked .badge-info,
+.profile-event-locked .profile-event-icon-wrapper,
+.profile-event-locked .profile-event-info {
     opacity: 0.5;
     filter: grayscale(0.6);
 }
 
-.badge-icon-wrapper {
+.badge-icon-wrapper,
+.profile-event-icon-wrapper {
     position: relative;
     flex-shrink: 0;
 }
 
-.badge-icon {
+.badge-icon,
+.profile-event-icon {
     width: 64px;
     height: 64px;
     border-radius: 12px;
     object-fit: cover;
 }
 
-.badge-check {
+.badge-check,
+.profile-event-check {
     position: absolute;
     bottom: -4px;
     right: -4px;
@@ -2245,18 +2253,21 @@ footer {
     border: 2px solid white;
 }
 
-.badge-lock {
+.badge-lock,
+.profile-event-lock {
     position: absolute;
     bottom: -4px;
     right: -4px;
     font-size: 16px;
 }
 
-.badge-info {
+.badge-info,
+.profile-event-info {
     min-width: 0;
 }
 
-.badge-category {
+.badge-category,
+.profile-event-category {
     display: inline-block;
     padding: 2px 10px;
     border-radius: 10px;
@@ -2268,7 +2279,8 @@ footer {
     margin-bottom: 4px;
 }
 
-.badge-title {
+.badge-title,
+.profile-event-title {
     font-size: 14px;
     font-weight: 700;
     color: #4a5160;
@@ -2278,18 +2290,21 @@ footer {
     text-overflow: ellipsis;
 }
 
-.badge-title-link {
+.badge-title-link,
+.profile-event-title-link {
     color: inherit;
     text-decoration: none;
     transition: color 0.2s;
 }
 
-.badge-title-link:hover {
+.badge-title-link:hover,
+.profile-event-title-link:hover {
     color: #6c63ff;
     text-decoration: underline;
 }
 
-.badge-date {
+.badge-date,
+.profile-event-date {
     font-size: 12px;
     color: #a0a8b8;
 }

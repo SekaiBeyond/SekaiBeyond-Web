@@ -96,25 +96,25 @@ const EventCard = ({event, attended, isEnglish, showAdminLink}: {
     isEnglish: boolean;
     showAdminLink?: boolean;
 }) => (
-    <div className={`badge-card ${attended ? 'badge-earned' : 'badge-locked'}`}>
-        <div className="badge-icon-wrapper">
-            <img src={event.icon} alt={isEnglish ? event.title : event.titleCn} className="badge-icon"/>
-            {attended && <span className="badge-check">&#10003;</span>}
-            {!attended && <span className="badge-lock">&#128274;</span>}
+    <div className={`profile-event-card ${attended ? 'profile-event-earned' : 'profile-event-locked'}`}>
+        <div className="profile-event-icon-wrapper">
+            <img src={event.icon} alt={isEnglish ? event.title : event.titleCn} className="profile-event-icon"/>
+            {attended && <span className="profile-event-check">&#10003;</span>}
+            {!attended && <span className="profile-event-lock">&#128274;</span>}
         </div>
-        <div className="badge-info">
-            <span className="badge-category">{isEnglish ? event.badge : event.badgeCn}</span>
-            <h3 className="badge-title">
+        <div className="profile-event-info">
+            <span className="profile-event-category">{isEnglish ? event.badge : event.badgeCn}</span>
+            <h3 className="profile-event-title">
                 {showAdminLink ? (
                     <a href={`/admin?tab=events&event=${encodeURIComponent(event.id)}`}
-                       className="badge-title-link">
+                       className="profile-event-title-link">
                         {isEnglish ? event.title : event.titleCn}
                     </a>
                 ) : (
                     isEnglish ? event.title : event.titleCn
                 )}
             </h3>
-            <p className="badge-date">
+            <p className="profile-event-date">
                 {new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
                     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
                 })}
@@ -143,10 +143,12 @@ export const ProfilePage = () => {
     const [earnedDates, setEarnedDates] = useState<Record<string, Date>>({});
 
     useEffect(() => {
+        let stale = false;
         const loadBadges = async () => {
             try {
                 const db = getFirebaseDb();
                 const snapshot = await getDocs(collection(db, 'badges'));
+                if (stale) return;
                 const defs: BadgeDef[] = [];
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
@@ -165,22 +167,28 @@ export const ProfilePage = () => {
                 });
                 setBadgeDefs(defs);
             } catch (err) {
-                console.error('Failed to load badges:', err);
+                if (!stale) console.error('Failed to load badges:', err);
             }
         };
         void loadBadges();
+        return () => {
+            stale = true;
+        };
     }, []);
 
     useEffect(() => {
         if (!viewUid || !isViewingOther) {
             setViewedProfile(null);
+            setLoadingViewed(false);
             return;
         }
+        let stale = false;
         setLoadingViewed(true);
         const loadViewedUser = async () => {
             try {
                 const db = getFirebaseDb();
                 const snap = await getDoc(doc(db, 'users', viewUid));
+                if (stale) return;
                 if (snap.exists()) {
                     const data = snap.data();
                     setViewedProfile({
@@ -194,18 +202,22 @@ export const ProfilePage = () => {
                     });
                 }
             } catch (err) {
-                console.error('Failed to load user profile:', err);
+                if (!stale) console.error('Failed to load user profile:', err);
             } finally {
-                setLoadingViewed(false);
+                if (!stale) setLoadingViewed(false);
             }
         };
         void loadViewedUser();
+        return () => {
+            stale = true;
+        };
     }, [viewUid, isViewingOther]);
 
     const targetUid = isViewingOther ? viewUid : user?.uid;
 
     useEffect(() => {
         if (!targetUid) return;
+        let stale = false;
         const loadEarnedDates = async () => {
             try {
                 const db = getFirebaseDb();
@@ -214,6 +226,7 @@ export const ProfilePage = () => {
                     where('targetUid', '==', targetUid)
                 );
                 const snapshot = await getDocs(q);
+                if (stale) return;
                 const dates: Record<string, Date> = {};
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
@@ -223,13 +236,15 @@ export const ProfilePage = () => {
                 });
                 setEarnedDates(dates);
             } catch (err) {
-                console.error('Failed to load earned dates:', err);
+                if (!stale) console.error('Failed to load earned dates:', err);
             }
         };
         void loadEarnedDates();
+        return () => {
+            stale = true;
+        };
     }, [targetUid]);
 
-    // Preload a custom (Firebase Storage) photo in the background; show the Google photo until ready
     const hasCustomPhoto = profile?.photoURL.includes('firebasestorage.googleapis.com') ?? false;
 
     useEffect(() => {
@@ -261,6 +276,8 @@ export const ProfilePage = () => {
         try {
             await updateProfile({photoFile: file});
             setCustomPhotoLoaded(true);
+        } catch (err) {
+            console.error('Failed to update photo:', err);
         } finally {
             setSavingPhoto(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -273,13 +290,15 @@ export const ProfilePage = () => {
         try {
             await updateProfile({deletePhoto: true});
             setCustomPhotoLoaded(false);
+        } catch (err) {
+            console.error('Failed to delete photo:', err);
         } finally {
             setSavingPhoto(false);
         }
     };
 
     const handleSaveName = async () => {
-        if (!profile || !editName.trim()) return;
+        if (!profile || !editName.trim() || savingName || !editingName) return;
         if (editName === profile.displayName) {
             setEditingName(false);
             return;
@@ -288,6 +307,8 @@ export const ProfilePage = () => {
         try {
             await updateProfile({displayName: editName});
             setEditingName(false);
+        } catch (err) {
+            console.error('Failed to update name:', err);
         } finally {
             setSavingName(false);
         }
@@ -306,96 +327,6 @@ export const ProfilePage = () => {
         );
     }
 
-    if (isViewingOther && viewedProfile) {
-        const vAttendedSet = new Set(viewedProfile.attendedEvents);
-        const vAttendedCount = pastEvents.filter(e => vAttendedSet.has(e.id)).length;
-        return (
-            <>
-                <nav className="profile-nav">
-                    <a href="/" className="profile-nav-home">
-                        {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
-                    </a>
-                    <div className="nav-actions">
-                        <LanguageSwitcher/>
-                        <LoginButton/>
-                    </div>
-                </nav>
-                <div className="profile-page">
-                    <div className="profile-header">
-                        <div className="profile-avatar-wrapper">
-                            <img
-                                src={viewedProfile.photoURL}
-                                alt={viewedProfile.displayName}
-                                className="profile-avatar"
-                                referrerPolicy="no-referrer"
-                            />
-                        </div>
-                        <div className="profile-info">
-                            <div className="profile-name-row">
-                                <h1 className="profile-name">{viewedProfile.displayName}</h1>
-                            </div>
-                            <p className="profile-joined">
-                                {isEnglish ? 'Joined ' : '加入时间：'}
-                                {viewedProfile.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                                    year: 'numeric', month: 'long', day: 'numeric',
-                                })}
-                            </p>
-                            <span className="profile-group-tag" data-group={viewedProfile.group}>
-                                {isEnglish ? GROUP_LABELS[viewedProfile.group].en : GROUP_LABELS[viewedProfile.group].zh}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="profile-stats">
-                        {badgeDefs.length > 0 && (
-                            <div className="profile-stat">
-                                <span className="profile-stat-number">
-                                    {badgeDefs.filter(b => viewedProfile.badges.includes(b.id)).length}
-                                </span>
-                                <span className="profile-stat-label">{isEnglish ? 'Badges' : '徽章'}</span>
-                            </div>
-                        )}
-                        <div className="profile-stat">
-                            <span className="profile-stat-number">{vAttendedCount}/{pastEvents.length}</span>
-                            <span className="profile-stat-label">{isEnglish ? 'Events Attended' : '参与活动'}</span>
-                        </div>
-                    </div>
-
-                    {badgeDefs.length > 0 && (
-                        <section className="badge-section">
-                            <h2 className="badge-section-title">{isEnglish ? 'Badges' : '徽章'}</h2>
-                            <div className="badge-grid">
-                                {badgeDefs.map(badge => (
-                                    <BadgeCard
-                                        key={badge.id}
-                                        badge={badge}
-                                        earned={viewedProfile.badges.includes(badge.id)}
-                                        earnedDate={earnedDates[badge.id]}
-                                        isEnglish={isEnglish}
-                                    />
-                                ))}
-                            </div>
-                        </section>
-                    )}
-
-                    <section className="badge-section">
-                        <h2 className="badge-section-title">{isEnglish ? 'Events Attended' : '参与活动'}</h2>
-                        <div className="badge-grid">
-                            {pastEvents.map(event => (
-                                <EventCard
-                                    key={event.id}
-                                    event={event}
-                                    attended={vAttendedSet.has(event.id)}
-                                    isEnglish={isEnglish}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                </div>
-            </>
-        );
-    }
-
     if (isViewingOther && !viewedProfile) {
         return (
             <div className="profile-login-prompt">
@@ -409,15 +340,14 @@ export const ProfilePage = () => {
         );
     }
 
-    if (!user || !profile) {
+    if (!isViewingOther && (!user || !profile)) {
         return (
             <div className="profile-login-prompt">
                 <div className="profile-login-card">
                     <h2>{isEnglish ? 'Sign in to view your profile' : '登录以查看你的个人主页'}</h2>
                     <p>{isEnglish
                         ? 'Track your event attendance and earn badges!'
-                        : '记录你的活动参与、收集徽章！'}
-                    </p>
+                        : '记录你的活动参与、收集徽章！'}</p>
                     <button onClick={signIn} className="profile-sign-in-btn">
                         {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
                     </button>
@@ -429,13 +359,32 @@ export const ProfilePage = () => {
         );
     }
 
-    const googlePhotoURL = user.photoURL ?? '';
-    const displayedPhoto = hasCustomPhoto
-        ? (customPhotoLoaded ? profile.photoURL : googlePhotoURL)
-        : profile.photoURL;
-    const attendedSet = new Set(profile.attendedEvents);
+    const isOwnProfile = !isViewingOther;
+    const googlePhotoURL = user?.photoURL ?? '';
+    const displayedPhoto = isOwnProfile
+        ? (hasCustomPhoto ? (customPhotoLoaded ? profile!.photoURL : googlePhotoURL) : profile!.photoURL)
+        : viewedProfile!.photoURL;
+    const dp = isOwnProfile
+        ? {
+            name: profile!.displayName,
+            email: profile!.email,
+            joinedAt: profile!.joinedAt,
+            badges: profile!.badges,
+            attendedEvents: profile!.attendedEvents,
+            group: profile!.group
+        }
+        : {
+            name: viewedProfile!.displayName,
+            email: viewedProfile!.email,
+            joinedAt: viewedProfile!.joinedAt,
+            badges: viewedProfile!.badges,
+            attendedEvents: viewedProfile!.attendedEvents,
+            group: viewedProfile!.group
+        };
+    const attendedSet = new Set(dp.attendedEvents);
     const attendedCount = pastEvents.filter(e => attendedSet.has(e.id)).length;
-    const isStaff = hasPermission(profile.group, 'staff');
+    const canEdit = isOwnProfile && profile!.group !== 'visitor';
+    const isStaff = isOwnProfile && hasPermission(profile!.group, 'staff');
 
     return (
         <>
@@ -451,16 +400,15 @@ export const ProfilePage = () => {
             <div className="profile-page">
 
                 <div className="profile-header">
-                    <div
-                        className={`profile-avatar-wrapper ${profile.group !== 'visitor' ? 'profile-avatar-clickable' : ''}`}>
+                    <div className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : ''}`}>
                         <img
                             src={displayedPhoto}
-                            alt={profile.displayName}
+                            alt={dp.name}
                             className="profile-avatar"
                             referrerPolicy="no-referrer"
-                            onClick={() => profile.group !== 'visitor' && !savingPhoto && fileInputRef.current?.click()}
+                            onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
                         />
-                        {profile.group !== 'visitor' && (
+                        {canEdit && (
                             <>
                                 <div
                                     className="profile-avatar-overlay"
@@ -492,19 +440,19 @@ export const ProfilePage = () => {
                                         </svg>
                                     </button>
                                 )}
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handlePhotoSelect}
+                                    hidden
+                                />
                             </>
                         )}
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handlePhotoSelect}
-                            hidden
-                        />
                     </div>
                     <div className="profile-info">
                         <div className="profile-name-row">
-                            {editingName ? (
+                            {editingName && canEdit ? (
                                 <div className="profile-name-edit-group">
                                     <input
                                         ref={nameInputRef}
@@ -521,8 +469,8 @@ export const ProfilePage = () => {
                                 </div>
                             ) : (
                                 <>
-                                    <h1 className="profile-name">{profile.displayName}</h1>
-                                    {profile.group !== 'visitor' && (
+                                    <h1 className="profile-name">{dp.name}</h1>
+                                    {canEdit && (
                                         <button className="profile-name-pencil" onClick={startEditingName} type="button"
                                                 aria-label="Edit name">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -534,17 +482,15 @@ export const ProfilePage = () => {
                                 </>
                             )}
                         </div>
-                        <p className="profile-email">{profile.email}</p>
+                        {isOwnProfile && <p className="profile-email">{dp.email}</p>}
                         <p className="profile-joined">
                             {isEnglish ? 'Joined ' : '加入时间：'}
-                            {profile.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric',
+                            {dp.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                                year: 'numeric', month: 'long', day: 'numeric',
                             })}
                         </p>
-                        <span className="profile-group-tag" data-group={profile.group}>
-                            {isEnglish ? GROUP_LABELS[profile.group].en : GROUP_LABELS[profile.group].zh}
+                        <span className="profile-group-tag" data-group={dp.group}>
+                            {isEnglish ? GROUP_LABELS[dp.group].en : GROUP_LABELS[dp.group].zh}
                         </span>
                     </div>
                 </div>
@@ -553,7 +499,7 @@ export const ProfilePage = () => {
                     {badgeDefs.length > 0 && (
                         <div className="profile-stat">
                             <span className="profile-stat-number">
-                                {badgeDefs.filter(b => profile.badges.includes(b.id)).length}
+                                {badgeDefs.filter(b => dp.badges.includes(b.id)).length}
                             </span>
                             <span className="profile-stat-label">{isEnglish ? 'Badges' : '徽章'}</span>
                         </div>
@@ -569,18 +515,19 @@ export const ProfilePage = () => {
                         <h2 className="badge-section-title">
                             {isEnglish ? 'Badges' : '徽章'}
                         </h2>
-                        <p className="badge-section-subtitle">
-                            {isEnglish
-                                ? 'Earn badges through challenges and special events!'
-                                : '通过挑战和特别活动赢取徽章！'}
-                        </p>
-
+                        {isOwnProfile && (
+                            <p className="badge-section-subtitle">
+                                {isEnglish
+                                    ? 'Earn badges through challenges and special events!'
+                                    : '通过挑战和特别活动赢取徽章！'}
+                            </p>
+                        )}
                         <div className="badge-grid">
                             {badgeDefs.map(badge => (
                                 <BadgeCard
                                     key={badge.id}
                                     badge={badge}
-                                    earned={profile.badges.includes(badge.id)}
+                                    earned={dp.badges.includes(badge.id)}
                                     earnedDate={earnedDates[badge.id]}
                                     isEnglish={isEnglish}
                                 />
@@ -593,12 +540,13 @@ export const ProfilePage = () => {
                     <h2 className="badge-section-title">
                         {isEnglish ? 'Events Attended' : '参与活动'}
                     </h2>
-                    <p className="badge-section-subtitle">
-                        {isEnglish
-                            ? 'Attend events and scan QR codes to check in'
-                            : '参加活动并扫码签到'}
-                    </p>
-
+                    {isOwnProfile && (
+                        <p className="badge-section-subtitle">
+                            {isEnglish
+                                ? 'Attend events and scan QR codes to check in'
+                                : '参加活动并扫码签到'}
+                        </p>
+                    )}
                     <div className="badge-grid">
                         {pastEvents.map(event => (
                             <EventCard

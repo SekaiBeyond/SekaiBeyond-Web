@@ -78,6 +78,7 @@ type RecordType =
     | 'achievement-revoke'
     | 'badge-create'
     | 'badge-edit'
+    | 'badge-delete'
     | 'event-create'
     | 'event-edit'
     | 'event-delete';
@@ -97,6 +98,21 @@ interface ActivityRecord {
     newGroup?: UserGroup;
     timestamp: Date;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const docToUserRecord = (docSnap: {id: string; data: () => Record<string, any>}): UserRecord => {
+    const data = docSnap.data();
+    return {
+        uid: docSnap.id,
+        displayName: data.displayName ?? '',
+        email: data.email ?? '',
+        photoURL: data.photoURL ?? '',
+        joinedAt: data.joinedAt?.toDate() ?? new Date(),
+        attendedEvents: data.attendedEvents ?? [],
+        badges: data.badges ?? [],
+        group: data.group ?? 'visitor',
+    };
+};
 
 export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
@@ -186,51 +202,42 @@ export const AdminPage = () => {
         if (loading || !user || !profile || !hasPermission(profile.group, 'core-staff')) return;
         const loadRecentUsers = async () => {
             setLoadingRecent(true);
-            const db = getFirebaseDb();
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, orderBy('joinedAt', 'desc'), limit(10));
-            const snapshot = await getDocs(q);
-
-            const users: UserRecord[] = [];
-            snapshot.forEach((docSnap) => {
-                const data = docSnap.data();
-                users.push({
-                    uid: docSnap.id,
-                    displayName: data.displayName ?? '',
-                    email: data.email ?? '',
-                    photoURL: data.photoURL ?? '',
-                    joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                    attendedEvents: data.attendedEvents ?? [],
-                    badges: data.badges ?? [],
-                    group: data.group ?? 'visitor',
-                });
-            });
-            setRecentUsers(users);
-            setLoadingRecent(false);
+            try {
+                const db = getFirebaseDb();
+                const usersRef = collection(db, 'users');
+                const q = query(usersRef, orderBy('joinedAt', 'desc'), limit(10));
+                const snapshot = await getDocs(q);
+                setRecentUsers(snapshot.docs.map(docToUserRecord));
+            } finally {
+                setLoadingRecent(false);
+            }
         };
         const loadBadgeDefinitions = async () => {
             setLoadingBadgeDefs(true);
-            const db = getFirebaseDb();
-            const snapshot = await getDocs(collection(db, 'badges'));
-            const defs: BadgeDef[] = [];
-            snapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                defs.push({
-                    id: docSnap.id,
-                    name: data.name ?? '',
-                    nameCn: data.nameCn ?? '',
-                    description: data.description ?? '',
-                    descriptionCn: data.descriptionCn ?? '',
-                    imageUrl: data.imageUrl ?? '',
-                    createdBy: data.createdBy ?? '',
-                    createdByUid: data.createdByUid ?? '',
-                    createdByName: data.createdByName ?? '',
-                    createdByLink: data.createdByLink ?? '',
-                    createdAt: data.createdAt?.toDate() ?? new Date(),
+            try {
+                const db = getFirebaseDb();
+                const snapshot = await getDocs(collection(db, 'badges'));
+                const defs: BadgeDef[] = [];
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    defs.push({
+                        id: docSnap.id,
+                        name: data.name ?? '',
+                        nameCn: data.nameCn ?? '',
+                        description: data.description ?? '',
+                        descriptionCn: data.descriptionCn ?? '',
+                        imageUrl: data.imageUrl ?? '',
+                        createdBy: data.createdBy ?? '',
+                        createdByUid: data.createdByUid ?? '',
+                        createdByName: data.createdByName ?? '',
+                        createdByLink: data.createdByLink ?? '',
+                        createdAt: data.createdAt?.toDate() ?? new Date(),
+                    });
                 });
-            });
-            setBadgeDefs(defs);
-            setLoadingBadgeDefs(false);
+                setBadgeDefs(defs);
+            } finally {
+                setLoadingBadgeDefs(false);
+            }
         };
         loadRecentUsers().then();
         loadBadgeDefinitions().then();
@@ -238,31 +245,34 @@ export const AdminPage = () => {
 
     const loadRecords = async () => {
         setLoadingRecords(true);
-        const db = getFirebaseDb();
-        const q = query(collection(db, 'records'), orderBy('timestamp', 'desc'), limit(20));
-        const snapshot = await getDocs(q);
+        try {
+            const db = getFirebaseDb();
+            const q = query(collection(db, 'records'), orderBy('timestamp', 'desc'), limit(20));
+            const snapshot = await getDocs(q);
 
-        const items: ActivityRecord[] = [];
-        snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            items.push({
-                id: docSnap.id,
-                type: data.type,
-                performedBy: data.performedBy,
-                performedByName: data.performedByName ?? '',
-                targetUid: data.targetUid,
-                targetName: data.targetName,
-                eventTitle: data.eventTitle,
-                badgeId: data.badgeId,
-                badgeName: data.badgeName,
-                code: data.code,
-                oldGroup: data.oldGroup,
-                newGroup: data.newGroup,
-                timestamp: data.timestamp?.toDate() ?? new Date(),
+            const items: ActivityRecord[] = [];
+            snapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                items.push({
+                    id: docSnap.id,
+                    type: data.type,
+                    performedBy: data.performedBy,
+                    performedByName: data.performedByName ?? '',
+                    targetUid: data.targetUid,
+                    targetName: data.targetName,
+                    eventTitle: data.eventTitle,
+                    badgeId: data.badgeId,
+                    badgeName: data.badgeName,
+                    code: data.code,
+                    oldGroup: data.oldGroup,
+                    newGroup: data.newGroup,
+                    timestamp: data.timestamp?.toDate() ?? new Date(),
+                });
             });
-        });
-        setRecords(items);
-        setLoadingRecords(false);
+            setRecords(items);
+        } finally {
+            setLoadingRecords(false);
+        }
     };
 
     const filteredRecords = records.filter((r) => {
@@ -304,18 +314,7 @@ export const AdminPage = () => {
         const db = getFirebaseDb();
         const userSnap = await getDoc(doc(db, 'users', uid));
         if (!userSnap.exists()) return;
-        const data = userSnap.data();
-        const userRecord: UserRecord = {
-            uid: userSnap.id,
-            displayName: data.displayName ?? '',
-            email: data.email ?? '',
-            photoURL: data.photoURL ?? '',
-            joinedAt: data.joinedAt?.toDate() ?? new Date(),
-            attendedEvents: data.attendedEvents ?? [],
-            badges: data.badges ?? [],
-            group: data.group ?? 'visitor',
-        };
-        setSelectedUser(userRecord);
+        setSelectedUser(docToUserRecord(userSnap));
         setSearchResults([]);
         setSearchQuery('');
         setActiveTab('users');
@@ -325,92 +324,83 @@ export const AdminPage = () => {
         if (!searchQuery.trim()) return;
         setSearching(true);
         setSelectedUser(null);
-
-        const db = getFirebaseDb();
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('email', '==', searchQuery.trim().toLowerCase()));
-        const snapshot = await getDocs(q);
-
-        const results: UserRecord[] = [];
-        snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            results.push({
-                uid: docSnap.id,
-                displayName: data.displayName ?? '',
-                email: data.email ?? '',
-                photoURL: data.photoURL ?? '',
-                joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                attendedEvents: data.attendedEvents ?? [],
-                badges: data.badges ?? [],
-                group: data.group ?? 'visitor',
-            });
-        });
-
-        setSearchResults(results);
-        setSearching(false);
+        try {
+            const db = getFirebaseDb();
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('email', '==', searchQuery.trim().toLowerCase()));
+            const snapshot = await getDocs(q);
+            setSearchResults(snapshot.docs.map(docToUserRecord));
+        } finally {
+            setSearching(false);
+        }
     };
 
     const toggleBadge = async (userRecord: UserRecord, eventId: string) => {
         setUpdating(true);
-        const db = getFirebaseDb();
-        const userRef = doc(db, 'users', userRecord.uid);
-        const has = userRecord.attendedEvents.includes(eventId);
-        const evt = pastEvents.find(e => e.id === eventId);
+        try {
+            const db = getFirebaseDb();
+            const userRef = doc(db, 'users', userRecord.uid);
+            const has = userRecord.attendedEvents.includes(eventId);
+            const evt = pastEvents.find(e => e.id === eventId);
 
-        await updateDoc(userRef, {
-            attendedEvents: has ? arrayRemove(eventId) : arrayUnion(eventId),
-        });
+            await updateDoc(userRef, {
+                attendedEvents: has ? arrayRemove(eventId) : arrayUnion(eventId),
+            });
 
-        await addDoc(collection(db, 'records'), {
-            type: has ? 'badge-revoke' : 'badge-grant',
-            performedBy: user.uid,
-            performedByName: profile.displayName,
-            targetUid: userRecord.uid,
-            targetName: userRecord.displayName,
-            eventTitle: evt?.title ?? eventId,
-            timestamp: serverTimestamp(),
-        });
+            await addDoc(collection(db, 'records'), {
+                type: has ? 'badge-revoke' : 'badge-grant',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                targetUid: userRecord.uid,
+                targetName: userRecord.displayName,
+                eventTitle: evt?.title ?? eventId,
+                timestamp: serverTimestamp(),
+            });
 
-        const updatedEvents = has
-            ? userRecord.attendedEvents.filter(e => e !== eventId)
-            : [...userRecord.attendedEvents, eventId];
+            const updatedEvents = has
+                ? userRecord.attendedEvents.filter(e => e !== eventId)
+                : [...userRecord.attendedEvents, eventId];
 
-        const updated = {...userRecord, attendedEvents: updatedEvents};
+            const updated = {...userRecord, attendedEvents: updatedEvents};
 
-        if (selectedUser?.uid === userRecord.uid) {
-            setSelectedUser(updated);
+            if (selectedUser?.uid === userRecord.uid) {
+                setSelectedUser(updated);
+            }
+            setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            setEventAttendees(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+        } finally {
+            setUpdating(false);
         }
-        setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
-        setEventAttendees(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
-        setUpdating(false);
     };
 
     const changeUserGroup = async (userRecord: UserRecord, newGroup: UserGroup) => {
         if (!canAssignGroup(profile.group, newGroup)) return;
         setUpdating(true);
+        try {
+            const db = getFirebaseDb();
+            const userRef = doc(db, 'users', userRecord.uid);
+            await updateDoc(userRef, {group: newGroup});
 
-        const db = getFirebaseDb();
-        const userRef = doc(db, 'users', userRecord.uid);
-        await updateDoc(userRef, {group: newGroup});
+            await addDoc(collection(db, 'records'), {
+                type: 'group-assign',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                targetUid: userRecord.uid,
+                targetName: userRecord.displayName,
+                oldGroup: userRecord.group,
+                newGroup,
+                timestamp: serverTimestamp(),
+            });
 
-        await addDoc(collection(db, 'records'), {
-            type: 'group-assign',
-            performedBy: user.uid,
-            performedByName: profile.displayName,
-            targetUid: userRecord.uid,
-            targetName: userRecord.displayName,
-            oldGroup: userRecord.group,
-            newGroup,
-            timestamp: serverTimestamp(),
-        });
-
-        const updated = {...userRecord, group: newGroup};
-        if (selectedUser?.uid === userRecord.uid) {
-            setSelectedUser(updated);
+            const updated = {...userRecord, group: newGroup};
+            if (selectedUser?.uid === userRecord.uid) {
+                setSelectedUser(updated);
+            }
+            setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            setEventAttendees(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+        } finally {
+            setUpdating(false);
         }
-        setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
-        setEventAttendees(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
-        setUpdating(false);
     };
 
     const resetEventForm = () => {
@@ -525,29 +515,15 @@ export const AdminPage = () => {
 
     const loadEventAttendees = async (eventId: string) => {
         setSearching(true);
-
-        const db = getFirebaseDb();
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('attendedEvents', 'array-contains', eventId));
-        const snapshot = await getDocs(q);
-
-        const attendees: UserRecord[] = [];
-        snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            attendees.push({
-                uid: docSnap.id,
-                displayName: data.displayName ?? '',
-                email: data.email ?? '',
-                photoURL: data.photoURL ?? '',
-                joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                attendedEvents: data.attendedEvents ?? [],
-                badges: data.badges ?? [],
-                group: data.group ?? 'visitor',
-            });
-        });
-
-        setEventAttendees(attendees);
-        setSearching(false);
+        try {
+            const db = getFirebaseDb();
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('attendedEvents', 'array-contains', eventId));
+            const snapshot = await getDocs(q);
+            setEventAttendees(snapshot.docs.map(docToUserRecord));
+        } finally {
+            setSearching(false);
+        }
     };
 
     const loadBadgeCodes = async (eventId: string) => {
@@ -583,35 +559,37 @@ export const AdminPage = () => {
     const generateBadgeCode = async (eventId: string) => {
         if (!user) return;
         setGeneratingCode(true);
+        try {
+            const evt = pastEvents.find(e => e.id === eventId);
+            const code = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+            const activeFrom = newCodeFrom || null;
+            const activeUntil = newCodeUntil || null;
+            const db = getFirebaseDb();
+            const docRef = await addDoc(collection(db, 'badgeCodes'), {
+                code,
+                eventId,
+                createdBy: user.uid,
+                createdAt: serverTimestamp(),
+                active: true,
+                activeFrom,
+                activeUntil,
+            });
 
-        const evt = pastEvents.find(e => e.id === eventId);
-        const code = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-        const activeFrom = newCodeFrom || null;
-        const activeUntil = newCodeUntil || null;
-        const db = getFirebaseDb();
-        const docRef = await addDoc(collection(db, 'badgeCodes'), {
-            code,
-            eventId,
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            active: true,
-            activeFrom,
-            activeUntil,
-        });
+            await addDoc(collection(db, 'records'), {
+                type: 'code-create',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                eventTitle: evt?.title ?? eventId,
+                code,
+                timestamp: serverTimestamp(),
+            });
 
-        await addDoc(collection(db, 'records'), {
-            type: 'code-create',
-            performedBy: user.uid,
-            performedByName: profile.displayName,
-            eventTitle: evt?.title ?? eventId,
-            code,
-            timestamp: serverTimestamp(),
-        });
-
-        setBadgeCodes(prev => [...prev, {id: docRef.id, code, eventId, active: true, activeFrom, activeUntil}]);
-        setNewCodeFrom('');
-        setNewCodeUntil('');
-        setGeneratingCode(false);
+            setBadgeCodes(prev => [...prev, {id: docRef.id, code, eventId, active: true, activeFrom, activeUntil}]);
+            setNewCodeFrom('');
+            setNewCodeUntil('');
+        } finally {
+            setGeneratingCode(false);
+        }
     };
 
     const toggleCodeActive = async (codeDoc: BadgeCode) => {
@@ -633,98 +611,101 @@ export const AdminPage = () => {
     const searchCreator = async () => {
         if (!creatorSearchQuery.trim()) return;
         setSearchingCreator(true);
-        const db = getFirebaseDb();
-        const q = query(collection(db, 'users'), where('email', '==', creatorSearchQuery.trim().toLowerCase()));
-        const snapshot = await getDocs(q);
-        const results: UserRecord[] = [];
-        snapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            results.push({
-                uid: docSnap.id,
-                displayName: data.displayName ?? '',
-                email: data.email ?? '',
-                photoURL: data.photoURL ?? '',
-                joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                attendedEvents: data.attendedEvents ?? [],
-                badges: data.badges ?? [],
-                group: data.group ?? 'visitor',
-            });
-        });
-        setCreatorSearchResults(results);
-        setSearchingCreator(false);
+        try {
+            const db = getFirebaseDb();
+            const q = query(collection(db, 'users'), where('email', '==', creatorSearchQuery.trim().toLowerCase()));
+            const snapshot = await getDocs(q);
+            setCreatorSearchResults(snapshot.docs.map(docToUserRecord));
+        } finally {
+            setSearchingCreator(false);
+        }
     };
 
     const createBadgeDef = async () => {
         if (!user) return;
         setCreatingBadgeDef(true);
+        try {
+            let imageUrl = '/images/mika.png';
+            if (newBadgeImage) {
+                const imageId = crypto.randomUUID();
+                const storageRef = ref(getFirebaseStorage(), `badges/${imageId}.webp`);
+                await uploadBytes(storageRef, newBadgeImage);
+                imageUrl = await getDownloadURL(storageRef);
+            }
 
-        let imageUrl = '/images/mika.png';
-        if (newBadgeImage) {
-            const imageId = crypto.randomUUID();
-            const storageRef = ref(getFirebaseStorage(), `badges/${imageId}.webp`);
-            await uploadBytes(storageRef, newBadgeImage);
-            imageUrl = await getDownloadURL(storageRef);
+            const db = getFirebaseDb();
+            const creatorUid = newBadgeCreatorUser?.uid ?? '';
+            const creatorName = newBadgeCreatorUser?.displayName ?? newBadgeCreatedByName.trim();
+            const creatorLink = newBadgeCreatorUser ? '' : newBadgeCreatedByLink.trim();
+
+            const docRef = await addDoc(collection(db, 'badges'), {
+                name: newBadgeName.trim(),
+                nameCn: newBadgeNameCn.trim(),
+                description: newBadgeDesc.trim(),
+                descriptionCn: newBadgeDescCn.trim(),
+                imageUrl,
+                createdBy: user.uid,
+                createdByUid: creatorUid,
+                createdByName: creatorName,
+                createdByLink: creatorLink,
+                createdAt: serverTimestamp(),
+            });
+
+            await addDoc(collection(db, 'records'), {
+                type: 'badge-create',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                badgeId: docRef.id,
+                badgeName: newBadgeName.trim(),
+                timestamp: serverTimestamp(),
+            });
+
+            setBadgeDefs(prev => [...prev, {
+                id: docRef.id,
+                name: newBadgeName.trim(),
+                nameCn: newBadgeNameCn.trim(),
+                description: newBadgeDesc.trim(),
+                descriptionCn: newBadgeDescCn.trim(),
+                imageUrl,
+                createdBy: user.uid,
+                createdByUid: creatorUid,
+                createdByName: creatorName,
+                createdByLink: creatorLink,
+                createdAt: new Date(),
+            }]);
+
+            setNewBadgeName('');
+            setNewBadgeNameCn('');
+            setNewBadgeDesc('');
+            setNewBadgeDescCn('');
+            setNewBadgeImage(null);
+            setNewBadgeImagePreview(null);
+            setNewBadgeCreatorUser(null);
+            setNewBadgeCreatedByName('');
+            setNewBadgeCreatedByLink('');
+            setCreatorSearchQuery('');
+            setCreatorSearchResults([]);
+            setShowCreateBadge(false);
+        } finally {
+            setCreatingBadgeDef(false);
         }
-
-        const db = getFirebaseDb();
-        const creatorUid = newBadgeCreatorUser?.uid ?? '';
-        const creatorName = newBadgeCreatorUser?.displayName ?? newBadgeCreatedByName.trim();
-        const creatorLink = newBadgeCreatorUser ? '' : newBadgeCreatedByLink.trim();
-
-        const docRef = await addDoc(collection(db, 'badges'), {
-            name: newBadgeName.trim(),
-            nameCn: newBadgeNameCn.trim(),
-            description: newBadgeDesc.trim(),
-            descriptionCn: newBadgeDescCn.trim(),
-            imageUrl,
-            createdBy: user.uid,
-            createdByUid: creatorUid,
-            createdByName: creatorName,
-            createdByLink: creatorLink,
-            createdAt: serverTimestamp(),
-        });
-
-        await addDoc(collection(db, 'records'), {
-            type: 'badge-create',
-            performedBy: user.uid,
-            performedByName: profile.displayName,
-            badgeId: docRef.id,
-            badgeName: newBadgeName.trim(),
-            timestamp: serverTimestamp(),
-        });
-
-        setBadgeDefs(prev => [...prev, {
-            id: docRef.id,
-            name: newBadgeName.trim(),
-            nameCn: newBadgeNameCn.trim(),
-            description: newBadgeDesc.trim(),
-            descriptionCn: newBadgeDescCn.trim(),
-            imageUrl,
-            createdBy: user.uid,
-            createdByUid: creatorUid,
-            createdByName: creatorName,
-            createdByLink: creatorLink,
-            createdAt: new Date(),
-        }]);
-
-        setNewBadgeName('');
-        setNewBadgeNameCn('');
-        setNewBadgeDesc('');
-        setNewBadgeDescCn('');
-        setNewBadgeImage(null);
-        setNewBadgeImagePreview(null);
-        setNewBadgeCreatorUser(null);
-        setNewBadgeCreatedByName('');
-        setNewBadgeCreatedByLink('');
-        setCreatorSearchQuery('');
-        setCreatorSearchResults([]);
-        setShowCreateBadge(false);
-        setCreatingBadgeDef(false);
     };
 
     const deleteBadgeDef = async (bd: BadgeDef) => {
+        if (!confirm(isEnglish
+            ? `Delete badge "${bd.name}"? This cannot be undone.`
+            : `删除徽章"${bd.name}"？此操作不可撤销。`
+        )) return;
         const db = getFirebaseDb();
         await deleteDoc(doc(db, 'badges', bd.id));
+        await addDoc(collection(db, 'records'), {
+            type: 'badge-delete',
+            performedBy: user.uid,
+            performedByName: profile.displayName,
+            badgeId: bd.id,
+            badgeName: bd.name,
+            timestamp: serverTimestamp(),
+        });
         setBadgeDefs(prev => prev.filter(d => d.id !== bd.id));
         setSelectedBadgeDef(null);
     };
@@ -732,119 +713,114 @@ export const AdminPage = () => {
     const updateBadgeDef = async () => {
         if (!selectedBadgeDef || !user) return;
         setSavingBadgeDef(true);
-        const db = getFirebaseDb();
-        const creatorUid = editBadgeCreatorUser?.uid ?? '';
-        const creatorName = editBadgeCreatorUser?.displayName ?? editBadgeCreatedByName.trim();
-        const creatorLink = editBadgeCreatorUser ? '' : editBadgeCreatedByLink.trim();
-        const updates: Record<string, string> = {
-            name: editBadgeName.trim(),
-            nameCn: editBadgeNameCn.trim(),
-            description: editBadgeDesc.trim(),
-            descriptionCn: editBadgeDescCn.trim(),
-            createdByUid: creatorUid,
-            createdByName: creatorName,
-            createdByLink: creatorLink,
-        };
+        try {
+            const db = getFirebaseDb();
+            const creatorUid = editBadgeCreatorUser?.uid ?? '';
+            const creatorName = editBadgeCreatorUser?.displayName ?? editBadgeCreatedByName.trim();
+            const creatorLink = editBadgeCreatorUser ? '' : editBadgeCreatedByLink.trim();
+            const updates: Record<string, string> = {
+                name: editBadgeName.trim(),
+                nameCn: editBadgeNameCn.trim(),
+                description: editBadgeDesc.trim(),
+                descriptionCn: editBadgeDescCn.trim(),
+                createdByUid: creatorUid,
+                createdByName: creatorName,
+                createdByLink: creatorLink,
+            };
 
-        if (editBadgeImage) {
-            const imageId = crypto.randomUUID();
-            const storageRef = ref(getFirebaseStorage(), `badges/${imageId}.webp`);
-            await uploadBytes(storageRef, editBadgeImage);
-            updates.imageUrl = await getDownloadURL(storageRef);
+            if (editBadgeImage) {
+                const imageId = crypto.randomUUID();
+                const storageRef = ref(getFirebaseStorage(), `badges/${imageId}.webp`);
+                await uploadBytes(storageRef, editBadgeImage);
+                updates.imageUrl = await getDownloadURL(storageRef);
+            }
+
+            await updateDoc(doc(db, 'badges', selectedBadgeDef.id), updates);
+
+            await addDoc(collection(db, 'records'), {
+                type: 'badge-edit',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                badgeId: selectedBadgeDef.id,
+                badgeName: editBadgeName.trim(),
+                timestamp: serverTimestamp(),
+            });
+
+            const updated = {...selectedBadgeDef, ...updates};
+            setBadgeDefs(prev => prev.map(d => d.id === selectedBadgeDef.id ? updated : d));
+            setSelectedBadgeDef(updated);
+            setEditingBadgeDef(false);
+            setEditBadgeImage(null);
+            setEditBadgeImagePreview(null);
+        } finally {
+            setSavingBadgeDef(false);
         }
-
-        await updateDoc(doc(db, 'badges', selectedBadgeDef.id), updates);
-
-        await addDoc(collection(db, 'records'), {
-            type: 'badge-edit',
-            performedBy: user.uid,
-            performedByName: profile.displayName,
-            badgeId: selectedBadgeDef.id,
-            badgeName: editBadgeName.trim(),
-            timestamp: serverTimestamp(),
-        });
-
-        const updated = {...selectedBadgeDef, ...updates};
-        setBadgeDefs(prev => prev.map(d => d.id === selectedBadgeDef.id ? updated : d));
-        setSelectedBadgeDef(updated);
-        setEditingBadgeDef(false);
-        setEditBadgeImage(null);
-        setEditBadgeImagePreview(null);
-        setSavingBadgeDef(false);
     };
 
     const selectBadgeDef = async (bd: BadgeDef) => {
         setSelectedBadgeDef(bd);
         setLoadingBadgeHolders(true);
-        const db = getFirebaseDb();
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('badges', 'array-contains', bd.id));
-        const snapshot = await getDocs(q);
-
-        const holders: UserRecord[] = [];
-        snapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            holders.push({
-                uid: docSnap.id,
-                displayName: data.displayName ?? '',
-                email: data.email ?? '',
-                photoURL: data.photoURL ?? '',
-                joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                attendedEvents: data.attendedEvents ?? [],
-                badges: data.badges ?? [],
-                group: data.group ?? 'visitor',
-            });
-        });
-        setBadgeHolders(holders);
-        setLoadingBadgeHolders(false);
+        try {
+            const db = getFirebaseDb();
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('badges', 'array-contains', bd.id));
+            const snapshot = await getDocs(q);
+            setBadgeHolders(snapshot.docs.map(docToUserRecord));
+        } finally {
+            setLoadingBadgeHolders(false);
+        }
     };
 
     const toggleUserBadge = async (userRecord: UserRecord, badgeId: string, badgeName: string) => {
         setUpdating(true);
-        const db = getFirebaseDb();
-        const userRef = doc(db, 'users', userRecord.uid);
-        const has = userRecord.badges.includes(badgeId);
+        try {
+            const db = getFirebaseDb();
+            const userRef = doc(db, 'users', userRecord.uid);
+            const has = userRecord.badges.includes(badgeId);
 
-        await updateDoc(userRef, {
-            badges: has ? arrayRemove(badgeId) : arrayUnion(badgeId),
-        });
+            await updateDoc(userRef, {
+                badges: has ? arrayRemove(badgeId) : arrayUnion(badgeId),
+            });
 
-        await addDoc(collection(db, 'records'), {
-            type: has ? 'achievement-revoke' : 'achievement-grant',
-            performedBy: user.uid,
-            performedByName: profile.displayName,
-            targetUid: userRecord.uid,
-            targetName: userRecord.displayName,
-            badgeId,
-            badgeName,
-            timestamp: serverTimestamp(),
-        });
+            await addDoc(collection(db, 'records'), {
+                type: has ? 'achievement-revoke' : 'achievement-grant',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                targetUid: userRecord.uid,
+                targetName: userRecord.displayName,
+                badgeId,
+                badgeName,
+                timestamp: serverTimestamp(),
+            });
 
-        // Update badge holder percentage
-        const usersRef = collection(db, 'users');
-        const [holderSnap, totalSnap] = await Promise.all([
-            getCountFromServer(query(usersRef, where('badges', 'array-contains', badgeId))),
-            getCountFromServer(usersRef),
-        ]);
-        const holderPct = totalSnap.data().count > 0
-            ? Math.round((holderSnap.data().count / totalSnap.data().count) * 100)
-            : 0;
-        await updateDoc(doc(db, 'badges', badgeId), {holderPct});
+            // Update badge holder percentage
+            const usersRef = collection(db, 'users');
+            const [holderSnap, totalSnap] = await Promise.all([
+                getCountFromServer(query(usersRef, where('badges', 'array-contains', badgeId))),
+                getCountFromServer(usersRef),
+            ]);
+            const holderPct = totalSnap.data().count > 0
+                ? Math.round((holderSnap.data().count / totalSnap.data().count) * 100)
+                : 0;
+            await updateDoc(doc(db, 'badges', badgeId), {holderPct});
 
-        const updatedBadges = has
-            ? userRecord.badges.filter(id => id !== badgeId)
-            : [...userRecord.badges, badgeId];
+            const updatedBadges = has
+                ? userRecord.badges.filter(id => id !== badgeId)
+                : [...userRecord.badges, badgeId];
 
-        const updated = {...userRecord, badges: updatedBadges};
+            const updated = {...userRecord, badges: updatedBadges};
 
-        if (selectedUser?.uid === userRecord.uid) {
-            setSelectedUser(updated);
+            if (selectedUser?.uid === userRecord.uid) {
+                setSelectedUser(updated);
+            }
+            setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+        } finally {
+            setUpdating(false);
         }
-        setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
-        setUpdating(false);
     };
 
     const assignableGroups = getAssignableGroups(profile.group);
+    const managedEvt = managedEvent ? pastEvents.find(e => e.id === managedEvent) ?? null : null;
 
     const clickableName = (uid: string, name: string) => (
         <span className="record-clickable-name" onClick={() => lookupUserByUid(uid)}>{name}</span>
@@ -916,6 +892,10 @@ export const AdminPage = () => {
                     ? <>edited badge {badge}</>
                     : <>编辑了徽章 {badge}</>;
             }
+            case 'badge-delete':
+                return isEnglish
+                    ? <>deleted badge {r.badgeName ?? ''}</>
+                    : <>删除了徽章 {r.badgeName ?? ''}</>;
             case 'event-create':
                 return isEnglish
                     ? <>created event {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
@@ -948,6 +928,8 @@ export const AdminPage = () => {
             case 'badge-create':
                 return isEnglish ? 'Badge' : '徽章';
             case 'badge-edit':
+                return isEnglish ? 'Badge' : '徽章';
+            case 'badge-delete':
                 return isEnglish ? 'Badge' : '徽章';
             case 'event-create':
                 return isEnglish ? 'Event' : '活动';
@@ -1172,10 +1154,11 @@ export const AdminPage = () => {
                                 </h4>
 
                                 <div className="admin-badge-list">
-                                    {pastEvents.map((event, i) => {
+                                    {pastEvents.map((event) => {
                                         const has = selectedUser.attendedEvents.includes(event.id);
                                         return (
-                                            <div key={i} className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
+                                            <div key={event.id}
+                                                 className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
                                                 <img src={event.icon} alt="" className="admin-badge-img"/>
                                                 <div className="admin-badge-info">
                                                     <span
@@ -1348,9 +1331,9 @@ export const AdminPage = () => {
                                     </button>
                                 )}
                                 <div className="admin-event-grid">
-                                    {pastEvents.map((event, i) => (
+                                    {pastEvents.map((event) => (
                                         <button
-                                            key={i}
+                                            key={event.id}
                                             className="admin-event-card"
                                             onClick={() => selectManagedEvent(event.id)}
                                         >
@@ -1370,45 +1353,41 @@ export const AdminPage = () => {
                                     &larr; {isEnglish ? 'All Events' : '所有活动'}
                                 </button>
 
-                                {(() => {
-                                    const evt = pastEvents.find(e => e.id === managedEvent);
-                                    if (!evt) return null;
-                                    return (
-                                        <>
-                                            <div className="admin-event-detail-header">
-                                                <img src={evt.icon} alt="" className="admin-event-detail-img"/>
-                                                <div>
-                                                    <h3>{isEnglish ? evt.title : evt.titleCn}</h3>
-                                                    <p className="admin-event-detail-meta">
-                                                        <span>{isEnglish ? evt.badge : evt.badgeCn}</span>
-                                                        <span>{evt.date}</span>
-                                                        <span>{evt.location}</span>
-                                                    </p>
-                                                </div>
+                                {managedEvt && (
+                                    <>
+                                        <div className="admin-event-detail-header">
+                                            <img src={managedEvt.icon} alt="" className="admin-event-detail-img"/>
+                                            <div>
+                                                <h3>{isEnglish ? managedEvt.title : managedEvt.titleCn}</h3>
+                                                <p className="admin-event-detail-meta">
+                                                    <span>{isEnglish ? managedEvt.badge : managedEvt.badgeCn}</span>
+                                                    <span>{managedEvt.date}</span>
+                                                    <span>{managedEvt.location}</span>
+                                                </p>
                                             </div>
-                                            <div className="admin-form-actions" style={{marginBottom: '20px'}}>
-                                                <button
-                                                    className="admin-generate-btn"
-                                                    onClick={() => {
-                                                        setManagedEvent(null);
-                                                        openEditEvent(evt);
-                                                    }}
-                                                >
-                                                    {isEnglish ? 'Edit Event' : '编辑活动'}
-                                                </button>
-                                                <button
-                                                    className="admin-toggle-btn admin-toggle-revoke"
-                                                    onClick={() => {
-                                                        deleteEvent(evt);
-                                                        setManagedEvent(null);
-                                                    }}
-                                                >
-                                                    {isEnglish ? 'Delete Event' : '删除活动'}
-                                                </button>
-                                            </div>
-                                        </>
-                                    );
-                                })()}
+                                        </div>
+                                        <div className="admin-form-actions" style={{marginBottom: '20px'}}>
+                                            <button
+                                                className="admin-generate-btn"
+                                                onClick={() => {
+                                                    setManagedEvent(null);
+                                                    openEditEvent(managedEvt);
+                                                }}
+                                            >
+                                                {isEnglish ? 'Edit Event' : '编辑活动'}
+                                            </button>
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-revoke"
+                                                onClick={async () => {
+                                                    await deleteEvent(managedEvt);
+                                                    setManagedEvent(null);
+                                                }}
+                                            >
+                                                {isEnglish ? 'Delete Event' : '删除活动'}
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
 
                                 <div className="admin-sub-tabs">
                                     <button
@@ -1711,6 +1690,7 @@ export const AdminPage = () => {
                                                             return;
                                                         }
                                                         setNewBadgeImage(file);
+                                                        if (newBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(newBadgeImagePreview);
                                                         setNewBadgeImagePreview(URL.createObjectURL(file));
                                                     }}
                                                 />
@@ -1739,6 +1719,7 @@ export const AdminPage = () => {
                                                     setNewBadgeDesc('');
                                                     setNewBadgeDescCn('');
                                                     setNewBadgeImage(null);
+                                                    if (newBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(newBadgeImagePreview);
                                                     setNewBadgeImagePreview(null);
                                                     setNewBadgeCreatorUser(null);
                                                     setNewBadgeCreatedByName('');
@@ -1958,6 +1939,7 @@ export const AdminPage = () => {
                                                             return;
                                                         }
                                                         setEditBadgeImage(file);
+                                                        if (editBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(editBadgeImagePreview);
                                                         setEditBadgeImagePreview(URL.createObjectURL(file));
                                                     }}
                                                 />
@@ -1982,6 +1964,7 @@ export const AdminPage = () => {
                                                 onClick={() => {
                                                     setEditingBadgeDef(false);
                                                     setEditBadgeImage(null);
+                                                    if (editBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(editBadgeImagePreview);
                                                     setEditBadgeImagePreview(null);
                                                     setEditBadgeCreatorUser(null);
                                                     setCreatorSearchQuery('');
@@ -2009,17 +1992,7 @@ export const AdminPage = () => {
                                                     const db = getFirebaseDb();
                                                     const snap = await getDoc(doc(db, 'users', selectedBadgeDef.createdByUid));
                                                     if (snap.exists()) {
-                                                        const data = snap.data();
-                                                        setEditBadgeCreatorUser({
-                                                            uid: snap.id,
-                                                            displayName: data.displayName ?? '',
-                                                            email: data.email ?? '',
-                                                            photoURL: data.photoURL ?? '',
-                                                            joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                                                            attendedEvents: data.attendedEvents ?? [],
-                                                            badges: data.badges ?? [],
-                                                            group: data.group ?? 'visitor',
-                                                        });
+                                                        setEditBadgeCreatorUser(docToUserRecord(snap));
                                                     } else {
                                                         setEditBadgeCreatorUser(null);
                                                         setEditBadgeCreatedByName(selectedBadgeDef.createdByName);
@@ -2099,6 +2072,7 @@ export const AdminPage = () => {
                                 <option value="achievement-revoke">{isEnglish ? 'Badge Revoke' : '撤销徽章'}</option>
                                 <option value="badge-create">{isEnglish ? 'Badge Create' : '创建徽章'}</option>
                                 <option value="badge-edit">{isEnglish ? 'Badge Edit' : '编辑徽章'}</option>
+                                <option value="badge-delete">{isEnglish ? 'Badge Delete' : '删除徽章'}</option>
                                 <option value="event-create">{isEnglish ? 'Event Create' : '创建活动'}</option>
                                 <option value="event-edit">{isEnglish ? 'Event Edit' : '编辑活动'}</option>
                                 <option value="event-delete">{isEnglish ? 'Event Delete' : '删除活动'}</option>
