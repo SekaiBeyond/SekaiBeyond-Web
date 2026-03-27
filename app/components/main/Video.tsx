@@ -30,7 +30,7 @@ export const Video = () => {
 
                 <div className="video-info">
                     <div className="video-badge">
-                        <span className="badge-icon">🎬</span>
+                        <span className="video-badge-icon">🎬</span>
                         <span>{isEnglish ? "Featured Video" : "精选视频"}</span>
                     </div>
                     <p className="video-caption">
