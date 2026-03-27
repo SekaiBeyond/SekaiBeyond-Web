@@ -116,6 +116,8 @@ export const AdminPage = () => {
     const [loadingRecent, setLoadingRecent] = useState(false);
     const [records, setRecords] = useState<ActivityRecord[]>([]);
     const [loadingRecords, setLoadingRecords] = useState(false);
+    const [recordFilterType, setRecordFilterType] = useState<RecordType | ''>('');
+    const [recordFilterActor, setRecordFilterActor] = useState('');
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [loadingBadgeDefs, setLoadingBadgeDefs] = useState(false);
     const [selectedBadgeDef, setSelectedBadgeDef] = useState<BadgeDef | null>(null);
@@ -245,6 +247,19 @@ export const AdminPage = () => {
         setRecords(items);
         setLoadingRecords(false);
     };
+
+    const filteredRecords = records.filter((r) => {
+        if (recordFilterType && r.type !== recordFilterType) return false;
+        if (recordFilterActor && r.performedBy !== recordFilterActor) return false;
+        return true;
+    });
+
+    const uniqueActors = records.reduce<{uid: string; name: string}[]>((acc, r) => {
+        if (!acc.some((a) => a.uid === r.performedBy)) {
+            acc.push({uid: r.performedBy, name: r.performedByName});
+        }
+        return acc;
+    }, []);
 
     if (loading) {
         return (
@@ -1739,13 +1754,42 @@ export const AdminPage = () => {
                 {/* Records Tab */}
                 {activeTab === 'records' && (
                     <div className="admin-section">
+                        <div className="record-filter-bar">
+                            <span className="record-filter-label">{isEnglish ? 'Filter' : '筛选'}</span>
+                            <select
+                                className="record-filter-select"
+                                value={recordFilterType}
+                                onChange={(e) => setRecordFilterType(e.target.value as RecordType | '')}
+                            >
+                                <option value="">{isEnglish ? 'All Types' : '所有类型'}</option>
+                                <option value="group-assign">{isEnglish ? 'Group' : '用户组'}</option>
+                                <option value="code-create">{isEnglish ? 'Code' : '兑换码'}</option>
+                                <option value="badge-grant">{isEnglish ? 'Attend' : '签到'}</option>
+                                <option value="badge-revoke">{isEnglish ? 'Unattend' : '取消签到'}</option>
+                                <option value="achievement-grant">{isEnglish ? 'Badge Grant' : '授予徽章'}</option>
+                                <option value="achievement-revoke">{isEnglish ? 'Badge Revoke' : '撤销徽章'}</option>
+                                <option value="badge-create">{isEnglish ? 'Badge Create' : '创建徽章'}</option>
+                                <option value="badge-edit">{isEnglish ? 'Badge Edit' : '编辑徽章'}</option>
+                            </select>
+                            <select
+                                className="record-filter-select"
+                                value={recordFilterActor}
+                                onChange={(e) => setRecordFilterActor(e.target.value)}
+                            >
+                                <option value="">{isEnglish ? 'All Actors' : '所有操作人'}</option>
+                                {uniqueActors.map((a) => (
+                                    <option key={a.uid} value={a.uid}>{a.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
                         {loadingRecords && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
 
                         {!loadingRecords && records.length === 0 && (
                             <p className="admin-no-results">{isEnglish ? 'No records yet.' : '暂无记录。'}</p>
                         )}
 
-                        {!loadingRecords && records.map((r) => (
+                        {!loadingRecords && filteredRecords.map((r) => (
                             <div key={r.id} className="record-row">
                                 <span className={`record-type-tag record-type-${r.type}`}>
                                     {getRecordTypeTag(r.type)}

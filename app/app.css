@@ -3290,6 +3290,39 @@ footer {
 }
 
 /* Records Tab */
+.record-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.record-filter-label {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #7a8190;
+    white-space: nowrap;
+}
+
+.record-filter-select {
+    padding: 7px 14px;
+    border: 2px solid rgba(255, 107, 157, 0.2);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.85);
+    color: #4a5160;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+.record-filter-select:focus {
+    border-color: #ff6b9d;
+}
+
 .record-row {
     display: flex;
     align-items: center;
@@ -3379,6 +3412,15 @@ footer {
 }
 
 @media (max-width: 600px) {
+    .record-filter-bar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .record-filter-select {
+        font-size: 12px;
+    }
+
     .record-row {
         flex-wrap: wrap;
         gap: 6px;
