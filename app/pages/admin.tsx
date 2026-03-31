@@ -73,7 +73,7 @@ interface EventLabel {
     nameCn: string;
 }
 
-type Tab = 'users' | 'events' | 'badges' | 'records';
+type Tab = 'users' | 'events' | 'labels' | 'badges' | 'records';
 
 type RecordType =
     'group-assign'
@@ -140,12 +140,12 @@ export const AdminPage = () => {
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
     const [searching, setSearching] = useState(false);
     const [updating, setUpdating] = useState(false);
-    const [badgeCodes, setBadgeCodes] = useState<BadgeCode[]>([]);
+    const [eventCode, setEventCode] = useState<BadgeCode | null>(null);
     const [managedEvent, setManagedEvent] = useState<string | null>(null);
     const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees'>('codes');
     const [generatingCode, setGeneratingCode] = useState(false);
-    const [newCodeFrom, setNewCodeFrom] = useState('');
-    const [newCodeUntil, setNewCodeUntil] = useState('');
+    const [codeFrom, setCodeFrom] = useState('');
+    const [codeUntil, setCodeUntil] = useState('');
     const [recentUsers, setRecentUsers] = useState<UserRecord[]>([]);
     const [loadingRecent, setLoadingRecent] = useState(false);
     const [records, setRecords] = useState<ActivityRecord[]>([]);
@@ -183,6 +183,12 @@ export const AdminPage = () => {
     const [creatorSearchResults, setCreatorSearchResults] = useState<UserRecord[]>([]);
     const [searchingCreator, setSearchingCreator] = useState(false);
     const [eventLabels, setEventLabels] = useState<EventLabel[]>([]);
+    const [newLabelName, setNewLabelName] = useState('');
+    const [newLabelNameCn, setNewLabelNameCn] = useState('');
+    const [savingLabel, setSavingLabel] = useState(false);
+    const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+    const [editLabelName, setEditLabelName] = useState('');
+    const [editLabelNameCn, setEditLabelNameCn] = useState('');
     const [showCreateEvent, setShowCreateEvent] = useState(false);
     const [editingEvent, setEditingEvent] = useState<PastEvent | null>(null);
     const [eventForm, setEventForm] = useState({
@@ -200,7 +206,7 @@ export const AdminPage = () => {
         if (loading || !user || !profile || !hasPermission(profile.group, 'core-staff')) return;
         const tab = searchParams.get('tab');
         const event = searchParams.get('event');
-        if (tab === 'events' || tab === 'badges' || tab === 'records' || tab === 'users') {
+        if (tab === 'events' || tab === 'labels' || tab === 'badges' || tab === 'records' || tab === 'users') {
             setActiveTab(tab);
         }
         if (tab === 'events' && event) {
@@ -460,6 +466,67 @@ export const AdminPage = () => {
         setShowCreateEvent(true);
     };
 
+    const createLabel = async () => {
+        if (!newLabelName.trim()) return;
+        setSavingLabel(true);
+        try {
+            const db = getFirebaseDb();
+            const docRef = await addDoc(collection(db, 'eventLabels'), {
+                name: newLabelName.trim(),
+                nameCn: newLabelNameCn.trim(),
+            });
+            setEventLabels(prev => [...prev, {
+                id: docRef.id,
+                name: newLabelName.trim(),
+                nameCn: newLabelNameCn.trim()
+            }]);
+            await addDoc(collection(db, 'records'), {
+                type: 'label-create',
+                performedBy: user!.uid,
+                performedByName: profile!.displayName,
+                labelName: newLabelName.trim(),
+                timestamp: serverTimestamp(),
+            });
+            setNewLabelName('');
+            setNewLabelNameCn('');
+        } finally {
+            setSavingLabel(false);
+        }
+    };
+
+    const saveLabelEdit = async (labelId: string) => {
+        if (!editLabelName.trim()) return;
+        const db = getFirebaseDb();
+        await updateDoc(doc(db, 'eventLabels', labelId), {name: editLabelName.trim(), nameCn: editLabelNameCn.trim()});
+        setEventLabels(prev => prev.map(l => l.id === labelId ? {
+            ...l,
+            name: editLabelName.trim(),
+            nameCn: editLabelNameCn.trim()
+        } : l));
+        await addDoc(collection(db, 'records'), {
+            type: 'label-edit',
+            performedBy: user!.uid,
+            performedByName: profile!.displayName,
+            labelName: editLabelName.trim(),
+            timestamp: serverTimestamp(),
+        });
+        setEditingLabelId(null);
+    };
+
+    const deleteLabel = async (labelId: string) => {
+        const label = eventLabels.find(l => l.id === labelId);
+        const db = getFirebaseDb();
+        await deleteDoc(doc(db, 'eventLabels', labelId));
+        setEventLabels(prev => prev.filter(l => l.id !== labelId));
+        await addDoc(collection(db, 'records'), {
+            type: 'label-delete',
+            performedBy: user!.uid,
+            performedByName: profile!.displayName,
+            labelName: label?.name ?? '',
+            timestamp: serverTimestamp(),
+        });
+    };
+
     const saveEvent = async () => {
         if (!eventForm.title.trim() || !eventForm.date.trim()) return;
         setSavingEvent(true);
@@ -530,9 +597,9 @@ export const AdminPage = () => {
     const selectManagedEvent = async (eventId: string) => {
         setManagedEvent(eventId);
         setEventSubTab('codes');
-        setBadgeCodes([]);
+        setEventCode(null);
         setEventAttendees([]);
-        await loadBadgeCodes(eventId);
+        await loadEventCode(eventId);
     };
 
     const loadEventAttendees = async (eventId: string) => {
@@ -548,7 +615,7 @@ export const AdminPage = () => {
         }
     };
 
-    const loadBadgeCodes = async (eventId: string) => {
+    const loadEventCode = async (eventId: string) => {
         const db = getFirebaseDb();
         const codesRef = collection(db, 'badgeCodes');
 
@@ -575,26 +642,33 @@ export const AdminPage = () => {
                 activeUntil: data.activeUntil ?? null,
             });
         }
-        setBadgeCodes(codes);
+        // Pick the first active code, or fall back to first overall
+        const active = codes.find(c => c.active);
+        const picked = active ?? codes[0] ?? null;
+        setEventCode(picked);
+        setCodeFrom(picked?.activeFrom ?? '');
+        setCodeUntil(picked?.activeUntil ?? '');
     };
 
-    const generateBadgeCode = async (eventId: string) => {
+    const generateEventCode = async (eventId: string) => {
         if (!user) return;
         setGeneratingCode(true);
         try {
             const evt = pastEvents.find(e => e.id === eventId);
-            const code = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-            const activeFrom = newCodeFrom || null;
-            const activeUntil = newCodeUntil || null;
             const db = getFirebaseDb();
+
+            // Deactivate existing code if any
+            if (eventCode) {
+                await updateDoc(doc(db, 'badgeCodes', eventCode.id), {active: false});
+            }
+
+            const code = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
             const docRef = await addDoc(collection(db, 'badgeCodes'), {
                 code,
                 eventId,
                 createdBy: user.uid,
                 createdAt: serverTimestamp(),
                 active: true,
-                activeFrom,
-                activeUntil,
             });
 
             await addDoc(collection(db, 'records'), {
@@ -606,24 +680,28 @@ export const AdminPage = () => {
                 timestamp: serverTimestamp(),
             });
 
-            setBadgeCodes(prev => [...prev, {id: docRef.id, code, eventId, active: true, activeFrom, activeUntil}]);
-            setNewCodeFrom('');
-            setNewCodeUntil('');
+            setEventCode({id: docRef.id, code, eventId, active: true, activeFrom: null, activeUntil: null});
+            setCodeFrom('');
+            setCodeUntil('');
         } finally {
             setGeneratingCode(false);
         }
     };
 
-    const toggleCodeActive = async (codeDoc: BadgeCode) => {
+    const toggleCodeActive = async () => {
+        if (!eventCode) return;
         const db = getFirebaseDb();
-        await updateDoc(doc(db, 'badgeCodes', codeDoc.id), {active: !codeDoc.active});
-        setBadgeCodes(prev => prev.map(c => c.id === codeDoc.id ? {...c, active: !c.active} : c));
+        await updateDoc(doc(db, 'badgeCodes', eventCode.id), {active: !eventCode.active});
+        setEventCode({...eventCode, active: !eventCode.active});
     };
 
-    const deleteBadgeCode = async (codeDoc: BadgeCode) => {
+    const saveCodeTimeWindow = async () => {
+        if (!eventCode) return;
+        const activeFrom = codeFrom || null;
+        const activeUntil = codeUntil || null;
         const db = getFirebaseDb();
-        await deleteDoc(doc(db, 'badgeCodes', codeDoc.id));
-        setBadgeCodes(prev => prev.filter(c => c.id !== codeDoc.id));
+        await updateDoc(doc(db, 'badgeCodes', eventCode.id), {activeFrom, activeUntil});
+        setEventCode({...eventCode, activeFrom, activeUntil});
     };
 
     const getClaimUrl = (code: string) => {
@@ -1004,7 +1082,13 @@ export const AdminPage = () => {
                         className={`admin-tab ${activeTab === 'events' ? 'admin-tab-active' : ''}`}
                         onClick={() => setActiveTab('events')}
                     >
-                        {isEnglish ? 'Event Management' : '活动管理'}
+                        {isEnglish ? 'Past Event Management' : '往期活动管理'}
+                    </button>
+                    <button
+                        className={`admin-tab ${activeTab === 'labels' ? 'admin-tab-active' : ''}`}
+                        onClick={() => setActiveTab('labels')}
+                    >
+                        {isEnglish ? 'Event Labels' : '活动标签'}
                     </button>
                     <button
                         className={`admin-tab ${activeTab === 'badges' ? 'admin-tab-active' : ''}`}
@@ -1274,19 +1358,18 @@ export const AdminPage = () => {
                                                                     value={l.id}>{isEnglish ? l.name : l.nameCn || l.name}</option>
                                                         ))}
                                                     </select>
-                                                    <a
-                                                        href="/admin/labels"
-                                                        target="_blank"
+                                                    <button
+                                                        type="button"
                                                         className="admin-generate-btn"
                                                         style={{
                                                             whiteSpace: 'nowrap',
                                                             padding: '6px 12px',
                                                             fontSize: '13px',
-                                                            textDecoration: 'none'
                                                         }}
+                                                        onClick={() => setActiveTab('labels')}
                                                     >
                                                         {isEnglish ? 'Manage' : '管理'}
-                                                    </a>
+                                                    </button>
                                                 </div>
                                             </label>
                                             <label>
@@ -1451,7 +1534,7 @@ export const AdminPage = () => {
                                         className={`admin-sub-tab ${eventSubTab === 'codes' ? 'admin-sub-tab-active' : ''}`}
                                         onClick={() => setEventSubTab('codes')}
                                     >
-                                        {isEnglish ? 'Claim Codes' : '兑换码'}
+                                        {isEnglish ? 'Check-in Code' : '签到码'}
                                     </button>
                                     <button
                                         className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
@@ -1467,107 +1550,106 @@ export const AdminPage = () => {
                                     </button>
                                 </div>
 
-                                {/* Claim Codes Sub-Tab */}
+                                {/* Check-in Code Sub-Tab */}
                                 {eventSubTab === 'codes' && (
                                     <div className="admin-codes-section">
-                                        <div className="admin-code-time-inputs">
-                                            <label>
-                                                <span>{isEnglish ? 'Active from' : '开始时间'}</span>
-                                                <input
-                                                    type="datetime-local"
-                                                    value={newCodeFrom}
-                                                    onChange={(e) => setNewCodeFrom(e.target.value)}
-                                                    className="admin-datetime-input"
-                                                />
-                                            </label>
-                                            <label>
-                                                <span>{isEnglish ? 'Active until' : '结束时间'}</span>
-                                                <input
-                                                    type="datetime-local"
-                                                    value={newCodeUntil}
-                                                    onChange={(e) => setNewCodeUntil(e.target.value)}
-                                                    className="admin-datetime-input"
-                                                />
-                                            </label>
-                                            <p className="admin-time-hint">
-                                                {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
-                                            </p>
-                                        </div>
-
-                                        <button
-                                            className="admin-generate-btn"
-                                            onClick={() => generateBadgeCode(managedEvent)}
-                                            disabled={generatingCode}
-                                        >
-                                            {generatingCode
-                                                ? (isEnglish ? 'Generating...' : '生成中...')
-                                                : (isEnglish ? '+ New Claim Code' : '+ 新建兑换码')}
-                                        </button>
-
-                                        {badgeCodes.length === 0 && (
-                                            <p className="admin-no-results">
-                                                {isEnglish ? 'No claim codes yet. Generate one above.' : '暂无兑换码，点击上方按钮生成。'}
-                                            </p>
-                                        )}
-
-                                        {badgeCodes.map((bc) => (
-                                            <div key={bc.id}
-                                                 className={`admin-code-card ${bc.active ? '' : 'admin-code-inactive'}`}>
-                                                <div className="admin-code-qr">
-                                                    <QRCodeSVG value={getClaimUrl(bc.code)} size={160} level="M"/>
+                                        {!eventCode ? (
+                                            <>
+                                                <p className="admin-no-results">
+                                                    {isEnglish ? 'No check-in code yet.' : '暂无签到码。'}
+                                                </p>
+                                                <button
+                                                    className="admin-generate-btn"
+                                                    onClick={() => generateEventCode(managedEvent)}
+                                                    disabled={generatingCode}
+                                                >
+                                                    {generatingCode
+                                                        ? (isEnglish ? 'Generating...' : '生成中...')
+                                                        : (isEnglish ? '+ Generate Code' : '+ 生成签到码')}
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <div className="admin-single-code">
+                                                <div className="admin-single-code-qr">
+                                                    <QRCodeSVG value={getClaimUrl(eventCode.code)} size={200}
+                                                               level="M"/>
                                                 </div>
-                                                <div className="admin-code-details">
-                                                    <div className="admin-code-url">
+                                                <div className="admin-code-url">
+                                                    <input
+                                                        readOnly
+                                                        value={getClaimUrl(eventCode.code)}
+                                                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                                                        className="admin-code-input"
+                                                    />
+                                                    <button
+                                                        className="admin-copy-btn"
+                                                        onClick={() => navigator.clipboard.writeText(getClaimUrl(eventCode.code))}
+                                                    >
+                                                        {isEnglish ? 'Copy' : '复制'}
+                                                    </button>
+                                                </div>
+                                                <span
+                                                    className={eventCode.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
+                                                    {eventCode.active
+                                                        ? (isEnglish ? 'Active' : '启用')
+                                                        : (isEnglish ? 'Disabled' : '已停用')}
+                                                </span>
+                                                <div className="admin-code-time-inputs">
+                                                    <label>
+                                                        <span>{isEnglish ? 'Active from' : '开始时间'}</span>
                                                         <input
-                                                            readOnly
-                                                            value={getClaimUrl(bc.code)}
-                                                            onClick={(e) => (e.target as HTMLInputElement).select()}
-                                                            className="admin-code-input"
+                                                            type="datetime-local"
+                                                            value={codeFrom}
+                                                            onChange={(e) => setCodeFrom(e.target.value)}
+                                                            className="admin-datetime-input"
                                                         />
-                                                        <button
-                                                            className="admin-copy-btn"
-                                                            onClick={() => navigator.clipboard.writeText(getClaimUrl(bc.code))}
-                                                        >
-                                                            {isEnglish ? 'Copy' : '复制'}
-                                                        </button>
-                                                    </div>
-                                                    <div className="admin-code-status">
-                                                        <span
-                                                            className={bc.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
-                                                            {bc.active
-                                                                ? (isEnglish ? 'Active' : '启用')
-                                                                : (isEnglish ? 'Disabled' : '已停用')}
-                                                        </span>
-                                                        {(bc.activeFrom || bc.activeUntil) && (
-                                                            <span className="admin-code-time-range">
-                                                                {bc.activeFrom && (
-                                                                    <span>{isEnglish ? 'From: ' : '开始：'}{new Date(bc.activeFrom).toLocaleString()}</span>
-                                                                )}
-                                                                {bc.activeUntil && (
-                                                                    <span>{isEnglish ? 'Until: ' : '截止：'}{new Date(bc.activeUntil).toLocaleString()}</span>
-                                                                )}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="admin-code-actions">
-                                                        <button
-                                                            className="admin-toggle-btn admin-toggle-small"
-                                                            onClick={() => toggleCodeActive(bc)}
-                                                        >
-                                                            {bc.active
-                                                                ? (isEnglish ? 'Disable' : '停用')
-                                                                : (isEnglish ? 'Enable' : '启用')}
-                                                        </button>
-                                                        <button
-                                                            className="admin-toggle-btn admin-toggle-revoke admin-toggle-small"
-                                                            onClick={() => deleteBadgeCode(bc)}
-                                                        >
-                                                            {isEnglish ? 'Delete' : '删除'}
-                                                        </button>
-                                                    </div>
+                                                    </label>
+                                                    <label>
+                                                        <span>{isEnglish ? 'Active until' : '结束时间'}</span>
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={codeUntil}
+                                                            onChange={(e) => setCodeUntil(e.target.value)}
+                                                            className="admin-datetime-input"
+                                                        />
+                                                    </label>
+                                                    <button
+                                                        className="admin-toggle-btn admin-toggle-grant"
+                                                        onClick={saveCodeTimeWindow}
+                                                        disabled={codeFrom === (eventCode.activeFrom ?? '') && codeUntil === (eventCode.activeUntil ?? '')}
+                                                    >
+                                                        {isEnglish ? 'Save' : '保存'}
+                                                    </button>
+                                                </div>
+                                                <p className="admin-time-hint">
+                                                    {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
+                                                </p>
+                                                <div className="admin-single-code-actions">
+                                                    <button
+                                                        className="admin-toggle-btn"
+                                                        onClick={toggleCodeActive}
+                                                    >
+                                                        {eventCode.active
+                                                            ? (isEnglish ? 'Disable' : '停用')
+                                                            : (isEnglish ? 'Enable' : '启用')}
+                                                    </button>
+                                                    <button
+                                                        className="admin-toggle-btn admin-toggle-revoke"
+                                                        onClick={() => {
+                                                            const msg = isEnglish
+                                                                ? 'This will deactivate the current code and generate a new one. Users with the old QR code will no longer be able to check in. Continue?'
+                                                                : '此操作将停用当前签到码并生成新码。持有旧二维码的用户将无法签到。是否继续？';
+                                                            if (window.confirm(msg)) generateEventCode(managedEvent);
+                                                        }}
+                                                        disabled={generatingCode}
+                                                    >
+                                                        {generatingCode
+                                                            ? (isEnglish ? 'Regenerating...' : '重新生成中...')
+                                                            : (isEnglish ? 'Regenerate' : '重新生成')}
+                                                    </button>
                                                 </div>
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
                                 )}
 
@@ -1599,6 +1681,119 @@ export const AdminPage = () => {
                                         ))}
                                     </div>
                                 )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Event Labels Tab */}
+                {activeTab === 'labels' && (
+                    <div className="admin-section">
+                        <h4 className="admin-badges-title" style={{marginBottom: '16px'}}>
+                            {isEnglish ? 'Create New Label' : '创建新标签'}
+                        </h4>
+                        <div style={{
+                            display: 'flex',
+                            gap: '8px',
+                            alignItems: 'flex-end',
+                            flexWrap: 'wrap',
+                            marginBottom: '24px'
+                        }}>
+                            <input
+                                value={newLabelName}
+                                onChange={e => setNewLabelName(e.target.value)}
+                                className="admin-search-input"
+                                placeholder={isEnglish ? 'English name' : '英文名称'}
+                                style={{flex: 1, minWidth: '120px'}}
+                                onKeyDown={e => e.key === 'Enter' && createLabel()}
+                            />
+                            <input
+                                value={newLabelNameCn}
+                                onChange={e => setNewLabelNameCn(e.target.value)}
+                                className="admin-search-input"
+                                placeholder={isEnglish ? 'Chinese name' : '中文名称'}
+                                style={{flex: 1, minWidth: '120px'}}
+                                onKeyDown={e => e.key === 'Enter' && createLabel()}
+                            />
+                            <button
+                                className="admin-generate-btn"
+                                onClick={createLabel}
+                                disabled={savingLabel || !newLabelName.trim()}
+                            >
+                                {savingLabel ? '...' : (isEnglish ? '+ Create' : '+ 创建')}
+                            </button>
+                        </div>
+
+                        <h4 className="admin-badges-title" style={{marginBottom: '16px'}}>
+                            {isEnglish ? `All Labels (${eventLabels.length})` : `所有标签 (${eventLabels.length})`}
+                        </h4>
+
+                        {eventLabels.length === 0 ? (
+                            <p style={{color: '#999', textAlign: 'center'}}>
+                                {isEnglish ? 'No labels yet.' : '暂无标签。'}
+                            </p>
+                        ) : (
+                            <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                                {eventLabels.map(l => (
+                                    <div key={l.id} className="admin-badge-row">
+                                        {editingLabelId === l.id ? (
+                                            <>
+                                                <input
+                                                    value={editLabelName}
+                                                    onChange={e => setEditLabelName(e.target.value)}
+                                                    className="admin-search-input"
+                                                    style={{flex: 1, minWidth: '80px'}}
+                                                    onKeyDown={e => e.key === 'Enter' && saveLabelEdit(l.id)}
+                                                />
+                                                <input
+                                                    value={editLabelNameCn}
+                                                    onChange={e => setEditLabelNameCn(e.target.value)}
+                                                    className="admin-search-input"
+                                                    style={{flex: 1, minWidth: '80px'}}
+                                                    onKeyDown={e => e.key === 'Enter' && saveLabelEdit(l.id)}
+                                                />
+                                                <button
+                                                    className="admin-toggle-btn admin-toggle-grant"
+                                                    onClick={() => saveLabelEdit(l.id)}
+                                                    disabled={!editLabelName.trim()}
+                                                >
+                                                    {isEnglish ? 'Save' : '保存'}
+                                                </button>
+                                                <button
+                                                    className="admin-toggle-btn"
+                                                    onClick={() => setEditingLabelId(null)}
+                                                >
+                                                    {isEnglish ? 'Cancel' : '取消'}
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="admin-badge-info" style={{flex: 1}}>
+                                                    <span className="admin-badge-name">{l.name}</span>
+                                                    {l.nameCn && (
+                                                        <span className="admin-badge-date">{l.nameCn}</span>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    className="admin-toggle-btn admin-toggle-grant"
+                                                    onClick={() => {
+                                                        setEditingLabelId(l.id);
+                                                        setEditLabelName(l.name);
+                                                        setEditLabelNameCn(l.nameCn);
+                                                    }}
+                                                >
+                                                    {isEnglish ? 'Edit' : '编辑'}
+                                                </button>
+                                                <button
+                                                    className="admin-toggle-btn admin-toggle-revoke"
+                                                    onClick={() => deleteLabel(l.id)}
+                                                >
+                                                    {isEnglish ? 'Delete' : '删除'}
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>

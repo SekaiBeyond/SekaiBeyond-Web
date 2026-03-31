@@ -131,7 +131,7 @@ export const AdminLabelsPage = () => {
                 <div className="admin-section">
                     <div style={{marginBottom: '16px'}}>
                         <a href="/admin?tab=events" className="admin-back-btn">
-                            &larr; {isEnglish ? 'Back to Events' : '返回活动管理'}
+                            &larr; {isEnglish ? 'Back to Admin' : '返回管理面板'}
                         </a>
                     </div>
 
