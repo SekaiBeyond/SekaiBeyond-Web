@@ -67,6 +67,12 @@ interface UserRecord {
     group: UserGroup;
 }
 
+interface EventLabel {
+    id: string;
+    name: string;
+    nameCn: string;
+}
+
 type Tab = 'users' | 'events' | 'badges' | 'records';
 
 type RecordType =
@@ -81,7 +87,10 @@ type RecordType =
     | 'badge-delete'
     | 'event-create'
     | 'event-edit'
-    | 'event-delete';
+    | 'event-delete'
+    | 'label-create'
+    | 'label-edit'
+    | 'label-delete';
 
 interface ActivityRecord {
     id: string;
@@ -93,6 +102,7 @@ interface ActivityRecord {
     eventTitle?: string;
     badgeId?: string;
     badgeName?: string;
+    labelName?: string;
     code?: string;
     oldGroup?: UserGroup;
     newGroup?: UserGroup;
@@ -172,10 +182,11 @@ export const AdminPage = () => {
     const [creatorSearchQuery, setCreatorSearchQuery] = useState('');
     const [creatorSearchResults, setCreatorSearchResults] = useState<UserRecord[]>([]);
     const [searchingCreator, setSearchingCreator] = useState(false);
+    const [eventLabels, setEventLabels] = useState<EventLabel[]>([]);
     const [showCreateEvent, setShowCreateEvent] = useState(false);
     const [editingEvent, setEditingEvent] = useState<PastEvent | null>(null);
     const [eventForm, setEventForm] = useState({
-        title: '', titleCn: '', badge: '', badgeCn: '', date: '',
+        title: '', titleCn: '', label: '', labelCn: '', date: '',
         location: '', description: '', descriptionCn: '', icon: '',
     });
     const [savingEvent, setSavingEvent] = useState(false);
@@ -239,8 +250,18 @@ export const AdminPage = () => {
                 setLoadingBadgeDefs(false);
             }
         };
+        const loadEventLabels = async () => {
+            const db = getFirebaseDb();
+            const snapshot = await getDocs(collection(db, 'eventLabels'));
+            setEventLabels(snapshot.docs.map(d => ({
+                id: d.id,
+                name: d.data().name ?? '',
+                nameCn: d.data().nameCn ?? ''
+            })));
+        };
         loadRecentUsers().then();
         loadBadgeDefinitions().then();
+        loadEventLabels().then();
     }, [loading, user, profile]);
 
     const loadRecords = async () => {
@@ -263,6 +284,7 @@ export const AdminPage = () => {
                     eventTitle: data.eventTitle,
                     badgeId: data.badgeId,
                     badgeName: data.badgeName,
+                    labelName: data.labelName,
                     code: data.code,
                     oldGroup: data.oldGroup,
                     newGroup: data.newGroup,
@@ -407,8 +429,8 @@ export const AdminPage = () => {
         setEventForm({
             title: '',
             titleCn: '',
-            badge: '',
-            badgeCn: '',
+            label: '',
+            labelCn: '',
             date: '',
             location: '',
             description: '',
@@ -453,8 +475,8 @@ export const AdminPage = () => {
             }
 
             const data: Record<string, string> = {
-                badge: eventForm.badge,
-                badgeCn: eventForm.badgeCn,
+                label: eventForm.label,
+                labelCn: eventForm.labelCn,
                 title: eventForm.title,
                 titleCn: eventForm.titleCn,
                 date: eventForm.date,
@@ -908,6 +930,18 @@ export const AdminPage = () => {
                 return isEnglish
                     ? <>deleted event {r.eventTitle ?? ''}</>
                     : <>删除了活动 {r.eventTitle ?? ''}</>;
+            case 'label-create':
+                return isEnglish
+                    ? <>created label {r.labelName ?? ''}</>
+                    : <>创建了标签 {r.labelName ?? ''}</>;
+            case 'label-edit':
+                return isEnglish
+                    ? <>edited label {r.labelName ?? ''}</>
+                    : <>编辑了标签 {r.labelName ?? ''}</>;
+            case 'label-delete':
+                return isEnglish
+                    ? <>deleted label {r.labelName ?? ''}</>
+                    : <>删除了标签 {r.labelName ?? ''}</>;
         }
     };
 
@@ -937,6 +971,10 @@ export const AdminPage = () => {
                 return isEnglish ? 'Event' : '活动';
             case 'event-delete':
                 return isEnglish ? 'Event' : '活动';
+            case 'label-create':
+            case 'label-edit':
+            case 'label-delete':
+                return isEnglish ? 'Label' : '标签';
         }
     };
 
@@ -1215,22 +1253,41 @@ export const AdminPage = () => {
                                                 />
                                             </label>
                                             <label>
-                                                <span>{isEnglish ? 'Badge (English)' : '标签（英文）'}</span>
-                                                <input
-                                                    value={eventForm.badge}
-                                                    onChange={e => setEventForm(f => ({...f, badge: e.target.value}))}
-                                                    className="admin-search-input"
-                                                    placeholder={isEnglish ? 'e.g. Gaming, Music, Food' : '如 游戏、音乐、美食'}
-                                                />
-                                            </label>
-                                            <label>
-                                                <span>{isEnglish ? 'Badge (Chinese)' : '标签（中文）'}</span>
-                                                <input
-                                                    value={eventForm.badgeCn}
-                                                    onChange={e => setEventForm(f => ({...f, badgeCn: e.target.value}))}
-                                                    className="admin-search-input"
-                                                    placeholder={isEnglish ? 'Badge in Chinese' : '中文标签'}
-                                                />
+                                                <span>{isEnglish ? 'Label' : '标签'}</span>
+                                                <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                                                    <select
+                                                        value={eventLabels.find(l => l.name === eventForm.label)?.id ?? ''}
+                                                        onChange={e => {
+                                                            const lbl = eventLabels.find(l => l.id === e.target.value);
+                                                            setEventForm(f => ({
+                                                                ...f,
+                                                                label: lbl?.name ?? '',
+                                                                labelCn: lbl?.nameCn ?? ''
+                                                            }));
+                                                        }}
+                                                        className="admin-search-input"
+                                                    >
+                                                        <option
+                                                            value="">{isEnglish ? '-- Select label --' : '-- 选择标签 --'}</option>
+                                                        {eventLabels.map(l => (
+                                                            <option key={l.id}
+                                                                    value={l.id}>{isEnglish ? l.name : l.nameCn || l.name}</option>
+                                                        ))}
+                                                    </select>
+                                                    <a
+                                                        href="/admin/labels"
+                                                        target="_blank"
+                                                        className="admin-generate-btn"
+                                                        style={{
+                                                            whiteSpace: 'nowrap',
+                                                            padding: '6px 12px',
+                                                            fontSize: '13px',
+                                                            textDecoration: 'none'
+                                                        }}
+                                                    >
+                                                        {isEnglish ? 'Manage' : '管理'}
+                                                    </a>
+                                                </div>
                                             </label>
                                             <label>
                                                 <span>{isEnglish ? 'Date' : '日期'}</span>
@@ -1360,7 +1417,7 @@ export const AdminPage = () => {
                                             <div>
                                                 <h3>{isEnglish ? managedEvt.title : managedEvt.titleCn}</h3>
                                                 <p className="admin-event-detail-meta">
-                                                    <span>{isEnglish ? managedEvt.badge : managedEvt.badgeCn}</span>
+                                                    <span>{isEnglish ? managedEvt.label : managedEvt.labelCn}</span>
                                                     <span>{managedEvt.date}</span>
                                                     <span>{managedEvt.location}</span>
                                                 </p>
@@ -2076,6 +2133,9 @@ export const AdminPage = () => {
                                 <option value="event-create">{isEnglish ? 'Event Create' : '创建活动'}</option>
                                 <option value="event-edit">{isEnglish ? 'Event Edit' : '编辑活动'}</option>
                                 <option value="event-delete">{isEnglish ? 'Event Delete' : '删除活动'}</option>
+                                <option value="label-create">{isEnglish ? 'Label Create' : '创建标签'}</option>
+                                <option value="label-edit">{isEnglish ? 'Label Edit' : '编辑标签'}</option>
+                                <option value="label-delete">{isEnglish ? 'Label Delete' : '删除标签'}</option>
                             </select>
                             <select
                                 className="record-filter-select"

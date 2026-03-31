@@ -143,7 +143,7 @@ export const ClaimPage = () => {
                                 : (isEnglish ? 'Already Checked In' : '已签到此活动')}
                         </h2>
                         <p className="claim-event-title">{isEnglish ? event.title : event.titleCn}</p>
-                        <p className="claim-event-category">{isEnglish ? event.badge : event.badgeCn}</p>
+                        <p className="claim-event-category">{isEnglish ? event.label : event.labelCn}</p>
                     </>
                 )}
 

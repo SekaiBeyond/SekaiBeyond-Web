@@ -4,8 +4,8 @@ import { getFirebaseDb } from './firebase';
 
 export interface PastEvent {
     id: string;
-    badge: string;
-    badgeCn: string;
+    label: string;
+    labelCn: string;
     title: string;
     titleCn: string;
     date: string;
@@ -32,8 +32,8 @@ async function fetchPastEvents(force = false): Promise<PastEvent[]> {
             const data = docSnap.data();
             events.push({
                 id: docSnap.id,
-                badge: data.badge ?? '',
-                badgeCn: data.badgeCn ?? '',
+                label: data.label ?? '',
+                labelCn: data.labelCn ?? '',
                 title: data.title ?? '',
                 titleCn: data.titleCn ?? '',
                 date: data.date ?? '',

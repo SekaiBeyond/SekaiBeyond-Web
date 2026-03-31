@@ -103,7 +103,7 @@ const EventCard = ({event, attended, isEnglish, showAdminLink}: {
             {!attended && <span className="profile-event-lock">&#128274;</span>}
         </div>
         <div className="profile-event-info">
-            <span className="profile-event-category">{isEnglish ? event.badge : event.badgeCn}</span>
+            <span className="profile-event-category">{isEnglish ? event.label : event.labelCn}</span>
             <h3 className="profile-event-title">
                 {showAdminLink ? (
                     <a href={`/admin?tab=events&event=${encodeURIComponent(event.id)}`}

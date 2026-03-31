@@ -31,7 +31,7 @@ export const PastEvents = () => {
                             style={{cursor: 'pointer'}}
                         />
                         <div className="event-content">
-                            <span className="event-badge">{isEnglish ? event.badge : event.badgeCn}</span>
+                            <span className="event-label">{isEnglish ? event.label : event.labelCn}</span>
                             <h3 className="event-title">{isEnglish ? event.title : event.titleCn}</h3>
                             <div className="event-date">
                                 <span>📅</span>
