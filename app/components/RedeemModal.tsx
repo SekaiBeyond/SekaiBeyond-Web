@@ -1,0 +1,217 @@
+import { useEffect, useRef, useState } from 'react';
+import { arrayUnion, collection, doc, getDocs, increment, query, updateDoc, where } from 'firebase/firestore';
+import { useAuth } from '~/components/AuthProvider';
+import { useLanguage } from '~/components/LanguageContextProvider';
+import { getFirebaseDb } from '~/lib/firebase';
+
+interface BadgeDef {
+    id: string;
+    name: string;
+    nameCn: string;
+    description: string;
+    descriptionCn: string;
+    imageUrl: string;
+}
+
+export const RedeemModal = () => {
+    const {user, profile, updateProfile} = useAuth();
+    const {isEnglish} = useLanguage();
+    const [show, setShow] = useState(false);
+    const [input, setInput] = useState('');
+    const [state, setState] = useState<'idle' | 'claiming' | 'success' | 'error'>('idle');
+    const [badge, setBadge] = useState<BadgeDef | null>(null);
+    const [error, setError] = useState('');
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const handler = () => {
+            if (!user || !profile) return;
+            setShow(true);
+            setInput('');
+            setState('idle');
+            setBadge(null);
+            setError('');
+            setTimeout(() => inputRef.current?.focus(), 50);
+        };
+        window.addEventListener('open-redeem-modal', handler);
+        return () => window.removeEventListener('open-redeem-modal', handler);
+    }, [user, profile]);
+
+    const close = () => setShow(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = input.trim();
+        if (!trimmed) {
+            setError(isEnglish ? 'Please enter a code.' : '请输入激活码。');
+            return;
+        }
+        if (trimmed.length < 6) {
+            setError(isEnglish ? 'Code is too short.' : '激活码太短。');
+            return;
+        }
+        if (!user || !profile) return;
+
+        setState('claiming');
+        setError('');
+        try {
+            const db = getFirebaseDb();
+            const codesRef = collection(db, 'badgeActivationCodes');
+            const q = query(codesRef, where('code', '==', trimmed), where('active', '==', true));
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                setState('error');
+                setError(isEnglish ? 'Invalid or deactivated code.' : '激活码无效或已被停用。');
+                return;
+            }
+
+            const codeDoc = snapshot.docs[0];
+            const data = codeDoc.data();
+            const badgeId = data.badgeId as string;
+
+            const now = new Date();
+            if (data.activeFrom && new Date(data.activeFrom) > now) {
+                setState('error');
+                setError(isEnglish ? 'This code is not active yet.' : '此激活码尚未激活。');
+                return;
+            }
+            if (data.activeUntil && new Date(data.activeUntil) < now) {
+                setState('error');
+                setError(isEnglish ? 'This code has expired.' : '此激活码已过期。');
+                return;
+            }
+
+            const usedCount = data.usedCount ?? 0;
+            const maxUses = data.maxUses ?? 0;
+            if (maxUses > 0 && usedCount >= maxUses) {
+                setState('error');
+                setError(isEnglish ? 'This code has reached its maximum uses.' : '此激活码已达到最大使用次数。');
+                return;
+            }
+
+            if (profile.badges?.includes(badgeId)) {
+                setState('error');
+                setError(isEnglish ? 'You already have this badge.' : '您已拥有此徽章。');
+                return;
+            }
+
+            const badgeSnap = await getDocs(query(collection(db, 'badges'), where('__name__', '==', badgeId)));
+            if (!badgeSnap.empty) {
+                const bd = badgeSnap.docs[0].data();
+                setBadge({
+                    id: badgeSnap.docs[0].id,
+                    name: bd.name ?? '',
+                    nameCn: bd.nameCn ?? '',
+                    description: bd.description ?? '',
+                    descriptionCn: bd.descriptionCn ?? '',
+                    imageUrl: bd.imageUrl ?? '/images/mika.png',
+                });
+            }
+
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {badges: arrayUnion(badgeId)});
+            await updateDoc(doc(db, 'badgeActivationCodes', codeDoc.id), {usedCount: increment(1)});
+            await updateProfile({badges: [...(profile.badges ?? []), badgeId]});
+            setState('success');
+        } catch {
+            setState('error');
+            setError(isEnglish ? 'Something went wrong. Please try again.' : '出错了，请重试。');
+        }
+    };
+
+    if (!show) return null;
+
+    return (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
+            <div className="modal-content">
+                <button className="modal-close" onClick={close} type="button">×</button>
+
+                {state === 'idle' && (
+                    <>
+                        <h2 style={{textAlign: 'center', marginBottom: '8px', color: '#c77dff'}}>
+                            {isEnglish ? 'Redeem Badge Code' : '兑换徽章激活码'}
+                        </h2>
+                        <p style={{textAlign: 'center', color: '#555', marginBottom: '20px'}}>
+                            {isEnglish
+                                ? 'Enter your activation code to claim a badge.'
+                                : '输入激活码来领取徽章。'}
+                        </p>
+                        <form onSubmit={handleSubmit}>
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                value={input}
+                                onChange={e => {
+                                    setInput(e.target.value);
+                                    setError('');
+                                }}
+                                placeholder={isEnglish ? 'Enter activation code' : '输入激活码'}
+                                className="admin-search-input"
+                                style={{width: '100%', boxSizing: 'border-box', textAlign: 'center'}}
+                            />
+                            {error && (
+                                <p style={{color: '#e5534b', fontSize: '13px', margin: '6px 0 0', textAlign: 'center'}}>
+                                    {error}
+                                </p>
+                            )}
+                            <button type="submit" className="admin-generate-btn"
+                                    style={{marginTop: '12px', width: '100%'}}>
+                                {isEnglish ? 'Claim Badge' : '领取徽章'}
+                            </button>
+                        </form>
+                    </>
+                )}
+
+                {state === 'claiming' && (
+                    <div style={{textAlign: 'center'}}>
+                        <div className="profile-spinner" style={{margin: '0 auto 20px'}}/>
+                        <p>{isEnglish ? 'Claiming...' : '领取中...'}</p>
+                    </div>
+                )}
+
+                {state === 'success' && badge && (
+                    <>
+                        <div className="claim-badge-icon">
+                            <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn}/>
+                        </div>
+                        <h2 style={{textAlign: 'center', marginBottom: '8px', color: '#c77dff'}}>
+                            {isEnglish ? 'Badge Claimed!' : '徽章领取成功！'}
+                        </h2>
+                        <p className="claim-event-title" style={{textAlign: 'center'}}>
+                            {isEnglish ? badge.name : badge.nameCn}
+                        </p>
+                        <p className="claim-event-category" style={{textAlign: 'center'}}>
+                            {isEnglish ? badge.description : badge.descriptionCn}
+                        </p>
+                        <button className="admin-generate-btn" style={{marginTop: '16px', width: '100%'}}
+                                onClick={close}>
+                            {isEnglish ? 'Done' : '完成'}
+                        </button>
+                    </>
+                )}
+
+                {state === 'error' && (
+                    <>
+                        <h2 style={{textAlign: 'center', marginBottom: '8px', color: '#e5534b'}}>
+                            {isEnglish ? 'Claim Failed' : '领取失败'}
+                        </h2>
+                        <p style={{textAlign: 'center', color: '#555', marginBottom: '20px'}}>{error}</p>
+                        <button
+                            className="admin-generate-btn"
+                            style={{marginTop: '12px', width: '100%'}}
+                            onClick={() => {
+                                setState('idle');
+                                setInput('');
+                                setError('');
+                                setTimeout(() => inputRef.current?.focus(), 50);
+                            }}
+                        >
+                            {isEnglish ? 'Try Again' : '重试'}
+                        </button>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};

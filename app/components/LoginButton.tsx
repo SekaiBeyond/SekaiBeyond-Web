@@ -28,6 +28,15 @@ export const LoginButton = () => {
                     <a href="/profile" className="user-dropdown-item">
                         {isEnglish ? 'My Profile' : '我的主页'}
                     </a>
+                    <button
+                        className="user-dropdown-item"
+                        onClick={() => {
+                            // Trigger redeem modal via custom event
+                            window.dispatchEvent(new CustomEvent('open-redeem-modal'));
+                        }}
+                    >
+                        {isEnglish ? 'Redeem Code' : '兑换激活码'}
+                    </button>
                     {profile && hasPermission(profile.group, 'core-staff') && (
                         <a href="/admin" className="user-dropdown-item">
                             {isEnglish ? 'Admin Panel' : '管理面板'}

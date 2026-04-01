@@ -4,6 +4,7 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { LanguageProvider } from "~/components/LanguageContextProvider";
 import { AuthProvider } from "~/components/AuthProvider";
+import { RedeemModal } from "~/components/RedeemModal";
 import React from "react";
 
 export function Layout({children}: {children: React.ReactNode}) {
@@ -18,6 +19,7 @@ export function Layout({children}: {children: React.ReactNode}) {
         <body>
         <LanguageProvider>
             <AuthProvider>
+                <RedeemModal/>
                 {children}
             </AuthProvider>
         </LanguageProvider>

@@ -2167,6 +2167,38 @@ footer {
     font-weight: 600;
 }
 
+.redeem-code-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding: 10px 18px;
+    border: 2px solid #d4a6ff;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f8f0ff 0%, #f0e6ff 100%);
+    color: #8b5cf6;
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+    align-self: center;
+}
+
+.redeem-code-btn:hover {
+    background: linear-gradient(135deg, #ede0ff 0%, #ddd0ff 100%);
+    border-color: #8b5cf6;
+    color: #7c3aed;
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+    transform: translateY(-1px);
+}
+
+.redeem-code-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+}
+
 /* Badge Section */
 .badge-section {
     margin-top: 20px;

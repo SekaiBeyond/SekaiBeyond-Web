@@ -11,6 +11,24 @@ The site deploys automatically to GitHub Pages when you push to `main` via GitHu
 3. Enable **Google sign-in** under Authentication > Sign-in method
 4. Create a **Cloud Firestore** database (choose a nearby region)
 5. Set Firestore **Security Rules** — copy the contents of [`firestore.rules`](firestore.rules) into the Firestore Rules editor
+6. Create the required **Composite Indexes** — either:
+   - Deploy automatically: `firebase deploy --only firestore:indexes`
+   - Or manually: paste the index definition from an error URL (Firestore will link you directly to the index creator when you first hit a query that needs one)
+
+### Firestore Indexes Explained
+
+Firestore requires composite indexes for queries that filter on multiple fields. Each index is a sorted table covering the fields in order, allowing O(1) lookups instead of O(n) collection scans.
+
+For example, querying `where('code', '==', X) AND where('active', '==', true)` needs an index on `[code, active]` — Firestore can't efficiently combine two single-field indexes for this.
+
+The app currently requires:
+- `badgeActivationCodes` by `[code, active]` — used when claiming a badge with a code
+- `badgeActivationCodes` by `[badgeId, createdAt desc]` — used in the admin panel to load codes for a badge
+6. Create the required **Composite Indexes** — either:
+   - Click the index creation link shown in the browser error when you first use the admin panel or badge claim page, **or**
+   - Deploy the indexes defined in [`firestore.indexes.json`](firestore.indexes.json) with `firebase deploy --only firestore:indexes`
+
+   Without these composite indexes, certain queries will fail with a `missing index` error.
 
 ### 2. GitHub Repository Secrets
 

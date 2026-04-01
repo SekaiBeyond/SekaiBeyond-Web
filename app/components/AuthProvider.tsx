@@ -58,7 +58,12 @@ interface AuthContextType {
     loading: boolean;
     signIn: () => Promise<void>;
     signOut: () => Promise<void>;
-    updateProfile: (updates: {displayName?: string; photoFile?: File; deletePhoto?: boolean}) => Promise<void>;
+    updateProfile: (updates: {
+        displayName?: string;
+        photoFile?: File;
+        deletePhoto?: boolean;
+        badges?: string[]
+    }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -134,11 +139,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
         setProfile(null);
     };
 
-    const updateProfile = async (updates: {displayName?: string; photoFile?: File; deletePhoto?: boolean}) => {
+    const updateProfile = async (updates: {
+        displayName?: string;
+        photoFile?: File;
+        deletePhoto?: boolean;
+        badges?: string[]
+    }) => {
         if (!user || !profile) return;
 
         const userRef = doc(getFirebaseDb(), 'users', user.uid);
-        const docUpdates: Record<string, string> = {};
+        const docUpdates: Record<string, string | string[]> = {};
 
         if (updates.displayName !== undefined) {
             docUpdates.displayName = updates.displayName;
@@ -155,6 +165,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
             const storageRef = ref(getFirebaseStorage(), `avatars/${user.uid}`);
             await uploadBytes(storageRef, updates.photoFile);
             docUpdates.photoURL = await getDownloadURL(storageRef);
+        }
+
+        if (updates.badges !== undefined) {
+            docUpdates.badges = updates.badges;
         }
 
         if (Object.keys(docUpdates).length > 0) {

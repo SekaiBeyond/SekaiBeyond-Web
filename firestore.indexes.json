@@ -1,0 +1,20 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "badgeActivationCodes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "badgeId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "badgeActivationCodes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "code", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" }
+      ]
+    }
+  ]
+}

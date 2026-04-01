@@ -42,6 +42,19 @@ interface BadgeCode {
     activeUntil: string | null;
 }
 
+interface BadgeActivationCode {
+    id: string;
+    code: string;
+    badgeId: string;
+    active: boolean;
+    activeFrom: string | null;
+    activeUntil: string | null;
+    maxUses: number;
+    usedCount: number;
+    createdBy: string;
+    createdAt: Date;
+}
+
 interface BadgeDef {
     id: string;
     name: string;
@@ -179,6 +192,15 @@ export const AdminPage = () => {
     const [editBadgeImage, setEditBadgeImage] = useState<File | null>(null);
     const [editBadgeImagePreview, setEditBadgeImagePreview] = useState<string | null>(null);
     const [savingBadgeDef, setSavingBadgeDef] = useState(false);
+
+    // Badge activation codes
+    const [badgeActivationCodes, setBadgeActivationCodes] = useState<BadgeActivationCode[]>([]);
+    const [loadingActivationCodes, setLoadingActivationCodes] = useState(false);
+    const [generatingActivationCode, setGeneratingActivationCode] = useState(false);
+    const [newCodeMaxUses, setNewCodeMaxUses] = useState<number>(100);
+    const [newCodeUnlimited, setNewCodeUnlimited] = useState(false);
+    const [newCodeFrom, setNewCodeFrom] = useState('');
+    const [newCodeUntil, setNewCodeUntil] = useState('');
     const [creatorSearchQuery, setCreatorSearchQuery] = useState('');
     const [creatorSearchResults, setCreatorSearchResults] = useState<UserRecord[]>([]);
     const [searchingCreator, setSearchingCreator] = useState(false);
@@ -860,6 +882,7 @@ export const AdminPage = () => {
     const selectBadgeDef = async (bd: BadgeDef) => {
         setSelectedBadgeDef(bd);
         setLoadingBadgeHolders(true);
+        setBadgeActivationCodes([]);
         try {
             const db = getFirebaseDb();
             const usersRef = collection(db, 'users');
@@ -869,6 +892,102 @@ export const AdminPage = () => {
         } finally {
             setLoadingBadgeHolders(false);
         }
+        loadBadgeActivationCodes(bd.id).then();
+    };
+
+    const loadBadgeActivationCodes = async (badgeId: string) => {
+        setLoadingActivationCodes(true);
+        try {
+            const db = getFirebaseDb();
+            const codesRef = collection(db, 'badgeActivationCodes');
+            const q1 = query(codesRef, where('badgeId', '==', badgeId), orderBy('createdAt', 'desc'));
+            const snapshot = await getDocs(q1);
+            const codes: BadgeActivationCode[] = snapshot.docs.map(docSnap => {
+                const data = docSnap.data();
+                return {
+                    id: docSnap.id,
+                    code: data.code,
+                    badgeId: data.badgeId,
+                    active: data.active ?? true,
+                    activeFrom: data.activeFrom ?? null,
+                    activeUntil: data.activeUntil ?? null,
+                    maxUses: data.maxUses ?? 0,
+                    usedCount: data.usedCount ?? 0,
+                    createdBy: data.createdBy ?? '',
+                    createdAt: data.createdAt?.toDate?.() ?? new Date(),
+                };
+            });
+            setBadgeActivationCodes(codes);
+        } finally {
+            setLoadingActivationCodes(false);
+        }
+    };
+
+    const createBadgeActivationCode = async (badgeId: string) => {
+        if (!user) return;
+        setGeneratingActivationCode(true);
+        try {
+            const bd = badgeDefs.find(d => d.id === badgeId);
+            const db = getFirebaseDb();
+            const code = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+            const docData: Record<string, unknown> = {
+                code,
+                badgeId,
+                createdBy: user.uid,
+                createdAt: serverTimestamp(),
+                active: true,
+                maxUses: newCodeMaxUses,
+                usedCount: 0,
+            };
+            if (newCodeFrom) docData.activeFrom = newCodeFrom;
+            if (newCodeUntil) docData.activeUntil = newCodeUntil;
+
+            const docRef = await addDoc(collection(db, 'badgeActivationCodes'), docData);
+
+            await addDoc(collection(db, 'records'), {
+                type: 'code-create',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                badgeId,
+                badgeName: bd?.name ?? badgeId,
+                code,
+                timestamp: serverTimestamp(),
+            });
+
+            setBadgeActivationCodes(prev => [{
+                id: docRef.id,
+                code,
+                badgeId,
+                active: true,
+                activeFrom: newCodeFrom || null,
+                activeUntil: newCodeUntil || null,
+                maxUses: newCodeMaxUses,
+                usedCount: 0,
+                createdBy: user.uid,
+                createdAt: new Date(),
+            }, ...prev]);
+            setNewCodeMaxUses(100);
+            setNewCodeFrom('');
+            setNewCodeUntil('');
+        } finally {
+            setGeneratingActivationCode(false);
+        }
+    };
+
+    const toggleActivationCodeActive = async (ac: BadgeActivationCode) => {
+        const db = getFirebaseDb();
+        await updateDoc(doc(db, 'badgeActivationCodes', ac.id), {active: !ac.active});
+        setBadgeActivationCodes(prev => prev.map(c => c.id === ac.id ? {...c, active: !c.active} : c));
+    };
+
+    const deleteActivationCode = async (ac: BadgeActivationCode) => {
+        const db = getFirebaseDb();
+        await deleteDoc(doc(db, 'badgeActivationCodes', ac.id));
+        setBadgeActivationCodes(prev => prev.filter(c => c.id !== ac.id));
+    };
+
+    const getClaimBadgeUrl = (code: string) => {
+        return `${window.location.origin}/claim-badge?code=${code}`;
     };
 
     const toggleUserBadge = async (userRecord: UserRecord, badgeId: string, badgeName: string) => {
@@ -2298,6 +2417,161 @@ export const AdminPage = () => {
                                         <span className="admin-user-group-tag" data-group={u.group}>
                                             {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
                                         </span>
+                                    </div>
+                                ))}
+
+                                {/* Badge Activation Codes */}
+                                <h4 className="admin-badges-title" style={{marginTop: '28px'}}>
+                                    {isEnglish ? 'Activation Codes' : '激活码'}
+                                    {badgeActivationCodes.length > 0 && (
+                                        <span className="admin-badges-count">{badgeActivationCodes.length}</span>
+                                    )}
+                                </h4>
+
+                                <div className="admin-activation-create-form">
+                                    <div className="admin-code-time-inputs">
+                                        <label>
+                                            <span>{isEnglish ? 'Max Uses' : '最大使用次数'}</span>
+                                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    value={newCodeUnlimited ? '' : newCodeMaxUses}
+                                                    disabled={newCodeUnlimited}
+                                                    onChange={(e) => {
+                                                        setNewCodeUnlimited(false);
+                                                        const val = parseInt(e.target.value);
+                                                        setNewCodeMaxUses(isNaN(val) ? 1 : Math.max(1, val));
+                                                    }}
+                                                    className="admin-search-input"
+                                                    placeholder={newCodeUnlimited ? '∞' : undefined}
+                                                />
+                                                <label style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    fontSize: '13px',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={newCodeUnlimited}
+                                                        onChange={(e) => {
+                                                            setNewCodeUnlimited(false);
+                                                            if (e.target.checked) setNewCodeMaxUses(0);
+                                                            else setNewCodeMaxUses(100);
+                                                        }}
+                                                    />
+                                                    {isEnglish ? 'Unlimited' : '无限次'}
+                                                </label>
+                                            </div>
+                                        </label>
+                                        <label>
+                                            <span>{isEnglish ? 'Active From' : '生效时间'}</span>
+                                            <input
+                                                type="datetime-local"
+                                                value={newCodeFrom}
+                                                onChange={(e) => setNewCodeFrom(e.target.value)}
+                                                className="admin-search-input"
+                                            />
+                                        </label>
+                                        <label>
+                                            <span>{isEnglish ? 'Active Until' : '失效时间'}</span>
+                                            <input
+                                                type="datetime-local"
+                                                value={newCodeUntil}
+                                                onChange={(e) => setNewCodeUntil(e.target.value)}
+                                                className="admin-search-input"
+                                            />
+                                        </label>
+                                    </div>
+                                    <button
+                                        className="admin-generate-btn"
+                                        onClick={() => createBadgeActivationCode(selectedBadgeDef.id)}
+                                        disabled={generatingActivationCode}
+                                        style={{marginTop: '12px'}}
+                                    >
+                                        {generatingActivationCode
+                                            ? (isEnglish ? 'Generating...' : '生成中...')
+                                            : (isEnglish ? '+ Generate Activation Code' : '+ 生成激活码')}
+                                    </button>
+                                </div>
+
+                                {loadingActivationCodes &&
+                                    <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+
+                                {!loadingActivationCodes && badgeActivationCodes.length === 0 && (
+                                    <p className="admin-no-results">
+                                        {isEnglish ? 'No activation codes yet.' : '暂无激活码。'}
+                                    </p>
+                                )}
+
+                                {!loadingActivationCodes && badgeActivationCodes.map((ac) => (
+                                    <div key={ac.id} className="admin-single-code" style={{marginTop: '12px'}}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            flexWrap: 'wrap'
+                                        }}>
+                                            <span
+                                                className={ac.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
+                                                {ac.active
+                                                    ? (isEnglish ? 'Active' : '活跃')
+                                                    : (isEnglish ? 'Inactive' : '已停用')}
+                                            </span>
+                                            <span style={{fontSize: '13px', color: '#7a8190'}}>
+                                                {ac.maxUses === 0
+                                                    ? (isEnglish
+                                                        ? `Used ${ac.usedCount} / ∞ times`
+                                                        : `已使用 ${ac.usedCount} / ∞ 次`)
+                                                    : (isEnglish
+                                                        ? `Used ${ac.usedCount} / ${ac.maxUses} times`
+                                                        : `已使用 ${ac.usedCount} / ${ac.maxUses} 次`)}
+                                            </span>
+                                            {ac.activeFrom && (
+                                                <span style={{fontSize: '12px', color: '#999'}}>
+                                                    {isEnglish ? 'From: ' : '从：'}{new Date(ac.activeFrom).toLocaleString()}
+                                                </span>
+                                            )}
+                                            {ac.activeUntil && (
+                                                <span style={{fontSize: '12px', color: '#999'}}>
+                                                    {isEnglish ? 'Until: ' : '至：'}{new Date(ac.activeUntil).toLocaleString()}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="admin-single-code-qr">
+                                            <QRCodeSVG value={getClaimBadgeUrl(ac.code)} size={160}/>
+                                        </div>
+                                        <div className="admin-code-url">
+                                            <input
+                                                readOnly
+                                                value={getClaimBadgeUrl(ac.code)}
+                                                className="admin-code-input"
+                                            />
+                                            <button
+                                                className="admin-copy-btn"
+                                                onClick={() => navigator.clipboard.writeText(getClaimBadgeUrl(ac.code))}
+                                            >
+                                                {isEnglish ? 'Copy' : '复制'}
+                                            </button>
+                                        </div>
+                                        <div className="admin-single-code-actions">
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-grant"
+                                                onClick={() => toggleActivationCodeActive(ac)}
+                                            >
+                                                {ac.active
+                                                    ? (isEnglish ? 'Deactivate' : '停用')
+                                                    : (isEnglish ? 'Activate' : '激活')}
+                                            </button>
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-revoke"
+                                                onClick={() => deleteActivationCode(ac)}
+                                            >
+                                                {isEnglish ? 'Delete' : '删除'}
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
