@@ -113,6 +113,7 @@ interface ActivityRecord {
     targetUid?: string;
     targetName?: string;
     eventTitle?: string;
+    eventId?: string;
     badgeId?: string;
     badgeName?: string;
     labelName?: string;
@@ -404,6 +405,7 @@ export const AdminPage = () => {
                 targetUid: userRecord.uid,
                 targetName: userRecord.displayName,
                 eventTitle: evt?.title ?? eventId,
+                eventId,
                 timestamp: serverTimestamp(),
             });
 
@@ -575,10 +577,13 @@ export const AdminPage = () => {
                 icon: iconUrl,
             };
 
+            let newEventId: string | undefined;
             if (editingEvent) {
                 await updateDoc(doc(db, 'pastEvents', editingEvent.id), data);
+                newEventId = editingEvent.id;
             } else {
-                await addDoc(collection(db, 'pastEvents'), data);
+                const docRef = await addDoc(collection(db, 'pastEvents'), data);
+                newEventId = docRef.id;
             }
 
             await addDoc(collection(db, 'records'), {
@@ -586,6 +591,7 @@ export const AdminPage = () => {
                 performedBy: user!.uid,
                 performedByName: profile!.displayName,
                 eventTitle: eventForm.title,
+                eventId: newEventId,
                 timestamp: serverTimestamp(),
             });
 
@@ -610,6 +616,7 @@ export const AdminPage = () => {
             performedBy: user!.uid,
             performedByName: profile!.displayName,
             eventTitle: event.title,
+            eventId: event.id,
             timestamp: serverTimestamp(),
         });
         await refreshEvents();
@@ -1045,26 +1052,27 @@ export const AdminPage = () => {
         <span className="record-clickable-name" onClick={() => lookupUserByUid(uid)}>{name}</span>
     );
 
-    const clickableBadge = (badgeId: string, badgeName: string) => {
+    const clickableBadge = (badgeId: string, badgeName?: string) => {
         const bd = badgeDefs.find(d => d.id === badgeId);
-        if (!bd) return <span>{badgeName}</span>;
+        const name = badgeName ?? (bd ? (isEnglish ? bd.name : bd.nameCn) : badgeId);
+        if (!bd) return <span>{name}</span>;
         return (
             <span className="record-clickable-name" onClick={() => {
                 setActiveTab('badges');
                 selectBadgeDef(bd).then();
-            }}>{badgeName}</span>
+            }}>{name}</span>
         );
     };
 
-    const clickableEvent = (eventTitle: string) => {
-        const evt = pastEvents.find(e => e.title === eventTitle);
+    const clickableEvent = (eventId: string, eventTitle?: string) => {
+        const evt = pastEvents.find(e => e.id === eventId);
+        const title = evt ? (isEnglish ? evt.title : evt.titleCn) : (eventTitle ?? eventId);
+        if (!evt) return <span>{title}</span>;
         return (
             <span className="record-clickable-name" onClick={() => {
-                if (evt) {
-                    setActiveTab('events');
-                    selectManagedEvent(evt.id).then();
-                }
-            }}>{eventTitle}</span>
+                setActiveTab('events');
+                selectManagedEvent(evt.id).then();
+            }}>{title}</span>
         );
     };
 
@@ -1075,38 +1083,40 @@ export const AdminPage = () => {
                 return isEnglish
                     ? <>assigned {target} from {GROUP_LABELS[r.oldGroup!].en} to {GROUP_LABELS[r.newGroup!].en}</>
                     : <>将 {target} 从 {GROUP_LABELS[r.oldGroup!].zh} 改为 {GROUP_LABELS[r.newGroup!].zh}</>;
-            case 'code-create':
+            case 'code-create': {
+                const badge = r.badgeId ? clickableBadge(r.badgeId) : r.badgeName;
                 return isEnglish
-                    ? <>created claim code for {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
-                    : <>为 {r.eventTitle ? clickableEvent(r.eventTitle) : ''} 创建了兑换码</>;
+                    ? <>created claim code for {badge}</>
+                    : <>为 {badge} 创建了兑换码</>;
+            }
             case 'badge-grant':
                 return isEnglish
-                    ? <>marked {target} as attended {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
-                    : <>标记 {target} 参加了 {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>;
+                    ? <>marked {target} as attended {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
+                    : <>标记 {target} 参加了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
             case 'badge-revoke':
                 return isEnglish
-                    ? <>revoked {target}'s attendance for {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
-                    : <>撤销了 {target} 的 {r.eventTitle ? clickableEvent(r.eventTitle) : ''} 签到</>;
+                    ? <>revoked {target}'s attendance for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
+                    : <>撤销了 {target} 的 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')} 签到</>;
             case 'achievement-grant': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? '') : r.badgeName;
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
                 return isEnglish
                     ? <>granted {badge} badge to {target}</>
                     : <>授予 {target} {badge} 徽章</>;
             }
             case 'achievement-revoke': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? '') : r.badgeName;
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
                 return isEnglish
                     ? <>revoked {badge} badge from {target}</>
                     : <>撤销了 {target} 的 {badge} 徽章</>;
             }
             case 'badge-create': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? '') : r.badgeName;
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
                 return isEnglish
                     ? <>created badge {badge}</>
                     : <>创建了徽章 {badge}</>;
             }
             case 'badge-edit': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? '') : r.badgeName;
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
                 return isEnglish
                     ? <>edited badge {badge}</>
                     : <>编辑了徽章 {badge}</>;
@@ -1117,16 +1127,16 @@ export const AdminPage = () => {
                     : <>删除了徽章 {r.badgeName ?? ''}</>;
             case 'event-create':
                 return isEnglish
-                    ? <>created event {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
-                    : <>创建了活动 {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>;
+                    ? <>created event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
+                    : <>创建了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
             case 'event-edit':
                 return isEnglish
-                    ? <>edited event {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>
-                    : <>编辑了活动 {r.eventTitle ? clickableEvent(r.eventTitle) : ''}</>;
+                    ? <>edited event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
+                    : <>编辑了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
             case 'event-delete':
                 return isEnglish
-                    ? <>deleted event {r.eventTitle ?? ''}</>
-                    : <>删除了活动 {r.eventTitle ?? ''}</>;
+                    ? <>deleted event {r.eventTitle ?? r.eventId ?? ''}</>
+                    : <>删除了活动 {r.eventTitle ?? r.eventId ?? ''}</>;
             case 'label-create':
                 return isEnglish
                     ? <>created label {r.labelName ?? ''}</>
