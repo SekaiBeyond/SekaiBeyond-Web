@@ -96,6 +96,11 @@ export const AdminPage = () => {
         pendingAction.current = {type: 'selectEvent', id: eventId};
     }, []);
 
+    const handleSelectUpcomingEvent = useCallback((eventId: string) => {
+        setActiveTab('upcoming');
+        pendingAction.current = {type: 'selectUpcomingEvent', id: eventId};
+    }, []);
+
     // Execute pending cross-tab actions after the target tab mounts
     useEffect(() => {
         const action = pendingAction.current;
@@ -111,6 +116,9 @@ export const AdminPage = () => {
                 break;
             case 'selectEvent':
                 eventsTabRef.current?.selectManagedEvent(action.id);
+                break;
+            case 'selectUpcomingEvent':
+                upcomingTabRef.current?.selectEvent(action.id);
                 break;
         }
     }, [activeTab]);
@@ -251,6 +259,7 @@ export const AdminPage = () => {
                         onLookupUser={handleLookupUser}
                         onSelectBadge={handleSelectBadge}
                         onSelectEvent={handleSelectEvent}
+                        onSelectUpcomingEvent={handleSelectUpcomingEvent}
                     />
                 )}
             </div>

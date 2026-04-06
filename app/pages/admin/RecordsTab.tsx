@@ -1,15 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import {
-    collection,
-    type DocumentSnapshot,
-    getDocs,
-    limit,
-    orderBy,
-    query,
-    type QueryConstraint,
-    startAfter,
-    where,
-} from 'firebase/firestore';
+import { collection, type DocumentSnapshot, getDocs, limit, orderBy, query, startAfter, } from 'firebase/firestore';
 import { GROUP_LABELS } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
@@ -18,17 +8,15 @@ import type { ActivityRecord, BadgeDef, RecordType } from './types';
 
 const PAGE_SIZE = 20;
 
-const getTypeConstraint = (filter: string): QueryConstraint | null => {
-    switch (filter) {
-        case '':
-            return null;
-        case 'attend':
-            return where('type', 'in', ['badge-grant', 'event-attend']);
-        case 'unattend':
-            return where('type', 'in', ['badge-revoke', 'event-unattend']);
-        default:
-            return where('type', '==', filter);
-    }
+const TYPE_CATEGORIES: Record<string, RecordType[]> = {
+    group: ['group-assign'],
+    code: ['code-create', 'code-activate', 'code-deactivate', 'code-delete',
+        'event-code-activate', 'event-code-deactivate', 'event-code-time-window'],
+    attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend'],
+    badge: ['achievement-grant', 'achievement-revoke', 'badge-create', 'badge-edit', 'badge-delete'],
+    event: ['event-create', 'event-edit', 'event-delete',
+        'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete', 'upcoming-event-archive'],
+    tag: ['tag-create', 'tag-edit', 'tag-delete'],
 };
 
 interface RecordsTabProps {
@@ -37,6 +25,7 @@ interface RecordsTabProps {
     onLookupUser: (uid: string) => void;
     onSelectBadge: (badgeId: string) => void;
     onSelectEvent: (eventId: string) => void;
+    onSelectUpcomingEvent: (eventId: string) => void;
 }
 
 export const RecordsTab = ({
@@ -45,6 +34,7 @@ export const RecordsTab = ({
                                onLookupUser,
                                onSelectBadge,
                                onSelectEvent,
+                               onSelectUpcomingEvent,
                            }: RecordsTabProps) => {
     const {isEnglish} = useLanguage();
     const [records, setRecords] = useState<ActivityRecord[]>([]);
@@ -54,18 +44,13 @@ export const RecordsTab = ({
     const [recordFilterType, setRecordFilterType] = useState<string>('');
     const [recordFilterActor, setRecordFilterActor] = useState('');
 
-    const loadRecords = useCallback(async (after?: DocumentSnapshot, typeFilter?: string, actorFilter?: string) => {
+    const loadRecords = useCallback(async (after?: DocumentSnapshot) => {
         setLoadingRecords(true);
         try {
             const db = getFirebaseDb();
-            const constraints: QueryConstraint[] = [];
-            const typeConstraint = getTypeConstraint(typeFilter ?? '');
-            if (typeConstraint) constraints.push(typeConstraint);
-            if (actorFilter) constraints.push(where('performedBy', '==', actorFilter));
-            constraints.push(orderBy('timestamp', 'desc'));
-            if (after) constraints.push(startAfter(after));
-            constraints.push(limit(PAGE_SIZE));
-            const q = query(collection(db, 'records'), ...constraints);
+            const q = after
+                ? query(collection(db, 'records'), orderBy('timestamp', 'desc'), startAfter(after), limit(PAGE_SIZE))
+                : query(collection(db, 'records'), orderBy('timestamp', 'desc'), limit(PAGE_SIZE));
             const snapshot = await getDocs(q);
 
             const items: ActivityRecord[] = snapshot.docs.map(docSnap => {
@@ -105,13 +90,24 @@ export const RecordsTab = ({
         setRecords([]);
         setLastDoc(null);
         setHasMore(true);
-        loadRecords(undefined, recordFilterType, recordFilterActor).catch(() => {
-        });
-    }, [loadRecords, recordFilterType, recordFilterActor]);
+        loadRecords().catch(console.error);
+    }, [loadRecords]);
 
     const loadMore = () => {
-        if (lastDoc && hasMore) loadRecords(lastDoc, recordFilterType, recordFilterActor).then();
+        if (lastDoc && hasMore) loadRecords(lastDoc).then();
     };
+
+    const filteredRecords = useMemo(() => {
+        let result = records;
+        if (recordFilterType) {
+            const types = TYPE_CATEGORIES[recordFilterType];
+            if (types) result = result.filter(r => types.includes(r.type));
+        }
+        if (recordFilterActor) {
+            result = result.filter(r => r.performedBy === recordFilterActor);
+        }
+        return result;
+    }, [records, recordFilterType, recordFilterActor]);
 
     const uniqueActors = useMemo(() => records.reduce<{uid: string; name: string}[]>((acc, r) => {
         if (!acc.some(a => a.uid === r.performedBy)) {
@@ -136,6 +132,12 @@ export const RecordsTab = ({
         const title = evt ? (isEnglish ? evt.title : evt.titleCn) : (eventTitle ?? eventId);
         if (!evt) return <span>{title}</span>;
         return <span className="record-clickable-name" onClick={() => onSelectEvent(evt.id)}>{title}</span>;
+    };
+
+    const clickableUpcomingEvent = (eventId: string | undefined, eventTitle?: string): ReactNode => {
+        const title = eventTitle ?? eventId ?? '';
+        if (!eventId) return <span>{title}</span>;
+        return <span className="record-clickable-name" onClick={() => onSelectUpcomingEvent(eventId)}>{title}</span>;
     };
 
     const getRecordLabel = (r: ActivityRecord): ReactNode => {
@@ -207,12 +209,12 @@ export const RecordsTab = ({
                     : <>删除了活动 {r.eventTitle ?? r.eventId ?? ''}</>;
             case 'upcoming-event-create':
                 return isEnglish
-                    ? <>created upcoming event {r.eventTitle ?? ''}</>
-                    : <>创建了活动预告 {r.eventTitle ?? ''}</>;
+                    ? <>created upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
+                    : <>创建了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
             case 'upcoming-event-edit':
                 return isEnglish
-                    ? <>edited upcoming event {r.eventTitle ?? ''}</>
-                    : <>编辑了活动预告 {r.eventTitle ?? ''}</>;
+                    ? <>edited upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
+                    : <>编辑了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
             case 'upcoming-event-delete':
                 return isEnglish
                     ? <>deleted upcoming event {r.eventTitle ?? ''}</>
@@ -301,31 +303,12 @@ export const RecordsTab = ({
                     onChange={e => setRecordFilterType(e.target.value)}
                 >
                     <option value="">{isEnglish ? 'All Types' : '所有类型'}</option>
-                    <option value="group-assign">{isEnglish ? 'Group' : '用户组'}</option>
-                    <option value="code-create">{isEnglish ? 'Code Create' : '创建兑换码'}</option>
-                    <option value="code-activate">{isEnglish ? 'Code Activate' : '激活兑换码'}</option>
-                    <option value="code-deactivate">{isEnglish ? 'Code Deactivate' : '停用兑换码'}</option>
-                    <option value="code-delete">{isEnglish ? 'Code Delete' : '删除兑换码'}</option>
-                    <option value="attend">{isEnglish ? 'Event Attend' : '签到'}</option>
-                    <option value="unattend">{isEnglish ? 'Event Revoke' : '取消签到'}</option>
-                    <option value="achievement-grant">{isEnglish ? 'Badge Grant' : '授予徽章'}</option>
-                    <option value="achievement-revoke">{isEnglish ? 'Badge Revoke' : '撤销徽章'}</option>
-                    <option value="badge-create">{isEnglish ? 'Badge Create' : '创建徽章'}</option>
-                    <option value="badge-edit">{isEnglish ? 'Badge Edit' : '编辑徽章'}</option>
-                    <option value="badge-delete">{isEnglish ? 'Badge Delete' : '删除徽章'}</option>
-                    <option value="event-create">{isEnglish ? 'Event Create' : '创建活动'}</option>
-                    <option value="event-edit">{isEnglish ? 'Event Edit' : '编辑活动'}</option>
-                    <option value="event-delete">{isEnglish ? 'Event Delete' : '删除活动'}</option>
-                    <option value="upcoming-event-create">{isEnglish ? 'Upcoming Create' : '创建活动预告'}</option>
-                    <option value="upcoming-event-edit">{isEnglish ? 'Upcoming Edit' : '编辑活动预告'}</option>
-                    <option value="upcoming-event-delete">{isEnglish ? 'Upcoming Delete' : '删除活动预告'}</option>
-                    <option value="upcoming-event-archive">{isEnglish ? 'Event Archive' : '归档活动'}</option>
-                    <option value="event-code-activate">{isEnglish ? 'Code Enable' : '启用签到码'}</option>
-                    <option value="event-code-deactivate">{isEnglish ? 'Code Disable' : '停用签到码'}</option>
-                    <option value="event-code-time-window">{isEnglish ? 'Code Time Window' : '签到码时间窗口'}</option>
-                    <option value="tag-create">{isEnglish ? 'Tag Create' : '创建标签'}</option>
-                    <option value="tag-edit">{isEnglish ? 'Tag Edit' : '编辑标签'}</option>
-                    <option value="tag-delete">{isEnglish ? 'Tag Delete' : '删除标签'}</option>
+                    <option value="group">{isEnglish ? 'Group' : '用户组'}</option>
+                    <option value="code">{isEnglish ? 'Code' : '兑换码'}</option>
+                    <option value="attend">{isEnglish ? 'Attend' : '签到'}</option>
+                    <option value="badge">{isEnglish ? 'Badge' : '徽章'}</option>
+                    <option value="event">{isEnglish ? 'Event' : '活动'}</option>
+                    <option value="tag">{isEnglish ? 'Tag' : '标签'}</option>
                 </select>
                 <select
                     className="record-filter-select"
@@ -337,17 +320,28 @@ export const RecordsTab = ({
                         <option key={a.uid} value={a.uid}>{a.name}</option>
                     ))}
                 </select>
+                {(recordFilterType || recordFilterActor) && (
+                    <button
+                        className="record-filter-reset"
+                        onClick={() => {
+                            setRecordFilterType('');
+                            setRecordFilterActor('');
+                        }}
+                    >
+                        {isEnglish ? 'Reset' : '重置'}
+                    </button>
+                )}
             </div>
 
             {loadingRecords && records.length === 0 && (
                 <div className="profile-spinner" style={{margin: '20px auto'}}/>
             )}
 
-            {!loadingRecords && records.length === 0 && (
+            {!loadingRecords && filteredRecords.length === 0 && (
                 <p className="admin-no-results">{isEnglish ? 'No records yet.' : '暂无记录。'}</p>
             )}
 
-            {records.map(r => (
+            {filteredRecords.map(r => (
                 <div key={r.id} className="record-row">
                     <span className={`record-type-tag record-type-${r.type}`}>
                         {getRecordTypeTag(r.type)}

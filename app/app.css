@@ -3374,6 +3374,23 @@ footer {
     border-color: #ff6b9d;
 }
 
+.record-filter-reset {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 16px;
+    background: rgba(255, 107, 157, 0.15);
+    color: #ff6b9d;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.record-filter-reset:hover {
+    background: rgba(255, 107, 157, 0.3);
+}
+
 .record-row {
     display: flex;
     align-items: center;
