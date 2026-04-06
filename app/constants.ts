@@ -18,74 +18,6 @@ export const LINKS = {
     email: `mailto:${RSO_EMAIL}`
 }
 
-/** Configuration for an upcoming event displayed on the website */
-export interface UpcomingEventType {
-    /** Event start date and time */
-    START_AT: Date;
-    /** Event end date and time (event hidden after this) */
-    END_AT: Date;
-    /** Event name in English */
-    NAME: string;
-    /** Event name in Chinese */
-    NAME_CN: string;
-    /** Event description in English */
-    DESCRIPTION: string;
-    /** Event description in Chinese */
-    DESCRIPTION_CN: string;
-    /** Event location in English */
-    LOCATION: string;
-    /** Event location in Chinese */
-    LOCATION_CN: string;
-    /** URL for ticket purchase (optional) */
-    BUY_TICKET?: string;
-    /** URL for more information (optional) */
-    LEARN_MORE?: string;
-    /** Custom button text in English (optional) */
-    CUSTOM_BUTTON_TEXT?: string;
-    /** Custom button text in Chinese (optional) */
-    CUSTOM_BUTTON_TEXT_CN?: string;
-    /** Custom button URL (optional) */
-    CUSTOM_BUTTON_LINK?: string;
-    /** Path to event poster image */
-    POSTER: string;
-    /** Credit for poster creator (optional) */
-    POSTER_CREDIT?: string;
-}
-
-export const UPCOMING_EVENTS: UpcomingEventType[] = [
-    {
-        START_AT: new Date('2026-03-21T15:00:00'),
-        END_AT: new Date('2026-03-21T18:00:00'),
-        NAME: "Bowtea Maid Café",
-        NAME_CN: "Bowtea 女仆咖啡",
-        DESCRIPTION: "Our beloved maid café returns for a second year! Enjoy an afternoon of themed drinks, sweet treats, and charming maid service across two cozy rooms. With interactive games, photo ops, and heartfelt hospitality, it's the perfect way to unwind and make new friends.",
-        DESCRIPTION_CN: "广受好评的UW女仆咖啡厅再度回归！在两间精心布置的房间里，品尝主题饮品与精致甜点，感受女仆们温馨贴心的服务。互动小游戏、合影留念与满满的元气，带你度过一个治愈又欢乐的下午。",
-        LOCATION: "Spratlen Hall 311 & 313",
-        LOCATION_CN: "Spratlen Hall 311 & 313",
-        POSTER: "/images/maid_cafe_2026.png",
-        CUSTOM_BUTTON_TEXT: "Reserve",
-        CUSTOM_BUTTON_TEXT_CN: "预约",
-        CUSTOM_BUTTON_LINK: "https://forms.gle/99nmMywkLCyaxXPg6"
-    },
-    {
-        START_AT: new Date('2026-05-23T15:00:00'),
-        END_AT: new Date('2026-05-23T19:00:00'),
-        NAME: "Sekai Band Con",
-        NAME_CN: "少女乐队Only",
-        DESCRIPTION: "Bringing the community together through Girls Band  themed live performances, fan-zine marketplaces, and rhythm game challenges.",
-        DESCRIPTION_CN: "少女乐队主题的热血乐队Live、同人制品售卖及趣味音游竞赛，为西雅图同好打造一场沉浸式的音乐与二次元文化盛宴。",
-        LOCATION: "UW Denny Room",
-        LOCATION_CN: "UW Denny Room",
-        POSTER: "/images/sekai_ban_con_2026.png"
-    }
-].filter(event => event.END_AT > new Date()); // Filter to only show events that haven't ended yet
-
-// Validate that END_AT is always later than START_AT
-UPCOMING_EVENTS.forEach((event, index) => {
-    if (event.END_AT <= event.START_AT) {
-        throw new Error(`Invalid event at index ${index} ("${event.NAME}"): END_AT must be later than START_AT`);
-    }
-});
 
 interface Officer {
     name: string;
@@ -208,9 +140,8 @@ const SHARED_LINKS: NavLink[] = [
     {
         id: 'upcoming',
         href: '#upcoming',
-        labelEn: UPCOMING_EVENTS.length > 1 ? 'Upcoming Events' : 'Upcoming Event',
+        labelEn: 'Upcoming Events',
         labelCn: '活动预告',
-        disabled: UPCOMING_EVENTS.length === 0,
     },
     {
         id: 'team',

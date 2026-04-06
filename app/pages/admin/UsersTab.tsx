@@ -44,12 +44,12 @@ export interface UsersTabHandle {
 }
 
 export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
-    pastEvents,
-    badgeDefs,
-    user,
-    profile,
-}, ref) => {
-    const { isEnglish } = useLanguage();
+                                                                       pastEvents,
+                                                                       badgeDefs,
+                                                                       user,
+                                                                       profile,
+                                                                   }, ref) => {
+    const {isEnglish} = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<UserRecord[]>([]);
     const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
@@ -84,7 +84,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 setLoadingRecent(false);
             }
         };
-        loadRecentUsers().catch(() => {});
+        loadRecentUsers().catch(() => {
+        });
     }, []);
 
     const loadMoreRecentUsers = async () => {
@@ -153,7 +154,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 ? userRecord.attendedEvents.filter(e => e !== eventId)
                 : [...userRecord.attendedEvents, eventId];
 
-            const updated = { ...userRecord, attendedEvents: updatedEvents };
+            const updated = {...userRecord, attendedEvents: updatedEvents};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
         } catch {
@@ -196,14 +197,15 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 const holderPct = totalSnap.data().count > 0
                     ? Math.round((holderSnap.data().count / totalSnap.data().count) * 100)
                     : 0;
-                await updateDoc(doc(db, 'badges', badgeId), { holderPct });
-            } catch { /* holderPct is non-critical */ }
+                await updateDoc(doc(db, 'badges', badgeId), {holderPct});
+            } catch { /* holderPct is non-critical */
+            }
 
             const updatedBadges = has
                 ? userRecord.badges.filter(id => id !== badgeId)
                 : [...userRecord.badges, badgeId];
 
-            const updated = { ...userRecord, badges: updatedBadges };
+            const updated = {...userRecord, badges: updatedBadges};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
         } catch {
@@ -227,7 +229,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const userRef = doc(db, 'users', userRecord.uid);
 
             const batch = writeBatch(db);
-            batch.update(userRef, { group: newGroup });
+            batch.update(userRef, {group: newGroup});
             batch.set(doc(collection(db, 'records')), {
                 type: 'group-assign',
                 performedBy: user.uid,
@@ -240,7 +242,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             });
             await batch.commit();
 
-            const updated = { ...userRecord, group: newGroup };
+            const updated = {...userRecord, group: newGroup};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
         } catch {
@@ -259,7 +261,10 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     type="email"
                     placeholder={isEnglish ? 'Search by email address...' : '输入邮箱地址搜索...'}
                     value={searchQuery}
-                    onChange={(e) => { setSearchQuery(e.target.value); setHasSearched(false); }}
+                    onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setHasSearched(false);
+                    }}
                     onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
                     className="admin-search-input"
                 />
@@ -274,7 +279,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 <div className="admin-results">
                     {searchResults.map((u) => (
                         <div key={u.uid} className="admin-user-row" onClick={() => setSelectedUser(u)}>
-                            <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer" />
+                            <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
                             <div>
                                 <div className="admin-user-name">{u.displayName}</div>
                                 <div className="admin-user-email">{u.email}</div>
@@ -301,7 +306,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     </h4>
                     {recentUsers.map((u) => (
                         <div key={u.uid} className="admin-user-row" onClick={() => setSelectedUser(u)}>
-                            <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer" />
+                            <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
                             <div>
                                 <div className="admin-user-name">{u.displayName}</div>
                                 <div className="admin-user-email">{u.email}</div>
@@ -316,7 +321,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                             </span>
                         </div>
                     ))}
-                    {loadingRecent && <div className="profile-spinner" style={{ margin: '20px auto' }} />}
+                    {loadingRecent && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
                     {!loadingRecent && hasMoreRecent && recentUsers.length > 0 && (
                         <button className="admin-load-more-btn" onClick={loadMoreRecentUsers}>
                             {isEnglish ? 'Load More' : '加载更多'}
@@ -332,7 +337,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     </button>
 
                     <div className="admin-detail-header">
-                        <img src={selectedUser.photoURL} alt="" className="admin-detail-avatar" referrerPolicy="no-referrer" />
+                        <img src={selectedUser.photoURL} alt="" className="admin-detail-avatar"
+                             referrerPolicy="no-referrer"/>
                         <div>
                             <h3>{selectedUser.displayName}</h3>
                             <p>{selectedUser.email}</p>
@@ -387,10 +393,12 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                     const has = selectedUser.badges.includes(bd.id);
                                     return (
                                         <div key={bd.id} className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
-                                            <img src={bd.imageUrl} alt="" className="admin-badge-img" />
+                                            <img src={bd.imageUrl} alt="" className="admin-badge-img"/>
                                             <div className="admin-badge-info">
-                                                <span className="admin-badge-name">{isEnglish ? bd.name : bd.nameCn}</span>
-                                                <span className="admin-badge-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
+                                                <span
+                                                    className="admin-badge-name">{isEnglish ? bd.name : bd.nameCn}</span>
+                                                <span
+                                                    className="admin-badge-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
                                             </div>
                                             <button
                                                 className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
@@ -420,9 +428,10 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                             const has = selectedUser.attendedEvents.includes(event.id);
                             return (
                                 <div key={event.id} className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
-                                    <img src={event.icon} alt="" className="admin-badge-img" />
+                                    <img src={event.icon} alt="" className="admin-badge-img"/>
                                     <div className="admin-badge-info">
-                                        <span className="admin-badge-name">{isEnglish ? event.title : event.titleCn}</span>
+                                        <span
+                                            className="admin-badge-name">{isEnglish ? event.title : event.titleCn}</span>
                                         <span className="admin-badge-date">{event.date}</span>
                                     </div>
                                     <button

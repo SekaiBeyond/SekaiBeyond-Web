@@ -49,7 +49,8 @@ export const ClaimPage = () => {
             const claimedEventId = result.data.eventId;
             setEventId(claimedEventId);
             setState('success');
-            refreshProfile().catch(() => {});
+            refreshProfile().catch(() => {
+            });
         };
 
         claimEvent().catch((err) => {

@@ -15,14 +15,14 @@ interface CreatorPickerProps {
 }
 
 export const CreatorPicker = ({
-    selected,
-    onSelect,
-    manualName,
-    onManualNameChange,
-    manualLink,
-    onManualLinkChange,
-}: CreatorPickerProps) => {
-    const { isEnglish } = useLanguage();
+                                  selected,
+                                  onSelect,
+                                  manualName,
+                                  onManualNameChange,
+                                  manualLink,
+                                  onManualLinkChange,
+                              }: CreatorPickerProps) => {
+    const {isEnglish} = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<UserRecord[]>([]);
     const [searching, setSearching] = useState(false);
@@ -47,7 +47,7 @@ export const CreatorPicker = ({
             </span>
             {selected ? (
                 <div className="admin-creator-selected">
-                    <img src={selected.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer" />
+                    <img src={selected.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
                     <div>
                         <div className="admin-user-name">{selected.displayName}</div>
                         <div className="admin-user-email">{selected.email}</div>
@@ -80,7 +80,7 @@ export const CreatorPicker = ({
                             setSearchQuery('');
                             setSearchResults([]);
                         }}>
-                            <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer" />
+                            <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
                             <div>
                                 <div className="admin-user-name">{u.displayName}</div>
                                 <div className="admin-user-email">{u.email}</div>
@@ -89,7 +89,7 @@ export const CreatorPicker = ({
                     ))}
                     {searchResults.length === 0 && !searching && (
                         <>
-                            <label style={{ marginTop: '8px' }}>
+                            <label style={{marginTop: '8px'}}>
                                 <span>{isEnglish ? 'Or enter name manually' : '或手动输入名称'}</span>
                                 <input
                                     value={manualName}

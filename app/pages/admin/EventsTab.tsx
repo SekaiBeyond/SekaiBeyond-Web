@@ -1,14 +1,5 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
-import {
-    collection,
-    doc,
-    getDocs,
-    query,
-    serverTimestamp,
-    updateDoc,
-    where,
-    writeBatch,
-} from 'firebase/firestore';
+import { collection, doc, getDocs, query, serverTimestamp, updateDoc, where, writeBatch, } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import type { User } from 'firebase/auth';
 import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
@@ -31,12 +22,12 @@ export interface EventsTabHandle {
 }
 
 export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
-    pastEvents,
-    refreshEvents,
-    user,
-    profile,
-}, forwardedRef) => {
-    const { isEnglish } = useLanguage();
+                                                                          pastEvents,
+                                                                          refreshEvents,
+                                                                          user,
+                                                                          profile,
+                                                                      }, forwardedRef) => {
+    const {isEnglish} = useLanguage();
     const [managedEvent, setManagedEvent] = useState<string | null>(null);
     const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees'>('codes');
     const [eventCode, setEventCode] = useState<BadgeCode | null>(null);
@@ -67,7 +58,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         }
     };
 
-    useImperativeHandle(forwardedRef, () => ({ selectManagedEvent }));
+    useImperativeHandle(forwardedRef, () => ({selectManagedEvent}));
 
     const resetEventForm = () => {
         setEventForm({
@@ -90,7 +81,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         const normalizedDate = parts.length === 3
             ? `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
             : event.date;
-        setEventForm({ ...event, date: normalizedDate });
+        setEventForm({...event, date: normalizedDate});
         setEditingEvent(event);
         setEventImage(null);
         setEventImagePreview(event.icon || null);
@@ -138,9 +129,9 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const generateEventCodeFn = async (eventId: string) => {
         setGeneratingCode(true);
         try {
-            const result = await callGenerateEventCode({ eventId });
-            const { id, code } = result.data;
-            setEventCode({ id, code, eventId, active: true, activeFrom: null, activeUntil: null });
+            const result = await callGenerateEventCode({eventId});
+            const {id, code} = result.data;
+            setEventCode({id, code, eventId, active: true, activeFrom: null, activeUntil: null});
             setCodeFrom('');
             setCodeUntil('');
         } catch {
@@ -154,8 +145,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         if (!eventCode) return;
         try {
             const db = getFirebaseDb();
-            await updateDoc(doc(db, 'badgeCodes', eventCode.id), { active: !eventCode.active });
-            setEventCode({ ...eventCode, active: !eventCode.active });
+            await updateDoc(doc(db, 'badgeCodes', eventCode.id), {active: !eventCode.active});
+            setEventCode({...eventCode, active: !eventCode.active});
         } catch {
             alert(isEnglish ? 'Failed to update code status.' : '更新签到码状态失败。');
         }
@@ -167,8 +158,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         const activeUntil = codeUntil || null;
         try {
             const db = getFirebaseDb();
-            await updateDoc(doc(db, 'badgeCodes', eventCode.id), { activeFrom, activeUntil });
-            setEventCode({ ...eventCode, activeFrom, activeUntil });
+            await updateDoc(doc(db, 'badgeCodes', eventCode.id), {activeFrom, activeUntil});
+            setEventCode({...eventCode, activeFrom, activeUntil});
         } catch {
             alert(isEnglish ? 'Failed to save time window.' : '保存时间窗口失败。');
         }
@@ -296,7 +287,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     <span>{isEnglish ? 'Title (English)' : '标题（英文）'}</span>
                                     <input
                                         value={eventForm.title}
-                                        onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
+                                        onChange={e => setEventForm(f => ({...f, title: e.target.value}))}
                                         className="admin-search-input"
                                         placeholder={isEnglish ? 'Event title' : '活动标题'}
                                     />
@@ -305,7 +296,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     <span>{isEnglish ? 'Title (Chinese)' : '标题（中文）'}</span>
                                     <input
                                         value={eventForm.titleCn}
-                                        onChange={e => setEventForm(f => ({ ...f, titleCn: e.target.value }))}
+                                        onChange={e => setEventForm(f => ({...f, titleCn: e.target.value}))}
                                         className="admin-search-input"
                                         placeholder={isEnglish ? 'Event title in Chinese' : '活动中文标题'}
                                     />
@@ -314,7 +305,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     <span>{isEnglish ? 'Label (English)' : '标签（英文）'}</span>
                                     <input
                                         value={eventForm.label}
-                                        onChange={e => setEventForm(f => ({ ...f, label: e.target.value }))}
+                                        onChange={e => setEventForm(f => ({...f, label: e.target.value}))}
                                         className="admin-search-input"
                                         placeholder={isEnglish ? 'e.g. Workshop' : '例如 Workshop'}
                                     />
@@ -323,7 +314,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     <span>{isEnglish ? 'Label (Chinese)' : '标签（中文）'}</span>
                                     <input
                                         value={eventForm.labelCn}
-                                        onChange={e => setEventForm(f => ({ ...f, labelCn: e.target.value }))}
+                                        onChange={e => setEventForm(f => ({...f, labelCn: e.target.value}))}
                                         className="admin-search-input"
                                         placeholder={isEnglish ? 'e.g. 工作坊' : '例如 工作坊'}
                                     />
@@ -333,7 +324,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     <input
                                         type="date"
                                         value={eventForm.date}
-                                        onChange={e => setEventForm(f => ({ ...f, date: e.target.value }))}
+                                        onChange={e => setEventForm(f => ({...f, date: e.target.value}))}
                                         className="admin-search-input"
                                     />
                                 </label>
@@ -341,38 +332,38 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     <span>{isEnglish ? 'Location' : '地点'}</span>
                                     <input
                                         value={eventForm.location}
-                                        onChange={e => setEventForm(f => ({ ...f, location: e.target.value }))}
+                                        onChange={e => setEventForm(f => ({...f, location: e.target.value}))}
                                         className="admin-search-input"
                                         placeholder={isEnglish ? 'Event location' : '活动地点'}
                                     />
                                 </label>
                                 <label>
                                     <span>{isEnglish ? 'Event Image' : '活动图片'}</span>
-                                    <input type="file" accept="image/webp" onChange={handleImageChange} />
+                                    <input type="file" accept="image/webp" onChange={handleImageChange}/>
                                     {eventImagePreview && (
-                                        <img src={eventImagePreview} alt="" className="admin-badge-image-preview" />
+                                        <img src={eventImagePreview} alt="" className="admin-badge-image-preview"/>
                                     )}
                                 </label>
-                                <label style={{ gridColumn: '1 / -1' }}>
+                                <label style={{gridColumn: '1 / -1'}}>
                                     <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
                                     <textarea
                                         value={eventForm.description}
-                                        onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))}
+                                        onChange={e => setEventForm(f => ({...f, description: e.target.value}))}
                                         className="admin-search-input admin-textarea"
                                         placeholder={isEnglish ? 'Event description' : '活动描述'}
                                     />
                                 </label>
-                                <label style={{ gridColumn: '1 / -1' }}>
+                                <label style={{gridColumn: '1 / -1'}}>
                                     <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
                                     <textarea
                                         value={eventForm.descriptionCn}
-                                        onChange={e => setEventForm(f => ({ ...f, descriptionCn: e.target.value }))}
+                                        onChange={e => setEventForm(f => ({...f, descriptionCn: e.target.value}))}
                                         className="admin-search-input admin-textarea"
                                         placeholder={isEnglish ? 'Event description in Chinese' : '活动中文描述'}
                                     />
                                 </label>
                             </div>
-                            <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{display: 'flex', gap: '10px'}}>
                                 <button
                                     className="admin-generate-btn"
                                     onClick={saveEvent}
@@ -386,14 +377,17 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 </button>
                                 <button
                                     className="admin-back-btn"
-                                    onClick={() => { setShowCreateEvent(false); setEditingEvent(null); }}
+                                    onClick={() => {
+                                        setShowCreateEvent(false);
+                                        setEditingEvent(null);
+                                    }}
                                 >
                                     {isEnglish ? 'Cancel' : '取消'}
                                 </button>
                             </div>
                         </div>
                     ) : (
-                        <button className="admin-generate-btn" onClick={openCreateEvent} style={{ marginBottom: '16px' }}>
+                        <button className="admin-generate-btn" onClick={openCreateEvent} style={{marginBottom: '16px'}}>
                             {isEnglish ? '+ New Event' : '+ 新建活动'}
                         </button>
                     )}
@@ -404,9 +398,10 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 className="admin-event-card"
                                 onClick={() => selectManagedEvent(event.id)}
                             >
-                                <img src={event.icon} alt="" className="admin-event-card-img" />
+                                <img src={event.icon} alt="" className="admin-event-card-img"/>
                                 <div className="admin-event-card-info">
-                                    <span className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
+                                    <span
+                                        className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
                                     <span className="admin-event-card-date">{event.date}</span>
                                 </div>
                             </button>
@@ -422,7 +417,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                     {managedEvt && (
                         <>
                             <div className="admin-event-detail-header">
-                                <img src={managedEvt.icon} alt="" className="admin-event-detail-img" />
+                                <img src={managedEvt.icon} alt="" className="admin-event-detail-img"/>
                                 <div>
                                     <h3>{isEnglish ? managedEvt.title : managedEvt.titleCn}</h3>
                                     <p className="admin-event-detail-meta">
@@ -432,10 +427,13 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     </p>
                                 </div>
                             </div>
-                            <div className="admin-form-actions" style={{ marginBottom: '20px' }}>
+                            <div className="admin-form-actions" style={{marginBottom: '20px'}}>
                                 <button
                                     className="admin-generate-btn"
-                                    onClick={() => { setManagedEvent(null); openEditEvent(managedEvt); }}
+                                    onClick={() => {
+                                        setManagedEvent(null);
+                                        openEditEvent(managedEvt);
+                                    }}
                                 >
                                     {isEnglish ? 'Edit Event' : '编辑活动'}
                                 </button>
@@ -490,7 +488,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             ) : (
                                 <div className="admin-single-code">
                                     <div className="admin-single-code-qr">
-                                        <QRCodeSVG value={getClaimUrl(eventCode.code)} size={200} level="M" />
+                                        <QRCodeSVG value={getClaimUrl(eventCode.code)} size={200} level="M"/>
                                     </div>
                                     <div className="admin-code-url">
                                         <input
@@ -506,7 +504,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                             {isEnglish ? 'Copy' : '复制'}
                                         </button>
                                     </div>
-                                    <span className={eventCode.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
+                                    <span
+                                        className={eventCode.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
                                         {eventCode.active
                                             ? (isEnglish ? 'Active' : '启用')
                                             : (isEnglish ? 'Disabled' : '已停用')}
@@ -569,7 +568,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
 
                     {eventSubTab === 'attendees' && (
                         <div className="admin-attendees-section">
-                            {searching && <div className="profile-spinner" style={{ margin: '20px auto' }} />}
+                            {searching && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
                             {!searching && eventAttendees.length === 0 && (
                                 <p className="admin-no-results">{isEnglish ? 'No attendees yet.' : '暂无参加者。'}</p>
                             )}
@@ -580,7 +579,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             )}
                             {!searching && eventAttendees.map((u) => (
                                 <div key={u.uid} className="admin-user-row">
-                                    <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer" />
+                                    <img src={u.photoURL} alt="" className="admin-user-avatar"
+                                         referrerPolicy="no-referrer"/>
                                     <div>
                                         <div className="admin-user-name">{u.displayName}</div>
                                         <div className="admin-user-email">{u.email}</div>

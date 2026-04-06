@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { UPCOMING_EVENTS, type UpcomingEventType } from "~/constants";
+import React, { useEffect, useMemo, useState } from "react";
+import { type UpcomingEvent as UpcomingEventType, useUpcomingEvents } from "~/lib/upcomingEvents";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 
@@ -21,11 +21,10 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
     useEffect(() => {
         const calculateTimeLeft = () => {
             const now = new Date().getTime();
-            const startTime = event.START_AT.getTime();
-            const endTime = event.END_AT.getTime();
+            const startTime = event.startAt.getTime();
+            const endTime = event.endAt.getTime();
 
             if (now < startTime) {
-                // Event hasn't started yet - countdown to start
                 setIsInProgress(false);
                 const difference = startTime - now;
                 setTimeLeft({
@@ -35,7 +34,6 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     seconds: Math.floor((difference / 1000) % 60)
                 });
             } else if (now >= startTime && now < endTime) {
-                // Event is in progress - countdown to end
                 setIsInProgress(true);
                 const difference = endTime - now;
                 setTimeLeft({
@@ -45,7 +43,6 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     seconds: Math.floor((difference / 1000) % 60)
                 });
             } else {
-                // Event has ended
                 setIsInProgress(false);
                 setTimeLeft({
                     days: 0,
@@ -60,7 +57,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
         const timer = setInterval(calculateTimeLeft, 1000);
 
         return () => clearInterval(timer);
-    }, [event.START_AT, event.END_AT]);
+    }, [event.startAt, event.endAt]);
 
     return (
         <div className="convention-banner">
@@ -72,33 +69,31 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                         ? (isEnglish ? "Happening Now" : "进行中")
                         : (isEnglish ? "Coming Soon" : "即将到来")}
                 </span>
-                <h2 className="convention-title">{isEnglish ? event.NAME : event.NAME_CN}</h2>
-                {/* Event Date & Time */}
-                <p className="event-date-text">{event.START_AT.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                <h2 className="convention-title">{isEnglish ? event.name : event.nameCn}</h2>
+                <p className="event-date-text">{event.startAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
                     hour: 'numeric',
                     minute: 'numeric',
                 })}</p>
-                {/* Event Location */}
                 <div className="convention-location">
-                    {isEnglish ? event.LOCATION : event.LOCATION_CN}
+                    {isEnglish ? event.location : event.locationCn}
                 </div>
-                {/* Event Description */}
                 <p className="event-description-text">
-                    {isEnglish ? event.DESCRIPTION : event.DESCRIPTION_CN}
+                    {isEnglish ? event.description : event.descriptionCn}
                 </p>
-                <div className="convention-poster" style={{marginTop: '2rem'}}
-                     onClick={onPosterClick}>
-                    <img src={event.POSTER} alt={isEnglish ? "Event Poster" : "活动海报"}/>
-                    {event.POSTER_CREDIT ? (
-                        <p className="poster-credit">
-                            {isEnglish ? `Poster by ${event.POSTER_CREDIT}` : `海报由 ${event.POSTER_CREDIT} 制作`}
-                        </p>
-                    ) : null}
-                </div>
-                {/* Countdown Timer */}
+                {event.poster && (
+                    <div className="convention-poster" style={{marginTop: '2rem'}}
+                         onClick={onPosterClick}>
+                        <img src={event.poster} alt={isEnglish ? "Event Poster" : "活动海报"}/>
+                        {event.posterCredit ? (
+                            <p className="poster-credit">
+                                {isEnglish ? `Poster by ${event.posterCredit}` : `海报由 ${event.posterCredit} 制作`}
+                            </p>
+                        ) : null}
+                    </div>
+                )}
                 <div className="countdown-container">
                     {[
                         {value: timeLeft.days, label: isEnglish ? 'Days' : '天'},
@@ -116,16 +111,16 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                         </div>
                     ))}
                 </div>
-                {event.BUY_TICKET || event.LEARN_MORE ? (
+                {event.buyTicket || event.learnMore ? (
                     <div className="hero-buttons" style={{marginTop: '40px'}}>
-                        {event.BUY_TICKET ? (<a href={event.BUY_TICKET}
-                                                className="btn btn-primary con-btn">{isEnglish ? "Get Tickets" : "购票"}</a>) : null}
-                        {event.LEARN_MORE ? (<a href={event.LEARN_MORE}
-                                                className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>) : null}
+                        {event.buyTicket ? (<a href={event.buyTicket}
+                                               className="btn btn-primary con-btn">{isEnglish ? "Get Tickets" : "购票"}</a>) : null}
+                        {event.learnMore ? (<a href={event.learnMore}
+                                               className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>) : null}
                     </div>) : null}
-                {event.CUSTOM_BUTTON_LINK ? (
-                    <a href={event.CUSTOM_BUTTON_LINK}
-                       className="btn btn-secondary con-btn">{isEnglish ? event.CUSTOM_BUTTON_TEXT : event.CUSTOM_BUTTON_TEXT_CN}</a>
+                {event.customButtonLink ? (
+                    <a href={event.customButtonLink}
+                       className="btn btn-secondary con-btn">{isEnglish ? event.customButtonText : event.customButtonTextCn}</a>
                 ) : null}
             </div>
         </div>
@@ -134,12 +129,17 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
 
 export const UpcomingEvent = () => {
     const {isEnglish} = useLanguage();
+    const {upcomingEvents: allEvents} = useUpcomingEvents();
+    const activeEvents = useMemo(
+        () => allEvents.filter(e => e.endAt > new Date()),
+        [allEvents],
+    );
     const [selectedPoster, setSelectedPoster] = useState<string | null>(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isTransitioning, setIsTransitioning] = useState(false);
     const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('left');
 
-    const hasMultipleEvents = UPCOMING_EVENTS.length > 1;
+    const hasMultipleEvents = activeEvents.length > 1;
     const sectionTitle = hasMultipleEvents
         ? (isEnglish ? "Upcoming Events" : "活动预告")
         : (isEnglish ? "Upcoming Event" : "活动预告");
@@ -155,24 +155,23 @@ export const UpcomingEvent = () => {
     };
 
     const goToPrevious = () => {
-        const newIndex = currentIndex === 0 ? UPCOMING_EVENTS.length - 1 : currentIndex - 1;
+        const newIndex = currentIndex === 0 ? activeEvents.length - 1 : currentIndex - 1;
         switchEvent(newIndex, 'right');
     };
 
     const goToNext = () => {
-        const newIndex = currentIndex === UPCOMING_EVENTS.length - 1 ? 0 : currentIndex + 1;
+        const newIndex = currentIndex === activeEvents.length - 1 ? 0 : currentIndex + 1;
         switchEvent(newIndex, 'left');
     };
 
-    const currentEvent = UPCOMING_EVENTS[currentIndex];
+    const currentEvent = activeEvents[currentIndex];
 
     return (
-        <section id="upcoming" className="section" hidden={UPCOMING_EVENTS.length === 0}>
+        <section id="upcoming" className="section" hidden={activeEvents.length === 0}>
             <div className="section-header">
                 <h2 className="section-title">{sectionTitle}</h2>
             </div>
 
-            {/* Current Event */}
             {currentEvent && (
                 <div
                     className="carousel-slide"
@@ -186,12 +185,11 @@ export const UpcomingEvent = () => {
                     <EventCard
                         event={currentEvent}
                         isEnglish={isEnglish}
-                        onPosterClick={() => setSelectedPoster(currentEvent.POSTER)}
+                        onPosterClick={() => setSelectedPoster(currentEvent.poster)}
                     />
                 </div>
             )}
 
-            {/* Event Navigation - only show if multiple events */}
             {hasMultipleEvents && (
                 <div className="carousel-nav">
                     <button
@@ -202,9 +200,8 @@ export const UpcomingEvent = () => {
                         ‹
                     </button>
 
-                    {/* Dot indicators */}
                     <div className="carousel-dots">
-                        {UPCOMING_EVENTS.map((_, index) => (
+                        {activeEvents.map((_, index) => (
                             <button
                                 key={index}
                                 className={`carousel-dot${currentIndex === index ? ' carousel-dot--active' : ''}`}
@@ -224,7 +221,6 @@ export const UpcomingEvent = () => {
                 </div>
             )}
 
-            {/* Poster Modal */}
             {selectedPoster && (
                 <EventImageModal
                     imageUrl={selectedPoster}

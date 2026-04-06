@@ -35,9 +35,9 @@ export interface BadgesTabHandle {
 }
 
 export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
-    badgeDefs, setBadgeDefs, user, profile,
-}, ref) => {
-    const { isEnglish } = useLanguage();
+                                                                          badgeDefs, setBadgeDefs, user, profile,
+                                                                      }, ref) => {
+    const {isEnglish} = useLanguage();
 
     const BADGE_HOLDER_PAGE_SIZE = 20;
 
@@ -308,7 +308,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             });
             await batch.commit();
 
-            const updated = { ...selectedBadgeDef, ...updates };
+            const updated = {...selectedBadgeDef, ...updates};
             setBadgeDefs(prev => prev.map(d => d.id === selectedBadgeDef.id ? updated : d));
             setSelectedBadgeDef(updated);
             setEditingBadgeDef(false);
@@ -352,7 +352,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     const createBadgeActivationCode = async (badgeId: string) => {
         setGeneratingActivationCode(true);
         try {
-            const params: { badgeId: string; maxUses: number; activeFrom?: string; activeUntil?: string } = {
+            const params: {badgeId: string; maxUses: number; activeFrom?: string; activeUntil?: string} = {
                 badgeId,
                 maxUses: newCodeMaxUses,
             };
@@ -360,7 +360,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             if (newCodeUntil) params.activeUntil = new Date(newCodeUntil).toISOString();
 
             const result = await callGenerateBadgeActivationCode(params);
-            const { id, code } = result.data;
+            const {id, code} = result.data;
 
             setBadgeActivationCodes(prev => [{
                 id, code, badgeId,
@@ -385,12 +385,12 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
 
     const toggleActivationCodeActive = async (ac: BadgeActivationCode) => {
         const newActive = !ac.active;
-        setBadgeActivationCodes(prev => prev.map(c => c.id === ac.id ? { ...c, active: newActive } : c));
+        setBadgeActivationCodes(prev => prev.map(c => c.id === ac.id ? {...c, active: newActive} : c));
         try {
             const db = getFirebaseDb();
             const bd = badgeDefs.find(d => d.id === ac.badgeId);
             const batch = writeBatch(db);
-            batch.update(doc(db, 'badgeActivationCodes', ac.id), { active: newActive });
+            batch.update(doc(db, 'badgeActivationCodes', ac.id), {active: newActive});
             batch.set(doc(collection(db, 'records')), {
                 type: newActive ? 'code-activate' : 'code-deactivate',
                 performedBy: user.uid,
@@ -402,7 +402,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             });
             await batch.commit();
         } catch {
-            setBadgeActivationCodes(prev => prev.map(c => c.id === ac.id ? { ...c, active: ac.active } : c));
+            setBadgeActivationCodes(prev => prev.map(c => c.id === ac.id ? {...c, active: ac.active} : c));
             alert(isEnglish ? 'Failed to update code status.' : '更新激活码状态失败。');
         }
     };
@@ -442,7 +442,10 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     const handleNewImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (!validateImageFile(file, isEnglish)) { e.target.value = ''; return; }
+        if (!validateImageFile(file, isEnglish)) {
+            e.target.value = '';
+            return;
+        }
         setNewBadgeImage(file);
         if (newBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(newBadgeImagePreview);
         setNewBadgeImagePreview(URL.createObjectURL(file));
@@ -451,7 +454,10 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     const handleEditImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (!validateImageFile(file, isEnglish)) { e.target.value = ''; return; }
+        if (!validateImageFile(file, isEnglish)) {
+            e.target.value = '';
+            return;
+        }
         setEditBadgeImage(file);
         if (editBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(editBadgeImagePreview);
         setEditBadgeImagePreview(URL.createObjectURL(file));
@@ -469,19 +475,27 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                         <div className="admin-form-grid">
                             <label>
                                 <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
-                                <input value={newBadgeName} onChange={e => setNewBadgeName(e.target.value)} className="admin-search-input" placeholder={isEnglish ? 'Badge name' : '徽章名称'} />
+                                <input value={newBadgeName} onChange={e => setNewBadgeName(e.target.value)}
+                                       className="admin-search-input"
+                                       placeholder={isEnglish ? 'Badge name' : '徽章名称'}/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
-                                <input value={newBadgeNameCn} onChange={e => setNewBadgeNameCn(e.target.value)} className="admin-search-input" placeholder={isEnglish ? 'Badge name in Chinese' : '徽章中文名称'} />
+                                <input value={newBadgeNameCn} onChange={e => setNewBadgeNameCn(e.target.value)}
+                                       className="admin-search-input"
+                                       placeholder={isEnglish ? 'Badge name in Chinese' : '徽章中文名称'}/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
-                                <textarea value={newBadgeDesc} onChange={e => setNewBadgeDesc(e.target.value)} className="admin-search-input admin-textarea" placeholder={isEnglish ? 'Badge description' : '徽章描述'} />
+                                <textarea value={newBadgeDesc} onChange={e => setNewBadgeDesc(e.target.value)}
+                                          className="admin-search-input admin-textarea"
+                                          placeholder={isEnglish ? 'Badge description' : '徽章描述'}/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
-                                <textarea value={newBadgeDescCn} onChange={e => setNewBadgeDescCn(e.target.value)} className="admin-search-input admin-textarea" placeholder={isEnglish ? 'Badge description in Chinese' : '徽章中文描述'} />
+                                <textarea value={newBadgeDescCn} onChange={e => setNewBadgeDescCn(e.target.value)}
+                                          className="admin-search-input admin-textarea"
+                                          placeholder={isEnglish ? 'Badge description in Chinese' : '徽章中文描述'}/>
                             </label>
                             <CreatorPicker
                                 selected={newBadgeCreatorUser}
@@ -493,12 +507,14 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             />
                             <label>
                                 <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
-                                <input type="file" accept="image/webp" onChange={handleNewImageChange} />
-                                {newBadgeImagePreview && <img src={newBadgeImagePreview} alt="" className="admin-badge-image-preview" />}
+                                <input type="file" accept="image/webp" onChange={handleNewImageChange}/>
+                                {newBadgeImagePreview &&
+                                    <img src={newBadgeImagePreview} alt="" className="admin-badge-image-preview"/>}
                             </label>
                         </div>
                         <div className="admin-form-actions">
-                            <button className="admin-generate-btn" onClick={createBadgeDef} disabled={creatingBadgeDef || !newBadgeName.trim()}>
+                            <button className="admin-generate-btn" onClick={createBadgeDef}
+                                    disabled={creatingBadgeDef || !newBadgeName.trim()}>
                                 {creatingBadgeDef ? (isEnglish ? 'Creating...' : '创建中...') : (isEnglish ? 'Create Badge' : '创建徽章')}
                             </button>
                             <button className="admin-back-btn" onClick={resetCreateForm}>
@@ -521,10 +537,11 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     <div className="admin-event-grid">
                         {badgeDefs.map(bd => (
                             <button key={bd.id} className="admin-event-card" onClick={() => selectBadgeDef(bd)}>
-                                <img src={bd.imageUrl} alt="" className="admin-event-card-img" />
+                                <img src={bd.imageUrl} alt="" className="admin-event-card-img"/>
                                 <div className="admin-event-card-info">
                                     <span className="admin-event-card-title">{isEnglish ? bd.name : bd.nameCn}</span>
-                                    <span className="admin-event-card-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
+                                    <span
+                                        className="admin-event-card-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
                                 </div>
                             </button>
                         ))}
@@ -547,21 +564,23 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 </button>
 
                 <div className="admin-event-detail-header">
-                    <img src={selectedBadgeDef.imageUrl} alt="" className="admin-event-detail-img" />
+                    <img src={selectedBadgeDef.imageUrl} alt="" className="admin-event-detail-img"/>
                     <div>
                         <h3>{isEnglish ? selectedBadgeDef.name : selectedBadgeDef.nameCn}</h3>
                         <p className="admin-event-detail-meta">
                             {isEnglish ? selectedBadgeDef.description : selectedBadgeDef.descriptionCn}
                         </p>
                         {selectedBadgeDef.createdByName && (
-                            <p className="admin-event-detail-meta" style={{ marginTop: '4px' }}>
+                            <p className="admin-event-detail-meta" style={{marginTop: '4px'}}>
                                 {isEnglish ? 'Created by: ' : '创建者：'}
                                 {selectedBadgeDef.createdByUid ? (
-                                    <a href={`/profile?uid=${selectedBadgeDef.createdByUid}`} style={{ color: '#6c63ff' }}>
+                                    <a href={`/profile?uid=${selectedBadgeDef.createdByUid}`}
+                                       style={{color: '#6c63ff'}}>
                                         {selectedBadgeDef.createdByName}
                                     </a>
                                 ) : selectedBadgeDef.createdByLink ? (
-                                    <a href={selectedBadgeDef.createdByLink} target="_blank" rel="noopener noreferrer" style={{ color: '#6c63ff' }}>
+                                    <a href={selectedBadgeDef.createdByLink} target="_blank" rel="noopener noreferrer"
+                                       style={{color: '#6c63ff'}}>
                                         {selectedBadgeDef.createdByName}
                                     </a>
                                 ) : selectedBadgeDef.createdByName}
@@ -571,30 +590,37 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 </div>
 
                 {editingBadgeDef ? (
-                    <div className="admin-create-badge-form" style={{ marginBottom: '20px' }}>
+                    <div className="admin-create-badge-form" style={{marginBottom: '20px'}}>
                         <h4 className="admin-badges-title">{isEnglish ? 'Edit Badge' : '编辑徽章'}</h4>
                         <div className="admin-form-grid">
                             <label>
                                 <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
-                                <input value={editBadgeName} onChange={e => setEditBadgeName(e.target.value)} className="admin-search-input" />
+                                <input value={editBadgeName} onChange={e => setEditBadgeName(e.target.value)}
+                                       className="admin-search-input"/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
-                                <input value={editBadgeNameCn} onChange={e => setEditBadgeNameCn(e.target.value)} className="admin-search-input" />
+                                <input value={editBadgeNameCn} onChange={e => setEditBadgeNameCn(e.target.value)}
+                                       className="admin-search-input"/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
-                                <textarea value={editBadgeDesc} onChange={e => setEditBadgeDesc(e.target.value)} className="admin-search-input admin-textarea" />
+                                <textarea value={editBadgeDesc} onChange={e => setEditBadgeDesc(e.target.value)}
+                                          className="admin-search-input admin-textarea"/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
-                                <textarea value={editBadgeDescCn} onChange={e => setEditBadgeDescCn(e.target.value)} className="admin-search-input admin-textarea" />
+                                <textarea value={editBadgeDescCn} onChange={e => setEditBadgeDescCn(e.target.value)}
+                                          className="admin-search-input admin-textarea"/>
                             </label>
                             <CreatorPicker
                                 selected={editBadgeCreatorUser}
                                 onSelect={(u) => {
                                     setEditBadgeCreatorUser(u);
-                                    if (!u) { setEditBadgeCreatedByName(''); setEditBadgeCreatedByLink(''); }
+                                    if (!u) {
+                                        setEditBadgeCreatedByName('');
+                                        setEditBadgeCreatedByLink('');
+                                    }
                                 }}
                                 manualName={editBadgeCreatedByName}
                                 onManualNameChange={setEditBadgeCreatedByName}
@@ -603,12 +629,14 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             />
                             <label>
                                 <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
-                                <input type="file" accept="image/webp" onChange={handleEditImageChange} />
-                                {editBadgeImagePreview && <img src={editBadgeImagePreview} alt="" className="admin-badge-image-preview" />}
+                                <input type="file" accept="image/webp" onChange={handleEditImageChange}/>
+                                {editBadgeImagePreview &&
+                                    <img src={editBadgeImagePreview} alt="" className="admin-badge-image-preview"/>}
                             </label>
                         </div>
                         <div className="admin-form-actions">
-                            <button className="admin-generate-btn" onClick={updateBadgeDef} disabled={savingBadgeDef || !editBadgeName.trim()}>
+                            <button className="admin-generate-btn" onClick={updateBadgeDef}
+                                    disabled={savingBadgeDef || !editBadgeName.trim()}>
                                 {savingBadgeDef ? (isEnglish ? 'Saving...' : '保存中...') : (isEnglish ? 'Save Changes' : '保存更改')}
                             </button>
                             <button className="admin-back-btn" onClick={() => {
@@ -622,11 +650,12 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                         </div>
                     </div>
                 ) : (
-                    <div className="admin-form-actions" style={{ marginBottom: '20px' }}>
+                    <div className="admin-form-actions" style={{marginBottom: '20px'}}>
                         <button className="admin-generate-btn" onClick={startEditBadge}>
                             {isEnglish ? 'Edit Badge' : '编辑徽章'}
                         </button>
-                        <button className="admin-toggle-btn admin-toggle-revoke" onClick={() => deleteBadgeDef(selectedBadgeDef)}>
+                        <button className="admin-toggle-btn admin-toggle-revoke"
+                                onClick={() => deleteBadgeDef(selectedBadgeDef)}>
                             {isEnglish ? 'Delete Badge' : '删除徽章'}
                         </button>
                     </div>
@@ -637,13 +666,13 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     {badgeHolders.length > 0 && <span className="admin-badges-count">{badgeHolders.length}</span>}
                 </h4>
 
-                {loadingBadgeHolders && <div className="profile-spinner" style={{ margin: '20px auto' }} />}
+                {loadingBadgeHolders && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
                 {!loadingBadgeHolders && badgeHolders.length === 0 && (
                     <p className="admin-no-results">{isEnglish ? 'No one has this badge yet.' : '暂无人持有此徽章。'}</p>
                 )}
                 {!loadingBadgeHolders && badgeHolders.map((u) => (
                     <div key={u.uid} className="admin-user-row">
-                        <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer" />
+                        <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
                         <div>
                             <div className="admin-user-name">{u.displayName}</div>
                             <div className="admin-user-email">{u.email}</div>
@@ -663,16 +692,17 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 )}
 
                 {/* Activation Codes */}
-                <h4 className="admin-badges-title" style={{ marginTop: '28px' }}>
+                <h4 className="admin-badges-title" style={{marginTop: '28px'}}>
                     {isEnglish ? 'Activation Codes' : '激活码'}
-                    {badgeActivationCodes.length > 0 && <span className="admin-badges-count">{badgeActivationCodes.length}</span>}
+                    {badgeActivationCodes.length > 0 &&
+                        <span className="admin-badges-count">{badgeActivationCodes.length}</span>}
                 </h4>
 
                 <div className="admin-activation-create-form">
                     <div className="admin-code-time-inputs">
                         <label>
                             <span>{isEnglish ? 'Max Uses' : '最大使用次数'}</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
                                 <input
                                     type="number" min="1"
                                     value={newCodeUnlimited ? '' : newCodeMaxUses}
@@ -685,7 +715,13 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                     className="admin-search-input"
                                     placeholder={newCodeUnlimited ? '∞' : undefined}
                                 />
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontSize: '13px',
+                                    whiteSpace: 'nowrap'
+                                }}>
                                     <input
                                         type="checkbox" checked={newCodeUnlimited}
                                         onChange={e => {
@@ -700,18 +736,20 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                         </label>
                         <label>
                             <span>{isEnglish ? 'Active From' : '生效时间'}</span>
-                            <input type="datetime-local" value={newCodeFrom} onChange={e => setNewCodeFrom(e.target.value)} className="admin-search-input" />
+                            <input type="datetime-local" value={newCodeFrom}
+                                   onChange={e => setNewCodeFrom(e.target.value)} className="admin-search-input"/>
                         </label>
                         <label>
                             <span>{isEnglish ? 'Active Until' : '失效时间'}</span>
-                            <input type="datetime-local" value={newCodeUntil} onChange={e => setNewCodeUntil(e.target.value)} className="admin-search-input" />
+                            <input type="datetime-local" value={newCodeUntil}
+                                   onChange={e => setNewCodeUntil(e.target.value)} className="admin-search-input"/>
                         </label>
                     </div>
                     <button
                         className="admin-generate-btn"
                         onClick={() => createBadgeActivationCode(selectedBadgeDef.id)}
                         disabled={generatingActivationCode}
-                        style={{ marginTop: '12px' }}
+                        style={{marginTop: '12px'}}
                     >
                         {generatingActivationCode
                             ? (isEnglish ? 'Generating...' : '生成中...')
@@ -719,44 +757,46 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     </button>
                 </div>
 
-                {loadingActivationCodes && <div className="profile-spinner" style={{ margin: '20px auto' }} />}
+                {loadingActivationCodes && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
                 {!loadingActivationCodes && badgeActivationCodes.length === 0 && (
                     <p className="admin-no-results">{isEnglish ? 'No activation codes yet.' : '暂无激活码。'}</p>
                 )}
 
                 {!loadingActivationCodes && badgeActivationCodes.map((ac) => (
-                    <div key={ac.id} className="admin-single-code" style={{ marginTop: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <div key={ac.id} className="admin-single-code" style={{marginTop: '12px'}}>
+                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap'}}>
                             <span className={ac.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
                                 {ac.active ? (isEnglish ? 'Active' : '活跃') : (isEnglish ? 'Inactive' : '已停用')}
                             </span>
-                            <span style={{ fontSize: '13px', color: '#7a8190' }}>
+                            <span style={{fontSize: '13px', color: '#7a8190'}}>
                                 {ac.maxUses === 0
                                     ? (isEnglish ? `Used ${ac.usedCount} / ∞ times` : `已使用 ${ac.usedCount} / ∞ 次`)
                                     : (isEnglish ? `Used ${ac.usedCount} / ${ac.maxUses} times` : `已使用 ${ac.usedCount} / ${ac.maxUses} 次`)}
                             </span>
                             {ac.activeFrom && (
-                                <span style={{ fontSize: '12px', color: '#999' }}>
+                                <span style={{fontSize: '12px', color: '#999'}}>
                                     {isEnglish ? 'From: ' : '从：'}{new Date(ac.activeFrom).toLocaleString()}
                                 </span>
                             )}
                             {ac.activeUntil && (
-                                <span style={{ fontSize: '12px', color: '#999' }}>
+                                <span style={{fontSize: '12px', color: '#999'}}>
                                     {isEnglish ? 'Until: ' : '至：'}{new Date(ac.activeUntil).toLocaleString()}
                                 </span>
                             )}
                         </div>
                         <div className="admin-code-url">
-                            <input readOnly value={ac.code} className="admin-code-input" />
+                            <input readOnly value={ac.code} className="admin-code-input"/>
                             <button className="admin-copy-btn" onClick={() => navigator.clipboard.writeText(ac.code)}>
                                 {isEnglish ? 'Copy' : '复制'}
                             </button>
                         </div>
                         <div className="admin-single-code-actions">
-                            <button className="admin-toggle-btn admin-toggle-grant" onClick={() => toggleActivationCodeActive(ac)}>
+                            <button className="admin-toggle-btn admin-toggle-grant"
+                                    onClick={() => toggleActivationCodeActive(ac)}>
                                 {ac.active ? (isEnglish ? 'Deactivate' : '停用') : (isEnglish ? 'Activate' : '激活')}
                             </button>
-                            <button className="admin-toggle-btn admin-toggle-revoke" onClick={() => deleteActivationCode(ac)}>
+                            <button className="admin-toggle-btn admin-toggle-revoke"
+                                    onClick={() => deleteActivationCode(ac)}>
                                 {isEnglish ? 'Delete' : '删除'}
                             </button>
                         </div>

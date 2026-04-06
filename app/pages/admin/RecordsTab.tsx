@@ -5,8 +5,8 @@ import {
     getDocs,
     limit,
     orderBy,
-    type QueryConstraint,
     query,
+    type QueryConstraint,
     startAfter,
     where,
 } from 'firebase/firestore';
@@ -20,10 +20,14 @@ const PAGE_SIZE = 20;
 
 const getTypeConstraint = (filter: string): QueryConstraint | null => {
     switch (filter) {
-        case '': return null;
-        case 'attend': return where('type', 'in', ['badge-grant', 'event-attend']);
-        case 'unattend': return where('type', 'in', ['badge-revoke', 'event-unattend']);
-        default: return where('type', '==', filter);
+        case '':
+            return null;
+        case 'attend':
+            return where('type', 'in', ['badge-grant', 'event-attend']);
+        case 'unattend':
+            return where('type', 'in', ['badge-revoke', 'event-unattend']);
+        default:
+            return where('type', '==', filter);
     }
 };
 
@@ -36,13 +40,13 @@ interface RecordsTabProps {
 }
 
 export const RecordsTab = ({
-    pastEvents,
-    badgeDefs,
-    onLookupUser,
-    onSelectBadge,
-    onSelectEvent,
-}: RecordsTabProps) => {
-    const { isEnglish } = useLanguage();
+                               pastEvents,
+                               badgeDefs,
+                               onLookupUser,
+                               onSelectBadge,
+                               onSelectEvent,
+                           }: RecordsTabProps) => {
+    const {isEnglish} = useLanguage();
     const [records, setRecords] = useState<ActivityRecord[]>([]);
     const [loadingRecords, setLoadingRecords] = useState(false);
     const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
@@ -100,16 +104,17 @@ export const RecordsTab = ({
         setRecords([]);
         setLastDoc(null);
         setHasMore(true);
-        loadRecords(undefined, recordFilterType, recordFilterActor).catch(() => {});
+        loadRecords(undefined, recordFilterType, recordFilterActor).catch(() => {
+        });
     }, [loadRecords, recordFilterType, recordFilterActor]);
 
     const loadMore = () => {
         if (lastDoc && hasMore) loadRecords(lastDoc, recordFilterType, recordFilterActor).then();
     };
 
-    const uniqueActors = useMemo(() => records.reduce<{ uid: string; name: string }[]>((acc, r) => {
+    const uniqueActors = useMemo(() => records.reduce<{uid: string; name: string}[]>((acc, r) => {
         if (!acc.some(a => a.uid === r.performedBy)) {
-            acc.push({ uid: r.performedBy, name: r.performedByName });
+            acc.push({uid: r.performedBy, name: r.performedByName});
         }
         return acc;
     }, []), [records]);
@@ -146,12 +151,14 @@ export const RecordsTab = ({
             case 'badge-grant':  // legacy type — same as event-attend
             case 'event-attend':
                 return isEnglish
-                    ? <>marked {target} as attended {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
+                    ? <>marked {target} as
+                        attended {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
                     : <>标记 {target} 参加了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
             case 'badge-revoke':  // legacy type — same as event-unattend
             case 'event-unattend':
                 return isEnglish
-                    ? <>revoked {target}'s attendance for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
+                    ? <>revoked {target}'s attendance
+                        for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
                     : <>撤销了 {target} 的 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')} 签到</>;
             case 'code-activate': {
                 const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
@@ -185,11 +192,13 @@ export const RecordsTab = ({
                 return isEnglish ? <>deleted badge {r.badgeName ?? ''}</> : <>删除了徽章 {r.badgeName ?? ''}</>;
             case 'event-create':
                 return isEnglish
-                    ? <>created event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
+                    ? <>created
+                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
                     : <>创建了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
             case 'event-edit':
                 return isEnglish
-                    ? <>edited event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
+                    ? <>edited
+                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
                     : <>编辑了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
             case 'event-delete':
                 return isEnglish
@@ -200,24 +209,30 @@ export const RecordsTab = ({
 
     const getRecordTypeTag = (type: RecordType) => {
         switch (type) {
-            case 'group-assign': return isEnglish ? 'Group' : '用户组';
+            case 'group-assign':
+                return isEnglish ? 'Group' : '用户组';
             case 'code-create':
             case 'code-activate':
             case 'code-deactivate':
-            case 'code-delete': return isEnglish ? 'Code' : '兑换码';
+            case 'code-delete':
+                return isEnglish ? 'Code' : '兑换码';
             case 'badge-grant':
             case 'badge-revoke':
             case 'event-attend':
-            case 'event-unattend': return isEnglish ? 'Attend' : '签到';
+            case 'event-unattend':
+                return isEnglish ? 'Attend' : '签到';
             case 'achievement-grant':
             case 'achievement-revoke':
             case 'badge-create':
             case 'badge-edit':
-            case 'badge-delete': return isEnglish ? 'Badge' : '徽章';
+            case 'badge-delete':
+                return isEnglish ? 'Badge' : '徽章';
             case 'event-create':
             case 'event-edit':
-            case 'event-delete': return isEnglish ? 'Event' : '活动';
-            default: return type;
+            case 'event-delete':
+                return isEnglish ? 'Event' : '活动';
+            default:
+                return type;
         }
     };
 
@@ -260,7 +275,7 @@ export const RecordsTab = ({
             </div>
 
             {loadingRecords && records.length === 0 && (
-                <div className="profile-spinner" style={{ margin: '20px auto' }} />
+                <div className="profile-spinner" style={{margin: '20px auto'}}/>
             )}
 
             {!loadingRecords && records.length === 0 && (

@@ -68,7 +68,8 @@ export const RedeemModal = () => {
             });
 
             setState('success');
-            refreshProfile().catch(() => {});
+            refreshProfile().catch(() => {
+            });
         } catch (err) {
             setState('error');
             const msg = err instanceof FirebaseError ? err.message : '';

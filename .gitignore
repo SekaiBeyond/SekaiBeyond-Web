@@ -12,3 +12,4 @@
 public/index.html
 /functions/lib
 functions/package-lock.json
+functions/firebase-debug.log

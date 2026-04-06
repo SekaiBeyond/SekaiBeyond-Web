@@ -61,11 +61,11 @@ export function getFunctions() {
     return functions;
 }
 
-export const callClaimEventCode = (data: { code: string }) =>
-    httpsCallable<{ code: string }, { eventId: string }>(getFunctions(), 'claimEventCode')(data);
+export const callClaimEventCode = (data: {code: string}) =>
+    httpsCallable<{code: string}, {eventId: string}>(getFunctions(), 'claimEventCode')(data);
 
-export const callClaimBadgeActivationCode = (data: { code: string }) =>
-    httpsCallable<{ code: string }, {
+export const callClaimBadgeActivationCode = (data: {code: string}) =>
+    httpsCallable<{code: string}, {
         badgeId: string;
         badgeName: string;
         badgeNameCn: string;
@@ -80,7 +80,7 @@ export const callGenerateBadgeActivationCode = (data: {
     activeFrom?: string;
     activeUntil?: string;
 }) =>
-    httpsCallable<typeof data, { id: string; code: string }>(
+    httpsCallable<typeof data, {id: string; code: string}>(
         getFunctions(), 'generateBadgeActivationCode'
     )(data);
 
@@ -89,7 +89,7 @@ export const callGenerateEventCode = (data: {
     activeFrom?: string;
     activeUntil?: string;
 }) =>
-    httpsCallable<typeof data, { id: string; code: string }>(
+    httpsCallable<typeof data, {id: string; code: string}>(
         getFunctions(), 'generateEventCode'
     )(data);
 

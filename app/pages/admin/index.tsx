@@ -6,17 +6,20 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { usePastEvents } from '~/lib/pastEvents';
+import { useUpcomingEvents } from '~/lib/upcomingEvents';
 import { useSearchParams } from 'react-router';
 import type { BadgeDef, Tab } from './types';
 import { UsersTab, type UsersTabHandle } from './UsersTab';
 import { EventsTab, type EventsTabHandle } from './EventsTab';
+import { UpcomingEventsTab, type UpcomingEventsTabHandle } from './UpcomingEventsTab';
 import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { RecordsTab } from './RecordsTab';
 
 export const AdminPage = () => {
-    const { user, profile, loading } = useAuth();
-    const { isEnglish } = useLanguage();
-    const { pastEvents: rawPastEvents, refresh: refreshEvents } = usePastEvents();
+    const {user, profile, loading} = useAuth();
+    const {isEnglish} = useLanguage();
+    const {pastEvents: rawPastEvents, refresh: refreshEvents} = usePastEvents();
+    const {upcomingEvents, refresh: refreshUpcoming} = useUpcomingEvents();
     const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => {
         const pad = (d: string) => d.split('-').map(p => p.padStart(2, '0')).join('-');
         return pad(b.date).localeCompare(pad(a.date));
@@ -28,15 +31,16 @@ export const AdminPage = () => {
     const urlParamsHandled = useRef(false);
     const usersTabRef = useRef<UsersTabHandle>(null);
     const eventsTabRef = useRef<EventsTabHandle>(null);
+    const upcomingTabRef = useRef<UpcomingEventsTabHandle>(null);
     const badgesTabRef = useRef<BadgesTabHandle>(null);
-    const pendingAction = useRef<{ type: string; id: string } | null>(null);
+    const pendingAction = useRef<{type: string; id: string} | null>(null);
 
     useEffect(() => {
         if (urlParamsHandled.current) return;
         if (loading || !user || !profile || !hasPermission(profile.group, 'core-staff')) return;
         const tab = searchParams.get('tab');
         const event = searchParams.get('event');
-        if (tab === 'events' || tab === 'badges' || tab === 'records' || tab === 'users') {
+        if (tab === 'events' || tab === 'upcoming' || tab === 'badges' || tab === 'records' || tab === 'users') {
             setActiveTab(tab);
         }
         if (tab === 'events' && event) {
@@ -68,44 +72,23 @@ export const AdminPage = () => {
             });
             setBadgeDefs(defs);
         };
-        loadBadgeDefinitions().catch(() => {});
+        loadBadgeDefinitions().catch(() => {
+        });
     }, [loading, user, profile]);
-
-    if (loading) {
-        return (
-            <div className="profile-loading">
-                <div className="profile-spinner" />
-            </div>
-        );
-    }
-
-    if (!user || !profile || !hasPermission(profile.group, 'core-staff')) {
-        return (
-            <div className="profile-login-prompt">
-                <div className="profile-login-card">
-                    <h2>{isEnglish ? 'Access Denied' : '无权访问'}</h2>
-                    <p>{isEnglish ? 'This page is for staff members only.' : '此页面仅限工作人员访问。'}</p>
-                    <a href="/" className="profile-back-link">
-                        {isEnglish ? 'Back to Home' : '返回首页'}
-                    </a>
-                </div>
-            </div>
-        );
-    }
 
     const handleLookupUser = useCallback((uid: string) => {
         setActiveTab('users');
-        pendingAction.current = { type: 'lookupUser', id: uid };
+        pendingAction.current = {type: 'lookupUser', id: uid};
     }, []);
 
     const handleSelectBadge = useCallback((badgeId: string) => {
         setActiveTab('badges');
-        pendingAction.current = { type: 'selectBadge', id: badgeId };
+        pendingAction.current = {type: 'selectBadge', id: badgeId};
     }, []);
 
     const handleSelectEvent = useCallback((eventId: string) => {
         setActiveTab('events');
-        pendingAction.current = { type: 'selectEvent', id: eventId };
+        pendingAction.current = {type: 'selectEvent', id: eventId};
     }, []);
 
     // Execute pending cross-tab actions after the target tab mounts
@@ -127,6 +110,28 @@ export const AdminPage = () => {
         }
     }, [activeTab]);
 
+    if (loading) {
+        return (
+            <div className="profile-loading">
+                <div className="profile-spinner"/>
+            </div>
+        );
+    }
+
+    if (!user || !profile || !hasPermission(profile.group, 'core-staff')) {
+        return (
+            <div className="profile-login-prompt">
+                <div className="profile-login-card">
+                    <h2>{isEnglish ? 'Access Denied' : '无权访问'}</h2>
+                    <p>{isEnglish ? 'This page is for staff members only.' : '此页面仅限工作人员访问。'}</p>
+                    <a href="/" className="profile-back-link">
+                        {isEnglish ? 'Back to Home' : '返回首页'}
+                    </a>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <>
             <nav className="profile-nav">
@@ -135,8 +140,8 @@ export const AdminPage = () => {
                 </a>
                 <span className="admin-nav-title">{isEnglish ? 'Admin Panel' : '管理面板'}</span>
                 <div className="nav-actions">
-                    <LanguageSwitcher />
-                    <LoginButton />
+                    <LanguageSwitcher/>
+                    <LoginButton/>
                 </div>
             </nav>
             <div className="profile-page">
@@ -151,7 +156,13 @@ export const AdminPage = () => {
                         className={`admin-tab ${activeTab === 'events' ? 'admin-tab-active' : ''}`}
                         onClick={() => setActiveTab('events')}
                     >
-                        {isEnglish ? 'Past Event Management' : '往期活动管理'}
+                        {isEnglish ? 'Past Events' : '往期活动'}
+                    </button>
+                    <button
+                        className={`admin-tab ${activeTab === 'upcoming' ? 'admin-tab-active' : ''}`}
+                        onClick={() => setActiveTab('upcoming')}
+                    >
+                        {isEnglish ? 'Upcoming Events' : '活动预告'}
                     </button>
                     <button
                         className={`admin-tab ${activeTab === 'badges' ? 'admin-tab-active' : ''}`}
@@ -182,6 +193,16 @@ export const AdminPage = () => {
                         ref={eventsTabRef}
                         pastEvents={pastEvents}
                         refreshEvents={refreshEvents}
+                        user={user}
+                        profile={profile}
+                    />
+                )}
+
+                {activeTab === 'upcoming' && (
+                    <UpcomingEventsTab
+                        ref={upcomingTabRef}
+                        upcomingEvents={upcomingEvents}
+                        refreshEvents={refreshUpcoming}
                         user={user}
                         profile={profile}
                     />
