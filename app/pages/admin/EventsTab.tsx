@@ -7,12 +7,14 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGenerateEventCode, getFirebaseDb, getFirebaseStorage } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import { QRCodeSVG } from 'qrcode.react';
+import type { Tag } from '~/lib/tags';
 import type { BadgeCode, UserRecord } from './types';
 import { docToUserRecord, getClaimUrl, validateImageFile } from './utils';
 
 interface EventsTabProps {
     pastEvents: PastEvent[];
     refreshEvents: () => Promise<void>;
+    tags: Tag[];
     user: User;
     profile: UserProfile;
 }
@@ -24,6 +26,7 @@ export interface EventsTabHandle {
 export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                                                           pastEvents,
                                                                           refreshEvents,
+                                                                          tags,
                                                                           user,
                                                                           profile,
                                                                       }, forwardedRef) => {
@@ -39,7 +42,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [showCreateEvent, setShowCreateEvent] = useState(false);
     const [editingEvent, setEditingEvent] = useState<PastEvent | null>(null);
     const [eventForm, setEventForm] = useState({
-        title: '', titleCn: '', label: '', labelCn: '', date: '',
+        title: '', titleCn: '', tagId: '', date: '',
         location: '', description: '', descriptionCn: '', icon: '',
     });
     const [savingEvent, setSavingEvent] = useState(false);
@@ -62,7 +65,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
 
     const resetEventForm = () => {
         setEventForm({
-            title: '', titleCn: '', label: '', labelCn: '', date: '',
+            title: '', titleCn: '', tagId: '', date: '',
             location: '', description: '', descriptionCn: '', icon: '',
         });
         setEventImage(null);
@@ -81,7 +84,11 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         const normalizedDate = parts.length === 3
             ? `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
             : event.date;
-        setEventForm({...event, date: normalizedDate});
+        setEventForm({
+            title: event.title, titleCn: event.titleCn, tagId: event.tagId,
+            date: normalizedDate, location: event.location,
+            description: event.description, descriptionCn: event.descriptionCn, icon: event.icon,
+        });
         setEditingEvent(event);
         setEventImage(null);
         setEventImagePreview(event.icon || null);
@@ -180,8 +187,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             }
 
             const data: Record<string, string> = {
-                label: eventForm.label,
-                labelCn: eventForm.labelCn,
+                tagId: eventForm.tagId,
                 title: eventForm.title,
                 titleCn: eventForm.titleCn,
                 date: eventForm.date,
@@ -302,22 +308,19 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     />
                                 </label>
                                 <label>
-                                    <span>{isEnglish ? 'Label (English)' : '标签（英文）'}</span>
-                                    <input
-                                        value={eventForm.label}
-                                        onChange={e => setEventForm(f => ({...f, label: e.target.value}))}
+                                    <span>{isEnglish ? 'Tag' : '标签'}</span>
+                                    <select
+                                        value={eventForm.tagId}
+                                        onChange={e => setEventForm(f => ({...f, tagId: e.target.value}))}
                                         className="admin-search-input"
-                                        placeholder={isEnglish ? 'e.g. Workshop' : '例如 Workshop'}
-                                    />
-                                </label>
-                                <label>
-                                    <span>{isEnglish ? 'Label (Chinese)' : '标签（中文）'}</span>
-                                    <input
-                                        value={eventForm.labelCn}
-                                        onChange={e => setEventForm(f => ({...f, labelCn: e.target.value}))}
-                                        className="admin-search-input"
-                                        placeholder={isEnglish ? 'e.g. 工作坊' : '例如 工作坊'}
-                                    />
+                                    >
+                                        <option value="">{isEnglish ? 'None' : '无'}</option>
+                                        {tags.map(t => (
+                                            <option key={t.id} value={t.id}>
+                                                {isEnglish ? t.name : t.nameCn} {t.nameCn && isEnglish ? `(${t.nameCn})` : t.name && !isEnglish ? `(${t.name})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </label>
                                 <label>
                                     <span>{isEnglish ? 'Date' : '日期'}</span>
@@ -421,7 +424,10 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 <div>
                                     <h3>{isEnglish ? managedEvt.title : managedEvt.titleCn}</h3>
                                     <p className="admin-event-detail-meta">
-                                        <span>{isEnglish ? managedEvt.label : managedEvt.labelCn}</span>
+                                        <span>{(() => {
+                                            const tag = tags.find(t => t.id === managedEvt.tagId);
+                                            return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
+                                        })()}</span>
                                         <span>{managedEvt.date}</span>
                                         <span>{managedEvt.location}</span>
                                     </p>

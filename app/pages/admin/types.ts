@@ -47,7 +47,7 @@ export interface UserRecord {
     group: UserGroup;
 }
 
-export type Tab = 'users' | 'events' | 'upcoming' | 'badges' | 'records';
+export type Tab = 'users' | 'events' | 'upcoming' | 'badges' | 'tags' | 'records';
 
 export type RecordType =
     'group-assign'
@@ -69,7 +69,8 @@ export type RecordType =
     | 'event-delete'
     | 'upcoming-event-create'
     | 'upcoming-event-edit'
-    | 'upcoming-event-delete';
+    | 'upcoming-event-delete'
+    | 'upcoming-event-archive';
 
 export interface ActivityRecord {
     id: string;

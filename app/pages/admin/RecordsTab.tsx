@@ -204,6 +204,10 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>deleted event {r.eventTitle ?? r.eventId ?? ''}</>
                     : <>删除了活动 {r.eventTitle ?? r.eventId ?? ''}</>;
+            case 'upcoming-event-archive':
+                return isEnglish
+                    ? <>archived {r.eventTitle ?? ''} to past events</>
+                    : <>将 {r.eventTitle ?? ''} 归档到往期活动</>;
         }
     };
 
@@ -230,6 +234,7 @@ export const RecordsTab = ({
             case 'event-create':
             case 'event-edit':
             case 'event-delete':
+            case 'upcoming-event-archive':
                 return isEnglish ? 'Event' : '活动';
             default:
                 return type;
@@ -261,6 +266,7 @@ export const RecordsTab = ({
                     <option value="event-create">{isEnglish ? 'Event Create' : '创建活动'}</option>
                     <option value="event-edit">{isEnglish ? 'Event Edit' : '编辑活动'}</option>
                     <option value="event-delete">{isEnglish ? 'Event Delete' : '删除活动'}</option>
+                    <option value="upcoming-event-archive">{isEnglish ? 'Event Archive' : '归档活动'}</option>
                 </select>
                 <select
                     className="record-filter-select"

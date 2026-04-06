@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 import { usePastEvents } from "~/lib/pastEvents";
+import { useTags } from "~/lib/tags";
 
 export const PastEvents = () => {
     const {isEnglish} = useLanguage();
     const [showAll, setShowAll] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const {pastEvents, loading} = usePastEvents();
+    const {tags} = useTags();
 
     if (loading) return null;
 
@@ -31,7 +33,10 @@ export const PastEvents = () => {
                             style={{cursor: 'pointer'}}
                         />
                         <div className="event-content">
-                            <span className="event-label">{isEnglish ? event.label : event.labelCn}</span>
+                            <span className="event-label">{(() => {
+                                const tag = tags.find(t => t.id === event.tagId);
+                                return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
+                            })()}</span>
                             <h3 className="event-title">{isEnglish ? event.title : event.titleCn}</h3>
                             <div className="event-date">
                                 <span>📅</span>

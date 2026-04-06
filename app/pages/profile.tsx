@@ -6,6 +6,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
+import { useTags } from '~/lib/tags';
 import { useSearchParams } from 'react-router';
 
 interface BadgeDef {
@@ -89,11 +90,12 @@ const BadgeCard = ({badge, earned, earnedDate, isEnglish}: {
     </div>
 );
 
-const EventCard = ({event, attended, isEnglish, showAdminLink}: {
+const EventCard = ({event, attended, isEnglish, showAdminLink, tagLabel}: {
     event: PastEvent;
     attended: boolean;
     isEnglish: boolean;
     showAdminLink?: boolean;
+    tagLabel?: string;
 }) => (
     <div className={`profile-event-card ${attended ? 'profile-event-earned' : 'profile-event-locked'}`}>
         <div className="profile-event-icon-wrapper">
@@ -102,7 +104,7 @@ const EventCard = ({event, attended, isEnglish, showAdminLink}: {
             {!attended && <span className="profile-event-lock">&#128274;</span>}
         </div>
         <div className="profile-event-info">
-            <span className="profile-event-category">{isEnglish ? event.label : event.labelCn}</span>
+            <span className="profile-event-category">{tagLabel ?? ''}</span>
             <h3 className="profile-event-title">
                 {showAdminLink ? (
                     <a href={`/admin?tab=events&event=${encodeURIComponent(event.id)}`}
@@ -126,6 +128,7 @@ export const ProfilePage = () => {
     const {user, profile, loading, signIn, updateProfile} = useAuth();
     const {isEnglish} = useLanguage();
     const {pastEvents, loading: eventsLoading} = usePastEvents();
+    const {tags} = useTags();
     const [searchParams] = useSearchParams();
     const viewUid = searchParams.get('uid');
     const isViewingOther = !!viewUid && viewUid !== user?.uid;
@@ -560,6 +563,10 @@ export const ProfilePage = () => {
                                 attended={attendedSet.has(event.id)}
                                 isEnglish={isEnglish}
                                 showAdminLink={isStaff}
+                                tagLabel={(() => {
+                                    const tag = tags.find(t => t.id === event.tagId);
+                                    return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
+                                })()}
                             />
                         ))}
                     </div>

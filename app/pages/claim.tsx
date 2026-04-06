@@ -5,6 +5,7 @@ import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callClaimEventCode } from '~/lib/firebase';
 import { usePastEvents } from '~/lib/pastEvents';
+import { useTags } from '~/lib/tags';
 
 type ClaimState =
     'loading'
@@ -25,6 +26,7 @@ export const ClaimPage = () => {
     const {user, profile, loading: authLoading, signIn, refreshProfile} = useAuth();
     const {isEnglish} = useLanguage();
     const {pastEvents} = usePastEvents();
+    const {tags} = useTags();
 
     const [state, setState] = useState<ClaimState>('loading');
     const [eventId, setEventId] = useState<string | null>(null);
@@ -142,7 +144,10 @@ export const ClaimPage = () => {
                         {event ? (
                             <>
                                 <p className="claim-event-title">{isEnglish ? event.title : event.titleCn}</p>
-                                <p className="claim-event-category">{isEnglish ? event.label : event.labelCn}</p>
+                                <p className="claim-event-category">{(() => {
+                                    const tag = tags.find(t => t.id === event.tagId);
+                                    return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
+                                })()}</p>
                             </>
                         ) : (
                             <p className="claim-event-title">{eventId}</p>

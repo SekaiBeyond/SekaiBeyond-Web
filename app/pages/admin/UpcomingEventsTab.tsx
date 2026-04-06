@@ -6,11 +6,14 @@ import type { UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb, getFirebaseStorage } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
+import type { Tag } from '~/lib/tags';
 import { validateImageFile } from './utils';
 
 interface UpcomingEventsTabProps {
     upcomingEvents: UpcomingEvent[];
     refreshEvents: () => Promise<void>;
+    refreshPastEvents: () => Promise<void>;
+    tags: Tag[];
     user: User;
     profile: UserProfile;
 }
@@ -51,6 +54,8 @@ const emptyForm: EventForm = {
 export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEventsTabProps>(({
                                                                                                   upcomingEvents,
                                                                                                   refreshEvents,
+                                                                                                  refreshPastEvents,
+                                                                                                  tags,
                                                                                                   user,
                                                                                                   profile,
                                                                                               }, forwardedRef) => {
@@ -62,6 +67,9 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [posterImage, setPosterImage] = useState<File | null>(null);
     const [posterPreview, setPosterPreview] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const [showArchive, setShowArchive] = useState(false);
+    const [archiveTagId, setArchiveTagId] = useState('');
+    const [archiving, setArchiving] = useState(false);
 
     const selectEvent = (eventId: string) => setSelectedEvent(eventId);
     useImperativeHandle(forwardedRef, () => ({selectEvent}));
@@ -194,6 +202,51 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             if (selectedEvent === event.id) setSelectedEvent(null);
         } catch {
             alert(isEnglish ? 'Failed to delete event.' : '删除活动失败。');
+        }
+    };
+
+    const archiveEvent = async (event: UpcomingEvent) => {
+        setArchiving(true);
+        try {
+            const db = getFirebaseDb();
+            const batch = writeBatch(db);
+
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const d = event.startAt;
+            const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+            const pastEventData = {
+                title: event.name,
+                titleCn: event.nameCn,
+                date: dateStr,
+                location: event.location,
+                description: event.description,
+                descriptionCn: event.descriptionCn,
+                icon: event.poster,
+                tagId: archiveTagId,
+            };
+
+            const newDocRef = doc(collection(db, 'pastEvents'));
+            batch.set(newDocRef, pastEventData);
+            batch.delete(doc(db, 'upcomingEvents', event.id));
+            batch.set(doc(collection(db, 'records')), {
+                type: 'upcoming-event-archive',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                eventTitle: event.name,
+                eventId: newDocRef.id,
+                timestamp: serverTimestamp(),
+            });
+            await batch.commit();
+
+            await Promise.all([refreshEvents(), refreshPastEvents()]);
+            setSelectedEvent(null);
+            setShowArchive(false);
+            setArchiveTagId('');
+        } catch {
+            alert(isEnglish ? 'Failed to archive event.' : '归档活动失败。');
+        } finally {
+            setArchiving(false);
         }
     };
 
@@ -468,7 +521,59 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 >
                                     {isEnglish ? 'Delete Event' : '删除活动'}
                                 </button>
+                                <button
+                                    className="admin-toggle-btn"
+                                    onClick={() => setShowArchive(!showArchive)}
+                                >
+                                    {isEnglish ? 'Archive to Past Events' : '归档到往期活动'}
+                                </button>
                             </div>
+                            {showArchive && (
+                                <div className="admin-create-badge-form" style={{marginBottom: '20px'}}>
+                                    <h4 className="admin-badges-title">
+                                        {isEnglish ? 'Archive Event' : '归档活动'}
+                                    </h4>
+                                    <p style={{color: '#aaa', fontSize: '13px', marginBottom: '12px'}}>
+                                        {isEnglish
+                                            ? 'This will move the event from Upcoming to Past Events. You can optionally add a label (e.g. "Workshop", "Convention").'
+                                            : '此操作会将活动从预告移到往期活动。你可以选填标签（如"工作坊"、"展会"）。'}
+                                    </p>
+                                    <div className="admin-form-grid">
+                                        <label>
+                                            <span>{isEnglish ? 'Tag' : '标签'}</span>
+                                            <select
+                                                value={archiveTagId}
+                                                onChange={e => setArchiveTagId(e.target.value)}
+                                                className="admin-search-input"
+                                            >
+                                                <option value="">{isEnglish ? 'None' : '无'}</option>
+                                                {tags.map(t => (
+                                                    <option key={t.id} value={t.id}>
+                                                        {isEnglish ? t.name : t.nameCn} {t.nameCn && isEnglish ? `(${t.nameCn})` : t.name && !isEnglish ? `(${t.name})` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <div style={{display: 'flex', gap: '10px', marginTop: '12px'}}>
+                                        <button
+                                            className="admin-generate-btn"
+                                            onClick={() => archiveEvent(selectedEvt)}
+                                            disabled={archiving}
+                                        >
+                                            {archiving
+                                                ? (isEnglish ? 'Archiving...' : '归档中...')
+                                                : (isEnglish ? 'Confirm Archive' : '确认归档')}
+                                        </button>
+                                        <button
+                                            className="admin-back-btn"
+                                            onClick={() => setShowArchive(false)}
+                                        >
+                                            {isEnglish ? 'Cancel' : '取消'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </>
                     )}
                 </div>

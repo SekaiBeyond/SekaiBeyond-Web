@@ -4,8 +4,7 @@ import { getFirebaseDb } from './firebase';
 
 export interface PastEvent {
     id: string;
-    label: string;
-    labelCn: string;
+    tagId: string;
     title: string;
     titleCn: string;
     date: string;
@@ -32,8 +31,7 @@ async function fetchPastEvents(force = false): Promise<PastEvent[]> {
             const data = docSnap.data();
             events.push({
                 id: docSnap.id,
-                label: data.label ?? '',
-                labelCn: data.labelCn ?? '',
+                tagId: data.tagId ?? '',
                 title: data.title ?? '',
                 titleCn: data.titleCn ?? '',
                 date: data.date ?? '',

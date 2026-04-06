@@ -8,11 +8,13 @@ import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useUpcomingEvents } from '~/lib/upcomingEvents';
 import { useSearchParams } from 'react-router';
+import { useTags } from '~/lib/tags';
 import type { BadgeDef, Tab } from './types';
 import { UsersTab, type UsersTabHandle } from './UsersTab';
 import { EventsTab, type EventsTabHandle } from './EventsTab';
 import { UpcomingEventsTab, type UpcomingEventsTabHandle } from './UpcomingEventsTab';
 import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
+import { TagsTab } from './TagsTab';
 import { RecordsTab } from './RecordsTab';
 
 export const AdminPage = () => {
@@ -27,6 +29,7 @@ export const AdminPage = () => {
 
     const [activeTab, setActiveTab] = useState<Tab>('users');
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
+    const {tags, refresh: refreshTags} = useTags();
     const [searchParams] = useSearchParams();
     const urlParamsHandled = useRef(false);
     const usersTabRef = useRef<UsersTabHandle>(null);
@@ -40,7 +43,7 @@ export const AdminPage = () => {
         if (loading || !user || !profile || !hasPermission(profile.group, 'core-staff')) return;
         const tab = searchParams.get('tab');
         const event = searchParams.get('event');
-        if (tab === 'events' || tab === 'upcoming' || tab === 'badges' || tab === 'records' || tab === 'users') {
+        if (tab === 'events' || tab === 'upcoming' || tab === 'badges' || tab === 'tags' || tab === 'records' || tab === 'users') {
             setActiveTab(tab);
         }
         if (tab === 'events' && event) {
@@ -171,6 +174,12 @@ export const AdminPage = () => {
                         {isEnglish ? 'Badges' : '徽章'}
                     </button>
                     <button
+                        className={`admin-tab ${activeTab === 'tags' ? 'admin-tab-active' : ''}`}
+                        onClick={() => setActiveTab('tags')}
+                    >
+                        {isEnglish ? 'Tags' : '标签'}
+                    </button>
+                    <button
                         className={`admin-tab ${activeTab === 'records' ? 'admin-tab-active' : ''}`}
                         onClick={() => setActiveTab('records')}
                     >
@@ -193,6 +202,7 @@ export const AdminPage = () => {
                         ref={eventsTabRef}
                         pastEvents={pastEvents}
                         refreshEvents={refreshEvents}
+                        tags={tags}
                         user={user}
                         profile={profile}
                     />
@@ -203,6 +213,8 @@ export const AdminPage = () => {
                         ref={upcomingTabRef}
                         upcomingEvents={upcomingEvents}
                         refreshEvents={refreshUpcoming}
+                        refreshPastEvents={refreshEvents}
+                        tags={tags}
                         user={user}
                         profile={profile}
                     />
@@ -216,6 +228,10 @@ export const AdminPage = () => {
                         user={user}
                         profile={profile}
                     />
+                )}
+
+                {activeTab === 'tags' && (
+                    <TagsTab tags={tags} refreshTags={refreshTags}/>
                 )}
 
                 {activeTab === 'records' && (
