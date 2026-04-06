@@ -16,7 +16,7 @@ export const About = () => {
             </div>
             <div className="about-content">
                 <div className="about-text">
-                    <h3>{isEnglish ? "A diverse anime club created as a space for students who love amines to freely explore" : "专为热爱二次元文化的学生们打造自由的探险之地"}</h3>
+                    <h3>{isEnglish ? "A diverse anime club created as a space for students who love anime to freely explore" : "专为热爱二次元文化的学生们打造自由的探险之地"}</h3>
                     {isEnglish ? (<p>
                             Here, we support you to become any version of yourself—whether you're a passionate
                             cosplayer, a creative artist, or an energetic dancer.<br/>
@@ -86,6 +86,7 @@ export const About = () => {
                         <button
                             className="modal-close"
                             onClick={() => setIsModalOpen(false)}
+                            aria-label={isEnglish ? "Close" : "关闭"}
                         >
                             ×
                         </button>

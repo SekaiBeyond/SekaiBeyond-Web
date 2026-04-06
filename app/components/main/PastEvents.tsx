@@ -26,11 +26,13 @@ export const PastEvents = () => {
                 {displayedEvents.map((event, index) => (
                     <div key={index} className="event-card">
                         <img
-                            className="event-image"
+                            className="event-image event-image--clickable"
                             src={event.icon}
                             alt={isEnglish ? event.title : event.titleCn}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => setSelectedImage(event.icon)}
-                            style={{cursor: 'pointer'}}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedImage(event.icon); }}}
                         />
                         <div className="event-content">
                             <span className="event-label">{(() => {
@@ -58,7 +60,7 @@ export const PastEvents = () => {
                     </div>
                 ))}
             </div>
-            <div style={{display: 'flex', justifyContent: 'center', marginTop: '3rem'}}>
+            <div className="show-more-container">
                 <button
                     onClick={() => setShowAll(!showAll)}
                     className="show-more-btn"

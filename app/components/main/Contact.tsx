@@ -14,25 +14,25 @@ export const Contact = () => {
                 {isEnglish ? "Follow us on social media for the latest updates and announcements!" : "关注我们的社交媒体，获取最新动态和公告！"}
             </p>
         </div>
-        <div style={{maxWidth: '70%', margin: '0 auto'}}>
+        <div className="contact-inner">
             <div className="social-links-grid">
-                <a className="social-card" href={LINKS.discord} target="_blank">
+                <a className="social-card" href={LINKS.discord} target="_blank" rel="noopener noreferrer">
                     <SiDiscord className="social-icon"/>
                     <div className="social-name">Discord</div>
                 </a>
-                <a className="social-card" href={LINKS.instagram} target="_blank">
+                <a className="social-card" href={LINKS.instagram} target="_blank" rel="noopener noreferrer">
                     <SiInstagram className="social-icon"/>
                     <div className="social-name">Instagram</div>
                 </a>
-                <a className="social-card" href={LINKS.bilibili} target="_blank">
+                <a className="social-card" href={LINKS.bilibili} target="_blank" rel="noopener noreferrer">
                     <SiBilibili className="social-icon"/>
                     <div className="social-name">{isEnglish ? "Bilibili" : "哔哩哔哩"}</div>
                 </a>
-                <a className="social-card" href={LINKS.xiaohongshu} target="_blank">
+                <a className="social-card" href={LINKS.xiaohongshu} target="_blank" rel="noopener noreferrer">
                     <SiXiaohongshu className="social-icon"/>
                     <div className="social-name">{isEnglish ? "Xiaohongshu" : "小红书"}</div>
                 </a>
-                <a className="social-card" href={LINKS.linkedin} target="_blank">
+                <a className="social-card" href={LINKS.linkedin} target="_blank" rel="noopener noreferrer">
                     <FaLinkedin className="social-icon"/>
                     <div className="social-name">{isEnglish ? "LinkedIn" : "领英"}</div>
                 </a>

@@ -21,14 +21,14 @@ export const Footer = () => {
                             {isEnglish ? link.labelEn : link.labelCn}
                         </a>
                     ) : (
-                        <a key={link.id} href={link.href} className="footer-link" target="_blank">
+                        <a key={link.id} href={link.href} className="footer-link" target="_blank" rel="noopener noreferrer">
                             {isEnglish ? link.labelEn : link.labelCn}
                         </a>
                     )
                 ))}
             </div>
             <p className="footer-text">
-                © 2025 {isEnglish ? "Sekai Beyond" : "彼世界动漫社"}<br/>
+                © {new Date().getFullYear()} {isEnglish ? "Sekai Beyond" : "彼世界动漫社"}<br/>
                 {isEnglish ? "A Registered Student Organization at University of Washington" : "华盛顿大学注册学生组织"}
             </p>
         </footer>

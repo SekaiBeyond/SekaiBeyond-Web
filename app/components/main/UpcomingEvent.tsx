@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { type UpcomingEvent as UpcomingEventType, useUpcomingEvents } from "~/lib/upcomingEvents";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
@@ -61,10 +61,8 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
 
     return (
         <div className="convention-banner">
-            <div style={{position: 'relative', zIndex: 2}}>
-                <span className="convention-label" style={isInProgress ? {
-                    background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
-                } : undefined}>
+            <div className="con-banner-inner">
+                <span className={`convention-label${isInProgress ? ' convention-label--progress' : ''}`}>
                     {isInProgress
                         ? (isEnglish ? "Happening Now" : "进行中")
                         : (isEnglish ? "Coming Soon" : "即将到来")}
@@ -84,7 +82,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     {isEnglish ? event.description : event.descriptionCn}
                 </p>
                 {event.poster && (
-                    <div className="convention-poster" style={{marginTop: '2rem'}}
+                    <div className="convention-poster convention-poster--spaced"
                          onClick={onPosterClick}>
                         <img src={event.poster} alt={isEnglish ? "Event Poster" : "活动海报"}/>
                         {event.posterCredit ? (
@@ -112,7 +110,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     ))}
                 </div>
                 {event.buyTicket || event.learnMore ? (
-                    <div className="hero-buttons" style={{marginTop: '40px'}}>
+                    <div className="hero-buttons con-buttons">
                         {event.buyTicket ? (<a href={event.buyTicket}
                                                className="btn btn-primary con-btn">{isEnglish ? "Get Tickets" : "购票"}</a>) : null}
                         {event.learnMore ? (<a href={event.learnMore}
@@ -130,10 +128,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
 export const UpcomingEvent = () => {
     const {isEnglish} = useLanguage();
     const {upcomingEvents: allEvents} = useUpcomingEvents();
-    const activeEvents = useMemo(
-        () => allEvents.filter(e => e.endAt > new Date()),
-        [allEvents],
-    );
+    const activeEvents = allEvents.filter(e => e.endAt > new Date());
     const [selectedPoster, setSelectedPoster] = useState<string | null>(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isTransitioning, setIsTransitioning] = useState(false);

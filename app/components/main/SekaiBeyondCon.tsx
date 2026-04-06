@@ -28,7 +28,7 @@ export const SekaiBeyondCon = () => {
                             <span className="con-deco" style={{top: '60%', left: '90%', animationDelay: '15s'}}>🎸</span>
                         </div>
 
-                        <div style={{position: 'relative', zIndex: 2}}>
+                        <div className="con-banner-inner">
                             <span className="convention-label">
                                 {new Date(edition.date).getUTCFullYear()} {isEnglish ? "Edition" : "年度"}
                             </span>

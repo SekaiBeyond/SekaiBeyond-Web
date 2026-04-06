@@ -1,23 +1,27 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
+
+const generateBubbleStyles = () =>
+    Array.from({length: 6}, () => ({
+        width: Math.random() * 25 + 10 + 'em',
+        height: Math.random() * 25 + 10 + 'em',
+        left: Math.random() * 100 + '%',
+        top: Math.random() * 100 + '%',
+        animationDelay: Math.random() * 5 + 's'
+    }));
 
 export const Hero = () => {
     const {isEnglish} = useLanguage();
+    const bubbleStyles = useMemo(generateBubbleStyles, []);
 
     return (
         <section id="home" className="hero">
             <div className="hero-decoration">
-                {[...Array(6)].map((_, i) => (
+                {bubbleStyles.map((style, i) => (
                     <div
                         key={i}
                         className="bubble"
-                        style={{
-                            width: Math.random() * 25 + 10 + 'em',
-                            height: Math.random() * 25 + 10 + 'em',
-                            left: Math.random() * 100 + '%',
-                            top: Math.random() * 100 + '%',
-                            animationDelay: Math.random() * 5 + 's'
-                        }}
+                        style={style}
                     />
                 ))}
             </div>
