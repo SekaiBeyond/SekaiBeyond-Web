@@ -139,7 +139,7 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
                             />
                         </label>
                     </div>
-                    <div style={{display: 'flex', gap: '10px', marginTop: '12px'}}>
+                    <div className="admin-btn-row" style={{marginTop: '12px'}}>
                         <button
                             className="admin-generate-btn"
                             onClick={createTag}
@@ -155,8 +155,7 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
                     </div>
                 </div>
             ) : (
-                <button className="admin-generate-btn" onClick={() => setShowCreate(true)}
-                        style={{marginBottom: '16px'}}>
+                <button className="admin-generate-btn admin-section-mb" onClick={() => setShowCreate(true)}>
                     {isEnglish ? '+ New Tag' : '+ 新建标签'}
                 </button>
             )}
@@ -167,39 +166,35 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
 
             <div className="admin-event-grid">
                 {tags.map(tag => (
-                    <div key={tag.id} className="admin-event-card" style={{cursor: 'default'}}>
-                        <div className="admin-event-card-info" style={{padding: '16px'}}>
+                    <div key={tag.id} className="admin-event-card admin-tag-card">
+                        <div className="admin-event-card-info admin-tag-card-info">
                             {editingTag?.id === tag.id ? (
                                 <>
                                     <input
                                         value={editName}
                                         onChange={e => setEditName(e.target.value)}
-                                        className="admin-search-input"
+                                        className="admin-search-input admin-tag-input"
                                         placeholder={isEnglish ? 'English name' : '英文名称'}
-                                        style={{marginBottom: '8px'}}
                                     />
                                     <input
                                         value={editNameCn}
                                         onChange={e => setEditNameCn(e.target.value)}
-                                        className="admin-search-input"
+                                        className="admin-search-input admin-tag-input"
                                         placeholder={isEnglish ? 'Chinese name' : '中文名称'}
-                                        style={{marginBottom: '8px'}}
                                     />
-                                    <div style={{display: 'flex', gap: '8px'}}>
+                                    <div className="admin-tag-actions">
                                         <button
-                                            className="admin-generate-btn"
+                                            className="admin-generate-btn admin-btn-sm"
                                             onClick={saveEdit}
                                             disabled={savingEdit || !editName.trim()}
-                                            style={{fontSize: '12px', padding: '4px 12px'}}
                                         >
                                             {savingEdit
                                                 ? (isEnglish ? 'Saving...' : '保存中...')
                                                 : (isEnglish ? 'Save' : '保存')}
                                         </button>
                                         <button
-                                            className="admin-back-btn"
+                                            className="admin-back-btn admin-btn-sm"
                                             onClick={() => setEditingTag(null)}
-                                            style={{fontSize: '12px', padding: '4px 12px'}}
                                         >
                                             {isEnglish ? 'Cancel' : '取消'}
                                         </button>
@@ -211,18 +206,16 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
                                     {tag.nameCn && (
                                         <span className="admin-event-card-date">{tag.nameCn}</span>
                                     )}
-                                    <div style={{display: 'flex', gap: '8px', marginTop: '8px'}}>
+                                    <div className="admin-tag-actions">
                                         <button
-                                            className="admin-toggle-btn"
+                                            className="admin-toggle-btn admin-btn-sm"
                                             onClick={() => openEdit(tag)}
-                                            style={{fontSize: '12px', padding: '4px 12px'}}
                                         >
                                             {isEnglish ? 'Edit' : '编辑'}
                                         </button>
                                         <button
-                                            className="admin-toggle-btn admin-toggle-revoke"
+                                            className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
                                             onClick={() => deleteTag(tag)}
-                                            style={{fontSize: '12px', padding: '4px 12px'}}
                                         >
                                             {isEnglish ? 'Delete' : '删除'}
                                         </button>

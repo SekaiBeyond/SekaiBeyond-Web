@@ -346,7 +346,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         placeholder={isEnglish ? 'Optional' : '可选'}
                                     />
                                 </label>
-                                <label style={{gridColumn: '1 / -1'}}>
+                                <label className="admin-form-grid-full">
                                     <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
                                     <textarea
                                         value={form.description}
@@ -355,7 +355,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         placeholder={isEnglish ? 'Event description' : '活动描述'}
                                     />
                                 </label>
-                                <label style={{gridColumn: '1 / -1'}}>
+                                <label className="admin-form-grid-full">
                                     <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
                                     <textarea
                                         value={form.descriptionCn}
@@ -400,7 +400,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         placeholder={isEnglish ? 'Optional' : '可选'}
                                     />
                                 </label>
-                                <label style={{gridColumn: '1 / -1'}}>
+                                <label className="admin-form-grid-full">
                                     <span>{isEnglish ? 'Custom Button Link' : '自定义按钮链接'}</span>
                                     <input
                                         value={form.customButtonLink}
@@ -410,7 +410,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     />
                                 </label>
                             </div>
-                            <div style={{display: 'flex', gap: '10px'}}>
+                            <div className="admin-btn-row">
                                 <button
                                     className="admin-generate-btn"
                                     onClick={saveEvent}
@@ -434,7 +434,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             </div>
                         </div>
                     ) : (
-                        <button className="admin-generate-btn" onClick={openCreate} style={{marginBottom: '16px'}}>
+                        <button className="admin-generate-btn admin-section-mb" onClick={openCreate}>
                             {isEnglish ? '+ New Upcoming Event' : '+ 新建活动预告'}
                         </button>
                     )}
@@ -448,14 +448,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 {event.poster ? (
                                     <img src={event.poster} alt="" className="admin-event-card-img"/>
                                 ) : (
-                                    <div className="admin-event-card-img" style={{
-                                        background: '#2a2a3e',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#888',
-                                        fontSize: '12px'
-                                    }}>
+                                    <div className="admin-event-card-img admin-no-poster">
                                         {isEnglish ? 'No poster' : '无海报'}
                                     </div>
                                 )}
@@ -468,7 +461,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         })}
                                     </span>
                                     {event.endAt < new Date() && (
-                                        <span style={{color: '#f44336', fontSize: '11px'}}>
+                                        <span className="admin-ended-tag">
                                             {isEnglish ? 'Ended' : '已结束'}
                                         </span>
                                     )}
@@ -500,12 +493,12 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         </span>
                                         <span>{isEnglish ? selectedEvt.location : selectedEvt.locationCn}</span>
                                     </p>
-                                    <p style={{color: '#aaa', marginTop: '8px', fontSize: '14px'}}>
+                                    <p className="admin-description-text">
                                         {isEnglish ? selectedEvt.description : selectedEvt.descriptionCn}
                                     </p>
                                 </div>
                             </div>
-                            <div className="admin-form-actions" style={{marginBottom: '20px'}}>
+                            <div className="admin-form-actions admin-section-mb">
                                 <button
                                     className="admin-generate-btn"
                                     onClick={() => {
@@ -529,11 +522,11 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 </button>
                             </div>
                             {showArchive && (
-                                <div className="admin-create-badge-form" style={{marginBottom: '20px'}}>
+                                <div className="admin-create-badge-form admin-section-mb">
                                     <h4 className="admin-badges-title">
                                         {isEnglish ? 'Archive Event' : '归档活动'}
                                     </h4>
-                                    <p style={{color: '#aaa', fontSize: '13px', marginBottom: '12px'}}>
+                                    <p className="admin-helper-text">
                                         {isEnglish
                                             ? 'This will move the event from Upcoming to Past Events. You can optionally add a label (e.g. "Workshop", "Convention").'
                                             : '此操作会将活动从预告移到往期活动。你可以选填标签（如"工作坊"、"展会"）。'}
@@ -555,7 +548,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                             </select>
                                         </label>
                                     </div>
-                                    <div style={{display: 'flex', gap: '10px', marginTop: '12px'}}>
+                                    <div className="admin-btn-row" style={{marginTop: '12px'}}>
                                         <button
                                             className="admin-generate-btn"
                                             onClick={() => archiveEvent(selectedEvt)}

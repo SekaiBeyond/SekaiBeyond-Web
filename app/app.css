@@ -3340,6 +3340,98 @@ footer {
     }
 }
 
+/* Admin Utility Classes */
+.admin-form-grid-full {
+    grid-column: 1 / -1;
+}
+
+.admin-btn-row {
+    display: flex;
+    gap: 10px;
+}
+
+.admin-btn-sm {
+    font-size: 12px;
+    padding: 4px 12px;
+}
+
+.admin-section-mb {
+    margin-bottom: 20px;
+}
+
+.admin-section-mt {
+    margin-top: 28px;
+}
+
+.admin-spinner-center {
+    margin: 20px auto;
+}
+
+.admin-ended-tag {
+    color: #f44336;
+    font-size: 11px;
+}
+
+.admin-no-poster {
+    background: #2a2a3e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #888;
+    font-size: 12px;
+}
+
+.admin-description-text {
+    color: #aaa;
+    margin-top: 8px;
+    font-size: 14px;
+}
+
+.admin-helper-text {
+    color: #aaa;
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+.admin-creator-link {
+    color: #6c63ff;
+}
+
+.admin-activation-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.admin-activation-usage {
+    font-size: 13px;
+    color: #7a8190;
+}
+
+.admin-activation-time {
+    font-size: 12px;
+    color: #999;
+}
+
+.admin-tag-card {
+    cursor: default;
+}
+
+.admin-tag-card-info {
+    padding: 16px;
+}
+
+.admin-tag-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.admin-tag-input {
+    margin-bottom: 8px;
+}
+
 /* Records Tab */
 .record-filter-bar {
     display: flex;

@@ -1,5 +1,6 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import {
+    arrayRemove,
     collection,
     doc,
     type DocumentSnapshot,
@@ -234,10 +235,11 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         try {
             const db = getFirebaseDb();
 
-            // Find orphaned activation codes to clean up
-            const codesSnap = await getDocs(query(
-                collection(db, 'badgeActivationCodes'), where('badgeId', '==', bd.id),
-            ));
+            // Find orphaned activation codes and badge holders to clean up
+            const [codesSnap, holdersSnap] = await Promise.all([
+                getDocs(query(collection(db, 'badgeActivationCodes'), where('badgeId', '==', bd.id))),
+                getDocs(query(collection(db, 'users'), where('badges', 'array-contains', bd.id))),
+            ]);
 
             const batch = writeBatch(db);
             batch.delete(doc(db, 'badges', bd.id));
@@ -251,6 +253,10 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             });
             for (const codeDoc of codesSnap.docs) {
                 batch.delete(codeDoc.ref);
+            }
+            // Remove dangling badge reference from holders
+            for (const userDoc of holdersSnap.docs) {
+                batch.update(userDoc.ref, {badges: arrayRemove(bd.id)});
             }
             await batch.commit();
 
@@ -569,12 +575,12 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                 {isEnglish ? 'Created by: ' : '创建者：'}
                                 {selectedBadgeDef.createdByUid ? (
                                     <a href={`/profile?uid=${selectedBadgeDef.createdByUid}`}
-                                       style={{color: '#6c63ff'}}>
+                                       className="admin-creator-link">
                                         {selectedBadgeDef.createdByName}
                                     </a>
                                 ) : selectedBadgeDef.createdByLink ? (
                                     <a href={selectedBadgeDef.createdByLink} target="_blank" rel="noopener noreferrer"
-                                       style={{color: '#6c63ff'}}>
+                                       className="admin-creator-link">
                                         {selectedBadgeDef.createdByName}
                                     </a>
                                 ) : selectedBadgeDef.createdByName}
@@ -584,7 +590,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 </div>
 
                 {editingBadgeDef ? (
-                    <div className="admin-create-badge-form" style={{marginBottom: '20px'}}>
+                    <div className="admin-create-badge-form admin-section-mb">
                         <h4 className="admin-badges-title">{isEnglish ? 'Edit Badge' : '编辑徽章'}</h4>
                         <div className="admin-form-grid">
                             <label>
@@ -646,7 +652,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                         </div>
                     </div>
                 ) : (
-                    <div className="admin-form-actions" style={{marginBottom: '20px'}}>
+                    <div className="admin-form-actions admin-section-mb">
                         <button className="admin-generate-btn" onClick={startEditBadge}>
                             {isEnglish ? 'Edit Badge' : '编辑徽章'}
                         </button>
@@ -662,7 +668,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     {badgeHolders.length > 0 && <span className="admin-badges-count">{badgeHolders.length}</span>}
                 </h4>
 
-                {loadingBadgeHolders && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+                {loadingBadgeHolders && <div className="profile-spinner admin-spinner-center"/>}
                 {!loadingBadgeHolders && badgeHolders.length === 0 && (
                     <p className="admin-no-results">{isEnglish ? 'No one has this badge yet.' : '暂无人持有此徽章。'}</p>
                 )}
@@ -688,7 +694,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 )}
 
                 {/* Activation Codes */}
-                <h4 className="admin-badges-title" style={{marginTop: '28px'}}>
+                <h4 className="admin-badges-title admin-section-mt">
                     {isEnglish ? 'Activation Codes' : '激活码'}
                     {badgeActivationCodes.length > 0 &&
                         <span className="admin-badges-count">{badgeActivationCodes.length}</span>}
@@ -698,7 +704,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     <div className="admin-code-time-inputs">
                         <label>
                             <span>{isEnglish ? 'Max Uses' : '最大使用次数'}</span>
-                            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                            <div className="admin-activation-meta">
                                 <input
                                     type="number" min="1"
                                     value={newCodeUnlimited ? '' : newCodeMaxUses}
@@ -745,37 +751,36 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                         className="admin-generate-btn"
                         onClick={() => createBadgeActivationCode(selectedBadgeDef.id)}
                         disabled={generatingActivationCode}
-                        style={{marginTop: '12px'}}
-                    >
+                        style={{marginTop: '12px'}}>
                         {generatingActivationCode
                             ? (isEnglish ? 'Generating...' : '生成中...')
                             : (isEnglish ? '+ Generate Activation Code' : '+ 生成激活码')}
                     </button>
                 </div>
 
-                {loadingActivationCodes && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+                {loadingActivationCodes && <div className="profile-spinner admin-spinner-center"/>}
                 {!loadingActivationCodes && badgeActivationCodes.length === 0 && (
                     <p className="admin-no-results">{isEnglish ? 'No activation codes yet.' : '暂无激活码。'}</p>
                 )}
 
                 {!loadingActivationCodes && badgeActivationCodes.map((ac) => (
                     <div key={ac.id} className="admin-single-code" style={{marginTop: '12px'}}>
-                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap'}}>
+                        <div className="admin-activation-meta">
                             <span className={ac.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
                                 {ac.active ? (isEnglish ? 'Active' : '活跃') : (isEnglish ? 'Inactive' : '已停用')}
                             </span>
-                            <span style={{fontSize: '13px', color: '#7a8190'}}>
+                            <span className="admin-activation-usage">
                                 {ac.maxUses === 0
                                     ? (isEnglish ? `Used ${ac.usedCount} / ∞ times` : `已使用 ${ac.usedCount} / ∞ 次`)
                                     : (isEnglish ? `Used ${ac.usedCount} / ${ac.maxUses} times` : `已使用 ${ac.usedCount} / ${ac.maxUses} 次`)}
                             </span>
                             {ac.activeFrom && (
-                                <span style={{fontSize: '12px', color: '#999'}}>
+                                <span className="admin-activation-time">
                                     {isEnglish ? 'From: ' : '从：'}{new Date(ac.activeFrom).toLocaleString()}
                                 </span>
                             )}
                             {ac.activeUntil && (
-                                <span style={{fontSize: '12px', color: '#999'}}>
+                                <span className="admin-activation-time">
                                     {isEnglish ? 'Until: ' : '至：'}{new Date(ac.activeUntil).toLocaleString()}
                                 </span>
                             )}

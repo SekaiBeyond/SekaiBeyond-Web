@@ -1,5 +1,15 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, type DocumentSnapshot, getDocs, limit, orderBy, query, startAfter, } from 'firebase/firestore';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import {
+    collection,
+    type DocumentSnapshot,
+    getDocs,
+    limit,
+    orderBy,
+    query,
+    type QueryConstraint,
+    startAfter,
+    where,
+} from 'firebase/firestore';
 import { GROUP_LABELS } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
@@ -8,6 +18,7 @@ import type { ActivityRecord, BadgeDef, RecordType } from './types';
 
 const PAGE_SIZE = 20;
 
+// Requires composite Firestore indexes: (type, timestamp) and (performedBy, timestamp)
 const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     group: ['group-assign'],
     code: ['code-create', 'code-activate', 'code-deactivate', 'code-delete',
@@ -43,36 +54,50 @@ export const RecordsTab = ({
     const [hasMore, setHasMore] = useState(true);
     const [recordFilterType, setRecordFilterType] = useState<string>('');
     const [recordFilterActor, setRecordFilterActor] = useState('');
+    const [knownActors, setKnownActors] = useState<{uid: string; name: string}[]>([]);
+    const activeFilterRef = useRef({type: '', actor: ''});
 
-    const loadRecords = useCallback(async (after?: DocumentSnapshot) => {
+    const parseRecordDocs = (snapshot: {docs: DocumentSnapshot[]}): ActivityRecord[] =>
+        snapshot.docs.map(docSnap => {
+            const data = docSnap.data()!;
+            return {
+                id: docSnap.id,
+                type: data.type,
+                performedBy: data.performedBy,
+                performedByName: data.performedByName ?? '',
+                targetUid: data.targetUid,
+                targetName: data.targetName,
+                eventTitle: data.eventTitle,
+                eventId: data.eventId,
+                badgeId: data.badgeId,
+                badgeName: data.badgeName,
+                tagName: data.tagName,
+                code: data.code,
+                oldGroup: data.oldGroup,
+                newGroup: data.newGroup,
+                timestamp: data.timestamp?.toDate() ?? new Date(),
+            };
+        });
+
+    const buildRecordsQuery = (typeFilter: string, actorFilter: string, after?: DocumentSnapshot) => {
+        const constraints: QueryConstraint[] = [];
+        if (typeFilter && TYPE_CATEGORIES[typeFilter]) {
+            constraints.push(where('type', 'in', TYPE_CATEGORIES[typeFilter]));
+        }
+        if (actorFilter) {
+            constraints.push(where('performedBy', '==', actorFilter));
+        }
+        constraints.push(orderBy('timestamp', 'desc'));
+        if (after) constraints.push(startAfter(after));
+        constraints.push(limit(PAGE_SIZE));
+        return query(collection(getFirebaseDb(), 'records'), ...constraints);
+    };
+
+    const loadRecords = useCallback(async (typeFilter: string, actorFilter: string, after?: DocumentSnapshot) => {
         setLoadingRecords(true);
         try {
-            const db = getFirebaseDb();
-            const q = after
-                ? query(collection(db, 'records'), orderBy('timestamp', 'desc'), startAfter(after), limit(PAGE_SIZE))
-                : query(collection(db, 'records'), orderBy('timestamp', 'desc'), limit(PAGE_SIZE));
-            const snapshot = await getDocs(q);
-
-            const items: ActivityRecord[] = snapshot.docs.map(docSnap => {
-                const data = docSnap.data();
-                return {
-                    id: docSnap.id,
-                    type: data.type,
-                    performedBy: data.performedBy,
-                    performedByName: data.performedByName ?? '',
-                    targetUid: data.targetUid,
-                    targetName: data.targetName,
-                    eventTitle: data.eventTitle,
-                    eventId: data.eventId,
-                    badgeId: data.badgeId,
-                    badgeName: data.badgeName,
-                    tagName: data.tagName,
-                    code: data.code,
-                    oldGroup: data.oldGroup,
-                    newGroup: data.newGroup,
-                    timestamp: data.timestamp?.toDate() ?? new Date(),
-                };
-            });
+            const snapshot = await getDocs(buildRecordsQuery(typeFilter, actorFilter, after));
+            const items = parseRecordDocs(snapshot);
 
             if (after) {
                 setRecords(prev => [...prev, ...items]);
@@ -81,40 +106,38 @@ export const RecordsTab = ({
             }
             setLastDoc(snapshot.docs[snapshot.docs.length - 1] ?? null);
             setHasMore(snapshot.docs.length === PAGE_SIZE);
+
+            // Track unique actors for the dropdown
+            setKnownActors(prev => {
+                const merged = [...prev];
+                for (const item of items) {
+                    if (!merged.some(a => a.uid === item.performedBy)) {
+                        merged.push({uid: item.performedBy, name: item.performedByName});
+                    }
+                }
+                return merged;
+            });
         } finally {
             setLoadingRecords(false);
         }
     }, []);
 
     useEffect(() => {
+        loadRecords('', '').catch(console.error);
+    }, [loadRecords]);
+
+    const applyFilters = (type: string, actor: string) => {
+        activeFilterRef.current = {type, actor};
         setRecords([]);
         setLastDoc(null);
         setHasMore(true);
-        loadRecords().catch(console.error);
-    }, [loadRecords]);
-
-    const loadMore = () => {
-        if (lastDoc && hasMore) loadRecords(lastDoc).then();
+        loadRecords(type, actor).catch(console.error);
     };
 
-    const filteredRecords = useMemo(() => {
-        let result = records;
-        if (recordFilterType) {
-            const types = TYPE_CATEGORIES[recordFilterType];
-            if (types) result = result.filter(r => types.includes(r.type));
-        }
-        if (recordFilterActor) {
-            result = result.filter(r => r.performedBy === recordFilterActor);
-        }
-        return result;
-    }, [records, recordFilterType, recordFilterActor]);
-
-    const uniqueActors = useMemo(() => records.reduce<{uid: string; name: string}[]>((acc, r) => {
-        if (!acc.some(a => a.uid === r.performedBy)) {
-            acc.push({uid: r.performedBy, name: r.performedByName});
-        }
-        return acc;
-    }, []), [records]);
+    const loadMore = () => {
+        const {type, actor} = activeFilterRef.current;
+        if (lastDoc && hasMore) loadRecords(type, actor, lastDoc).then();
+    };
 
     const clickableName = (uid: string, name: string): ReactNode => (
         <span className="record-clickable-name" onClick={() => onLookupUser(uid)}>{name}</span>
@@ -300,7 +323,11 @@ export const RecordsTab = ({
                 <select
                     className="record-filter-select"
                     value={recordFilterType}
-                    onChange={e => setRecordFilterType(e.target.value)}
+                    onChange={e => {
+                        const val = e.target.value;
+                        setRecordFilterType(val);
+                        applyFilters(val, recordFilterActor);
+                    }}
                 >
                     <option value="">{isEnglish ? 'All Types' : '所有类型'}</option>
                     <option value="group">{isEnglish ? 'Group' : '用户组'}</option>
@@ -313,10 +340,14 @@ export const RecordsTab = ({
                 <select
                     className="record-filter-select"
                     value={recordFilterActor}
-                    onChange={e => setRecordFilterActor(e.target.value)}
+                    onChange={e => {
+                        const val = e.target.value;
+                        setRecordFilterActor(val);
+                        applyFilters(recordFilterType, val);
+                    }}
                 >
                     <option value="">{isEnglish ? 'All Actors' : '所有操作人'}</option>
-                    {uniqueActors.map(a => (
+                    {knownActors.map(a => (
                         <option key={a.uid} value={a.uid}>{a.name}</option>
                     ))}
                 </select>
@@ -326,6 +357,7 @@ export const RecordsTab = ({
                         onClick={() => {
                             setRecordFilterType('');
                             setRecordFilterActor('');
+                            applyFilters('', '');
                         }}
                     >
                         {isEnglish ? 'Reset' : '重置'}
@@ -334,14 +366,14 @@ export const RecordsTab = ({
             </div>
 
             {loadingRecords && records.length === 0 && (
-                <div className="profile-spinner" style={{margin: '20px auto'}}/>
+                <div className="profile-spinner admin-spinner-center"/>
             )}
 
-            {!loadingRecords && filteredRecords.length === 0 && (
+            {!loadingRecords && records.length === 0 && (
                 <p className="admin-no-results">{isEnglish ? 'No records yet.' : '暂无记录。'}</p>
             )}
 
-            {filteredRecords.map(r => (
+            {records.map(r => (
                 <div key={r.id} className="record-row">
                     <span className={`record-type-tag record-type-${r.type}`}>
                         {getRecordTypeTag(r.type)}

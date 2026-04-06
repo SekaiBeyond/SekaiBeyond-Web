@@ -84,7 +84,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 setLoadingRecent(false);
             }
         };
-        loadRecentUsers().catch(() => {
+        loadRecentUsers().catch(err => {
+            console.error('Failed to load recent users:', err);
         });
     }, []);
 
@@ -198,7 +199,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     ? Math.round((holderSnap.data().count / totalSnap.data().count) * 100)
                     : 0;
                 await updateDoc(doc(db, 'badges', badgeId), {holderPct});
-            } catch { /* holderPct is non-critical */
+            } catch (err) {
+                console.error('Failed to update holderPct:', err);
             }
 
             const updatedBadges = has
@@ -321,7 +323,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                             </span>
                         </div>
                     ))}
-                    {loadingRecent && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+                    {loadingRecent && <div className="profile-spinner admin-spinner-center"/>}
                     {!loadingRecent && hasMoreRecent && recentUsers.length > 0 && (
                         <button className="admin-load-more-btn" onClick={loadMoreRecentUsers}>
                             {isEnglish ? 'Load More' : '加载更多'}

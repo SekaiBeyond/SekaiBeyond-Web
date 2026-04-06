@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
-import { collection, doc, getDocs, query, serverTimestamp, where, writeBatch, } from 'firebase/firestore';
+import { arrayRemove, collection, doc, getDocs, query, serverTimestamp, where, writeBatch, } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import type { User } from 'firebase/auth';
 import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
@@ -56,8 +56,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         setEventAttendees([]);
         try {
             await loadEventCode(eventId);
-        } catch {
-            // Non-fatal — user can still see event details and generate a new code
+        } catch (err) {
+            console.error('Failed to load event code:', err);
         }
     };
 
@@ -106,7 +106,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             return {
                 id: docSnap.id,
                 code: data.code,
-                eventId: data.eventId ?? data.eventTitle,
+                eventId: data.eventId ?? '',
                 active: data.active ?? true,
                 activeFrom: data.activeFrom ?? null,
                 activeUntil: data.activeUntil ?? null,
@@ -261,10 +261,11 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         try {
             const db = getFirebaseDb();
 
-            // Find orphaned codes to clean up
-            const codesSnap = await getDocs(query(
-                collection(db, 'badgeCodes'), where('eventId', '==', event.id),
-            ));
+            // Find orphaned codes and attendees to clean up
+            const [codesSnap, attendeesSnap] = await Promise.all([
+                getDocs(query(collection(db, 'badgeCodes'), where('eventId', '==', event.id))),
+                getDocs(query(collection(db, 'users'), where('attendedEvents', 'array-contains', event.id))),
+            ]);
 
             const batch = writeBatch(db);
             batch.delete(doc(db, 'pastEvents', event.id));
@@ -278,6 +279,10 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             });
             for (const codeDoc of codesSnap.docs) {
                 batch.delete(codeDoc.ref);
+            }
+            // Remove dangling event reference from attendees
+            for (const userDoc of attendeesSnap.docs) {
+                batch.update(userDoc.ref, {attendedEvents: arrayRemove(event.id)});
             }
             await batch.commit();
 
@@ -372,7 +377,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                         <img src={eventImagePreview} alt="" className="admin-badge-image-preview"/>
                                     )}
                                 </label>
-                                <label style={{gridColumn: '1 / -1'}}>
+                                <label className="admin-form-grid-full">
                                     <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
                                     <textarea
                                         value={eventForm.description}
@@ -381,7 +386,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                         placeholder={isEnglish ? 'Event description' : '活动描述'}
                                     />
                                 </label>
-                                <label style={{gridColumn: '1 / -1'}}>
+                                <label className="admin-form-grid-full">
                                     <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
                                     <textarea
                                         value={eventForm.descriptionCn}
@@ -391,7 +396,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     />
                                 </label>
                             </div>
-                            <div style={{display: 'flex', gap: '10px'}}>
+                            <div className="admin-btn-row">
                                 <button
                                     className="admin-generate-btn"
                                     onClick={saveEvent}
@@ -415,7 +420,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             </div>
                         </div>
                     ) : (
-                        <button className="admin-generate-btn" onClick={openCreateEvent} style={{marginBottom: '16px'}}>
+                        <button className="admin-generate-btn admin-section-mb" onClick={openCreateEvent}>
                             {isEnglish ? '+ New Event' : '+ 新建活动'}
                         </button>
                     )}
@@ -458,7 +463,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     </p>
                                 </div>
                             </div>
-                            <div className="admin-form-actions" style={{marginBottom: '20px'}}>
+                            <div className="admin-form-actions admin-section-mb">
                                 <button
                                     className="admin-generate-btn"
                                     onClick={() => {
@@ -599,7 +604,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
 
                     {eventSubTab === 'attendees' && (
                         <div className="admin-attendees-section">
-                            {searching && <div className="profile-spinner" style={{margin: '20px auto'}}/>}
+                            {searching && <div className="profile-spinner admin-spinner-center"/>}
                             {!searching && eventAttendees.length === 0 && (
                                 <p className="admin-no-results">{isEnglish ? 'No attendees yet.' : '暂无参加者。'}</p>
                             )}
