@@ -22,5 +22,15 @@ service firebase.storage {
                    && request.resource.size < 5 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
     }
+
+    match /badges/{imageId} {
+      // Badge images are publicly readable (shown on profile pages)
+      allow read: if true;
+
+      // Only authenticated users can upload (core-staff check enforced client-side)
+      allow write: if request.auth != null
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
   }
 }

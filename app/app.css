@@ -3093,6 +3093,32 @@ footer {
     cursor: not-allowed;
 }
 
+.admin-load-more-btn {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d4a6ff;
+    border-radius: 10px;
+    background: transparent;
+    color: #9b59b6;
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 12px;
+}
+
+.admin-load-more-btn:hover:not(:disabled) {
+    background: #f3e8ff;
+    border-color: #9b59b6;
+}
+
+.admin-load-more-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .admin-single-code {
     display: flex;
     flex-direction: column;

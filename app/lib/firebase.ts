@@ -1,6 +1,7 @@
 import { type FirebaseApp, initializeApp } from "firebase/app";
 import { type Auth, getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { type Firestore, getFirestore } from "firebase/firestore";
+import { type Functions, getFunctions as _getFunctions, httpsCallable } from "firebase/functions";
 import { type FirebaseStorage, getStorage } from "firebase/storage";
 
 const requiredEnvVars = [
@@ -29,6 +30,7 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
+let functions: Functions;
 let storage: FirebaseStorage;
 
 function getFirebaseApp() {
@@ -51,6 +53,45 @@ export function getFirebaseDb() {
     }
     return db;
 }
+
+export function getFunctions() {
+    if (!functions) {
+        functions = _getFunctions(getFirebaseApp());
+    }
+    return functions;
+}
+
+export const callClaimEventCode = (data: { code: string }) =>
+    httpsCallable<{ code: string }, { eventId: string }>(getFunctions(), 'claimEventCode')(data);
+
+export const callClaimBadgeActivationCode = (data: { code: string }) =>
+    httpsCallable<{ code: string }, {
+        badgeId: string;
+        badgeName: string;
+        badgeNameCn: string;
+        badgeDescription: string;
+        badgeDescriptionCn: string;
+        badgeImageUrl: string;
+    }>(getFunctions(), 'claimBadgeActivationCode')(data);
+
+export const callGenerateBadgeActivationCode = (data: {
+    badgeId: string;
+    maxUses: number;
+    activeFrom?: string;
+    activeUntil?: string;
+}) =>
+    httpsCallable<typeof data, { id: string; code: string }>(
+        getFunctions(), 'generateBadgeActivationCode'
+    )(data);
+
+export const callGenerateEventCode = (data: {
+    eventId: string;
+    activeFrom?: string;
+    activeUntil?: string;
+}) =>
+    httpsCallable<typeof data, { id: string; code: string }>(
+        getFunctions(), 'generateEventCode'
+    )(data);
 
 export function getFirebaseStorage() {
     if (!storage) {

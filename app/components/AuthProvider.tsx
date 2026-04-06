@@ -58,11 +58,13 @@ interface AuthContextType {
     loading: boolean;
     signIn: () => Promise<void>;
     signOut: () => Promise<void>;
+    refreshProfile: () => Promise<void>;
     updateProfile: (updates: {
         displayName?: string;
         photoFile?: File;
         deletePhoto?: boolean;
-        badges?: string[]
+        badges?: string[];
+        attendedEvents?: string[];
     }) => Promise<void>;
 }
 
@@ -139,11 +141,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
         setProfile(null);
     };
 
+    const refreshProfile = async () => {
+        if (!user) return;
+        const userRef = doc(getFirebaseDb(), 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+            const data = userSnap.data();
+            setProfile({
+                displayName: data.displayName,
+                email: data.email,
+                photoURL: data.photoURL,
+                joinedAt: data.joinedAt?.toDate() ?? new Date(),
+                attendedEvents: data.attendedEvents ?? [],
+                badges: data.badges ?? [],
+                group: data.group ?? 'visitor',
+            });
+        }
+    };
+
     const updateProfile = async (updates: {
         displayName?: string;
         photoFile?: File;
         deletePhoto?: boolean;
-        badges?: string[]
+        badges?: string[];
+        attendedEvents?: string[];
     }) => {
         if (!user || !profile) return;
 
@@ -171,6 +192,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
             docUpdates.badges = updates.badges;
         }
 
+        if (updates.attendedEvents !== undefined) {
+            docUpdates.attendedEvents = updates.attendedEvents;
+        }
+
         if (Object.keys(docUpdates).length > 0) {
             await updateDoc(userRef, docUpdates);
             setProfile(prev => prev ? {...prev, ...docUpdates} : prev);
@@ -183,6 +208,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({children}) => {
         loading,
         signIn,
         signOut,
+        refreshProfile,
         updateProfile,
     };
 

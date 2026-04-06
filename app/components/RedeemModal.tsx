@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { arrayUnion, collection, doc, getDocs, increment, query, updateDoc, where } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { getFirebaseDb } from '~/lib/firebase';
+import { callClaimBadgeActivationCode } from '~/lib/firebase';
 
 interface BadgeDef {
     id: string;
@@ -14,7 +14,7 @@ interface BadgeDef {
 }
 
 export const RedeemModal = () => {
-    const {user, profile, updateProfile} = useAuth();
+    const {user, profile, refreshProfile} = useAuth();
     const {isEnglish} = useLanguage();
     const [show, setShow] = useState(false);
     const [input, setInput] = useState('');
@@ -46,8 +46,8 @@ export const RedeemModal = () => {
             setError(isEnglish ? 'Please enter a code.' : '请输入激活码。');
             return;
         }
-        if (trimmed.length < 6) {
-            setError(isEnglish ? 'Code is too short.' : '激活码太短。');
+        if (trimmed.length < 6 || trimmed.length > 20) {
+            setError(isEnglish ? 'Invalid code length.' : '激活码长度无效。');
             return;
         }
         if (!user || !profile) return;
@@ -55,68 +55,38 @@ export const RedeemModal = () => {
         setState('claiming');
         setError('');
         try {
-            const db = getFirebaseDb();
-            const codesRef = collection(db, 'badgeActivationCodes');
-            const q = query(codesRef, where('code', '==', trimmed), where('active', '==', true));
-            const snapshot = await getDocs(q);
+            const result = await callClaimBadgeActivationCode({code: trimmed});
+            const d = result.data;
 
-            if (snapshot.empty) {
-                setState('error');
-                setError(isEnglish ? 'Invalid or deactivated code.' : '激活码无效或已被停用。');
-                return;
-            }
+            setBadge({
+                id: d.badgeId,
+                name: d.badgeName,
+                nameCn: d.badgeNameCn,
+                description: d.badgeDescription,
+                descriptionCn: d.badgeDescriptionCn,
+                imageUrl: d.badgeImageUrl || '/images/mika.png',
+            });
 
-            const codeDoc = snapshot.docs[0];
-            const data = codeDoc.data();
-            const badgeId = data.badgeId as string;
-
-            const now = new Date();
-            if (data.activeFrom && new Date(data.activeFrom) > now) {
-                setState('error');
-                setError(isEnglish ? 'This code is not active yet.' : '此激活码尚未激活。');
-                return;
-            }
-            if (data.activeUntil && new Date(data.activeUntil) < now) {
-                setState('error');
-                setError(isEnglish ? 'This code has expired.' : '此激活码已过期。');
-                return;
-            }
-
-            const usedCount = data.usedCount ?? 0;
-            const maxUses = data.maxUses ?? 0;
-            if (maxUses > 0 && usedCount >= maxUses) {
-                setState('error');
-                setError(isEnglish ? 'This code has reached its maximum uses.' : '此激活码已达到最大使用次数。');
-                return;
-            }
-
-            if (profile.badges?.includes(badgeId)) {
-                setState('error');
-                setError(isEnglish ? 'You already have this badge.' : '您已拥有此徽章。');
-                return;
-            }
-
-            const badgeSnap = await getDocs(query(collection(db, 'badges'), where('__name__', '==', badgeId)));
-            if (!badgeSnap.empty) {
-                const bd = badgeSnap.docs[0].data();
-                setBadge({
-                    id: badgeSnap.docs[0].id,
-                    name: bd.name ?? '',
-                    nameCn: bd.nameCn ?? '',
-                    description: bd.description ?? '',
-                    descriptionCn: bd.descriptionCn ?? '',
-                    imageUrl: bd.imageUrl ?? '/images/mika.png',
-                });
-            }
-
-            const userRef = doc(db, 'users', user.uid);
-            await updateDoc(userRef, {badges: arrayUnion(badgeId)});
-            await updateDoc(doc(db, 'badgeActivationCodes', codeDoc.id), {usedCount: increment(1)});
-            await updateProfile({badges: [...(profile.badges ?? []), badgeId]});
             setState('success');
-        } catch {
+            refreshProfile().catch(() => {});
+        } catch (err) {
             setState('error');
-            setError(isEnglish ? 'Something went wrong. Please try again.' : '出错了，请重试。');
+            const msg = err instanceof FirebaseError ? err.message : '';
+            if (msg.includes('rate-limited')) {
+                setError(isEnglish ? 'Too many attempts. Please wait a moment.' : '尝试次数过多，请稍后再试。');
+            } else if (msg.includes('not-active-yet')) {
+                setError(isEnglish ? 'This code is not active yet.' : '此激活码尚未激活。');
+            } else if (msg.includes('expired')) {
+                setError(isEnglish ? 'This code has expired.' : '此激活码已过期。');
+            } else if (msg.includes('max-uses')) {
+                setError(isEnglish ? 'This code has reached its maximum uses.' : '此激活码已达到最大使用次数。');
+            } else if (msg.includes('already-have')) {
+                setError(isEnglish ? 'You already have this badge.' : '您已拥有此徽章。');
+            } else if (msg.includes('invalid') || msg.includes('inactive')) {
+                setError(isEnglish ? 'Invalid or deactivated code.' : '激活码无效或已被停用。');
+            } else {
+                setError(isEnglish ? 'Something went wrong. Please try again.' : '出错了，请重试。');
+            }
         }
     };
 
@@ -170,20 +140,26 @@ export const RedeemModal = () => {
                     </div>
                 )}
 
-                {state === 'success' && badge && (
+                {state === 'success' && (
                     <>
-                        <div className="claim-badge-icon">
-                            <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn}/>
-                        </div>
+                        {badge && (
+                            <div className="claim-badge-icon">
+                                <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn}/>
+                            </div>
+                        )}
                         <h2 style={{textAlign: 'center', marginBottom: '8px', color: '#c77dff'}}>
                             {isEnglish ? 'Badge Claimed!' : '徽章领取成功！'}
                         </h2>
-                        <p className="claim-event-title" style={{textAlign: 'center'}}>
-                            {isEnglish ? badge.name : badge.nameCn}
-                        </p>
-                        <p className="claim-event-category" style={{textAlign: 'center'}}>
-                            {isEnglish ? badge.description : badge.descriptionCn}
-                        </p>
+                        {badge && (
+                            <>
+                                <p className="claim-event-title" style={{textAlign: 'center'}}>
+                                    {isEnglish ? badge.name : badge.nameCn}
+                                </p>
+                                <p className="claim-event-category" style={{textAlign: 'center'}}>
+                                    {isEnglish ? badge.description : badge.descriptionCn}
+                                </p>
+                            </>
+                        )}
                         <button className="admin-generate-btn" style={{marginTop: '16px', width: '100%'}}
                                 onClick={close}>
                             {isEnglish ? 'Done' : '完成'}

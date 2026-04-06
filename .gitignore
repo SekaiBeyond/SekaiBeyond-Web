@@ -1,5 +1,5 @@
 .DS_Store
-/node_modules/
+**/node_modules/
 
 # React Router
 /.react-router/
@@ -9,5 +9,6 @@
 /.claude
 .env
 .firebaserc
-firebase.json
 public/index.html
+/functions/lib
+functions/package-lock.json

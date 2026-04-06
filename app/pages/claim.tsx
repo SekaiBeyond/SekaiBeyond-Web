@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { getFirebaseDb } from '~/lib/firebase';
+import { callClaimEventCode } from '~/lib/firebase';
 import { usePastEvents } from '~/lib/pastEvents';
 
 type ClaimState =
     'loading'
     | 'no-code'
     | 'invalid'
+    | 'not-active-yet'
     | 'expired'
+    | 'max-uses'
     | 'not-logged-in'
     | 'claiming'
     | 'success'
@@ -20,12 +22,13 @@ type ClaimState =
 export const ClaimPage = () => {
     const [searchParams] = useSearchParams();
     const code = searchParams.get('code');
-    const {user, profile, loading: authLoading, signIn} = useAuth();
+    const {user, profile, loading: authLoading, signIn, refreshProfile} = useAuth();
     const {isEnglish} = useLanguage();
     const {pastEvents} = usePastEvents();
 
     const [state, setState] = useState<ClaimState>('loading');
     const [eventId, setEventId] = useState<string | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
 
     const event = pastEvents.find(e => e.id === eventId);
 
@@ -40,48 +43,25 @@ export const ClaimPage = () => {
             return;
         }
 
-        const claimBadge = async () => {
-            setState('loading');
-            const db = getFirebaseDb();
-            const codesRef = collection(db, 'badgeCodes');
-            const q = query(codesRef, where('code', '==', code), where('active', '==', true));
-            const snapshot = await getDocs(q);
-
-            if (snapshot.empty) {
-                setState('invalid');
-                return;
-            }
-
-            const codeDoc = snapshot.docs[0];
-            const data = codeDoc.data();
-            const claimedEventId = (data.eventId ?? data.eventTitle) as string;
-            setEventId(claimedEventId);
-
-            const now = new Date();
-            if (data.activeFrom && new Date(data.activeFrom) > now) {
-                setState('expired');
-                return;
-            }
-            if (data.activeUntil && new Date(data.activeUntil) < now) {
-                setState('expired');
-                return;
-            }
-
-            if (profile.attendedEvents.includes(claimedEventId)) {
-                setState('already-have');
-                return;
-            }
-
+        const claimEvent = async () => {
             setState('claiming');
-            const userRef = doc(db, 'users', user.uid);
-            await updateDoc(userRef, {
-                attendedEvents: arrayUnion(claimedEventId),
-            });
+            const result = await callClaimEventCode({code});
+            const claimedEventId = result.data.eventId;
+            setEventId(claimedEventId);
             setState('success');
+            refreshProfile().catch(() => {});
         };
 
-        claimBadge().catch(() => setState('error'));
-    }, [code, user, profile, authLoading]);
+        claimEvent().catch((err) => {
+            const msg = err instanceof FirebaseError ? err.message : '';
+            if (msg.includes('not-active-yet')) setState('not-active-yet');
+            else if (msg.includes('expired')) setState('expired');
+            else if (msg.includes('max-uses')) setState('max-uses');
+            else if (msg.includes('already-have')) setState('already-have');
+            else if (msg.includes('invalid') || msg.includes('inactive')) setState('invalid');
+            else setState('error');
+        });
+    }, [code, user, profile, authLoading, retryCount]);
 
     if (state === 'loading' || authLoading) {
         return (
@@ -108,10 +88,24 @@ export const ClaimPage = () => {
                     </>
                 )}
 
+                {state === 'not-active-yet' && (
+                    <>
+                        <h2>{isEnglish ? 'Code Not Active Yet' : '兑换码尚未生效'}</h2>
+                        <p>{isEnglish ? 'This claim code is not active yet. Please try again later.' : '此兑换码尚未生效，请稍后再试。'}</p>
+                    </>
+                )}
+
                 {state === 'expired' && (
                     <>
                         <h2>{isEnglish ? 'Code Expired' : '兑换码已过期'}</h2>
-                        <p>{isEnglish ? 'This claim code is no longer within its active time period.' : '此兑换码不在有效时间范围内。'}</p>
+                        <p>{isEnglish ? 'This claim code has expired.' : '此兑换码已过期。'}</p>
+                    </>
+                )}
+
+                {state === 'max-uses' && (
+                    <>
+                        <h2>{isEnglish ? 'Code Fully Used' : '兑换码已用完'}</h2>
+                        <p>{isEnglish ? 'This claim code has reached its maximum number of uses.' : '此兑换码已达到最大使用次数。'}</p>
                     </>
                 )}
 
@@ -132,18 +126,26 @@ export const ClaimPage = () => {
                     </>
                 )}
 
-                {(state === 'success' || state === 'already-have') && event && (
+                {(state === 'success' || state === 'already-have') && (
                     <>
-                        <div className="claim-badge-icon">
-                            <img src={event.icon} alt={isEnglish ? event.title : event.titleCn}/>
-                        </div>
+                        {event && (
+                            <div className="claim-badge-icon">
+                                <img src={event.icon} alt={isEnglish ? event.title : event.titleCn}/>
+                            </div>
+                        )}
                         <h2>
                             {state === 'success'
                                 ? (isEnglish ? 'Event Claimed!' : '签到成功！')
                                 : (isEnglish ? 'Already Checked In' : '已签到此活动')}
                         </h2>
-                        <p className="claim-event-title">{isEnglish ? event.title : event.titleCn}</p>
-                        <p className="claim-event-category">{isEnglish ? event.label : event.labelCn}</p>
+                        {event ? (
+                            <>
+                                <p className="claim-event-title">{isEnglish ? event.title : event.titleCn}</p>
+                                <p className="claim-event-category">{isEnglish ? event.label : event.labelCn}</p>
+                            </>
+                        ) : (
+                            <p className="claim-event-title">{eventId}</p>
+                        )}
                     </>
                 )}
 
@@ -151,6 +153,12 @@ export const ClaimPage = () => {
                     <>
                         <h2>{isEnglish ? 'Something Went Wrong' : '出错了'}</h2>
                         <p>{isEnglish ? 'Could not check in. Please try again.' : '无法签到，请重试。'}</p>
+                        <button
+                            onClick={() => setRetryCount(c => c + 1)}
+                            className="profile-sign-in-btn"
+                        >
+                            {isEnglish ? 'Try Again' : '重试'}
+                        </button>
                     </>
                 )}
 

@@ -23,7 +23,6 @@ interface BadgeDef {
 
 interface ViewedProfile {
     displayName: string;
-    email: string;
     photoURL: string;
     joinedAt: Date;
     attendedEvents: string[];
@@ -193,7 +192,6 @@ export const ProfilePage = () => {
                     const data = snap.data();
                     setViewedProfile({
                         displayName: data.displayName ?? '',
-                        email: data.email ?? '',
                         photoURL: data.photoURL ?? '',
                         joinedAt: data.joinedAt?.toDate() ?? new Date(),
                         attendedEvents: data.attendedEvents ?? [],
@@ -223,7 +221,8 @@ export const ProfilePage = () => {
                 const db = getFirebaseDb();
                 const q = query(
                     collection(db, 'records'),
-                    where('targetUid', '==', targetUid)
+                    where('targetUid', '==', targetUid),
+                    where('type', '==', 'achievement-grant')
                 );
                 const snapshot = await getDocs(q);
                 if (stale) return;
@@ -269,9 +268,16 @@ export const ProfilePage = () => {
         setEditingName(false);
     };
 
+    const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5 MB
+
     const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !profile || !user) return;
+        if (file.size > MAX_PHOTO_SIZE) {
+            alert(isEnglish ? 'Photo must be under 5 MB.' : '照片不能超过 5 MB。');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
         setSavingPhoto(true);
         try {
             await updateProfile({photoFile: file});
@@ -375,7 +381,6 @@ export const ProfilePage = () => {
         }
         : {
             name: viewedProfile!.displayName,
-            email: viewedProfile!.email,
             joinedAt: viewedProfile!.joinedAt,
             badges: viewedProfile!.badges,
             attendedEvents: viewedProfile!.attendedEvents,
@@ -460,7 +465,7 @@ export const ProfilePage = () => {
                                         value={editName}
                                         onChange={e => setEditName(e.target.value)}
                                         onKeyDown={handleNameKeyDown}
-                                        onBlur={handleSaveName}
+                                        onBlur={() => requestAnimationFrame(() => handleSaveName())}
                                         maxLength={50}
                                         disabled={savingName}
                                     />
@@ -482,7 +487,7 @@ export const ProfilePage = () => {
                                 </>
                             )}
                         </div>
-                        {isOwnProfile && <p className="profile-email">{dp.email}</p>}
+                        {isOwnProfile && 'email' in dp && <p className="profile-email">{dp.email}</p>}
                         <p className="profile-joined">
                             {isEnglish ? 'Joined ' : '加入时间：'}
                             {dp.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {

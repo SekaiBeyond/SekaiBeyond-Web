@@ -1,5 +1,5 @@
 import type { Route } from "./+types/admin";
-import { AdminPage } from "~/pages/admin";
+import { AdminPage } from "~/pages/admin/index";
 
 export function meta({}: Route.MetaArgs) {
     return [

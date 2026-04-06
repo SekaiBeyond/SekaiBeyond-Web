@@ -16,5 +16,13 @@
         { "fieldPath": "active", "order": "ASCENDING" }
       ]
     }
+    {
+      "collectionGroup": "records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    }
   ]
 }
