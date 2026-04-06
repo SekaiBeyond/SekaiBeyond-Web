@@ -3430,6 +3430,83 @@ footer {
     color: #d84315;
 }
 
+.record-type-code-activate {
+    background: rgba(155, 89, 182, 0.12);
+    color: #9b59b6;
+}
+
+.record-type-code-deactivate {
+    background: rgba(155, 89, 182, 0.12);
+    color: #9b59b6;
+}
+
+.record-type-code-delete {
+    background: rgba(155, 89, 182, 0.12);
+    color: #9b59b6;
+}
+
+.record-type-event-attend {
+    background: rgba(76, 175, 80, 0.12);
+    color: #388e3c;
+}
+
+.record-type-event-unattend {
+    background: rgba(244, 67, 54, 0.12);
+    color: #c62828;
+}
+
+.record-type-badge-create {
+    background: rgba(255, 193, 7, 0.15);
+    color: #f57f17;
+}
+
+.record-type-badge-edit {
+    background: rgba(255, 193, 7, 0.15);
+    color: #f57f17;
+}
+
+.record-type-badge-delete {
+    background: rgba(255, 193, 7, 0.15);
+    color: #f57f17;
+}
+
+.record-type-event-create {
+    background: rgba(33, 150, 243, 0.12);
+    color: #1565c0;
+}
+
+.record-type-event-edit {
+    background: rgba(33, 150, 243, 0.12);
+    color: #1565c0;
+}
+
+.record-type-event-delete {
+    background: rgba(33, 150, 243, 0.12);
+    color: #1565c0;
+}
+
+.record-type-upcoming-event-create,
+.record-type-upcoming-event-edit,
+.record-type-upcoming-event-delete,
+.record-type-upcoming-event-archive {
+    background: rgba(0, 150, 136, 0.12);
+    color: #00796b;
+}
+
+.record-type-event-code-activate,
+.record-type-event-code-deactivate,
+.record-type-event-code-time-window {
+    background: rgba(155, 89, 182, 0.12);
+    color: #9b59b6;
+}
+
+.record-type-tag-create,
+.record-type-tag-edit,
+.record-type-tag-delete {
+    background: rgba(0, 150, 136, 0.12);
+    color: #00796b;
+}
+
 .record-content {
     flex: 1;
     min-width: 0;

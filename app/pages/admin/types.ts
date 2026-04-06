@@ -70,7 +70,13 @@ export type RecordType =
     | 'upcoming-event-create'
     | 'upcoming-event-edit'
     | 'upcoming-event-delete'
-    | 'upcoming-event-archive';
+    | 'upcoming-event-archive'
+    | 'event-code-activate'
+    | 'event-code-deactivate'
+    | 'event-code-time-window'
+    | 'tag-create'
+    | 'tag-edit'
+    | 'tag-delete';
 
 export interface ActivityRecord {
     id: string;
@@ -83,6 +89,7 @@ export interface ActivityRecord {
     eventId?: string;
     badgeId?: string;
     badgeName?: string;
+    tagName?: string;
     code?: string;
     oldGroup?: UserGroup;
     newGroup?: UserGroup;

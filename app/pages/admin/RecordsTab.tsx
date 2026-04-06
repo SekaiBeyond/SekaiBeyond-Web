@@ -81,6 +81,7 @@ export const RecordsTab = ({
                     eventId: data.eventId,
                     badgeId: data.badgeId,
                     badgeName: data.badgeName,
+                    tagName: data.tagName,
                     code: data.code,
                     oldGroup: data.oldGroup,
                     newGroup: data.newGroup,
@@ -204,10 +205,49 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>deleted event {r.eventTitle ?? r.eventId ?? ''}</>
                     : <>删除了活动 {r.eventTitle ?? r.eventId ?? ''}</>;
+            case 'upcoming-event-create':
+                return isEnglish
+                    ? <>created upcoming event {r.eventTitle ?? ''}</>
+                    : <>创建了活动预告 {r.eventTitle ?? ''}</>;
+            case 'upcoming-event-edit':
+                return isEnglish
+                    ? <>edited upcoming event {r.eventTitle ?? ''}</>
+                    : <>编辑了活动预告 {r.eventTitle ?? ''}</>;
+            case 'upcoming-event-delete':
+                return isEnglish
+                    ? <>deleted upcoming event {r.eventTitle ?? ''}</>
+                    : <>删除了活动预告 {r.eventTitle ?? ''}</>;
             case 'upcoming-event-archive':
                 return isEnglish
                     ? <>archived {r.eventTitle ?? ''} to past events</>
                     : <>将 {r.eventTitle ?? ''} 归档到往期活动</>;
+            case 'event-code-activate':
+                return isEnglish
+                    ? <>activated check-in code
+                        for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
+                    : <>激活了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} 的签到码</>;
+            case 'event-code-deactivate':
+                return isEnglish
+                    ? <>deactivated check-in code
+                        for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
+                    : <>停用了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} 的签到码</>;
+            case 'event-code-time-window':
+                return isEnglish
+                    ? <>updated time window for check-in code
+                        of {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
+                    : <>更新了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} 签到码的时间窗口</>;
+            case 'tag-create':
+                return isEnglish
+                    ? <>created tag {r.tagName ?? ''}</>
+                    : <>创建了标签 {r.tagName ?? ''}</>;
+            case 'tag-edit':
+                return isEnglish
+                    ? <>edited tag {r.tagName ?? ''}</>
+                    : <>编辑了标签 {r.tagName ?? ''}</>;
+            case 'tag-delete':
+                return isEnglish
+                    ? <>deleted tag {r.tagName ?? ''}</>
+                    : <>删除了标签 {r.tagName ?? ''}</>;
         }
     };
 
@@ -219,6 +259,9 @@ export const RecordsTab = ({
             case 'code-activate':
             case 'code-deactivate':
             case 'code-delete':
+            case 'event-code-activate':
+            case 'event-code-deactivate':
+            case 'event-code-time-window':
                 return isEnglish ? 'Code' : '兑换码';
             case 'badge-grant':
             case 'badge-revoke':
@@ -234,8 +277,15 @@ export const RecordsTab = ({
             case 'event-create':
             case 'event-edit':
             case 'event-delete':
+            case 'upcoming-event-create':
+            case 'upcoming-event-edit':
+            case 'upcoming-event-delete':
             case 'upcoming-event-archive':
                 return isEnglish ? 'Event' : '活动';
+            case 'tag-create':
+            case 'tag-edit':
+            case 'tag-delete':
+                return isEnglish ? 'Tag' : '标签';
             default:
                 return type;
         }
@@ -266,7 +316,16 @@ export const RecordsTab = ({
                     <option value="event-create">{isEnglish ? 'Event Create' : '创建活动'}</option>
                     <option value="event-edit">{isEnglish ? 'Event Edit' : '编辑活动'}</option>
                     <option value="event-delete">{isEnglish ? 'Event Delete' : '删除活动'}</option>
+                    <option value="upcoming-event-create">{isEnglish ? 'Upcoming Create' : '创建活动预告'}</option>
+                    <option value="upcoming-event-edit">{isEnglish ? 'Upcoming Edit' : '编辑活动预告'}</option>
+                    <option value="upcoming-event-delete">{isEnglish ? 'Upcoming Delete' : '删除活动预告'}</option>
                     <option value="upcoming-event-archive">{isEnglish ? 'Event Archive' : '归档活动'}</option>
+                    <option value="event-code-activate">{isEnglish ? 'Code Enable' : '启用签到码'}</option>
+                    <option value="event-code-deactivate">{isEnglish ? 'Code Disable' : '停用签到码'}</option>
+                    <option value="event-code-time-window">{isEnglish ? 'Code Time Window' : '签到码时间窗口'}</option>
+                    <option value="tag-create">{isEnglish ? 'Tag Create' : '创建标签'}</option>
+                    <option value="tag-edit">{isEnglish ? 'Tag Edit' : '编辑标签'}</option>
+                    <option value="tag-delete">{isEnglish ? 'Tag Delete' : '删除标签'}</option>
                 </select>
                 <select
                     className="record-filter-select"

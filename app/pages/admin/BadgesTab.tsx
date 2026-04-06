@@ -34,6 +34,24 @@ export interface BadgesTabHandle {
     selectBadgeById: (badgeId: string) => void;
 }
 
+interface BadgeForm {
+    name: string;
+    nameCn: string;
+    description: string;
+    descriptionCn: string;
+    image: File | null;
+    imagePreview: string | null;
+    creatorUser: UserRecord | null;
+    createdByName: string;
+    createdByLink: string;
+}
+
+const emptyBadgeForm: BadgeForm = {
+    name: '', nameCn: '', description: '', descriptionCn: '',
+    image: null, imagePreview: null,
+    creatorUser: null, createdByName: '', createdByLink: '',
+};
+
 export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                                                           badgeDefs, setBadgeDefs, user, profile,
                                                                       }, ref) => {
@@ -50,28 +68,12 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
 
     // Create badge state
     const [showCreateBadge, setShowCreateBadge] = useState(false);
-    const [newBadgeName, setNewBadgeName] = useState('');
-    const [newBadgeNameCn, setNewBadgeNameCn] = useState('');
-    const [newBadgeDesc, setNewBadgeDesc] = useState('');
-    const [newBadgeDescCn, setNewBadgeDescCn] = useState('');
-    const [newBadgeImage, setNewBadgeImage] = useState<File | null>(null);
-    const [newBadgeImagePreview, setNewBadgeImagePreview] = useState<string | null>(null);
+    const [createForm, setCreateForm] = useState<BadgeForm>(emptyBadgeForm);
     const [creatingBadgeDef, setCreatingBadgeDef] = useState(false);
-    const [newBadgeCreatorUser, setNewBadgeCreatorUser] = useState<UserRecord | null>(null);
-    const [newBadgeCreatedByName, setNewBadgeCreatedByName] = useState('');
-    const [newBadgeCreatedByLink, setNewBadgeCreatedByLink] = useState('');
 
     // Edit badge state
     const [editingBadgeDef, setEditingBadgeDef] = useState(false);
-    const [editBadgeName, setEditBadgeName] = useState('');
-    const [editBadgeNameCn, setEditBadgeNameCn] = useState('');
-    const [editBadgeDesc, setEditBadgeDesc] = useState('');
-    const [editBadgeDescCn, setEditBadgeDescCn] = useState('');
-    const [editBadgeCreatorUser, setEditBadgeCreatorUser] = useState<UserRecord | null>(null);
-    const [editBadgeCreatedByName, setEditBadgeCreatedByName] = useState('');
-    const [editBadgeCreatedByLink, setEditBadgeCreatedByLink] = useState('');
-    const [editBadgeImage, setEditBadgeImage] = useState<File | null>(null);
-    const [editBadgeImagePreview, setEditBadgeImagePreview] = useState<string | null>(null);
+    const [editForm, setEditForm] = useState<BadgeForm>(emptyBadgeForm);
     const [savingBadgeDef, setSavingBadgeDef] = useState(false);
 
     // Activation codes state
@@ -153,7 +155,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     };
 
     const createBadgeDef = async () => {
-        const creatorLink = newBadgeCreatorUser ? '' : newBadgeCreatedByLink.trim();
+        const creatorLink = createForm.creatorUser ? '' : createForm.createdByLink.trim();
         if (creatorLink && !isValidHttpUrl(creatorLink)) {
             alert(isEnglish ? 'Creator link must be a valid URL (http/https).' : '创建者链接必须是有效的网址（http/https）。');
             return;
@@ -161,24 +163,24 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         setCreatingBadgeDef(true);
         try {
             let imageUrl = '/images/mika.png';
-            if (newBadgeImage) {
+            if (createForm.image) {
                 const imageId = crypto.randomUUID();
                 const sRef = storageRef(getFirebaseStorage(), `badges/${imageId}.webp`);
-                await uploadBytes(sRef, newBadgeImage);
+                await uploadBytes(sRef, createForm.image);
                 imageUrl = await getDownloadURL(sRef);
             }
 
             const db = getFirebaseDb();
-            const creatorUid = newBadgeCreatorUser?.uid ?? '';
-            const creatorName = newBadgeCreatorUser?.displayName ?? newBadgeCreatedByName.trim();
+            const creatorUid = createForm.creatorUser?.uid ?? '';
+            const creatorName = createForm.creatorUser?.displayName ?? createForm.createdByName.trim();
 
             const batch = writeBatch(db);
             const newDocRef = doc(collection(db, 'badges'));
             batch.set(newDocRef, {
-                name: newBadgeName.trim(),
-                nameCn: newBadgeNameCn.trim(),
-                description: newBadgeDesc.trim(),
-                descriptionCn: newBadgeDescCn.trim(),
+                name: createForm.name.trim(),
+                nameCn: createForm.nameCn.trim(),
+                description: createForm.description.trim(),
+                descriptionCn: createForm.descriptionCn.trim(),
                 imageUrl,
                 createdBy: user.uid,
                 createdByUid: creatorUid,
@@ -191,17 +193,17 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 performedBy: user.uid,
                 performedByName: profile.displayName,
                 badgeId: newDocRef.id,
-                badgeName: newBadgeName.trim(),
+                badgeName: createForm.name.trim(),
                 timestamp: serverTimestamp(),
             });
             await batch.commit();
 
             setBadgeDefs(prev => [...prev, {
                 id: newDocRef.id,
-                name: newBadgeName.trim(),
-                nameCn: newBadgeNameCn.trim(),
-                description: newBadgeDesc.trim(),
-                descriptionCn: newBadgeDescCn.trim(),
+                name: createForm.name.trim(),
+                nameCn: createForm.nameCn.trim(),
+                description: createForm.description.trim(),
+                descriptionCn: createForm.descriptionCn.trim(),
                 imageUrl,
                 createdBy: user.uid,
                 createdByUid: creatorUid,
@@ -219,16 +221,8 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     };
 
     const resetCreateForm = () => {
-        setNewBadgeName('');
-        setNewBadgeNameCn('');
-        setNewBadgeDesc('');
-        setNewBadgeDescCn('');
-        setNewBadgeImage(null);
-        if (newBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(newBadgeImagePreview);
-        setNewBadgeImagePreview(null);
-        setNewBadgeCreatorUser(null);
-        setNewBadgeCreatedByName('');
-        setNewBadgeCreatedByLink('');
+        if (createForm.imagePreview?.startsWith('blob:')) URL.revokeObjectURL(createForm.imagePreview);
+        setCreateForm(emptyBadgeForm);
         setShowCreateBadge(false);
     };
 
@@ -269,7 +263,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
 
     const updateBadgeDef = async () => {
         if (!selectedBadgeDef) return;
-        const creatorLink = editBadgeCreatorUser ? '' : editBadgeCreatedByLink.trim();
+        const creatorLink = editForm.creatorUser ? '' : editForm.createdByLink.trim();
         if (creatorLink && !isValidHttpUrl(creatorLink)) {
             alert(isEnglish ? 'Creator link must be a valid URL (http/https).' : '创建者链接必须是有效的网址（http/https）。');
             return;
@@ -277,22 +271,22 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         setSavingBadgeDef(true);
         try {
             const db = getFirebaseDb();
-            const creatorUid = editBadgeCreatorUser?.uid ?? '';
-            const creatorName = editBadgeCreatorUser?.displayName ?? editBadgeCreatedByName.trim();
+            const creatorUid = editForm.creatorUser?.uid ?? '';
+            const creatorName = editForm.creatorUser?.displayName ?? editForm.createdByName.trim();
             const updates: Record<string, string> = {
-                name: editBadgeName.trim(),
-                nameCn: editBadgeNameCn.trim(),
-                description: editBadgeDesc.trim(),
-                descriptionCn: editBadgeDescCn.trim(),
+                name: editForm.name.trim(),
+                nameCn: editForm.nameCn.trim(),
+                description: editForm.description.trim(),
+                descriptionCn: editForm.descriptionCn.trim(),
                 createdByUid: creatorUid,
                 createdByName: creatorName,
                 createdByLink: creatorLink,
             };
 
-            if (editBadgeImage) {
+            if (editForm.image) {
                 const imageId = crypto.randomUUID();
                 const sRef = storageRef(getFirebaseStorage(), `badges/${imageId}.webp`);
-                await uploadBytes(sRef, editBadgeImage);
+                await uploadBytes(sRef, editForm.image);
                 updates.imageUrl = await getDownloadURL(sRef);
             }
 
@@ -303,7 +297,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 performedBy: user.uid,
                 performedByName: profile.displayName,
                 badgeId: selectedBadgeDef.id,
-                badgeName: editBadgeName.trim(),
+                badgeName: editForm.name.trim(),
                 timestamp: serverTimestamp(),
             });
             await batch.commit();
@@ -312,9 +306,8 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             setBadgeDefs(prev => prev.map(d => d.id === selectedBadgeDef.id ? updated : d));
             setSelectedBadgeDef(updated);
             setEditingBadgeDef(false);
-            setEditBadgeImage(null);
-            if (editBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(editBadgeImagePreview);
-            setEditBadgeImagePreview(null);
+            if (editForm.imagePreview?.startsWith('blob:')) URL.revokeObjectURL(editForm.imagePreview);
+            setEditForm(emptyBadgeForm);
         } catch {
             alert(isEnglish ? 'Failed to save badge.' : '保存徽章失败。');
         } finally {
@@ -324,28 +317,35 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
 
     const startEditBadge = async () => {
         if (!selectedBadgeDef) return;
-        setEditBadgeName(selectedBadgeDef.name);
-        setEditBadgeNameCn(selectedBadgeDef.nameCn);
-        setEditBadgeDesc(selectedBadgeDef.description);
-        setEditBadgeDescCn(selectedBadgeDef.descriptionCn);
-        setEditBadgeImage(null);
-        setEditBadgeImagePreview(null);
+        let creatorUser: UserRecord | null = null;
+        let createdByName = '';
+        let createdByLink = '';
 
         if (selectedBadgeDef.createdByUid) {
             const db = getFirebaseDb();
             const snap = await getDoc(doc(db, 'users', selectedBadgeDef.createdByUid));
             if (snap.exists()) {
-                setEditBadgeCreatorUser(docToUserRecord(snap));
+                creatorUser = docToUserRecord(snap);
             } else {
-                setEditBadgeCreatorUser(null);
-                setEditBadgeCreatedByName(selectedBadgeDef.createdByName);
-                setEditBadgeCreatedByLink(selectedBadgeDef.createdByLink);
+                createdByName = selectedBadgeDef.createdByName;
+                createdByLink = selectedBadgeDef.createdByLink;
             }
         } else {
-            setEditBadgeCreatorUser(null);
-            setEditBadgeCreatedByName(selectedBadgeDef.createdByName);
-            setEditBadgeCreatedByLink(selectedBadgeDef.createdByLink);
+            createdByName = selectedBadgeDef.createdByName;
+            createdByLink = selectedBadgeDef.createdByLink;
         }
+
+        setEditForm({
+            name: selectedBadgeDef.name,
+            nameCn: selectedBadgeDef.nameCn,
+            description: selectedBadgeDef.description,
+            descriptionCn: selectedBadgeDef.descriptionCn,
+            image: null,
+            imagePreview: null,
+            creatorUser,
+            createdByName,
+            createdByLink,
+        });
         setEditingBadgeDef(true);
     };
 
@@ -439,29 +439,17 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         }
     };
 
-    const handleNewImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        if (!validateImageFile(file, isEnglish)) {
-            e.target.value = '';
-            return;
-        }
-        setNewBadgeImage(file);
-        if (newBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(newBadgeImagePreview);
-        setNewBadgeImagePreview(URL.createObjectURL(file));
-    };
-
-    const handleEditImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        if (!validateImageFile(file, isEnglish)) {
-            e.target.value = '';
-            return;
-        }
-        setEditBadgeImage(file);
-        if (editBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(editBadgeImagePreview);
-        setEditBadgeImagePreview(URL.createObjectURL(file));
-    };
+    const handleImageChange = (form: BadgeForm, setForm: React.Dispatch<React.SetStateAction<BadgeForm>>) =>
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            if (!validateImageFile(file, isEnglish)) {
+                e.target.value = '';
+                return;
+            }
+            if (form.imagePreview?.startsWith('blob:')) URL.revokeObjectURL(form.imagePreview);
+            setForm(f => ({...f, image: file, imagePreview: URL.createObjectURL(file)}));
+        };
 
     // Badge list view
     if (!selectedBadgeDef) {
@@ -475,46 +463,52 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                         <div className="admin-form-grid">
                             <label>
                                 <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
-                                <input value={newBadgeName} onChange={e => setNewBadgeName(e.target.value)}
+                                <input value={createForm.name}
+                                       onChange={e => setCreateForm(f => ({...f, name: e.target.value}))}
                                        className="admin-search-input"
                                        placeholder={isEnglish ? 'Badge name' : '徽章名称'}/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
-                                <input value={newBadgeNameCn} onChange={e => setNewBadgeNameCn(e.target.value)}
+                                <input value={createForm.nameCn}
+                                       onChange={e => setCreateForm(f => ({...f, nameCn: e.target.value}))}
                                        className="admin-search-input"
                                        placeholder={isEnglish ? 'Badge name in Chinese' : '徽章中文名称'}/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
-                                <textarea value={newBadgeDesc} onChange={e => setNewBadgeDesc(e.target.value)}
+                                <textarea value={createForm.description}
+                                          onChange={e => setCreateForm(f => ({...f, description: e.target.value}))}
                                           className="admin-search-input admin-textarea"
                                           placeholder={isEnglish ? 'Badge description' : '徽章描述'}/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
-                                <textarea value={newBadgeDescCn} onChange={e => setNewBadgeDescCn(e.target.value)}
+                                <textarea value={createForm.descriptionCn}
+                                          onChange={e => setCreateForm(f => ({...f, descriptionCn: e.target.value}))}
                                           className="admin-search-input admin-textarea"
                                           placeholder={isEnglish ? 'Badge description in Chinese' : '徽章中文描述'}/>
                             </label>
                             <CreatorPicker
-                                selected={newBadgeCreatorUser}
-                                onSelect={setNewBadgeCreatorUser}
-                                manualName={newBadgeCreatedByName}
-                                onManualNameChange={setNewBadgeCreatedByName}
-                                manualLink={newBadgeCreatedByLink}
-                                onManualLinkChange={setNewBadgeCreatedByLink}
+                                selected={createForm.creatorUser}
+                                onSelect={u => setCreateForm(f => ({...f, creatorUser: u}))}
+                                manualName={createForm.createdByName}
+                                onManualNameChange={v => setCreateForm(f => ({...f, createdByName: v}))}
+                                manualLink={createForm.createdByLink}
+                                onManualLinkChange={v => setCreateForm(f => ({...f, createdByLink: v}))}
                             />
                             <label>
                                 <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
-                                <input type="file" accept="image/webp" onChange={handleNewImageChange}/>
-                                {newBadgeImagePreview &&
-                                    <img src={newBadgeImagePreview} alt="" className="admin-badge-image-preview"/>}
+                                <input type="file" accept="image/webp"
+                                       onChange={handleImageChange(createForm, setCreateForm)}/>
+                                {createForm.imagePreview &&
+                                    <img src={createForm.imagePreview} alt=""
+                                         className="admin-badge-image-preview"/>}
                             </label>
                         </div>
                         <div className="admin-form-actions">
                             <button className="admin-generate-btn" onClick={createBadgeDef}
-                                    disabled={creatingBadgeDef || !newBadgeName.trim()}>
+                                    disabled={creatingBadgeDef || !createForm.name.trim()}>
                                 {creatingBadgeDef ? (isEnglish ? 'Creating...' : '创建中...') : (isEnglish ? 'Create Badge' : '创建徽章')}
                             </button>
                             <button className="admin-back-btn" onClick={resetCreateForm}>
@@ -595,55 +589,57 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                         <div className="admin-form-grid">
                             <label>
                                 <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
-                                <input value={editBadgeName} onChange={e => setEditBadgeName(e.target.value)}
+                                <input value={editForm.name}
+                                       onChange={e => setEditForm(f => ({...f, name: e.target.value}))}
                                        className="admin-search-input"/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
-                                <input value={editBadgeNameCn} onChange={e => setEditBadgeNameCn(e.target.value)}
+                                <input value={editForm.nameCn}
+                                       onChange={e => setEditForm(f => ({...f, nameCn: e.target.value}))}
                                        className="admin-search-input"/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
-                                <textarea value={editBadgeDesc} onChange={e => setEditBadgeDesc(e.target.value)}
+                                <textarea value={editForm.description}
+                                          onChange={e => setEditForm(f => ({...f, description: e.target.value}))}
                                           className="admin-search-input admin-textarea"/>
                             </label>
                             <label>
                                 <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
-                                <textarea value={editBadgeDescCn} onChange={e => setEditBadgeDescCn(e.target.value)}
+                                <textarea value={editForm.descriptionCn}
+                                          onChange={e => setEditForm(f => ({...f, descriptionCn: e.target.value}))}
                                           className="admin-search-input admin-textarea"/>
                             </label>
                             <CreatorPicker
-                                selected={editBadgeCreatorUser}
-                                onSelect={(u) => {
-                                    setEditBadgeCreatorUser(u);
-                                    if (!u) {
-                                        setEditBadgeCreatedByName('');
-                                        setEditBadgeCreatedByLink('');
-                                    }
-                                }}
-                                manualName={editBadgeCreatedByName}
-                                onManualNameChange={setEditBadgeCreatedByName}
-                                manualLink={editBadgeCreatedByLink}
-                                onManualLinkChange={setEditBadgeCreatedByLink}
+                                selected={editForm.creatorUser}
+                                onSelect={u => setEditForm(f => ({
+                                    ...f,
+                                    creatorUser: u,
+                                    ...(u ? {} : {createdByName: '', createdByLink: ''}),
+                                }))}
+                                manualName={editForm.createdByName}
+                                onManualNameChange={v => setEditForm(f => ({...f, createdByName: v}))}
+                                manualLink={editForm.createdByLink}
+                                onManualLinkChange={v => setEditForm(f => ({...f, createdByLink: v}))}
                             />
                             <label>
                                 <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
-                                <input type="file" accept="image/webp" onChange={handleEditImageChange}/>
-                                {editBadgeImagePreview &&
-                                    <img src={editBadgeImagePreview} alt="" className="admin-badge-image-preview"/>}
+                                <input type="file" accept="image/webp"
+                                       onChange={handleImageChange(editForm, setEditForm)}/>
+                                {editForm.imagePreview &&
+                                    <img src={editForm.imagePreview} alt="" className="admin-badge-image-preview"/>}
                             </label>
                         </div>
                         <div className="admin-form-actions">
                             <button className="admin-generate-btn" onClick={updateBadgeDef}
-                                    disabled={savingBadgeDef || !editBadgeName.trim()}>
+                                    disabled={savingBadgeDef || !editForm.name.trim()}>
                                 {savingBadgeDef ? (isEnglish ? 'Saving...' : '保存中...') : (isEnglish ? 'Save Changes' : '保存更改')}
                             </button>
                             <button className="admin-back-btn" onClick={() => {
                                 setEditingBadgeDef(false);
-                                setEditBadgeImage(null);
-                                if (editBadgeImagePreview?.startsWith('blob:')) URL.revokeObjectURL(editBadgeImagePreview);
-                                setEditBadgeImagePreview(null);
+                                if (editForm.imagePreview?.startsWith('blob:')) URL.revokeObjectURL(editForm.imagePreview);
+                                setEditForm(emptyBadgeForm);
                             }}>
                                 {isEnglish ? 'Cancel' : '取消'}
                             </button>

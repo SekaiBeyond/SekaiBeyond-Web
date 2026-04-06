@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { collection, doc, writeBatch } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import type { User } from 'firebase/auth';
+import type { UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import type { Tag } from '~/lib/tags';
@@ -7,9 +9,11 @@ import type { Tag } from '~/lib/tags';
 interface TagsTabProps {
     tags: Tag[];
     refreshTags: () => Promise<void>;
+    user: User;
+    profile: UserProfile;
 }
 
-export const TagsTab = ({tags, refreshTags}: TagsTabProps) => {
+export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
     const {isEnglish} = useLanguage();
     const [showCreate, setShowCreate] = useState(false);
     const [name, setName] = useState('');
@@ -29,6 +33,13 @@ export const TagsTab = ({tags, refreshTags}: TagsTabProps) => {
             const newRef = doc(collection(db, 'eventLabels'));
             const batch = writeBatch(db);
             batch.set(newRef, {name: name.trim(), nameCn: nameCn.trim()});
+            batch.set(doc(collection(db, 'records')), {
+                type: 'tag-create',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                tagName: name.trim(),
+                timestamp: serverTimestamp(),
+            });
             await batch.commit();
             await refreshTags();
             setName('');
@@ -60,6 +71,13 @@ export const TagsTab = ({tags, refreshTags}: TagsTabProps) => {
                 name: newName,
                 nameCn: newNameCn,
             });
+            batch.set(doc(collection(db, 'records')), {
+                type: 'tag-edit',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                tagName: newName,
+                timestamp: serverTimestamp(),
+            });
             await batch.commit();
             await refreshTags();
             setEditingTag(null);
@@ -79,6 +97,13 @@ export const TagsTab = ({tags, refreshTags}: TagsTabProps) => {
             const db = getFirebaseDb();
             const batch = writeBatch(db);
             batch.delete(doc(db, 'eventLabels', tag.id));
+            batch.set(doc(collection(db, 'records')), {
+                type: 'tag-delete',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                tagName: tag.name,
+                timestamp: serverTimestamp(),
+            });
             await batch.commit();
             await refreshTags();
             if (editingTag?.id === tag.id) setEditingTag(null);

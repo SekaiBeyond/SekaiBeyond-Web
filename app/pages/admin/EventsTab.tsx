@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
-import { collection, doc, getDocs, query, serverTimestamp, updateDoc, where, writeBatch, } from 'firebase/firestore';
+import { collection, doc, getDocs, query, serverTimestamp, where, writeBatch, } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import type { User } from 'firebase/auth';
 import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
@@ -150,10 +150,23 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
 
     const toggleCodeActive = async () => {
         if (!eventCode) return;
+        const newActive = !eventCode.active;
         try {
             const db = getFirebaseDb();
-            await updateDoc(doc(db, 'badgeCodes', eventCode.id), {active: !eventCode.active});
-            setEventCode({...eventCode, active: !eventCode.active});
+            const evt = managedEvent ? pastEvents.find(e => e.id === managedEvent) : null;
+            const batch = writeBatch(db);
+            batch.update(doc(db, 'badgeCodes', eventCode.id), {active: newActive});
+            batch.set(doc(collection(db, 'records')), {
+                type: newActive ? 'event-code-activate' : 'event-code-deactivate',
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                eventTitle: evt?.title ?? managedEvent,
+                eventId: managedEvent,
+                code: eventCode.code,
+                timestamp: serverTimestamp(),
+            });
+            await batch.commit();
+            setEventCode({...eventCode, active: newActive});
         } catch {
             alert(isEnglish ? 'Failed to update code status.' : '更新签到码状态失败。');
         }
@@ -165,7 +178,19 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         const activeUntil = codeUntil || null;
         try {
             const db = getFirebaseDb();
-            await updateDoc(doc(db, 'badgeCodes', eventCode.id), {activeFrom, activeUntil});
+            const evt = managedEvent ? pastEvents.find(e => e.id === managedEvent) : null;
+            const batch = writeBatch(db);
+            batch.update(doc(db, 'badgeCodes', eventCode.id), {activeFrom, activeUntil});
+            batch.set(doc(collection(db, 'records')), {
+                type: 'event-code-time-window' as const,
+                performedBy: user.uid,
+                performedByName: profile.displayName,
+                eventTitle: evt?.title ?? managedEvent,
+                eventId: managedEvent,
+                code: eventCode.code,
+                timestamp: serverTimestamp(),
+            });
+            await batch.commit();
             setEventCode({...eventCode, activeFrom, activeUntil});
         } catch {
             alert(isEnglish ? 'Failed to save time window.' : '保存时间窗口失败。');

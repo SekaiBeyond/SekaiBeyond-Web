@@ -29,6 +29,7 @@ export const AdminPage = () => {
 
     const [activeTab, setActiveTab] = useState<Tab>('users');
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
+    const [badgeDefsError, setBadgeDefsError] = useState(false);
     const {tags, refresh: refreshTags} = useTags();
     const [searchParams] = useSearchParams();
     const urlParamsHandled = useRef(false);
@@ -76,6 +77,7 @@ export const AdminPage = () => {
             setBadgeDefs(defs);
         };
         loadBadgeDefinitions().catch(() => {
+            setBadgeDefsError(true);
         });
     }, [loading, user, profile]);
 
@@ -221,17 +223,25 @@ export const AdminPage = () => {
                 )}
 
                 {activeTab === 'badges' && (
-                    <BadgesTab
-                        ref={badgesTabRef}
-                        badgeDefs={badgeDefs}
-                        setBadgeDefs={setBadgeDefs}
-                        user={user}
-                        profile={profile}
-                    />
+                    badgeDefsError ? (
+                        <div className="admin-section">
+                            <p className="admin-no-results">
+                                {isEnglish ? 'Failed to load badges. Please refresh.' : '加载徽章失败，请刷新页面。'}
+                            </p>
+                        </div>
+                    ) : (
+                        <BadgesTab
+                            ref={badgesTabRef}
+                            badgeDefs={badgeDefs}
+                            setBadgeDefs={setBadgeDefs}
+                            user={user}
+                            profile={profile}
+                        />
+                    )
                 )}
 
                 {activeTab === 'tags' && (
-                    <TagsTab tags={tags} refreshTags={refreshTags}/>
+                    <TagsTab tags={tags} refreshTags={refreshTags} user={user} profile={profile}/>
                 )}
 
                 {activeTab === 'records' && (
