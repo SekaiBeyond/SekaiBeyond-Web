@@ -4,7 +4,6 @@ import {
     arrayUnion,
     collection,
     doc,
-    getCountFromServer,
     getDoc,
     getDocs,
     limit,
@@ -12,7 +11,6 @@ import {
     query,
     serverTimestamp,
     startAfter,
-    updateDoc,
     where,
     writeBatch,
 } from 'firebase/firestore';
@@ -35,8 +33,10 @@ const PAGE_SIZE = 10;
 interface UsersTabProps {
     pastEvents: PastEvent[];
     badgeDefs: BadgeDef[];
+    badgeDefsError: boolean;
     user: User;
     profile: UserProfile;
+    showToast: (message: string, type: 'success' | 'error') => void;
 }
 
 export interface UsersTabHandle {
@@ -46,8 +46,10 @@ export interface UsersTabHandle {
 export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                                        pastEvents,
                                                                        badgeDefs,
+                                                                       badgeDefsError,
                                                                        user,
                                                                        profile,
+                                                                       showToast,
                                                                    }, ref) => {
     const {isEnglish} = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
@@ -120,7 +122,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const snapshot = await getDocs(q);
             setSearchResults(snapshot.docs.map(docToUserRecord));
         } catch {
-            alert(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。');
+            showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error');
         } finally {
             setSearching(false);
             setHasSearched(true);
@@ -159,7 +161,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
         } catch {
-            alert(isEnglish ? 'Failed to update attendance.' : '更新签到状态失败。');
+            showToast(isEnglish ? 'Failed to update attendance.' : '更新签到状态失败。', 'error');
         } finally {
             setUpdating(false);
         }
@@ -188,21 +190,6 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             });
             await batch.commit();
 
-            // Best-effort holderPct update (non-critical display stat)
-            try {
-                const usersRef = collection(db, 'users');
-                const [holderSnap, totalSnap] = await Promise.all([
-                    getCountFromServer(query(usersRef, where('badges', 'array-contains', badgeId))),
-                    getCountFromServer(usersRef),
-                ]);
-                const holderPct = totalSnap.data().count > 0
-                    ? Math.round((holderSnap.data().count / totalSnap.data().count) * 100)
-                    : 0;
-                await updateDoc(doc(db, 'badges', badgeId), {holderPct});
-            } catch (err) {
-                console.error('Failed to update holderPct:', err);
-            }
-
             const updatedBadges = has
                 ? userRecord.badges.filter(id => id !== badgeId)
                 : [...userRecord.badges, badgeId];
@@ -211,7 +198,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
         } catch {
-            alert(isEnglish ? 'Failed to update badge.' : '更新徽章失败。');
+            showToast(isEnglish ? 'Failed to update badge.' : '更新徽章失败。', 'error');
         } finally {
             setUpdating(false);
         }
@@ -248,7 +235,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
         } catch {
-            alert(isEnglish ? 'Failed to update group.' : '更新用户组失败。');
+            showToast(isEnglish ? 'Failed to update group.' : '更新用户组失败。', 'error');
         } finally {
             setUpdating(false);
         }
@@ -381,7 +368,13 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                         )}
                     </div>
 
-                    {badgeDefs.length > 0 && (
+                    {badgeDefsError && (
+                        <p className="admin-no-results">
+                            {isEnglish ? 'Failed to load badges.' : '加载徽章失败。'}
+                        </p>
+                    )}
+
+                    {!badgeDefsError && badgeDefs.length > 0 && (
                         <>
                             <h4 className="admin-badges-title">
                                 {isEnglish ? 'Badges' : '徽章'}

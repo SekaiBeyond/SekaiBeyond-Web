@@ -3363,6 +3363,69 @@ footer {
     margin-top: 28px;
 }
 
+.admin-mt-4 {
+    margin-top: 4px;
+}
+
+.admin-mt-8 {
+    margin-top: 8px;
+}
+
+.admin-mt-12 {
+    margin-top: 12px;
+}
+
+.admin-unlimited-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.admin-toast-container {
+    position: fixed;
+    top: 80px;
+    right: 24px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.admin-toast {
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    animation: admin-toast-in 0.3s ease;
+    pointer-events: auto;
+}
+
+.admin-toast-success {
+    background: #2e7d4f;
+    color: white;
+}
+
+.admin-toast-error {
+    background: #c62828;
+    color: white;
+}
+
+@keyframes admin-toast-in {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
 .admin-spinner-center {
     margin: 20px auto;
 }

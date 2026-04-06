@@ -7,7 +7,8 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb, getFirebaseStorage } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
-import { validateImageFile } from './utils';
+import { BilingualFormField } from './BilingualFormField';
+import { ImageUploadField } from './ImageUploadField';
 
 interface UpcomingEventsTabProps {
     upcomingEvents: UpcomingEvent[];
@@ -16,6 +17,7 @@ interface UpcomingEventsTabProps {
     tags: Tag[];
     user: User;
     profile: UserProfile;
+    showToast: (message: string, type: 'success' | 'error') => void;
 }
 
 export interface UpcomingEventsTabHandle {
@@ -58,6 +60,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                                                                   tags,
                                                                                                   user,
                                                                                                   profile,
+                                                                                                  showToast,
                                                                                               }, forwardedRef) => {
     const {isEnglish} = useLanguage();
     const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
@@ -70,6 +73,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [showArchive, setShowArchive] = useState(false);
     const [archiveTagId, setArchiveTagId] = useState('');
     const [archiving, setArchiving] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const selectEvent = (eventId: string) => setSelectedEvent(eventId);
     useImperativeHandle(forwardedRef, () => ({selectEvent}));
@@ -115,7 +119,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         const startAt = new Date(form.startAt);
         const endAt = new Date(form.endAt);
         if (endAt <= startAt) {
-            alert(isEnglish ? 'End time must be after start time.' : '结束时间必须晚于开始时间。');
+            showToast(isEnglish ? 'End time must be after start time.' : '结束时间必须晚于开始时间。', 'error');
             return;
         }
         setSaving(true);
@@ -169,11 +173,17 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             await batch.commit();
 
             await refreshEvents();
+            showToast(
+                editingEvent
+                    ? (isEnglish ? 'Event updated.' : '活动已更新。')
+                    : (isEnglish ? 'Event created.' : '活动已创建。'),
+                'success',
+            );
             setShowForm(false);
             resetForm();
             setEditingEvent(null);
         } catch {
-            alert(isEnglish ? 'Failed to save event.' : '保存活动失败。');
+            showToast(isEnglish ? 'Failed to save event.' : '保存活动失败。', 'error');
         } finally {
             setSaving(false);
         }
@@ -184,6 +194,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             ? `Delete "${event.name}"? This cannot be undone.`
             : `删除"${event.name}"？此操作不可撤销。`
         )) return;
+        setDeletingId(event.id);
         try {
             const db = getFirebaseDb();
             const batch = writeBatch(db);
@@ -200,8 +211,11 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
 
             await refreshEvents();
             if (selectedEvent === event.id) setSelectedEvent(null);
+            showToast(isEnglish ? 'Event deleted.' : '活动已删除。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to delete event.' : '删除活动失败。');
+            showToast(isEnglish ? 'Failed to delete event.' : '删除活动失败。', 'error');
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -243,23 +257,12 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             setSelectedEvent(null);
             setShowArchive(false);
             setArchiveTagId('');
+            showToast(isEnglish ? 'Event archived.' : '活动已归档。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to archive event.' : '归档活动失败。');
+            showToast(isEnglish ? 'Failed to archive event.' : '归档活动失败。', 'error');
         } finally {
             setArchiving(false);
         }
-    };
-
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        if (!validateImageFile(file, isEnglish)) {
-            e.target.value = '';
-            return;
-        }
-        setPosterImage(file);
-        if (posterPreview?.startsWith('blob:')) URL.revokeObjectURL(posterPreview);
-        setPosterPreview(URL.createObjectURL(file));
     };
 
     const selectedEvt = selectedEvent ? upcomingEvents.find(e => e.id === selectedEvent) ?? null : null;
@@ -276,24 +279,14 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     : (isEnglish ? 'Create Upcoming Event' : '创建活动预告')}
                             </h4>
                             <div className="admin-form-grid">
-                                <label>
-                                    <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
-                                    <input
-                                        value={form.name}
-                                        onChange={e => setForm(f => ({...f, name: e.target.value}))}
-                                        className="admin-search-input"
-                                        placeholder={isEnglish ? 'Event name' : '活动名称'}
-                                    />
-                                </label>
-                                <label>
-                                    <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
-                                    <input
-                                        value={form.nameCn}
-                                        onChange={e => setForm(f => ({...f, nameCn: e.target.value}))}
-                                        className="admin-search-input"
-                                        placeholder={isEnglish ? 'Event name in Chinese' : '活动中文名称'}
-                                    />
-                                </label>
+                                <BilingualFormField
+                                    label="Name" labelCn="名称"
+                                    value={form.name} valueCn={form.nameCn}
+                                    onChange={v => setForm(f => ({...f, name: v}))}
+                                    onChangeCn={v => setForm(f => ({...f, nameCn: v}))}
+                                    placeholder={isEnglish ? 'Event name' : '活动名称'}
+                                    placeholderCn={isEnglish ? 'Event name in Chinese' : '活动中文名称'}
+                                />
                                 <label>
                                     <span>{isEnglish ? 'Start Time' : '开始时间'}</span>
                                     <input
@@ -312,31 +305,23 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         className="admin-search-input"
                                     />
                                 </label>
-                                <label>
-                                    <span>{isEnglish ? 'Location (English)' : '地点（英文）'}</span>
-                                    <input
-                                        value={form.location}
-                                        onChange={e => setForm(f => ({...f, location: e.target.value}))}
-                                        className="admin-search-input"
-                                        placeholder={isEnglish ? 'Event location' : '活动地点'}
-                                    />
-                                </label>
-                                <label>
-                                    <span>{isEnglish ? 'Location (Chinese)' : '地点（中文）'}</span>
-                                    <input
-                                        value={form.locationCn}
-                                        onChange={e => setForm(f => ({...f, locationCn: e.target.value}))}
-                                        className="admin-search-input"
-                                        placeholder={isEnglish ? 'Location in Chinese' : '中文地点'}
-                                    />
-                                </label>
-                                <label>
-                                    <span>{isEnglish ? 'Poster Image' : '海报图片'}</span>
-                                    <input type="file" accept="image/webp" onChange={handleImageChange}/>
-                                    {posterPreview && (
-                                        <img src={posterPreview} alt="" className="admin-badge-image-preview"/>
-                                    )}
-                                </label>
+                                <BilingualFormField
+                                    label="Location" labelCn="地点"
+                                    value={form.location} valueCn={form.locationCn}
+                                    onChange={v => setForm(f => ({...f, location: v}))}
+                                    onChangeCn={v => setForm(f => ({...f, locationCn: v}))}
+                                    placeholder={isEnglish ? 'Event location' : '活动地点'}
+                                    placeholderCn={isEnglish ? 'Location in Chinese' : '中文地点'}
+                                />
+                                <ImageUploadField
+                                    label="Poster Image" labelCn="海报图片"
+                                    preview={posterPreview}
+                                    onFileChange={(file, url) => {
+                                        setPosterImage(file);
+                                        setPosterPreview(url);
+                                    }}
+                                    onCleanupPreview={url => URL.revokeObjectURL(url)}
+                                />
                                 <label>
                                     <span>{isEnglish ? 'Poster Credit' : '海报作者'}</span>
                                     <input
@@ -346,24 +331,15 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         placeholder={isEnglish ? 'Optional' : '可选'}
                                     />
                                 </label>
-                                <label className="admin-form-grid-full">
-                                    <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
-                                    <textarea
-                                        value={form.description}
-                                        onChange={e => setForm(f => ({...f, description: e.target.value}))}
-                                        className="admin-search-input admin-textarea"
-                                        placeholder={isEnglish ? 'Event description' : '活动描述'}
-                                    />
-                                </label>
-                                <label className="admin-form-grid-full">
-                                    <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
-                                    <textarea
-                                        value={form.descriptionCn}
-                                        onChange={e => setForm(f => ({...f, descriptionCn: e.target.value}))}
-                                        className="admin-search-input admin-textarea"
-                                        placeholder={isEnglish ? 'Description in Chinese' : '中文描述'}
-                                    />
-                                </label>
+                                <BilingualFormField
+                                    label="Description" labelCn="描述"
+                                    value={form.description} valueCn={form.descriptionCn}
+                                    onChange={v => setForm(f => ({...f, description: v}))}
+                                    onChangeCn={v => setForm(f => ({...f, descriptionCn: v}))}
+                                    placeholder={isEnglish ? 'Event description' : '活动描述'}
+                                    placeholderCn={isEnglish ? 'Description in Chinese' : '中文描述'}
+                                    multiline fullWidth
+                                />
                                 <label>
                                     <span>{isEnglish ? 'Buy Ticket URL' : '购票链接'}</span>
                                     <input
@@ -511,8 +487,11 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 <button
                                     className="admin-toggle-btn admin-toggle-revoke"
                                     onClick={() => deleteEvent(selectedEvt)}
+                                    disabled={deletingId === selectedEvt.id}
                                 >
-                                    {isEnglish ? 'Delete Event' : '删除活动'}
+                                    {deletingId === selectedEvt.id
+                                        ? (isEnglish ? 'Deleting...' : '删除中...')
+                                        : (isEnglish ? 'Delete Event' : '删除活动')}
                                 </button>
                                 <button
                                     className="admin-toggle-btn"
@@ -548,7 +527,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                             </select>
                                         </label>
                                     </div>
-                                    <div className="admin-btn-row" style={{marginTop: '12px'}}>
+                                    <div className="admin-btn-row admin-mt-12">
                                         <button
                                             className="admin-generate-btn"
                                             onClick={() => archiveEvent(selectedEvt)}

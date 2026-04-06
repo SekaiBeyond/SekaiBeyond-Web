@@ -9,7 +9,9 @@ import type { PastEvent } from '~/lib/pastEvents';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Tag } from '~/lib/tags';
 import type { BadgeCode, UserRecord } from './types';
-import { docToUserRecord, getClaimUrl, validateImageFile } from './utils';
+import { commitInChunks, docToUserRecord, getClaimUrl } from './utils';
+import { BilingualFormField } from './BilingualFormField';
+import { ImageUploadField } from './ImageUploadField';
 
 interface EventsTabProps {
     pastEvents: PastEvent[];
@@ -17,6 +19,7 @@ interface EventsTabProps {
     tags: Tag[];
     user: User;
     profile: UserProfile;
+    showToast: (message: string, type: 'success' | 'error') => void;
 }
 
 export interface EventsTabHandle {
@@ -29,6 +32,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                                                           tags,
                                                                           user,
                                                                           profile,
+                                                                          showToast,
                                                                       }, forwardedRef) => {
     const {isEnglish} = useLanguage();
     const [managedEvent, setManagedEvent] = useState<string | null>(null);
@@ -48,6 +52,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [savingEvent, setSavingEvent] = useState(false);
     const [eventImage, setEventImage] = useState<File | null>(null);
     const [eventImagePreview, setEventImagePreview] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const selectManagedEvent = async (eventId: string) => {
         setManagedEvent(eventId);
@@ -127,7 +132,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             const snapshot = await getDocs(q);
             setEventAttendees(snapshot.docs.map(docToUserRecord));
         } catch {
-            alert(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。');
+            showToast(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。', 'error');
         } finally {
             setSearching(false);
         }
@@ -142,7 +147,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             setCodeFrom('');
             setCodeUntil('');
         } catch {
-            alert(isEnglish ? 'Failed to generate code.' : '生成签到码失败。');
+            showToast(isEnglish ? 'Failed to generate code.' : '生成签到码失败。', 'error');
         } finally {
             setGeneratingCode(false);
         }
@@ -168,7 +173,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             await batch.commit();
             setEventCode({...eventCode, active: newActive});
         } catch {
-            alert(isEnglish ? 'Failed to update code status.' : '更新签到码状态失败。');
+            showToast(isEnglish ? 'Failed to update code status.' : '更新签到码状态失败。', 'error');
         }
     };
 
@@ -193,7 +198,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             await batch.commit();
             setEventCode({...eventCode, activeFrom, activeUntil});
         } catch {
-            alert(isEnglish ? 'Failed to save time window.' : '保存时间窗口失败。');
+            showToast(isEnglish ? 'Failed to save time window.' : '保存时间窗口失败。', 'error');
         }
     };
 
@@ -243,11 +248,17 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             await batch.commit();
 
             await refreshEvents();
+            showToast(
+                editingEvent
+                    ? (isEnglish ? 'Event updated.' : '活动已更新。')
+                    : (isEnglish ? 'Event created.' : '活动已创建。'),
+                'success',
+            );
             setShowCreateEvent(false);
             resetEventForm();
             setEditingEvent(null);
         } catch {
-            alert(isEnglish ? 'Failed to save event.' : '保存活动失败。');
+            showToast(isEnglish ? 'Failed to save event.' : '保存活动失败。', 'error');
         } finally {
             setSavingEvent(false);
         }
@@ -258,6 +269,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             ? `Delete "${event.title}"? This cannot be undone.`
             : `删除"${event.title}"？此操作不可撤销。`
         )) return;
+        setDeletingId(event.id);
         try {
             const db = getFirebaseDb();
 
@@ -267,42 +279,29 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 getDocs(query(collection(db, 'users'), where('attendedEvents', 'array-contains', event.id))),
             ]);
 
-            const batch = writeBatch(db);
-            batch.delete(doc(db, 'pastEvents', event.id));
-            batch.set(doc(collection(db, 'records')), {
-                type: 'event-delete',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                eventTitle: event.title,
-                eventId: event.id,
-                timestamp: serverTimestamp(),
-            });
-            for (const codeDoc of codesSnap.docs) {
-                batch.delete(codeDoc.ref);
-            }
-            // Remove dangling event reference from attendees
-            for (const userDoc of attendeesSnap.docs) {
-                batch.update(userDoc.ref, {attendedEvents: arrayRemove(event.id)});
-            }
-            await batch.commit();
+            const ops: ((b: ReturnType<typeof writeBatch>) => void)[] = [
+                b => b.delete(doc(db, 'pastEvents', event.id)),
+                b => b.set(doc(collection(db, 'records')), {
+                    type: 'event-delete',
+                    performedBy: user.uid,
+                    performedByName: profile.displayName,
+                    eventTitle: event.title,
+                    eventId: event.id,
+                    timestamp: serverTimestamp(),
+                }),
+                ...codesSnap.docs.map(codeDoc => (b: ReturnType<typeof writeBatch>) => b.delete(codeDoc.ref)),
+                ...attendeesSnap.docs.map(userDoc => (b: ReturnType<typeof writeBatch>) => b.update(userDoc.ref, {attendedEvents: arrayRemove(event.id)})),
+            ];
+            await commitInChunks(db, ops);
 
             await refreshEvents();
             if (managedEvent === event.id) setManagedEvent(null);
+            showToast(isEnglish ? 'Event deleted.' : '活动已删除。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to delete event.' : '删除活动失败。');
+            showToast(isEnglish ? 'Failed to delete event.' : '删除活动失败。', 'error');
+        } finally {
+            setDeletingId(null);
         }
-    };
-
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        if (!validateImageFile(file, isEnglish)) {
-            e.target.value = '';
-            return;
-        }
-        setEventImage(file);
-        if (eventImagePreview?.startsWith('blob:')) URL.revokeObjectURL(eventImagePreview);
-        setEventImagePreview(URL.createObjectURL(file));
     };
 
     const managedEvt = managedEvent ? pastEvents.find(e => e.id === managedEvent) ?? null : null;
@@ -319,24 +318,14 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     : (isEnglish ? 'Create New Event' : '创建新活动')}
                             </h4>
                             <div className="admin-form-grid">
-                                <label>
-                                    <span>{isEnglish ? 'Title (English)' : '标题（英文）'}</span>
-                                    <input
-                                        value={eventForm.title}
-                                        onChange={e => setEventForm(f => ({...f, title: e.target.value}))}
-                                        className="admin-search-input"
-                                        placeholder={isEnglish ? 'Event title' : '活动标题'}
-                                    />
-                                </label>
-                                <label>
-                                    <span>{isEnglish ? 'Title (Chinese)' : '标题（中文）'}</span>
-                                    <input
-                                        value={eventForm.titleCn}
-                                        onChange={e => setEventForm(f => ({...f, titleCn: e.target.value}))}
-                                        className="admin-search-input"
-                                        placeholder={isEnglish ? 'Event title in Chinese' : '活动中文标题'}
-                                    />
-                                </label>
+                                <BilingualFormField
+                                    label="Title" labelCn="标题"
+                                    value={eventForm.title} valueCn={eventForm.titleCn}
+                                    onChange={v => setEventForm(f => ({...f, title: v}))}
+                                    onChangeCn={v => setEventForm(f => ({...f, titleCn: v}))}
+                                    placeholder={isEnglish ? 'Event title' : '活动标题'}
+                                    placeholderCn={isEnglish ? 'Event title in Chinese' : '活动中文标题'}
+                                />
                                 <label>
                                     <span>{isEnglish ? 'Tag' : '标签'}</span>
                                     <select
@@ -370,31 +359,24 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                         placeholder={isEnglish ? 'Event location' : '活动地点'}
                                     />
                                 </label>
-                                <label>
-                                    <span>{isEnglish ? 'Event Image' : '活动图片'}</span>
-                                    <input type="file" accept="image/webp" onChange={handleImageChange}/>
-                                    {eventImagePreview && (
-                                        <img src={eventImagePreview} alt="" className="admin-badge-image-preview"/>
-                                    )}
-                                </label>
-                                <label className="admin-form-grid-full">
-                                    <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
-                                    <textarea
-                                        value={eventForm.description}
-                                        onChange={e => setEventForm(f => ({...f, description: e.target.value}))}
-                                        className="admin-search-input admin-textarea"
-                                        placeholder={isEnglish ? 'Event description' : '活动描述'}
-                                    />
-                                </label>
-                                <label className="admin-form-grid-full">
-                                    <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
-                                    <textarea
-                                        value={eventForm.descriptionCn}
-                                        onChange={e => setEventForm(f => ({...f, descriptionCn: e.target.value}))}
-                                        className="admin-search-input admin-textarea"
-                                        placeholder={isEnglish ? 'Event description in Chinese' : '活动中文描述'}
-                                    />
-                                </label>
+                                <ImageUploadField
+                                    label="Event Image" labelCn="活动图片"
+                                    preview={eventImagePreview}
+                                    onFileChange={(file, url) => {
+                                        setEventImage(file);
+                                        setEventImagePreview(url);
+                                    }}
+                                    onCleanupPreview={url => URL.revokeObjectURL(url)}
+                                />
+                                <BilingualFormField
+                                    label="Description" labelCn="描述"
+                                    value={eventForm.description} valueCn={eventForm.descriptionCn}
+                                    onChange={v => setEventForm(f => ({...f, description: v}))}
+                                    onChangeCn={v => setEventForm(f => ({...f, descriptionCn: v}))}
+                                    placeholder={isEnglish ? 'Event description' : '活动描述'}
+                                    placeholderCn={isEnglish ? 'Event description in Chinese' : '活动中文描述'}
+                                    multiline fullWidth
+                                />
                             </div>
                             <div className="admin-btn-row">
                                 <button
@@ -476,8 +458,11 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 <button
                                     className="admin-toggle-btn admin-toggle-revoke"
                                     onClick={() => deleteEvent(managedEvt)}
+                                    disabled={deletingId === managedEvt.id}
                                 >
-                                    {isEnglish ? 'Delete Event' : '删除活动'}
+                                    {deletingId === managedEvt.id
+                                        ? (isEnglish ? 'Deleting...' : '删除中...')
+                                        : (isEnglish ? 'Delete Event' : '删除活动')}
                                 </button>
                             </div>
                         </>

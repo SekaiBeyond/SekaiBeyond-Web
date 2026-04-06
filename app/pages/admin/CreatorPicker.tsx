@@ -89,7 +89,7 @@ export const CreatorPicker = ({
                     ))}
                     {searchResults.length === 0 && !searching && (
                         <>
-                            <label style={{marginTop: '8px'}}>
+                            <label className="admin-mt-8">
                                 <span>{isEnglish ? 'Or enter name manually' : '或手动输入名称'}</span>
                                 <input
                                     value={manualName}

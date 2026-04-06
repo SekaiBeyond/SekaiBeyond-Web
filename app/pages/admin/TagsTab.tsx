@@ -11,9 +11,10 @@ interface TagsTabProps {
     refreshTags: () => Promise<void>;
     user: User;
     profile: UserProfile;
+    showToast: (message: string, type: 'success' | 'error') => void;
 }
 
-export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
+export const TagsTab = ({tags, refreshTags, user, profile, showToast}: TagsTabProps) => {
     const {isEnglish} = useLanguage();
     const [showCreate, setShowCreate] = useState(false);
     const [name, setName] = useState('');
@@ -24,6 +25,7 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
     const [editName, setEditName] = useState('');
     const [editNameCn, setEditNameCn] = useState('');
     const [savingEdit, setSavingEdit] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const createTag = async () => {
         if (!name.trim()) return;
@@ -45,8 +47,9 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
             setName('');
             setNameCn('');
             setShowCreate(false);
+            showToast(isEnglish ? 'Tag created.' : '标签已创建。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to create tag.' : '创建标签失败。');
+            showToast(isEnglish ? 'Failed to create tag.' : '创建标签失败。', 'error');
         } finally {
             setSaving(false);
         }
@@ -81,8 +84,9 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
             await batch.commit();
             await refreshTags();
             setEditingTag(null);
+            showToast(isEnglish ? 'Tag updated.' : '标签已更新。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to save tag.' : '保存标签失败。');
+            showToast(isEnglish ? 'Failed to save tag.' : '保存标签失败。', 'error');
         } finally {
             setSavingEdit(false);
         }
@@ -93,6 +97,7 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
             ? `Delete tag "${tag.name}"? Events using this tag will show no tag.`
             : `删除标签"${tag.name}"？使用此标签的活动将不显示标签。`
         )) return;
+        setDeletingId(tag.id);
         try {
             const db = getFirebaseDb();
             const batch = writeBatch(db);
@@ -107,8 +112,11 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
             await batch.commit();
             await refreshTags();
             if (editingTag?.id === tag.id) setEditingTag(null);
+            showToast(isEnglish ? 'Tag deleted.' : '标签已删除。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to delete tag.' : '删除标签失败。');
+            showToast(isEnglish ? 'Failed to delete tag.' : '删除标签失败。', 'error');
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -139,7 +147,7 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
                             />
                         </label>
                     </div>
-                    <div className="admin-btn-row" style={{marginTop: '12px'}}>
+                    <div className="admin-btn-row admin-mt-12">
                         <button
                             className="admin-generate-btn"
                             onClick={createTag}
@@ -216,8 +224,11 @@ export const TagsTab = ({tags, refreshTags, user, profile}: TagsTabProps) => {
                                         <button
                                             className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
                                             onClick={() => deleteTag(tag)}
+                                            disabled={deletingId === tag.id}
                                         >
-                                            {isEnglish ? 'Delete' : '删除'}
+                                            {deletingId === tag.id
+                                                ? (isEnglish ? 'Deleting...' : '删除中...')
+                                                : (isEnglish ? 'Delete' : '删除')}
                                         </button>
                                     </div>
                                 </>

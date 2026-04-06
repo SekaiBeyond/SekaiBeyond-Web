@@ -17,6 +17,14 @@ import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { TagsTab } from './TagsTab';
 import { RecordsTab } from './RecordsTab';
 
+interface Toast {
+    id: number;
+    message: string;
+    type: 'success' | 'error';
+}
+
+let toastCounter = 0;
+
 export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
@@ -30,6 +38,13 @@ export const AdminPage = () => {
     const [activeTab, setActiveTab] = useState<Tab>('users');
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [badgeDefsError, setBadgeDefsError] = useState(false);
+    const [toasts, setToasts] = useState<Toast[]>([]);
+
+    const showToast = useCallback((message: string, type: 'success' | 'error') => {
+        const id = ++toastCounter;
+        setToasts(prev => [...prev, {id, message, type}]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+    }, []);
     const {tags, refresh: refreshTags} = useTags();
     const [searchParams] = useSearchParams();
     const urlParamsHandled = useRef(false);
@@ -147,6 +162,13 @@ export const AdminPage = () => {
 
     return (
         <>
+            <div className="admin-toast-container">
+                {toasts.map(t => (
+                    <div key={t.id} className={`admin-toast admin-toast-${t.type}`}>
+                        {t.message}
+                    </div>
+                ))}
+            </div>
             <nav className="profile-nav">
                 <a href="/" className="profile-nav-home">
                     {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
@@ -202,8 +224,10 @@ export const AdminPage = () => {
                         ref={usersTabRef}
                         pastEvents={pastEvents}
                         badgeDefs={badgeDefs}
+                        badgeDefsError={badgeDefsError}
                         user={user}
                         profile={profile}
+                        showToast={showToast}
                     />
                 )}
 
@@ -215,6 +239,7 @@ export const AdminPage = () => {
                         tags={tags}
                         user={user}
                         profile={profile}
+                        showToast={showToast}
                     />
                 )}
 
@@ -227,6 +252,7 @@ export const AdminPage = () => {
                         tags={tags}
                         user={user}
                         profile={profile}
+                        showToast={showToast}
                     />
                 )}
 
@@ -244,12 +270,13 @@ export const AdminPage = () => {
                             setBadgeDefs={setBadgeDefs}
                             user={user}
                             profile={profile}
+                            showToast={showToast}
                         />
                     )
                 )}
 
                 {activeTab === 'tags' && (
-                    <TagsTab tags={tags} refreshTags={refreshTags} user={user} profile={profile}/>
+                    <TagsTab tags={tags} refreshTags={refreshTags} user={user} profile={profile} showToast={showToast}/>
                 )}
 
                 {activeTab === 'records' && (

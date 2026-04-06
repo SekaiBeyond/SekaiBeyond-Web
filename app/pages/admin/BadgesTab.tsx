@@ -21,14 +21,17 @@ import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGenerateBadgeActivationCode, getFirebaseDb, getFirebaseStorage } from '~/lib/firebase';
 import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
-import { docToUserRecord, isValidHttpUrl, validateImageFile } from './utils';
+import { commitInChunks, docToUserRecord, isValidHttpUrl } from './utils';
 import { CreatorPicker } from './CreatorPicker';
+import { BilingualFormField } from './BilingualFormField';
+import { ImageUploadField } from './ImageUploadField';
 
 interface BadgesTabProps {
     badgeDefs: BadgeDef[];
     setBadgeDefs: React.Dispatch<React.SetStateAction<BadgeDef[]>>;
     user: User;
     profile: UserProfile;
+    showToast: (message: string, type: 'success' | 'error') => void;
 }
 
 export interface BadgesTabHandle {
@@ -54,7 +57,11 @@ const emptyBadgeForm: BadgeForm = {
 };
 
 export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
-                                                                          badgeDefs, setBadgeDefs, user, profile,
+                                                                          badgeDefs,
+                                                                          setBadgeDefs,
+                                                                          user,
+                                                                          profile,
+                                                                          showToast,
                                                                       }, ref) => {
     const {isEnglish} = useLanguage();
 
@@ -76,6 +83,9 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     const [editingBadgeDef, setEditingBadgeDef] = useState(false);
     const [editForm, setEditForm] = useState<BadgeForm>(emptyBadgeForm);
     const [savingBadgeDef, setSavingBadgeDef] = useState(false);
+
+    // Delete state
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     // Activation codes state
     const [badgeActivationCodes, setBadgeActivationCodes] = useState<BadgeActivationCode[]>([]);
@@ -158,7 +168,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     const createBadgeDef = async () => {
         const creatorLink = createForm.creatorUser ? '' : createForm.createdByLink.trim();
         if (creatorLink && !isValidHttpUrl(creatorLink)) {
-            alert(isEnglish ? 'Creator link must be a valid URL (http/https).' : '创建者链接必须是有效的网址（http/https）。');
+            showToast(isEnglish ? 'Creator link must be a valid URL (http/https).' : '创建者链接必须是有效的网址（http/https）。', 'error');
             return;
         }
         setCreatingBadgeDef(true);
@@ -214,8 +224,9 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             }]);
 
             resetCreateForm();
+            showToast(isEnglish ? 'Badge created.' : '徽章已创建。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to create badge.' : '创建徽章失败。');
+            showToast(isEnglish ? 'Failed to create badge.' : '创建徽章失败。', 'error');
         } finally {
             setCreatingBadgeDef(false);
         }
@@ -232,6 +243,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             ? `Delete badge "${bd.name}"? This cannot be undone.`
             : `删除徽章"${bd.name}"？此操作不可撤销。`
         )) return;
+        setDeletingId(bd.id);
         try {
             const db = getFirebaseDb();
 
@@ -241,29 +253,28 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 getDocs(query(collection(db, 'users'), where('badges', 'array-contains', bd.id))),
             ]);
 
-            const batch = writeBatch(db);
-            batch.delete(doc(db, 'badges', bd.id));
-            batch.set(doc(collection(db, 'records')), {
-                type: 'badge-delete',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                badgeId: bd.id,
-                badgeName: bd.name,
-                timestamp: serverTimestamp(),
-            });
-            for (const codeDoc of codesSnap.docs) {
-                batch.delete(codeDoc.ref);
-            }
-            // Remove dangling badge reference from holders
-            for (const userDoc of holdersSnap.docs) {
-                batch.update(userDoc.ref, {badges: arrayRemove(bd.id)});
-            }
-            await batch.commit();
+            const ops: ((b: ReturnType<typeof writeBatch>) => void)[] = [
+                b => b.delete(doc(db, 'badges', bd.id)),
+                b => b.set(doc(collection(db, 'records')), {
+                    type: 'badge-delete',
+                    performedBy: user.uid,
+                    performedByName: profile.displayName,
+                    badgeId: bd.id,
+                    badgeName: bd.name,
+                    timestamp: serverTimestamp(),
+                }),
+                ...codesSnap.docs.map(codeDoc => (b: ReturnType<typeof writeBatch>) => b.delete(codeDoc.ref)),
+                ...holdersSnap.docs.map(userDoc => (b: ReturnType<typeof writeBatch>) => b.update(userDoc.ref, {badges: arrayRemove(bd.id)})),
+            ];
+            await commitInChunks(db, ops);
 
             setBadgeDefs(prev => prev.filter(d => d.id !== bd.id));
             setSelectedBadgeDef(null);
+            showToast(isEnglish ? 'Badge deleted.' : '徽章已删除。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to delete badge.' : '删除徽章失败。');
+            showToast(isEnglish ? 'Failed to delete badge.' : '删除徽章失败。', 'error');
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -271,7 +282,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         if (!selectedBadgeDef) return;
         const creatorLink = editForm.creatorUser ? '' : editForm.createdByLink.trim();
         if (creatorLink && !isValidHttpUrl(creatorLink)) {
-            alert(isEnglish ? 'Creator link must be a valid URL (http/https).' : '创建者链接必须是有效的网址（http/https）。');
+            showToast(isEnglish ? 'Creator link must be a valid URL (http/https).' : '创建者链接必须是有效的网址（http/https）。', 'error');
             return;
         }
         setSavingBadgeDef(true);
@@ -314,8 +325,9 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             setEditingBadgeDef(false);
             if (editForm.imagePreview?.startsWith('blob:')) URL.revokeObjectURL(editForm.imagePreview);
             setEditForm(emptyBadgeForm);
+            showToast(isEnglish ? 'Badge updated.' : '徽章已更新。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to save badge.' : '保存徽章失败。');
+            showToast(isEnglish ? 'Failed to save badge.' : '保存徽章失败。', 'error');
         } finally {
             setSavingBadgeDef(false);
         }
@@ -383,7 +395,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             setNewCodeFrom('');
             setNewCodeUntil('');
         } catch {
-            alert(isEnglish ? 'Failed to generate code.' : '生成激活码失败。');
+            showToast(isEnglish ? 'Failed to generate code.' : '生成激活码失败。', 'error');
         } finally {
             setGeneratingActivationCode(false);
         }
@@ -409,7 +421,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             await batch.commit();
         } catch {
             setBadgeActivationCodes(prev => prev.map(c => c.id === ac.id ? {...c, active: ac.active} : c));
-            alert(isEnglish ? 'Failed to update code status.' : '更新激活码状态失败。');
+            showToast(isEnglish ? 'Failed to update code status.' : '更新激活码状态失败。', 'error');
         }
     };
 
@@ -441,21 +453,9 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             await batch.commit();
         } catch {
             setBadgeActivationCodes(prevSnapshot);
-            alert(isEnglish ? 'Failed to delete code.' : '删除激活码失败。');
+            showToast(isEnglish ? 'Failed to delete code.' : '删除激活码失败。', 'error');
         }
     };
-
-    const handleImageChange = (form: BadgeForm, setForm: React.Dispatch<React.SetStateAction<BadgeForm>>) =>
-        (e: React.ChangeEvent<HTMLInputElement>) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            if (!validateImageFile(file, isEnglish)) {
-                e.target.value = '';
-                return;
-            }
-            if (form.imagePreview?.startsWith('blob:')) URL.revokeObjectURL(form.imagePreview);
-            setForm(f => ({...f, image: file, imagePreview: URL.createObjectURL(file)}));
-        };
 
     // Badge list view
     if (!selectedBadgeDef) {
@@ -467,34 +467,23 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             {isEnglish ? 'Create New Badge' : '创建新徽章'}
                         </h4>
                         <div className="admin-form-grid">
-                            <label>
-                                <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
-                                <input value={createForm.name}
-                                       onChange={e => setCreateForm(f => ({...f, name: e.target.value}))}
-                                       className="admin-search-input"
-                                       placeholder={isEnglish ? 'Badge name' : '徽章名称'}/>
-                            </label>
-                            <label>
-                                <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
-                                <input value={createForm.nameCn}
-                                       onChange={e => setCreateForm(f => ({...f, nameCn: e.target.value}))}
-                                       className="admin-search-input"
-                                       placeholder={isEnglish ? 'Badge name in Chinese' : '徽章中文名称'}/>
-                            </label>
-                            <label>
-                                <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
-                                <textarea value={createForm.description}
-                                          onChange={e => setCreateForm(f => ({...f, description: e.target.value}))}
-                                          className="admin-search-input admin-textarea"
-                                          placeholder={isEnglish ? 'Badge description' : '徽章描述'}/>
-                            </label>
-                            <label>
-                                <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
-                                <textarea value={createForm.descriptionCn}
-                                          onChange={e => setCreateForm(f => ({...f, descriptionCn: e.target.value}))}
-                                          className="admin-search-input admin-textarea"
-                                          placeholder={isEnglish ? 'Badge description in Chinese' : '徽章中文描述'}/>
-                            </label>
+                            <BilingualFormField
+                                label="Name" labelCn="名称"
+                                value={createForm.name} valueCn={createForm.nameCn}
+                                onChange={v => setCreateForm(f => ({...f, name: v}))}
+                                onChangeCn={v => setCreateForm(f => ({...f, nameCn: v}))}
+                                placeholder={isEnglish ? 'Badge name' : '徽章名称'}
+                                placeholderCn={isEnglish ? 'Badge name in Chinese' : '徽章中文名称'}
+                            />
+                            <BilingualFormField
+                                label="Description" labelCn="描述"
+                                value={createForm.description} valueCn={createForm.descriptionCn}
+                                onChange={v => setCreateForm(f => ({...f, description: v}))}
+                                onChangeCn={v => setCreateForm(f => ({...f, descriptionCn: v}))}
+                                placeholder={isEnglish ? 'Badge description' : '徽章描述'}
+                                placeholderCn={isEnglish ? 'Badge description in Chinese' : '徽章中文描述'}
+                                multiline
+                            />
                             <CreatorPicker
                                 selected={createForm.creatorUser}
                                 onSelect={u => setCreateForm(f => ({...f, creatorUser: u}))}
@@ -503,14 +492,16 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                 manualLink={createForm.createdByLink}
                                 onManualLinkChange={v => setCreateForm(f => ({...f, createdByLink: v}))}
                             />
-                            <label>
-                                <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
-                                <input type="file" accept="image/webp"
-                                       onChange={handleImageChange(createForm, setCreateForm)}/>
-                                {createForm.imagePreview &&
-                                    <img src={createForm.imagePreview} alt=""
-                                         className="admin-badge-image-preview"/>}
-                            </label>
+                            <ImageUploadField
+                                label="Badge Image" labelCn="徽章图片"
+                                preview={createForm.imagePreview}
+                                onFileChange={(file, url) => setCreateForm(f => ({
+                                    ...f,
+                                    image: file,
+                                    imagePreview: url
+                                }))}
+                                onCleanupPreview={url => URL.revokeObjectURL(url)}
+                            />
                         </div>
                         <div className="admin-form-actions">
                             <button className="admin-generate-btn" onClick={createBadgeDef}
@@ -571,7 +562,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             {isEnglish ? selectedBadgeDef.description : selectedBadgeDef.descriptionCn}
                         </p>
                         {selectedBadgeDef.createdByName && (
-                            <p className="admin-event-detail-meta" style={{marginTop: '4px'}}>
+                            <p className="admin-event-detail-meta admin-mt-4">
                                 {isEnglish ? 'Created by: ' : '创建者：'}
                                 {selectedBadgeDef.createdByUid ? (
                                     <a href={`/profile?uid=${selectedBadgeDef.createdByUid}`}
@@ -593,30 +584,19 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     <div className="admin-create-badge-form admin-section-mb">
                         <h4 className="admin-badges-title">{isEnglish ? 'Edit Badge' : '编辑徽章'}</h4>
                         <div className="admin-form-grid">
-                            <label>
-                                <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
-                                <input value={editForm.name}
-                                       onChange={e => setEditForm(f => ({...f, name: e.target.value}))}
-                                       className="admin-search-input"/>
-                            </label>
-                            <label>
-                                <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
-                                <input value={editForm.nameCn}
-                                       onChange={e => setEditForm(f => ({...f, nameCn: e.target.value}))}
-                                       className="admin-search-input"/>
-                            </label>
-                            <label>
-                                <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
-                                <textarea value={editForm.description}
-                                          onChange={e => setEditForm(f => ({...f, description: e.target.value}))}
-                                          className="admin-search-input admin-textarea"/>
-                            </label>
-                            <label>
-                                <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
-                                <textarea value={editForm.descriptionCn}
-                                          onChange={e => setEditForm(f => ({...f, descriptionCn: e.target.value}))}
-                                          className="admin-search-input admin-textarea"/>
-                            </label>
+                            <BilingualFormField
+                                label="Name" labelCn="名称"
+                                value={editForm.name} valueCn={editForm.nameCn}
+                                onChange={v => setEditForm(f => ({...f, name: v}))}
+                                onChangeCn={v => setEditForm(f => ({...f, nameCn: v}))}
+                            />
+                            <BilingualFormField
+                                label="Description" labelCn="描述"
+                                value={editForm.description} valueCn={editForm.descriptionCn}
+                                onChange={v => setEditForm(f => ({...f, description: v}))}
+                                onChangeCn={v => setEditForm(f => ({...f, descriptionCn: v}))}
+                                multiline
+                            />
                             <CreatorPicker
                                 selected={editForm.creatorUser}
                                 onSelect={u => setEditForm(f => ({
@@ -629,13 +609,12 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                 manualLink={editForm.createdByLink}
                                 onManualLinkChange={v => setEditForm(f => ({...f, createdByLink: v}))}
                             />
-                            <label>
-                                <span>{isEnglish ? 'Badge Image' : '徽章图片'}</span>
-                                <input type="file" accept="image/webp"
-                                       onChange={handleImageChange(editForm, setEditForm)}/>
-                                {editForm.imagePreview &&
-                                    <img src={editForm.imagePreview} alt="" className="admin-badge-image-preview"/>}
-                            </label>
+                            <ImageUploadField
+                                label="Badge Image" labelCn="徽章图片"
+                                preview={editForm.imagePreview}
+                                onFileChange={(file, url) => setEditForm(f => ({...f, image: file, imagePreview: url}))}
+                                onCleanupPreview={url => URL.revokeObjectURL(url)}
+                            />
                         </div>
                         <div className="admin-form-actions">
                             <button className="admin-generate-btn" onClick={updateBadgeDef}
@@ -657,8 +636,11 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             {isEnglish ? 'Edit Badge' : '编辑徽章'}
                         </button>
                         <button className="admin-toggle-btn admin-toggle-revoke"
-                                onClick={() => deleteBadgeDef(selectedBadgeDef)}>
-                            {isEnglish ? 'Delete Badge' : '删除徽章'}
+                                onClick={() => deleteBadgeDef(selectedBadgeDef)}
+                                disabled={deletingId === selectedBadgeDef.id}>
+                            {deletingId === selectedBadgeDef.id
+                                ? (isEnglish ? 'Deleting...' : '删除中...')
+                                : (isEnglish ? 'Delete Badge' : '删除徽章')}
                         </button>
                     </div>
                 )}
@@ -717,13 +699,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                     className="admin-search-input"
                                     placeholder={newCodeUnlimited ? '∞' : undefined}
                                 />
-                                <label style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    fontSize: '13px',
-                                    whiteSpace: 'nowrap'
-                                }}>
+                                <label className="admin-unlimited-label">
                                     <input
                                         type="checkbox" checked={newCodeUnlimited}
                                         onChange={e => {
@@ -748,10 +724,9 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                         </label>
                     </div>
                     <button
-                        className="admin-generate-btn"
+                        className="admin-generate-btn admin-mt-12"
                         onClick={() => createBadgeActivationCode(selectedBadgeDef.id)}
-                        disabled={generatingActivationCode}
-                        style={{marginTop: '12px'}}>
+                        disabled={generatingActivationCode}>
                         {generatingActivationCode
                             ? (isEnglish ? 'Generating...' : '生成中...')
                             : (isEnglish ? '+ Generate Activation Code' : '+ 生成激活码')}
@@ -764,7 +739,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 )}
 
                 {!loadingActivationCodes && badgeActivationCodes.map((ac) => (
-                    <div key={ac.id} className="admin-single-code" style={{marginTop: '12px'}}>
+                    <div key={ac.id} className="admin-single-code admin-mt-12">
                         <div className="admin-activation-meta">
                             <span className={ac.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
                                 {ac.active ? (isEnglish ? 'Active' : '活跃') : (isEnglish ? 'Inactive' : '已停用')}
