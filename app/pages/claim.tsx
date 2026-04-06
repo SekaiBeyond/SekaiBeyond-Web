@@ -124,7 +124,7 @@ export const ClaimPage = () => {
 
                 {state === 'claiming' && (
                     <>
-                        <div className="profile-spinner" style={{margin: '0 auto 20px'}}/>
+                        <div className="profile-spinner spinner-centered"/>
                         <h2>{isEnglish ? 'Checking In...' : '签到中...'}</h2>
                     </>
                 )}

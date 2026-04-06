@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { FOOTER_LINKS, type NavLink } from "~/constants";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
@@ -21,7 +21,8 @@ export const Footer = () => {
                             {isEnglish ? link.labelEn : link.labelCn}
                         </a>
                     ) : (
-                        <a key={link.id} href={link.href} className="footer-link" target="_blank" rel="noopener noreferrer">
+                        <a key={link.id} href={link.href} className="footer-link" target="_blank"
+                           rel="noopener noreferrer">
                             {isEnglish ? link.labelEn : link.labelCn}
                         </a>
                     )

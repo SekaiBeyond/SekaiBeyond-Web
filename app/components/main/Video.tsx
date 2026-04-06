@@ -1,4 +1,3 @@
-import React from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { BILIBILI_VIDEO, LINKS } from "~/constants";
 

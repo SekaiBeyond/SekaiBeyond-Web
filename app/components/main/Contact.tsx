@@ -1,6 +1,5 @@
 import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from "react-icons/si";
 import { FaLinkedin } from "react-icons/fa";
-import React from "react";
 import { LINKS } from "~/constants";
 import { useLanguage } from "~/components/LanguageContextProvider";
 

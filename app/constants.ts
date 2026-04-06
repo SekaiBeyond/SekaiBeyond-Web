@@ -18,7 +18,6 @@ export const LINKS = {
     email: `mailto:${RSO_EMAIL}`
 }
 
-
 interface Officer {
     name: string;
     nameCn?: string;
@@ -108,7 +107,6 @@ export const SEKAI_BEYOND_CON: ConEdition[] = [
         ],
     },
 ];
-
 
 export interface NavLink {
     id: string;

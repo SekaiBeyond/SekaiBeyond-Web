@@ -1,10 +1,9 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { LanguageSwitcher } from "~/components/LanguageSwitcher";
 import { LoginButton } from "~/components/LoginButton";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { NAVIGATION_LINKS, type NavLink } from "~/constants";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
-
 
 export const Navigation = () => {
     const {isEnglish} = useLanguage();

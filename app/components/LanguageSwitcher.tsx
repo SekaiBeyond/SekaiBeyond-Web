@@ -1,7 +1,6 @@
-import React from 'react';
 import { useLanguage } from './LanguageContextProvider';
 
-export const LanguageSwitcher: React.FC = () => {
+export const LanguageSwitcher = () => {
     const {currentLanguage, setLanguage} = useLanguage();
 
     const toggleLanguage = () => {

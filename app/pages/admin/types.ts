@@ -1,4 +1,5 @@
 import type { UserGroup } from '~/components/AuthProvider';
+import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 
 export interface BadgeCode {
     id: string;
@@ -22,13 +23,7 @@ export interface BadgeActivationCode {
     createdAt: Date;
 }
 
-export interface BadgeDef {
-    id: string;
-    name: string;
-    nameCn: string;
-    description: string;
-    descriptionCn: string;
-    imageUrl: string;
+export interface BadgeDef extends BaseBadgeDef {
     createdBy: string;
     createdByUid: string;
     createdByName: string;

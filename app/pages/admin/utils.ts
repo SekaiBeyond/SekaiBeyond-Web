@@ -1,4 +1,4 @@
-import { type Firestore, writeBatch } from 'firebase/firestore';
+import { type DocumentData, type Firestore, writeBatch } from 'firebase/firestore';
 import type { UserRecord } from './types';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -19,8 +19,7 @@ export const commitInChunks = async (db: Firestore, ops: BatchOp[]): Promise<voi
     }
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const docToUserRecord = (docSnap: {id: string; data: () => Record<string, any>}): UserRecord => {
+export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData}): UserRecord => {
     const data = docSnap.data();
     return {
         uid: docSnap.id,

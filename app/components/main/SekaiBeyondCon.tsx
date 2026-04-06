@@ -22,10 +22,10 @@ export const SekaiBeyondCon = () => {
                 {SEKAI_BEYOND_CON.map((edition: ConEdition) => (
                     <div key={edition.year} className="convention-banner">
                         <div className="con-decorations">
-                            <span className="con-deco" style={{top: '10%', left: '5%', animationDelay: '0s'}}>🌸</span>
-                            <span className="con-deco" style={{top: '20%', left: '80%', animationDelay: '5s'}}>🎨</span>
-                            <span className="con-deco" style={{top: '70%', left: '10%', animationDelay: '10s'}}>🎤</span>
-                            <span className="con-deco" style={{top: '60%', left: '90%', animationDelay: '15s'}}>🎸</span>
+                            <span className="con-deco">🌸</span>
+                            <span className="con-deco">🎨</span>
+                            <span className="con-deco">🎤</span>
+                            <span className="con-deco">🎸</span>
                         </div>
 
                         <div className="con-banner-inner">

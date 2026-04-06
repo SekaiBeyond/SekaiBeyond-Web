@@ -1,4 +1,4 @@
-import React, { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, type FC, type ReactNode, useContext, useEffect, useState } from 'react';
 
 export type Language = 'en' | 'zh';
 
@@ -23,7 +23,7 @@ interface LanguageProviderProps {
     children: ReactNode;
 }
 
-export const LanguageProvider: React.FC<LanguageProviderProps> = ({children}) => {
+export const LanguageProvider: FC<LanguageProviderProps> = ({children}) => {
     const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
 
     useEffect(() => {

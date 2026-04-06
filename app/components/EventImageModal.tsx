@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { type FC, useEffect } from "react";
 
 interface EventImageModalProps {
     imageUrl: string;
@@ -6,7 +6,7 @@ interface EventImageModalProps {
     altText: string;
 }
 
-export const EventImageModal: React.FC<EventImageModalProps> = ({imageUrl, onClose, altText}) => {
+export const EventImageModal: FC<EventImageModalProps> = ({imageUrl, onClose, altText}) => {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();

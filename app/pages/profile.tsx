@@ -8,14 +8,9 @@ import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
 import { useSearchParams } from 'react-router';
+import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 
-interface BadgeDef {
-    id: string;
-    name: string;
-    nameCn: string;
-    description: string;
-    descriptionCn: string;
-    imageUrl: string;
+interface BadgeDef extends BaseBadgeDef {
     holderPct?: number;
     createdByUid?: string;
     createdByName?: string;

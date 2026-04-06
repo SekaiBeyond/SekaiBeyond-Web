@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { type UpcomingEvent as UpcomingEventType, useUpcomingEvents } from "~/lib/upcomingEvents";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
@@ -169,13 +169,7 @@ export const UpcomingEvent = () => {
 
             {currentEvent && (
                 <div
-                    className="carousel-slide"
-                    style={{
-                        opacity: isTransitioning ? 0 : 1,
-                        transform: isTransitioning
-                            ? `translateX(${slideDirection === 'left' ? '-30px' : '30px'})`
-                            : 'translateX(0)',
-                    }}
+                    className={`carousel-slide${isTransitioning ? (slideDirection === 'left' ? ' carousel-slide--hidden-left' : ' carousel-slide--hidden-right') : ''}`}
                 >
                     <EventCard
                         event={currentEvent}

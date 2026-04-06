@@ -32,7 +32,12 @@ export const PastEvents = () => {
                             role="button"
                             tabIndex={0}
                             onClick={() => setSelectedImage(event.icon)}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedImage(event.icon); }}}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    setSelectedImage(event.icon);
+                                }
+                            }}
                         />
                         <div className="event-content">
                             <span className="event-label">{(() => {

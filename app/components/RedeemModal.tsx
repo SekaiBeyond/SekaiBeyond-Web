@@ -3,15 +3,7 @@ import { FirebaseError } from 'firebase/app';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callClaimBadgeActivationCode } from '~/lib/firebase';
-
-interface BadgeDef {
-    id: string;
-    name: string;
-    nameCn: string;
-    description: string;
-    descriptionCn: string;
-    imageUrl: string;
-}
+import type { BadgeDef } from '~/lib/types';
 
 export const RedeemModal = () => {
     const {user, profile, refreshProfile} = useAuth();
@@ -100,10 +92,10 @@ export const RedeemModal = () => {
 
                 {state === 'idle' && (
                     <>
-                        <h2 style={{textAlign: 'center', marginBottom: '8px', color: '#c77dff'}}>
+                        <h2 className="redeem-heading">
                             {isEnglish ? 'Redeem Badge Code' : '兑换徽章激活码'}
                         </h2>
-                        <p style={{textAlign: 'center', color: '#555', marginBottom: '20px'}}>
+                        <p className="redeem-subtitle">
                             {isEnglish
                                 ? 'Enter your activation code to claim a badge.'
                                 : '输入激活码来领取徽章。'}
@@ -118,16 +110,14 @@ export const RedeemModal = () => {
                                     setError('');
                                 }}
                                 placeholder={isEnglish ? 'Enter activation code' : '输入激活码'}
-                                className="admin-search-input"
-                                style={{width: '100%', boxSizing: 'border-box', textAlign: 'center'}}
+                                className="admin-search-input redeem-input"
                             />
                             {error && (
-                                <p style={{color: '#e5534b', fontSize: '13px', margin: '6px 0 0', textAlign: 'center'}}>
+                                <p className="redeem-error-text">
                                     {error}
                                 </p>
                             )}
-                            <button type="submit" className="admin-generate-btn"
-                                    style={{marginTop: '12px', width: '100%'}}>
+                            <button type="submit" className="admin-generate-btn redeem-submit-btn">
                                 {isEnglish ? 'Claim Badge' : '领取徽章'}
                             </button>
                         </form>
@@ -135,8 +125,8 @@ export const RedeemModal = () => {
                 )}
 
                 {state === 'claiming' && (
-                    <div style={{textAlign: 'center'}}>
-                        <div className="profile-spinner" style={{margin: '0 auto 20px'}}/>
+                    <div className="redeem-loading">
+                        <div className="profile-spinner spinner-centered"/>
                         <p>{isEnglish ? 'Claiming...' : '领取中...'}</p>
                     </div>
                 )}
@@ -148,20 +138,20 @@ export const RedeemModal = () => {
                                 <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn}/>
                             </div>
                         )}
-                        <h2 style={{textAlign: 'center', marginBottom: '8px', color: '#c77dff'}}>
+                        <h2 className="redeem-heading">
                             {isEnglish ? 'Badge Claimed!' : '徽章领取成功！'}
                         </h2>
                         {badge && (
                             <>
-                                <p className="claim-event-title" style={{textAlign: 'center'}}>
+                                <p className="claim-event-title redeem-centered-text">
                                     {isEnglish ? badge.name : badge.nameCn}
                                 </p>
-                                <p className="claim-event-category" style={{textAlign: 'center'}}>
+                                <p className="claim-event-category redeem-centered-text">
                                     {isEnglish ? badge.description : badge.descriptionCn}
                                 </p>
                             </>
                         )}
-                        <button className="admin-generate-btn" style={{marginTop: '16px', width: '100%'}}
+                        <button className="admin-generate-btn redeem-done-btn"
                                 onClick={close}>
                             {isEnglish ? 'Done' : '完成'}
                         </button>
@@ -170,13 +160,12 @@ export const RedeemModal = () => {
 
                 {state === 'error' && (
                     <>
-                        <h2 style={{textAlign: 'center', marginBottom: '8px', color: '#e5534b'}}>
+                        <h2 className="redeem-heading redeem-heading--error">
                             {isEnglish ? 'Claim Failed' : '领取失败'}
                         </h2>
-                        <p style={{textAlign: 'center', color: '#555', marginBottom: '20px'}}>{error}</p>
+                        <p className="redeem-subtitle">{error}</p>
                         <button
-                            className="admin-generate-btn"
-                            style={{marginTop: '12px', width: '100%'}}
+                            className="admin-generate-btn redeem-submit-btn"
                             onClick={() => {
                                 setState('idle');
                                 setInput('');

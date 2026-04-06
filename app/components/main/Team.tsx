@@ -1,4 +1,3 @@
-import React from "react";
 import { OFFICERS } from "~/constants"
 import { useLanguage } from "~/components/LanguageContextProvider";
 
