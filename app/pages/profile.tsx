@@ -9,6 +9,7 @@ import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
 import { useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
+import { isValidHttpUrl } from '~/pages/admin/utils';
 
 interface BadgeDef extends BaseBadgeDef {
     holderPct?: number;
@@ -71,7 +72,7 @@ const BadgeCard = ({badge, earned, earnedDate, isEnglish}: {
                            className="badge-tooltip-creator-link">
                             {badge.createdByName}
                         </a>
-                    ) : badge.createdByLink ? (
+                    ) : (badge.createdByLink && isValidHttpUrl(badge.createdByLink)) ? (
                         <a href={badge.createdByLink} target="_blank"
                            rel="noopener noreferrer"
                            className="badge-tooltip-creator-link">
@@ -164,7 +165,7 @@ export const ProfilePage = () => {
                 });
                 setBadgeDefs(defs);
             } catch (err) {
-                if (!stale) console.error('Failed to load badges:', err);
+                void (stale || err);
             }
         };
         void loadBadges();
@@ -198,7 +199,7 @@ export const ProfilePage = () => {
                     });
                 }
             } catch (err) {
-                if (!stale) console.error('Failed to load user profile:', err);
+                void (stale || err);
             } finally {
                 if (!stale) setLoadingViewed(false);
             }
@@ -233,7 +234,7 @@ export const ProfilePage = () => {
                 });
                 setEarnedDates(dates);
             } catch (err) {
-                if (!stale) console.error('Failed to load earned dates:', err);
+                void (stale || err);
             }
         };
         void loadEarnedDates();
@@ -281,7 +282,7 @@ export const ProfilePage = () => {
             await updateProfile({photoFile: file});
             setCustomPhotoLoaded(true);
         } catch (err) {
-            console.error('Failed to update photo:', err);
+            void err;
         } finally {
             setSavingPhoto(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -295,7 +296,7 @@ export const ProfilePage = () => {
             await updateProfile({deletePhoto: true});
             setCustomPhotoLoaded(false);
         } catch (err) {
-            console.error('Failed to delete photo:', err);
+            void err;
         } finally {
             setSavingPhoto(false);
         }
@@ -312,7 +313,7 @@ export const ProfilePage = () => {
             await updateProfile({displayName: editName});
             setEditingName(false);
         } catch (err) {
-            console.error('Failed to update name:', err);
+            void err;
         } finally {
             setSavingName(false);
         }

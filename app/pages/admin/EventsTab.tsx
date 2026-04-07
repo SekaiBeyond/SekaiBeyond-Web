@@ -1,10 +1,9 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import { arrayRemove, collection, doc, getDocs, query, serverTimestamp, where, writeBatch, } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import type { User } from 'firebase/auth';
 import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGenerateEventCode, getFirebaseDb, getFirebaseStorage } from '~/lib/firebase';
+import { callGenerateEventCode, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Tag } from '~/lib/tags';
@@ -211,9 +210,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             let iconUrl = eventForm.icon;
             if (eventImage) {
                 const imageId = crypto.randomUUID();
-                const storageRef = ref(getFirebaseStorage(), `events/${imageId}.webp`);
-                await uploadBytes(storageRef, eventImage);
-                iconUrl = await getDownloadURL(storageRef);
+                iconUrl = await callUploadAdminImage(eventImage, `events/${imageId}.webp`);
             }
 
             const data: Record<string, string> = {

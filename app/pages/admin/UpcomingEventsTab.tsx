@@ -1,10 +1,9 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import { collection, doc, serverTimestamp, Timestamp, writeBatch, } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import type { User } from 'firebase/auth';
 import type { UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { getFirebaseDb, getFirebaseStorage } from '~/lib/firebase';
+import { callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { BilingualFormField } from './BilingualFormField';
@@ -129,9 +128,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             let posterUrl = editingEvent?.poster ?? '';
             if (posterImage) {
                 const imageId = crypto.randomUUID();
-                const storageRef = ref(getFirebaseStorage(), `upcoming-events/${imageId}.webp`);
-                await uploadBytes(storageRef, posterImage);
-                posterUrl = await getDownloadURL(storageRef);
+                posterUrl = await callUploadAdminImage(posterImage, `upcoming-events/${imageId}.webp`);
             }
 
             const data = {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { type UpcomingEvent as UpcomingEventType, useUpcomingEvents } from "~/lib/upcomingEvents";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
+import { isValidHttpUrl } from "~/pages/admin/utils";
 
 interface EventCardProps {
     event: UpcomingEventType;
@@ -111,13 +112,15 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                 </div>
                 {event.buyTicket || event.learnMore ? (
                     <div className="hero-buttons con-buttons">
-                        {event.buyTicket ? (<a href={event.buyTicket}
-                                               className="btn btn-primary con-btn">{isEnglish ? "Get Tickets" : "购票"}</a>) : null}
-                        {event.learnMore ? (<a href={event.learnMore}
-                                               className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>) : null}
+                        {event.buyTicket && isValidHttpUrl(event.buyTicket) ? (
+                            <a href={event.buyTicket} target="_blank" rel="noopener noreferrer"
+                               className="btn btn-primary con-btn">{isEnglish ? "Get Tickets" : "购票"}</a>) : null}
+                        {event.learnMore && isValidHttpUrl(event.learnMore) ? (
+                            <a href={event.learnMore} target="_blank" rel="noopener noreferrer"
+                               className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>) : null}
                     </div>) : null}
-                {event.customButtonLink ? (
-                    <a href={event.customButtonLink}
+                {event.customButtonLink && isValidHttpUrl(event.customButtonLink) ? (
+                    <a href={event.customButtonLink} target="_blank" rel="noopener noreferrer"
                        className="btn btn-secondary con-btn">{isEnglish ? event.customButtonText : event.customButtonTextCn}</a>
                 ) : null}
             </div>

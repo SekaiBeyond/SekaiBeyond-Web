@@ -15,11 +15,10 @@ import {
     where,
     writeBatch,
 } from 'firebase/firestore';
-import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import type { User } from 'firebase/auth';
 import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGenerateBadgeActivationCode, getFirebaseDb, getFirebaseStorage } from '~/lib/firebase';
+import { callGenerateBadgeActivationCode, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
 import { commitInChunks, docToUserRecord, isValidHttpUrl } from './utils';
 import { CreatorPicker } from './CreatorPicker';
@@ -176,9 +175,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             let imageUrl = '/images/mika.png';
             if (createForm.image) {
                 const imageId = crypto.randomUUID();
-                const sRef = storageRef(getFirebaseStorage(), `badges/${imageId}.webp`);
-                await uploadBytes(sRef, createForm.image);
-                imageUrl = await getDownloadURL(sRef);
+                imageUrl = await callUploadAdminImage(createForm.image, `badges/${imageId}.webp`);
             }
 
             const db = getFirebaseDb();
@@ -302,9 +299,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
 
             if (editForm.image) {
                 const imageId = crypto.randomUUID();
-                const sRef = storageRef(getFirebaseStorage(), `badges/${imageId}.webp`);
-                await uploadBytes(sRef, editForm.image);
-                updates.imageUrl = await getDownloadURL(sRef);
+                updates.imageUrl = await callUploadAdminImage(editForm.image, `badges/${imageId}.webp`);
             }
 
             const batch = writeBatch(db);
@@ -569,7 +564,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                        className="admin-creator-link">
                                         {selectedBadgeDef.createdByName}
                                     </a>
-                                ) : selectedBadgeDef.createdByLink ? (
+                                ) : (selectedBadgeDef.createdByLink && isValidHttpUrl(selectedBadgeDef.createdByLink)) ? (
                                     <a href={selectedBadgeDef.createdByLink} target="_blank" rel="noopener noreferrer"
                                        className="admin-creator-link">
                                         {selectedBadgeDef.createdByName}

@@ -93,6 +93,47 @@ export const callGenerateEventCode = (data: {
         getFunctions(), 'generateEventCode'
     )(data);
 
+export const callUploadAdminImage = async (file: File, storagePath: string): Promise<string> => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+    const result = await httpsCallable<
+        {path: string; data: string; contentType: string},
+        {url: string}
+    >(getFunctions(), 'uploadAdminImage')({
+        path: storagePath,
+        data: base64,
+        contentType: file.type,
+    });
+    return result.data.url;
+};
+
+export const callUploadAvatar = async (file: File): Promise<string> => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+    const result = await httpsCallable<
+        {data: string; contentType: string},
+        {url: string}
+    >(getFunctions(), 'uploadAvatar')({
+        data: base64,
+        contentType: file.type,
+    });
+    return result.data.url;
+};
+
 export function getFirebaseStorage() {
     if (!storage) {
         storage = getStorage(getFirebaseApp());

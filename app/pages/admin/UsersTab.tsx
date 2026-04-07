@@ -87,7 +87,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             }
         };
         loadRecentUsers().catch(err => {
-            console.error('Failed to load recent users:', err);
+            void err;
         });
     }, []);
 

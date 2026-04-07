@@ -1,8 +1,9 @@
 import { createContext, type FC, type ReactNode, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { deleteObject, ref } from 'firebase/storage';
 import {
+    callUploadAvatar,
     getFirebaseAuth,
     getFirebaseDb,
     getFirebaseStorage,
@@ -183,9 +184,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
             }
             docUpdates.photoURL = user.photoURL ?? '';
         } else if (updates.photoFile) {
-            const storageRef = ref(getFirebaseStorage(), `avatars/${user.uid}`);
-            await uploadBytes(storageRef, updates.photoFile);
-            docUpdates.photoURL = await getDownloadURL(storageRef);
+            docUpdates.photoURL = await callUploadAvatar(updates.photoFile);
         }
 
         if (updates.badges !== undefined) {
