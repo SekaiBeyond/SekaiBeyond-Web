@@ -366,146 +366,62 @@
     margin-bottom: 24px;
 }
 
+/* Badge circles */
 .badge-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
 }
 
-.badge-card,
-.profile-event-card {
+.badge-circle {
     position: relative;
     display: flex;
-    gap: 14px;
-    padding: 16px;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.85);
-    box-shadow: 0 2px 12px rgba(255, 150, 200, 0.08);
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: default;
     transition: transform 0.2s ease;
 }
 
-.badge-card:hover,
-.profile-event-card:hover {
-    transform: translateY(-2px);
+.badge-circle:hover {
+    transform: translateY(-3px);
 }
 
-.badge-earned,
-.profile-event-earned {
-    border: 2px solid rgba(255, 107, 157, 0.3);
-}
-
-.badge-locked .badge-icon-wrapper,
-.badge-locked .badge-info,
-.profile-event-locked .profile-event-icon-wrapper,
-.profile-event-locked .profile-event-info {
-    opacity: 0.5;
-    filter: grayscale(0.6);
-}
-
-.badge-icon-wrapper,
-.profile-event-icon-wrapper {
+.badge-circle .badge-icon-wrapper {
     position: relative;
     flex-shrink: 0;
 }
 
-.badge-icon,
-.profile-event-icon {
+.badge-circle .badge-icon {
     width: 64px;
     height: 64px;
-    border-radius: 12px;
-    object-fit: cover;
-}
-
-.badge-check,
-.profile-event-check {
-    position: absolute;
-    bottom: -4px;
-    right: -4px;
-    width: 22px;
-    height: 22px;
-    background: var(--color-success);
-    color: white;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    object-fit: cover;
+    background: white;
+    border: 3px solid rgba(255, 107, 157, 0.3);
+    box-shadow: 0 2px 10px rgba(255, 107, 157, 0.15);
+}
+
+
+.badge-label {
     font-size: 12px;
-    font-weight: bold;
-    border: 2px solid white;
-}
-
-.badge-lock,
-.profile-event-lock {
-    position: absolute;
-    bottom: -4px;
-    right: -4px;
-    font-size: 16px;
-}
-
-.badge-info,
-.profile-event-info {
-    min-width: 0;
-}
-
-.badge-category,
-.profile-event-category {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, rgba(255, 107, 157, 0.15), rgba(254, 202, 87, 0.15));
-    color: var(--color-primary);
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-}
-
-.badge-title,
-.profile-event-title {
-    font-size: 14px;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--color-text);
-    margin-bottom: 2px;
-    white-space: nowrap;
+    text-align: center;
+    max-width: 80px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.badge-title-link,
-.profile-event-title-link {
-    color: inherit;
-    text-decoration: none;
-    transition: color 0.2s;
-}
-
-.badge-title-link:hover,
-.profile-event-title-link:hover {
-    color: var(--color-link);
-    text-decoration: underline;
-}
-
-.badge-date,
-.profile-event-date {
-    font-size: 12px;
-    color: var(--color-text-light);
-}
-
-.badge-description {
-    font-size: 12px;
-    color: var(--color-text-light);
-    margin: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
 
 .badge-tooltip {
     display: none;
     position: absolute;
     bottom: calc(100% + 10px);
-    left: 0;
-    right: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 220px;
     background: rgba(30, 35, 50, 0.95);
     color: white;
     padding: 14px 16px;
@@ -529,13 +445,92 @@
     content: '';
     position: absolute;
     top: 100%;
-    left: 24px;
+    left: 50%;
+    transform: translateX(-50%);
     border: 7px solid transparent;
     border-top-color: rgba(30, 35, 50, 0.95);
 }
 
-.badge-card:hover .badge-tooltip {
+.badge-circle:hover .badge-tooltip {
     display: block;
+}
+
+/* Event cards */
+.profile-event-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.profile-event-card {
+    position: relative;
+    display: flex;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 2px 12px rgba(255, 150, 200, 0.08);
+    transition: transform 0.2s ease;
+}
+
+.profile-event-card:hover {
+    transform: translateY(-2px);
+}
+
+
+.profile-event-icon-wrapper {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.profile-event-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    object-fit: cover;
+}
+
+
+.profile-event-info {
+    min-width: 0;
+}
+
+.profile-event-category {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(255, 107, 157, 0.15), rgba(254, 202, 87, 0.15));
+    color: var(--color-primary);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.profile-event-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profile-event-title-link {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.profile-event-title-link:hover {
+    color: var(--color-link);
+    text-decoration: underline;
+}
+
+.profile-event-date {
+    font-size: 12px;
+    color: var(--color-text-light);
 }
 
 .badge-tooltip-name {
@@ -760,6 +755,10 @@
     }
 
     .badge-grid {
+        justify-content: center;
+    }
+
+    .profile-event-grid {
         grid-template-columns: 1fr;
     }
 

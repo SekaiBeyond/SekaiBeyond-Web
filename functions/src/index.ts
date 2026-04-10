@@ -125,10 +125,16 @@ const IMAGE_SIGNATURES: {mime: string; magic: Buffer}[] = [
     {mime: "image/jpeg", magic: Buffer.from([0xFF, 0xD8, 0xFF])},
     {mime: "image/png", magic: Buffer.from([0x89, 0x50, 0x4E, 0x47])},
     {mime: "image/gif", magic: Buffer.from([0x47, 0x49, 0x46, 0x38])},
-    {mime: "image/webp", magic: Buffer.from([0x52, 0x49, 0x46, 0x46])},
 ];
 
 function detectImageMime(buffer: Buffer): string | null {
+    // WebP uses a RIFF container — check bytes 0-3 for "RIFF" and bytes 8-11 for "WEBP"
+    // to avoid false positives from other RIFF formats (WAV, AVI, etc.)
+    if (buffer.length >= 12 &&
+        buffer.subarray(0, 4).equals(Buffer.from([0x52, 0x49, 0x46, 0x46])) &&
+        buffer.subarray(8, 12).equals(Buffer.from([0x57, 0x45, 0x42, 0x50]))) {
+        return "image/webp";
+    }
     const match = IMAGE_SIGNATURES.find(sig => buffer.length >= sig.magic.length &&
         buffer.subarray(0, sig.magic.length).equals(sig.magic));
     return match?.mime ?? null;
@@ -149,6 +155,8 @@ export const deleteAdminImage = onCall({maxInstances: 10}, async (request) => {
     if (!ADMIN_GROUPS.includes(group)) {
         throw new HttpsError("permission-denied", "Insufficient permissions.");
     }
+
+    await checkRateLimit(uid);
 
     const path = (request.data as {path?: string})?.path;
     if (!path) {
@@ -181,6 +189,8 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
     if (!ADMIN_GROUPS.includes(group)) {
         throw new HttpsError("permission-denied", "Insufficient permissions.");
     }
+
+    await checkRateLimit(uid);
 
     const input = request.data as {
         path?: string;
@@ -223,7 +233,7 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
  * Claim an event attendance code.
  * Validates the code server-side and atomically increments usedCount + adds event to user's attendedEvents.
  */
-export const claimEventCode = onCall(async (request) => {
+export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
     }
@@ -283,7 +293,7 @@ export const claimEventCode = onCall(async (request) => {
  * Validates the code server-side and atomically increments usedCount + adds badge to user's badges.
  * Returns badge metadata so the client doesn't need a separate fetch.
  */
-export const claimBadgeActivationCode = onCall(async (request) => {
+export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
     }
@@ -353,7 +363,7 @@ export const claimBadgeActivationCode = onCall(async (request) => {
  * Generate a badge activation code (admin only).
  * Verifies caller is core-staff+, generates a unique code atomically via transaction.
  */
-export const generateBadgeActivationCode = onCall(async (request) => {
+export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
     }
@@ -364,6 +374,8 @@ export const generateBadgeActivationCode = onCall(async (request) => {
     if (!ADMIN_GROUPS.includes(group)) {
         throw new HttpsError("permission-denied", "Insufficient permissions.");
     }
+
+    await checkRateLimit(uid);
 
     const input = request.data as {
         badgeId?: string;
@@ -456,9 +468,8 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("invalid-argument", "Missing data or contentType.");
     }
 
-    const allowedTypes = ["image/webp", "image/jpeg", "image/png", "image/gif"];
-    if (!allowedTypes.includes(contentType)) {
-        throw new HttpsError("invalid-argument", "Only webp, jpeg, png, and gif are allowed.");
+    if (contentType !== "image/webp") {
+        throw new HttpsError("invalid-argument", "Only image/webp is allowed.");
     }
 
     const buffer = Buffer.from(dataBase64, "base64");
@@ -480,7 +491,7 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     return {url: downloadUrl};
 });
 
-export const generateEventCode = onCall(async (request) => {
+export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
     }
@@ -491,6 +502,8 @@ export const generateEventCode = onCall(async (request) => {
     if (!ADMIN_GROUPS.includes(group)) {
         throw new HttpsError("permission-denied", "Insufficient permissions.");
     }
+
+    await checkRateLimit(uid);
 
     const input = request.data as {
         eventId?: string;

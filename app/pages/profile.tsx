@@ -27,28 +27,20 @@ interface ViewedProfile {
     group: UserGroup;
 }
 
-const BadgeCard = ({badge, earned, earnedDate, isEnglish}: {
+const BadgeCard = ({badge, earnedDate, isEnglish}: {
     badge: BadgeDef;
-    earned: boolean;
     earnedDate?: Date;
     isEnglish: boolean;
 }) => (
-    <div className={`badge-card ${earned ? 'badge-earned' : 'badge-locked'}`}>
+    <div className="badge-circle">
         <div className="badge-icon-wrapper">
             <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn} className="badge-icon"/>
-            {earned && <span className="badge-check">&#10003;</span>}
-            {!earned && <span className="badge-lock">&#128274;</span>}
         </div>
-        <div className="badge-info">
-            <h3 className="badge-title">{isEnglish ? badge.name : badge.nameCn}</h3>
-            <p className="badge-description">
-                {isEnglish ? badge.description : badge.descriptionCn}
-            </p>
-        </div>
+        <span className="badge-label">{isEnglish ? badge.name : badge.nameCn}</span>
         <div className="badge-tooltip">
             <h4 className="badge-tooltip-name">{isEnglish ? badge.name : badge.nameCn}</h4>
             <p className="badge-tooltip-desc">{isEnglish ? badge.description : badge.descriptionCn}</p>
-            {earned && earnedDate && (
+            {earnedDate && (
                 <p className="badge-tooltip-date">
                     {isEnglish ? 'Earned: ' : '获得于：'}
                     {earnedDate.toLocaleDateString(
@@ -86,18 +78,15 @@ const BadgeCard = ({badge, earned, earnedDate, isEnglish}: {
     </div>
 );
 
-const EventCard = ({event, attended, isEnglish, showAdminLink, tagLabel}: {
+const EventCard = ({event, isEnglish, showAdminLink, tagLabel}: {
     event: PastEvent;
-    attended: boolean;
     isEnglish: boolean;
     showAdminLink?: boolean;
     tagLabel?: string;
 }) => (
-    <div className={`profile-event-card ${attended ? 'profile-event-earned' : 'profile-event-locked'}`}>
+    <div className="profile-event-card">
         <div className="profile-event-icon-wrapper">
             <img src={event.icon} alt={isEnglish ? event.title : event.titleCn} className="profile-event-icon"/>
-            {attended && <span className="profile-event-check">&#10003;</span>}
-            {!attended && <span className="profile-event-lock">&#128274;</span>}
         </div>
         <div className="profile-event-info">
             <span className="profile-event-category">{tagLabel ?? ''}</span>
@@ -386,7 +375,8 @@ export const ProfilePage = () => {
             group: viewedProfile!.group
         };
     const attendedSet = new Set(dp.attendedEvents);
-    const attendedCount = pastEvents.filter(e => attendedSet.has(e.id)).length;
+    const attendedEvents = pastEvents.filter(e => attendedSet.has(e.id));
+    const earnedBadges = badgeDefs.filter(b => dp.badges.includes(b.id));
     const canEdit = isOwnProfile && profile!.group !== 'visitor';
     const isStaff = isOwnProfile && hasPermission(profile!.group, 'staff');
 
@@ -447,7 +437,7 @@ export const ProfilePage = () => {
                                 <input
                                     ref={fileInputRef}
                                     type="file"
-                                    accept="image/*"
+                                    accept="image/webp"
                                     onChange={handlePhotoSelect}
                                     hidden
                                 />
@@ -500,38 +490,28 @@ export const ProfilePage = () => {
                 </div>
 
                 <div className="profile-stats">
-                    {badgeDefs.length > 0 && (
+                    {earnedBadges.length > 0 && (
                         <div className="profile-stat">
-                            <span className="profile-stat-number">
-                                {badgeDefs.filter(b => dp.badges.includes(b.id)).length}
-                            </span>
+                            <span className="profile-stat-number">{earnedBadges.length}</span>
                             <span className="profile-stat-label">{isEnglish ? 'Badges' : '徽章'}</span>
                         </div>
                     )}
                     <div className="profile-stat">
-                        <span className="profile-stat-number">{attendedCount}/{pastEvents.length}</span>
+                        <span className="profile-stat-number">{attendedEvents.length}</span>
                         <span className="profile-stat-label">{isEnglish ? 'Events Attended' : '参与活动'}</span>
                     </div>
                 </div>
 
-                {badgeDefs.length > 0 && (
+                {earnedBadges.length > 0 && (
                     <section className="badge-section">
                         <h2 className="badge-section-title">
                             {isEnglish ? 'Badges' : '徽章'}
                         </h2>
-                        {isOwnProfile && (
-                            <p className="badge-section-subtitle">
-                                {isEnglish
-                                    ? 'Earn badges through challenges and special events!'
-                                    : '通过挑战和特别活动赢取徽章！'}
-                            </p>
-                        )}
                         <div className="badge-grid">
-                            {badgeDefs.map(badge => (
+                            {earnedBadges.map(badge => (
                                 <BadgeCard
                                     key={badge.id}
                                     badge={badge}
-                                    earned={dp.badges.includes(badge.id)}
                                     earnedDate={earnedDates[badge.id]}
                                     isEnglish={isEnglish}
                                 />
@@ -540,33 +520,27 @@ export const ProfilePage = () => {
                     </section>
                 )}
 
-                <section className="badge-section">
-                    <h2 className="badge-section-title">
-                        {isEnglish ? 'Events Attended' : '参与活动'}
-                    </h2>
-                    {isOwnProfile && (
-                        <p className="badge-section-subtitle">
-                            {isEnglish
-                                ? 'Attend events and scan QR codes to check in'
-                                : '参加活动并扫码签到'}
-                        </p>
-                    )}
-                    <div className="badge-grid">
-                        {pastEvents.map(event => (
-                            <EventCard
-                                key={event.id}
-                                event={event}
-                                attended={attendedSet.has(event.id)}
-                                isEnglish={isEnglish}
-                                showAdminLink={isStaff}
-                                tagLabel={(() => {
-                                    const tag = tags.find(t => t.id === event.tagId);
-                                    return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
-                                })()}
-                            />
-                        ))}
-                    </div>
-                </section>
+                {attendedEvents.length > 0 && (
+                    <section className="badge-section">
+                        <h2 className="badge-section-title">
+                            {isEnglish ? 'Events Attended' : '参与活动'}
+                        </h2>
+                        <div className="profile-event-grid">
+                            {attendedEvents.map(event => (
+                                <EventCard
+                                    key={event.id}
+                                    event={event}
+                                    isEnglish={isEnglish}
+                                    showAdminLink={isStaff}
+                                    tagLabel={(() => {
+                                        const tag = tags.find(t => t.id === event.tagId);
+                                        return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
+                                    })()}
+                                />
+                            ))}
+                        </div>
+                    </section>
+                )}
             </div>
         </>
     );
