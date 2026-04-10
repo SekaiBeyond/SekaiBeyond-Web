@@ -3,7 +3,7 @@ import { arrayRemove, collection, doc, getDocs, query, serverTimestamp, where, w
 import type { User } from 'firebase/auth';
 import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGenerateEventCode, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
+import { callDeleteAdminImage, callGenerateEventCode, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Tag } from '~/lib/tags';
@@ -101,7 +101,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
 
     const loadEventCode = async (eventId: string) => {
         const db = getFirebaseDb();
-        const codesRef = collection(db, 'badgeCodes');
+        const codesRef = collection(db, 'claimCodes');
         const q = query(codesRef, where('eventId', '==', eventId));
         const snapshot = await getDocs(q);
 
@@ -159,7 +159,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             const db = getFirebaseDb();
             const evt = managedEvent ? pastEvents.find(e => e.id === managedEvent) : null;
             const batch = writeBatch(db);
-            batch.update(doc(db, 'badgeCodes', eventCode.id), {active: newActive});
+            batch.update(doc(db, 'claimCodes', eventCode.id), {active: newActive});
             batch.set(doc(collection(db, 'records')), {
                 type: newActive ? 'event-code-activate' : 'event-code-deactivate',
                 performedBy: user.uid,
@@ -184,7 +184,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             const db = getFirebaseDb();
             const evt = managedEvent ? pastEvents.find(e => e.id === managedEvent) : null;
             const batch = writeBatch(db);
-            batch.update(doc(db, 'badgeCodes', eventCode.id), {activeFrom, activeUntil});
+            batch.update(doc(db, 'claimCodes', eventCode.id), {activeFrom, activeUntil});
             batch.set(doc(collection(db, 'records')), {
                 type: 'event-code-time-window' as const,
                 performedBy: user.uid,
@@ -272,7 +272,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
 
             // Find orphaned codes and attendees to clean up
             const [codesSnap, attendeesSnap] = await Promise.all([
-                getDocs(query(collection(db, 'badgeCodes'), where('eventId', '==', event.id))),
+                getDocs(query(collection(db, 'claimCodes'), where('eventId', '==', event.id))),
                 getDocs(query(collection(db, 'users'), where('attendedEvents', 'array-contains', event.id))),
             ]);
 
@@ -290,6 +290,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 ...attendeesSnap.docs.map(userDoc => (b: ReturnType<typeof writeBatch>) => b.update(userDoc.ref, {attendedEvents: arrayRemove(event.id)})),
             ];
             await commitInChunks(db, ops);
+            await callDeleteAdminImage(event.icon).catch(() => {
+            });
 
             await refreshEvents();
             if (managedEvent === event.id) setManagedEvent(null);

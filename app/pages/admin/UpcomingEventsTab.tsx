@@ -3,7 +3,7 @@ import { collection, doc, serverTimestamp, Timestamp, writeBatch, } from 'fireba
 import type { User } from 'firebase/auth';
 import type { UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
+import { callDeleteAdminImage, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { BilingualFormField } from './BilingualFormField';
@@ -205,6 +205,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 timestamp: serverTimestamp(),
             });
             await batch.commit();
+            await callDeleteAdminImage(event.poster).catch(() => {
+            });
 
             await refreshEvents();
             if (selectedEvent === event.id) setSelectedEvent(null);

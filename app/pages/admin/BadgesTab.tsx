@@ -18,7 +18,12 @@ import {
 import type { User } from 'firebase/auth';
 import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGenerateBadgeActivationCode, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
+import {
+    callDeleteAdminImage,
+    callGenerateBadgeActivationCode,
+    callUploadAdminImage,
+    getFirebaseDb
+} from '~/lib/firebase';
 import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
 import { commitInChunks, docToUserRecord, isValidHttpUrl } from './utils';
 import { CreatorPicker } from './CreatorPicker';
@@ -264,6 +269,8 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 ...holdersSnap.docs.map(userDoc => (b: ReturnType<typeof writeBatch>) => b.update(userDoc.ref, {badges: arrayRemove(bd.id)})),
             ];
             await commitInChunks(db, ops);
+            await callDeleteAdminImage(bd.imageUrl).catch(() => {
+            });
 
             setBadgeDefs(prev => prev.filter(d => d.id !== bd.id));
             setSelectedBadgeDef(null);

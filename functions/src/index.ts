@@ -10,19 +10,29 @@ const db = getFirestore();
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
-const rateLimitMap = new Map<string, {count: number; windowStart: number}>();
 
-function checkRateLimit(uid: string): void {
+async function checkRateLimit(uid: string): Promise<void> {
+    const ref = db.collection("rateLimits").doc(uid);
     const now = Date.now();
-    const entry = rateLimitMap.get(uid);
-    if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
-        rateLimitMap.set(uid, {count: 1, windowStart: now});
-        return;
-    }
-    entry.count++;
-    if (entry.count > RATE_LIMIT_MAX) {
-        throw new HttpsError("resource-exhausted", "rate-limited");
-    }
+    // expiresAt is used by Firestore TTL policy to auto-delete stale documents.
+    // Configure TTL on the "expiresAt" field in the Firebase console.
+    const expiresAt = new Date(now + RATE_LIMIT_WINDOW_MS * 2);
+
+    await db.runTransaction(async (txn) => {
+        const snap = await txn.get(ref);
+        const data = snap.data() as {count: number; windowStart: number} | undefined;
+
+        if (!data || now - data.windowStart > RATE_LIMIT_WINDOW_MS) {
+            txn.set(ref, {count: 1, windowStart: now, expiresAt});
+            return;
+        }
+
+        if (data.count >= RATE_LIMIT_MAX) {
+            throw new HttpsError("resource-exhausted", "rate-limited");
+        }
+
+        txn.update(ref, {count: FieldValue.increment(1)});
+    });
 }
 
 const ADMIN_GROUPS = ["core-staff", "president"];
@@ -71,8 +81,45 @@ function validateCodeInTransaction(data: {
     }
 }
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+
+function validateISODate(value: unknown, name: string): string | null {
+    if (value === undefined || value === null || value === "") return null;
+    if (typeof value !== "string" || !ISO_DATE_RE.test(value) || isNaN(Date.parse(value))) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must be an ISO 8601 date string.`);
+    }
+    return value;
+}
+
+function validateMaxUses(value: unknown): number {
+    if (value === undefined || value === null) return 0;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+        throw new HttpsError("invalid-argument", "Invalid maxUses: must be a non-negative integer.");
+    }
+    return value;
+}
+
+function validateDocId(value: unknown, name: string): string {
+    if (typeof value !== "string" || value.length === 0 || value.length > 128) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
+    }
+    if (/[\/\0]/.test(value)) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: illegal characters.`);
+    }
+    return value;
+}
+
 const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "badges/"];
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
+
+function validateStoragePath(path: string): void {
+    if (path.includes("..") || path.includes("\0") || path.includes("//")) {
+        throw new HttpsError("invalid-argument", "Invalid path characters.");
+    }
+    if (!ALLOWED_UPLOAD_PREFIXES.some(prefix => path.startsWith(prefix))) {
+        throw new HttpsError("invalid-argument", "Invalid path.");
+    }
+}
 
 const IMAGE_SIGNATURES: {mime: string; magic: Buffer}[] = [
     {mime: "image/jpeg", magic: Buffer.from([0xFF, 0xD8, 0xFF])},
@@ -81,10 +128,43 @@ const IMAGE_SIGNATURES: {mime: string; magic: Buffer}[] = [
     {mime: "image/webp", magic: Buffer.from([0x52, 0x49, 0x46, 0x46])},
 ];
 
-function isValidImage(buffer: Buffer): boolean {
-    return IMAGE_SIGNATURES.some(sig => buffer.length >= sig.magic.length &&
+function detectImageMime(buffer: Buffer): string | null {
+    const match = IMAGE_SIGNATURES.find(sig => buffer.length >= sig.magic.length &&
         buffer.subarray(0, sig.magic.length).equals(sig.magic));
+    return match?.mime ?? null;
 }
+
+/**
+ * Delete an image from Firebase Storage (admin only).
+ * Verifies caller is core-staff+ before deleting. Client sends the storage path.
+ */
+export const deleteAdminImage = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+
+    const uid = request.auth.uid;
+    const userSnap = await db.collection("users").doc(uid).get();
+    const group = userSnap.data()?.group;
+    if (!ADMIN_GROUPS.includes(group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+
+    const path = (request.data as {path?: string})?.path;
+    if (!path) {
+        throw new HttpsError("invalid-argument", "Missing path.");
+    }
+    validateStoragePath(path);
+
+    const bucket = getStorage().bucket();
+    const file = bucket.file(path);
+    const [exists] = await file.exists();
+    if (exists) {
+        await file.delete();
+    }
+
+    return {deleted: exists};
+});
 
 /**
  * Upload an image to Firebase Storage (admin only).
@@ -115,10 +195,7 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
     if (!path || !dataBase64 || !contentType) {
         throw new HttpsError("invalid-argument", "Missing path, data, or contentType.");
     }
-
-    if (!ALLOWED_UPLOAD_PREFIXES.some(prefix => path.startsWith(prefix))) {
-        throw new HttpsError("invalid-argument", "Invalid upload path.");
-    }
+    validateStoragePath(path);
 
     if (contentType !== "image/webp") {
         throw new HttpsError("invalid-argument", "Only image/webp is allowed.");
@@ -129,8 +206,9 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("invalid-argument", "Image exceeds 5MB limit.");
     }
 
-    if (!isValidImage(buffer)) {
-        throw new HttpsError("invalid-argument", "File is not a valid image.");
+    const detectedMime = detectImageMime(buffer);
+    if (!detectedMime || detectedMime !== contentType) {
+        throw new HttpsError("invalid-argument", "File content does not match claimed content type.");
     }
 
     const bucket = getStorage().bucket();
@@ -159,9 +237,9 @@ export const claimEventCode = onCall(async (request) => {
     }
 
     const uid = request.auth.uid;
-    checkRateLimit(uid);
+    await checkRateLimit(uid);
 
-    const codesRef = db.collection("badgeCodes");
+    const codesRef = db.collection("claimCodes");
     const snapshot = await codesRef
         .where("code", "==", code)
         .where("active", "==", true)
@@ -219,7 +297,7 @@ export const claimBadgeActivationCode = onCall(async (request) => {
     }
 
     const uid = request.auth.uid;
-    checkRateLimit(uid);
+    await checkRateLimit(uid);
 
     const codesRef = db.collection("badgeActivationCodes");
     const snapshot = await codesRef
@@ -293,19 +371,15 @@ export const generateBadgeActivationCode = onCall(async (request) => {
         activeFrom?: string;
         activeUntil?: string;
     };
-    const badgeId = input.badgeId;
-    if (!badgeId) {
-        throw new HttpsError("invalid-argument", "Missing badgeId.");
-    }
+    const badgeId = validateDocId(input.badgeId, "badgeId");
+    const maxUses = validateMaxUses(input.maxUses);
+    const activeFrom = validateISODate(input.activeFrom, "activeFrom");
+    const activeUntil = validateISODate(input.activeUntil, "activeUntil");
 
     const badgeSnap = await db.collection("badges").doc(badgeId).get();
     if (!badgeSnap.exists) {
         throw new HttpsError("not-found", "Badge not found.");
     }
-
-    const maxUses = input.maxUses ?? 0;
-    const activeFrom = input.activeFrom ?? null;
-    const activeUntil = input.activeUntil ?? null;
 
     let code = "";
 
@@ -392,8 +466,9 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("invalid-argument", "Image exceeds 5MB limit.");
     }
 
-    if (!isValidImage(buffer)) {
-        throw new HttpsError("invalid-argument", "File is not a valid image.");
+    const detectedMime = detectImageMime(buffer);
+    if (!detectedMime || detectedMime !== contentType) {
+        throw new HttpsError("invalid-argument", "File content does not match claimed content type.");
     }
 
     const bucket = getStorage().bucket();
@@ -422,31 +497,27 @@ export const generateEventCode = onCall(async (request) => {
         activeFrom?: string;
         activeUntil?: string;
     };
-    const eventId = input.eventId;
-    if (!eventId) {
-        throw new HttpsError("invalid-argument", "Missing eventId.");
-    }
+    const eventId = validateDocId(input.eventId, "eventId");
+    const activeFrom = validateISODate(input.activeFrom, "activeFrom");
+    const activeUntil = validateISODate(input.activeUntil, "activeUntil");
 
     const eventSnap = await db.collection("pastEvents").doc(eventId).get();
     if (!eventSnap.exists) {
         throw new HttpsError("not-found", "Event not found.");
     }
 
-    const activeFrom = input.activeFrom ?? null;
-    const activeUntil = input.activeUntil ?? null;
-
     let code = "";
 
     for (let attempt = 0; attempt < 5; attempt++) {
         code = generateSecureCode(12);
-        const codeRef = db.collection("badgeCodes").doc(code);
+        const codeRef = db.collection("claimCodes").doc(code);
 
         try {
             await db.runTransaction(async (txn) => {
                 const [existing, existingCodes] = await Promise.all([
                     txn.get(codeRef),
                     txn.get(
-                        db.collection("badgeCodes")
+                        db.collection("claimCodes")
                             .where("eventId", "==", eventId)
                             .where("active", "==", true)
                     ),

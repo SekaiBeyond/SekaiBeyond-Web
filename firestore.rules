@@ -44,22 +44,30 @@ service cloud.firestore {
       // Badge and event claims are handled server-side via Cloud Functions.
       // Users cannot directly modify badges or attendedEvents on their own profile.
 
-      // Core-staff can toggle attendedEvents on any user
+      // Core-staff can toggle attendedEvents on users below their level; president on anyone
       allow update: if request.auth != null
                     && isCoreStaffOrAbove()
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendedEvents']);
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendedEvents'])
+                    && (isPresident() || resource.data.group in ['visitor', 'member', 'staff']);
 
-      // Core-staff can grant or revoke badges on any user
+      // Core-staff can grant or revoke badges on users below their level; president on anyone
       allow update: if request.auth != null
                     && isCoreStaffOrAbove()
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['badges']);
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['badges'])
+                    && (isPresident() || resource.data.group in ['visitor', 'member', 'staff']);
 
-      // Core-staff can update group; only president can assign 'president'
+      // Group changes: no one can change their own group
+      // Core-staff can only manage users below their level and assign up to 'staff'
+      // Only president can manage core-staff/president users or assign those groups
       allow update: if request.auth != null
+                    && request.auth.uid != userId
                     && isCoreStaffOrAbove()
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['group'])
                     && request.resource.data.group in ['visitor', 'member', 'staff', 'core-staff', 'president']
-                    && (isPresident() || request.resource.data.group != 'president');
+                    && (isPresident() || (
+                        resource.data.group in ['visitor', 'member', 'staff']
+                        && request.resource.data.group in ['visitor', 'member', 'staff']
+                    ));
     }
 
     // Activity records — core-staff+ can read, create only (no edit/delete), must be own uid
@@ -69,11 +77,36 @@ service cloud.firestore {
       allow create: if request.auth != null
                     && isCoreStaffOrAbove()
                     && request.resource.data.performedBy == request.auth.uid
-                    && request.resource.data.keys().hasOnly(['type', 'performedBy', 'performedByName', 'timestamp', 'eventTitle', 'eventId', 'badgeId', 'badgeName', 'code', 'tagName', 'targetUid', 'targetName', 'oldGroup', 'newGroup']);
+                    && request.resource.data.keys().hasOnly(['type', 'performedBy', 'performedByName', 'timestamp', 'eventTitle', 'eventId', 'badgeId', 'badgeName', 'code', 'tagName', 'targetUid', 'targetName', 'oldGroup', 'newGroup'])
+                    && request.resource.data.type is string
+                    && request.resource.data.type in [
+                        'code-create', 'code-delete',
+                        'event-create', 'event-edit', 'event-delete',
+                        'event-attend', 'event-unattend',
+                        'event-code-activate', 'event-code-deactivate', 'event-code-time-window',
+                        'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete', 'upcoming-event-archive',
+                        'badge-create', 'badge-edit', 'badge-delete',
+                        'achievement-grant', 'achievement-revoke',
+                        'group-assign',
+                        'tag-create', 'tag-edit', 'tag-delete'
+                    ]
+                    && request.resource.data.performedByName is string
+                    && request.resource.data.performedByName.size() <= 100
+                    && request.resource.data.timestamp is timestamp
+                    && (!('eventTitle' in request.resource.data) || (request.resource.data.eventTitle is string && request.resource.data.eventTitle.size() <= 200))
+                    && (!('eventId' in request.resource.data) || request.resource.data.eventId is string)
+                    && (!('badgeId' in request.resource.data) || request.resource.data.badgeId is string)
+                    && (!('badgeName' in request.resource.data) || (request.resource.data.badgeName is string && request.resource.data.badgeName.size() <= 200))
+                    && (!('code' in request.resource.data) || request.resource.data.code is string)
+                    && (!('tagName' in request.resource.data) || (request.resource.data.tagName is string && request.resource.data.tagName.size() <= 100))
+                    && (!('targetUid' in request.resource.data) || request.resource.data.targetUid is string)
+                    && (!('targetName' in request.resource.data) || (request.resource.data.targetName is string && request.resource.data.targetName.size() <= 100))
+                    && (!('oldGroup' in request.resource.data) || request.resource.data.oldGroup is string)
+                    && (!('newGroup' in request.resource.data) || request.resource.data.newGroup is string);
     }
 
-    // Badge claim codes — generated by admins, claimed via Cloud Function
-    match /badgeCodes/{codeId} {
+    // Event/badge claim codes — generated by admins, claimed via Cloud Function
+    match /claimCodes/{codeId} {
       // Only core-staff+ can read; claims go through Cloud Function (admin SDK bypasses rules)
       allow read: if request.auth != null
                   && isCoreStaffOrAbove();
@@ -82,7 +115,10 @@ service cloud.firestore {
       allow update: if request.auth != null
                     && isCoreStaffOrAbove()
                     && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['active', 'activeFrom', 'activeUntil']);
+                        .hasOnly(['active', 'activeFrom', 'activeUntil'])
+                    && request.resource.data.active is bool
+                    && (!('activeFrom' in request.resource.data) || request.resource.data.activeFrom is string)
+                    && (!('activeUntil' in request.resource.data) || request.resource.data.activeUntil is string);
 
       // Core-staff can delete codes (e.g. event cleanup)
       allow delete: if request.auth != null
@@ -93,16 +129,39 @@ service cloud.firestore {
 
     // Achievement badge definitions — created by admins, readable by any logged-in user
     match /badges/{badgeId} {
+      function isValidBadgeStrings() {
+        let d = request.resource.data;
+        return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+            && d.nameCn is string && d.nameCn.size() <= 200
+            && d.description is string && d.description.size() <= 2000
+            && d.descriptionCn is string && d.descriptionCn.size() <= 2000
+            && d.imageUrl is string && d.imageUrl.size() <= 500;
+      }
+
       allow read: if request.auth != null;
 
       allow create: if request.auth != null
                     && isCoreStaffOrAbove()
-                    && request.resource.data.keys().hasOnly(['name', 'nameCn', 'description', 'descriptionCn', 'imageUrl', 'createdBy', 'createdByUid', 'createdByName', 'createdByLink', 'createdAt']);
+                    && request.resource.data.keys().hasOnly(['name', 'nameCn', 'description', 'descriptionCn', 'imageUrl', 'createdBy', 'createdByUid', 'createdByName', 'createdByLink', 'createdAt'])
+                    && isValidBadgeStrings()
+                    && request.resource.data.createdBy is string
+                    && request.resource.data.createdByUid is string
+                    && request.resource.data.createdByName is string
+                    && request.resource.data.createdByName.size() <= 100
+                    && request.resource.data.createdByLink is string
+                    && request.resource.data.createdByLink.size() <= 500
+                    && request.resource.data.createdAt is timestamp;
 
       allow update: if request.auth != null
                     && isCoreStaffOrAbove()
                     && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['name', 'nameCn', 'description', 'descriptionCn', 'imageUrl', 'createdByUid', 'createdByName', 'createdByLink']);
+                        .hasOnly(['name', 'nameCn', 'description', 'descriptionCn', 'imageUrl', 'createdByUid', 'createdByName', 'createdByLink'])
+                    && isValidBadgeStrings()
+                    && request.resource.data.createdByUid is string
+                    && request.resource.data.createdByName is string
+                    && request.resource.data.createdByName.size() <= 100
+                    && request.resource.data.createdByLink is string
+                    && request.resource.data.createdByLink.size() <= 500;
 
       allow delete: if request.auth != null
                     && isCoreStaffOrAbove();
@@ -118,7 +177,10 @@ service cloud.firestore {
       allow update: if request.auth != null
                     && isCoreStaffOrAbove()
                     && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['active', 'activeFrom', 'activeUntil']);
+                        .hasOnly(['active', 'activeFrom', 'activeUntil'])
+                    && request.resource.data.active is bool
+                    && (!('activeFrom' in request.resource.data) || request.resource.data.activeFrom is string)
+                    && (!('activeUntil' in request.resource.data) || request.resource.data.activeUntil is string);
 
       // Core-staff can delete codes
       allow delete: if request.auth != null
@@ -133,12 +195,22 @@ service cloud.firestore {
 
       allow create: if request.auth != null
                     && isCoreStaffOrAbove()
-                    && request.resource.data.keys().hasOnly(['name', 'nameCn']);
+                    && request.resource.data.keys().hasOnly(['name', 'nameCn'])
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 100
+                    && request.resource.data.nameCn is string
+                    && request.resource.data.nameCn.size() <= 100;
 
       allow update: if request.auth != null
                     && isCoreStaffOrAbove()
                     && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['name', 'nameCn']);
+                        .hasOnly(['name', 'nameCn'])
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 100
+                    && request.resource.data.nameCn is string
+                    && request.resource.data.nameCn.size() <= 100;
 
       allow delete: if request.auth != null
                     && isCoreStaffOrAbove();
@@ -146,33 +218,73 @@ service cloud.firestore {
 
     // Past events — publicly readable (used on landing page), core-staff+ can manage
     match /pastEvents/{eventId} {
+      function isValidPastEventFields() {
+        let d = request.resource.data;
+        return d.title is string && d.title.size() > 0 && d.title.size() <= 200
+            && d.titleCn is string && d.titleCn.size() <= 200
+            && d.date is string && d.date.size() <= 50
+            && d.location is string && d.location.size() <= 200
+            && d.description is string && d.description.size() <= 2000
+            && d.descriptionCn is string && d.descriptionCn.size() <= 2000
+            && d.icon is string && d.icon.size() <= 500
+            && d.tagId is string;
+      }
+
       allow read: if true;
 
       allow create: if request.auth != null
                     && isCoreStaffOrAbove()
-                    && request.resource.data.keys().hasOnly(['title', 'titleCn', 'date', 'location', 'description', 'descriptionCn', 'icon', 'tagId']);
+                    && request.resource.data.keys().hasOnly(['title', 'titleCn', 'date', 'location', 'description', 'descriptionCn', 'icon', 'tagId'])
+                    && isValidPastEventFields();
 
       allow update: if request.auth != null
                     && isCoreStaffOrAbove()
                     && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['title', 'titleCn', 'date', 'location', 'description', 'descriptionCn', 'icon', 'tagId']);
+                        .hasOnly(['title', 'titleCn', 'date', 'location', 'description', 'descriptionCn', 'icon', 'tagId'])
+                    && isValidPastEventFields();
 
       allow delete: if request.auth != null
                     && isCoreStaffOrAbove();
     }
 
+    // Rate-limit counters — server-only, no client access
+    match /rateLimits/{uid} {
+      allow read, write: if false;
+    }
+
     // Upcoming events — publicly readable (used on landing page), core-staff+ can manage
     match /upcomingEvents/{eventId} {
+      function isValidUpcomingEventFields() {
+        let d = request.resource.data;
+        return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+            && d.nameCn is string && d.nameCn.size() <= 200
+            && d.description is string && d.description.size() <= 2000
+            && d.descriptionCn is string && d.descriptionCn.size() <= 2000
+            && d.location is string && d.location.size() <= 200
+            && d.locationCn is string && d.locationCn.size() <= 200
+            && d.startAt is timestamp
+            && d.endAt is timestamp
+            && d.poster is string && d.poster.size() <= 500
+            && d.posterCredit is string && d.posterCredit.size() <= 200
+            && d.buyTicket is string && d.buyTicket.size() <= 500
+            && d.learnMore is string && d.learnMore.size() <= 500
+            && d.customButtonText is string && d.customButtonText.size() <= 100
+            && d.customButtonTextCn is string && d.customButtonTextCn.size() <= 100
+            && d.customButtonLink is string && d.customButtonLink.size() <= 500;
+      }
+
       allow read: if true;
 
       allow create: if request.auth != null
                     && isCoreStaffOrAbove()
-                    && request.resource.data.keys().hasOnly(['name', 'nameCn', 'description', 'descriptionCn', 'location', 'locationCn', 'startAt', 'endAt', 'poster', 'posterCredit', 'buyTicket', 'learnMore', 'customButtonText', 'customButtonTextCn', 'customButtonLink']);
+                    && request.resource.data.keys().hasOnly(['name', 'nameCn', 'description', 'descriptionCn', 'location', 'locationCn', 'startAt', 'endAt', 'poster', 'posterCredit', 'buyTicket', 'learnMore', 'customButtonText', 'customButtonTextCn', 'customButtonLink'])
+                    && isValidUpcomingEventFields();
 
       allow update: if request.auth != null
                     && isCoreStaffOrAbove()
                     && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['name', 'nameCn', 'description', 'descriptionCn', 'location', 'locationCn', 'startAt', 'endAt', 'poster', 'posterCredit', 'buyTicket', 'learnMore', 'customButtonText', 'customButtonTextCn', 'customButtonLink']);
+                        .hasOnly(['name', 'nameCn', 'description', 'descriptionCn', 'location', 'locationCn', 'startAt', 'endAt', 'poster', 'posterCredit', 'buyTicket', 'learnMore', 'customButtonText', 'customButtonTextCn', 'customButtonLink'])
+                    && isValidUpcomingEventFields();
 
       allow delete: if request.auth != null
                     && isCoreStaffOrAbove();

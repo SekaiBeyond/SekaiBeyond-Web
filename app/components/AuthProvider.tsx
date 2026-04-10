@@ -36,11 +36,19 @@ export function hasPermission(userGroup: UserGroup, requiredGroup: UserGroup): b
 }
 
 export function canAssignGroup(assignerGroup: UserGroup, targetGroup: UserGroup): boolean {
-    return GROUP_LEVEL[assignerGroup] >= GROUP_LEVEL[targetGroup];
+    if (assignerGroup === 'president') return true;
+    if (assignerGroup === 'core-staff') return GROUP_LEVEL[targetGroup] <= GROUP_LEVEL['staff'];
+    return false;
+}
+
+export function canManageUser(assignerGroup: UserGroup, userCurrentGroup: UserGroup): boolean {
+    if (assignerGroup === 'president') return true;
+    if (assignerGroup === 'core-staff') return GROUP_LEVEL[userCurrentGroup] < GROUP_LEVEL['core-staff'];
+    return false;
 }
 
 export function getAssignableGroups(assignerGroup: UserGroup): UserGroup[] {
-    return USER_GROUPS.filter(g => GROUP_LEVEL[assignerGroup] >= GROUP_LEVEL[g]);
+    return USER_GROUPS.filter(g => canAssignGroup(assignerGroup, g));
 }
 
 export interface UserProfile {

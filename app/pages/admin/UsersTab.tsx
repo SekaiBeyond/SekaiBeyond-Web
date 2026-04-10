@@ -17,8 +17,9 @@ import {
 import type { User } from 'firebase/auth';
 import {
     canAssignGroup,
-    getAssignableGroups,
+    canManageUser,
     GROUP_LABELS,
+    USER_GROUPS,
     type UserGroup,
     type UserProfile,
 } from '~/components/AuthProvider';
@@ -204,8 +205,25 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         }
     };
 
+    const getGroupDisabledReason = (userRecord: UserRecord, targetGroup: UserGroup): string | null => {
+        if (userRecord.group === targetGroup) return null;
+        if (userRecord.uid === user.uid) {
+            return isEnglish ? 'You cannot change your own group' : '你不能更改自己的用户组';
+        }
+        if (!canManageUser(profile.group, userRecord.group)) {
+            return isEnglish
+                ? 'You cannot change the group of a user at or above your level'
+                : '你不能更改同级或更高级别用户的用户组';
+        }
+        if (!canAssignGroup(profile.group, targetGroup)) {
+            return isEnglish
+                ? 'Only the president can assign this group'
+                : '只有社长可以分配此用户组';
+        }
+        return null;
+    };
+
     const changeUserGroup = async (userRecord: UserRecord, newGroup: UserGroup) => {
-        if (!canAssignGroup(profile.group, newGroup)) return;
         const oldLabel = isEnglish ? GROUP_LABELS[userRecord.group].en : GROUP_LABELS[userRecord.group].zh;
         const newLabel = isEnglish ? GROUP_LABELS[newGroup].en : GROUP_LABELS[newGroup].zh;
         if (!confirm(isEnglish
@@ -235,13 +253,16 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
         } catch {
-            showToast(isEnglish ? 'Failed to update group.' : '更新用户组失败。', 'error');
+            showToast(
+                isEnglish
+                    ? 'Failed to update group. You may not have permission for this action.'
+                    : '更新用户组失败。你可能没有权限执行此操作。',
+                'error',
+            );
         } finally {
             setUpdating(false);
         }
     };
-
-    const assignableGroups = getAssignableGroups(profile.group);
 
     return (
         <div className="admin-section">
@@ -319,131 +340,144 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 </div>
             )}
 
-            {selectedUser && (
-                <div className="admin-user-detail">
-                    <button className="admin-back-btn" onClick={() => setSelectedUser(null)}>
-                        &larr; {isEnglish ? 'Back to results' : '返回结果'}
-                    </button>
+            {selectedUser && (() => {
+                const canManage = canManageUser(profile.group, selectedUser.group);
+                const manageTooltip = !canManage
+                    ? (isEnglish ? 'You cannot manage a user at or above your level' : '你不能管理同级或更高级别的用户')
+                    : undefined;
+                return (
+                    <div className="admin-user-detail">
+                        <button className="admin-back-btn" onClick={() => setSelectedUser(null)}>
+                            &larr; {isEnglish ? 'Back to results' : '返回结果'}
+                        </button>
 
-                    <div className="admin-detail-header">
-                        <img src={selectedUser.photoURL} alt="" className="admin-detail-avatar"
-                             referrerPolicy="no-referrer"/>
-                        <div>
-                            <h3>{selectedUser.displayName}</h3>
-                            <p>{selectedUser.email}</p>
-                            <p className="admin-detail-joined">
-                                {isEnglish ? 'Joined: ' : '加入时间：'}
-                                {selectedUser.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                                    year: 'numeric', month: 'long', day: 'numeric',
-                                })}
-                            </p>
+                        <div className="admin-detail-header">
+                            <img src={selectedUser.photoURL} alt="" className="admin-detail-avatar"
+                                 referrerPolicy="no-referrer"/>
+                            <div>
+                                <h3>{selectedUser.displayName}</h3>
+                                <p>{selectedUser.email}</p>
+                                <p className="admin-detail-joined">
+                                    {isEnglish ? 'Joined: ' : '加入时间：'}
+                                    {selectedUser.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                                        year: 'numeric', month: 'long', day: 'numeric',
+                                    })}
+                                </p>
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="admin-group-section">
-                        <h4 className="admin-badges-title">
-                            {isEnglish ? 'User Group' : '用户组'}
-                        </h4>
-                        <div className="admin-group-current">
+                        <div className="admin-group-section">
+                            <h4 className="admin-badges-title">
+                                {isEnglish ? 'User Group' : '用户组'}
+                            </h4>
+                            <div className="admin-group-current">
                             <span className="admin-group-label">
                                 {isEnglish ? 'Current group: ' : '当前用户组：'}
                             </span>
-                            <span className="admin-user-group-tag" data-group={selectedUser.group}>
+                                <span className="admin-user-group-tag" data-group={selectedUser.group}>
                                 {isEnglish ? GROUP_LABELS[selectedUser.group].en : GROUP_LABELS[selectedUser.group].zh}
                             </span>
-                        </div>
-                        {assignableGroups.length > 0 && (
-                            <div className="admin-group-actions">
-                                {assignableGroups.map((g) => (
-                                    <button
-                                        key={g}
-                                        className={`admin-group-btn ${selectedUser.group === g ? 'admin-group-btn-active' : ''}`}
-                                        onClick={() => changeUserGroup(selectedUser, g)}
-                                        disabled={updating || selectedUser.group === g}
-                                    >
-                                        {isEnglish ? GROUP_LABELS[g].en : GROUP_LABELS[g].zh}
-                                    </button>
-                                ))}
                             </div>
-                        )}
-                    </div>
-
-                    {badgeDefsError && (
-                        <p className="admin-no-results">
-                            {isEnglish ? 'Failed to load badges.' : '加载徽章失败。'}
-                        </p>
-                    )}
-
-                    {!badgeDefsError && badgeDefs.length > 0 && (
-                        <>
-                            <h4 className="admin-badges-title">
-                                {isEnglish ? 'Badges' : '徽章'}
-                                <span className="admin-badges-count">
-                                    {selectedUser.badges.filter(id => badgeDefs.some(bd => bd.id === id)).length}/{badgeDefs.length}
-                                </span>
-                            </h4>
-
-                            <div className="admin-badge-list">
-                                {badgeDefs.map((bd) => {
-                                    const has = selectedUser.badges.includes(bd.id);
+                            <div className="admin-group-actions">
+                                {USER_GROUPS.map((g) => {
+                                    const isCurrent = selectedUser.group === g;
+                                    const reason = getGroupDisabledReason(selectedUser, g);
+                                    const isDisabled = updating || isCurrent || reason !== null;
                                     return (
-                                        <div key={bd.id} className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
-                                            <img src={bd.imageUrl} alt="" className="admin-badge-img"/>
-                                            <div className="admin-badge-info">
-                                                <span
-                                                    className="admin-badge-name">{isEnglish ? bd.name : bd.nameCn}</span>
-                                                <span
-                                                    className="admin-badge-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
-                                            </div>
-                                            <button
-                                                className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                                onClick={() => toggleUserBadge(selectedUser, bd.id, isEnglish ? bd.name : bd.nameCn)}
-                                                disabled={updating}
-                                            >
-                                                {has
-                                                    ? (isEnglish ? 'Revoke' : '撤销')
-                                                    : (isEnglish ? 'Grant' : '授予')}
-                                            </button>
-                                        </div>
+                                        <button
+                                            key={g}
+                                            className={`admin-group-btn ${isCurrent ? 'admin-group-btn-active' : ''}`}
+                                            onClick={() => changeUserGroup(selectedUser, g)}
+                                            disabled={isDisabled}
+                                            title={reason ?? undefined}
+                                        >
+                                            {isEnglish ? GROUP_LABELS[g].en : GROUP_LABELS[g].zh}
+                                        </button>
                                     );
                                 })}
                             </div>
-                        </>
-                    )}
+                        </div>
 
-                    <h4 className="admin-badges-title">
-                        {isEnglish ? 'Events Attended' : '参与活动'}
-                        <span className="admin-badges-count">
+                        {badgeDefsError && (
+                            <p className="admin-no-results">
+                                {isEnglish ? 'Failed to load badges.' : '加载徽章失败。'}
+                            </p>
+                        )}
+
+                        {!badgeDefsError && badgeDefs.length > 0 && (
+                            <>
+                                <h4 className="admin-badges-title">
+                                    {isEnglish ? 'Badges' : '徽章'}
+                                    <span className="admin-badges-count">
+                                    {selectedUser.badges.filter(id => badgeDefs.some(bd => bd.id === id)).length}/{badgeDefs.length}
+                                </span>
+                                </h4>
+
+                                <div className="admin-badge-list">
+                                    {badgeDefs.map((bd) => {
+                                        const has = selectedUser.badges.includes(bd.id);
+                                        return (
+                                            <div key={bd.id}
+                                                 className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
+                                                <img src={bd.imageUrl} alt="" className="admin-badge-img"/>
+                                                <div className="admin-badge-info">
+                                                <span
+                                                    className="admin-badge-name">{isEnglish ? bd.name : bd.nameCn}</span>
+                                                    <span
+                                                        className="admin-badge-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
+                                                </div>
+                                                <button
+                                                    className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                                    onClick={() => toggleUserBadge(selectedUser, bd.id, isEnglish ? bd.name : bd.nameCn)}
+                                                    disabled={updating || !canManage}
+                                                    title={manageTooltip}
+                                                >
+                                                    {has
+                                                        ? (isEnglish ? 'Revoke' : '撤销')
+                                                        : (isEnglish ? 'Grant' : '授予')}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
+
+                        <h4 className="admin-badges-title">
+                            {isEnglish ? 'Events Attended' : '参与活动'}
+                            <span className="admin-badges-count">
                             {selectedUser.attendedEvents.length}/{pastEvents.length}
                         </span>
-                    </h4>
+                        </h4>
 
-                    <div className="admin-badge-list">
-                        {pastEvents.map((event) => {
-                            const has = selectedUser.attendedEvents.includes(event.id);
-                            return (
-                                <div key={event.id} className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
-                                    <img src={event.icon} alt="" className="admin-badge-img"/>
-                                    <div className="admin-badge-info">
+                        <div className="admin-badge-list">
+                            {pastEvents.map((event) => {
+                                const has = selectedUser.attendedEvents.includes(event.id);
+                                return (
+                                    <div key={event.id} className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
+                                        <img src={event.icon} alt="" className="admin-badge-img"/>
+                                        <div className="admin-badge-info">
                                         <span
                                             className="admin-badge-name">{isEnglish ? event.title : event.titleCn}</span>
-                                        <span className="admin-badge-date">{event.date}</span>
+                                            <span className="admin-badge-date">{event.date}</span>
+                                        </div>
+                                        <button
+                                            className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                            onClick={() => toggleAttendance(selectedUser, event.id)}
+                                            disabled={updating || !canManage}
+                                            title={manageTooltip}
+                                        >
+                                            {has
+                                                ? (isEnglish ? 'Revoke' : '撤销')
+                                                : (isEnglish ? 'Grant' : '授予')}
+                                        </button>
                                     </div>
-                                    <button
-                                        className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                        onClick={() => toggleAttendance(selectedUser, event.id)}
-                                        disabled={updating}
-                                    >
-                                        {has
-                                            ? (isEnglish ? 'Revoke' : '撤销')
-                                            : (isEnglish ? 'Grant' : '授予')}
-                                    </button>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </div>
     );
 });
