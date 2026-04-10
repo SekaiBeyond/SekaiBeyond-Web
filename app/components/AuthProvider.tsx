@@ -1,8 +1,9 @@
 import { createContext, type FC, type ReactNode, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
 import {
+    callCreateUserProfile,
     callUploadAvatar,
     getFirebaseAuth,
     getFirebaseDb,
@@ -116,19 +117,17 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                         group: data.group ?? 'visitor',
                     });
                 } else {
-                    const newProfile = {
-                        displayName: firebaseUser.displayName ?? '',
-                        email: firebaseUser.email ?? '',
-                        photoURL: firebaseUser.photoURL ?? '',
-                        joinedAt: serverTimestamp(),
+                    await callCreateUserProfile();
+                    const freshSnap = await getDoc(userRef);
+                    const data = freshSnap.data()!;
+                    setProfile({
+                        displayName: data.displayName,
+                        email: data.email,
+                        photoURL: data.photoURL,
+                        joinedAt: data.joinedAt?.toDate() ?? new Date(),
                         attendedEvents: [],
                         badges: [],
-                        group: 'visitor' as UserGroup,
-                    };
-                    await setDoc(userRef, newProfile);
-                    setProfile({
-                        ...newProfile,
-                        joinedAt: new Date(),
+                        group: 'visitor',
                     });
                 }
             } else {

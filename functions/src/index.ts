@@ -141,6 +141,41 @@ function detectImageMime(buffer: Buffer): string | null {
 }
 
 /**
+ * Create a user profile (called on first sign-in).
+ * Sets joinedAt and email server-side so they can't be faked.
+ * Idempotent — returns existing profile if already created.
+ */
+export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+
+    const uid = request.auth.uid;
+    const userRef = db.collection("users").doc(uid);
+
+    const existing = await userRef.get();
+    if (existing.exists) {
+        return {alreadyExists: true};
+    }
+
+    const displayName = request.auth.token.name ?? "";
+    const email = request.auth.token.email ?? "";
+    const photoURL = request.auth.token.picture ?? "";
+
+    await userRef.set({
+        displayName: typeof displayName === "string" ? displayName.slice(0, 50) : "",
+        email: typeof email === "string" ? email : "",
+        photoURL: typeof photoURL === "string" ? photoURL.slice(0, 500) : "",
+        joinedAt: FieldValue.serverTimestamp(),
+        attendedEvents: [],
+        badges: [],
+        group: "visitor",
+    });
+
+    return {alreadyExists: false};
+});
+
+/**
  * Delete an image from Firebase Storage (admin only).
  * Verifies caller is core-staff+ before deleting. Client sends the storage path.
  */
@@ -460,6 +495,8 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("permission-denied", "Visitors cannot upload avatars.");
     }
 
+    await checkRateLimit(uid);
+
     const input = request.data as {data?: string; contentType?: string};
     const dataBase64 = input.data;
     const contentType = input.contentType;
@@ -573,4 +610,223 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     }
 
     throw new HttpsError("internal", "code-generation-failed");
+});
+
+const BATCH_LIMIT = 500;
+
+async function commitInChunks(
+    ops: ((batch: FirebaseFirestore.WriteBatch) => void)[]
+): Promise<void> {
+    for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
+        const chunk = ops.slice(i, i + BATCH_LIMIT);
+        const batch = db.batch();
+        for (const op of chunk) op(batch);
+        await batch.commit();
+    }
+}
+
+function extractStoragePath(downloadUrl: string): string | null {
+    const match = downloadUrl.match(
+        /firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/([^?]+)/
+    );
+    if (!match) return null;
+    return decodeURIComponent(match[1]);
+}
+
+async function deleteStorageFile(downloadUrl: string): Promise<void> {
+    const path = extractStoragePath(downloadUrl);
+    if (!path) return;
+    const file = getStorage().bucket().file(path);
+    const [exists] = await file.exists();
+    if (exists) await file.delete();
+}
+
+/**
+ * Delete a past event and all related data (admin only).
+ * Atomically deletes the event, its claim codes, removes from users' attendedEvents,
+ * deletes the storage image, and creates an audit record.
+ */
+export const deleteEvent = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    const callerGroup = callerSnap.data()?.group;
+    if (!ADMIN_GROUPS.includes(callerGroup)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+
+    await checkRateLimit(uid);
+
+    const eventId = validateDocId(
+        (request.data as {eventId?: string})?.eventId, "eventId"
+    );
+
+    const eventSnap = await db.collection("pastEvents").doc(eventId).get();
+    if (!eventSnap.exists) {
+        throw new HttpsError("not-found", "Event not found.");
+    }
+    const eventData = eventSnap.data()!;
+
+    const [codesSnap, attendeesSnap] = await Promise.all([
+        db.collection("claimCodes").where("eventId", "==", eventId).get(),
+        db.collection("users").where("attendedEvents", "array-contains", eventId).get(),
+    ]);
+
+    const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
+        b => b.delete(db.collection("pastEvents").doc(eventId)),
+        b => b.set(db.collection("records").doc(), {
+            type: "event-delete",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventTitle: eventData.title ?? eventId,
+            eventId,
+            timestamp: FieldValue.serverTimestamp(),
+        }),
+        ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
+        ...attendeesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
+            b.update(d.ref, {attendedEvents: FieldValue.arrayRemove(eventId)})
+        ),
+    ];
+    await commitInChunks(ops);
+
+    await deleteStorageFile(eventData.icon ?? "").catch(() => {
+    });
+
+    return {deleted: true};
+});
+
+/**
+ * Delete a badge and all related data (admin only).
+ * Atomically deletes the badge, its activation codes, removes from users' badges,
+ * deletes the storage image, and creates an audit record.
+ */
+export const deleteBadge = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    const callerGroup = callerSnap.data()?.group;
+    if (!ADMIN_GROUPS.includes(callerGroup)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+
+    await checkRateLimit(uid);
+
+    const badgeId = validateDocId(
+        (request.data as {badgeId?: string})?.badgeId, "badgeId"
+    );
+
+    const badgeSnap = await db.collection("badges").doc(badgeId).get();
+    if (!badgeSnap.exists) {
+        throw new HttpsError("not-found", "Badge not found.");
+    }
+    const badgeData = badgeSnap.data()!;
+
+    const [codesSnap, holdersSnap] = await Promise.all([
+        db.collection("badgeActivationCodes").where("badgeId", "==", badgeId).get(),
+        db.collection("users").where("badges", "array-contains", badgeId).get(),
+    ]);
+
+    const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
+        b => b.delete(db.collection("badges").doc(badgeId)),
+        b => b.set(db.collection("records").doc(), {
+            type: "badge-delete",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            badgeId,
+            badgeName: badgeData.name ?? badgeId,
+            timestamp: FieldValue.serverTimestamp(),
+        }),
+        ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
+        ...holdersSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
+            b.update(d.ref, {badges: FieldValue.arrayRemove(badgeId)})
+        ),
+    ];
+    await commitInChunks(ops);
+
+    await deleteStorageFile(badgeData.imageUrl ?? "").catch(() => {
+    });
+
+    return {deleted: true};
+});
+
+const VALID_GROUPS = ["visitor", "member", "staff", "core-staff", "president"];
+
+/**
+ * Change a user's group (admin only).
+ * Runs in a transaction to guarantee the audit record's oldGroup is accurate.
+ * Enforces the same hierarchy rules as Firestore rules:
+ * - Cannot change own group
+ * - Core-staff can only manage visitor/member/staff and assign up to staff
+ * - President can manage and assign any group
+ */
+export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+
+    const uid = request.auth.uid;
+
+    const input = request.data as {targetUid?: string; newGroup?: string};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    const newGroup = input.newGroup;
+
+    if (!newGroup || !VALID_GROUPS.includes(newGroup)) {
+        throw new HttpsError("invalid-argument", "Invalid group.");
+    }
+
+    if (uid === targetUid) {
+        throw new HttpsError("permission-denied", "Cannot change your own group.");
+    }
+
+    await checkRateLimit(uid);
+
+    let oldGroup: string = "";
+
+    await db.runTransaction(async (txn) => {
+        const [callerSnap, targetSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(uid)),
+            txn.get(db.collection("users").doc(targetUid)),
+        ]);
+
+        if (!callerSnap.exists) throw new HttpsError("not-found", "Caller not found.");
+        if (!targetSnap.exists) throw new HttpsError("not-found", "Target user not found.");
+
+        const callerGroup = callerSnap.data()!.group;
+        if (!ADMIN_GROUPS.includes(callerGroup)) {
+            throw new HttpsError("permission-denied", "Insufficient permissions.");
+        }
+
+        oldGroup = targetSnap.data()!.group;
+
+        if (callerGroup !== "president") {
+            if (!["visitor", "member", "staff"].includes(oldGroup)) {
+                throw new HttpsError("permission-denied",
+                    "Cannot manage users at or above your level.");
+            }
+            if (!["visitor", "member", "staff"].includes(newGroup)) {
+                throw new HttpsError("permission-denied",
+                    "Cannot assign this group.");
+            }
+        }
+
+        txn.update(db.collection("users").doc(targetUid), {group: newGroup});
+        txn.set(db.collection("records").doc(), {
+            type: "group-assign",
+            performedBy: uid,
+            performedByName: callerSnap.data()!.displayName ?? "",
+            targetUid,
+            targetName: targetSnap.data()!.displayName ?? "",
+            oldGroup,
+            newGroup,
+            timestamp: FieldValue.serverTimestamp(),
+        });
+    });
+
+    return {oldGroup, newGroup};
 });

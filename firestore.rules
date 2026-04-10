@@ -17,21 +17,6 @@ service cloud.firestore {
       // Authenticated users can read any profile
       allow read: if request.auth != null;
 
-      // Users can create their own profile (group must be 'visitor', badges and events must be empty)
-      allow create: if request.auth != null
-                    && request.auth.uid == userId
-                    && request.resource.data.group == 'visitor'
-                    && request.resource.data.keys().hasOnly(['displayName', 'photoURL', 'group', 'attendedEvents', 'email', 'joinedAt', 'badges'])
-                    && request.resource.data.attendedEvents is list
-                    && request.resource.data.attendedEvents.size() == 0
-                    && request.resource.data.badges is list
-                    && request.resource.data.badges.size() == 0
-                    && request.resource.data.displayName is string
-                    && request.resource.data.displayName.size() <= 50
-                    && request.resource.data.photoURL is string
-                    && request.resource.data.photoURL.size() <= 500
-                    && request.resource.data.email is string;
-
       // Users can update their own displayName and photoURL only
       allow update: if request.auth != null
                     && request.auth.uid == userId

@@ -1,6 +1,5 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import {
-    arrayRemove,
     collection,
     doc,
     type DocumentSnapshot,
@@ -18,14 +17,9 @@ import {
 import type { User } from 'firebase/auth';
 import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import {
-    callDeleteAdminImage,
-    callGenerateBadgeActivationCode,
-    callUploadAdminImage,
-    getFirebaseDb
-} from '~/lib/firebase';
+import { callDeleteBadge, callGenerateBadgeActivationCode, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
-import { commitInChunks, docToUserRecord, isValidHttpUrl } from './utils';
+import { docToUserRecord, isValidHttpUrl } from './utils';
 import { CreatorPicker } from './CreatorPicker';
 import { BilingualFormField } from './BilingualFormField';
 import { ImageUploadField } from './ImageUploadField';
@@ -247,31 +241,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         )) return;
         setDeletingId(bd.id);
         try {
-            const db = getFirebaseDb();
-
-            // Find orphaned activation codes and badge holders to clean up
-            const [codesSnap, holdersSnap] = await Promise.all([
-                getDocs(query(collection(db, 'badgeActivationCodes'), where('badgeId', '==', bd.id))),
-                getDocs(query(collection(db, 'users'), where('badges', 'array-contains', bd.id))),
-            ]);
-
-            const ops: ((b: ReturnType<typeof writeBatch>) => void)[] = [
-                b => b.delete(doc(db, 'badges', bd.id)),
-                b => b.set(doc(collection(db, 'records')), {
-                    type: 'badge-delete',
-                    performedBy: user.uid,
-                    performedByName: profile.displayName,
-                    badgeId: bd.id,
-                    badgeName: bd.name,
-                    timestamp: serverTimestamp(),
-                }),
-                ...codesSnap.docs.map(codeDoc => (b: ReturnType<typeof writeBatch>) => b.delete(codeDoc.ref)),
-                ...holdersSnap.docs.map(userDoc => (b: ReturnType<typeof writeBatch>) => b.update(userDoc.ref, {badges: arrayRemove(bd.id)})),
-            ];
-            await commitInChunks(db, ops);
-            await callDeleteAdminImage(bd.imageUrl).catch(() => {
-            });
-
+            await callDeleteBadge({badgeId: bd.id});
             setBadgeDefs(prev => prev.filter(d => d.id !== bd.id));
             setSelectedBadgeDef(null);
             showToast(isEnglish ? 'Badge deleted.' : '徽章已删除。', 'success');

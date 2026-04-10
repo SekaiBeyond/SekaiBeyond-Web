@@ -1,14 +1,14 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
-import { arrayRemove, collection, doc, getDocs, query, serverTimestamp, where, writeBatch, } from 'firebase/firestore';
+import { collection, doc, getDocs, query, serverTimestamp, where, writeBatch, } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeleteAdminImage, callGenerateEventCode, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
+import { callDeleteEvent, callGenerateEventCode, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Tag } from '~/lib/tags';
 import type { BadgeCode, UserRecord } from './types';
-import { commitInChunks, docToUserRecord, getClaimUrl } from './utils';
+import { docToUserRecord, getClaimUrl } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { ImageUploadField } from './ImageUploadField';
 
@@ -268,31 +268,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         )) return;
         setDeletingId(event.id);
         try {
-            const db = getFirebaseDb();
-
-            // Find orphaned codes and attendees to clean up
-            const [codesSnap, attendeesSnap] = await Promise.all([
-                getDocs(query(collection(db, 'claimCodes'), where('eventId', '==', event.id))),
-                getDocs(query(collection(db, 'users'), where('attendedEvents', 'array-contains', event.id))),
-            ]);
-
-            const ops: ((b: ReturnType<typeof writeBatch>) => void)[] = [
-                b => b.delete(doc(db, 'pastEvents', event.id)),
-                b => b.set(doc(collection(db, 'records')), {
-                    type: 'event-delete',
-                    performedBy: user.uid,
-                    performedByName: profile.displayName,
-                    eventTitle: event.title,
-                    eventId: event.id,
-                    timestamp: serverTimestamp(),
-                }),
-                ...codesSnap.docs.map(codeDoc => (b: ReturnType<typeof writeBatch>) => b.delete(codeDoc.ref)),
-                ...attendeesSnap.docs.map(userDoc => (b: ReturnType<typeof writeBatch>) => b.update(userDoc.ref, {attendedEvents: arrayRemove(event.id)})),
-            ];
-            await commitInChunks(db, ops);
-            await callDeleteAdminImage(event.icon).catch(() => {
-            });
-
+            await callDeleteEvent({eventId: event.id});
             await refreshEvents();
             if (managedEvent === event.id) setManagedEvent(null);
             showToast(isEnglish ? 'Event deleted.' : '活动已删除。', 'success');

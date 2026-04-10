@@ -61,6 +61,9 @@ export function getFunctions() {
     return functions;
 }
 
+export const callCreateUserProfile = () =>
+    httpsCallable<Record<string, never>, {alreadyExists: boolean}>(getFunctions(), 'createUserProfile')({});
+
 export const callClaimEventCode = (data: {code: string}) =>
     httpsCallable<{code: string}, {eventId: string}>(getFunctions(), 'claimEventCode')(data);
 
@@ -91,6 +94,17 @@ export const callGenerateEventCode = (data: {
 }) =>
     httpsCallable<typeof data, {id: string; code: string}>(
         getFunctions(), 'generateEventCode'
+    )(data);
+
+export const callDeleteEvent = (data: {eventId: string}) =>
+    httpsCallable<{eventId: string}, {deleted: boolean}>(getFunctions(), 'deleteEvent')(data);
+
+export const callDeleteBadge = (data: {badgeId: string}) =>
+    httpsCallable<{badgeId: string}, {deleted: boolean}>(getFunctions(), 'deleteBadge')(data);
+
+export const callChangeUserGroup = (data: {targetUid: string; newGroup: string}) =>
+    httpsCallable<{targetUid: string; newGroup: string}, {oldGroup: string; newGroup: string}>(
+        getFunctions(), 'changeUserGroup'
     )(data);
 
 export const callDeleteAdminImage = async (downloadUrl: string): Promise<void> => {

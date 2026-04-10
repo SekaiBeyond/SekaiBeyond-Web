@@ -14,6 +14,7 @@ import {
     where,
     writeBatch,
 } from 'firebase/firestore';
+import { callChangeUserGroup, getFirebaseDb } from '~/lib/firebase';
 import type { User } from 'firebase/auth';
 import {
     canAssignGroup,
@@ -24,7 +25,6 @@ import {
     type UserProfile,
 } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { BadgeDef, UserRecord } from './types';
 import { docToUserRecord } from './utils';
@@ -232,22 +232,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         )) return;
         setUpdating(true);
         try {
-            const db = getFirebaseDb();
-            const userRef = doc(db, 'users', userRecord.uid);
-
-            const batch = writeBatch(db);
-            batch.update(userRef, {group: newGroup});
-            batch.set(doc(collection(db, 'records')), {
-                type: 'group-assign',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                targetUid: userRecord.uid,
-                targetName: userRecord.displayName,
-                oldGroup: userRecord.group,
-                newGroup,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
+            await callChangeUserGroup({targetUid: userRecord.uid, newGroup});
 
             const updated = {...userRecord, group: newGroup};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
