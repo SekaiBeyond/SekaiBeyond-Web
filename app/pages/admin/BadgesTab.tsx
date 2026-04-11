@@ -9,15 +9,21 @@ import {
     orderBy,
     query,
     type QueryConstraint,
-    serverTimestamp,
     startAfter,
     where,
-    writeBatch,
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeleteBadge, callGenerateBadgeActivationCode, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
+import {
+    callDeleteBadge,
+    callDeleteBadgeActivationCode,
+    callGenerateBadgeActivationCode,
+    callSaveBadge,
+    callToggleBadgeCodeActive,
+    callUploadAdminImage,
+    getFirebaseDb,
+} from '~/lib/firebase';
 import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
 import { docToUserRecord, isValidHttpUrl } from './utils';
 import { CreatorPicker } from './CreatorPicker';
@@ -177,36 +183,22 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 imageUrl = await callUploadAdminImage(createForm.image, `badges/${imageId}.webp`);
             }
 
-            const db = getFirebaseDb();
             const creatorUid = createForm.creatorUser?.uid ?? '';
             const creatorName = createForm.creatorUser?.displayName ?? createForm.createdByName.trim();
 
-            const batch = writeBatch(db);
-            const newDocRef = doc(collection(db, 'badges'));
-            batch.set(newDocRef, {
+            const result = await callSaveBadge({
                 name: createForm.name.trim(),
                 nameCn: createForm.nameCn.trim(),
                 description: createForm.description.trim(),
                 descriptionCn: createForm.descriptionCn.trim(),
                 imageUrl,
-                createdBy: user.uid,
                 createdByUid: creatorUid,
                 createdByName: creatorName,
                 createdByLink: creatorLink,
-                createdAt: serverTimestamp(),
             });
-            batch.set(doc(collection(db, 'records')), {
-                type: 'badge-create',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                badgeId: newDocRef.id,
-                badgeName: createForm.name.trim(),
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
 
             setBadgeDefs(prev => [...prev, {
-                id: newDocRef.id,
+                id: result.data.badgeId,
                 name: createForm.name.trim(),
                 nameCn: createForm.nameCn.trim(),
                 description: createForm.description.trim(),
@@ -261,37 +253,38 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         }
         setSavingBadgeDef(true);
         try {
-            const db = getFirebaseDb();
             const creatorUid = editForm.creatorUser?.uid ?? '';
             const creatorName = editForm.creatorUser?.displayName ?? editForm.createdByName.trim();
-            const updates: Record<string, string> = {
+
+            let imageUrl = selectedBadgeDef.imageUrl;
+            if (editForm.image) {
+                const imageId = crypto.randomUUID();
+                imageUrl = await callUploadAdminImage(editForm.image, `badges/${imageId}.webp`);
+            }
+
+            await callSaveBadge({
+                badgeId: selectedBadgeDef.id,
                 name: editForm.name.trim(),
                 nameCn: editForm.nameCn.trim(),
                 description: editForm.description.trim(),
                 descriptionCn: editForm.descriptionCn.trim(),
+                imageUrl,
+                createdByUid: creatorUid,
+                createdByName: creatorName,
+                createdByLink: creatorLink,
+            });
+
+            const updated = {
+                ...selectedBadgeDef,
+                name: editForm.name.trim(),
+                nameCn: editForm.nameCn.trim(),
+                description: editForm.description.trim(),
+                descriptionCn: editForm.descriptionCn.trim(),
+                imageUrl,
                 createdByUid: creatorUid,
                 createdByName: creatorName,
                 createdByLink: creatorLink,
             };
-
-            if (editForm.image) {
-                const imageId = crypto.randomUUID();
-                updates.imageUrl = await callUploadAdminImage(editForm.image, `badges/${imageId}.webp`);
-            }
-
-            const batch = writeBatch(db);
-            batch.update(doc(db, 'badges', selectedBadgeDef.id), updates);
-            batch.set(doc(collection(db, 'records')), {
-                type: 'badge-edit',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                badgeId: selectedBadgeDef.id,
-                badgeName: editForm.name.trim(),
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
-
-            const updated = {...selectedBadgeDef, ...updates};
             setBadgeDefs(prev => prev.map(d => d.id === selectedBadgeDef.id ? updated : d));
             setSelectedBadgeDef(updated);
             setEditingBadgeDef(false);
@@ -377,20 +370,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         const newActive = !ac.active;
         setBadgeActivationCodes(prev => prev.map(c => c.id === ac.id ? {...c, active: newActive} : c));
         try {
-            const db = getFirebaseDb();
-            const bd = badgeDefs.find(d => d.id === ac.badgeId);
-            const batch = writeBatch(db);
-            batch.update(doc(db, 'badgeActivationCodes', ac.id), {active: newActive});
-            batch.set(doc(collection(db, 'records')), {
-                type: newActive ? 'code-activate' : 'code-deactivate',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                badgeId: ac.badgeId,
-                badgeName: bd?.name ?? ac.badgeId,
-                code: ac.code,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
+            await callToggleBadgeCodeActive({codeId: ac.id, active: newActive});
         } catch {
             setBadgeActivationCodes(prev => prev.map(c => c.id === ac.id ? {...c, active: ac.active} : c));
             showToast(isEnglish ? 'Failed to update code status.' : '更新激活码状态失败。', 'error');
@@ -409,20 +389,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         const prevSnapshot = [...badgeActivationCodes];
         setBadgeActivationCodes(prev => prev.filter(c => c.id !== ac.id));
         try {
-            const db = getFirebaseDb();
-            const bd = badgeDefs.find(d => d.id === ac.badgeId);
-            const batch = writeBatch(db);
-            batch.delete(doc(db, 'badgeActivationCodes', ac.id));
-            batch.set(doc(collection(db, 'records')), {
-                type: 'code-delete',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                badgeId: ac.badgeId,
-                badgeName: bd?.name ?? ac.badgeId,
-                code: ac.code,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
+            await callDeleteBadgeActivationCode({codeId: ac.id});
         } catch {
             setBadgeActivationCodes(prevSnapshot);
             showToast(isEnglish ? 'Failed to delete code.' : '删除激活码失败。', 'error');

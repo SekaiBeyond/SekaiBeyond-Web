@@ -107,6 +107,60 @@ export const callChangeUserGroup = (data: {targetUid: string; newGroup: string})
         getFunctions(), 'changeUserGroup'
     )(data);
 
+export const callSavePastEvent = (data: {
+    eventId?: string;
+    title: string; titleCn: string; tagId: string; date: string;
+    location: string; description: string; descriptionCn: string; icon: string;
+}) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'savePastEvent')(data);
+
+export const callSaveUpcomingEvent = (data: {
+    eventId?: string;
+    name: string; nameCn: string; description: string; descriptionCn: string;
+    location: string; locationCn: string; startAt: string; endAt: string;
+    poster: string; posterCredit: string; buyTicket: string; learnMore: string;
+    customButtonText: string; customButtonTextCn: string; customButtonLink: string;
+}) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'saveUpcomingEvent')(data);
+
+export const callDeleteUpcomingEvent = (data: {eventId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteUpcomingEvent')(data);
+
+export const callArchiveUpcomingEvent = (data: {eventId: string; tagId: string}) =>
+    httpsCallable<typeof data, {pastEventId: string}>(getFunctions(), 'archiveUpcomingEvent')(data);
+
+export const callSaveBadge = (data: {
+    badgeId?: string;
+    name: string; nameCn: string; description: string; descriptionCn: string;
+    imageUrl: string; createdByUid: string; createdByName: string; createdByLink: string;
+}) => httpsCallable<typeof data, {badgeId: string}>(getFunctions(), 'saveBadge')(data);
+
+export const callToggleAttendance = (data: {targetUid: string; eventId: string; grant: boolean}) =>
+    httpsCallable<typeof data, {granted: boolean}>(getFunctions(), 'toggleAttendance')(data);
+
+export const callToggleUserBadge = (data: {targetUid: string; badgeId: string; grant: boolean}) =>
+    httpsCallable<typeof data, {granted: boolean}>(getFunctions(), 'toggleUserBadge')(data);
+
+export const callToggleClaimCodeActive = (data: {codeId: string; active: boolean}) =>
+    httpsCallable<typeof data, {active: boolean}>(getFunctions(), 'toggleClaimCodeActive')(data);
+
+export const callSaveClaimCodeTimeWindow = (data: {
+    codeId: string;
+    activeFrom?: string | null;
+    activeUntil?: string | null
+}) =>
+    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveClaimCodeTimeWindow')(data);
+
+export const callToggleBadgeCodeActive = (data: {codeId: string; active: boolean}) =>
+    httpsCallable<typeof data, {active: boolean}>(getFunctions(), 'toggleBadgeCodeActive')(data);
+
+export const callDeleteBadgeActivationCode = (data: {codeId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteBadgeActivationCode')(data);
+
+export const callSaveTag = (data: {tagId?: string; name: string; nameCn: string}) =>
+    httpsCallable<typeof data, {tagId: string}>(getFunctions(), 'saveTag')(data);
+
+export const callDeleteTag = (data: {tagId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteTag')(data);
+
 export const callDeleteAdminImage = async (downloadUrl: string): Promise<void> => {
     const match = downloadUrl.match(/firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/([^?]+)/);
     if (!match) return;

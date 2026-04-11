@@ -1,20 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-import {
-    arrayRemove,
-    arrayUnion,
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    limit,
-    orderBy,
-    query,
-    serverTimestamp,
-    startAfter,
-    where,
-    writeBatch,
-} from 'firebase/firestore';
-import { callChangeUserGroup, getFirebaseDb } from '~/lib/firebase';
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter, where, } from 'firebase/firestore';
+import { callChangeUserGroup, callToggleAttendance, callToggleUserBadge, getFirebaseDb } from '~/lib/firebase';
 import type { User } from 'firebase/auth';
 import {
     canAssignGroup,
@@ -133,26 +119,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const toggleAttendance = async (userRecord: UserRecord, eventId: string) => {
         setUpdating(true);
         try {
-            const db = getFirebaseDb();
-            const userRef = doc(db, 'users', userRecord.uid);
             const has = userRecord.attendedEvents.includes(eventId);
-            const evt = pastEvents.find(e => e.id === eventId);
-
-            const batch = writeBatch(db);
-            batch.update(userRef, {
-                attendedEvents: has ? arrayRemove(eventId) : arrayUnion(eventId),
-            });
-            batch.set(doc(collection(db, 'records')), {
-                type: has ? 'event-unattend' : 'event-attend',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                targetUid: userRecord.uid,
-                targetName: userRecord.displayName,
-                eventTitle: evt?.title ?? eventId,
-                eventId,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
+            await callToggleAttendance({targetUid: userRecord.uid, eventId, grant: !has});
 
             const updatedEvents = has
                 ? userRecord.attendedEvents.filter(e => e !== eventId)
@@ -168,28 +136,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         }
     };
 
-    const toggleUserBadge = async (userRecord: UserRecord, badgeId: string, badgeName: string) => {
+    const toggleUserBadge = async (userRecord: UserRecord, badgeId: string) => {
         setUpdating(true);
         try {
-            const db = getFirebaseDb();
-            const userRef = doc(db, 'users', userRecord.uid);
             const has = userRecord.badges.includes(badgeId);
-
-            const batch = writeBatch(db);
-            batch.update(userRef, {
-                badges: has ? arrayRemove(badgeId) : arrayUnion(badgeId),
-            });
-            batch.set(doc(collection(db, 'records')), {
-                type: has ? 'achievement-revoke' : 'achievement-grant',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                targetUid: userRecord.uid,
-                targetName: userRecord.displayName,
-                badgeId,
-                badgeName,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
+            await callToggleUserBadge({targetUid: userRecord.uid, badgeId, grant: !has});
 
             const updatedBadges = has
                 ? userRecord.badges.filter(id => id !== badgeId)
@@ -413,7 +364,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                 </div>
                                                 <button
                                                     className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                                    onClick={() => toggleUserBadge(selectedUser, bd.id, isEnglish ? bd.name : bd.nameCn)}
+                                                    onClick={() => toggleUserBadge(selectedUser, bd.id)}
                                                     disabled={updating || !canManage}
                                                     title={manageTooltip}
                                                 >

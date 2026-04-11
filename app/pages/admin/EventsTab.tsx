@@ -1,9 +1,16 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
-import { collection, doc, getDocs, query, serverTimestamp, where, writeBatch, } from 'firebase/firestore';
-import type { User } from 'firebase/auth';
-import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { GROUP_LABELS } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeleteEvent, callGenerateEventCode, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
+import {
+    callDeleteEvent,
+    callGenerateEventCode,
+    callSaveClaimCodeTimeWindow,
+    callSavePastEvent,
+    callToggleClaimCodeActive,
+    callUploadAdminImage,
+    getFirebaseDb,
+} from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Tag } from '~/lib/tags';
@@ -16,8 +23,6 @@ interface EventsTabProps {
     pastEvents: PastEvent[];
     refreshEvents: () => Promise<void>;
     tags: Tag[];
-    user: User;
-    profile: UserProfile;
     showToast: (message: string, type: 'success' | 'error') => void;
 }
 
@@ -29,8 +34,6 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                                                           pastEvents,
                                                                           refreshEvents,
                                                                           tags,
-                                                                          user,
-                                                                          profile,
                                                                           showToast,
                                                                       }, forwardedRef) => {
     const {isEnglish} = useLanguage();
@@ -156,20 +159,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         if (!eventCode) return;
         const newActive = !eventCode.active;
         try {
-            const db = getFirebaseDb();
-            const evt = managedEvent ? pastEvents.find(e => e.id === managedEvent) : null;
-            const batch = writeBatch(db);
-            batch.update(doc(db, 'claimCodes', eventCode.id), {active: newActive});
-            batch.set(doc(collection(db, 'records')), {
-                type: newActive ? 'event-code-activate' : 'event-code-deactivate',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                eventTitle: evt?.title ?? managedEvent,
-                eventId: managedEvent,
-                code: eventCode.code,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
+            await callToggleClaimCodeActive({codeId: eventCode.id, active: newActive});
             setEventCode({...eventCode, active: newActive});
         } catch {
             showToast(isEnglish ? 'Failed to update code status.' : '更新签到码状态失败。', 'error');
@@ -181,20 +171,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         const activeFrom = codeFrom || null;
         const activeUntil = codeUntil || null;
         try {
-            const db = getFirebaseDb();
-            const evt = managedEvent ? pastEvents.find(e => e.id === managedEvent) : null;
-            const batch = writeBatch(db);
-            batch.update(doc(db, 'claimCodes', eventCode.id), {activeFrom, activeUntil});
-            batch.set(doc(collection(db, 'records')), {
-                type: 'event-code-time-window' as const,
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                eventTitle: evt?.title ?? managedEvent,
-                eventId: managedEvent,
-                code: eventCode.code,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
+            await callSaveClaimCodeTimeWindow({codeId: eventCode.id, activeFrom, activeUntil});
             setEventCode({...eventCode, activeFrom, activeUntil});
         } catch {
             showToast(isEnglish ? 'Failed to save time window.' : '保存时间窗口失败。', 'error');
@@ -205,44 +182,23 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         if (!eventForm.title.trim() || !eventForm.date.trim()) return;
         setSavingEvent(true);
         try {
-            const db = getFirebaseDb();
-
             let iconUrl = eventForm.icon;
             if (eventImage) {
                 const imageId = crypto.randomUUID();
                 iconUrl = await callUploadAdminImage(eventImage, `events/${imageId}.webp`);
             }
 
-            const data: Record<string, string> = {
-                tagId: eventForm.tagId,
+            await callSavePastEvent({
+                ...(editingEvent ? {eventId: editingEvent.id} : {}),
                 title: eventForm.title,
                 titleCn: eventForm.titleCn,
+                tagId: eventForm.tagId,
                 date: eventForm.date,
                 location: eventForm.location,
                 description: eventForm.description,
                 descriptionCn: eventForm.descriptionCn,
                 icon: iconUrl,
-            };
-
-            const batch = writeBatch(db);
-            let newEventId: string;
-            if (editingEvent) {
-                batch.update(doc(db, 'pastEvents', editingEvent.id), data);
-                newEventId = editingEvent.id;
-            } else {
-                const newDocRef = doc(collection(db, 'pastEvents'));
-                batch.set(newDocRef, data);
-                newEventId = newDocRef.id;
-            }
-            batch.set(doc(collection(db, 'records')), {
-                type: editingEvent ? 'event-edit' : 'event-create',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                eventTitle: eventForm.title,
-                eventId: newEventId,
-                timestamp: serverTimestamp(),
             });
-            await batch.commit();
 
             await refreshEvents();
             showToast(

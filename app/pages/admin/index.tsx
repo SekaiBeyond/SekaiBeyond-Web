@@ -237,8 +237,6 @@ export const AdminPage = () => {
                         pastEvents={pastEvents}
                         refreshEvents={refreshEvents}
                         tags={tags}
-                        user={user}
-                        profile={profile}
                         showToast={showToast}
                     />
                 )}
@@ -250,8 +248,6 @@ export const AdminPage = () => {
                         refreshEvents={refreshUpcoming}
                         refreshPastEvents={refreshEvents}
                         tags={tags}
-                        user={user}
-                        profile={profile}
                         showToast={showToast}
                     />
                 )}
@@ -276,7 +272,7 @@ export const AdminPage = () => {
                 )}
 
                 {activeTab === 'tags' && (
-                    <TagsTab tags={tags} refreshTags={refreshTags} user={user} profile={profile} showToast={showToast}/>
+                    <TagsTab tags={tags} refreshTags={refreshTags} showToast={showToast}/>
                 )}
 
                 {activeTab === 'records' && (

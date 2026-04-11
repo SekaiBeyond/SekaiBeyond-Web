@@ -1,9 +1,11 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
-import { collection, doc, serverTimestamp, Timestamp, writeBatch, } from 'firebase/firestore';
-import type { User } from 'firebase/auth';
-import type { UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeleteAdminImage, callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
+import {
+    callArchiveUpcomingEvent,
+    callDeleteUpcomingEvent,
+    callSaveUpcomingEvent,
+    callUploadAdminImage,
+} from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { BilingualFormField } from './BilingualFormField';
@@ -14,8 +16,6 @@ interface UpcomingEventsTabProps {
     refreshEvents: () => Promise<void>;
     refreshPastEvents: () => Promise<void>;
     tags: Tag[];
-    user: User;
-    profile: UserProfile;
     showToast: (message: string, type: 'success' | 'error') => void;
 }
 
@@ -57,8 +57,6 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                                                                   refreshEvents,
                                                                                                   refreshPastEvents,
                                                                                                   tags,
-                                                                                                  user,
-                                                                                                  profile,
                                                                                                   showToast,
                                                                                               }, forwardedRef) => {
     const {isEnglish} = useLanguage();
@@ -123,23 +121,22 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         }
         setSaving(true);
         try {
-            const db = getFirebaseDb();
-
             let posterUrl = editingEvent?.poster ?? '';
             if (posterImage) {
                 const imageId = crypto.randomUUID();
                 posterUrl = await callUploadAdminImage(posterImage, `upcoming-events/${imageId}.webp`);
             }
 
-            const data = {
+            await callSaveUpcomingEvent({
+                ...(editingEvent ? {eventId: editingEvent.id} : {}),
                 name: form.name,
                 nameCn: form.nameCn,
                 description: form.description,
                 descriptionCn: form.descriptionCn,
                 location: form.location,
                 locationCn: form.locationCn,
-                startAt: Timestamp.fromDate(startAt),
-                endAt: Timestamp.fromDate(endAt),
+                startAt: startAt.toISOString(),
+                endAt: endAt.toISOString(),
                 poster: posterUrl,
                 posterCredit: form.posterCredit,
                 buyTicket: form.buyTicket,
@@ -147,27 +144,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 customButtonText: form.customButtonText,
                 customButtonTextCn: form.customButtonTextCn,
                 customButtonLink: form.customButtonLink,
-            };
-
-            const batch = writeBatch(db);
-            let newEventId: string;
-            if (editingEvent) {
-                batch.update(doc(db, 'upcomingEvents', editingEvent.id), data);
-                newEventId = editingEvent.id;
-            } else {
-                const newDocRef = doc(collection(db, 'upcomingEvents'));
-                batch.set(newDocRef, data);
-                newEventId = newDocRef.id;
-            }
-            batch.set(doc(collection(db, 'records')), {
-                type: editingEvent ? 'upcoming-event-edit' : 'upcoming-event-create',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                eventTitle: form.name,
-                eventId: newEventId,
-                timestamp: serverTimestamp(),
             });
-            await batch.commit();
 
             await refreshEvents();
             showToast(
@@ -193,21 +170,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         )) return;
         setDeletingId(event.id);
         try {
-            const db = getFirebaseDb();
-            const batch = writeBatch(db);
-            batch.delete(doc(db, 'upcomingEvents', event.id));
-            batch.set(doc(collection(db, 'records')), {
-                type: 'upcoming-event-delete',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                eventTitle: event.name,
-                eventId: event.id,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
-            await callDeleteAdminImage(event.poster).catch(() => {
-            });
-
+            await callDeleteUpcomingEvent({eventId: event.id});
             await refreshEvents();
             if (selectedEvent === event.id) setSelectedEvent(null);
             showToast(isEnglish ? 'Event deleted.' : '活动已删除。', 'success');
@@ -221,37 +184,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const archiveEvent = async (event: UpcomingEvent) => {
         setArchiving(true);
         try {
-            const db = getFirebaseDb();
-            const batch = writeBatch(db);
-
-            const pad = (n: number) => String(n).padStart(2, '0');
-            const d = event.startAt;
-            const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-            const pastEventData = {
-                title: event.name,
-                titleCn: event.nameCn,
-                date: dateStr,
-                location: event.location,
-                description: event.description,
-                descriptionCn: event.descriptionCn,
-                icon: event.poster,
-                tagId: archiveTagId,
-            };
-
-            const newDocRef = doc(collection(db, 'pastEvents'));
-            batch.set(newDocRef, pastEventData);
-            batch.delete(doc(db, 'upcomingEvents', event.id));
-            batch.set(doc(collection(db, 'records')), {
-                type: 'upcoming-event-archive',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                eventTitle: event.name,
-                eventId: newDocRef.id,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
-
+            await callArchiveUpcomingEvent({eventId: event.id, tagId: archiveTagId});
             await Promise.all([refreshEvents(), refreshPastEvents()]);
             setSelectedEvent(null);
             setShowArchive(false);

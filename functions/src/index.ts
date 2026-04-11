@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase-admin/app";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
@@ -105,6 +105,20 @@ function validateDocId(value: unknown, name: string): string {
     }
     if (/[\/\0]/.test(value)) {
         throw new HttpsError("invalid-argument", `Invalid ${name}: illegal characters.`);
+    }
+    return value;
+}
+
+function validateStr(value: unknown, name: string, maxLen: number, required = false): string {
+    if (value === undefined || value === null) value = "";
+    if (typeof value !== "string") {
+        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
+    }
+    if (required && value.trim().length === 0) {
+        throw new HttpsError("invalid-argument", `${name} is required.`);
+    }
+    if (value.length > maxLen) {
+        throw new HttpsError("invalid-argument", `${name} exceeds maximum length.`);
     }
     return value;
 }
@@ -633,9 +647,10 @@ function extractStoragePath(downloadUrl: string): string | null {
     return decodeURIComponent(match[1]);
 }
 
-async function deleteStorageFile(downloadUrl: string): Promise<void> {
+async function deleteStorageFile(downloadUrl: string, allowedPrefix?: string): Promise<void> {
     const path = extractStoragePath(downloadUrl);
     if (!path) return;
+    if (allowedPrefix && !path.startsWith(allowedPrefix)) return;
     const file = getStorage().bucket().file(path);
     const [exists] = await file.exists();
     if (exists) await file.delete();
@@ -692,7 +707,7 @@ export const deleteEvent = onCall({maxInstances: 10}, async (request) => {
     ];
     await commitInChunks(ops);
 
-    await deleteStorageFile(eventData.icon ?? "").catch(() => {
+    await deleteStorageFile(eventData.icon ?? "", "events/").catch(() => {
     });
 
     return {deleted: true};
@@ -749,7 +764,7 @@ export const deleteBadge = onCall({maxInstances: 10}, async (request) => {
     ];
     await commitInChunks(ops);
 
-    await deleteStorageFile(badgeData.imageUrl ?? "").catch(() => {
+    await deleteStorageFile(badgeData.imageUrl ?? "", "badges/").catch(() => {
     });
 
     return {deleted: true};
@@ -829,4 +844,614 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
     });
 
     return {oldGroup, newGroup};
+});
+
+/**
+ * Create or update a past event (admin only).
+ * Server-side validation, audit record with server timestamp.
+ */
+export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const input = request.data as Record<string, unknown>;
+    const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : null;
+    const title = validateStr(input.title, "title", 200, true);
+    const titleCn = validateStr(input.titleCn, "titleCn", 200);
+    const tagId = validateStr(input.tagId, "tagId", 128);
+    const date = validateStr(input.date, "date", 50, true);
+    const location = validateStr(input.location, "location", 200);
+    const description = validateStr(input.description, "description", 2000);
+    const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
+    const icon = validateStr(input.icon, "icon", 500);
+
+    const data = {title, titleCn, tagId, date, location, description, descriptionCn, icon};
+
+    if (eventId) {
+        const existing = await db.collection("pastEvents").doc(eventId).get();
+        if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
+    }
+
+    const batch = db.batch();
+    const docId = eventId ?? db.collection("pastEvents").doc().id;
+    const ref = db.collection("pastEvents").doc(docId);
+    if (eventId) {
+        batch.update(ref, data);
+    } else {
+        batch.set(ref, data);
+    }
+    batch.set(db.collection("records").doc(), {
+        type: eventId ? "event-edit" : "event-create",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        eventTitle: title,
+        eventId: docId,
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {eventId: docId};
+});
+
+/**
+ * Create or update an upcoming event (admin only).
+ * Accepts ISO date strings for startAt/endAt, converts to Firestore Timestamps.
+ */
+export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const input = request.data as Record<string, unknown>;
+    const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : null;
+    const name = validateStr(input.name, "name", 200, true);
+    const nameCn = validateStr(input.nameCn, "nameCn", 200);
+    const description = validateStr(input.description, "description", 2000);
+    const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
+    const location = validateStr(input.location, "location", 200);
+    const locationCn = validateStr(input.locationCn, "locationCn", 200);
+    const poster = validateStr(input.poster, "poster", 500);
+    const posterCredit = validateStr(input.posterCredit, "posterCredit", 200);
+    const buyTicket = validateStr(input.buyTicket, "buyTicket", 500);
+    const learnMore = validateStr(input.learnMore, "learnMore", 500);
+    const customButtonText = validateStr(input.customButtonText, "customButtonText", 100);
+    const customButtonTextCn = validateStr(input.customButtonTextCn, "customButtonTextCn", 100);
+    const customButtonLink = validateStr(input.customButtonLink, "customButtonLink", 500);
+
+    const startAtStr = validateISODate(input.startAt, "startAt");
+    if (!startAtStr) throw new HttpsError("invalid-argument", "startAt is required.");
+    const endAtStr = validateISODate(input.endAt, "endAt");
+    if (!endAtStr) throw new HttpsError("invalid-argument", "endAt is required.");
+    const startAt = Timestamp.fromDate(new Date(startAtStr));
+    const endAt = Timestamp.fromDate(new Date(endAtStr));
+    if (endAt.toMillis() <= startAt.toMillis()) {
+        throw new HttpsError("invalid-argument", "End time must be after start time.");
+    }
+
+    if (eventId) {
+        const existing = await db.collection("upcomingEvents").doc(eventId).get();
+        if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
+    }
+
+    const data = {
+        name, nameCn, description, descriptionCn, location, locationCn,
+        startAt, endAt, poster, posterCredit, buyTicket, learnMore,
+        customButtonText, customButtonTextCn, customButtonLink,
+    };
+
+    const batch = db.batch();
+    const docId = eventId ?? db.collection("upcomingEvents").doc().id;
+    const ref = db.collection("upcomingEvents").doc(docId);
+    if (eventId) {
+        batch.update(ref, data);
+    } else {
+        batch.set(ref, data);
+    }
+    batch.set(db.collection("records").doc(), {
+        type: eventId ? "upcoming-event-edit" : "upcoming-event-create",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        eventTitle: name,
+        eventId: docId,
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {eventId: docId};
+});
+
+/**
+ * Delete an upcoming event (admin only).
+ * Deletes the document, cleans up storage, and creates an audit record.
+ */
+export const deleteUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
+    const eventSnap = await db.collection("upcomingEvents").doc(eventId).get();
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+    const eventData = eventSnap.data()!;
+
+    const batch = db.batch();
+    batch.delete(db.collection("upcomingEvents").doc(eventId));
+    batch.set(db.collection("records").doc(), {
+        type: "upcoming-event-delete",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        eventTitle: eventData.name ?? eventId,
+        eventId,
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    await deleteStorageFile(eventData.poster ?? "", "upcoming-events/").catch(() => {
+    });
+
+    return {deleted: true};
+});
+
+/**
+ * Archive an upcoming event to past events (admin only).
+ * Creates a past event, deletes the upcoming event, and creates an audit record.
+ */
+export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const input = request.data as {eventId?: string; tagId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const tagId = validateStr(input.tagId, "tagId", 128);
+
+    const eventSnap = await db.collection("upcomingEvents").doc(eventId).get();
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+    const eventData = eventSnap.data()!;
+
+    const startDate: Date = eventData.startAt?.toDate?.() ?? new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const dateStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
+
+    const pastEventData = {
+        title: eventData.name ?? "",
+        titleCn: eventData.nameCn ?? "",
+        date: dateStr,
+        location: eventData.location ?? "",
+        description: eventData.description ?? "",
+        descriptionCn: eventData.descriptionCn ?? "",
+        icon: eventData.poster ?? "",
+        tagId,
+    };
+
+    const batch = db.batch();
+    const newDocRef = db.collection("pastEvents").doc();
+    batch.set(newDocRef, pastEventData);
+    batch.delete(db.collection("upcomingEvents").doc(eventId));
+    batch.set(db.collection("records").doc(), {
+        type: "upcoming-event-archive",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        eventTitle: eventData.name ?? eventId,
+        eventId: newDocRef.id,
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    return {pastEventId: newDocRef.id};
+});
+
+/**
+ * Create or update a badge definition (admin only).
+ * On create, sets createdBy to the caller's UID and createdAt to server timestamp.
+ */
+export const saveBadge = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const input = request.data as Record<string, unknown>;
+    const badgeId = input.badgeId ? validateDocId(input.badgeId, "badgeId") : null;
+    const name = validateStr(input.name, "name", 200, true);
+    const nameCn = validateStr(input.nameCn, "nameCn", 200);
+    const description = validateStr(input.description, "description", 2000);
+    const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
+    const imageUrl = validateStr(input.imageUrl, "imageUrl", 500);
+    const createdByUid = validateStr(input.createdByUid, "createdByUid", 128);
+    const createdByName = validateStr(input.createdByName, "createdByName", 100);
+    const createdByLink = validateStr(input.createdByLink, "createdByLink", 500);
+
+    if (badgeId) {
+        const existing = await db.collection("badges").doc(badgeId).get();
+        if (!existing.exists) throw new HttpsError("not-found", "Badge not found.");
+
+        const updates = {
+            name,
+            nameCn,
+            description,
+            descriptionCn,
+            imageUrl,
+            createdByUid,
+            createdByName,
+            createdByLink
+        };
+        const batch = db.batch();
+        batch.update(db.collection("badges").doc(badgeId), updates);
+        batch.set(db.collection("records").doc(), {
+            type: "badge-edit",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            badgeId,
+            badgeName: name,
+            timestamp: FieldValue.serverTimestamp(),
+        });
+        await batch.commit();
+        return {badgeId};
+    }
+
+    const newRef = db.collection("badges").doc();
+    const batch = db.batch();
+    batch.set(newRef, {
+        name, nameCn, description, descriptionCn, imageUrl,
+        createdBy: uid,
+        createdByUid, createdByName, createdByLink,
+        createdAt: FieldValue.serverTimestamp(),
+    });
+    batch.set(db.collection("records").doc(), {
+        type: "badge-create",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        badgeId: newRef.id,
+        badgeName: name,
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {badgeId: newRef.id};
+});
+
+/**
+ * Toggle event attendance for a user (admin only).
+ * Enforces hierarchy: core-staff can only manage visitor/member/staff.
+ */
+export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    const callerGroup = callerSnap.data()?.group;
+    if (!ADMIN_GROUPS.includes(callerGroup)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const input = request.data as {targetUid?: string; eventId?: string; grant?: boolean};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    const eventId = validateDocId(input.eventId, "eventId");
+    if (typeof input.grant !== "boolean") {
+        throw new HttpsError("invalid-argument", "grant must be a boolean.");
+    }
+    const grant = input.grant;
+
+    const targetSnap = await db.collection("users").doc(targetUid).get();
+    if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
+    if (callerGroup !== "president" && !["visitor", "member", "staff"].includes(targetSnap.data()!.group)) {
+        throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
+    }
+
+    const eventSnap = await db.collection("pastEvents").doc(eventId).get();
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+
+    const batch = db.batch();
+    batch.update(db.collection("users").doc(targetUid), {
+        attendedEvents: grant ? FieldValue.arrayUnion(eventId) : FieldValue.arrayRemove(eventId),
+    });
+    batch.set(db.collection("records").doc(), {
+        type: grant ? "event-attend" : "event-unattend",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        targetUid,
+        targetName: targetSnap.data()!.displayName ?? "",
+        eventTitle: eventSnap.data()!.title ?? eventId,
+        eventId,
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {granted: grant};
+});
+
+/**
+ * Toggle a badge on a user (admin only).
+ * Enforces hierarchy: core-staff can only manage visitor/member/staff.
+ */
+export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    const callerGroup = callerSnap.data()?.group;
+    if (!ADMIN_GROUPS.includes(callerGroup)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const input = request.data as {targetUid?: string; badgeId?: string; grant?: boolean};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    const badgeId = validateDocId(input.badgeId, "badgeId");
+    if (typeof input.grant !== "boolean") {
+        throw new HttpsError("invalid-argument", "grant must be a boolean.");
+    }
+    const grant = input.grant;
+
+    const targetSnap = await db.collection("users").doc(targetUid).get();
+    if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
+    if (callerGroup !== "president" && !["visitor", "member", "staff"].includes(targetSnap.data()!.group)) {
+        throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
+    }
+
+    const badgeSnap = await db.collection("badges").doc(badgeId).get();
+
+    const batch = db.batch();
+    batch.update(db.collection("users").doc(targetUid), {
+        badges: grant ? FieldValue.arrayUnion(badgeId) : FieldValue.arrayRemove(badgeId),
+    });
+    batch.set(db.collection("records").doc(), {
+        type: grant ? "achievement-grant" : "achievement-revoke",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        targetUid,
+        targetName: targetSnap.data()!.displayName ?? "",
+        badgeId,
+        badgeName: badgeSnap.data()?.name ?? badgeId,
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {granted: grant};
+});
+
+/**
+ * Toggle active status on an event claim code (admin only).
+ */
+export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const input = request.data as {codeId?: string; active?: boolean};
+    const codeId = validateDocId(input.codeId, "codeId");
+    if (typeof input.active !== "boolean") {
+        throw new HttpsError("invalid-argument", "active must be a boolean.");
+    }
+
+    const codeSnap = await db.collection("claimCodes").doc(codeId).get();
+    if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
+    const codeData = codeSnap.data()!;
+
+    const eventSnap = codeData.eventId
+        ? await db.collection("pastEvents").doc(codeData.eventId).get()
+        : null;
+
+    const batch = db.batch();
+    batch.update(db.collection("claimCodes").doc(codeId), {active: input.active});
+    batch.set(db.collection("records").doc(), {
+        type: input.active ? "event-code-activate" : "event-code-deactivate",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
+        eventId: codeData.eventId ?? "",
+        code: codeData.code ?? "",
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {active: input.active};
+});
+
+/**
+ * Update time window on an event claim code (admin only).
+ */
+export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const input = request.data as {codeId?: string; activeFrom?: string; activeUntil?: string};
+    const codeId = validateDocId(input.codeId, "codeId");
+    const activeFrom = validateISODate(input.activeFrom, "activeFrom");
+    const activeUntil = validateISODate(input.activeUntil, "activeUntil");
+
+    const codeSnap = await db.collection("claimCodes").doc(codeId).get();
+    if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
+    const codeData = codeSnap.data()!;
+
+    const eventSnap = codeData.eventId
+        ? await db.collection("pastEvents").doc(codeData.eventId).get()
+        : null;
+
+    const batch = db.batch();
+    batch.update(db.collection("claimCodes").doc(codeId), {
+        activeFrom: activeFrom ?? null,
+        activeUntil: activeUntil ?? null,
+    });
+    batch.set(db.collection("records").doc(), {
+        type: "event-code-time-window",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
+        eventId: codeData.eventId ?? "",
+        code: codeData.code ?? "",
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {saved: true};
+});
+
+/**
+ * Toggle active status on a badge activation code (admin only).
+ */
+export const toggleBadgeCodeActive = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const input = request.data as {codeId?: string; active?: boolean};
+    const codeId = validateDocId(input.codeId, "codeId");
+    if (typeof input.active !== "boolean") {
+        throw new HttpsError("invalid-argument", "active must be a boolean.");
+    }
+
+    const codeSnap = await db.collection("badgeActivationCodes").doc(codeId).get();
+    if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
+    const codeData = codeSnap.data()!;
+
+    const badgeSnap = codeData.badgeId
+        ? await db.collection("badges").doc(codeData.badgeId).get()
+        : null;
+
+    const batch = db.batch();
+    batch.update(db.collection("badgeActivationCodes").doc(codeId), {active: input.active});
+    batch.set(db.collection("records").doc(), {
+        type: input.active ? "badge-code-activate" : "badge-code-deactivate",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        badgeId: codeData.badgeId ?? "",
+        badgeName: badgeSnap?.data()?.name ?? codeData.badgeId ?? "",
+        code: codeData.code ?? "",
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {active: input.active};
+});
+
+/**
+ * Delete a badge activation code (admin only).
+ */
+export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const codeId = validateDocId((request.data as {codeId?: string})?.codeId, "codeId");
+    const codeSnap = await db.collection("badgeActivationCodes").doc(codeId).get();
+    if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
+    const codeData = codeSnap.data()!;
+
+    const badgeSnap = codeData.badgeId
+        ? await db.collection("badges").doc(codeData.badgeId).get()
+        : null;
+
+    const batch = db.batch();
+    batch.delete(db.collection("badgeActivationCodes").doc(codeId));
+    batch.set(db.collection("records").doc(), {
+        type: "code-delete",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        badgeId: codeData.badgeId ?? "",
+        badgeName: badgeSnap?.data()?.name ?? codeData.badgeId ?? "",
+        code: codeData.code ?? "",
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {deleted: true};
+});
+
+/**
+ * Create or update an event label/tag (admin only).
+ */
+export const saveTag = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const input = request.data as Record<string, unknown>;
+    const tagId = input.tagId ? validateDocId(input.tagId, "tagId") : null;
+    const name = validateStr(input.name, "name", 100, true);
+    const nameCn = validateStr(input.nameCn, "nameCn", 100);
+
+    if (tagId) {
+        const existing = await db.collection("eventLabels").doc(tagId).get();
+        if (!existing.exists) throw new HttpsError("not-found", "Tag not found.");
+    }
+
+    const batch = db.batch();
+    const docId = tagId ?? db.collection("eventLabels").doc().id;
+    const ref = db.collection("eventLabels").doc(docId);
+    if (tagId) {
+        batch.update(ref, {name, nameCn});
+    } else {
+        batch.set(ref, {name, nameCn});
+    }
+    batch.set(db.collection("records").doc(), {
+        type: tagId ? "tag-edit" : "tag-create",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        tagName: name,
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {tagId: docId};
+});
+
+/**
+ * Delete an event label/tag (admin only).
+ */
+export const deleteTag = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    await checkRateLimit(uid);
+
+    const tagId = validateDocId((request.data as {tagId?: string})?.tagId, "tagId");
+    const tagSnap = await db.collection("eventLabels").doc(tagId).get();
+    if (!tagSnap.exists) throw new HttpsError("not-found", "Tag not found.");
+
+    const batch = db.batch();
+    batch.delete(db.collection("eventLabels").doc(tagId));
+    batch.set(db.collection("records").doc(), {
+        type: "tag-delete",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        tagName: tagSnap.data()?.name ?? tagId,
+        timestamp: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {deleted: true};
 });

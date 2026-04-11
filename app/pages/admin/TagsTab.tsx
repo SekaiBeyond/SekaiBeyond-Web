@@ -1,20 +1,15 @@
 import { useState } from 'react';
-import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import type { User } from 'firebase/auth';
-import type { UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { getFirebaseDb } from '~/lib/firebase';
+import { callDeleteTag, callSaveTag } from '~/lib/firebase';
 import type { Tag } from '~/lib/tags';
 
 interface TagsTabProps {
     tags: Tag[];
     refreshTags: () => Promise<void>;
-    user: User;
-    profile: UserProfile;
     showToast: (message: string, type: 'success' | 'error') => void;
 }
 
-export const TagsTab = ({tags, refreshTags, user, profile, showToast}: TagsTabProps) => {
+export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
     const {isEnglish} = useLanguage();
     const [showCreate, setShowCreate] = useState(false);
     const [name, setName] = useState('');
@@ -31,18 +26,7 @@ export const TagsTab = ({tags, refreshTags, user, profile, showToast}: TagsTabPr
         if (!name.trim()) return;
         setSaving(true);
         try {
-            const db = getFirebaseDb();
-            const newRef = doc(collection(db, 'eventLabels'));
-            const batch = writeBatch(db);
-            batch.set(newRef, {name: name.trim(), nameCn: nameCn.trim()});
-            batch.set(doc(collection(db, 'records')), {
-                type: 'tag-create',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                tagName: name.trim(),
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
+            await callSaveTag({name: name.trim(), nameCn: nameCn.trim()});
             await refreshTags();
             setName('');
             setNameCn('');
@@ -65,23 +49,7 @@ export const TagsTab = ({tags, refreshTags, user, profile, showToast}: TagsTabPr
         if (!editingTag || !editName.trim()) return;
         setSavingEdit(true);
         try {
-            const db = getFirebaseDb();
-            const newName = editName.trim();
-            const newNameCn = editNameCn.trim();
-
-            const batch = writeBatch(db);
-            batch.update(doc(db, 'eventLabels', editingTag.id), {
-                name: newName,
-                nameCn: newNameCn,
-            });
-            batch.set(doc(collection(db, 'records')), {
-                type: 'tag-edit',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                tagName: newName,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
+            await callSaveTag({tagId: editingTag.id, name: editName.trim(), nameCn: editNameCn.trim()});
             await refreshTags();
             setEditingTag(null);
             showToast(isEnglish ? 'Tag updated.' : '标签已更新。', 'success');
@@ -99,17 +67,7 @@ export const TagsTab = ({tags, refreshTags, user, profile, showToast}: TagsTabPr
         )) return;
         setDeletingId(tag.id);
         try {
-            const db = getFirebaseDb();
-            const batch = writeBatch(db);
-            batch.delete(doc(db, 'eventLabels', tag.id));
-            batch.set(doc(collection(db, 'records')), {
-                type: 'tag-delete',
-                performedBy: user.uid,
-                performedByName: profile.displayName,
-                tagName: tag.name,
-                timestamp: serverTimestamp(),
-            });
-            await batch.commit();
+            await callDeleteTag({tagId: tag.id});
             await refreshTags();
             if (editingTag?.id === tag.id) setEditingTag(null);
             showToast(isEnglish ? 'Tag deleted.' : '标签已删除。', 'success');
