@@ -27,5 +27,11 @@ service firebase.storage {
       allow read: if true;
       // Writes only via Cloud Function (Admin SDK bypasses rules)
     }
+
+    // Deny all access to unlisted paths (safety net — Firestore denies by default,
+    // but an explicit rule prevents accidental exposure if new paths are added)
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
   }
 }

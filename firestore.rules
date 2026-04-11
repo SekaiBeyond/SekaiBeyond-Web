@@ -10,8 +10,11 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // Authenticated users can read any profile
-      allow read: if request.auth != null;
+      // Users can read their own profile; admins can read any profile.
+      // Other users' public data is served via the getPublicProfile Cloud Function
+      // to avoid exposing email to all authenticated users.
+      allow read: if request.auth != null
+                  && (request.auth.uid == userId || isCoreStaffOrAbove());
 
       // All user mutations (displayName, photoURL, badges, attendedEvents, group) via Cloud Functions
     }

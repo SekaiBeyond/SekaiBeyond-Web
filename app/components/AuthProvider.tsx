@@ -107,7 +107,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                     const data = userSnap.data();
                     setProfile({
                         displayName: data.displayName,
-                        email: data.email,
+                        email: firebaseUser.email ?? '',
                         photoURL: data.photoURL,
                         joinedAt: data.joinedAt?.toDate() ?? new Date(),
                         attendedEvents: data.attendedEvents ?? [],
@@ -120,7 +120,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                     const data = freshSnap.data()!;
                     setProfile({
                         displayName: data.displayName,
-                        email: data.email,
+                        email: firebaseUser.email ?? '',
                         photoURL: data.photoURL,
                         joinedAt: data.joinedAt?.toDate() ?? new Date(),
                         attendedEvents: [],
@@ -155,7 +155,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
             const data = userSnap.data();
             setProfile({
                 displayName: data.displayName,
-                email: data.email,
+                email: user.email ?? '',
                 photoURL: data.photoURL,
                 joinedAt: data.joinedAt?.toDate() ?? new Date(),
                 attendedEvents: data.attendedEvents ?? [],

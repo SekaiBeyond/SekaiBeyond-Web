@@ -159,6 +159,12 @@ export const callSaveTag = (data: {tagId?: string; name: string; nameCn: string}
 export const callDeleteTag = (data: {tagId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteTag')(data);
 
+export const callGetPublicProfile = (data: {uid: string}) =>
+    httpsCallable<{uid: string}, {
+        displayName: string; photoURL: string; joinedAt: string;
+        attendedEvents: string[]; badges: string[]; group: string;
+    }>(getFunctions(), 'getPublicProfile')(data);
+
 export const callDeleteAdminImage = async (downloadUrl: string): Promise<void> => {
     const match = downloadUrl.match(/firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/([^?]+)/);
     if (!match) return;

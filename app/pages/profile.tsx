@@ -3,7 +3,7 @@ import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firesto
 import { GROUP_LABELS, hasPermission, useAuth, type UserGroup } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { getFirebaseDb } from '~/lib/firebase';
+import { callGetPublicProfile, getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
@@ -173,20 +173,17 @@ export const ProfilePage = () => {
         setLoadingViewed(true);
         const loadViewedUser = async () => {
             try {
-                const db = getFirebaseDb();
-                const snap = await getDoc(doc(db, 'users', viewUid));
+                const result = await callGetPublicProfile({uid: viewUid});
                 if (stale) return;
-                if (snap.exists()) {
-                    const data = snap.data();
-                    setViewedProfile({
-                        displayName: data.displayName ?? '',
-                        photoURL: data.photoURL ?? '',
-                        joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                        attendedEvents: data.attendedEvents ?? [],
-                        badges: data.badges ?? [],
-                        group: data.group ?? 'visitor',
-                    });
-                }
+                const data = result.data;
+                setViewedProfile({
+                    displayName: data.displayName ?? '',
+                    photoURL: data.photoURL ?? '',
+                    joinedAt: data.joinedAt ? new Date(data.joinedAt) : new Date(),
+                    attendedEvents: data.attendedEvents ?? [],
+                    badges: data.badges ?? [],
+                    group: (data.group ?? 'visitor') as UserGroup,
+                });
             } catch (err) {
                 void (stale || err);
             } finally {
