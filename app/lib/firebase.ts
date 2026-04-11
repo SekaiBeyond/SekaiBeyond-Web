@@ -2,7 +2,6 @@ import { type FirebaseApp, initializeApp } from "firebase/app";
 import { type Auth, getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { type Firestore, getFirestore } from "firebase/firestore";
 import { type Functions, getFunctions as _getFunctions, httpsCallable } from "firebase/functions";
-import { type FirebaseStorage, getStorage } from "firebase/storage";
 
 const requiredEnvVars = [
     'VITE_FIREBASE_API_KEY',
@@ -31,7 +30,6 @@ let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
 let functions: Functions;
-let storage: FirebaseStorage;
 
 function getFirebaseApp() {
     if (!app) {
@@ -191,6 +189,12 @@ export const callUploadAdminImage = async (file: File, storagePath: string): Pro
     return result.data.url;
 };
 
+export const callUpdateDisplayName = (data: {displayName: string}) =>
+    httpsCallable<{displayName: string}, {displayName: string}>(getFunctions(), 'updateDisplayName')(data);
+
+export const callDeleteAvatar = () =>
+    httpsCallable<Record<string, never>, {photoURL: string}>(getFunctions(), 'deleteAvatar')({});
+
 export const callUploadAvatar = async (file: File): Promise<string> => {
     const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -210,13 +214,6 @@ export const callUploadAvatar = async (file: File): Promise<string> => {
     });
     return result.data.url;
 };
-
-export function getFirebaseStorage() {
-    if (!storage) {
-        storage = getStorage(getFirebaseApp());
-    }
-    return storage;
-}
 
 const googleProvider = new GoogleAuthProvider();
 

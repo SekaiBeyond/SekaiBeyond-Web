@@ -13,16 +13,7 @@ service cloud.firestore {
       // Authenticated users can read any profile
       allow read: if request.auth != null;
 
-      // Users can update their own displayName and photoURL only
-      allow update: if request.auth != null
-                    && request.auth.uid == userId
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL'])
-                    && request.resource.data.displayName is string
-                    && request.resource.data.displayName.size() <= 50
-                    && request.resource.data.photoURL is string
-                    && request.resource.data.photoURL.size() <= 500;
-
-      // All other user mutations (badges, attendedEvents, group) via Cloud Functions
+      // All user mutations (displayName, photoURL, badges, attendedEvents, group) via Cloud Functions
     }
 
     // Activity records — core-staff+ can read only; all writes via Cloud Functions

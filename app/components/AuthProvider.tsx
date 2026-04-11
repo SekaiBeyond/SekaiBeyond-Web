@@ -1,13 +1,13 @@
 import { createContext, type FC, type ReactNode, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { deleteObject, ref } from 'firebase/storage';
+import { doc, getDoc } from 'firebase/firestore';
 import {
     callCreateUserProfile,
+    callDeleteAvatar,
+    callUpdateDisplayName,
     callUploadAvatar,
     getFirebaseAuth,
     getFirebaseDb,
-    getFirebaseStorage,
     signInWithGoogle as firebaseSignIn,
     signOut as firebaseSignOut
 } from '~/lib/firebase';
@@ -73,8 +73,6 @@ interface AuthContextType {
         displayName?: string;
         photoFile?: File;
         deletePhoto?: boolean;
-        badges?: string[];
-        attendedEvents?: string[];
     }) => Promise<void>;
 }
 
@@ -171,40 +169,20 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         displayName?: string;
         photoFile?: File;
         deletePhoto?: boolean;
-        badges?: string[];
-        attendedEvents?: string[];
     }) => {
         if (!user || !profile) return;
 
-        const userRef = doc(getFirebaseDb(), 'users', user.uid);
-        const docUpdates: Record<string, string | string[]> = {};
-
         if (updates.displayName !== undefined) {
-            docUpdates.displayName = updates.displayName;
+            const result = await callUpdateDisplayName({displayName: updates.displayName});
+            setProfile(prev => prev ? {...prev, displayName: result.data.displayName} : prev);
         }
 
         if (updates.deletePhoto) {
-            const storageRef = ref(getFirebaseStorage(), `avatars/${user.uid}`);
-            try {
-                await deleteObject(storageRef);
-            } catch { /* may not exist */
-            }
-            docUpdates.photoURL = user.photoURL ?? '';
+            const result = await callDeleteAvatar();
+            setProfile(prev => prev ? {...prev, photoURL: result.data.photoURL} : prev);
         } else if (updates.photoFile) {
-            docUpdates.photoURL = await callUploadAvatar(updates.photoFile);
-        }
-
-        if (updates.badges !== undefined) {
-            docUpdates.badges = updates.badges;
-        }
-
-        if (updates.attendedEvents !== undefined) {
-            docUpdates.attendedEvents = updates.attendedEvents;
-        }
-
-        if (Object.keys(docUpdates).length > 0) {
-            await updateDoc(userRef, docUpdates);
-            setProfile(prev => prev ? {...prev, ...docUpdates} : prev);
+            const url = await callUploadAvatar(updates.photoFile);
+            setProfile(prev => prev ? {...prev, photoURL: url} : prev);
         }
     };
 

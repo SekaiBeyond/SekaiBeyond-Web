@@ -157,7 +157,7 @@ function detectImageMime(buffer: Buffer): string | null {
 /**
  * Create a user profile (called on first sign-in).
  * Sets joinedAt and email server-side so they can't be faked.
- * Idempotent — returns existing profile if already created.
+ * Idempotent — uses a transaction to avoid race conditions on concurrent first-logins.
  */
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     if (!request.auth) {
@@ -165,28 +165,74 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     }
 
     const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
     const userRef = db.collection("users").doc(uid);
 
-    const existing = await userRef.get();
-    if (existing.exists) {
-        return {alreadyExists: true};
-    }
-
-    const displayName = request.auth.token.name ?? "";
+    const rawName = request.auth.token.name ?? "";
     const email = request.auth.token.email ?? "";
     const photoURL = request.auth.token.picture ?? "";
 
-    await userRef.set({
-        displayName: typeof displayName === "string" ? displayName.slice(0, 50) : "",
-        email: typeof email === "string" ? email : "",
-        photoURL: typeof photoURL === "string" ? photoURL.slice(0, 500) : "",
-        joinedAt: FieldValue.serverTimestamp(),
-        attendedEvents: [],
-        badges: [],
-        group: "visitor",
+    // Sanitize displayName: strip HTML tags and control characters
+    const displayName = (typeof rawName === "string" ? rawName : "")
+        .replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, " ").trim().slice(0, 50);
+
+    let alreadyExists = false;
+
+    await db.runTransaction(async (txn) => {
+        const snap = await txn.get(userRef);
+        if (snap.exists) {
+            alreadyExists = true;
+            return;
+        }
+        txn.set(userRef, {
+            displayName,
+            email: typeof email === "string" ? email : "",
+            photoURL: typeof photoURL === "string" ? photoURL.slice(0, 500) : "",
+            joinedAt: FieldValue.serverTimestamp(),
+            attendedEvents: [],
+            badges: [],
+            group: "visitor",
+        });
     });
 
-    return {alreadyExists: false};
+    return {alreadyExists};
+});
+
+/**
+ * Update a user's display name.
+ * Sanitizes input (strips control characters and HTML tags).
+ */
+export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const raw = (request.data as {displayName?: string})?.displayName;
+    if (typeof raw !== "string") {
+        throw new HttpsError("invalid-argument", "displayName must be a string.");
+    }
+
+    // Strip HTML tags and control characters (keep newlines/tabs as spaces)
+    const sanitized = raw.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, " ").trim();
+    if (sanitized.length === 0) {
+        throw new HttpsError("invalid-argument", "displayName is required.");
+    }
+    if (sanitized.length > 50) {
+        throw new HttpsError("invalid-argument", "displayName exceeds maximum length.");
+    }
+
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+        throw new HttpsError("not-found", "User not found.");
+    }
+
+    await userRef.update({displayName: sanitized});
+    return {displayName: sanitized};
 });
 
 /**
@@ -539,7 +585,44 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     await file.save(buffer, {metadata: {contentType}});
 
     const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+
+    // Atomically set photoURL on the user doc so clients can't set arbitrary URLs
+    await db.collection("users").doc(uid).update({photoURL: downloadUrl});
+
     return {url: downloadUrl};
+});
+
+/**
+ * Delete a user's avatar and reset photoURL to their Google profile picture.
+ * Deletes the storage file and resets photoURL to the OAuth picture or empty string.
+ */
+export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+        throw new HttpsError("not-found", "User not found.");
+    }
+
+    const bucket = getStorage().bucket();
+    const file = bucket.file(`avatars/${uid}`);
+    const [exists] = await file.exists();
+    if (exists) {
+        await file.delete();
+    }
+
+    // Reset to Google OAuth photo or empty string
+    const googlePhoto = request.auth.token.picture ?? "";
+    const photoURL = typeof googlePhoto === "string" ? googlePhoto.slice(0, 500) : "";
+    await userRef.update({photoURL});
+
+    return {photoURL};
 });
 
 export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
@@ -1079,6 +1162,9 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
     const createdByUid = validateStr(input.createdByUid, "createdByUid", 128);
     const createdByName = validateStr(input.createdByName, "createdByName", 100);
     const createdByLink = validateStr(input.createdByLink, "createdByLink", 500);
+    if (createdByLink && !createdByLink.startsWith("https://")) {
+        throw new HttpsError("invalid-argument", "createdByLink must use https://.");
+    }
 
     if (badgeId) {
         const existing = await db.collection("badges").doc(badgeId).get();
@@ -1206,6 +1292,7 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
     }
 
     const badgeSnap = await db.collection("badges").doc(badgeId).get();
+    if (!badgeSnap.exists) throw new HttpsError("not-found", "Badge not found.");
 
     const batch = db.batch();
     batch.update(db.collection("users").doc(targetUid), {

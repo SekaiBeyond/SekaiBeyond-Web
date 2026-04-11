@@ -5,12 +5,9 @@ service firebase.storage {
       // Authenticated users can view any avatar
       allow read: if request.auth != null;
 
-      // Users can delete their own avatar
-      allow delete: if request.auth != null
-                    && request.auth.uid == userId;
-
-      // Writes only via Cloud Function (uploadAvatar) which enforces:
-      // - group != visitor, magic bytes validation, size limit, content type
+      // All writes and deletes via Cloud Functions (uploadAvatar, deleteAvatar)
+      // which enforce: group != visitor, magic bytes validation, size limit,
+      // content type, and atomic photoURL update on the user doc
     }
 
     match /events/{imageId} {
