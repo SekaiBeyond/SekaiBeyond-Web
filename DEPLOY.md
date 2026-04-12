@@ -1,6 +1,7 @@
 # Deployment
 
 The site deploys automatically to GitHub Pages when you push to `main` via GitHub Actions.
+An alternative deployment to Firebase Hosting is also available (see below).
 
 ## First-Time Setup
 
@@ -11,24 +12,44 @@ The site deploys automatically to GitHub Pages when you push to `main` via GitHu
 3. Enable **Google sign-in** under Authentication > Sign-in method
 4. Create a **Cloud Firestore** database (choose a nearby region)
 5. Set Firestore **Security Rules** — copy the contents of [`firestore.rules`](firestore.rules) into the Firestore Rules editor
-6. Create the required **Composite Indexes** — either:
-   - Deploy automatically: `firebase deploy --only firestore:indexes`
-   - Or manually: paste the index definition from an error URL (Firestore will link you directly to the index creator when you first hit a query that needs one)
-
-### Firestore Indexes Explained
-
-Firestore requires composite indexes for queries that filter on multiple fields. Each index is a sorted table covering the fields in order, allowing O(1) lookups instead of O(n) collection scans.
-
-For example, querying `where('code', '==', X) AND where('active', '==', true)` needs an index on `[code, active]` — Firestore can't efficiently combine two single-field indexes for this.
-
-The app currently requires:
-- `badgeActivationCodes` by `[code, active]` — used when claiming a badge with a code
-- `badgeActivationCodes` by `[badgeId, createdAt desc]` — used in the admin panel to load codes for a badge
-6. Create the required **Composite Indexes** — either:
-   - Click the index creation link shown in the browser error when you first use the admin panel or badge claim page, **or**
+6. Deploy the required **Composite Indexes**:
+   - Either click the index creation link shown in the browser error when you first use the app, **or**
    - Deploy the indexes defined in [`firestore.indexes.json`](firestore.indexes.json) with `firebase deploy --only firestore:indexes`
 
    Without these composite indexes, certain queries will fail with a `missing index` error.
+
+7. Deploy **Storage Rules** — copy the contents of [`storage.rules`](storage.rules) into the Storage Rules editor, or deploy via `firebase deploy --only storage`
+
+   Storage rules control access to user avatars and admin-uploaded images (event/badge images). Without deploying these, storage defaults to locked-down and all image uploads will fail.
+
+8. Deploy **Cloud Functions** — the app uses 28 callable Cloud Functions for all data mutations (user profile creation, admin operations, badge/event management, image uploads, etc.). Without these, the entire app is non-functional:
+
+   ```bash
+   cd functions && npm install && npm run build && cd ..
+   firebase deploy --only functions
+   ```
+
+9. Configure **Firestore TTL Policy** for rate limiting — the app uses a `rateLimits` collection with TTL-based auto-expiry. In Firebase Console, go to **Firestore** > **TTL** > **Create policy**, and set:
+   - Collection: `rateLimits`
+   - Field: `expiresAt`
+
+   > **Note:** Firestore TTL requires the **Blaze plan** (pay-as-you-go). It is not available on the free Spark plan.
+
+   Without this policy, rate-limit entries accumulate indefinitely and never get cleaned up.
+
+#### Firestore Indexes Explained
+
+Firestore requires composite indexes for queries that filter on multiple fields. Each index is a sorted table covering the fields in order, allowing O(1) lookups instead of O(n) collection scans.
+
+The app currently requires 5 composite indexes (defined in [`firestore.indexes.json`](firestore.indexes.json)):
+
+| Collection | Fields | Purpose |
+|---|---|---|
+| `badgeActivationCodes` | `[badgeId, createdAt desc]` | Admin panel: load codes for a badge |
+| `badgeActivationCodes` | `[code, active]` | Claiming a badge with a code |
+| `records` | `[type, timestamp desc]` | Activity log by type |
+| `records` | `[performedBy, timestamp desc]` | Activity log by user |
+| `records` | `[type, performedBy, timestamp desc]` | Activity log filtered by type and user |
 
 ### 2. GitHub Repository Secrets
 
@@ -77,6 +98,8 @@ Once the first president is set up, they can assign groups to other users throug
 
 ## Deploy Workflow
 
+### GitHub Pages (default)
+
 Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deploy.yml`):
 
 1. Installs dependencies
@@ -85,3 +108,14 @@ Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deplo
 4. Deploys to GitHub Pages
 
 You can also trigger a deployment manually from the **Actions** tab > **Deploy to GitHub Pages** > **Run workflow**.
+
+### Firebase Hosting (alternative)
+
+The project also includes a Firebase Hosting configuration in [`firebase.json`](firebase.json) with SPA rewrites and security headers. To deploy to Firebase Hosting instead:
+
+```bash
+npm run build
+npm run deploy:firebase
+```
+
+This deploys the built site along with Firestore rules, Firestore indexes, Storage rules, and Cloud Functions in one command.
