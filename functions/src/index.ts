@@ -142,6 +142,10 @@ function validateStr(value: unknown, name: string, maxLen: number, required = fa
     return value;
 }
 
+function sanitizeDisplayText(value: string): string {
+    return value.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, " ").trim();
+}
+
 const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "badges/"];
 const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -192,9 +196,7 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     const email = request.auth.token.email ?? "";
     const photoURL = request.auth.token.picture ?? "";
 
-    // Sanitize displayName: strip HTML tags and control characters
-    const displayName = (typeof rawName === "string" ? rawName : "")
-        .replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, " ").trim().slice(0, 50);
+    const displayName = sanitizeDisplayText(typeof rawName === "string" ? rawName : "").slice(0, 50);
 
     let alreadyExists = false;
 
@@ -264,8 +266,7 @@ export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
         throw new HttpsError("invalid-argument", "displayName must be a string.");
     }
 
-    // Strip HTML tags and control characters (keep newlines/tabs as spaces)
-    const sanitized = raw.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, " ").trim();
+    const sanitized = sanitizeDisplayText(raw);
     if (sanitized.length === 0) {
         throw new HttpsError("invalid-argument", "displayName is required.");
     }
@@ -381,11 +382,11 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
         throw new HttpsError("unauthenticated", "Must be signed in.");
     }
 
-    const code = (request.data as {code?: string})?.code?.trim();
+    const code = (request.data as {code?: string})?.code?.trim().toUpperCase();
     if (!code) {
         throw new HttpsError("invalid-argument", "Missing code.");
     }
-    if (!/^[A-Z0-9]{6,20}$/i.test(code)) {
+    if (!/^[A-Z0-9]{6,20}$/.test(code)) {
         throw new HttpsError("invalid-argument", "invalid");
     }
 
@@ -441,11 +442,11 @@ export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (reques
         throw new HttpsError("unauthenticated", "Must be signed in.");
     }
 
-    const code = (request.data as {code?: string})?.code?.trim();
+    const code = (request.data as {code?: string})?.code?.trim().toUpperCase();
     if (!code) {
         throw new HttpsError("invalid-argument", "Missing code.");
     }
-    if (!/^[A-Z0-9]{6,20}$/i.test(code)) {
+    if (!/^[A-Z0-9]{6,20}$/.test(code)) {
         throw new HttpsError("invalid-argument", "invalid");
     }
 
@@ -583,11 +584,6 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
 });
 
 /**
- * Generate an event check-in code (admin only).
- * Verifies caller is core-staff+, deactivates any existing active code for the event,
- * and generates a unique code atomically.
- */
-/**
  * Upload a user avatar (non-visitor only).
  * Validates group, checks magic bytes, enforces size limit, and saves to avatars/{uid}.
  */
@@ -673,6 +669,11 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     return {photoURL};
 });
 
+/**
+ * Generate an event check-in code (admin only).
+ * Verifies caller is core-staff+, deactivates any existing active code for the event,
+ * and generates a unique code atomically.
+ */
 export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -1016,6 +1017,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const description = validateStr(input.description, "description", 2000);
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const icon = validateStr(input.icon, "icon", 500);
+    validateUrl(icon, "icon");
 
     const data = {title, titleCn, tagId, date, location, description, descriptionCn, icon};
     const docId = eventId ?? db.collection("pastEvents").doc().id;
@@ -1068,6 +1070,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const customButtonTextCn = validateStr(input.customButtonTextCn, "customButtonTextCn", 100);
     const customButtonLink = validateStr(input.customButtonLink, "customButtonLink", 500);
 
+    validateUrl(poster, "poster");
     validateUrl(buyTicket, "buyTicket");
     validateUrl(learnMore, "learnMore");
     validateUrl(customButtonLink, "customButtonLink");
@@ -1208,10 +1211,11 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
     const description = validateStr(input.description, "description", 2000);
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const imageUrl = validateStr(input.imageUrl, "imageUrl", 500);
+    validateUrl(imageUrl, "imageUrl");
     // createdByUid/Name/Link are for crediting the badge designer (not the admin who enters it).
     // The actual admin who performed the action is recorded as createdBy/performedBy.
     const createdByUid = validateStr(input.createdByUid, "createdByUid", 128);
-    const createdByName = validateStr(input.createdByName, "createdByName", 100);
+    const createdByName = sanitizeDisplayText(validateStr(input.createdByName, "createdByName", 100));
     const createdByLink = validateStr(input.createdByLink, "createdByLink", 500);
     validateUrl(createdByLink, "createdByLink");
 
