@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "npm --prefix functions run build && react-router build",
-    "postbuild": "node scripts/update-csp-hashes.mjs",
+    "postbuild": "npx tsx scripts/update-csp-hashes.ts",
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
