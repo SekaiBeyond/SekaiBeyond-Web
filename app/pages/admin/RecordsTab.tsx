@@ -171,6 +171,13 @@ export const RecordsTab = ({
                     ? <>assigned {target} from {GROUP_LABELS[r.oldGroup!].en} to {GROUP_LABELS[r.newGroup!].en}</>
                     : <>将 {target} 从 {GROUP_LABELS[r.oldGroup!].zh} 改为 {GROUP_LABELS[r.newGroup!].zh}</>;
             case 'code-create': {
+                if (r.eventId) {
+                    const isPast = pastEvents.some(e => e.id === r.eventId);
+                    const event = isPast
+                        ? clickableEvent(r.eventId, r.eventTitle)
+                        : clickableUpcomingEvent(r.eventId, r.eventTitle);
+                    return isEnglish ? <>created check-in code for {event}</> : <>为 {event} 创建了签到码</>;
+                }
                 const badge = r.badgeId ? clickableBadge(r.badgeId) : r.badgeName;
                 return isEnglish ? <>created claim code for {badge}</> : <>为 {badge} 创建了兑换码</>;
             }

@@ -1,22 +1,12 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { GROUP_LABELS } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import {
-    callDeleteEvent,
-    callGenerateEventCode,
-    callSaveClaimCodeTimeWindow,
-    callSavePastEvent,
-    callToggleClaimCodeActive,
-    callUploadAdminImage,
-    getFirebaseDb,
-} from '~/lib/firebase';
+import { callDeleteEvent, callSavePastEvent, callUploadAdminImage, } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
-import { QRCodeSVG } from 'qrcode.react';
 import type { Tag } from '~/lib/tags';
-import type { BadgeCode, UserRecord } from './types';
-import { docToUserRecord, getClaimUrl } from './utils';
+import type { UserRecord } from './types';
+import { fetchEventAttendees } from './utils';
 import { BilingualFormField } from './BilingualFormField';
+import { EventAttendeesList } from './EventAttendeesList';
 import { ImageUploadField } from './ImageUploadField';
 
 interface EventsTabProps {
@@ -38,11 +28,6 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                                                       }, forwardedRef) => {
     const {isEnglish} = useLanguage();
     const [managedEvent, setManagedEvent] = useState<string | null>(null);
-    const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees'>('codes');
-    const [eventCode, setEventCode] = useState<BadgeCode | null>(null);
-    const [codeFrom, setCodeFrom] = useState('');
-    const [codeUntil, setCodeUntil] = useState('');
-    const [generatingCode, setGeneratingCode] = useState(false);
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
     const [searching, setSearching] = useState(false);
     const [showCreateEvent, setShowCreateEvent] = useState(false);
@@ -58,13 +43,11 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
 
     const selectManagedEvent = async (eventId: string) => {
         setManagedEvent(eventId);
-        setEventSubTab('codes');
-        setEventCode(null);
         setEventAttendees([]);
         try {
-            await loadEventCode(eventId);
+            await loadEventAttendees(eventId);
         } catch (err) {
-            console.error('Failed to load event code:', err);
+            console.error('Failed to load attendees:', err);
         }
     };
 
@@ -102,79 +85,14 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         setShowCreateEvent(true);
     };
 
-    const loadEventCode = async (eventId: string) => {
-        const db = getFirebaseDb();
-        const codesRef = collection(db, 'claimCodes');
-        const q = query(codesRef, where('eventId', '==', eventId));
-        const snapshot = await getDocs(q);
-
-        const codes: BadgeCode[] = snapshot.docs.map(docSnap => {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                code: data.code,
-                eventId: data.eventId ?? '',
-                active: data.active ?? true,
-                activeFrom: data.activeFrom ?? null,
-                activeUntil: data.activeUntil ?? null,
-            };
-        });
-        const active = codes.find(c => c.active);
-        const picked = active ?? codes[0] ?? null;
-        setEventCode(picked);
-        setCodeFrom(picked?.activeFrom ?? '');
-        setCodeUntil(picked?.activeUntil ?? '');
-    };
-
     const loadEventAttendees = async (eventId: string) => {
         setSearching(true);
         try {
-            const db = getFirebaseDb();
-            const q = query(collection(db, 'users'), where('attendedEvents', 'array-contains', eventId));
-            const snapshot = await getDocs(q);
-            setEventAttendees(snapshot.docs.map(docToUserRecord));
+            setEventAttendees(await fetchEventAttendees(eventId));
         } catch {
             showToast(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。', 'error');
         } finally {
             setSearching(false);
-        }
-    };
-
-    const generateEventCodeFn = async (eventId: string) => {
-        setGeneratingCode(true);
-        try {
-            const result = await callGenerateEventCode({eventId});
-            const {id, code} = result.data;
-            setEventCode({id, code, eventId, active: true, activeFrom: null, activeUntil: null});
-            setCodeFrom('');
-            setCodeUntil('');
-        } catch {
-            showToast(isEnglish ? 'Failed to generate code.' : '生成签到码失败。', 'error');
-        } finally {
-            setGeneratingCode(false);
-        }
-    };
-
-    const toggleCodeActive = async () => {
-        if (!eventCode) return;
-        const newActive = !eventCode.active;
-        try {
-            await callToggleClaimCodeActive({codeId: eventCode.id, active: newActive});
-            setEventCode({...eventCode, active: newActive});
-        } catch {
-            showToast(isEnglish ? 'Failed to update code status.' : '更新签到码状态失败。', 'error');
-        }
-    };
-
-    const saveCodeTimeWindow = async () => {
-        if (!eventCode) return;
-        const activeFrom = codeFrom || null;
-        const activeUntil = codeUntil || null;
-        try {
-            await callSaveClaimCodeTimeWindow({codeId: eventCode.id, activeFrom, activeUntil});
-            setEventCode({...eventCode, activeFrom, activeUntil});
-        } catch {
-            showToast(isEnglish ? 'Failed to save time window.' : '保存时间窗口失败。', 'error');
         }
     };
 
@@ -399,151 +317,13 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                         </>
                     )}
 
-                    <div className="admin-sub-tabs">
-                        <button
-                            className={`admin-sub-tab ${eventSubTab === 'codes' ? 'admin-sub-tab-active' : ''}`}
-                            onClick={() => setEventSubTab('codes')}
-                        >
-                            {isEnglish ? 'Check-in Code' : '签到码'}
-                        </button>
-                        <button
-                            className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
-                            onClick={() => {
-                                setEventSubTab('attendees');
-                                loadEventAttendees(managedEvent).then();
-                            }}
-                        >
-                            {isEnglish ? 'Attendees' : '参加者'}
-                            {eventAttendees.length > 0 && (
-                                <span className="admin-sub-tab-count">{eventAttendees.length}</span>
-                            )}
-                        </button>
-                    </div>
-
-                    {eventSubTab === 'codes' && (
-                        <div className="admin-codes-section">
-                            {!eventCode ? (
-                                <>
-                                    <p className="admin-no-results">
-                                        {isEnglish ? 'No check-in code yet.' : '暂无签到码。'}
-                                    </p>
-                                    <button
-                                        className="admin-generate-btn"
-                                        onClick={() => generateEventCodeFn(managedEvent)}
-                                        disabled={generatingCode}
-                                    >
-                                        {generatingCode
-                                            ? (isEnglish ? 'Generating...' : '生成中...')
-                                            : (isEnglish ? '+ Generate Code' : '+ 生成签到码')}
-                                    </button>
-                                </>
-                            ) : (
-                                <div className="admin-single-code">
-                                    <div className="admin-single-code-qr">
-                                        <QRCodeSVG value={getClaimUrl(eventCode.code)} size={200} level="M"/>
-                                    </div>
-                                    <div className="admin-code-url">
-                                        <input
-                                            readOnly
-                                            value={getClaimUrl(eventCode.code)}
-                                            onClick={(e) => (e.target as HTMLInputElement).select()}
-                                            className="admin-code-input"
-                                        />
-                                        <button
-                                            className="admin-copy-btn"
-                                            onClick={() => navigator.clipboard.writeText(getClaimUrl(eventCode.code))}
-                                        >
-                                            {isEnglish ? 'Copy' : '复制'}
-                                        </button>
-                                    </div>
-                                    <span
-                                        className={eventCode.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
-                                        {eventCode.active
-                                            ? (isEnglish ? 'Active' : '启用')
-                                            : (isEnglish ? 'Disabled' : '已停用')}
-                                    </span>
-                                    <div className="admin-code-time-inputs">
-                                        <label>
-                                            <span>{isEnglish ? 'Active from' : '开始时间'}</span>
-                                            <input
-                                                type="datetime-local"
-                                                value={codeFrom}
-                                                onChange={(e) => setCodeFrom(e.target.value)}
-                                                className="admin-datetime-input"
-                                            />
-                                        </label>
-                                        <label>
-                                            <span>{isEnglish ? 'Active until' : '结束时间'}</span>
-                                            <input
-                                                type="datetime-local"
-                                                value={codeUntil}
-                                                onChange={(e) => setCodeUntil(e.target.value)}
-                                                className="admin-datetime-input"
-                                            />
-                                        </label>
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-grant"
-                                            onClick={saveCodeTimeWindow}
-                                            disabled={codeFrom === (eventCode.activeFrom ?? '') && codeUntil === (eventCode.activeUntil ?? '')}
-                                        >
-                                            {isEnglish ? 'Save' : '保存'}
-                                        </button>
-                                    </div>
-                                    <p className="admin-time-hint">
-                                        {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
-                                    </p>
-                                    <div className="admin-single-code-actions">
-                                        <button className="admin-toggle-btn" onClick={toggleCodeActive}>
-                                            {eventCode.active
-                                                ? (isEnglish ? 'Disable' : '停用')
-                                                : (isEnglish ? 'Enable' : '启用')}
-                                        </button>
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-revoke"
-                                            onClick={() => {
-                                                const msg = isEnglish
-                                                    ? 'This will deactivate the current code and generate a new one. Users with the old QR code will no longer be able to check in. Continue?'
-                                                    : '此操作将停用当前签到码并生成新码。持有旧二维码的用户将无法签到。是否继续？';
-                                                if (window.confirm(msg)) generateEventCodeFn(managedEvent);
-                                            }}
-                                            disabled={generatingCode}
-                                        >
-                                            {generatingCode
-                                                ? (isEnglish ? 'Regenerating...' : '重新生成中...')
-                                                : (isEnglish ? 'Regenerate' : '重新生成')}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {eventSubTab === 'attendees' && (
-                        <div className="admin-attendees-section">
-                            {searching && <div className="profile-spinner admin-spinner-center"/>}
-                            {!searching && eventAttendees.length === 0 && (
-                                <p className="admin-no-results">{isEnglish ? 'No attendees yet.' : '暂无参加者。'}</p>
-                            )}
-                            {!searching && eventAttendees.length > 0 && (
-                                <p className="admin-attendees-count">
-                                    {eventAttendees.length} {isEnglish ? 'attendees' : '人参加'}
-                                </p>
-                            )}
-                            {!searching && eventAttendees.map((u) => (
-                                <div key={u.uid} className="admin-user-row">
-                                    <img src={u.photoURL} alt="" className="admin-user-avatar"
-                                         referrerPolicy="no-referrer"/>
-                                    <div>
-                                        <div className="admin-user-name">{u.displayName}</div>
-                                        <div className="admin-user-email">{u.email}</div>
-                                    </div>
-                                    <span className="admin-user-group-tag" data-group={u.group}>
-                                        {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    <h4 className="admin-badges-title admin-section-mb">
+                        {isEnglish ? 'Attendees' : '参加者'}
+                        {eventAttendees.length > 0 && (
+                            <span className="admin-sub-tab-count">{eventAttendees.length}</span>
+                        )}
+                    </h4>
+                    <EventAttendeesList loading={searching} attendees={eventAttendees}/>
                 </div>
             )}
         </div>

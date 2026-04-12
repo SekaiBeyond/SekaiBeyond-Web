@@ -1,4 +1,5 @@
-import { type DocumentData, type Firestore, writeBatch } from 'firebase/firestore';
+import { collection, type DocumentData, type Firestore, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { getFirebaseDb } from '~/lib/firebase';
 import type { UserRecord } from './types';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -31,6 +32,13 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
         badges: data.badges ?? [],
         group: data.group ?? 'visitor',
     };
+};
+
+export const fetchEventAttendees = async (eventId: string): Promise<UserRecord[]> => {
+    const db = getFirebaseDb();
+    const q = query(collection(db, 'users'), where('attendedEvents', 'array-contains', eventId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docToUserRecord);
 };
 
 export const getClaimUrl = (code: string): string => {

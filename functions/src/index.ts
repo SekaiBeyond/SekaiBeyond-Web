@@ -704,7 +704,11 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                     throw new HttpsError("permission-denied", "Insufficient permissions.");
                 }
 
-                const eventSnap = await txn.get(db.collection("pastEvents").doc(eventId));
+                const [pastSnap, upcomingSnap] = await Promise.all([
+                    txn.get(db.collection("pastEvents").doc(eventId)),
+                    txn.get(db.collection("upcomingEvents").doc(eventId)),
+                ]);
+                const eventSnap = pastSnap.exists ? pastSnap : upcomingSnap;
                 if (!eventSnap.exists) {
                     throw new HttpsError("not-found", "Event not found.");
                 }
@@ -738,7 +742,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                     type: "code-create",
                     performedBy: uid,
                     performedByName: callerSnap.data()?.displayName ?? "",
-                    eventTitle: eventSnap.data()?.title ?? eventId,
+                    eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
                     eventId,
                     code,
                     timestamp: FieldValue.serverTimestamp(),
