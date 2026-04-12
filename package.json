@@ -3,12 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "react-router build",
+    "build": "npm --prefix functions run build && react-router build",
     "postbuild": "node scripts/update-csp-hashes.mjs",
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
-    "deploy": "npm run build && cp build/client/index.html build/client/404.html && gh-pages -d build/client"
+    "deploy:github": "npm run build && cp build/client/index.html build/client/404.html && gh-pages -d build/client",
+    "deploy:firebase": "npm run build && firebase deploy",
+    "deploy:rules": "firebase deploy --only functions,firestore,storage"
   },
   "dependencies": {
     "@react-router/node": "^7.5.3",

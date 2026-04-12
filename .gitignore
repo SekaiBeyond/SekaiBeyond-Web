@@ -3,7 +3,6 @@
 
 # React Router
 /.react-router/
-/build/
 /.idea
 /.firebase
 /.claude
@@ -12,4 +11,5 @@
 public/index.html
 /functions/lib
 functions/package-lock.json
-functions/firebase-debug.log
+**/*.log
+**/build

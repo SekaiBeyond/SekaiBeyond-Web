@@ -551,7 +551,11 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             <ImageUploadField
                                 label="Badge Image" labelCn="徽章图片"
                                 preview={editForm.imagePreview}
-                                onFileChange={(file, url) => setEditForm(f => ({...f, image: file, imagePreview: url}))}
+                                onFileChange={(file, url) => setEditForm(f => ({
+                                    ...f,
+                                    image: file,
+                                    imagePreview: url
+                                }))}
                                 onCleanupPreview={url => URL.revokeObjectURL(url)}
                             />
                         </div>

@@ -851,7 +851,8 @@ export const deleteEvent = onCall({maxInstances: 10}, async (request) => {
         await commitInChunks(cascadeOps);
     }
 
-    await deleteStorageFile(eventData.icon ?? "", "events/").catch(() => {});
+    await deleteStorageFile(eventData.icon ?? "", "events/").catch(() => {
+    });
 
     return {deleted: true};
 });
@@ -910,7 +911,8 @@ export const deleteBadge = onCall({maxInstances: 10}, async (request) => {
         await commitInChunks(cascadeOps);
     }
 
-    await deleteStorageFile(badgeData.imageUrl ?? "", "badges/").catch(() => {});
+    await deleteStorageFile(badgeData.imageUrl ?? "", "badges/").catch(() => {
+    });
 
     return {deleted: true};
 });
@@ -1134,7 +1136,8 @@ export const deleteUpcomingEvent = onCall({maxInstances: 10}, async (request) =>
         return eventData.poster ?? "";
     });
 
-    await deleteStorageFile(posterUrl, "upcoming-events/").catch(() => {});
+    await deleteStorageFile(posterUrl, "upcoming-events/").catch(() => {
+    });
 
     return {deleted: true};
 });

@@ -29,7 +29,7 @@ for (const rule of firebase.hosting.headers) {
             // Replace script-src directive, preserving everything after it
             header.value = header.value.replace(
                 /script-src\s+[^;]+/,
-                `script-src 'self' ${hashes.join(" ")}`
+                `script-src 'self' https://apis.google.com ${hashes.join(" ")}`
             );
         }
     }
