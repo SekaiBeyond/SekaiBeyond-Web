@@ -3,6 +3,7 @@ import { getFirebaseDb } from '~/lib/firebase';
 import type { UserRecord } from './types';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_RAW_IMAGE_SIZE = 25 * 1024 * 1024; // 25MB, pre-crop browser-side sanity cap
 const MAX_BATCH_OPS = 450; // Firestore limit is 500, leave margin
 
 type BatchOp = (batch: ReturnType<typeof writeBatch>) => void;
@@ -54,7 +55,22 @@ export const isValidHttpUrl = (url: string): boolean => {
     }
 };
 
-export const validateImageFile = (file: File, isEnglish: boolean): boolean => {
+export const validateImageFile = (
+    file: File,
+    isEnglish: boolean,
+    opts?: {allowAnyImage?: boolean},
+): boolean => {
+    if (opts?.allowAnyImage) {
+        if (!file.type.startsWith('image/')) {
+            alert(isEnglish ? 'Please select an image file.' : '请选择图片文件。');
+            return false;
+        }
+        if (file.size > MAX_RAW_IMAGE_SIZE) {
+            alert(isEnglish ? 'Image must be under 25MB.' : '图片大小不能超过 25MB。');
+            return false;
+        }
+        return true;
+    }
     if (file.type !== 'image/webp') {
         alert(isEnglish ? 'Please upload a WebP image.' : '请上传 WebP 格式的图片。');
         return false;

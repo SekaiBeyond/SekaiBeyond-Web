@@ -1173,3 +1173,51 @@
         text-align: right;
     }
 }
+
+/* Image Crop Modal */
+.image-crop-modal {
+    max-width: min(440px, 92vw);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.image-crop-canvas-wrap {
+    position: relative;
+    max-width: 100%;
+    overflow: hidden;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.image-crop-canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    touch-action: none;
+    cursor: grab;
+    user-select: none;
+}
+
+.image-crop-canvas:active {
+    cursor: grabbing;
+}
+
+.image-crop-zoom {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    font-size: 14px;
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.image-crop-zoom input[type="range"] {
+    flex: 1;
+    accent-color: var(--color-primary);
+}
+

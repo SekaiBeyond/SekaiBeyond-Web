@@ -440,6 +440,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                     imagePreview: url
                                 }))}
                                 onCleanupPreview={url => URL.revokeObjectURL(url)}
+                                cropAspect={1}
                             />
                         </div>
                         <div className="admin-form-actions">
@@ -557,6 +558,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                     imagePreview: url
                                 }))}
                                 onCleanupPreview={url => URL.revokeObjectURL(url)}
+                                cropAspect={1}
                             />
                         </div>
                         <div className="admin-form-actions">
