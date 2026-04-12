@@ -10,6 +10,7 @@ import { useTags } from '~/lib/tags';
 import { useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { isValidHttpUrl } from '~/pages/admin/utils';
+import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 
 interface BadgeDef extends BaseBadgeDef {
     holderPct?: number;
@@ -124,6 +125,7 @@ export const ProfilePage = () => {
     const [savingName, setSavingName] = useState(false);
     const [savingPhoto, setSavingPhoto] = useState(false);
     const [customPhotoLoaded, setCustomPhotoLoaded] = useState(false);
+    const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
@@ -253,25 +255,34 @@ export const ProfilePage = () => {
         setEditingName(false);
     };
 
-    const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5 MB
+    const MAX_RAW_PHOTO_SIZE = 25 * 1024 * 1024; // 25 MB, pre-crop browser-side sanity cap
 
-    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
+        if (fileInputRef.current) fileInputRef.current.value = '';
         if (!file || !profile || !user) return;
-        if (file.size > MAX_PHOTO_SIZE) {
-            alert(isEnglish ? 'Photo must be under 5 MB.' : '照片不能超过 5 MB。');
-            if (fileInputRef.current) fileInputRef.current.value = '';
+        if (!file.type.startsWith('image/')) {
+            alert(isEnglish ? 'Please select an image file.' : '请选择图片文件。');
             return;
         }
+        if (file.size > MAX_RAW_PHOTO_SIZE) {
+            alert(isEnglish ? 'Image must be under 25 MB.' : '图片大小不能超过 25 MB。');
+            return;
+        }
+        setPendingPhoto(file);
+    };
+
+    const handlePhotoCropConfirm = async (cropped: File) => {
+        setPendingPhoto(null);
+        if (!profile || !user) return;
         setSavingPhoto(true);
         try {
-            await updateProfile({photoFile: file});
+            await updateProfile({photoFile: cropped});
             setCustomPhotoLoaded(true);
         } catch (err) {
             void err;
         } finally {
             setSavingPhoto(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
@@ -434,7 +445,7 @@ export const ProfilePage = () => {
                                 <input
                                     ref={fileInputRef}
                                     type="file"
-                                    accept="image/webp"
+                                    accept="image/*"
                                     onChange={handlePhotoSelect}
                                     hidden
                                 />
@@ -539,6 +550,14 @@ export const ProfilePage = () => {
                     </section>
                 )}
             </div>
+            {pendingPhoto && (
+                <ImageCropModal
+                    file={pendingPhoto}
+                    aspect={1}
+                    onConfirm={handlePhotoCropConfirm}
+                    onCancel={() => setPendingPhoto(null)}
+                />
+            )}
         </>
     );
 };

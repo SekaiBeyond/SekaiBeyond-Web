@@ -632,7 +632,7 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     const file = bucket.file(path);
     await file.save(buffer, {metadata: {contentType}});
 
-    const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+    const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&t=${Date.now()}`;
 
     // Atomically set photoURL on the user doc so clients can't set arbitrary URLs
     await db.collection("users").doc(uid).update({photoURL: downloadUrl});

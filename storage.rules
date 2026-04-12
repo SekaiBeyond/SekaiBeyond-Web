@@ -2,8 +2,8 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     match /avatars/{userId} {
-      // Authenticated users can view any avatar
-      allow read: if request.auth != null;
+      // Avatars are publicly readable (shown on public profile pages)
+      allow read: if true;
 
       // All writes and deletes via Cloud Functions (uploadAvatar, deleteAvatar)
       // which enforce: group != visitor, magic bytes validation, size limit,
