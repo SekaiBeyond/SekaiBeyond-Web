@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
 import { GROUP_LABELS, hasPermission, useAuth, type UserGroup } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
@@ -25,6 +25,7 @@ interface ViewedProfile {
     joinedAt: Date;
     attendedEvents: string[];
     badges: string[];
+    badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
 }
 
@@ -129,7 +130,6 @@ export const ProfilePage = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
-    const [earnedDates, setEarnedDates] = useState<Record<string, Date>>({});
 
     useEffect(() => {
         let stale = false;
@@ -178,12 +178,18 @@ export const ProfilePage = () => {
                 const result = await callGetPublicProfile({uid: viewUid});
                 if (stale) return;
                 const data = result.data;
+                const earnedAt: Record<string, Date> = {};
+                for (const [k, v] of Object.entries(data.badgeEarnedAt ?? {})) {
+                    const d = new Date(v);
+                    if (!isNaN(d.getTime())) earnedAt[k] = d;
+                }
                 setViewedProfile({
                     displayName: data.displayName ?? '',
                     photoURL: data.photoURL ?? '',
                     joinedAt: data.joinedAt ? new Date(data.joinedAt) : new Date(),
                     attendedEvents: data.attendedEvents ?? [],
                     badges: data.badges ?? [],
+                    badgeEarnedAt: earnedAt,
                     group: (data.group ?? 'visitor') as UserGroup,
                 });
             } catch (err) {
@@ -198,38 +204,10 @@ export const ProfilePage = () => {
         };
     }, [viewUid, isViewingOther]);
 
-    const targetUid = isViewingOther ? viewUid : user?.uid;
-
-    useEffect(() => {
-        if (!targetUid) return;
-        let stale = false;
-        const loadEarnedDates = async () => {
-            try {
-                const db = getFirebaseDb();
-                const q = query(
-                    collection(db, 'records'),
-                    where('targetUid', '==', targetUid),
-                    where('type', '==', 'achievement-grant')
-                );
-                const snapshot = await getDocs(q);
-                if (stale) return;
-                const dates: Record<string, Date> = {};
-                snapshot.forEach(docSnap => {
-                    const data = docSnap.data();
-                    if (data.type === 'achievement-grant' && data.badgeId && data.timestamp) {
-                        dates[data.badgeId] = data.timestamp.toDate();
-                    }
-                });
-                setEarnedDates(dates);
-            } catch (err) {
-                void (stale || err);
-            }
-        };
-        void loadEarnedDates();
-        return () => {
-            stale = true;
-        };
-    }, [targetUid]);
+    const earnedDates = useMemo<Record<string, Date>>(
+        () => (isViewingOther ? viewedProfile?.badgeEarnedAt : profile?.badgeEarnedAt) ?? {},
+        [isViewingOther, viewedProfile, profile],
+    );
 
     const hasCustomPhoto = profile?.photoURL.includes('firebasestorage.googleapis.com') ?? false;
 

@@ -23,8 +23,8 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     group: ['group-assign'],
     code: ['code-create', 'code-activate', 'code-deactivate', 'code-delete',
         'event-code-activate', 'event-code-deactivate', 'event-code-time-window'],
-    attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend'],
-    badge: ['achievement-grant', 'achievement-revoke', 'badge-create', 'badge-edit', 'badge-delete'],
+    attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend', 'event-claim'],
+    badge: ['achievement-grant', 'achievement-revoke', 'badge-claim', 'badge-create', 'badge-edit', 'badge-delete'],
     event: ['event-create', 'event-edit', 'event-delete',
         'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete', 'upcoming-event-archive'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
@@ -193,6 +193,15 @@ export const RecordsTab = ({
                     ? <>revoked {target}'s attendance
                         for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
                     : <>撤销了 {target} 的 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')} 签到</>;
+            case 'event-claim':
+                return isEnglish
+                    ? <>checked in to {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} with
+                        code</>
+                    : <>使用兑换码签到 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>;
+            case 'badge-claim': {
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+                return isEnglish ? <>claimed {badge} badge with code</> : <>使用兑换码获得 {badge} 徽章</>;
+            }
             case 'code-activate': {
                 const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
                 return isEnglish ? <>activated code for {badge}</> : <>激活了 {badge} 的兑换码</>;
@@ -299,9 +308,11 @@ export const RecordsTab = ({
             case 'badge-revoke':
             case 'event-attend':
             case 'event-unattend':
+            case 'event-claim':
                 return isEnglish ? 'Attend' : '签到';
             case 'achievement-grant':
             case 'achievement-revoke':
+            case 'badge-claim':
             case 'badge-create':
             case 'badge-edit':
             case 'badge-delete':

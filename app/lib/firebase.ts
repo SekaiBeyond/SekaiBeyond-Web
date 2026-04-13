@@ -162,7 +162,9 @@ export const callDeleteTag = (data: {tagId: string}) =>
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {
         displayName: string; photoURL: string; joinedAt: string;
-        attendedEvents: string[]; badges: string[]; group: string;
+        attendedEvents: string[]; badges: string[];
+        badgeEarnedAt: Record<string, string>;
+        group: string;
     }>(getFunctions(), 'getPublicProfile')(data);
 
 export const callDeleteAdminImage = async (downloadUrl: string): Promise<void> => {

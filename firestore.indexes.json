@@ -15,20 +15,6 @@
       ]
     },
     {
-      "collectionGroup": "badgeActivationCodes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "code",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "records",
       "queryScope": "COLLECTION",
       "fields": [

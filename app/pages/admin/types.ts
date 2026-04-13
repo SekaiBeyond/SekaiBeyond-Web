@@ -54,6 +54,8 @@ export type RecordType =
     | 'badge-revoke'      // legacy: means event-unattend (kept for backward compat with existing records)
     | 'event-attend'
     | 'event-unattend'
+    | 'event-claim'
+    | 'badge-claim'
     | 'achievement-grant'
     | 'achievement-revoke'
     | 'badge-create'

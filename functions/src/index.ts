@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 
 import * as crypto from "crypto";
 
@@ -36,6 +36,23 @@ async function checkRateLimit(uid: string): Promise<void> {
 }
 
 const ADMIN_GROUPS = ["core-staff", "president"];
+
+async function requireAuth(request: CallableRequest<unknown>): Promise<string> {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+    return uid;
+}
+
+async function requireAdmin(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {
+    const snap = await db.collection("users").doc(uid).get();
+    if (!ADMIN_GROUPS.includes(snap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    return snap;
+}
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
@@ -110,8 +127,28 @@ function validateDocId(value: unknown, name: string): string {
 }
 
 function validateUrl(value: string, name: string): void {
-    if (value && !value.startsWith("https://")) {
-        throw new HttpsError("invalid-argument", `${name} must use https://.`);
+    if (!value) return;
+    try {
+        const url = new URL(value);
+        if (url.protocol !== "https:") {
+            throw new HttpsError("invalid-argument", `${name} must use https://.`);
+        }
+    } catch (e) {
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError("invalid-argument", `${name} must be a valid URL.`);
+    }
+}
+
+function validateStorageImageUrl(value: string, name: string): void {
+    if (!value) return;
+    try {
+        const url = new URL(value);
+        if (url.protocol !== "https:" || url.hostname !== "firebasestorage.googleapis.com") {
+            throw new HttpsError("invalid-argument", `${name} must be a Firebase Storage URL.`);
+        }
+    } catch (e) {
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError("invalid-argument", `${name} must be a valid URL.`);
     }
 }
 
@@ -239,12 +276,19 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     }
 
     const data = userSnap.data()!;
+    const rawEarnedAt = (data.badgeEarnedAt ?? {}) as Record<string, Timestamp>;
+    const badgeEarnedAt: Record<string, string> = {};
+    for (const [k, v] of Object.entries(rawEarnedAt)) {
+        const iso = v?.toDate?.()?.toISOString();
+        if (iso) badgeEarnedAt[k] = iso;
+    }
     return {
         displayName: data.displayName ?? "",
         photoURL: data.photoURL ?? "",
         joinedAt: data.joinedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
         attendedEvents: data.attendedEvents ?? [],
         badges: data.badges ?? [],
+        badgeEarnedAt,
         group: data.group ?? "visitor",
     };
 });
@@ -289,18 +333,8 @@ export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
  * Verifies caller is core-staff+ before deleting. Client sends the storage path.
  */
 export const deleteAdminImage = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
-    const userSnap = await db.collection("users").doc(uid).get();
-    const group = userSnap.data()?.group;
-    if (!ADMIN_GROUPS.includes(group)) {
-        throw new HttpsError("permission-denied", "Insufficient permissions.");
-    }
-
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
+    await requireAdmin(uid);
 
     const path = (request.data as {path?: string})?.path;
     if (!path) {
@@ -323,18 +357,8 @@ export const deleteAdminImage = onCall({maxInstances: 10}, async (request) => {
  * Verifies caller is core-staff+ before writing. Client sends base64-encoded image data.
  */
 export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
-    const userSnap = await db.collection("users").doc(uid).get();
-    const group = userSnap.data()?.group;
-    if (!ADMIN_GROUPS.includes(group)) {
-        throw new HttpsError("permission-denied", "Insufficient permissions.");
-    }
-
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
+    await requireAdmin(uid);
 
     const input = request.data as {
         path?: string;
@@ -378,58 +402,50 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
  * Validates the code server-side and atomically increments usedCount + adds event to user's attendedEvents.
  */
 export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
+    const uid = await requireAuth(request);
 
     const code = (request.data as {code?: string})?.code?.trim().toUpperCase();
-    if (!code) {
-        throw new HttpsError("invalid-argument", "Missing code.");
-    }
-    if (!/^[A-Z0-9]{6,20}$/.test(code)) {
+    if (!code || !/^[A-Z0-9]{6,20}$/.test(code)) {
         throw new HttpsError("invalid-argument", "invalid");
     }
 
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
-
-    const codesRef = db.collection("claimCodes");
-    const snapshot = await codesRef
-        .where("code", "==", code)
-        .where("active", "==", true)
-        .get();
-
-    if (snapshot.empty) {
-        throw new HttpsError("not-found", "invalid");
-    }
-
-    const codeDoc = snapshot.docs[0];
-    const codeRef = codeDoc.ref;
+    const codeRef = db.collection("claimCodes").doc(code);
     const userRef = db.collection("users").doc(uid);
 
-    const eventId: string = codeDoc.data().eventId ?? codeDoc.data().eventTitle;
-
-    await db.runTransaction(async (txn) => {
-        const [freshCode, freshUser] = await Promise.all([
-            txn.get(codeRef),
-            txn.get(userRef),
-        ]);
-
+    return db.runTransaction(async (txn) => {
+        const freshCode = await txn.get(codeRef);
         if (!freshCode.exists) throw new HttpsError("not-found", "invalid");
         const data = freshCode.data()!;
-
         validateCodeInTransaction(data);
 
-        const attendedEvents: string[] = freshUser.data()?.attendedEvents ?? [];
+        const eventId: string = data.eventId;
+        if (!eventId) throw new HttpsError("not-found", "invalid");
+
+        const [eventSnap, userSnap] = await Promise.all([
+            txn.get(db.collection("pastEvents").doc(eventId)),
+            txn.get(userRef),
+        ]);
+        // Forces retry if the event is concurrently deleted mid-claim
+        if (!eventSnap.exists) throw new HttpsError("not-found", "invalid");
+
+        const attendedEvents: string[] = userSnap.data()?.attendedEvents ?? [];
         if (attendedEvents.includes(eventId)) {
             throw new HttpsError("already-exists", "already-have");
         }
 
         txn.update(codeRef, {usedCount: FieldValue.increment(1)});
         txn.update(userRef, {attendedEvents: FieldValue.arrayUnion(eventId)});
+        txn.set(db.collection("records").doc(), {
+            type: "event-claim",
+            performedBy: uid,
+            performedByName: userSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle: eventSnap.data()?.title ?? eventId,
+            code,
+            timestamp: FieldValue.serverTimestamp(),
+        });
+        return {eventId};
     });
-
-    return {eventId};
 });
 
 /**
@@ -438,69 +454,61 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
  * Returns badge metadata so the client doesn't need a separate fetch.
  */
 export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
+    const uid = await requireAuth(request);
 
     const code = (request.data as {code?: string})?.code?.trim().toUpperCase();
-    if (!code) {
-        throw new HttpsError("invalid-argument", "Missing code.");
-    }
-    if (!/^[A-Z0-9]{6,20}$/.test(code)) {
+    if (!code || !/^[A-Z0-9]{6,20}$/.test(code)) {
         throw new HttpsError("invalid-argument", "invalid");
     }
 
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
-
-    const codesRef = db.collection("badgeActivationCodes");
-    const snapshot = await codesRef
-        .where("code", "==", code)
-        .where("active", "==", true)
-        .get();
-
-    if (snapshot.empty) {
-        throw new HttpsError("not-found", "invalid");
-    }
-
-    const codeDoc = snapshot.docs[0];
-    const codeRef = codeDoc.ref;
+    const codeRef = db.collection("badgeActivationCodes").doc(code);
     const userRef = db.collection("users").doc(uid);
-    const badgeId: string = codeDoc.data().badgeId;
 
-    let badgeData: FirebaseFirestore.DocumentData;
-
-    await db.runTransaction(async (txn) => {
-        const [freshCode, freshUser, badgeSnap] = await Promise.all([
-            txn.get(codeRef),
-            txn.get(userRef),
-            txn.get(db.collection("badges").doc(badgeId)),
-        ]);
-
+    return db.runTransaction(async (txn) => {
+        const freshCode = await txn.get(codeRef);
         if (!freshCode.exists) throw new HttpsError("not-found", "invalid");
-        if (!badgeSnap.exists) throw new HttpsError("not-found", "invalid");
-        badgeData = badgeSnap.data()!;
         const data = freshCode.data()!;
-
         validateCodeInTransaction(data);
 
-        const userBadges: string[] = freshUser.data()?.badges ?? [];
+        const badgeId: string = data.badgeId;
+        if (!badgeId) throw new HttpsError("not-found", "invalid");
+
+        const [badgeSnap, userSnap] = await Promise.all([
+            txn.get(db.collection("badges").doc(badgeId)),
+            txn.get(userRef),
+        ]);
+        if (!badgeSnap.exists) throw new HttpsError("not-found", "invalid");
+        const badgeData = badgeSnap.data()!;
+
+        const userBadges: string[] = userSnap.data()?.badges ?? [];
         if (userBadges.includes(badgeId)) {
             throw new HttpsError("already-exists", "already-have");
         }
 
         txn.update(codeRef, {usedCount: FieldValue.increment(1)});
-        txn.update(userRef, {badges: FieldValue.arrayUnion(badgeId)});
-    });
+        txn.update(userRef, {
+            badges: FieldValue.arrayUnion(badgeId),
+            [`badgeEarnedAt.${badgeId}`]: FieldValue.serverTimestamp(),
+        });
+        txn.set(db.collection("records").doc(), {
+            type: "badge-claim",
+            performedBy: uid,
+            performedByName: userSnap.data()?.displayName ?? "",
+            badgeId,
+            badgeName: badgeData.name ?? badgeId,
+            code,
+            timestamp: FieldValue.serverTimestamp(),
+        });
 
-    return {
-        badgeId,
-        badgeName: badgeData!.name ?? "",
-        badgeNameCn: badgeData!.nameCn ?? "",
-        badgeDescription: badgeData!.description ?? "",
-        badgeDescriptionCn: badgeData!.descriptionCn ?? "",
-        badgeImageUrl: badgeData!.imageUrl ?? "",
-    };
+        return {
+            badgeId,
+            badgeName: badgeData.name ?? "",
+            badgeNameCn: badgeData.nameCn ?? "",
+            badgeDescription: badgeData.description ?? "",
+            badgeDescriptionCn: badgeData.descriptionCn ?? "",
+            badgeImageUrl: badgeData.imageUrl ?? "",
+        };
+    });
 });
 
 /**
@@ -646,13 +654,15 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     }
 
     const uid = request.auth.uid;
+    const userSnap = await db.collection("users").doc(uid).get();
+    const group = userSnap.data()?.group;
+    if (!group || group === "visitor") {
+        throw new HttpsError("permission-denied", "Visitors cannot delete avatars.");
+    }
+
     await checkRateLimit(uid);
 
     const userRef = db.collection("users").doc(uid);
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) {
-        throw new HttpsError("not-found", "User not found.");
-    }
 
     const bucket = getStorage().bucket();
     const file = bucket.file(`avatars/${uid}`);
@@ -793,13 +803,17 @@ function extractStoragePath(downloadUrl: string): string | null {
     return decodeURIComponent(match[1]);
 }
 
-async function deleteStorageFile(downloadUrl: string, allowedPrefix?: string): Promise<void> {
+async function deleteStorageFile(downloadUrl: string, allowedPrefixes?: string[]): Promise<void> {
     const path = extractStoragePath(downloadUrl);
     if (!path) return;
-    if (allowedPrefix && !path.startsWith(allowedPrefix)) return;
+    if (allowedPrefixes && !allowedPrefixes.some(p => path.startsWith(p))) return;
     const file = getStorage().bucket().file(path);
     const [exists] = await file.exists();
     if (exists) await file.delete();
+}
+
+function logStorageCleanupError(context: string): (err: unknown) => void {
+    return (err) => console.error(`Storage cleanup failed (${context}):`, err);
 }
 
 /**
@@ -856,8 +870,8 @@ export const deleteEvent = onCall({maxInstances: 10}, async (request) => {
         await commitInChunks(cascadeOps);
     }
 
-    await deleteStorageFile(eventData.icon ?? "", "events/").catch(() => {
-    });
+    await deleteStorageFile(eventData.icon ?? "", ["events/", "upcoming-events/"])
+        .catch(logStorageCleanupError(`deleteEvent ${eventId}`));
 
     return {deleted: true};
 });
@@ -916,8 +930,8 @@ export const deleteBadge = onCall({maxInstances: 10}, async (request) => {
         await commitInChunks(cascadeOps);
     }
 
-    await deleteStorageFile(badgeData.imageUrl ?? "", "badges/").catch(() => {
-    });
+    await deleteStorageFile(badgeData.imageUrl ?? "", ["badges/"])
+        .catch(logStorageCleanupError(`deleteBadge ${badgeId}`));
 
     return {deleted: true};
 });
@@ -1017,15 +1031,17 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const description = validateStr(input.description, "description", 2000);
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const icon = validateStr(input.icon, "icon", 500);
-    validateUrl(icon, "icon");
+    validateStorageImageUrl(icon, "icon");
 
     const data = {title, titleCn, tagId, date, location, description, descriptionCn, icon};
     const docId = eventId ?? db.collection("pastEvents").doc().id;
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    const {result, oldIcon} = await adminTransaction(uid, async (txn, callerSnap) => {
+        let prevIcon = "";
         if (eventId) {
             const existing = await txn.get(db.collection("pastEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
+            prevIcon = existing.data()?.icon ?? "";
         }
         const ref = db.collection("pastEvents").doc(docId);
         if (eventId) {
@@ -1041,8 +1057,15 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
             eventId: docId,
             timestamp: FieldValue.serverTimestamp(),
         });
-        return {eventId: docId};
+        return {result: {eventId: docId}, oldIcon: prevIcon};
     });
+
+    if (oldIcon && oldIcon !== icon) {
+        await deleteStorageFile(oldIcon, ["events/", "upcoming-events/"])
+            .catch(logStorageCleanupError(`savePastEvent ${docId}`));
+    }
+
+    return result;
 });
 
 /**
@@ -1070,7 +1093,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const customButtonTextCn = validateStr(input.customButtonTextCn, "customButtonTextCn", 100);
     const customButtonLink = validateStr(input.customButtonLink, "customButtonLink", 500);
 
-    validateUrl(poster, "poster");
+    validateStorageImageUrl(poster, "poster");
     validateUrl(buyTicket, "buyTicket");
     validateUrl(learnMore, "learnMore");
     validateUrl(customButtonLink, "customButtonLink");
@@ -1092,10 +1115,12 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     };
     const docId = eventId ?? db.collection("upcomingEvents").doc().id;
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    const {result, oldPoster} = await adminTransaction(uid, async (txn, callerSnap) => {
+        let prevPoster = "";
         if (eventId) {
             const existing = await txn.get(db.collection("upcomingEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
+            prevPoster = existing.data()?.poster ?? "";
         }
         const ref = db.collection("upcomingEvents").doc(docId);
         if (eventId) {
@@ -1111,8 +1136,15 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
             eventId: docId,
             timestamp: FieldValue.serverTimestamp(),
         });
-        return {eventId: docId};
+        return {result: {eventId: docId}, oldPoster: prevPoster};
     });
+
+    if (oldPoster && oldPoster !== poster) {
+        await deleteStorageFile(oldPoster, ["upcoming-events/"])
+            .catch(logStorageCleanupError(`saveUpcomingEvent ${docId}`));
+    }
+
+    return result;
 });
 
 /**
@@ -1143,8 +1175,8 @@ export const deleteUpcomingEvent = onCall({maxInstances: 10}, async (request) =>
         return eventData.poster ?? "";
     });
 
-    await deleteStorageFile(posterUrl, "upcoming-events/").catch(() => {
-    });
+    await deleteStorageFile(posterUrl, ["upcoming-events/"])
+        .catch(logStorageCleanupError(`deleteUpcomingEvent ${eventId}`));
 
     return {deleted: true};
 });
@@ -1211,7 +1243,7 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
     const description = validateStr(input.description, "description", 2000);
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const imageUrl = validateStr(input.imageUrl, "imageUrl", 500);
-    validateUrl(imageUrl, "imageUrl");
+    validateStorageImageUrl(imageUrl, "imageUrl");
     // createdByUid/Name/Link are for crediting the badge designer (not the admin who enters it).
     // The actual admin who performed the action is recorded as createdBy/performedBy.
     const createdByUid = validateStr(input.createdByUid, "createdByUid", 128);
@@ -1221,7 +1253,7 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
 
     const newRef = badgeId ? null : db.collection("badges").doc();
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    const {result, oldImageUrl} = await adminTransaction(uid, async (txn, callerSnap) => {
         // Validate createdByUid references an existing user if provided
         if (createdByUid) {
             const creatorSnap = await txn.get(db.collection("users").doc(createdByUid));
@@ -1233,6 +1265,7 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
         if (badgeId) {
             const existing = await txn.get(db.collection("badges").doc(badgeId));
             if (!existing.exists) throw new HttpsError("not-found", "Badge not found.");
+            const prevImageUrl: string = existing.data()?.imageUrl ?? "";
 
             txn.update(db.collection("badges").doc(badgeId), {
                 name, nameCn, description, descriptionCn, imageUrl,
@@ -1246,7 +1279,7 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
                 badgeName: name,
                 timestamp: FieldValue.serverTimestamp(),
             });
-            return {badgeId};
+            return {result: {badgeId}, oldImageUrl: prevImageUrl};
         }
 
         txn.set(newRef!, {
@@ -1263,8 +1296,15 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
             badgeName: name,
             timestamp: FieldValue.serverTimestamp(),
         });
-        return {badgeId: newRef!.id};
+        return {result: {badgeId: newRef!.id}, oldImageUrl: ""};
     });
+
+    if (oldImageUrl && oldImageUrl !== imageUrl) {
+        await deleteStorageFile(oldImageUrl, ["badges/"])
+            .catch(logStorageCleanupError(`saveBadge ${result.badgeId}`));
+    }
+
+    return result;
 });
 
 /**
@@ -1342,6 +1382,7 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
 
         txn.update(db.collection("users").doc(targetUid), {
             badges: grant ? FieldValue.arrayUnion(badgeId) : FieldValue.arrayRemove(badgeId),
+            [`badgeEarnedAt.${badgeId}`]: grant ? FieldValue.serverTimestamp() : FieldValue.delete(),
         });
         txn.set(db.collection("records").doc(), {
             type: grant ? "achievement-grant" : "achievement-revoke",

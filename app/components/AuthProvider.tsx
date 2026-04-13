@@ -1,6 +1,6 @@
 import { createContext, type FC, type ReactNode, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import {
     callCreateUserProfile,
     callDeleteAvatar,
@@ -59,7 +59,17 @@ export interface UserProfile {
     joinedAt: Date;
     attendedEvents: string[];
     badges: string[];
+    badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
+}
+
+function parseBadgeEarnedAt(raw: unknown): Record<string, Date> {
+    if (!raw || typeof raw !== 'object') return {};
+    const out: Record<string, Date> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+        if (v instanceof Timestamp) out[k] = v.toDate();
+    }
+    return out;
 }
 
 interface AuthContextType {
@@ -112,6 +122,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                         joinedAt: data.joinedAt?.toDate() ?? new Date(),
                         attendedEvents: data.attendedEvents ?? [],
                         badges: data.badges ?? [],
+                        badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
                         group: data.group ?? 'visitor',
                     });
                 } else {
@@ -125,6 +136,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                         joinedAt: data.joinedAt?.toDate() ?? new Date(),
                         attendedEvents: [],
                         badges: [],
+                        badgeEarnedAt: {},
                         group: 'visitor',
                     });
                 }
@@ -160,6 +172,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                 joinedAt: data.joinedAt?.toDate() ?? new Date(),
                 attendedEvents: data.attendedEvents ?? [],
                 badges: data.badges ?? [],
+                badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
                 group: data.group ?? 'visitor',
             });
         }
