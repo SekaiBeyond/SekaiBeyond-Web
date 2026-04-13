@@ -612,7 +612,8 @@
     transition: opacity 0.2s;
 }
 
-.profile-avatar-clickable:hover .profile-avatar-overlay {
+.profile-avatar-clickable:hover .profile-avatar-overlay,
+.profile-avatar-saving .profile-avatar-overlay {
     opacity: 1;
 }
 

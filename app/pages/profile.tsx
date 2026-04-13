@@ -380,7 +380,7 @@ export const ProfilePage = () => {
             <div className="profile-page">
 
                 <div className="profile-header">
-                    <div className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : ''}`}>
+                    <div className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
                         <img
                             src={displayedPhoto}
                             alt={dp.name}
