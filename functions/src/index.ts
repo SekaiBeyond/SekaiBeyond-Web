@@ -391,7 +391,9 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
 
     const bucket = getStorage().bucket();
     const file = bucket.file(path);
-    await file.save(buffer, {metadata: {contentType}});
+    await file.save(buffer, {
+        metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
+    });
 
     const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
     return {url: downloadUrl};
@@ -634,7 +636,9 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     const bucket = getStorage().bucket();
     const path = `avatars/${uid}`;
     const file = bucket.file(path);
-    await file.save(buffer, {metadata: {contentType}});
+    await file.save(buffer, {
+        metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
+    });
 
     const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&t=${Date.now()}`;
 
