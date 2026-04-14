@@ -48,10 +48,6 @@ export function canManageUser(assignerGroup: UserGroup, userCurrentGroup: UserGr
     return false;
 }
 
-export function getAssignableGroups(assignerGroup: UserGroup): UserGroup[] {
-    return USER_GROUPS.filter(g => canAssignGroup(assignerGroup, g));
-}
-
 export interface UserProfile {
     displayName: string;
     email: string;

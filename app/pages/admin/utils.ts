@@ -1,25 +1,9 @@
-import { collection, type DocumentData, type Firestore, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { collection, type DocumentData, getDocs, query, where } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
 import type { UserRecord } from './types';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_RAW_IMAGE_SIZE = 25 * 1024 * 1024; // 25MB, pre-crop browser-side sanity cap
-const MAX_BATCH_OPS = 450; // Firestore limit is 500, leave margin
-
-type BatchOp = (batch: ReturnType<typeof writeBatch>) => void;
-
-/**
- * Execute batch operations in chunks to stay under Firestore's 500-op batch limit.
- * Each callback in `ops` should call exactly one batch method (set/update/delete).
- */
-export const commitInChunks = async (db: Firestore, ops: BatchOp[]): Promise<void> => {
-    for (let i = 0; i < ops.length; i += MAX_BATCH_OPS) {
-        const chunk = ops.slice(i, i + MAX_BATCH_OPS);
-        const batch = writeBatch(db);
-        for (const op of chunk) op(batch);
-        await batch.commit();
-    }
-};
 
 export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData}): UserRecord => {
     const data = docSnap.data();

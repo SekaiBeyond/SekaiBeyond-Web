@@ -350,13 +350,6 @@
     font-weight: 600;
 }
 
-.admin-event-card-actions {
-    display: flex;
-    gap: 6px;
-    margin-left: auto;
-    flex-shrink: 0;
-}
-
 /* Event Detail View */
 .admin-event-detail-header {
     display: flex;

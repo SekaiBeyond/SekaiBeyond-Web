@@ -167,15 +167,6 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         group: string;
     }>(getFunctions(), 'getPublicProfile')(data);
 
-export const callDeleteAdminImage = async (downloadUrl: string): Promise<void> => {
-    const match = downloadUrl.match(/firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/([^?]+)/);
-    if (!match) return;
-    const path = decodeURIComponent(match[1]);
-    await httpsCallable<{path: string}, {deleted: boolean}>(
-        getFunctions(), 'deleteAdminImage'
-    )({path});
-};
-
 export const callUploadAdminImage = async (file: File, storagePath: string): Promise<string> => {
     const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
