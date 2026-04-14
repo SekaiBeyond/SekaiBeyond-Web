@@ -6,7 +6,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { usePastEvents } from '~/lib/pastEvents';
-import { useUpcomingEvents } from '~/lib/upcomingEvents';
+import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { useSearchParams } from 'react-router';
 import { useTags } from '~/lib/tags';
 import type { BadgeDef, Tab } from './types';
@@ -29,7 +29,7 @@ export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
     const {pastEvents: rawPastEvents, refresh: refreshEvents} = usePastEvents();
-    const {upcomingEvents, refresh: refreshUpcoming} = useUpcomingEvents();
+    const {upcomingEvents, refresh: refreshUpcoming} = useAllUpcomingEvents();
     const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => {
         const pad = (d: string) => d.split('-').map(p => p.padStart(2, '0')).join('-');
         return pad(b.date).localeCompare(pad(a.date));

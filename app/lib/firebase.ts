@@ -122,6 +122,9 @@ export const callSaveUpcomingEvent = (data: {
 export const callDeleteUpcomingEvent = (data: {eventId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteUpcomingEvent')(data);
 
+export const callSetUpcomingEventPublished = (data: {eventId: string; published: boolean}) =>
+    httpsCallable<typeof data, {published: boolean}>(getFunctions(), 'setUpcomingEventPublished')(data);
+
 export const callArchiveUpcomingEvent = (data: {eventId: string; tagId: string}) =>
     httpsCallable<typeof data, {pastEventId: string}>(getFunctions(), 'archiveUpcomingEvent')(data);
 

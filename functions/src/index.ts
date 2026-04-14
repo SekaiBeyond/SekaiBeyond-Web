@@ -1137,16 +1137,18 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
 
     const {result, oldPoster} = await adminTransaction(uid, async (txn, callerSnap) => {
         let prevPoster = "";
+        let wasPublished = false;
         if (eventId) {
             const existing = await txn.get(db.collection("upcomingEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
             prevPoster = existing.data()?.poster ?? "";
+            wasPublished = existing.data()?.published ?? false;
         }
         const ref = db.collection("upcomingEvents").doc(docId);
         if (eventId) {
-            txn.update(ref, data);
+            txn.update(ref, {...data, published: wasPublished});
         } else {
-            txn.set(ref, data);
+            txn.set(ref, {...data, published: false});
         }
         txn.set(db.collection("records").doc(), {
             type: eventId ? "upcoming-event-edit" : "upcoming-event-create",
@@ -1166,6 +1168,39 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     }
 
     return result;
+});
+
+/**
+ * Publish or unpublish an upcoming event (admin only).
+ * Unpublished events are hidden from the public site.
+ */
+export const setUpcomingEventPublished = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const input = request.data as {eventId?: string; published?: boolean};
+    const eventId = validateDocId(input.eventId, "eventId");
+    if (typeof input.published !== "boolean") {
+        throw new HttpsError("invalid-argument", "published must be a boolean.");
+    }
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const ref = db.collection("upcomingEvents").doc(eventId);
+        const snap = await txn.get(ref);
+        if (!snap.exists) throw new HttpsError("not-found", "Event not found.");
+        txn.update(ref, {published: input.published});
+        txn.set(db.collection("records").doc(), {
+            type: input.published ? "upcoming-event-publish" : "upcoming-event-unpublish",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventTitle: snap.data()?.name ?? eventId,
+            eventId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {published: input.published};
+    });
 });
 
 /**

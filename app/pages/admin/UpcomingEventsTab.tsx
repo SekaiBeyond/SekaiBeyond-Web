@@ -7,6 +7,7 @@ import {
     callGenerateEventCode,
     callSaveClaimCodeTimeWindow,
     callSaveUpcomingEvent,
+    callSetUpcomingEventPublished,
     callToggleClaimCodeActive,
     callUploadAdminImage,
     getFirebaseDb,
@@ -295,6 +296,23 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         }
     };
 
+    const togglePublish = async (event: UpcomingEvent) => {
+        const newPublished = !event.published;
+        try {
+            await callSetUpcomingEventPublished({eventId: event.id, published: newPublished});
+            await refreshEvents();
+            showToast(
+                newPublished
+                    ? (isEnglish ? 'Event published.' : '活动已发布。')
+                    : (isEnglish ? 'Event unpublished.' : '活动已取消发布。'),
+                'success',
+            );
+        } catch (err) {
+            console.error('[togglePublish]', err);
+            showToast(isEnglish ? 'Failed to update publish status.' : '更新发布状态失败。', 'error');
+        }
+    };
+
     const selectedEvt = selectedEvent ? upcomingEvents.find(e => e.id === selectedEvent) ?? null : null;
 
     return (
@@ -466,6 +484,11 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                             year: 'numeric', month: 'short', day: 'numeric',
                                         })}
                                     </span>
+                                    {!event.published && (
+                                        <span className="admin-ended-tag">
+                                            {isEnglish ? 'Unpublished' : '未发布'}
+                                        </span>
+                                    )}
                                     {event.endAt < new Date() && (
                                         <span className="admin-ended-tag">
                                             {isEnglish ? 'Ended' : '已结束'}
@@ -513,6 +536,14 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     }}
                                 >
                                     {isEnglish ? 'Edit Event' : '编辑活动'}
+                                </button>
+                                <button
+                                    className="admin-toggle-btn admin-toggle-grant"
+                                    onClick={() => togglePublish(selectedEvt)}
+                                >
+                                    {selectedEvt.published
+                                        ? (isEnglish ? 'Unpublish' : '取消发布')
+                                        : (isEnglish ? 'Publish' : '发布')}
                                 </button>
                                 <button
                                     className="admin-toggle-btn admin-toggle-revoke"

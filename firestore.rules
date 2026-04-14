@@ -57,9 +57,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Upcoming events — publicly readable; all writes via Cloud Functions
+    // Upcoming events — public can read only published ones; staff can read all.
+    // All writes via Cloud Functions.
     match /upcomingEvents/{eventId} {
-      allow read: if true;
+      allow read: if resource.data.published == true
+                  || (request.auth != null && isCoreStaffOrAbove());
     }
 
     // Deny all access to unlisted paths (safety net — Firestore denies by default,

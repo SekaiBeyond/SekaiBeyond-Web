@@ -1107,6 +1107,8 @@
 .record-type-upcoming-event-edit,
 .record-type-upcoming-event-delete,
 .record-type-upcoming-event-archive,
+.record-type-upcoming-event-publish,
+.record-type-upcoming-event-unpublish,
 .record-type-tag-create,
 .record-type-tag-edit,
 .record-type-tag-delete {

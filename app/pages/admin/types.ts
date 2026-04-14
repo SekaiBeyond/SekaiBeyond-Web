@@ -68,6 +68,8 @@ export type RecordType =
     | 'upcoming-event-edit'
     | 'upcoming-event-delete'
     | 'upcoming-event-archive'
+    | 'upcoming-event-publish'
+    | 'upcoming-event-unpublish'
     | 'event-code-activate'
     | 'event-code-deactivate'
     | 'event-code-time-window'

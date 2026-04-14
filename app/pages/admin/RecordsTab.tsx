@@ -26,7 +26,8 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend', 'event-claim'],
     badge: ['achievement-grant', 'achievement-revoke', 'badge-claim', 'badge-create', 'badge-edit', 'badge-delete'],
     event: ['event-create', 'event-edit', 'event-delete',
-        'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete', 'upcoming-event-archive'],
+        'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete', 'upcoming-event-archive',
+        'upcoming-event-publish', 'upcoming-event-unpublish'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
 };
 
@@ -262,6 +263,14 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>archived {r.eventTitle ?? ''} to past events</>
                     : <>将 {r.eventTitle ?? ''} 归档到往期活动</>;
+            case 'upcoming-event-publish':
+                return isEnglish
+                    ? <>published upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
+                    : <>发布了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
+            case 'upcoming-event-unpublish':
+                return isEnglish
+                    ? <>unpublished upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
+                    : <>取消发布了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
             case 'event-code-activate':
                 return isEnglish
                     ? <>activated check-in code
@@ -324,6 +333,8 @@ export const RecordsTab = ({
             case 'upcoming-event-edit':
             case 'upcoming-event-delete':
             case 'upcoming-event-archive':
+            case 'upcoming-event-publish':
+            case 'upcoming-event-unpublish':
                 return isEnglish ? 'Event' : '活动';
             case 'tag-create':
             case 'tag-edit':
