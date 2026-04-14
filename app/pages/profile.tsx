@@ -216,7 +216,7 @@ export const ProfilePage = () => {
         [isViewingOther, viewedEarnedAt, ownEarnedAt],
     );
 
-    const hasCustomPhoto = profile?.photoURL.includes('firebasestorage.googleapis.com') ?? false;
+    const hasCustomPhoto = profile?.photoURL?.includes('firebasestorage.googleapis.com') ?? false;
 
     useEffect(() => {
         if (!hasCustomPhoto || !profile) {
@@ -264,8 +264,8 @@ export const ProfilePage = () => {
         try {
             await updateProfile({photoFile: cropped});
             setCustomPhotoLoaded(true);
-        } catch (err) {
-            void err;
+        } catch {
+            alert(isEnglish ? 'Failed to upload photo. Please try again.' : '上传头像失败，请重试。');
         } finally {
             setSavingPhoto(false);
         }
@@ -283,8 +283,8 @@ export const ProfilePage = () => {
         try {
             await updateProfile({deletePhoto: true});
             setCustomPhotoLoaded(false);
-        } catch (err) {
-            void err;
+        } catch {
+            alert(isEnglish ? 'Failed to remove photo. Please try again.' : '删除头像失败，请重试。');
         } finally {
             setSavingPhoto(false);
         }
@@ -300,8 +300,8 @@ export const ProfilePage = () => {
         try {
             await updateProfile({displayName: editName});
             setEditingName(false);
-        } catch (err) {
-            void err;
+        } catch {
+            alert(isEnglish ? 'Failed to update name. Please try again.' : '修改名称失败，请重试。');
         } finally {
             setSavingName(false);
         }
