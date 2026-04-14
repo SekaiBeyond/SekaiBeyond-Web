@@ -4,7 +4,13 @@ import { useUpcomingEvents } from "~/lib/upcomingEvents";
 
 export const Footer = () => {
     const {isEnglish} = useLanguage();
-    const {hasActive} = useUpcomingEvents();
+    const {hasActive, activeEvents} = useUpcomingEvents();
+    const singleUpcoming = activeEvents.length === 1;
+
+    const labelFor = (link: NavLink) =>
+        link.id === 'upcoming' && singleUpcoming && isEnglish
+            ? 'Upcoming Event'
+            : (isEnglish ? link.labelEn : link.labelCn);
 
     return (
         <footer>
@@ -16,12 +22,12 @@ export const Footer = () => {
                             e.preventDefault();
                             document.querySelector(link.href)?.scrollIntoView({behavior: "smooth"});
                         }}>
-                            {isEnglish ? link.labelEn : link.labelCn}
+                            {labelFor(link)}
                         </a>
                     ) : (
                         <a key={link.id} href={link.href} className="footer-link" target="_blank"
                            rel="noopener noreferrer">
-                            {isEnglish ? link.labelEn : link.labelCn}
+                            {labelFor(link)}
                         </a>
                     )
                 ))}

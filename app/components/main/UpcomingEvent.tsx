@@ -83,9 +83,15 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     {isEnglish ? event.description : event.descriptionCn}
                 </p>
                 {event.poster && (
-                    <div className="convention-poster convention-poster--spaced"
-                         onClick={onPosterClick}>
-                        <img src={event.poster} alt={isEnglish ? "Event Poster" : "活动海报"}/>
+                    <div className="convention-poster convention-poster--spaced">
+                        <button
+                            type="button"
+                            className="convention-poster-btn"
+                            onClick={onPosterClick}
+                            aria-label={isEnglish ? "View event poster" : "查看活动海报"}
+                        >
+                            <img src={event.poster} alt={isEnglish ? "Event Poster" : "活动海报"}/>
+                        </button>
                         {event.posterCredit ? (
                             <p className="poster-credit">
                                 {isEnglish ? `Poster by ${event.posterCredit}` : `海报由 ${event.posterCredit} 制作`}

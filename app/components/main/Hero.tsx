@@ -29,9 +29,7 @@ export const Hero = () => {
             <div className="hero-content">
                 <span
                     className="hero-badge">{isEnglish ? 'Registered Student Organization @ University of Washington' : '华盛顿大学的学生社团'}</span>
-                <div className="hero-title-wrapper">
-                    <h1 className="hero-title">{isEnglish ? "Welcome to Sekai Beyond!" : "欢迎来到彼世界!"}</h1>
-                </div>
+                <h1 className="hero-title">{isEnglish ? "Welcome to Sekai Beyond!" : "欢迎来到彼世界!"}</h1>
                 <p className="hero-subtitle">{isEnglish ? "A creative community for anime, gaming, cosplay, and creation." : '一个面向动漫、游戏、Cosplay 与开发的创作社区'}
                 </p>
                 <p className="hero-description">

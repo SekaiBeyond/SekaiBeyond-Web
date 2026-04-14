@@ -8,8 +8,9 @@ import { useUpcomingEvents } from "~/lib/upcomingEvents";
 
 export const Navigation = () => {
     const {isEnglish} = useLanguage();
-    const {hasActive} = useUpcomingEvents();
+    const {hasActive, activeEvents} = useUpcomingEvents();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const singleUpcoming = activeEvents.length === 1;
 
     const handleNavClick = (e: MouseEvent, href: string) => {
         e.preventDefault();
@@ -29,7 +30,9 @@ export const Navigation = () => {
                             <li key={link.id}>
                                 <a href={link.href} className="nav-link"
                                    onClick={(e) => handleNavClick(e, link.href)}>
-                                    {isEnglish ? link.labelEn : link.labelCn}
+                                    {link.id === 'upcoming' && singleUpcoming && isEnglish
+                                        ? 'Upcoming Event'
+                                        : (isEnglish ? link.labelEn : link.labelCn)}
                                 </a>
                             </li>
                         )

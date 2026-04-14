@@ -20,7 +20,7 @@ export const Video = () => {
             <div className="video-content">
                 <div className="video-wrapper">
                     <iframe
-                        src={`//player.bilibili.com/player.html?isOutside=true&aid=${BILIBILI_VIDEO.aid}&bvid=${BILIBILI_VIDEO.bvid}&cid=${BILIBILI_VIDEO.cid}&p=${BILIBILI_VIDEO.p}&autoplay=0`}
+                        src={`https://player.bilibili.com/player.html?isOutside=true&aid=${BILIBILI_VIDEO.aid}&bvid=${BILIBILI_VIDEO.bvid}&cid=${BILIBILI_VIDEO.cid}&p=${BILIBILI_VIDEO.p}&autoplay=0`}
                         allowFullScreen={true}
                         title={isEnglish ? "Sekai Beyond Video" : "彼世界视频"}
                         autoFocus={false}

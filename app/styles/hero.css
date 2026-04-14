@@ -64,7 +64,7 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
     animation: rainbow-wave 4s ease-in-out infinite;
-    line-height: 1.1;
+    line-height: 1.25;
     letter-spacing: 2px;
 }
 

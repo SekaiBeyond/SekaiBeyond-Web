@@ -62,11 +62,13 @@ export const About = () => {
                     </div>
                 </div>
                 <div className="about-image">
-                    <div
+                    <button
+                        type="button"
                         className={`image-container ${isHovering ? 'hovering' : ''}`}
                         onMouseEnter={() => setIsHovering(true)}
                         onMouseLeave={() => setIsHovering(false)}
                         onClick={() => setIsModalOpen(true)}
+                        aria-label={isEnglish ? "Learn about Mika" : "了解米卡"}
                     >
                         <img
                             src="/images/mika.png"
@@ -74,11 +76,11 @@ export const About = () => {
                             className="about-main-image"
                         />
                         {isHovering && (
-                            <div className="hover-prompt">
+                            <span className="hover-prompt">
                                 <span className="click-hint">{isEnglish ? "Learn about Mika" : "了解米卡"}</span>
-                            </div>
+                            </span>
                         )}
-                    </div>
+                    </button>
                 </div>
             </div>
 

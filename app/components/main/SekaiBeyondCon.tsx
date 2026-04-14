@@ -49,11 +49,18 @@ export const SekaiBeyondCon = () => {
                                 {edition.locationCn && !isEnglish ? edition.locationCn : edition.location}
                             </p>
 
-                            <div className="convention-poster" onClick={() => setSelectedImage(edition.image)}>
-                                <img
-                                    src={edition.image}
-                                    alt={isEnglish ? `Sekai Beyond Con ${edition.year}` : `彼世界漫展 ${edition.year}`}
-                                />
+                            <div className="convention-poster">
+                                <button
+                                    type="button"
+                                    className="convention-poster-btn"
+                                    onClick={() => setSelectedImage(edition.image)}
+                                    aria-label={isEnglish ? `View Sekai Beyond Con ${edition.year} poster` : `查看${edition.year}年彼世界漫展海报`}
+                                >
+                                    <img
+                                        src={edition.image}
+                                        alt={isEnglish ? `Sekai Beyond Con ${edition.year}` : `彼世界漫展 ${edition.year}`}
+                                    />
+                                </button>
                             </div>
 
                             <div className="convention-features">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 
@@ -72,6 +72,7 @@ export async function refreshUpcomingEvents(): Promise<UpcomingEvent[]> {
 /** Returns all upcoming events (including past ones for admin). Filter client-side if needed. */
 export function useUpcomingEvents(): {
     upcomingEvents: UpcomingEvent[];
+    activeEvents: UpcomingEvent[];
     hasActive: boolean;
     loading: boolean;
     refresh: () => Promise<void>;
@@ -107,7 +108,11 @@ export function useUpcomingEvents(): {
         await refreshUpcomingEvents();
     }, []);
 
-    const hasActive = upcomingEvents.some(e => e.endAt > new Date());
+    const activeEvents = useMemo(
+        () => upcomingEvents.filter(e => e.endAt > new Date()),
+        [upcomingEvents]
+    );
+    const hasActive = activeEvents.length > 0;
 
-    return {upcomingEvents, hasActive, loading, refresh};
+    return {upcomingEvents, activeEvents, hasActive, loading, refresh};
 }

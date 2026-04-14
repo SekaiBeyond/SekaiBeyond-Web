@@ -5,6 +5,18 @@
     transition: transform 0.3s ease;
     border-radius: 15px;
     overflow: hidden;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    display: block;
+    width: 100%;
+}
+
+.image-container:focus-visible {
+    outline: 3px solid var(--color-primary);
+    outline-offset: 3px;
 }
 
 .image-container:hover {
