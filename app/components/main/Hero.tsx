@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
+import { FOUNDED_YEAR } from "~/constants";
 
 const generateBubbleStyles = () =>
     Array.from({length: 6}, () => ({
@@ -65,7 +66,7 @@ export const Hero = () => {
                         <div className="stat-label">{isEnglish ? "Events Per Year" : "年度活动"}</div>
                     </div>
                     <div className="stat-item">
-                        <div className="stat-number">1</div>
+                        <div className="stat-number">{new Date().getFullYear() - FOUNDED_YEAR + 1}</div>
                         <div className="stat-label">{isEnglish ? "Years Active" : "成立年数"}</div>
                     </div>
                     <div className="stat-item">

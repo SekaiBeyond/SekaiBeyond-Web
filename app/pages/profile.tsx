@@ -9,7 +9,7 @@ import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
 import { useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
-import { isValidHttpUrl } from '~/pages/admin/utils';
+import { isValidHttpUrl } from '~/lib/urls';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 
 interface BadgeDef extends BaseBadgeDef {
@@ -130,6 +130,8 @@ export const ProfilePage = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
+    const [badgeLoadError, setBadgeLoadError] = useState(false);
+    const [viewedLoadError, setViewedLoadError] = useState(false);
 
     useEffect(() => {
         let stale = false;
@@ -155,8 +157,9 @@ export const ProfilePage = () => {
                     });
                 });
                 setBadgeDefs(defs);
-            } catch (err) {
-                void (stale || err);
+                if (!stale) setBadgeLoadError(false);
+            } catch {
+                if (!stale) setBadgeLoadError(true);
             }
         };
         void loadBadges();
@@ -169,10 +172,12 @@ export const ProfilePage = () => {
         if (!viewUid || !isViewingOther) {
             setViewedProfile(null);
             setLoadingViewed(false);
+            setViewedLoadError(false);
             return;
         }
         let stale = false;
         setLoadingViewed(true);
+        setViewedLoadError(false);
         const loadViewedUser = async () => {
             try {
                 const result = await callGetPublicProfile({uid: viewUid});
@@ -192,8 +197,8 @@ export const ProfilePage = () => {
                     badgeEarnedAt: earnedAt,
                     group: (data.group ?? 'visitor') as UserGroup,
                 });
-            } catch (err) {
-                void (stale || err);
+            } catch {
+                if (!stale) setViewedLoadError(true);
             } finally {
                 if (!stale) setLoadingViewed(false);
             }
@@ -204,9 +209,11 @@ export const ProfilePage = () => {
         };
     }, [viewUid, isViewingOther]);
 
+    const viewedEarnedAt = viewedProfile?.badgeEarnedAt;
+    const ownEarnedAt = profile?.badgeEarnedAt;
     const earnedDates = useMemo<Record<string, Date>>(
-        () => (isViewingOther ? viewedProfile?.badgeEarnedAt : profile?.badgeEarnedAt) ?? {},
-        [isViewingOther, viewedProfile, profile],
+        () => (isViewingOther ? viewedEarnedAt : ownEarnedAt) ?? {},
+        [isViewingOther, viewedEarnedAt, ownEarnedAt],
     );
 
     const hasCustomPhoto = profile?.photoURL.includes('firebasestorage.googleapis.com') ?? false;
@@ -266,6 +273,12 @@ export const ProfilePage = () => {
 
     const handlePhotoDelete = async () => {
         if (!profile || !user) return;
+        const confirmed = window.confirm(
+            isEnglish
+                ? 'Remove your profile photo? This will revert to your Google account photo.'
+                : '确定要删除头像吗？将恢复为 Google 账户的头像。',
+        );
+        if (!confirmed) return;
         setSavingPhoto(true);
         try {
             await updateProfile({deletePhoto: true});
@@ -311,7 +324,9 @@ export const ProfilePage = () => {
         return (
             <div className="profile-login-prompt">
                 <div className="profile-login-card">
-                    <h2>{isEnglish ? 'User not found' : '未找到用户'}</h2>
+                    <h2>{viewedLoadError
+                        ? (isEnglish ? 'Failed to load profile' : '加载用户信息失败')
+                        : (isEnglish ? 'User not found' : '未找到用户')}</h2>
                     <a href="/" className="profile-back-link">
                         {isEnglish ? 'Back to Home' : '返回首页'}
                     </a>
@@ -380,7 +395,8 @@ export const ProfilePage = () => {
             <div className="profile-page">
 
                 <div className="profile-header">
-                    <div className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
+                    <div
+                        className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
                         <img
                             src={displayedPhoto}
                             alt={dp.name}
@@ -440,7 +456,11 @@ export const ProfilePage = () => {
                                         value={editName}
                                         onChange={e => setEditName(e.target.value)}
                                         onKeyDown={handleNameKeyDown}
-                                        onBlur={() => requestAnimationFrame(() => handleSaveName())}
+                                        onBlur={(e) => {
+                                            const related = e.relatedTarget as HTMLElement | null;
+                                            if (related?.closest('.profile-name-row')) return;
+                                            requestAnimationFrame(() => handleSaveName());
+                                        }}
                                         maxLength={50}
                                         disabled={savingName}
                                     />
@@ -488,7 +508,12 @@ export const ProfilePage = () => {
                     </div>
                 </div>
 
-                {earnedBadges.length > 0 && (
+                {badgeLoadError && dp.badges.length > 0 && (
+                    <p className="profile-load-error">
+                        {isEnglish ? 'Failed to load badge details.' : '加载徽章详情失败。'}
+                    </p>
+                )}
+                {!badgeLoadError && earnedBadges.length > 0 && (
                     <section className="badge-section">
                         <h2 className="badge-section-title">
                             {isEnglish ? 'Badges' : '徽章'}

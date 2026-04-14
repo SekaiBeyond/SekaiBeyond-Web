@@ -25,7 +25,8 @@ import {
     getFirebaseDb,
 } from '~/lib/firebase';
 import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
-import { docToUserRecord, isValidHttpUrl } from './utils';
+import { isValidHttpUrl } from '~/lib/urls';
+import { docToUserRecord } from './utils';
 import { CreatorPicker } from './CreatorPicker';
 import { BilingualFormField } from './BilingualFormField';
 import { ImageUploadField } from './ImageUploadField';

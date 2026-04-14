@@ -4,6 +4,7 @@ import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callClaimBadgeActivationCode } from '~/lib/firebase';
 import type { BadgeDef } from '~/lib/types';
+import { useModalEffects } from '~/lib/useModalEffects';
 
 export const RedeemModal = () => {
     const {user, profile, refreshProfile} = useAuth();
@@ -14,6 +15,8 @@ export const RedeemModal = () => {
     const [badge, setBadge] = useState<BadgeDef | null>(null);
     const [error, setError] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
+    const overlayRef = useRef<HTMLDivElement>(null);
+    useModalEffects(show, overlayRef);
 
     useEffect(() => {
         const handler = () => {
@@ -86,7 +89,7 @@ export const RedeemModal = () => {
     if (!show) return null;
 
     return (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
+        <div ref={overlayRef} className="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
             <div className="modal-content">
                 <button className="modal-close" onClick={close} type="button">×</button>
 

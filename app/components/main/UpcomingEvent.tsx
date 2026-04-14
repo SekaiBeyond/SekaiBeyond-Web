@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { type UpcomingEvent as UpcomingEventType, useUpcomingEvents } from "~/lib/upcomingEvents";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
-import { isValidHttpUrl } from "~/pages/admin/utils";
+import { isValidHttpUrl } from "~/lib/urls";
 
 interface EventCardProps {
     event: UpcomingEventType;

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { FaArrowUp } from "react-icons/fa";
+import { useLanguage } from "~/components/LanguageContextProvider";
 
 export const GoToTop = () => {
     const [isVisible, setIsVisible] = useState(false);
+    const {isEnglish} = useLanguage();
 
     useEffect(() => {
         const toggleVisibility = () => setIsVisible(window.scrollY > 300);
@@ -22,7 +24,7 @@ export const GoToTop = () => {
         <button
             className={`go-to-top ${isVisible ? "visible" : ""}`}
             onClick={scrollToTop}
-            aria-label="Go to top"
+            aria-label={isEnglish ? "Go to top" : "回到顶部"}
         >
             <FaArrowUp className="go-to-top-icon"/>
         </button>

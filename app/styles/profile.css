@@ -349,6 +349,17 @@
     margin: 0 auto 20px;
 }
 
+/* Profile load error */
+.profile-load-error {
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 14px;
+    padding: 20px;
+    background: rgba(255, 77, 79, 0.06);
+    border-radius: 12px;
+    margin-top: 20px;
+}
+
 /* Badge Section */
 .badge-section {
     margin-top: 20px;

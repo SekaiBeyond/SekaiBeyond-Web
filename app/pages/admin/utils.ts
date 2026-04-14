@@ -46,15 +46,6 @@ export const getClaimUrl = (code: string): string => {
     return `${window.location.origin}/claim?code=${code}`;
 };
 
-export const isValidHttpUrl = (url: string): boolean => {
-    try {
-        const parsed = new URL(url);
-        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-    } catch {
-        return false;
-    }
-};
-
 export const validateImageFile = (
     file: File,
     isEnglish: boolean,

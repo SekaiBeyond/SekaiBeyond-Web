@@ -45,6 +45,10 @@ export const LanguageProvider: FC<LanguageProviderProps> = ({children}) => {
         localStorage.setItem('language', lang);
     };
 
+    useEffect(() => {
+        document.documentElement.lang = currentLanguage;
+    }, [currentLanguage]);
+
     const value: LanguageContextType = {
         currentLanguage,
         setLanguage,

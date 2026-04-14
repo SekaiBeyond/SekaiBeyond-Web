@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
+import { useModalEffects } from "~/lib/useModalEffects";
 
 export const About = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isHovering, setIsHovering] = useState(false);
     const {isEnglish} = useLanguage();
+    const modalRef = useRef<HTMLDivElement>(null);
+    useModalEffects(isModalOpen, modalRef);
 
     return (
         <section id="about" className="about-section section">
@@ -81,7 +84,7 @@ export const About = () => {
 
             {/* Modal */}
             {isModalOpen && (
-                <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+                <div ref={modalRef} className="modal-overlay" onClick={() => setIsModalOpen(false)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <button
                             className="modal-close"

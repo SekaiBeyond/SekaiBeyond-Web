@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { useModalEffects } from '~/lib/useModalEffects';
 
 interface ImageCropModalProps {
     file: File;
@@ -16,6 +17,8 @@ export const ImageCropModal = ({file, aspect, onConfirm, onCancel}: ImageCropMod
     const {isEnglish} = useLanguage();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const dragRef = useRef<{startX: number; startY: number; ox: number; oy: number} | null>(null);
+    const overlayRef = useRef<HTMLDivElement>(null);
+    useModalEffects(true, overlayRef);
 
     const [image, setImage] = useState<HTMLImageElement | null>(null);
     const [minScale, setMinScale] = useState(1);
@@ -118,7 +121,8 @@ export const ImageCropModal = ({file, aspect, onConfirm, onCancel}: ImageCropMod
     };
 
     return (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && !saving && onCancel()}>
+        <div ref={overlayRef} className="modal-overlay"
+             onClick={e => e.target === e.currentTarget && !saving && onCancel()}>
             <div className="modal-content image-crop-modal">
                 <button className="modal-close" onClick={onCancel} type="button" disabled={saving}>×</button>
                 <h2 className="redeem-heading">{isEnglish ? 'Crop Image' : '裁剪图片'}</h2>

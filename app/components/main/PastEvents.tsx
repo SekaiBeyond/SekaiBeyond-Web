@@ -23,8 +23,8 @@ export const PastEvents = () => {
             </div>
 
             <div className="events-grid">
-                {displayedEvents.map((event, index) => (
-                    <div key={index} className="event-card">
+                {displayedEvents.map((event) => (
+                    <div key={event.id} className="event-card">
                         <img
                             className="event-image event-image--clickable"
                             src={event.icon}

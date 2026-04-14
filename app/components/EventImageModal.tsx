@@ -1,4 +1,6 @@
-import { type FC, useEffect } from "react";
+import { type FC, useEffect, useRef } from "react";
+import { useLanguage } from "~/components/LanguageContextProvider";
+import { useModalEffects } from "~/lib/useModalEffects";
 
 interface EventImageModalProps {
     imageUrl: string;
@@ -7,6 +9,10 @@ interface EventImageModalProps {
 }
 
 export const EventImageModal: FC<EventImageModalProps> = ({imageUrl, onClose, altText}) => {
+    const ref = useRef<HTMLDivElement>(null);
+    const {isEnglish} = useLanguage();
+    useModalEffects(true, ref);
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
@@ -16,12 +22,12 @@ export const EventImageModal: FC<EventImageModalProps> = ({imageUrl, onClose, al
     }, [onClose]);
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div ref={ref} className="modal-overlay" onClick={onClose}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <button
                     className="modal-close"
                     onClick={onClose}
-                    aria-label="Close"
+                    aria-label={isEnglish ? "Close" : "关闭"}
                 >
                     ×
                 </button>

@@ -24,6 +24,7 @@ export const Video = () => {
                         allowFullScreen={true}
                         title={isEnglish ? "Sekai Beyond Video" : "彼世界视频"}
                         autoFocus={false}
+                        sandbox="allow-scripts allow-same-origin allow-presentation"
                     />
                 </div>
 
