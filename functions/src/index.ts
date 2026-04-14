@@ -5,6 +5,14 @@ import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/
 
 import * as crypto from "crypto";
 
+// Records are audit logs. Firestore TTL policy on `records.expiresAt`
+// auto-deletes documents past this point (configure in Firebase console).
+const RECORD_RETENTION_DAYS = 30;
+
+function recordExpiresAt(): Timestamp {
+    return Timestamp.fromMillis(Date.now() + RECORD_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+}
+
 initializeApp();
 const db = getFirestore();
 
@@ -445,6 +453,7 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
             eventTitle: eventSnap.data()?.title ?? eventId,
             code,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {eventId};
     });
@@ -500,6 +509,7 @@ export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (reques
             badgeName: badgeData.name ?? badgeId,
             code,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
 
         return {
@@ -578,6 +588,7 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
                     badgeName: badgeSnap.data()!.name ?? badgeId,
                     code,
                     timestamp: FieldValue.serverTimestamp(),
+                    expiresAt: recordExpiresAt(),
                 });
             });
             return {id: codeRef.id, code};
@@ -761,6 +772,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                     eventId,
                     code,
                     timestamp: FieldValue.serverTimestamp(),
+                    expiresAt: recordExpiresAt(),
                 });
             });
             return {id: codeRef.id, code};
@@ -859,6 +871,7 @@ export const deleteEvent = onCall({maxInstances: 10}, async (request) => {
             eventTitle: data.title ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return data;
     });
@@ -919,6 +932,7 @@ export const deleteBadge = onCall({maxInstances: 10}, async (request) => {
             badgeId,
             badgeName: data.name ?? badgeId,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return data;
     });
@@ -1010,6 +1024,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
             oldGroup,
             newGroup,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
     });
 
@@ -1060,6 +1075,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
             eventTitle: title,
             eventId: docId,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {result: {eventId: docId}, oldIcon: prevIcon};
     });
@@ -1139,6 +1155,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
             eventTitle: name,
             eventId: docId,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {result: {eventId: docId}, oldPoster: prevPoster};
     });
@@ -1175,6 +1192,7 @@ export const deleteUpcomingEvent = onCall({maxInstances: 10}, async (request) =>
             eventTitle: eventData.name ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return eventData.poster ?? "";
     });
@@ -1226,6 +1244,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             eventTitle: eventData.name ?? eventId,
             eventId: newDocRef.id,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {pastEventId: newDocRef.id};
     });
@@ -1282,6 +1301,7 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
                 badgeId,
                 badgeName: name,
                 timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
             });
             return {result: {badgeId}, oldImageUrl: prevImageUrl};
         }
@@ -1299,6 +1319,7 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
             badgeId: newRef!.id,
             badgeName: name,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {result: {badgeId: newRef!.id}, oldImageUrl: ""};
     });
@@ -1351,6 +1372,7 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
             eventTitle: eventSnap.data()!.title ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {granted: grant};
     });
@@ -1397,6 +1419,7 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
             badgeId,
             badgeName: badgeSnap.data()?.name ?? badgeId,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {granted: grant};
     });
@@ -1434,6 +1457,7 @@ export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) 
             eventId: codeData.eventId ?? "",
             code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {active: input.active};
     });
@@ -1473,6 +1497,7 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
             eventId: codeData.eventId ?? "",
             code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {saved: true};
     });
@@ -1510,6 +1535,7 @@ export const toggleBadgeCodeActive = onCall({maxInstances: 10}, async (request) 
             badgeName: badgeSnap?.data()?.name ?? codeData.badgeId ?? "",
             code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {active: input.active};
     });
@@ -1543,6 +1569,7 @@ export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (reque
             badgeName: badgeSnap?.data()?.name ?? codeData.badgeId ?? "",
             code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {deleted: true};
     });
@@ -1579,6 +1606,7 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
             performedByName: callerSnap.data()?.displayName ?? "",
             tagName: name,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {tagId: docId};
     });
@@ -1605,6 +1633,7 @@ export const deleteTag = onCall({maxInstances: 10}, async (request) => {
             performedByName: callerSnap.data()?.displayName ?? "",
             tagName: tagSnap.data()?.name ?? tagId,
             timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
         });
         return {deleted: true};
     });
