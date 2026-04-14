@@ -5,6 +5,10 @@
         justify-content: space-between;
     }
 
+    .nav-toggle {
+        display: flex;
+    }
+
     .nav-links {
         position: fixed;
         top: 70px;
@@ -161,7 +165,6 @@
 
     .event-image {
         height: 150px;
-        font-size: 40px;
     }
 
     .event-content {
@@ -187,14 +190,6 @@
     .event-description {
         font-size: 13px;
         line-height: 1.5;
-    }
-
-    .event-image::after {
-        content: '📸 Photos';
-        font-size: 10px;
-        padding: 4px 10px;
-        bottom: 8px;
-        right: 8px;
     }
 
     .nav-actions {
@@ -399,7 +394,6 @@
 
     .event-image {
         height: 120px;
-        font-size: 32px;
     }
 
     .event-content {

@@ -70,7 +70,12 @@ export async function refreshUpcomingEvents(): Promise<UpcomingEvent[]> {
 }
 
 /** Returns all upcoming events (including past ones for admin). Filter client-side if needed. */
-export function useUpcomingEvents(): {upcomingEvents: UpcomingEvent[]; loading: boolean; refresh: () => Promise<void>} {
+export function useUpcomingEvents(): {
+    upcomingEvents: UpcomingEvent[];
+    hasActive: boolean;
+    loading: boolean;
+    refresh: () => Promise<void>;
+} {
     const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>(cachedEvents ?? []);
     const [loading, setLoading] = useState(cachedEvents === null);
 
@@ -102,5 +107,7 @@ export function useUpcomingEvents(): {upcomingEvents: UpcomingEvent[]; loading: 
         await refreshUpcomingEvents();
     }, []);
 
-    return {upcomingEvents, loading, refresh};
+    const hasActive = upcomingEvents.some(e => e.endAt > new Date());
+
+    return {upcomingEvents, hasActive, loading, refresh};
 }

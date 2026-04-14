@@ -25,20 +25,18 @@ export const PastEvents = () => {
             <div className="events-grid">
                 {displayedEvents.map((event) => (
                     <div key={event.id} className="event-card">
-                        <img
-                            className="event-image event-image--clickable"
-                            src={event.icon}
-                            alt={isEnglish ? event.title : event.titleCn}
-                            role="button"
-                            tabIndex={0}
+                        <button
+                            type="button"
+                            className="event-image-btn"
                             onClick={() => setSelectedImage(event.icon)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    setSelectedImage(event.icon);
-                                }
-                            }}
-                        />
+                            aria-label={isEnglish ? `View ${event.title} photo` : `查看${event.titleCn}照片`}
+                        >
+                            <img
+                                className="event-image"
+                                src={event.icon}
+                                alt={isEnglish ? event.title : event.titleCn}
+                            />
+                        </button>
                         <div className="event-content">
                             <span className="event-label">{(() => {
                                 const tag = tags.find(t => t.id === event.tagId);

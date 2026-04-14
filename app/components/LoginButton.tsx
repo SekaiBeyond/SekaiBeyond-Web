@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 
@@ -11,7 +12,7 @@ export const LoginButton = () => {
         return (
             <div className="user-dropdown-wrapper">
                 <img
-                    src={profile?.photoURL ?? user.photoURL ?? ''}
+                    src={profile?.photoURL ?? user.photoURL ?? '/images/mika.png'}
                     alt={isEnglish ? 'Profile' : '个人主页'}
                     className="login-avatar"
                     referrerPolicy="no-referrer"
@@ -22,25 +23,24 @@ export const LoginButton = () => {
                         <span className="user-dropdown-email">{user.email}</span>
                     </div>
                     <div className="user-dropdown-divider"/>
-                    <a href="/" className="user-dropdown-item">
+                    <Link to="/" className="user-dropdown-item">
                         {isEnglish ? 'Home' : '首页'}
-                    </a>
-                    <a href="/profile" className="user-dropdown-item">
+                    </Link>
+                    <Link to="/profile" className="user-dropdown-item">
                         {isEnglish ? 'My Profile' : '我的主页'}
-                    </a>
+                    </Link>
                     <button
                         className="user-dropdown-item"
                         onClick={() => {
-                            // Trigger redeem modal via custom event
                             window.dispatchEvent(new CustomEvent('open-redeem-modal'));
                         }}
                     >
                         {isEnglish ? 'Redeem Code' : '兑换激活码'}
                     </button>
                     {profile && hasPermission(profile.group, 'core-staff') && (
-                        <a href="/admin" className="user-dropdown-item">
+                        <Link to="/admin" className="user-dropdown-item">
                             {isEnglish ? 'Admin Panel' : '管理面板'}
-                        </a>
+                        </Link>
                     )}
                     <div className="user-dropdown-divider"/>
                     <button className="user-dropdown-item user-dropdown-signout" onClick={signOut}>

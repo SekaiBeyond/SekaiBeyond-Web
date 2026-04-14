@@ -185,3 +185,20 @@
     background: rgba(255, 99, 99, 0.08);
     color: var(--color-error);
 }
+
+.nav-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    cursor: pointer;
+    padding: 8px;
+    font-size: 24px;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.nav-toggle:hover {
+    transform: scale(1.1);
+}
