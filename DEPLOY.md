@@ -1,7 +1,6 @@
 # Deployment
 
-The site deploys automatically to GitHub Pages when you push to `main` via GitHub Actions.
-An alternative deployment to Firebase Hosting is also available (see below).
+The site deploys automatically to Firebase Hosting when you push to `main` via GitHub Actions.
 
 ## First-Time Setup
 
@@ -55,16 +54,28 @@ The app currently requires 5 composite indexes (defined in [`firestore.indexes.j
 
 Go to your repo > **Settings** > **Secrets and variables** > **Actions**, and add these secrets:
 
-| Secret                              | Value                          |
-|-------------------------------------|--------------------------------|
-| `VITE_FIREBASE_API_KEY`             | Your Firebase API key          |
-| `VITE_FIREBASE_AUTH_DOMAIN`         | `your-project.firebaseapp.com` |
-| `VITE_FIREBASE_PROJECT_ID`          | Your project ID                |
-| `VITE_FIREBASE_STORAGE_BUCKET`      | `your-project.appspot.com`     |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Your sender ID                 |
-| `VITE_FIREBASE_APP_ID`              | Your app ID                    |
+| Secret                              | Value                            |
+|-------------------------------------|----------------------------------|
+| `VITE_FIREBASE_API_KEY`             | Your Firebase API key            |
+| `VITE_FIREBASE_AUTH_DOMAIN`         | `your-project.firebaseapp.com`   |
+| `VITE_FIREBASE_PROJECT_ID`          | Your project ID                  |
+| `VITE_FIREBASE_STORAGE_BUCKET`      | `your-project.appspot.com`       |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Your sender ID                   |
+| `VITE_FIREBASE_APP_ID`              | Your app ID                      |
+| `FIREBASE_SERVICE_ACCOUNT`          | Service account JSON (see below) |
 
-These are injected during the GitHub Actions build step.
+The `VITE_*` secrets are injected as build-time environment variables. `FIREBASE_SERVICE_ACCOUNT` authenticates the deploy step.
+
+**Generating `FIREBASE_SERVICE_ACCOUNT`:**
+
+1. Open [Google Cloud Console](https://console.cloud.google.com) and select your Firebase project
+2. Go to **IAM & Admin** > **Service Accounts** > **Create Service Account**
+3. Name it something like `github-actions-deploy`
+4. Grant these roles:
+   - **Firebase Admin** (broad, simplest), or more narrowly: **Firebase Hosting Admin**, **Cloud Functions Admin**, **Firebase Rules Admin**, **Storage Admin**
+   - **Service Account User**
+5. After creating, open the service account, go to the **Keys** tab, click **Add Key** > **Create new key** > **JSON**, and download the file
+6. Paste the entire file contents into the `FIREBASE_SERVICE_ACCOUNT` secret value in GitHub
 
 ### 3. Local Development
 
@@ -98,24 +109,22 @@ Once the first president is set up, they can assign groups to other users throug
 
 ## Deploy Workflow
 
-### GitHub Pages (default)
-
 Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deploy.yml`):
 
-1. Installs dependencies
+1. Installs dependencies (root and `functions/`)
 2. Builds the site with Firebase env vars from secrets
-3. Copies `index.html` to `404.html` (SPA fallback routing)
-4. Deploys to GitHub Pages
+3. Authenticates to Google Cloud via the service account
+4. Runs `firebase deploy` — ships hosting, Cloud Functions, Firestore rules/indexes, and Storage rules in a single atomic deploy
 
-You can also trigger a deployment manually from the **Actions** tab > **Deploy to GitHub Pages** > **Run workflow**.
+You can also trigger a deployment manually from the **Actions** tab > **Deploy to Firebase** > **Run workflow**.
 
-### Firebase Hosting (alternative)
+### Manual deploy (escape hatch)
 
-The project also includes a Firebase Hosting configuration in [`firebase.json`](firebase.json) with SPA rewrites and security headers. To deploy to Firebase Hosting instead:
+If CI is unavailable, you can still deploy from your local machine:
 
 ```bash
-npm run build
-npm run deploy:firebase
+npm run deploy:firebase   # full deploy (hosting + rules + functions)
+npm run deploy:rules      # just rules/functions/indexes, skips frontend rebuild
 ```
 
-This deploys the built site along with Firestore rules, Firestore indexes, Storage rules, and Cloud Functions in one command.
+Both require `firebase login` locally.
