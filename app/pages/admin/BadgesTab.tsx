@@ -13,7 +13,7 @@ import {
     where,
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
-import { GROUP_LABELS, type UserProfile } from '~/components/AuthProvider';
+import { formatGroupWithTitle, type UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     callDeleteBadge,
@@ -608,7 +608,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             <div className="admin-user-email">{u.email}</div>
                         </div>
                         <span className="admin-user-group-tag" data-group={u.group}>
-                            {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
+                            {formatGroupWithTitle(u.group, u.title, isEnglish)}
                         </span>
                     </div>
                 ))}

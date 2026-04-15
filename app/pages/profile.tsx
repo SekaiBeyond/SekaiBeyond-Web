@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
-import { GROUP_LABELS, hasPermission, useAuth, type UserGroup } from '~/components/AuthProvider';
+import { formatGroupWithTitle, hasPermission, useAuth, type UserGroup } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetPublicProfile, getFirebaseDb } from '~/lib/firebase';
@@ -27,6 +27,7 @@ interface ViewedProfile {
     badges: string[];
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
+    title?: string;
 }
 
 const BadgeCard = ({badge, earnedDate, isEnglish}: {
@@ -196,6 +197,7 @@ export const ProfilePage = () => {
                     badges: data.badges ?? [],
                     badgeEarnedAt: earnedAt,
                     group: (data.group ?? 'visitor') as UserGroup,
+                    title: data.title ?? '',
                 });
             } catch {
                 if (!stale) setViewedLoadError(true);
@@ -366,14 +368,16 @@ export const ProfilePage = () => {
             joinedAt: profile!.joinedAt,
             badges: profile!.badges,
             attendedEvents: profile!.attendedEvents,
-            group: profile!.group
+            group: profile!.group,
+            title: profile!.title ?? '',
         }
         : {
             name: viewedProfile!.displayName,
             joinedAt: viewedProfile!.joinedAt,
             badges: viewedProfile!.badges,
             attendedEvents: viewedProfile!.attendedEvents,
-            group: viewedProfile!.group
+            group: viewedProfile!.group,
+            title: viewedProfile!.title ?? '',
         };
     const attendedSet = new Set(dp.attendedEvents);
     const attendedEvents = pastEvents.filter(e => attendedSet.has(e.id));
@@ -490,7 +494,7 @@ export const ProfilePage = () => {
                             })}
                         </p>
                         <span className="profile-group-tag" data-group={dp.group}>
-                            {isEnglish ? GROUP_LABELS[dp.group].en : GROUP_LABELS[dp.group].zh}
+                            {formatGroupWithTitle(dp.group, dp.title, isEnglish)}
                         </span>
                     </div>
                 </div>

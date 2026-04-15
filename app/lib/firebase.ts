@@ -100,9 +100,14 @@ export const callDeleteEvent = (data: {eventId: string}) =>
 export const callDeleteBadge = (data: {badgeId: string}) =>
     httpsCallable<{badgeId: string}, {deleted: boolean}>(getFunctions(), 'deleteBadge')(data);
 
-export const callChangeUserGroup = (data: {targetUid: string; newGroup: string}) =>
-    httpsCallable<{targetUid: string; newGroup: string}, {oldGroup: string; newGroup: string}>(
+export const callChangeUserGroup = (data: {targetUid: string; newGroup: string; title?: string}) =>
+    httpsCallable<{targetUid: string; newGroup: string; title?: string}, {oldGroup: string; newGroup: string}>(
         getFunctions(), 'changeUserGroup'
+    )(data);
+
+export const callSetUserTitle = (data: {targetUid: string; title?: string}) =>
+    httpsCallable<{targetUid: string; title?: string}, {success: boolean}>(
+        getFunctions(), 'setUserTitle'
     )(data);
 
 export const callSavePastEvent = (data: {
@@ -168,6 +173,7 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         attendedEvents: string[]; badges: string[];
         badgeEarnedAt: Record<string, string>;
         group: string;
+        title?: string;
     }>(getFunctions(), 'getPublicProfile')(data);
 
 export const callUploadAdminImage = async (file: File, storagePath: string): Promise<string> => {

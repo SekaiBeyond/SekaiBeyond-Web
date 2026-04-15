@@ -48,6 +48,11 @@ export function canManageUser(assignerGroup: UserGroup, userCurrentGroup: UserGr
     return false;
 }
 
+export function formatGroupWithTitle(group: UserGroup, title: string | undefined, isEnglish: boolean): string {
+    const label = isEnglish ? GROUP_LABELS[group].en : GROUP_LABELS[group].zh;
+    return title ? `${label} - ${title}` : label;
+}
+
 export interface UserProfile {
     displayName: string;
     email: string;
@@ -57,6 +62,7 @@ export interface UserProfile {
     badges: string[];
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
+    title?: string;
 }
 
 function parseBadgeEarnedAt(raw: unknown): Record<string, Date> {
@@ -120,6 +126,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                         badges: data.badges ?? [],
                         badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
                         group: data.group ?? 'visitor',
+                        title: data.title ?? '',
                     });
                 } else {
                     await callCreateUserProfile();
@@ -134,6 +141,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                         badges: [],
                         badgeEarnedAt: {},
                         group: 'visitor',
+                        title: '',
                     });
                 }
             } else {
@@ -170,6 +178,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                 badges: data.badges ?? [],
                 badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
                 group: data.group ?? 'visitor',
+                title: data.title ?? '',
             });
         }
     };

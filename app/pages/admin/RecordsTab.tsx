@@ -20,7 +20,7 @@ const PAGE_SIZE = 20;
 
 // Requires composite Firestore indexes: (type, timestamp) and (performedBy, timestamp)
 const TYPE_CATEGORIES: Record<string, RecordType[]> = {
-    group: ['group-assign'],
+    role: ['group-assign', 'title-set'],
     code: ['code-create', 'code-activate', 'code-deactivate', 'code-delete',
         'event-code-activate', 'event-code-deactivate', 'event-code-time-window'],
     attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend', 'event-claim'],
@@ -78,6 +78,8 @@ export const RecordsTab = ({
                 code: data.code,
                 oldGroup: data.oldGroup,
                 newGroup: data.newGroup,
+                oldTitle: data.oldTitle,
+                newTitle: data.newTitle,
                 timestamp: data.timestamp?.toDate() ?? new Date(),
             };
         });
@@ -173,6 +175,26 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>assigned {target} from {GROUP_LABELS[r.oldGroup!].en} to {GROUP_LABELS[r.newGroup!].en}</>
                     : <>将 {target} 从 {GROUP_LABELS[r.oldGroup!].zh} 改为 {GROUP_LABELS[r.newGroup!].zh}</>;
+            case 'title-set': {
+                const oldT = r.oldTitle ?? '';
+                const newT = r.newTitle ?? '';
+                if (!oldT && newT) {
+                    return isEnglish
+                        ? <>set {target}'s title to "{newT}"</>
+                        : <>将 {target} 的头衔设为"{newT}"</>;
+                }
+                if (oldT && !newT) {
+                    return isEnglish
+                        ? <>cleared {target}'s title ("{oldT}")</>
+                        : <>清除了 {target} 的头衔（"{oldT}"）</>;
+                }
+                if (oldT && newT) {
+                    return isEnglish
+                        ? <>changed {target}'s title from "{oldT}" to "{newT}"</>
+                        : <>将 {target} 的头衔从"{oldT}"改为"{newT}"</>;
+                }
+                return isEnglish ? <>updated {target}'s title</> : <>更新了 {target} 的头衔</>;
+            }
             case 'code-create': {
                 if (r.eventId) {
                     const isPast = pastEvents.some(e => e.id === r.eventId);
@@ -334,7 +356,8 @@ export const RecordsTab = ({
     const getRecordTypeTag = (type: RecordType) => {
         switch (type) {
             case 'group-assign':
-                return isEnglish ? 'Group' : '用户组';
+            case 'title-set':
+                return isEnglish ? 'Role' : '角色';
             case 'code-create':
             case 'code-activate':
             case 'code-deactivate':
@@ -393,7 +416,7 @@ export const RecordsTab = ({
                     }}
                 >
                     <option value="">{isEnglish ? 'All Types' : '所有类型'}</option>
-                    <option value="group">{isEnglish ? 'Group' : '用户组'}</option>
+                    <option value="role">{isEnglish ? 'Role' : '角色'}</option>
                     <option value="code">{isEnglish ? 'Code' : '兑换码'}</option>
                     <option value="attend">{isEnglish ? 'Attend' : '签到'}</option>
                     <option value="badge">{isEnglish ? 'Badge' : '徽章'}</option>

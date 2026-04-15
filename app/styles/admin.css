@@ -569,6 +569,62 @@
     cursor: not-allowed;
 }
 
+/* Title Management */
+.admin-title-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.admin-title-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 2px solid rgba(255, 107, 157, 0.2);
+    border-radius: 12px;
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--color-text);
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.admin-title-input:focus {
+    border-color: var(--color-primary);
+}
+
+.admin-title-input:disabled {
+    opacity: 0.6;
+}
+
+.admin-title-save-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 12px;
+    background: var(--gradient-cta);
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.admin-title-save-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-primary);
+}
+
+.admin-title-save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.admin-title-hint {
+    font-size: 12px;
+    color: var(--color-text-light);
+    margin: 8px 0 0;
+}
+
 /* Admin Badge Codes */
 .admin-generate-btn {
     display: block;

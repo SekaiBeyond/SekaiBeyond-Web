@@ -15,6 +15,7 @@ import {
     callCancelAccountDeletion,
     callChangeUserGroup,
     callRequestAccountDeletion,
+    callSetUserTitle,
     callToggleAttendance,
     callToggleUserBadge,
     getFirebaseDb,
@@ -23,6 +24,7 @@ import type { User } from 'firebase/auth';
 import {
     canAssignGroup,
     canManageUser,
+    formatGroupWithTitle,
     GROUP_LABELS,
     USER_GROUPS,
     type UserGroup,
@@ -69,17 +71,27 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const [pendingDeletionExpiresAt, setPendingDeletionExpiresAt] = useState<Date | null>(null);
     const [deletionBusy, setDeletionBusy] = useState(false);
     const [pendingDeletionUids, setPendingDeletionUids] = useState<Set<string>>(new Set());
+    const [titleInput, setTitleInput] = useState('');
+    const [titleBusy, setTitleBusy] = useState(false);
 
     useImperativeHandle(ref, () => ({
         lookupUserByUid: async (uid: string) => {
             const db = getFirebaseDb();
             const userSnap = await getDoc(doc(db, 'users', uid));
             if (!userSnap.exists()) return;
-            setSelectedUser(docToUserRecord(userSnap));
+            const record = docToUserRecord(userSnap);
+            setSelectedUser(record);
+            setTitleInput(record.title ?? '');
             setSearchResults([]);
             setSearchQuery('');
         },
     }));
+
+    useEffect(() => {
+        if (selectedUser) {
+            setTitleInput(selectedUser.title ?? '');
+        }
+    }, [selectedUser?.uid, selectedUser?.title]);
 
     useEffect(() => {
         if (!selectedUser) {
@@ -280,9 +292,10 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         )) return;
         setUpdating(true);
         try {
-            await callChangeUserGroup({targetUid: userRecord.uid, newGroup});
+            const title = ['staff', 'core-staff'].includes(newGroup) ? (userRecord.title ?? '') : '';
+            await callChangeUserGroup({targetUid: userRecord.uid, newGroup, title});
 
-            const updated = {...userRecord, group: newGroup};
+            const updated = {...userRecord, group: newGroup, title};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
         } catch {
@@ -294,6 +307,27 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             );
         } finally {
             setUpdating(false);
+        }
+    };
+
+    const setTitle = async (userRecord: UserRecord) => {
+        setTitleBusy(true);
+        try {
+            const newTitle = titleInput.trim();
+            await callSetUserTitle({targetUid: userRecord.uid, title: newTitle || undefined});
+
+            const updated = {...userRecord, title: newTitle};
+            if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
+            setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+        } catch {
+            showToast(
+                isEnglish
+                    ? 'Failed to update title. You may not have permission.'
+                    : '更新头衔失败。你可能没有权限执行此操作。',
+                'error',
+            );
+        } finally {
+            setTitleBusy(false);
         }
     };
 
@@ -333,7 +367,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 </span>
                             )}
                             <span className="admin-user-group-tag" data-group={u.group}>
-                                {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
+                                {formatGroupWithTitle(u.group, u.title, isEnglish)}
                             </span>
                             <span className="admin-user-badge-count">
                                 {u.attendedEvents.length} {isEnglish ? 'events' : '活动'}
@@ -365,7 +399,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 </span>
                             )}
                             <span className="admin-user-group-tag" data-group={u.group}>
-                                {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
+                                {formatGroupWithTitle(u.group, u.title, isEnglish)}
                             </span>
                             <span className="admin-detail-joined">
                                 {u.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
@@ -418,7 +452,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 {isEnglish ? 'Current group: ' : '当前用户组：'}
                             </span>
                                 <span className="admin-user-group-tag" data-group={selectedUser.group}>
-                                {isEnglish ? GROUP_LABELS[selectedUser.group].en : GROUP_LABELS[selectedUser.group].zh}
+                                {formatGroupWithTitle(selectedUser.group, selectedUser.title, isEnglish)}
                             </span>
                             </div>
                             <div className="admin-group-actions">
@@ -440,6 +474,39 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 })}
                             </div>
                         </div>
+
+                        {canManage && ['staff', 'core-staff'].includes(selectedUser.group) && (
+                            <div className="admin-group-section">
+                                <h4 className="admin-badges-title">
+                                    {isEnglish ? 'Title' : '头衔'}
+                                </h4>
+                                <div className="admin-title-input-row">
+                                    <input
+                                        type="text"
+                                        className="admin-title-input"
+                                        placeholder={isEnglish ? 'e.g. Tech Lead, Event Coordinator...' : '例如：技术负责人、活动策划...'}
+                                        value={titleInput}
+                                        onChange={(e) => setTitleInput(e.target.value)}
+                                        maxLength={100}
+                                        disabled={titleBusy}
+                                    />
+                                    <button
+                                        className="admin-title-save-btn"
+                                        onClick={() => setTitle(selectedUser)}
+                                        disabled={titleBusy || titleInput === (selectedUser.title ?? '')}
+                                    >
+                                        {titleBusy
+                                            ? (isEnglish ? 'Saving...' : '保存中...')
+                                            : (isEnglish ? 'Save' : '保存')}
+                                    </button>
+                                </div>
+                                <p className="admin-title-hint">
+                                    {isEnglish
+                                        ? 'Leave empty to remove title. Title is shown alongside role (e.g., "Core Staff - Tech Lead").'
+                                        : '留空则清除头衔。头衔会与角色一同显示（例如："核心成员 - 技术负责人"）。'}
+                                </p>
+                            </div>
+                        )}
 
                         <div className="admin-deletion-section">
                             <h4 className="admin-badges-title">

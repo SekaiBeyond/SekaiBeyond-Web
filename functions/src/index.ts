@@ -309,6 +309,7 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         badges: data.badges ?? [],
         badgeEarnedAt,
         group: data.group ?? "visitor",
+        title: data.title ?? "",
     };
 });
 
@@ -982,7 +983,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 
     const uid = request.auth.uid;
 
-    const input = request.data as {targetUid?: string; newGroup?: string};
+    const input = request.data as {targetUid?: string; newGroup?: string; title?: string};
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const newGroup = input.newGroup;
 
@@ -994,9 +995,19 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("permission-denied", "Cannot change your own group.");
     }
 
+    // Title can only be set when assigning staff or core-staff
+    const title = input.title;
+    if (title !== undefined && (typeof title !== "string" || title.length > 100)) {
+        throw new HttpsError("invalid-argument", "Invalid title.");
+    }
+    if (title && !["staff", "core-staff"].includes(newGroup)) {
+        throw new HttpsError("invalid-argument", "Title can only be set for staff or core-staff.");
+    }
+
     await checkRateLimit(uid);
 
     let oldGroup: string = "";
+    let oldTitle: string = "";
 
     await db.runTransaction(async (txn) => {
         const [callerSnap, targetSnap] = await Promise.all([
@@ -1013,6 +1024,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
         }
 
         oldGroup = targetSnap.data()!.group;
+        oldTitle = targetSnap.data()!.title ?? "";
 
         if (callerGroup !== "president") {
             if (!["visitor", "member", "staff"].includes(oldGroup)) {
@@ -1025,7 +1037,16 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
             }
         }
 
-        txn.update(db.collection("users").doc(targetUid), {group: newGroup});
+        const shouldHaveTitle = ["staff", "core-staff"].includes(newGroup);
+        const newTitle = shouldHaveTitle ? (title ?? "") : "";
+        const updateData: Record<string, unknown> = {group: newGroup};
+        if (shouldHaveTitle) {
+            updateData.title = newTitle;
+        } else {
+            updateData.title = FieldValue.delete();
+        }
+
+        txn.update(db.collection("users").doc(targetUid), updateData);
         txn.set(db.collection("records").doc(), {
             type: "group-assign",
             performedBy: uid,
@@ -1037,9 +1058,94 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
+
+        if (oldTitle !== newTitle) {
+            txn.set(db.collection("records").doc(), {
+                type: "title-set",
+                performedBy: uid,
+                performedByName: callerSnap.data()!.displayName ?? "",
+                targetUid,
+                targetName: targetSnap.data()!.displayName ?? "",
+                oldTitle,
+                newTitle,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        }
     });
 
     return {oldGroup, newGroup};
+});
+
+/**
+ * Set or clear a user's title.
+ * Only president/core-staff can set title for staff/core-staff users.
+ * Title is cleared automatically when group changes to visitor/member/president.
+ */
+export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+
+    const uid = request.auth.uid;
+    const input = request.data as {targetUid?: string; title?: string};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    const title = input.title;
+
+    if (title !== undefined && (typeof title !== "string" || title.length > 100)) {
+        throw new HttpsError("invalid-argument", "Invalid title.");
+    }
+
+    await checkRateLimit(uid);
+
+    await db.runTransaction(async (txn) => {
+        const [callerSnap, targetSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(uid)),
+            txn.get(db.collection("users").doc(targetUid)),
+        ]);
+
+        if (!callerSnap.exists) throw new HttpsError("not-found", "Caller not found.");
+        if (!targetSnap.exists) throw new HttpsError("not-found", "Target user not found.");
+
+        const callerGroup = callerSnap.data()!.group;
+        const targetGroup = targetSnap.data()!.group;
+
+        if (!ADMIN_GROUPS.includes(callerGroup)) {
+            throw new HttpsError("permission-denied", "Insufficient permissions.");
+        }
+
+        if (!["staff", "core-staff"].includes(targetGroup)) {
+            throw new HttpsError("invalid-argument", "Title can only be set for staff or core-staff.");
+        }
+
+        // Only president can set title for core-staff; core-staff can only set title for staff
+        if (targetGroup === "core-staff" && callerGroup !== "president") {
+            throw new HttpsError("permission-denied",
+                "Only the president can set the title of a core-staff member.");
+        }
+
+        const updateData: Record<string, unknown> = {};
+        if (title) {
+            updateData.title = title;
+        } else {
+            updateData.title = FieldValue.delete();
+        }
+
+        txn.update(db.collection("users").doc(targetUid), updateData);
+        txn.set(db.collection("records").doc(), {
+            type: "title-set",
+            performedBy: uid,
+            performedByName: callerSnap.data()!.displayName ?? "",
+            targetUid,
+            targetName: targetSnap.data()!.displayName ?? "",
+            oldTitle: targetSnap.data()!.title ?? "",
+            newTitle: title ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+    });
+
+    return {success: true};
 });
 
 /**

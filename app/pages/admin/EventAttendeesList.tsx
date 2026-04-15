@@ -1,4 +1,4 @@
-import { GROUP_LABELS } from '~/components/AuthProvider';
+import { formatGroupWithTitle } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { UserRecord } from './types';
 
@@ -29,7 +29,7 @@ export function EventAttendeesList({loading, attendees}: EventAttendeesListProps
                         <div className="admin-user-email">{u.email}</div>
                     </div>
                     <span className="admin-user-group-tag" data-group={u.group}>
-                        {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
+                        {formatGroupWithTitle(u.group, u.title, isEnglish)}
                     </span>
                 </div>
             ))}

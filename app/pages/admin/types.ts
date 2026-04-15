@@ -40,6 +40,7 @@ export interface UserRecord {
     attendedEvents: string[];
     badges: string[];
     group: UserGroup;
+    title?: string;
 }
 
 export type Tab = 'users' | 'events' | 'upcoming' | 'badges' | 'tags' | 'records';
@@ -78,7 +79,8 @@ export type RecordType =
     | 'tag-delete'
     | 'account-deletion-requested'
     | 'account-deletion-cancelled'
-    | 'account-deleted';
+    | 'account-deleted'
+    | 'title-set';
 
 export interface ActivityRecord {
     id: string;
@@ -96,5 +98,7 @@ export interface ActivityRecord {
     code?: string;
     oldGroup?: UserGroup;
     newGroup?: UserGroup;
+    oldTitle?: string;
+    newTitle?: string;
     timestamp: Date;
 }
