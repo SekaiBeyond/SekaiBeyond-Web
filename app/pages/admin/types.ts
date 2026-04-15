@@ -75,7 +75,10 @@ export type RecordType =
     | 'event-code-time-window'
     | 'tag-create'
     | 'tag-edit'
-    | 'tag-delete';
+    | 'tag-delete'
+    | 'account-deletion-requested'
+    | 'account-deletion-cancelled'
+    | 'account-deleted';
 
 export interface ActivityRecord {
     id: string;
@@ -84,6 +87,7 @@ export interface ActivityRecord {
     performedByName: string;
     targetUid?: string;
     targetName?: string;
+    targetEmail?: string;
     eventTitle?: string;
     eventId?: string;
     badgeId?: string;

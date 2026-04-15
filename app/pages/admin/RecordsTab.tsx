@@ -29,6 +29,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
         'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete', 'upcoming-event-archive',
         'upcoming-event-publish', 'upcoming-event-unpublish'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
+    account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
 };
 
 interface RecordsTabProps {
@@ -68,6 +69,7 @@ export const RecordsTab = ({
                 performedByName: data.performedByName ?? '',
                 targetUid: data.targetUid,
                 targetName: data.targetName,
+                targetEmail: data.targetEmail,
                 eventTitle: data.eventTitle,
                 eventId: data.eventId,
                 badgeId: data.badgeId,
@@ -298,6 +300,34 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>deleted tag {r.tagName ?? ''}</>
                     : <>删除了标签 {r.tagName ?? ''}</>;
+            case 'account-deletion-requested': {
+                const selfRequest = r.performedBy && r.targetUid && r.performedBy === r.targetUid;
+                if (selfRequest) {
+                    return isEnglish
+                        ? <>requested account deletion</>
+                        : <>申请删除账号</>;
+                }
+                return isEnglish
+                    ? <>requested deletion of {target}'s account</>
+                    : <>申请删除 {target} 的账号</>;
+            }
+            case 'account-deletion-cancelled': {
+                const selfCancel = r.performedBy && r.targetUid && r.performedBy === r.targetUid;
+                if (selfCancel) {
+                    return isEnglish
+                        ? <>cancelled their account deletion</>
+                        : <>取消了账号删除</>;
+                }
+                return isEnglish
+                    ? <>cancelled deletion of {target}'s account</>
+                    : <>取消了 {target} 的账号删除</>;
+            }
+            case 'account-deleted': {
+                const name = r.targetName || r.targetEmail || r.targetUid || '';
+                return isEnglish
+                    ? <>deleted account {name}</>
+                    : <>删除了账号 {name}</>;
+            }
         }
     };
 
@@ -340,6 +370,10 @@ export const RecordsTab = ({
             case 'tag-edit':
             case 'tag-delete':
                 return isEnglish ? 'Tag' : '标签';
+            case 'account-deletion-requested':
+            case 'account-deletion-cancelled':
+            case 'account-deleted':
+                return isEnglish ? 'Account' : '账号';
             default:
                 return type;
         }
@@ -365,6 +399,7 @@ export const RecordsTab = ({
                     <option value="badge">{isEnglish ? 'Badge' : '徽章'}</option>
                     <option value="event">{isEnglish ? 'Event' : '活动'}</option>
                     <option value="tag">{isEnglish ? 'Tag' : '标签'}</option>
+                    <option value="account">{isEnglish ? 'Account' : '账号'}</option>
                 </select>
                 <select
                     className="record-filter-select"
@@ -408,7 +443,11 @@ export const RecordsTab = ({
                         {getRecordTypeTag(r.type)}
                     </span>
                     <div className="record-content">
-                        <span className="record-actor">{clickableName(r.performedBy, r.performedByName)}</span>
+                        <span className="record-actor">
+                            {r.performedBy
+                                ? clickableName(r.performedBy, r.performedByName)
+                                : (isEnglish ? 'System' : '系统')}
+                        </span>
                         {' '}
                         <span className="record-description">{getRecordLabel(r)}</span>
                     </div>

@@ -1,6 +1,8 @@
 import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
+import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 
 import * as crypto from "crypto";
@@ -11,6 +13,15 @@ const RECORD_RETENTION_DAYS = 30;
 
 function recordExpiresAt(): Timestamp {
     return Timestamp.fromMillis(Date.now() + RECORD_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+}
+
+// Account deletion cooldown. Firestore TTL policy on
+// `users.deleteAt` fires the onUserDeleted trigger, which performs the actual wipe
+// (configure TTL on the deleteAt field in the Firebase console).
+const DELETION_COOLDOWN_HOURS = 48;
+
+function deletionExpiresAt(): Timestamp {
+    return Timestamp.fromMillis(Date.now() + DELETION_COOLDOWN_HOURS * 60 * 60 * 1000);
 }
 
 initializeApp();
@@ -1673,3 +1684,162 @@ export const deleteTag = onCall({maxInstances: 10}, async (request) => {
         return {deleted: true};
     });
 });
+
+/**
+ * Request account deletion with a 48-hour cooldown.
+ * Self-request when targetUid is omitted; admin-request requires hierarchy auth.
+ * Sets deleteAt on the user doc. Firestore TTL on deleteAt triggers onUserDeleted.
+ */
+export const requestAccountDeletion = onCall({maxInstances: 10}, async (request) => {
+    const callerUid = await requireAuth(request);
+    const inputTarget = (request.data as {targetUid?: string})?.targetUid;
+    const targetUid = inputTarget ? validateDocId(inputTarget, "targetUid") : callerUid;
+
+    const deleteAt = deletionExpiresAt();
+
+    await db.runTransaction(async (txn) => {
+        const [callerSnap, targetSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(callerUid)),
+            txn.get(db.collection("users").doc(targetUid)),
+        ]);
+
+        if (!targetSnap.exists) {
+            throw new HttpsError("not-found", "User not found.");
+        }
+        const targetData = targetSnap.data()!;
+
+        if (callerUid === targetUid) {
+            if (targetData.group === "visitor") {
+                throw new HttpsError("permission-denied", "Visitors cannot delete.");
+            }
+        } else {
+            if (!callerSnap.exists) {
+                throw new HttpsError("permission-denied", "Insufficient permissions.");
+            }
+            const callerGroup = callerSnap.data()!.group;
+            if (!ADMIN_GROUPS.includes(callerGroup)) {
+                throw new HttpsError("permission-denied", "Insufficient permissions.");
+            }
+            if (callerGroup !== "president"
+                && !["visitor", "member", "staff"].includes(targetData.group)) {
+                throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
+            }
+        }
+
+        if (targetData.deleteAt && targetData.deleteAt.toMillis() > Date.now()) {
+            throw new HttpsError("already-exists", "deletion-already-pending");
+        }
+
+        const callerName = callerSnap.exists
+            ? (callerSnap.data()!.displayName ?? "")
+            : (targetData.displayName ?? "");
+
+        txn.update(db.collection("users").doc(targetUid), {deleteAt});
+        txn.set(db.collection("records").doc(), {
+            type: "account-deletion-requested",
+            performedBy: callerUid,
+            performedByName: callerName,
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+    });
+
+    return {deleteAt: deleteAt.toDate().toISOString()};
+});
+
+/**
+ * Cancel a pending account deletion.
+ * Target user can always cancel their own; admins must pass hierarchy check.
+ * Clears deleteAt on the user doc so Firestore TTL never fires.
+ */
+export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) => {
+    const callerUid = await requireAuth(request);
+    const inputTarget = (request.data as {targetUid?: string})?.targetUid;
+    const targetUid = inputTarget ? validateDocId(inputTarget, "targetUid") : callerUid;
+
+    await db.runTransaction(async (txn) => {
+        const [callerSnap, targetSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(callerUid)),
+            txn.get(db.collection("users").doc(targetUid)),
+        ]);
+
+        if (!targetSnap.exists) {
+            throw new HttpsError("not-found", "User not found.");
+        }
+        const targetData = targetSnap.data()!;
+        if (!targetData.deleteAt || targetData.deleteAt.toMillis() <= Date.now()) {
+            throw new HttpsError("not-found", "No pending deletion.");
+        }
+
+        if (callerUid !== targetUid) {
+            if (!callerSnap.exists || !ADMIN_GROUPS.includes(callerSnap.data()!.group)) {
+                throw new HttpsError("permission-denied", "Insufficient permissions.");
+            }
+            const callerGroup = callerSnap.data()!.group;
+            if (callerGroup !== "president"
+                && !["visitor", "member", "staff"].includes(targetData.group)) {
+                throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
+            }
+        }
+
+        const callerName = callerSnap.exists
+            ? (callerSnap.data()!.displayName ?? "")
+            : (targetData.displayName ?? "");
+
+        txn.update(db.collection("users").doc(targetUid), {deleteAt: FieldValue.delete()});
+        txn.set(db.collection("records").doc(), {
+            type: "account-deletion-cancelled",
+            performedBy: callerUid,
+            performedByName: callerName,
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+    });
+
+    return {cancelled: true};
+});
+
+/**
+ * Firestore trigger that fires when a user doc is deleted via Firestore TTL.
+ * TTL on users.deleteAt triggers this after the 48-hour cooldown passes.
+ */
+export const onUserDeleted = onDocumentDeleted(
+    {document: "users/{uid}", maxInstances: 10},
+    async (event) => {
+        const data = event.data?.data();
+        const uid = event.params.uid;
+
+        try {
+            await getAuth().deleteUser(uid);
+        } catch (err: unknown) {
+            const code = (err as {code?: string})?.code;
+            if (code !== "auth/user-not-found") {
+                console.error(`onUserDeleted: deleteUser failed for ${uid}`, err);
+                throw err;
+            }
+        }
+
+        try {
+            await getStorage().bucket().file(`avatars/${uid}`).delete({ignoreNotFound: true});
+        } catch (err) {
+            console.error(`onUserDeleted: avatar delete failed for ${uid}`, err);
+        }
+
+        try {
+            await db.collection("records").add({
+                type: "account-deleted",
+                targetUid: uid,
+                targetName: data?.displayName ?? "",
+                targetEmail: data?.email ?? "",
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        } catch (err) {
+            console.error(`onUserDeleted: record write failed for ${uid}`, err);
+        }
+    }
+);

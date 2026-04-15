@@ -197,6 +197,16 @@ export const callUpdateDisplayName = (data: {displayName: string}) =>
 export const callDeleteAvatar = () =>
     httpsCallable<Record<string, never>, {photoURL: string}>(getFunctions(), 'deleteAvatar')({});
 
+export const callRequestAccountDeletion = (data: {targetUid?: string} = {}) =>
+    httpsCallable<{targetUid?: string}, {expiresAt: string}>(
+        getFunctions(), 'requestAccountDeletion'
+    )(data);
+
+export const callCancelAccountDeletion = (data: {targetUid?: string} = {}) =>
+    httpsCallable<{targetUid?: string}, {cancelled: boolean}>(
+        getFunctions(), 'cancelAccountDeletion'
+    )(data);
+
 export const callUploadAvatar = async (file: File): Promise<string> => {
     const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();

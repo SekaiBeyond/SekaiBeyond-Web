@@ -1,6 +1,24 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter, where, } from 'firebase/firestore';
-import { callChangeUserGroup, callToggleAttendance, callToggleUserBadge, getFirebaseDb } from '~/lib/firebase';
+import {
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    startAfter,
+    where,
+} from 'firebase/firestore';
+import {
+    callCancelAccountDeletion,
+    callChangeUserGroup,
+    callRequestAccountDeletion,
+    callToggleAttendance,
+    callToggleUserBadge,
+    getFirebaseDb,
+} from '~/lib/firebase';
 import type { User } from 'firebase/auth';
 import {
     canAssignGroup,
@@ -48,6 +66,9 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const [recentUsers, setRecentUsers] = useState<UserRecord[]>([]);
     const [loadingRecent, setLoadingRecent] = useState(false);
     const [hasMoreRecent, setHasMoreRecent] = useState(true);
+    const [pendingDeletionExpiresAt, setPendingDeletionExpiresAt] = useState<Date | null>(null);
+    const [deletionBusy, setDeletionBusy] = useState(false);
+    const [pendingDeletionUids, setPendingDeletionUids] = useState<Set<string>>(new Set());
 
     useImperativeHandle(ref, () => ({
         lookupUserByUid: async (uid: string) => {
@@ -59,6 +80,40 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             setSearchQuery('');
         },
     }));
+
+    useEffect(() => {
+        if (!selectedUser) {
+            setPendingDeletionExpiresAt(null);
+            return;
+        }
+        const db = getFirebaseDb();
+        const unsubscribe = onSnapshot(
+            doc(db, 'users', selectedUser.uid),
+            (snap) => {
+                const data = snap.data();
+                const deleteAt = data?.deleteAt?.toDate?.();
+                setPendingDeletionExpiresAt(deleteAt instanceof Date ? deleteAt : null);
+            },
+            () => setPendingDeletionExpiresAt(null),
+        );
+        return () => unsubscribe();
+    }, [selectedUser?.uid]);
+
+    useEffect(() => {
+        const db = getFirebaseDb();
+        const q = query(
+            collection(db, 'users'),
+            where('deleteAt', '!=', null),
+        );
+        const unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+                setPendingDeletionUids(new Set(snapshot.docs.map(d => d.id)));
+            },
+            () => setPendingDeletionUids(new Set()),
+        );
+        return () => unsubscribe();
+    }, []);
 
     useEffect(() => {
         const loadRecentUsers = async () => {
@@ -174,6 +229,48 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         return null;
     };
 
+    const requestDeletion = async (userRecord: UserRecord) => {
+        if (!confirm(isEnglish
+            ? `Request deletion of ${userRecord.displayName}'s account? It will be wiped in about 48 hours unless cancelled.`
+            : `申请删除 ${userRecord.displayName} 的账号？如不取消，约 48 小时后账号将被永久删除。`
+        )) return;
+        setDeletionBusy(true);
+        try {
+            await callRequestAccountDeletion({targetUid: userRecord.uid});
+            showToast(
+                isEnglish ? 'Deletion request submitted.' : '已提交删除申请。',
+                'success',
+            );
+        } catch {
+            showToast(
+                isEnglish
+                    ? 'Failed to request deletion. You may not have permission.'
+                    : '申请删除失败。你可能没有权限执行此操作。',
+                'error',
+            );
+        } finally {
+            setDeletionBusy(false);
+        }
+    };
+
+    const cancelDeletion = async (userRecord: UserRecord) => {
+        setDeletionBusy(true);
+        try {
+            await callCancelAccountDeletion({targetUid: userRecord.uid});
+            showToast(
+                isEnglish ? 'Deletion cancelled.' : '已取消删除。',
+                'success',
+            );
+        } catch {
+            showToast(
+                isEnglish ? 'Failed to cancel deletion.' : '取消删除失败。',
+                'error',
+            );
+        } finally {
+            setDeletionBusy(false);
+        }
+    };
+
     const changeUserGroup = async (userRecord: UserRecord, newGroup: UserGroup) => {
         const oldLabel = isEnglish ? GROUP_LABELS[userRecord.group].en : GROUP_LABELS[userRecord.group].zh;
         const newLabel = isEnglish ? GROUP_LABELS[newGroup].en : GROUP_LABELS[newGroup].zh;
@@ -230,6 +327,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 <div className="admin-user-name">{u.displayName}</div>
                                 <div className="admin-user-email">{u.email}</div>
                             </div>
+                            {pendingDeletionUids.has(u.uid) && (
+                                <span className="admin-user-deletion-flag">
+                                    {isEnglish ? 'Pending deletion' : '待删除'}
+                                </span>
+                            )}
                             <span className="admin-user-group-tag" data-group={u.group}>
                                 {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
                             </span>
@@ -257,6 +359,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 <div className="admin-user-name">{u.displayName}</div>
                                 <div className="admin-user-email">{u.email}</div>
                             </div>
+                            {pendingDeletionUids.has(u.uid) && (
+                                <span className="admin-user-deletion-flag">
+                                    {isEnglish ? 'Pending deletion' : '待删除'}
+                                </span>
+                            )}
                             <span className="admin-user-group-tag" data-group={u.group}>
                                 {isEnglish ? GROUP_LABELS[u.group].en : GROUP_LABELS[u.group].zh}
                             </span>
@@ -332,6 +439,46 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                     );
                                 })}
                             </div>
+                        </div>
+
+                        <div className="admin-deletion-section">
+                            <h4 className="admin-badges-title">
+                                {isEnglish ? 'Account Deletion' : '账号删除'}
+                            </h4>
+                            {pendingDeletionExpiresAt ? (
+                                <div className="admin-deletion-pending">
+                                    <p>
+                                        {isEnglish
+                                            ? `Pending — scheduled around ${pendingDeletionExpiresAt.toLocaleString('en-US', {
+                                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                                            })}.`
+                                            : `待删除 — 预计于 ${pendingDeletionExpiresAt.toLocaleString('zh-CN', {
+                                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                                            })} 前后执行。`}
+                                    </p>
+                                    <button
+                                        className="admin-deletion-cancel-btn"
+                                        onClick={() => cancelDeletion(selectedUser)}
+                                        disabled={deletionBusy || !canManage}
+                                        title={manageTooltip}
+                                    >
+                                        {isEnglish ? 'Cancel deletion' : '取消删除'}
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    className="admin-deletion-request-btn"
+                                    onClick={() => requestDeletion(selectedUser)}
+                                    disabled={deletionBusy || !canManage || selectedUser.uid === user.uid}
+                                    title={
+                                        selectedUser.uid === user.uid
+                                            ? (isEnglish ? 'Use the Danger Zone on your own profile' : '请在个人主页的危险操作区删除自己')
+                                            : manageTooltip
+                                    }
+                                >
+                                    {isEnglish ? 'Request account deletion' : '申请删除账号'}
+                                </button>
+                            )}
                         </div>
 
                         {badgeDefsError && (

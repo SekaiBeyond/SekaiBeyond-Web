@@ -135,6 +135,18 @@
     font-weight: 600;
 }
 
+.admin-user-deletion-flag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(208, 37, 69, 0.12);
+    color: #b31c37;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 1px solid rgba(208, 37, 69, 0.35);
+}
+
 .admin-no-results {
     text-align: center;
     color: var(--color-text-light);
@@ -1214,5 +1226,68 @@
 .image-crop-zoom input[type="range"] {
     flex: 1;
     accent-color: var(--color-primary);
+}
+
+.admin-deletion-section {
+    margin-top: 24px;
+    padding: 16px 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(208, 37, 69, 0.2);
+    background: rgba(255, 245, 248, 0.7);
+}
+
+.admin-deletion-section .admin-badges-title {
+    color: #b31c37;
+}
+
+.admin-deletion-pending {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: #8a1f33;
+    font-size: 14px;
+}
+
+.admin-deletion-pending p {
+    margin: 0;
+}
+
+.admin-deletion-request-btn,
+.admin-deletion-cancel-btn {
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid #d02545;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-deletion-request-btn {
+    background: transparent;
+    color: #d02545;
+}
+
+.admin-deletion-request-btn:hover:not(:disabled) {
+    background: #d02545;
+    color: #fff;
+}
+
+.admin-deletion-cancel-btn {
+    background: #d02545;
+    color: #fff;
+}
+
+.admin-deletion-cancel-btn:hover:not(:disabled) {
+    background: #b31c37;
+    border-color: #b31c37;
+}
+
+.admin-deletion-request-btn:disabled,
+.admin-deletion-cancel-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
