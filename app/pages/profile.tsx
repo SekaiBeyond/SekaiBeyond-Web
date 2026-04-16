@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { formatGroupWithTitle, hasPermission, useAuth, type UserGroup } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
@@ -30,12 +30,14 @@ interface ViewedProfile {
     title?: string;
 }
 
-const BadgeCard = ({badge, earnedDate, isEnglish}: {
+const BadgeCard = ({badge, earnedDate, isEnglish, active, onToggle}: {
     badge: BadgeDef;
     earnedDate?: Date;
     isEnglish: boolean;
+    active: boolean;
+    onToggle: () => void;
 }) => (
-    <div className="badge-circle">
+    <div className={`badge-circle ${active ? 'badge-circle-active' : ''}`} onClick={onToggle}>
         <div className="badge-icon-wrapper">
             <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn} className="badge-icon"/>
         </div>
@@ -92,7 +94,8 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabel}: {
             <img src={event.icon} alt={isEnglish ? event.title : event.titleCn} className="profile-event-icon"/>
         </div>
         <div className="profile-event-info">
-            <span className="profile-event-category">{tagLabel ?? ''}</span>
+            <span
+                className={`profile-event-category${tagLabel ? '' : ' profile-event-category-hidden'}`}>{tagLabel || '\u00A0'}</span>
             <h3 className="profile-event-title">
                 {showAdminLink ? (
                     <a href={`/admin?tab=events&event=${encodeURIComponent(event.id)}`}
@@ -117,6 +120,7 @@ export const ProfilePage = () => {
     const {isEnglish} = useLanguage();
     const {pastEvents, loading: eventsLoading} = usePastEvents();
     const {tags} = useTags();
+    const tagMap = useMemo(() => new Map(tags.map(t => [t.id, t])), [tags]);
     const [searchParams] = useSearchParams();
     const viewUid = searchParams.get('uid');
     const isViewingOther = !!viewUid && viewUid !== user?.uid;
@@ -128,37 +132,57 @@ export const ProfilePage = () => {
     const [savingPhoto, setSavingPhoto] = useState(false);
     const [customPhotoLoaded, setCustomPhotoLoaded] = useState(false);
     const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+    const [avatarError, setAvatarError] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [badgeLoadError, setBadgeLoadError] = useState(false);
     const [viewedLoadError, setViewedLoadError] = useState(false);
+    const [activeBadge, setActiveBadge] = useState<string | null>(null);
+    const badgeGridRef = useRef<HTMLDivElement>(null);
+
+    const badgeIds = isViewingOther ? viewedProfile?.badges : profile?.badges;
+    const badgeIdsKey = badgeIds?.slice().sort().join(',') ?? '';
 
     useEffect(() => {
+        if (!badgeIds || badgeIds.length === 0) {
+            setBadgeDefs([]);
+            setBadgeLoadError(false);
+            return;
+        }
         let stale = false;
         const loadBadges = async () => {
             try {
                 const db = getFirebaseDb();
-                const snapshot = await getDocs(collection(db, 'badges'));
-                if (stale) return;
+                const col = collection(db, 'badges');
+                // Firestore 'in' queries support max 30 items per batch
+                const batches: string[][] = [];
+                for (let i = 0; i < badgeIds.length; i += 30) {
+                    batches.push(badgeIds.slice(i, i + 30));
+                }
                 const defs: BadgeDef[] = [];
-                snapshot.forEach(docSnap => {
-                    const data = docSnap.data();
-                    defs.push({
-                        id: docSnap.id,
-                        name: data.name ?? '',
-                        nameCn: data.nameCn ?? '',
-                        description: data.description ?? '',
-                        descriptionCn: data.descriptionCn ?? '',
-                        imageUrl: data.imageUrl ?? '',
-                        holderPct: data.holderPct,
-                        createdByUid: data.createdByUid ?? '',
-                        createdByName: data.createdByName ?? '',
-                        createdByLink: data.createdByLink ?? '',
+                await Promise.all(batches.map(async (batch) => {
+                    const q = query(col, where(documentId(), 'in', batch));
+                    const snapshot = await getDocs(q);
+                    snapshot.forEach(docSnap => {
+                        const data = docSnap.data();
+                        defs.push({
+                            id: docSnap.id,
+                            name: data.name ?? '',
+                            nameCn: data.nameCn ?? '',
+                            description: data.description ?? '',
+                            descriptionCn: data.descriptionCn ?? '',
+                            imageUrl: data.imageUrl ?? '',
+                            holderPct: data.holderPct,
+                            createdByUid: data.createdByUid ?? '',
+                            createdByName: data.createdByName ?? '',
+                            createdByLink: data.createdByLink ?? '',
+                        });
                     });
-                });
+                }));
+                if (stale) return;
                 setBadgeDefs(defs);
-                if (!stale) setBadgeLoadError(false);
+                setBadgeLoadError(false);
             } catch {
                 if (!stale) setBadgeLoadError(true);
             }
@@ -167,7 +191,7 @@ export const ProfilePage = () => {
         return () => {
             stale = true;
         };
-    }, []);
+    }, [badgeIdsKey]);
 
     useEffect(() => {
         if (!viewUid || !isViewingOther) {
@@ -221,6 +245,7 @@ export const ProfilePage = () => {
     const hasCustomPhoto = profile?.photoURL?.includes('firebasestorage.googleapis.com') ?? false;
 
     useEffect(() => {
+        setAvatarError(false);
         if (!hasCustomPhoto || !profile) {
             setCustomPhotoLoaded(false);
             return;
@@ -230,6 +255,32 @@ export const ProfilePage = () => {
         img.onerror = () => setCustomPhotoLoaded(false);
         img.src = profile.photoURL;
     }, [profile?.photoURL, hasCustomPhoto]);
+
+    useEffect(() => {
+        if (!activeBadge) return;
+        const handleClick = (e: MouseEvent) => {
+            if (badgeGridRef.current && !badgeGridRef.current.contains(e.target as Node)) {
+                setActiveBadge(null);
+            }
+        };
+        document.addEventListener('click', handleClick);
+        return () => document.removeEventListener('click', handleClick);
+    }, [activeBadge]);
+
+    const toggleBadge = useCallback((id: string) => {
+        setActiveBadge(prev => prev === id ? null : id);
+    }, []);
+
+    useEffect(() => {
+        if (isViewingOther && viewedProfile) {
+            document.title = `${viewedProfile.displayName} | Sekai Beyond`;
+        } else {
+            document.title = 'Profile | Sekai Beyond';
+        }
+        return () => {
+            document.title = 'Profile | Sekai Beyond';
+        };
+    }, [isViewingOther, viewedProfile?.displayName]);
 
     const startEditingName = () => {
         if (!profile) return;
@@ -294,13 +345,14 @@ export const ProfilePage = () => {
 
     const handleSaveName = async () => {
         if (!profile || !editName.trim() || savingName || !editingName) return;
-        if (editName === profile.displayName) {
+        if (editName.trim() === profile.displayName) {
             setEditingName(false);
             return;
         }
+        const trimmed = editName.trim();
         setSavingName(true);
         try {
-            await updateProfile({displayName: editName});
+            await updateProfile({displayName: trimmed});
             setEditingName(false);
         } catch {
             alert(isEnglish ? 'Failed to update name. Please try again.' : '修改名称失败，请重试。');
@@ -380,8 +432,12 @@ export const ProfilePage = () => {
             title: viewedProfile!.title ?? '',
         };
     const attendedSet = new Set(dp.attendedEvents);
-    const attendedEvents = pastEvents.filter(e => attendedSet.has(e.id));
-    const earnedBadges = badgeDefs.filter(b => dp.badges.includes(b.id));
+    const attendedEvents = pastEvents
+        .filter(e => attendedSet.has(e.id))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const earnedBadges = badgeDefs
+        .filter(b => dp.badges.includes(b.id))
+        .sort((a, b) => (earnedDates[b.id]?.getTime() ?? 0) - (earnedDates[a.id]?.getTime() ?? 0));
     const canEdit = isOwnProfile && profile!.group !== 'visitor';
     const isStaff = isOwnProfile && hasPermission(profile!.group, 'staff');
 
@@ -401,13 +457,23 @@ export const ProfilePage = () => {
                 <div className="profile-header">
                     <div
                         className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
-                        <img
-                            src={displayedPhoto}
-                            alt={dp.name}
-                            className="profile-avatar"
-                            referrerPolicy="no-referrer"
-                            onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
-                        />
+                        {!avatarError && displayedPhoto ? (
+                            <img
+                                src={displayedPhoto}
+                                alt={dp.name}
+                                className="profile-avatar"
+                                referrerPolicy="no-referrer"
+                                onError={() => setAvatarError(true)}
+                                onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
+                            />
+                        ) : (
+                            <div
+                                className="profile-avatar profile-avatar-initials"
+                                onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
+                            >
+                                {(dp.name?.[0] ?? '?').toUpperCase()}
+                            </div>
+                        )}
                         {canEdit && (
                             <>
                                 <div
@@ -460,16 +526,35 @@ export const ProfilePage = () => {
                                         value={editName}
                                         onChange={e => setEditName(e.target.value)}
                                         onKeyDown={handleNameKeyDown}
-                                        onBlur={(e) => {
-                                            const related = e.relatedTarget as HTMLElement | null;
-                                            if (related?.closest('.profile-name-row')) return;
-                                            requestAnimationFrame(() => handleSaveName());
-                                        }}
                                         maxLength={50}
                                         disabled={savingName}
                                     />
-                                    {savingName && <span
-                                        className="profile-name-saving">{isEnglish ? 'Saving...' : '保存中...'}</span>}
+                                    {savingName ? (
+                                        <span
+                                            className="profile-name-saving">{isEnglish ? 'Saving...' : '保存中...'}</span>
+                                    ) : (
+                                        <>
+                                            <button type="button" className="profile-name-save"
+                                                    onClick={() => void handleSaveName()}
+                                                    aria-label="Save name">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                     strokeWidth="2.5"
+                                                     strokeLinecap="round" strokeLinejoin="round">
+                                                    <polyline points="20 6 9 17 4 12"/>
+                                                </svg>
+                                            </button>
+                                            <button type="button" className="profile-name-cancel"
+                                                    onClick={cancelEditingName}
+                                                    aria-label="Cancel editing">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                     strokeWidth="2.5"
+                                                     strokeLinecap="round" strokeLinejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                                </svg>
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             ) : (
                                 <>
@@ -517,25 +602,38 @@ export const ProfilePage = () => {
                         {isEnglish ? 'Failed to load badge details.' : '加载徽章详情失败。'}
                     </p>
                 )}
-                {!badgeLoadError && earnedBadges.length > 0 && (
+                {!badgeLoadError && earnedBadges.length > 0 ? (
                     <section className="badge-section">
                         <h2 className="badge-section-title">
                             {isEnglish ? 'Badges' : '徽章'}
                         </h2>
-                        <div className="badge-grid">
+                        <div className="badge-grid" ref={badgeGridRef}>
                             {earnedBadges.map(badge => (
                                 <BadgeCard
                                     key={badge.id}
                                     badge={badge}
                                     earnedDate={earnedDates[badge.id]}
                                     isEnglish={isEnglish}
+                                    active={activeBadge === badge.id}
+                                    onToggle={() => toggleBadge(badge.id)}
                                 />
                             ))}
                         </div>
                     </section>
+                ) : !badgeLoadError && earnedBadges.length === 0 && (
+                    <section className="badge-section">
+                        <h2 className="badge-section-title">
+                            {isEnglish ? 'Badges' : '徽章'}
+                        </h2>
+                        <p className="profile-empty-state">
+                            {isEnglish
+                                ? 'No badges yet — attend events and complete challenges to earn your first!'
+                                : '还没有徽章——参加活动和完成挑战来获得你的第一枚徽章吧！'}
+                        </p>
+                    </section>
                 )}
 
-                {attendedEvents.length > 0 && (
+                {attendedEvents.length > 0 ? (
                     <section className="badge-section">
                         <h2 className="badge-section-title">
                             {isEnglish ? 'Events Attended' : '参与活动'}
@@ -548,12 +646,23 @@ export const ProfilePage = () => {
                                     isEnglish={isEnglish}
                                     showAdminLink={isStaff}
                                     tagLabel={(() => {
-                                        const tag = tags.find(t => t.id === event.tagId);
+                                        const tag = tagMap.get(event.tagId);
                                         return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
                                     })()}
                                 />
                             ))}
                         </div>
+                    </section>
+                ) : (
+                    <section className="badge-section">
+                        <h2 className="badge-section-title">
+                            {isEnglish ? 'Events Attended' : '参与活动'}
+                        </h2>
+                        <p className="profile-empty-state">
+                            {isEnglish
+                                ? 'No events attended yet — check out our upcoming events and join one!'
+                                : '还没有参加过活动——看看即将到来的活动，来参加一场吧！'}
+                        </p>
                     </section>
                 )}
             </div>
