@@ -449,8 +449,9 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
         ]);
         // Forces retry if the event is concurrently deleted mid-claim
         if (!eventSnap.exists) throw new HttpsError("not-found", "invalid");
+        if (!userSnap.exists) throw new HttpsError("not-found", "invalid");
 
-        const attendedEvents: string[] = userSnap.data()?.attendedEvents ?? [];
+        const attendedEvents: string[] = userSnap.data()!.attendedEvents ?? [];
         if (attendedEvents.includes(eventId)) {
             throw new HttpsError("already-exists", "already-have");
         }
@@ -501,9 +502,10 @@ export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (reques
             txn.get(userRef),
         ]);
         if (!badgeSnap.exists) throw new HttpsError("not-found", "invalid");
+        if (!userSnap.exists) throw new HttpsError("not-found", "invalid");
         const badgeData = badgeSnap.data()!;
 
-        const userBadges: string[] = userSnap.data()?.badges ?? [];
+        const userBadges: string[] = userSnap.data()!.badges ?? [];
         if (userBadges.includes(badgeId)) {
             throw new HttpsError("already-exists", "already-have");
         }

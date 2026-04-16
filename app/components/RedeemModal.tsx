@@ -16,6 +16,7 @@ export const RedeemModal = () => {
     const [error, setError] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
+    const submittingRef = useRef(false);
     useModalEffects(show, overlayRef);
 
     useEffect(() => {
@@ -26,6 +27,7 @@ export const RedeemModal = () => {
             setState('idle');
             setBadge(null);
             setError('');
+            submittingRef.current = false;
             setTimeout(() => inputRef.current?.focus(), 50);
         };
         window.addEventListener('open-redeem-modal', handler);
@@ -46,7 +48,9 @@ export const RedeemModal = () => {
             return;
         }
         if (!user || !profile) return;
+        if (submittingRef.current) return;
 
+        submittingRef.current = true;
         setState('claiming');
         setError('');
         try {
@@ -67,6 +71,7 @@ export const RedeemModal = () => {
             });
         } catch (err) {
             setState('error');
+            const code = err instanceof FirebaseError ? err.code : '';
             const msg = err instanceof FirebaseError ? err.message : '';
             if (msg.includes('rate-limited')) {
                 setError(isEnglish ? 'Too many attempts. Please wait a moment.' : '尝试次数过多，请稍后再试。');
@@ -76,13 +81,15 @@ export const RedeemModal = () => {
                 setError(isEnglish ? 'This code has expired.' : '此激活码已过期。');
             } else if (msg.includes('max-uses')) {
                 setError(isEnglish ? 'This code has reached its maximum uses.' : '此激活码已达到最大使用次数。');
-            } else if (msg.includes('already-have')) {
+            } else if (code === 'functions/already-exists' || msg.includes('already-have')) {
                 setError(isEnglish ? 'You already have this badge.' : '您已拥有此徽章。');
-            } else if (msg.includes('invalid') || msg.includes('inactive')) {
+            } else if (code === 'functions/not-found' || code === 'functions/invalid-argument' || msg.includes('invalid') || msg.includes('inactive')) {
                 setError(isEnglish ? 'Invalid or deactivated code.' : '激活码无效或已被停用。');
             } else {
                 setError(isEnglish ? 'Something went wrong. Please try again.' : '出错了，请重试。');
             }
+        } finally {
+            submittingRef.current = false;
         }
     };
 
