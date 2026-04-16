@@ -141,7 +141,7 @@ export const RecordsTab = ({
 
     const loadMore = () => {
         const {type, actor} = activeFilterRef.current;
-        if (lastDoc && hasMore) loadRecords(type, actor, lastDoc).then();
+        if (lastDoc && hasMore) loadRecords(type, actor, lastDoc).catch(console.error);
     };
 
     const clickableName = (uid: string, name: string): ReactNode => (

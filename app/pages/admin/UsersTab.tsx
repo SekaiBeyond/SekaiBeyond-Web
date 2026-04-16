@@ -78,7 +78,10 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         lookupUserByUid: async (uid: string) => {
             const db = getFirebaseDb();
             const userSnap = await getDoc(doc(db, 'users', uid));
-            if (!userSnap.exists()) return;
+            if (!userSnap.exists()) {
+                showToast(isEnglish ? 'User not found.' : '未找到该用户。', 'error');
+                return;
+            }
             const record = docToUserRecord(userSnap);
             setSelectedUser(record);
             setTitleInput(record.title ?? '');
