@@ -48,8 +48,8 @@ export type Tab = 'users' | 'events' | 'upcoming' | 'badges' | 'tags' | 'records
 export type RecordType =
     'group-assign'
     | 'code-create'
-    | 'code-activate'
-    | 'code-deactivate'
+    | 'badge-code-activate'
+    | 'badge-code-deactivate'
     | 'code-delete'
     | 'badge-grant'       // legacy: means event-attend (kept for backward compat with existing records)
     | 'badge-revoke'      // legacy: means event-unattend (kept for backward compat with existing records)

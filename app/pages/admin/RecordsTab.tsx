@@ -21,7 +21,7 @@ const PAGE_SIZE = 20;
 // Requires composite Firestore indexes: (type, timestamp) and (performedBy, timestamp)
 const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     role: ['group-assign', 'title-set'],
-    code: ['code-create', 'code-activate', 'code-deactivate', 'code-delete',
+    code: ['code-create', 'badge-code-activate', 'badge-code-deactivate', 'code-delete',
         'event-code-activate', 'event-code-deactivate', 'event-code-time-window'],
     attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend', 'event-claim'],
     badge: ['achievement-grant', 'achievement-revoke', 'badge-claim', 'badge-create', 'badge-edit', 'badge-delete'],
@@ -227,11 +227,11 @@ export const RecordsTab = ({
                 const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
                 return isEnglish ? <>claimed {badge} badge with code</> : <>使用兑换码获得 {badge} 徽章</>;
             }
-            case 'code-activate': {
+            case 'badge-code-activate': {
                 const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
                 return isEnglish ? <>activated code for {badge}</> : <>激活了 {badge} 的兑换码</>;
             }
-            case 'code-deactivate': {
+            case 'badge-code-deactivate': {
                 const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
                 return isEnglish ? <>deactivated code for {badge}</> : <>停用了 {badge} 的兑换码</>;
             }
@@ -359,8 +359,8 @@ export const RecordsTab = ({
             case 'title-set':
                 return isEnglish ? 'Role' : '角色';
             case 'code-create':
-            case 'code-activate':
-            case 'code-deactivate':
+            case 'badge-code-activate':
+            case 'badge-code-deactivate':
             case 'code-delete':
             case 'event-code-activate':
             case 'event-code-deactivate':
