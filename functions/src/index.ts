@@ -1739,8 +1739,9 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
 
     const input = request.data as Record<string, unknown>;
     const tagId = input.tagId ? validateDocId(input.tagId, "tagId") : null;
-    const name = validateStr(input.name, "name", 100, true);
-    const nameCn = validateStr(input.nameCn, "nameCn", 100);
+    const name = sanitizeDisplayText(validateStr(input.name, "name", 100, true));
+    const nameCn = sanitizeDisplayText(validateStr(input.nameCn, "nameCn", 100));
+    if (!name) throw new HttpsError("invalid-argument", "name is required.");
     const docId = tagId ?? db.collection("eventLabels").doc().id;
 
     return adminTransaction(uid, async (txn, callerSnap) => {
@@ -1748,6 +1749,15 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
             const existing = await txn.get(db.collection("eventLabels").doc(tagId));
             if (!existing.exists) throw new HttpsError("not-found", "Tag not found.");
         }
+
+        const allTagsSnap = await txn.get(db.collection("eventLabels"));
+        for (const doc of allTagsSnap.docs) {
+            if (doc.id === tagId) continue;
+            if (doc.data().name === name) {
+                throw new HttpsError("already-exists", "A tag with this name already exists.");
+            }
+        }
+
         const ref = db.collection("eventLabels").doc(docId);
         if (tagId) {
             txn.update(ref, {name, nameCn});

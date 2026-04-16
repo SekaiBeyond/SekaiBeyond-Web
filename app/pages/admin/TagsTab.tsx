@@ -1,7 +1,12 @@
 import { useState } from 'react';
+import { FirebaseError } from 'firebase/app';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteTag, callSaveTag } from '~/lib/firebase';
 import type { Tag } from '~/lib/tags';
+
+function isDuplicateError(err: unknown): boolean {
+    return err instanceof FirebaseError && err.code === 'functions/already-exists';
+}
 
 interface TagsTabProps {
     tags: Tag[];
@@ -32,8 +37,10 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
             setNameCn('');
             setShowCreate(false);
             showToast(isEnglish ? 'Tag created.' : '标签已创建。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to create tag.' : '创建标签失败。', 'error');
+        } catch (err) {
+            showToast(isDuplicateError(err)
+                ? (isEnglish ? 'A tag with this name already exists.' : '已存在同名标签。')
+                : (isEnglish ? 'Failed to create tag.' : '创建标签失败。'), 'error');
         } finally {
             setSaving(false);
         }
@@ -53,8 +60,10 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
             await refreshTags();
             setEditingTag(null);
             showToast(isEnglish ? 'Tag updated.' : '标签已更新。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to save tag.' : '保存标签失败。', 'error');
+        } catch (err) {
+            showToast(isDuplicateError(err)
+                ? (isEnglish ? 'A tag with this name already exists.' : '已存在同名标签。')
+                : (isEnglish ? 'Failed to save tag.' : '保存标签失败。'), 'error');
         } finally {
             setSavingEdit(false);
         }
@@ -92,7 +101,7 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
                                 value={name}
                                 onChange={e => setName(e.target.value)}
                                 className="admin-search-input"
-                                placeholder={isEnglish ? 'e.g. Workshop' : '例如 Workshop'}
+                                placeholder='e.g. Workshop'
                             />
                         </label>
                         <label>
@@ -101,7 +110,7 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
                                 value={nameCn}
                                 onChange={e => setNameCn(e.target.value)}
                                 className="admin-search-input"
-                                placeholder={isEnglish ? 'e.g. 工作坊' : '例如 工作坊'}
+                                placeholder='e.g. 工坊'
                             />
                         </label>
                     </div>

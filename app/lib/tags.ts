@@ -10,7 +10,7 @@ export interface Tag {
 
 let cachedTags: Tag[] | null = null;
 let fetchPromise: Promise<Tag[]> | null = null;
-let subscribers: Array<(tags: Tag[]) => void> = [];
+const subscribers = new Set<(tags: Tag[]) => void>();
 
 async function fetchTags(force = false): Promise<Tag[]> {
     if (!force && cachedTags) return cachedTags;
@@ -39,7 +39,7 @@ async function fetchTags(force = false): Promise<Tag[]> {
 
 export async function refreshTags(): Promise<Tag[]> {
     const tags = await fetchTags(true);
-    subscribers.forEach(fn => fn(tags));
+    for (const fn of subscribers) fn(tags);
     return tags;
 }
 
@@ -48,9 +48,9 @@ export function useTags(): {tags: Tag[]; loading: boolean; refresh: () => Promis
     const [loading, setLoading] = useState(cachedTags === null);
 
     useEffect(() => {
-        subscribers.push(setTags);
+        subscribers.add(setTags);
         return () => {
-            subscribers = subscribers.filter(fn => fn !== setTags);
+            subscribers.delete(setTags);
         };
     }, []);
 
