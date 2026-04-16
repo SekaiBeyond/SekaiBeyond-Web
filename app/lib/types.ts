@@ -5,4 +5,5 @@ export interface BadgeDef {
     description: string;
     descriptionCn: string;
     imageUrl: string;
+    deleteAt: Date | null;
 }

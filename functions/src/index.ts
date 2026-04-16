@@ -847,39 +847,30 @@ function logStorageCleanupError(context: string): (err: unknown) => void {
 }
 
 /**
- * Delete a past event and all related data (admin only).
- * Atomically deletes the event, its claim codes, removes from users' attendedEvents,
- * deletes the storage image, and creates an audit record.
+ * Request deletion of a past event with a 48-hour cooldown (admin only).
+ * Sets deleteAt on the pastEvents doc. Firestore TTL on deleteAt triggers onPastEventDeleted,
+ * which handles cascading cleanup (claim codes, user attendance, storage).
  */
-export const deleteEvent = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
+export const requestEventDeletion = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
     await checkRateLimit(uid);
 
-    const eventId = validateDocId(
-        (request.data as {eventId?: string})?.eventId, "eventId"
-    );
+    const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
+    const deleteAt = deletionExpiresAt();
 
-    // Query related docs before the transaction (queries are not transactional anyway)
-    const [codesSnap, attendeesSnap] = await Promise.all([
-        db.collection("claimCodes").where("eventId", "==", eventId).get(),
-        db.collection("users").where("attendedEvents", "array-contains", eventId).get(),
-    ]);
-
-    // Admin check + main delete + audit record in a transaction
-    const eventData = await adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const eventSnap = await txn.get(db.collection("pastEvents").doc(eventId));
-        if (!eventSnap.exists) {
-            throw new HttpsError("not-found", "Event not found.");
-        }
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         const data = eventSnap.data()!;
 
-        txn.delete(db.collection("pastEvents").doc(eventId));
+        if (data.deleteAt && data.deleteAt.toMillis() > Date.now()) {
+            throw new HttpsError("already-exists", "deletion-already-pending");
+        }
+
+        txn.update(db.collection("pastEvents").doc(eventId), {deleteAt});
         txn.set(db.collection("records").doc(), {
-            type: "event-delete",
+            type: "event-deletion-requested",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: data.title ?? eventId,
@@ -887,60 +878,116 @@ export const deleteEvent = onCall({maxInstances: 10}, async (request) => {
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
-        return data;
     });
 
-    // Cascading cleanup (codes + user references) in batches
-    const cascadeOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
-        ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
-        ...attendeesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
-            b.update(d.ref, {attendedEvents: FieldValue.arrayRemove(eventId)})
-        ),
-    ];
-    if (cascadeOps.length > 0) {
-        await commitInChunks(cascadeOps);
-    }
-
-    await deleteStorageFile(eventData.icon ?? "", ["events/", "upcoming-events/"])
-        .catch(logStorageCleanupError(`deleteEvent ${eventId}`));
-
-    return {deleted: true};
+    return {deleteAt: deleteAt.toDate().toISOString()};
 });
 
 /**
- * Delete a badge and all related data (admin only).
- * Atomically deletes the badge, its activation codes, removes from users' badges,
- * deletes the storage image, and creates an audit record.
+ * Cancel a pending past-event deletion (admin only).
+ * Clears deleteAt so Firestore TTL never fires.
  */
-export const deleteBadge = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
+export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
     await checkRateLimit(uid);
 
-    const badgeId = validateDocId(
-        (request.data as {badgeId?: string})?.badgeId, "badgeId"
-    );
+    const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
 
-    // Query related docs before the transaction (queries are not transactional anyway)
-    const [codesSnap, holdersSnap] = await Promise.all([
-        db.collection("badgeActivationCodes").where("badgeId", "==", badgeId).get(),
-        db.collection("users").where("badges", "array-contains", badgeId).get(),
-    ]);
+    await adminTransaction(uid, async (txn, callerSnap) => {
+        const eventSnap = await txn.get(db.collection("pastEvents").doc(eventId));
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        const data = eventSnap.data()!;
 
-    // Admin check + main delete + audit record in a transaction
-    const badgeData = await adminTransaction(uid, async (txn, callerSnap) => {
-        const badgeSnap = await txn.get(db.collection("badges").doc(badgeId));
-        if (!badgeSnap.exists) {
-            throw new HttpsError("not-found", "Badge not found.");
+        if (!data.deleteAt || data.deleteAt.toMillis() <= Date.now()) {
+            throw new HttpsError("not-found", "No pending deletion.");
         }
+
+        txn.update(db.collection("pastEvents").doc(eventId), {deleteAt: FieldValue.delete()});
+        txn.set(db.collection("records").doc(), {
+            type: "event-deletion-cancelled",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventTitle: data.title ?? eventId,
+            eventId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+    });
+
+    return {cancelled: true};
+});
+
+/**
+ * Firestore trigger fired when a past event is deleted.
+ * Only runs cleanup for TTL-triggered deletions (deleteAt was set).
+ * Cascades: deletes claim codes, removes from users' attendedEvents, deletes storage icon.
+ */
+export const onPastEventDeleted = onDocumentDeleted(
+    {document: "pastEvents/{eventId}", maxInstances: 10},
+    async (event) => {
+        const data = event.data?.data();
+        const eventId = event.params.eventId;
+        if (!data?.deleteAt) return;
+
+        try {
+            const [codesSnap, attendeesSnap] = await Promise.all([
+                db.collection("claimCodes").where("eventId", "==", eventId).get(),
+                db.collection("users").where("attendedEvents", "array-contains", eventId).get(),
+            ]);
+            const cascadeOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
+                ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
+                ...attendeesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
+                    b.update(d.ref, {attendedEvents: FieldValue.arrayRemove(eventId)})
+                ),
+            ];
+            if (cascadeOps.length > 0) await commitInChunks(cascadeOps);
+        } catch (err) {
+            console.error(`onPastEventDeleted: cascade failed for ${eventId}`, err);
+        }
+
+        await deleteStorageFile(data.icon ?? "", ["events/", "upcoming-events/"])
+            .catch(logStorageCleanupError(`onPastEventDeleted ${eventId}`));
+
+        try {
+            await db.collection("records").add({
+                type: "event-deleted",
+                eventId,
+                eventTitle: data.title ?? "",
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        } catch (err) {
+            console.error(`onPastEventDeleted: record write failed for ${eventId}`, err);
+        }
+    }
+);
+
+/**
+ * Request deletion of a badge with a 48-hour cooldown (admin only).
+ * Sets deleteAt on the badges doc. Firestore TTL triggers onBadgeDeleted,
+ * which handles cascading cleanup (activation codes, user badges, storage).
+ */
+export const requestBadgeDeletion = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const badgeId = validateDocId((request.data as {badgeId?: string})?.badgeId, "badgeId");
+    const deleteAt = deletionExpiresAt();
+
+    await adminTransaction(uid, async (txn, callerSnap) => {
+        const badgeSnap = await txn.get(db.collection("badges").doc(badgeId));
+        if (!badgeSnap.exists) throw new HttpsError("not-found", "Badge not found.");
         const data = badgeSnap.data()!;
 
-        txn.delete(db.collection("badges").doc(badgeId));
+        if (data.deleteAt && data.deleteAt.toMillis() > Date.now()) {
+            throw new HttpsError("already-exists", "deletion-already-pending");
+        }
+
+        txn.update(db.collection("badges").doc(badgeId), {deleteAt});
         txn.set(db.collection("records").doc(), {
-            type: "badge-delete",
+            type: "badge-deletion-requested",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             badgeId,
@@ -948,25 +995,90 @@ export const deleteBadge = onCall({maxInstances: 10}, async (request) => {
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
-        return data;
     });
 
-    // Cascading cleanup (codes + user references) in batches
-    const cascadeOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
-        ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
-        ...holdersSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
-            b.update(d.ref, {badges: FieldValue.arrayRemove(badgeId)})
-        ),
-    ];
-    if (cascadeOps.length > 0) {
-        await commitInChunks(cascadeOps);
-    }
-
-    await deleteStorageFile(badgeData.imageUrl ?? "", ["badges/"])
-        .catch(logStorageCleanupError(`deleteBadge ${badgeId}`));
-
-    return {deleted: true};
+    return {deleteAt: deleteAt.toDate().toISOString()};
 });
+
+/**
+ * Cancel a pending badge deletion (admin only).
+ * Clears deleteAt so Firestore TTL never fires.
+ */
+export const cancelBadgeDeletion = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const badgeId = validateDocId((request.data as {badgeId?: string})?.badgeId, "badgeId");
+
+    await adminTransaction(uid, async (txn, callerSnap) => {
+        const badgeSnap = await txn.get(db.collection("badges").doc(badgeId));
+        if (!badgeSnap.exists) throw new HttpsError("not-found", "Badge not found.");
+        const data = badgeSnap.data()!;
+
+        if (!data.deleteAt || data.deleteAt.toMillis() <= Date.now()) {
+            throw new HttpsError("not-found", "No pending deletion.");
+        }
+
+        txn.update(db.collection("badges").doc(badgeId), {deleteAt: FieldValue.delete()});
+        txn.set(db.collection("records").doc(), {
+            type: "badge-deletion-cancelled",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            badgeId,
+            badgeName: data.name ?? badgeId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+    });
+
+    return {cancelled: true};
+});
+
+/**
+ * Firestore trigger fired when a badge is deleted.
+ * Only runs cleanup for TTL-triggered deletions (deleteAt was set).
+ * Cascades: deletes activation codes, removes badge from users' badges, deletes storage image.
+ */
+export const onBadgeDeleted = onDocumentDeleted(
+    {document: "badges/{badgeId}", maxInstances: 10},
+    async (event) => {
+        const data = event.data?.data();
+        const badgeId = event.params.badgeId;
+        if (!data?.deleteAt) return;
+
+        try {
+            const [codesSnap, holdersSnap] = await Promise.all([
+                db.collection("badgeActivationCodes").where("badgeId", "==", badgeId).get(),
+                db.collection("users").where("badges", "array-contains", badgeId).get(),
+            ]);
+            const cascadeOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
+                ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
+                ...holdersSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
+                    b.update(d.ref, {badges: FieldValue.arrayRemove(badgeId)})
+                ),
+            ];
+            if (cascadeOps.length > 0) await commitInChunks(cascadeOps);
+        } catch (err) {
+            console.error(`onBadgeDeleted: cascade failed for ${badgeId}`, err);
+        }
+
+        await deleteStorageFile(data.imageUrl ?? "", ["badges/"])
+            .catch(logStorageCleanupError(`onBadgeDeleted ${badgeId}`));
+
+        try {
+            await db.collection("records").add({
+                type: "badge-deleted",
+                badgeId,
+                badgeName: data.name ?? "",
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        } catch (err) {
+            console.error(`onBadgeDeleted: record write failed for ${badgeId}`, err);
+        }
+    }
+);
 
 const VALID_GROUPS = ["visitor", "member", "staff", "core-staff", "president"];
 
@@ -1356,39 +1468,117 @@ export const setUpcomingEventPublished = onCall({maxInstances: 10}, async (reque
 });
 
 /**
- * Delete an upcoming event (admin only).
- * Deletes the document, cleans up storage, and creates an audit record.
+ * Request deletion of an upcoming event with a 48-hour cooldown (admin only).
+ * Sets deleteAt on the upcomingEvents doc. Firestore TTL triggers onUpcomingEventDeleted,
+ * which handles cleanup (claim codes, storage poster).
  */
-export const deleteUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
+export const requestUpcomingEventDeletion = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
+    const deleteAt = deletionExpiresAt();
+
+    await adminTransaction(uid, async (txn, callerSnap) => {
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        const data = eventSnap.data()!;
+
+        if (data.deleteAt && data.deleteAt.toMillis() > Date.now()) {
+            throw new HttpsError("already-exists", "deletion-already-pending");
+        }
+
+        txn.update(db.collection("upcomingEvents").doc(eventId), {deleteAt});
+        txn.set(db.collection("records").doc(), {
+            type: "upcoming-event-deletion-requested",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventTitle: data.name ?? eventId,
+            eventId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+    });
+
+    return {deleteAt: deleteAt.toDate().toISOString()};
+});
+
+/**
+ * Cancel a pending upcoming-event deletion (admin only).
+ * Clears deleteAt so Firestore TTL never fires.
+ */
+export const cancelUpcomingEventDeletion = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
     await checkRateLimit(uid);
 
     const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
 
-    const posterUrl = await adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        const eventData = eventSnap.data()!;
+        const data = eventSnap.data()!;
 
-        txn.delete(db.collection("upcomingEvents").doc(eventId));
+        if (!data.deleteAt || data.deleteAt.toMillis() <= Date.now()) {
+            throw new HttpsError("not-found", "No pending deletion.");
+        }
+
+        txn.update(db.collection("upcomingEvents").doc(eventId), {deleteAt: FieldValue.delete()});
         txn.set(db.collection("records").doc(), {
-            type: "upcoming-event-delete",
+            type: "upcoming-event-deletion-cancelled",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventData.name ?? eventId,
+            eventTitle: data.name ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
-        return eventData.poster ?? "";
     });
 
-    await deleteStorageFile(posterUrl, ["upcoming-events/"])
-        .catch(logStorageCleanupError(`deleteUpcomingEvent ${eventId}`));
-
-    return {deleted: true};
+    return {cancelled: true};
 });
+
+/**
+ * Firestore trigger fired when an upcoming event is deleted.
+ * Only runs cleanup for TTL-triggered deletions (deleteAt was set).
+ * Direct deletions (e.g. archiveUpcomingEvent) are skipped because the poster
+ * is reused by the new pastEvent, and those flows manage their own cleanup.
+ */
+export const onUpcomingEventDeleted = onDocumentDeleted(
+    {document: "upcomingEvents/{eventId}", maxInstances: 10},
+    async (event) => {
+        const data = event.data?.data();
+        const eventId = event.params.eventId;
+        if (!data?.deleteAt) return;
+
+        try {
+            const codesSnap = await db.collection("claimCodes")
+                .where("eventId", "==", eventId).get();
+            const cascadeOps = codesSnap.docs.map(d =>
+                (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)
+            );
+            if (cascadeOps.length > 0) await commitInChunks(cascadeOps);
+        } catch (err) {
+            console.error(`onUpcomingEventDeleted: cascade failed for ${eventId}`, err);
+        }
+
+        await deleteStorageFile(data.poster ?? "", ["upcoming-events/"])
+            .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId}`));
+
+        try {
+            await db.collection("records").add({
+                type: "upcoming-event-deleted",
+                eventId,
+                eventTitle: data.name ?? "",
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        } catch (err) {
+            console.error(`onUpcomingEventDeleted: record write failed for ${eventId}`, err);
+        }
+    }
+);
 
 /**
  * Archive an upcoming event to past events (admin only).

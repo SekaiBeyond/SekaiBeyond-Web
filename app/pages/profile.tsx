@@ -177,6 +177,7 @@ export const ProfilePage = () => {
                             createdByUid: data.createdByUid ?? '',
                             createdByName: data.createdByName ?? '',
                             createdByLink: data.createdByLink ?? '',
+                            deleteAt: data.deleteAt?.toDate?.() ?? null,
                         });
                     });
                 }));

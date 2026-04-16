@@ -84,6 +84,7 @@ export const AdminPage = () => {
                     createdByName: data.createdByName ?? '',
                     createdByLink: data.createdByLink ?? '',
                     createdAt: data.createdAt?.toDate() ?? new Date(),
+                    deleteAt: data.deleteAt?.toDate?.() ?? null,
                 };
             });
             setBadgeDefs(defs);

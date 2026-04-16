@@ -24,11 +24,14 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     code: ['code-create', 'badge-code-activate', 'badge-code-deactivate', 'code-delete',
         'event-code-activate', 'event-code-deactivate', 'event-code-time-window'],
     attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend', 'event-claim'],
-    badge: ['achievement-grant', 'achievement-revoke', 'badge-claim', 'badge-create', 'badge-edit', 'badge-delete'],
+    badge: ['achievement-grant', 'achievement-revoke', 'badge-claim', 'badge-create', 'badge-edit',
+        'badge-delete', 'badge-deletion-requested', 'badge-deletion-cancelled', 'badge-deleted'],
     event: ['event-create', 'event-edit', 'event-delete',
+        'event-deletion-requested', 'event-deletion-cancelled', 'event-deleted',
         'past-event-publish', 'past-event-unpublish',
-        'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete', 'upcoming-event-archive',
-        'upcoming-event-publish', 'upcoming-event-unpublish'],
+        'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete',
+        'upcoming-event-deletion-requested', 'upcoming-event-deletion-cancelled', 'upcoming-event-deleted',
+        'upcoming-event-archive', 'upcoming-event-publish', 'upcoming-event-unpublish'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
 };
@@ -258,6 +261,20 @@ export const RecordsTab = ({
             }
             case 'badge-delete':
                 return isEnglish ? <>deleted badge {r.badgeName ?? ''}</> : <>删除了徽章 {r.badgeName ?? ''}</>;
+            case 'badge-deletion-requested': {
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+                return isEnglish
+                    ? <>requested deletion of badge {badge}</>
+                    : <>申请删除徽章 {badge}</>;
+            }
+            case 'badge-deletion-cancelled': {
+                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+                return isEnglish
+                    ? <>cancelled deletion of badge {badge}</>
+                    : <>取消了徽章 {badge} 的删除</>;
+            }
+            case 'badge-deleted':
+                return isEnglish ? <>deleted badge {r.badgeName ?? ''}</> : <>删除了徽章 {r.badgeName ?? ''}</>;
             case 'event-create':
                 return isEnglish
                     ? <>created
@@ -269,6 +286,20 @@ export const RecordsTab = ({
                         event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
                     : <>编辑了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
             case 'event-delete':
+                return isEnglish
+                    ? <>deleted event {r.eventTitle ?? r.eventId ?? ''}</>
+                    : <>删除了活动 {r.eventTitle ?? r.eventId ?? ''}</>;
+            case 'event-deletion-requested':
+                return isEnglish
+                    ? <>requested deletion of
+                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
+                    : <>申请删除活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>;
+            case 'event-deletion-cancelled':
+                return isEnglish
+                    ? <>cancelled deletion of
+                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
+                    : <>取消了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} 的删除</>;
+            case 'event-deleted':
                 return isEnglish
                     ? <>deleted event {r.eventTitle ?? r.eventId ?? ''}</>
                     : <>删除了活动 {r.eventTitle ?? r.eventId ?? ''}</>;
@@ -291,6 +322,18 @@ export const RecordsTab = ({
                     ? <>edited upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
                     : <>编辑了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
             case 'upcoming-event-delete':
+                return isEnglish
+                    ? <>deleted upcoming event {r.eventTitle ?? ''}</>
+                    : <>删除了活动预告 {r.eventTitle ?? ''}</>;
+            case 'upcoming-event-deletion-requested':
+                return isEnglish
+                    ? <>requested deletion of upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
+                    : <>申请删除活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
+            case 'upcoming-event-deletion-cancelled':
+                return isEnglish
+                    ? <>cancelled deletion of upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
+                    : <>取消了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)} 的删除</>;
+            case 'upcoming-event-deleted':
                 return isEnglish
                     ? <>deleted upcoming event {r.eventTitle ?? ''}</>
                     : <>删除了活动预告 {r.eventTitle ?? ''}</>;
@@ -389,15 +432,24 @@ export const RecordsTab = ({
             case 'badge-create':
             case 'badge-edit':
             case 'badge-delete':
+            case 'badge-deletion-requested':
+            case 'badge-deletion-cancelled':
+            case 'badge-deleted':
                 return isEnglish ? 'Badge' : '徽章';
             case 'event-create':
             case 'event-edit':
             case 'event-delete':
+            case 'event-deletion-requested':
+            case 'event-deletion-cancelled':
+            case 'event-deleted':
             case 'past-event-publish':
             case 'past-event-unpublish':
             case 'upcoming-event-create':
             case 'upcoming-event-edit':
             case 'upcoming-event-delete':
+            case 'upcoming-event-deletion-requested':
+            case 'upcoming-event-deletion-cancelled':
+            case 'upcoming-event-deleted':
             case 'upcoming-event-archive':
             case 'upcoming-event-publish':
             case 'upcoming-event-unpublish':

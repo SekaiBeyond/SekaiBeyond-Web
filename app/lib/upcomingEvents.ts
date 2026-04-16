@@ -20,6 +20,7 @@ export interface UpcomingEvent {
     customButtonTextCn: string;
     customButtonLink: string;
     published: boolean;
+    deleteAt: Date | null;
 }
 
 interface FirestoreDocLike {
@@ -31,6 +32,7 @@ const mapDoc = (docSnap: FirestoreDocLike): UpcomingEvent => {
     const data = docSnap.data() as Record<string, unknown>;
     const startAtRaw = data.startAt as {toDate?: () => Date} | undefined;
     const endAtRaw = data.endAt as {toDate?: () => Date} | undefined;
+    const deleteAtRaw = data.deleteAt as {toDate?: () => Date} | undefined;
     return {
         id: docSnap.id,
         name: (data.name as string) ?? '',
@@ -49,6 +51,7 @@ const mapDoc = (docSnap: FirestoreDocLike): UpcomingEvent => {
         customButtonTextCn: (data.customButtonTextCn as string) ?? '',
         customButtonLink: (data.customButtonLink as string) ?? '',
         published: (data.published as boolean) ?? false,
+        deleteAt: deleteAtRaw?.toDate?.() ?? null,
     };
 };
 

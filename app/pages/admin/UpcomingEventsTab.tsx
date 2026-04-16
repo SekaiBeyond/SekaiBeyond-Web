@@ -3,8 +3,9 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     callArchiveUpcomingEvent,
-    callDeleteUpcomingEvent,
+    callCancelUpcomingEventDeletion,
     callGenerateEventCode,
+    callRequestUpcomingEventDeletion,
     callSaveClaimCodeTimeWindow,
     callSaveUpcomingEvent,
     callSetUpcomingEventPublished,
@@ -80,7 +81,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [showArchive, setShowArchive] = useState(false);
     const [archiveTagId, setArchiveTagId] = useState('');
     const [archiving, setArchiving] = useState(false);
-    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
     const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees'>('codes');
     const [eventCode, setEventCode] = useState<BadgeCode | null>(null);
     const [codeFrom, setCodeFrom] = useState('');
@@ -263,21 +264,33 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         }
     };
 
-    const deleteEvent = async (event: UpcomingEvent) => {
+    const requestDeleteEvent = async (event: UpcomingEvent) => {
         if (!confirm(isEnglish
-            ? `Delete "${event.name}"? This cannot be undone.`
-            : `删除"${event.name}"？此操作不可撤销。`
+            ? `Request deletion of "${event.name}"? It will be permanently deleted in about 48 hours unless cancelled.`
+            : `申请删除"${event.name}"？如不取消，约 48 小时后将被永久删除。`
         )) return;
-        setDeletingId(event.id);
+        setDeletionBusyId(event.id);
         try {
-            await callDeleteUpcomingEvent({eventId: event.id});
+            await callRequestUpcomingEventDeletion({eventId: event.id});
             await refreshEvents();
-            if (selectedEvent === event.id) setSelectedEvent(null);
-            showToast(isEnglish ? 'Event deleted.' : '活动已删除。', 'success');
+            showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'success');
         } catch {
-            showToast(isEnglish ? 'Failed to delete event.' : '删除活动失败。', 'error');
+            showToast(isEnglish ? 'Failed to schedule deletion.' : '计划删除失败。', 'error');
         } finally {
-            setDeletingId(null);
+            setDeletionBusyId(null);
+        }
+    };
+
+    const cancelDeleteEvent = async (event: UpcomingEvent) => {
+        setDeletionBusyId(event.id);
+        try {
+            await callCancelUpcomingEventDeletion({eventId: event.id});
+            await refreshEvents();
+            showToast(isEnglish ? 'Deletion cancelled.' : '已取消删除。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to cancel deletion.' : '取消删除失败。', 'error');
+        } finally {
+            setDeletionBusyId(null);
         }
     };
 
@@ -495,6 +508,11 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                             {isEnglish ? 'Ended' : '已结束'}
                                         </span>
                                     )}
+                                    {event.deleteAt && (
+                                        <span className="admin-ended-tag">
+                                            {isEnglish ? 'Pending deletion' : '待删除'}
+                                        </span>
+                                    )}
                                 </div>
                             </button>
                         ))}
@@ -546,15 +564,27 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         ? (isEnglish ? 'Unpublish' : '取消发布')
                                         : (isEnglish ? 'Publish' : '发布')}
                                 </button>
-                                <button
-                                    className="admin-toggle-btn admin-toggle-revoke"
-                                    onClick={() => deleteEvent(selectedEvt)}
-                                    disabled={deletingId === selectedEvt.id}
-                                >
-                                    {deletingId === selectedEvt.id
-                                        ? (isEnglish ? 'Deleting...' : '删除中...')
-                                        : (isEnglish ? 'Delete Event' : '删除活动')}
-                                </button>
+                                {selectedEvt.deleteAt ? (
+                                    <button
+                                        className="admin-toggle-btn admin-toggle-grant"
+                                        onClick={() => cancelDeleteEvent(selectedEvt)}
+                                        disabled={deletionBusyId === selectedEvt.id}
+                                    >
+                                        {deletionBusyId === selectedEvt.id
+                                            ? (isEnglish ? 'Working...' : '处理中...')
+                                            : (isEnglish ? 'Cancel deletion' : '取消删除')}
+                                    </button>
+                                ) : (
+                                    <button
+                                        className="admin-toggle-btn admin-toggle-revoke"
+                                        onClick={() => requestDeleteEvent(selectedEvt)}
+                                        disabled={deletionBusyId === selectedEvt.id}
+                                    >
+                                        {deletionBusyId === selectedEvt.id
+                                            ? (isEnglish ? 'Working...' : '处理中...')
+                                            : (isEnglish ? 'Delete Event' : '删除活动')}
+                                    </button>
+                                )}
                                 <button
                                     className="admin-toggle-btn"
                                     onClick={() => setShowArchive(!showArchive)}
@@ -562,6 +592,17 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     {isEnglish ? 'Archive to Past Events' : '归档到往期活动'}
                                 </button>
                             </div>
+                            {selectedEvt.deleteAt && (
+                                <p className="admin-helper-text">
+                                    {isEnglish
+                                        ? `Pending deletion — scheduled around ${selectedEvt.deleteAt.toLocaleString('en-US', {
+                                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                                        })}.`
+                                        : `待删除 — 预计于 ${selectedEvt.deleteAt.toLocaleString('zh-CN', {
+                                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                                        })} 前后执行。`}
+                                </p>
+                            )}
                             {showArchive && (
                                 <div className="admin-create-badge-form admin-section-mb">
                                     <h4 className="admin-badges-title">

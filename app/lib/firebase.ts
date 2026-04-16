@@ -94,11 +94,17 @@ export const callGenerateEventCode = (data: {
         getFunctions(), 'generateEventCode'
     )(data);
 
-export const callDeleteEvent = (data: {eventId: string}) =>
-    httpsCallable<{eventId: string}, {deleted: boolean}>(getFunctions(), 'deleteEvent')(data);
+export const callRequestEventDeletion = (data: {eventId: string}) =>
+    httpsCallable<{eventId: string}, {deleteAt: string}>(getFunctions(), 'requestEventDeletion')(data);
 
-export const callDeleteBadge = (data: {badgeId: string}) =>
-    httpsCallable<{badgeId: string}, {deleted: boolean}>(getFunctions(), 'deleteBadge')(data);
+export const callCancelEventDeletion = (data: {eventId: string}) =>
+    httpsCallable<{eventId: string}, {cancelled: boolean}>(getFunctions(), 'cancelEventDeletion')(data);
+
+export const callRequestBadgeDeletion = (data: {badgeId: string}) =>
+    httpsCallable<{badgeId: string}, {deleteAt: string}>(getFunctions(), 'requestBadgeDeletion')(data);
+
+export const callCancelBadgeDeletion = (data: {badgeId: string}) =>
+    httpsCallable<{badgeId: string}, {cancelled: boolean}>(getFunctions(), 'cancelBadgeDeletion')(data);
 
 export const callChangeUserGroup = (data: {targetUid: string; newGroup: string; title?: string}) =>
     httpsCallable<{targetUid: string; newGroup: string; title?: string}, {oldGroup: string; newGroup: string}>(
@@ -127,8 +133,11 @@ export const callSaveUpcomingEvent = (data: {
     customButtonText: string; customButtonTextCn: string; customButtonLink: string;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'saveUpcomingEvent')(data);
 
-export const callDeleteUpcomingEvent = (data: {eventId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteUpcomingEvent')(data);
+export const callRequestUpcomingEventDeletion = (data: {eventId: string}) =>
+    httpsCallable<{eventId: string}, {deleteAt: string}>(getFunctions(), 'requestUpcomingEventDeletion')(data);
+
+export const callCancelUpcomingEventDeletion = (data: {eventId: string}) =>
+    httpsCallable<{eventId: string}, {cancelled: boolean}>(getFunctions(), 'cancelUpcomingEventDeletion')(data);
 
 export const callSetUpcomingEventPublished = (data: {eventId: string; published: boolean}) =>
     httpsCallable<typeof data, {published: boolean}>(getFunctions(), 'setUpcomingEventPublished')(data);

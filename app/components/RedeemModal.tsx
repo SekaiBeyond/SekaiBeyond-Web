@@ -64,6 +64,7 @@ export const RedeemModal = () => {
                 description: d.badgeDescription,
                 descriptionCn: d.badgeDescriptionCn,
                 imageUrl: d.badgeImageUrl || '/images/mika.png',
+                deleteAt: null,
             });
 
             setState('success');

@@ -16,9 +16,10 @@ import type { User } from 'firebase/auth';
 import { formatGroupWithTitle, type UserProfile } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
-    callDeleteBadge,
+    callCancelBadgeDeletion,
     callDeleteBadgeActivationCode,
     callGenerateBadgeActivationCode,
+    callRequestBadgeDeletion,
     callSaveBadge,
     callToggleBadgeCodeActive,
     callUploadAdminImage,
@@ -90,7 +91,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     const [savingBadgeDef, setSavingBadgeDef] = useState(false);
 
     // Delete state
-    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
 
     // Activation codes state
     const [badgeActivationCodes, setBadgeActivationCodes] = useState<BadgeActivationCode[]>([]);
@@ -210,6 +211,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 createdByName: creatorName,
                 createdByLink: creatorLink,
                 createdAt: new Date(),
+                deleteAt: null,
             }]);
 
             resetCreateForm();
@@ -227,21 +229,38 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         setShowCreateBadge(false);
     };
 
-    const deleteBadgeDef = async (bd: BadgeDef) => {
+    const requestDeleteBadge = async (bd: BadgeDef) => {
         if (!confirm(isEnglish
-            ? `Delete badge "${bd.name}"? This cannot be undone.`
-            : `删除徽章"${bd.name}"？此操作不可撤销。`
+            ? `Request deletion of badge "${bd.name}"? It will be permanently deleted in about 48 hours unless cancelled.`
+            : `申请删除徽章"${bd.name}"？如不取消，约 48 小时后将被永久删除。`
         )) return;
-        setDeletingId(bd.id);
+        setDeletionBusyId(bd.id);
         try {
-            await callDeleteBadge({badgeId: bd.id});
-            setBadgeDefs(prev => prev.filter(d => d.id !== bd.id));
-            setSelectedBadgeDef(null);
-            showToast(isEnglish ? 'Badge deleted.' : '徽章已删除。', 'success');
+            const result = await callRequestBadgeDeletion({badgeId: bd.id});
+            const deleteAt = new Date(result.data.deleteAt);
+            const updated = {...bd, deleteAt};
+            setBadgeDefs(prev => prev.map(d => d.id === bd.id ? updated : d));
+            if (selectedBadgeDef?.id === bd.id) setSelectedBadgeDef(updated);
+            showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'success');
         } catch {
-            showToast(isEnglish ? 'Failed to delete badge.' : '删除徽章失败。', 'error');
+            showToast(isEnglish ? 'Failed to schedule deletion.' : '计划删除失败。', 'error');
         } finally {
-            setDeletingId(null);
+            setDeletionBusyId(null);
+        }
+    };
+
+    const cancelDeleteBadge = async (bd: BadgeDef) => {
+        setDeletionBusyId(bd.id);
+        try {
+            await callCancelBadgeDeletion({badgeId: bd.id});
+            const updated = {...bd, deleteAt: null};
+            setBadgeDefs(prev => prev.map(d => d.id === bd.id ? updated : d));
+            if (selectedBadgeDef?.id === bd.id) setSelectedBadgeDef(updated);
+            showToast(isEnglish ? 'Deletion cancelled.' : '已取消删除。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to cancel deletion.' : '取消删除失败。', 'error');
+        } finally {
+            setDeletionBusyId(null);
         }
     };
 
@@ -474,6 +493,11 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                     <span className="admin-event-card-title">{isEnglish ? bd.name : bd.nameCn}</span>
                                     <span
                                         className="admin-event-card-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
+                                    {bd.deleteAt && (
+                                        <span className="admin-ended-tag">
+                                            {isEnglish ? 'Pending deletion' : '待删除'}
+                                        </span>
+                                    )}
                                 </div>
                             </button>
                         ))}
@@ -577,18 +601,41 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                         </div>
                     </div>
                 ) : (
-                    <div className="admin-form-actions admin-section-mb">
-                        <button className="admin-generate-btn" onClick={startEditBadge}>
-                            {isEnglish ? 'Edit Badge' : '编辑徽章'}
-                        </button>
-                        <button className="admin-toggle-btn admin-toggle-revoke"
-                                onClick={() => deleteBadgeDef(selectedBadgeDef)}
-                                disabled={deletingId === selectedBadgeDef.id}>
-                            {deletingId === selectedBadgeDef.id
-                                ? (isEnglish ? 'Deleting...' : '删除中...')
-                                : (isEnglish ? 'Delete Badge' : '删除徽章')}
-                        </button>
-                    </div>
+                    <>
+                        <div className="admin-form-actions admin-section-mb">
+                            <button className="admin-generate-btn" onClick={startEditBadge}>
+                                {isEnglish ? 'Edit Badge' : '编辑徽章'}
+                            </button>
+                            {selectedBadgeDef.deleteAt ? (
+                                <button className="admin-toggle-btn admin-toggle-grant"
+                                        onClick={() => cancelDeleteBadge(selectedBadgeDef)}
+                                        disabled={deletionBusyId === selectedBadgeDef.id}>
+                                    {deletionBusyId === selectedBadgeDef.id
+                                        ? (isEnglish ? 'Working...' : '处理中...')
+                                        : (isEnglish ? 'Cancel deletion' : '取消删除')}
+                                </button>
+                            ) : (
+                                <button className="admin-toggle-btn admin-toggle-revoke"
+                                        onClick={() => requestDeleteBadge(selectedBadgeDef)}
+                                        disabled={deletionBusyId === selectedBadgeDef.id}>
+                                    {deletionBusyId === selectedBadgeDef.id
+                                        ? (isEnglish ? 'Working...' : '处理中...')
+                                        : (isEnglish ? 'Delete Badge' : '删除徽章')}
+                                </button>
+                            )}
+                        </div>
+                        {selectedBadgeDef.deleteAt && (
+                            <p className="admin-helper-text">
+                                {isEnglish
+                                    ? `Pending deletion — scheduled around ${selectedBadgeDef.deleteAt.toLocaleString('en-US', {
+                                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                                    })}.`
+                                    : `待删除 — 预计于 ${selectedBadgeDef.deleteAt.toLocaleString('zh-CN', {
+                                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                                    })} 前后执行。`}
+                            </p>
+                        )}
+                    </>
                 )}
 
                 <h4 className="admin-badges-title">
