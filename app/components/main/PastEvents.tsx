@@ -13,7 +13,8 @@ export const PastEvents = () => {
 
     if (loading) return null;
 
-    const displayedEvents = showAll ? pastEvents : pastEvents.slice(0, 6);
+    const publishedEvents = pastEvents.filter(e => e.published);
+    const displayedEvents = showAll ? publishedEvents : publishedEvents.slice(0, 6);
 
     return (
         <section id="events" className="section">

@@ -116,6 +116,9 @@ export const callSavePastEvent = (data: {
     location: string; description: string; descriptionCn: string; icon: string;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'savePastEvent')(data);
 
+export const callSetPastEventPublished = (data: {eventId: string; published: boolean}) =>
+    httpsCallable<typeof data, {published: boolean}>(getFunctions(), 'setPastEventPublished')(data);
+
 export const callSaveUpcomingEvent = (data: {
     eventId?: string;
     name: string; nameCn: string; description: string; descriptionCn: string;

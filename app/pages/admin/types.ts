@@ -65,6 +65,8 @@ export type RecordType =
     | 'event-create'
     | 'event-edit'
     | 'event-delete'
+    | 'past-event-publish'
+    | 'past-event-unpublish'
     | 'upcoming-event-create'
     | 'upcoming-event-edit'
     | 'upcoming-event-delete'

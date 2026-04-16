@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeleteEvent, callSavePastEvent, callUploadAdminImage, } from '~/lib/firebase';
+import { callDeleteEvent, callSavePastEvent, callSetPastEventPublished, callUploadAdminImage, } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
 import type { UserRecord } from './types';
@@ -136,6 +136,23 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         }
     };
 
+    const togglePublish = async (event: PastEvent) => {
+        const newPublished = !event.published;
+        try {
+            await callSetPastEventPublished({eventId: event.id, published: newPublished});
+            await refreshEvents();
+            showToast(
+                newPublished
+                    ? (isEnglish ? 'Event published.' : '活动已发布。')
+                    : (isEnglish ? 'Event unpublished.' : '活动已取消发布。'),
+                'success',
+            );
+        } catch (err) {
+            console.error('[togglePublish]', err);
+            showToast(isEnglish ? 'Failed to update publish status.' : '更新发布状态失败。', 'error');
+        }
+    };
+
     const deleteEvent = async (event: PastEvent) => {
         if (!confirm(isEnglish
             ? `Delete "${event.title}"? This cannot be undone.`
@@ -268,6 +285,11 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     <span
                                         className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
                                     <span className="admin-event-card-date">{event.date}</span>
+                                    {!event.published && (
+                                        <span className="admin-ended-tag">
+                                            {isEnglish ? 'Unpublished' : '未发布'}
+                                        </span>
+                                    )}
                                 </div>
                             </button>
                         ))}
@@ -304,6 +326,14 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     }}
                                 >
                                     {isEnglish ? 'Edit Event' : '编辑活动'}
+                                </button>
+                                <button
+                                    className="admin-toggle-btn admin-toggle-grant"
+                                    onClick={() => togglePublish(managedEvt)}
+                                >
+                                    {managedEvt.published
+                                        ? (isEnglish ? 'Unpublish' : '取消发布')
+                                        : (isEnglish ? 'Publish' : '发布')}
                                 </button>
                                 <button
                                     className="admin-toggle-btn admin-toggle-revoke"

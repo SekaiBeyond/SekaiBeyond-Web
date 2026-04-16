@@ -26,6 +26,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend', 'event-claim'],
     badge: ['achievement-grant', 'achievement-revoke', 'badge-claim', 'badge-create', 'badge-edit', 'badge-delete'],
     event: ['event-create', 'event-edit', 'event-delete',
+        'past-event-publish', 'past-event-unpublish',
         'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete', 'upcoming-event-archive',
         'upcoming-event-publish', 'upcoming-event-unpublish'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
@@ -271,6 +272,16 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>deleted event {r.eventTitle ?? r.eventId ?? ''}</>
                     : <>删除了活动 {r.eventTitle ?? r.eventId ?? ''}</>;
+            case 'past-event-publish':
+                return isEnglish
+                    ? <>published
+                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
+                    : <>发布了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>;
+            case 'past-event-unpublish':
+                return isEnglish
+                    ? <>unpublished
+                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
+                    : <>取消发布了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>;
             case 'upcoming-event-create':
                 return isEnglish
                     ? <>created upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
@@ -382,6 +393,8 @@ export const RecordsTab = ({
             case 'event-create':
             case 'event-edit':
             case 'event-delete':
+            case 'past-event-publish':
+            case 'past-event-unpublish':
             case 'upcoming-event-create':
             case 'upcoming-event-edit':
             case 'upcoming-event-delete':

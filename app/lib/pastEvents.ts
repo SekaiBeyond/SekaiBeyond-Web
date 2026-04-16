@@ -12,6 +12,7 @@ export interface PastEvent {
     description: string;
     descriptionCn: string;
     icon: string;
+    published: boolean;
 }
 
 let cachedEvents: PastEvent[] | null = null;
@@ -39,6 +40,7 @@ async function fetchPastEvents(force = false): Promise<PastEvent[]> {
                 description: data.description ?? '',
                 descriptionCn: data.descriptionCn ?? '',
                 icon: data.icon ?? '',
+                published: data.published ?? true,
             });
         });
         cachedEvents = events;

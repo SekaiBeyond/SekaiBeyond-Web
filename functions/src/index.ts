@@ -1185,7 +1185,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
         if (eventId) {
             txn.update(ref, data);
         } else {
-            txn.set(ref, data);
+            txn.set(ref, {...data, published: false});
         }
         txn.set(db.collection("records").doc(), {
             type: eventId ? "event-edit" : "event-create",
@@ -1205,6 +1205,39 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     }
 
     return result;
+});
+
+/**
+ * Publish or unpublish a past event (admin only).
+ * Unpublished events are hidden from the public site.
+ */
+export const setPastEventPublished = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const input = request.data as {eventId?: string; published?: boolean};
+    const eventId = validateDocId(input.eventId, "eventId");
+    if (typeof input.published !== "boolean") {
+        throw new HttpsError("invalid-argument", "published must be a boolean.");
+    }
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const ref = db.collection("pastEvents").doc(eventId);
+        const snap = await txn.get(ref);
+        if (!snap.exists) throw new HttpsError("not-found", "Event not found.");
+        txn.update(ref, {published: input.published});
+        txn.set(db.collection("records").doc(), {
+            type: input.published ? "past-event-publish" : "past-event-unpublish",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventTitle: snap.data()?.title ?? eventId,
+            eventId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {published: input.published};
+    });
 });
 
 /**
@@ -1389,6 +1422,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             descriptionCn: eventData.descriptionCn ?? "",
             icon: eventData.poster ?? "",
             tagId,
+            published: false,
         });
         txn.delete(db.collection("upcomingEvents").doc(eventId));
         txn.set(db.collection("records").doc(), {
