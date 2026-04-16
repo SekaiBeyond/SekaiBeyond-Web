@@ -48,6 +48,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             await loadEventAttendees(eventId);
         } catch (err) {
             console.error('Failed to load attendees:', err);
+            showToast(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。', 'error');
         }
     };
 

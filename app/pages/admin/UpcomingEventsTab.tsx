@@ -170,6 +170,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             await loadEventCode(eventId);
         } catch (err) {
             console.error('Failed to load event code:', err);
+            showToast(isEnglish ? 'Failed to load event code.' : '加载活动码失败。', 'error');
         }
     };
     useImperativeHandle(forwardedRef, () => ({selectEvent}));
@@ -619,7 +620,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
                                     onClick={() => {
                                         setEventSubTab('attendees');
-                                        loadEventAttendees(selectedEvent!).then();
+                                        loadEventAttendees(selectedEvent!);
                                     }}
                                 >
                                     {isEnglish ? 'Attendees' : '参加者'}

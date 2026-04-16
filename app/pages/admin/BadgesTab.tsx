@@ -130,7 +130,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         setBadgeHolderLastDoc(null);
         setHasMoreBadgeHolders(false);
         await loadBadgeHolders(bd.id);
-        loadBadgeActivationCodes(bd.id).then();
+        await loadBadgeActivationCodes(bd.id);
     };
 
     useImperativeHandle(ref, () => ({

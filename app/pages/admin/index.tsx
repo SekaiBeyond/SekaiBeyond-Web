@@ -30,10 +30,7 @@ export const AdminPage = () => {
     const {isEnglish} = useLanguage();
     const {pastEvents: rawPastEvents, refresh: refreshEvents} = usePastEvents();
     const {upcomingEvents, refresh: refreshUpcoming} = useAllUpcomingEvents();
-    const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => {
-        const pad = (d: string) => d.split('-').map(p => p.padStart(2, '0')).join('-');
-        return pad(b.date).localeCompare(pad(a.date));
-    }), [rawPastEvents]);
+    const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => b.date.localeCompare(a.date)), [rawPastEvents]);
 
     const [activeTab, setActiveTab] = useState<Tab>('users');
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
