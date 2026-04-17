@@ -43,7 +43,7 @@ interface UsersTabProps {
     badgeDefsError: boolean;
     user: User;
     profile: UserProfile;
-    showToast: (message: string, type: 'success' | 'error') => void;
+    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
 }
 
 export interface UsersTabHandle {
@@ -199,6 +199,12 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const updated = {...userRecord, attendedEvents: updatedEvents};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            showToast(
+                has
+                    ? (isEnglish ? 'Attendance revoked.' : '已取消参加记录。')
+                    : (isEnglish ? 'Attendance granted.' : '已添加参加记录。'),
+                has ? 'warning' : 'success',
+            );
         } catch {
             showToast(isEnglish ? 'Failed to update attendance.' : '更新签到状态失败。', 'error');
         } finally {
@@ -219,6 +225,12 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const updated = {...userRecord, badges: updatedBadges};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            showToast(
+                has
+                    ? (isEnglish ? 'Badge revoked.' : '已撤销徽章。')
+                    : (isEnglish ? 'Badge granted.' : '已授予徽章。'),
+                has ? 'warning' : 'success',
+            );
         } catch {
             showToast(isEnglish ? 'Failed to update badge.' : '更新徽章失败。', 'error');
         } finally {
@@ -254,7 +266,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             await callRequestAccountDeletion({targetUid: userRecord.uid});
             showToast(
                 isEnglish ? 'Deletion request submitted.' : '已提交删除申请。',
-                'success',
+                'warning',
             );
         } catch {
             showToast(
@@ -301,6 +313,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const updated = {...userRecord, group: newGroup, title};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            showToast(isEnglish ? 'Group updated.' : '用户组已更新。', 'success');
         } catch {
             showToast(
                 isEnglish
@@ -322,6 +335,12 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const updated = {...userRecord, title: newTitle};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            showToast(
+                newTitle
+                    ? (isEnglish ? 'Title updated.' : '头衔已更新。')
+                    : (isEnglish ? 'Title removed.' : '头衔已清除。'),
+                newTitle ? 'success' : 'warning',
+            );
         } catch {
             showToast(
                 isEnglish

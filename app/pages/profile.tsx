@@ -30,6 +30,16 @@ interface ViewedProfile {
     title?: string;
 }
 
+type ToastType = 'success' | 'warning' | 'error';
+
+interface Toast {
+    id: number;
+    message: string;
+    type: ToastType;
+}
+
+let profileToastCounter = 0;
+
 const BadgeCard = ({badge, earnedDate, isEnglish, active, onToggle}: {
     badge: BadgeDef;
     earnedDate?: Date;
@@ -140,6 +150,13 @@ export const ProfilePage = () => {
     const [viewedLoadError, setViewedLoadError] = useState(false);
     const [activeBadge, setActiveBadge] = useState<string | null>(null);
     const badgeGridRef = useRef<HTMLDivElement>(null);
+    const [toasts, setToasts] = useState<Toast[]>([]);
+
+    const showToast = useCallback((message: string, type: ToastType) => {
+        const id = ++profileToastCounter;
+        setToasts(prev => [...prev, {id, message, type}]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+    }, []);
 
     const badgeIds = isViewingOther ? viewedProfile?.badges : profile?.badges;
     const badgeIdsKey = badgeIds?.slice().sort().join(',') ?? '';
@@ -301,11 +318,11 @@ export const ProfilePage = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
         if (!file || !profile || !user) return;
         if (!file.type.startsWith('image/')) {
-            alert(isEnglish ? 'Please select an image file.' : '请选择图片文件。');
+            showToast(isEnglish ? 'Please select an image file.' : '请选择图片文件。', 'error');
             return;
         }
         if (file.size > MAX_RAW_PHOTO_SIZE) {
-            alert(isEnglish ? 'Image must be under 25 MB.' : '图片大小不能超过 25 MB。');
+            showToast(isEnglish ? 'Image must be under 25 MB.' : '图片大小不能超过 25 MB。', 'error');
             return;
         }
         setPendingPhoto(file);
@@ -318,8 +335,9 @@ export const ProfilePage = () => {
         try {
             await updateProfile({photoFile: cropped});
             setCustomPhotoLoaded(true);
+            showToast(isEnglish ? 'Profile photo updated.' : '头像已更新。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to upload photo. Please try again.' : '上传头像失败，请重试。');
+            showToast(isEnglish ? 'Failed to upload photo. Please try again.' : '上传头像失败，请重试。', 'error');
         } finally {
             setSavingPhoto(false);
         }
@@ -337,8 +355,9 @@ export const ProfilePage = () => {
         try {
             await updateProfile({deletePhoto: true});
             setCustomPhotoLoaded(false);
+            showToast(isEnglish ? 'Profile photo removed.' : '头像已删除。', 'warning');
         } catch {
-            alert(isEnglish ? 'Failed to remove photo. Please try again.' : '删除头像失败，请重试。');
+            showToast(isEnglish ? 'Failed to remove photo. Please try again.' : '删除头像失败，请重试。', 'error');
         } finally {
             setSavingPhoto(false);
         }
@@ -355,8 +374,9 @@ export const ProfilePage = () => {
         try {
             await updateProfile({displayName: trimmed});
             setEditingName(false);
+            showToast(isEnglish ? 'Name updated.' : '名称已更新。', 'success');
         } catch {
-            alert(isEnglish ? 'Failed to update name. Please try again.' : '修改名称失败，请重试。');
+            showToast(isEnglish ? 'Failed to update name. Please try again.' : '修改名称失败，请重试。', 'error');
         } finally {
             setSavingName(false);
         }
@@ -444,6 +464,13 @@ export const ProfilePage = () => {
 
     return (
         <>
+            <div className="admin-toast-container">
+                {toasts.map(t => (
+                    <div key={t.id} className={`admin-toast admin-toast-${t.type}`}>
+                        {t.message}
+                    </div>
+                ))}
+            </div>
             <nav className="profile-nav">
                 <a href="/" className="profile-nav-home">
                     {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}

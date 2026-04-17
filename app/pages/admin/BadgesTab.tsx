@@ -37,7 +37,7 @@ interface BadgesTabProps {
     setBadgeDefs: React.Dispatch<React.SetStateAction<BadgeDef[]>>;
     user: User;
     profile: UserProfile;
-    showToast: (message: string, type: 'success' | 'error') => void;
+    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
 }
 
 export interface BadgesTabHandle {
@@ -241,7 +241,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             const updated = {...bd, deleteAt};
             setBadgeDefs(prev => prev.map(d => d.id === bd.id ? updated : d));
             if (selectedBadgeDef?.id === bd.id) setSelectedBadgeDef(updated);
-            showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'success');
+            showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'warning');
         } catch {
             showToast(isEnglish ? 'Failed to schedule deletion.' : '计划删除失败。', 'error');
         } finally {
@@ -379,6 +379,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             setNewCodeUnlimited(false);
             setNewCodeFrom('');
             setNewCodeUntil('');
+            showToast(isEnglish ? 'Activation code generated.' : '激活码已生成。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to generate code.' : '生成激活码失败。', 'error');
         } finally {
@@ -391,6 +392,12 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         setBadgeActivationCodes(prev => prev.map(c => c.id === ac.id ? {...c, active: newActive} : c));
         try {
             await callToggleBadgeCodeActive({codeId: ac.id, active: newActive});
+            showToast(
+                newActive
+                    ? (isEnglish ? 'Code activated.' : '激活码已启用。')
+                    : (isEnglish ? 'Code deactivated.' : '激活码已停用。'),
+                newActive ? 'success' : 'warning',
+            );
         } catch {
             setBadgeActivationCodes(prev => prev.map(c => c.id === ac.id ? {...c, active: ac.active} : c));
             showToast(isEnglish ? 'Failed to update code status.' : '更新激活码状态失败。', 'error');
@@ -410,6 +417,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         setBadgeActivationCodes(prev => prev.filter(c => c.id !== ac.id));
         try {
             await callDeleteBadgeActivationCode({codeId: ac.id});
+            showToast(isEnglish ? 'Activation code deleted.' : '激活码已删除。', 'warning');
         } catch {
             setBadgeActivationCodes(prevSnapshot);
             showToast(isEnglish ? 'Failed to delete code.' : '删除激活码失败。', 'error');

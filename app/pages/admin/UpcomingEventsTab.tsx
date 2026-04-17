@@ -27,7 +27,7 @@ interface UpcomingEventsTabProps {
     refreshEvents: () => Promise<void>;
     refreshPastEvents: () => Promise<void>;
     tags: Tag[];
-    showToast: (message: string, type: 'success' | 'error') => void;
+    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
 }
 
 export interface UpcomingEventsTabHandle {
@@ -132,6 +132,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             setEventCode({id, code, eventId, active: true, activeFrom: null, activeUntil: null});
             setCodeFrom('');
             setCodeUntil('');
+            showToast(isEnglish ? 'Check-in code generated.' : '签到码已生成。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to generate code.' : '生成签到码失败。', 'error');
         } finally {
@@ -145,6 +146,12 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         try {
             await callToggleClaimCodeActive({codeId: eventCode.id, active: newActive});
             setEventCode({...eventCode, active: newActive});
+            showToast(
+                newActive
+                    ? (isEnglish ? 'Code enabled.' : '签到码已启用。')
+                    : (isEnglish ? 'Code disabled.' : '签到码已停用。'),
+                newActive ? 'success' : 'warning',
+            );
         } catch {
             showToast(isEnglish ? 'Failed to update code status.' : '更新签到码状态失败。', 'error');
         }
@@ -157,6 +164,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         try {
             await callSaveClaimCodeTimeWindow({codeId: eventCode.id, activeFrom, activeUntil});
             setEventCode({...eventCode, activeFrom, activeUntil});
+            showToast(isEnglish ? 'Time window saved.' : '时间窗口已保存。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to save time window.' : '保存时间窗口失败。', 'error');
         }
@@ -273,7 +281,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         try {
             await callRequestUpcomingEventDeletion({eventId: event.id});
             await refreshEvents();
-            showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'success');
+            showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'warning');
         } catch {
             showToast(isEnglish ? 'Failed to schedule deletion.' : '计划删除失败。', 'error');
         } finally {
@@ -319,7 +327,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 newPublished
                     ? (isEnglish ? 'Event published.' : '活动已发布。')
                     : (isEnglish ? 'Event unpublished.' : '活动已取消发布。'),
-                'success',
+                newPublished ? 'success' : 'warning',
             );
         } catch (err) {
             console.error('[togglePublish]', err);

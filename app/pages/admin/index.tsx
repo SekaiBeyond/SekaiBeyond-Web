@@ -17,10 +17,12 @@ import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { TagsTab } from './TagsTab';
 import { RecordsTab } from './RecordsTab';
 
+type ToastType = 'success' | 'warning' | 'error';
+
 interface Toast {
     id: number;
     message: string;
-    type: 'success' | 'error';
+    type: ToastType;
 }
 
 let toastCounter = 0;
@@ -37,7 +39,7 @@ export const AdminPage = () => {
     const [badgeDefsError, setBadgeDefsError] = useState(false);
     const [toasts, setToasts] = useState<Toast[]>([]);
 
-    const showToast = useCallback((message: string, type: 'success' | 'error') => {
+    const showToast = useCallback((message: string, type: ToastType) => {
         const id = ++toastCounter;
         setToasts(prev => [...prev, {id, message, type}]);
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);

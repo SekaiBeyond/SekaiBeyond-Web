@@ -11,7 +11,7 @@ function isDuplicateError(err: unknown): boolean {
 interface TagsTabProps {
     tags: Tag[];
     refreshTags: () => Promise<void>;
-    showToast: (message: string, type: 'success' | 'error') => void;
+    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
 }
 
 export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
@@ -79,7 +79,7 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
             await callDeleteTag({tagId: tag.id});
             await refreshTags();
             if (editingTag?.id === tag.id) setEditingTag(null);
-            showToast(isEnglish ? 'Tag deleted.' : '标签已删除。', 'success');
+            showToast(isEnglish ? 'Tag deleted.' : '标签已删除。', 'warning');
         } catch {
             showToast(isEnglish ? 'Failed to delete tag.' : '删除标签失败。', 'error');
         } finally {

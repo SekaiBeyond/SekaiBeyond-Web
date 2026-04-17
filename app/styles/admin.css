@@ -1000,6 +1000,11 @@
     color: white;
 }
 
+.admin-toast-warning {
+    background: #b45309;
+    color: white;
+}
+
 .admin-toast-error {
     background: #c62828;
     color: white;

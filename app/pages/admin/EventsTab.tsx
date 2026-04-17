@@ -19,7 +19,7 @@ interface EventsTabProps {
     pastEvents: PastEvent[];
     refreshEvents: () => Promise<void>;
     tags: Tag[];
-    showToast: (message: string, type: 'success' | 'error') => void;
+    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
 }
 
 export interface EventsTabHandle {
@@ -151,7 +151,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 newPublished
                     ? (isEnglish ? 'Event published.' : '活动已发布。')
                     : (isEnglish ? 'Event unpublished.' : '活动已取消发布。'),
-                'success',
+                newPublished ? 'success' : 'warning',
             );
         } catch (err) {
             console.error('[togglePublish]', err);
@@ -168,7 +168,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         try {
             await callRequestEventDeletion({eventId: event.id});
             await refreshEvents();
-            showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'success');
+            showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'warning');
         } catch {
             showToast(isEnglish ? 'Failed to schedule deletion.' : '计划删除失败。', 'error');
         } finally {
