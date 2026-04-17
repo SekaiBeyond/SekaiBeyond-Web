@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useModalEffects } from '~/lib/useModalEffects';
+import { WEBP_QUALITY } from './utils';
 
 interface ImageCropModalProps {
     file: File;
@@ -11,7 +12,6 @@ interface ImageCropModalProps {
 
 const DISPLAY_SIZE = 360;
 const OUTPUT_SIZE = 512;
-const WEBP_QUALITY = 0.9;
 
 export const ImageCropModal = ({file, aspect, onConfirm, onCancel}: ImageCropModalProps) => {
     const {isEnglish} = useLanguage();

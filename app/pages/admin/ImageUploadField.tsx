@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { validateImageFile } from './utils';
+import { convertImageToWebp, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 
 interface ImageUploadFieldProps {
@@ -10,15 +10,17 @@ interface ImageUploadFieldProps {
     onFileChange: (file: File, previewUrl: string) => void;
     onCleanupPreview?: (url: string) => void;
     cropAspect?: number;
+    convertToWebp?: boolean;
 }
 
 export const ImageUploadField = ({
-                                     label, labelCn, preview, onFileChange, onCleanupPreview, cropAspect,
+                                     label, labelCn, preview, onFileChange, onCleanupPreview, cropAspect, convertToWebp,
                                  }: ImageUploadFieldProps) => {
     const {isEnglish} = useLanguage();
     const [pendingFile, setPendingFile] = useState<File | null>(null);
+    const [converting, setConverting] = useState(false);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
         if (cropAspect) {
@@ -28,6 +30,25 @@ export const ImageUploadField = ({
             }
             setPendingFile(file);
             e.target.value = '';
+            return;
+        }
+        if (convertToWebp) {
+            if (!validateImageFile(file, isEnglish, {allowAnyImage: true})) {
+                e.target.value = '';
+                return;
+            }
+            e.target.value = '';
+            setConverting(true);
+            try {
+                const webp = await convertImageToWebp(file);
+                if (!validateImageFile(webp, isEnglish)) return;
+                if (preview?.startsWith('blob:')) onCleanupPreview?.(preview);
+                onFileChange(webp, URL.createObjectURL(webp));
+            } catch {
+                alert(isEnglish ? 'Failed to convert image.' : '转换图片失败。');
+            } finally {
+                setConverting(false);
+            }
             return;
         }
         if (!validateImageFile(file, isEnglish)) {
@@ -50,9 +71,15 @@ export const ImageUploadField = ({
                 <span>{isEnglish ? label : labelCn}</span>
                 <input
                     type="file"
-                    accept={cropAspect ? 'image/*' : 'image/webp'}
+                    accept={cropAspect || convertToWebp ? 'image/*' : 'image/webp'}
                     onChange={handleChange}
+                    disabled={converting}
                 />
+                {converting && (
+                    <span className="admin-helper-text">
+                        {isEnglish ? 'Converting…' : '转换中…'}
+                    </span>
+                )}
                 {preview && (
                     <img src={preview} alt="" className="admin-badge-image-preview"/>
                 )}

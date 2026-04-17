@@ -4,6 +4,7 @@ import type { UserRecord } from './types';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_RAW_IMAGE_SIZE = 25 * 1024 * 1024; // 25MB, pre-crop browser-side sanity cap
+export const WEBP_QUALITY = 0.95;
 
 export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData}): UserRecord => {
     const data = docSnap.data();
@@ -56,4 +57,31 @@ export const validateImageFile = (
         return false;
     }
     return true;
+};
+
+export const convertImageToWebp = async (file: File): Promise<File> => {
+    if (file.type === 'image/webp') return file;
+    const url = URL.createObjectURL(file);
+    try {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const i = new Image();
+            i.onload = () => resolve(i);
+            i.onerror = () => reject(new Error('load-failed'));
+            i.src = url;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('canvas-unsupported');
+        ctx.drawImage(img, 0, 0);
+        const blob = await new Promise<Blob | null>(resolve =>
+            canvas.toBlob(b => resolve(b), 'image/webp', WEBP_QUALITY)
+        );
+        if (!blob) throw new Error('encode-failed');
+        const name = file.name.replace(/\.[^.]+$/, '') + '.webp';
+        return new File([blob], name, {type: 'image/webp'});
+    } finally {
+        URL.revokeObjectURL(url);
+    }
 };
