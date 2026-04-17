@@ -548,7 +548,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             </div>
                             <div className="admin-form-actions admin-section-mb">
                                 <button
-                                    className="admin-generate-btn"
+                                    className="admin-toggle-btn admin-toggle-edit"
                                     onClick={() => {
                                         setSelectedEvent(null);
                                         openEdit(selectedEvt);
@@ -586,7 +586,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     </button>
                                 )}
                                 <button
-                                    className="admin-toggle-btn"
+                                    className="admin-toggle-btn admin-toggle-archive"
                                     onClick={() => setShowArchive(!showArchive)}
                                 >
                                     {isEnglish ? 'Archive to Past Events' : '归档到往期活动'}
@@ -632,7 +632,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     </div>
                                     <div className="admin-btn-row admin-mt-12">
                                         <button
-                                            className="admin-generate-btn"
+                                            className="admin-toggle-btn admin-toggle-archive"
                                             onClick={() => archiveEvent(selectedEvt)}
                                             disabled={archiving}
                                         >

@@ -301,6 +301,26 @@
     color: white;
 }
 
+.admin-toggle-edit {
+    background: rgba(155, 89, 182, 0.14);
+    color: var(--color-purple);
+}
+
+.admin-toggle-edit:hover:not(:disabled) {
+    background: var(--color-purple);
+    color: white;
+}
+
+.admin-toggle-archive {
+    background: rgba(108, 99, 255, 0.14);
+    color: var(--color-link);
+}
+
+.admin-toggle-archive:hover:not(:disabled) {
+    background: var(--color-link);
+    color: white;
+}
+
 .admin-toggle-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;

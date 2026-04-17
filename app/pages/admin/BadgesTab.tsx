@@ -603,7 +603,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 ) : (
                     <>
                         <div className="admin-form-actions admin-section-mb">
-                            <button className="admin-generate-btn" onClick={startEditBadge}>
+                            <button className="admin-toggle-btn admin-toggle-edit" onClick={startEditBadge}>
                                 {isEnglish ? 'Edit Badge' : '编辑徽章'}
                             </button>
                             {selectedBadgeDef.deleteAt ? (

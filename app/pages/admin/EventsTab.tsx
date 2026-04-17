@@ -342,7 +342,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             </div>
                             <div className="admin-form-actions admin-section-mb">
                                 <button
-                                    className="admin-generate-btn"
+                                    className="admin-toggle-btn admin-toggle-edit"
                                     onClick={() => {
                                         setManagedEvent(null);
                                         openEditEvent(managedEvt);
