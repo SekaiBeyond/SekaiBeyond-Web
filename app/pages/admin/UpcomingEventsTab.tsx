@@ -451,7 +451,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             </div>
                             <div className="admin-btn-row">
                                 <button
-                                    className="admin-generate-btn"
+                                    className="admin-toggle-btn admin-toggle-save"
                                     onClick={saveEvent}
                                     disabled={saving || !form.name.trim() || !form.startAt || !form.endAt}
                                 >
@@ -462,7 +462,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                             : (isEnglish ? 'Create Event' : '创建活动')}
                                 </button>
                                 <button
-                                    className="admin-back-btn"
+                                    className="admin-toggle-btn admin-toggle-cancel"
                                     onClick={() => {
                                         setShowForm(false);
                                         setEditingEvent(null);
@@ -558,7 +558,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     {isEnglish ? 'Edit Event' : '编辑活动'}
                                 </button>
                                 <button
-                                    className="admin-toggle-btn admin-toggle-grant"
+                                    className={`admin-toggle-btn ${selectedEvt.published ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
                                     onClick={() => togglePublish(selectedEvt)}
                                 >
                                     {selectedEvt.published
@@ -642,7 +642,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                 : (isEnglish ? 'Confirm Archive' : '确认归档')}
                                         </button>
                                         <button
-                                            className="admin-back-btn"
+                                            className="admin-toggle-btn admin-toggle-cancel"
                                             onClick={() => setShowArchive(false)}
                                         >
                                             {isEnglish ? 'Cancel' : '取消'}
@@ -734,7 +734,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                     />
                                                 </label>
                                                 <button
-                                                    className="admin-toggle-btn admin-toggle-grant"
+                                                    className="admin-toggle-btn admin-toggle-save"
                                                     onClick={saveCodeTimeWindow}
                                                     disabled={codeFrom === (eventCode.activeFrom ?? '') && codeUntil === (eventCode.activeUntil ?? '')}
                                                 >
@@ -745,7 +745,10 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                 {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
                                             </p>
                                             <div className="admin-single-code-actions">
-                                                <button className="admin-toggle-btn" onClick={toggleCodeActive}>
+                                                <button
+                                                    className={`admin-toggle-btn ${eventCode.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                                    onClick={toggleCodeActive}
+                                                >
                                                     {eventCode.active
                                                         ? (isEnglish ? 'Disable' : '停用')
                                                         : (isEnglish ? 'Enable' : '启用')}

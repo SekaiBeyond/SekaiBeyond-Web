@@ -464,11 +464,11 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             />
                         </div>
                         <div className="admin-form-actions">
-                            <button className="admin-generate-btn" onClick={createBadgeDef}
+                            <button className="admin-toggle-btn admin-toggle-save" onClick={createBadgeDef}
                                     disabled={creatingBadgeDef || !createForm.name.trim()}>
                                 {creatingBadgeDef ? (isEnglish ? 'Creating...' : '创建中...') : (isEnglish ? 'Create Badge' : '创建徽章')}
                             </button>
-                            <button className="admin-back-btn" onClick={resetCreateForm}>
+                            <button className="admin-toggle-btn admin-toggle-cancel" onClick={resetCreateForm}>
                                 {isEnglish ? 'Cancel' : '取消'}
                             </button>
                         </div>
@@ -587,11 +587,11 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             />
                         </div>
                         <div className="admin-form-actions">
-                            <button className="admin-generate-btn" onClick={updateBadgeDef}
+                            <button className="admin-toggle-btn admin-toggle-save" onClick={updateBadgeDef}
                                     disabled={savingBadgeDef || !editForm.name.trim()}>
                                 {savingBadgeDef ? (isEnglish ? 'Saving...' : '保存中...') : (isEnglish ? 'Save Changes' : '保存更改')}
                             </button>
-                            <button className="admin-back-btn" onClick={() => {
+                            <button className="admin-toggle-btn admin-toggle-cancel" onClick={() => {
                                 setEditingBadgeDef(false);
                                 if (editForm.imagePreview?.startsWith('blob:')) URL.revokeObjectURL(editForm.imagePreview);
                                 setEditForm(emptyBadgeForm);
@@ -760,8 +760,10 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             </button>
                         </div>
                         <div className="admin-single-code-actions">
-                            <button className="admin-toggle-btn admin-toggle-grant"
-                                    onClick={() => toggleActivationCodeActive(ac)}>
+                            <button
+                                className={`admin-toggle-btn ${ac.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                onClick={() => toggleActivationCodeActive(ac)}
+                            >
                                 {ac.active ? (isEnglish ? 'Deactivate' : '停用') : (isEnglish ? 'Activate' : '激活')}
                             </button>
                             <button className="admin-toggle-btn admin-toggle-revoke"

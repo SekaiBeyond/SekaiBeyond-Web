@@ -116,7 +116,7 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
                     </div>
                     <div className="admin-btn-row admin-mt-12">
                         <button
-                            className="admin-generate-btn"
+                            className="admin-toggle-btn admin-toggle-save"
                             onClick={createTag}
                             disabled={saving || !name.trim()}
                         >
@@ -124,7 +124,7 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
                                 ? (isEnglish ? 'Creating...' : '创建中...')
                                 : (isEnglish ? 'Create Tag' : '创建标签')}
                         </button>
-                        <button className="admin-back-btn" onClick={() => setShowCreate(false)}>
+                        <button className="admin-toggle-btn admin-toggle-cancel" onClick={() => setShowCreate(false)}>
                             {isEnglish ? 'Cancel' : '取消'}
                         </button>
                     </div>
@@ -159,7 +159,7 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
                                     />
                                     <div className="admin-tag-actions">
                                         <button
-                                            className="admin-generate-btn admin-btn-sm"
+                                            className="admin-toggle-btn admin-toggle-save admin-btn-sm"
                                             onClick={saveEdit}
                                             disabled={savingEdit || !editName.trim()}
                                         >
@@ -168,7 +168,7 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
                                                 : (isEnglish ? 'Save' : '保存')}
                                         </button>
                                         <button
-                                            className="admin-back-btn admin-btn-sm"
+                                            className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
                                             onClick={() => setEditingTag(null)}
                                         >
                                             {isEnglish ? 'Cancel' : '取消'}
@@ -183,7 +183,7 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
                                     )}
                                     <div className="admin-tag-actions">
                                         <button
-                                            className="admin-toggle-btn admin-btn-sm"
+                                            className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
                                             onClick={() => openEdit(tag)}
                                         >
                                             {isEnglish ? 'Edit' : '编辑'}

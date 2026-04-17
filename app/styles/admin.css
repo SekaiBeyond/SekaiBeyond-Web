@@ -271,10 +271,10 @@
 }
 
 .admin-toggle-btn {
-    padding: 6px 16px;
-    border: none;
-    border-radius: 14px;
-    font-size: 13px;
+    padding: 8px 20px;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -319,6 +319,28 @@
 .admin-toggle-archive:hover:not(:disabled) {
     background: var(--color-link);
     color: white;
+}
+
+.admin-toggle-save {
+    background: rgba(255, 107, 157, 0.14);
+    color: var(--color-primary);
+}
+
+.admin-toggle-save:hover:not(:disabled) {
+    background: var(--color-primary);
+    color: white;
+}
+
+.admin-toggle-cancel {
+    background: transparent;
+    color: var(--color-text-muted);
+    border-color: rgba(0, 0, 0, 0.18);
+}
+
+.admin-toggle-cancel:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--color-text);
+    border-color: rgba(0, 0, 0, 0.3);
 }
 
 .admin-toggle-btn:disabled {
@@ -857,12 +879,6 @@
     align-items: center;
 }
 
-.admin-form-actions .admin-generate-btn {
-    width: auto;
-    margin-bottom: 0;
-    padding: 6px 16px;
-}
-
 .admin-badge-image-preview {
     width: 64px;
     height: 64px;
@@ -922,11 +938,12 @@
 .admin-btn-row {
     display: flex;
     gap: 10px;
+    align-items: center;
 }
 
 .admin-btn-sm {
-    font-size: 12px;
-    padding: 4px 12px;
+    font-size: 13px;
+    padding: 5px 14px;
 }
 
 .admin-section-mb {
@@ -1062,6 +1079,7 @@
     display: flex;
     gap: 8px;
     margin-top: 8px;
+    align-items: center;
 }
 
 .admin-tag-input {

@@ -266,7 +266,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             </div>
                             <div className="admin-btn-row">
                                 <button
-                                    className="admin-generate-btn"
+                                    className="admin-toggle-btn admin-toggle-save"
                                     onClick={saveEvent}
                                     disabled={savingEvent || !eventForm.title.trim() || !eventForm.date.trim()}
                                 >
@@ -277,7 +277,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                             : (isEnglish ? 'Create Event' : '创建活动')}
                                 </button>
                                 <button
-                                    className="admin-back-btn"
+                                    className="admin-toggle-btn admin-toggle-cancel"
                                     onClick={() => {
                                         setShowCreateEvent(false);
                                         setEditingEvent(null);
@@ -352,7 +352,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     {isEnglish ? 'Edit Event' : '编辑活动'}
                                 </button>
                                 <button
-                                    className="admin-toggle-btn admin-toggle-grant"
+                                    className={`admin-toggle-btn ${managedEvt.published ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
                                     onClick={() => togglePublish(managedEvt)}
                                 >
                                     {managedEvt.published
