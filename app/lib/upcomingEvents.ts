@@ -88,7 +88,7 @@ async function fetchPublishedEvents(force = false): Promise<UpcomingEvent[]> {
     return publishedFetchPromise;
 }
 
-export async function refreshUpcomingEvents(): Promise<UpcomingEvent[]> {
+async function refreshUpcomingEvents(): Promise<UpcomingEvent[]> {
     try {
         const events = await fetchPublishedEvents(true);
         publishedSubscribers.forEach(fn => fn(events));
@@ -176,7 +176,7 @@ async function fetchAllUpcomingEvents(force = false): Promise<UpcomingEvent[]> {
     return adminFetchPromise;
 }
 
-export async function refreshAllUpcomingEvents(): Promise<UpcomingEvent[]> {
+async function refreshAllUpcomingEvents(): Promise<UpcomingEvent[]> {
     try {
         const [all] = await Promise.all([
             fetchAllUpcomingEvents(true),

@@ -53,7 +53,7 @@ async function fetchPastEvents(force = false): Promise<PastEvent[]> {
     return fetchPromise;
 }
 
-export async function refreshPastEvents(): Promise<PastEvent[]> {
+async function refreshPastEvents(): Promise<PastEvent[]> {
     const events = await fetchPastEvents(true);
     subscribers.forEach(fn => fn(events));
     return events;

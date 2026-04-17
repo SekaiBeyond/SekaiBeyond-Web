@@ -13,7 +13,7 @@ import {
     where,
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
-import { formatGroupWithTitle, type UserProfile } from '~/components/AuthProvider';
+import { formatGroupWithTitle } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     callCancelBadgeDeletion,
@@ -36,7 +36,6 @@ interface BadgesTabProps {
     badgeDefs: BadgeDef[];
     setBadgeDefs: React.Dispatch<React.SetStateAction<BadgeDef[]>>;
     user: User;
-    profile: UserProfile;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
 }
 
@@ -66,7 +65,6 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                                                           badgeDefs,
                                                                           setBadgeDefs,
                                                                           user,
-                                                                          profile,
                                                                           showToast,
                                                                       }, ref) => {
     const {isEnglish} = useLanguage();

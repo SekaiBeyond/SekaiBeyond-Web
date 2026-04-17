@@ -349,30 +349,6 @@ export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
 });
 
 /**
- * Delete an image from Firebase Storage (admin only).
- * Verifies caller is core-staff+ before deleting. Client sends the storage path.
- */
-export const deleteAdminImage = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
-    await requireAdmin(uid);
-
-    const path = (request.data as {path?: string})?.path;
-    if (!path) {
-        throw new HttpsError("invalid-argument", "Missing path.");
-    }
-    validateStoragePath(path);
-
-    const bucket = getStorage().bucket();
-    const file = bucket.file(path);
-    const [exists] = await file.exists();
-    if (exists) {
-        await file.delete();
-    }
-
-    return {deleted: exists};
-});
-
-/**
  * Upload an image to Firebase Storage (admin only).
  * Verifies caller is core-staff+ before writing. Client sends base64-encoded image data.
  */

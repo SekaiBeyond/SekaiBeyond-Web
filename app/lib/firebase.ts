@@ -52,7 +52,7 @@ export function getFirebaseDb() {
     return db;
 }
 
-export function getFunctions() {
+function getFunctions() {
     if (!functions) {
         functions = _getFunctions(getFirebaseApp());
     }

@@ -265,7 +265,6 @@ export const AdminPage = () => {
                             badgeDefs={badgeDefs}
                             setBadgeDefs={setBadgeDefs}
                             user={user}
-                            profile={profile}
                             showToast={showToast}
                         />
                     )

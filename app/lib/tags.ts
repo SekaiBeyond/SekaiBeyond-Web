@@ -37,7 +37,7 @@ async function fetchTags(force = false): Promise<Tag[]> {
     return fetchPromise;
 }
 
-export async function refreshTags(): Promise<Tag[]> {
+async function refreshTags(): Promise<Tag[]> {
     const tags = await fetchTags(true);
     for (const fn of subscribers) fn(tags);
     return tags;
