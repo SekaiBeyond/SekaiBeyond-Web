@@ -535,6 +535,7 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
     const maxUses = validateMaxUses(input.maxUses);
     const activeFrom = validateISODate(input.activeFrom, "activeFrom");
     const activeUntil = validateISODate(input.activeUntil, "activeUntil");
+    const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
     let code = "";
 
@@ -569,6 +570,7 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
                     usedCount: 0,
                     ...(activeFrom ? {activeFrom} : {}),
                     ...(activeUntil ? {activeUntil} : {}),
+                    ...(expiresAt ? {expiresAt} : {}),
                 });
                 txn.set(db.collection("records").doc(), {
                     type: "code-create",
@@ -705,6 +707,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     const eventId = validateDocId(input.eventId, "eventId");
     const activeFrom = validateISODate(input.activeFrom, "activeFrom");
     const activeUntil = validateISODate(input.activeUntil, "activeUntil");
+    const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
     let code = "";
 
@@ -753,6 +756,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                     usedCount: 0,
                     ...(activeFrom ? {activeFrom} : {}),
                     ...(activeUntil ? {activeUntil} : {}),
+                    ...(expiresAt ? {expiresAt} : {}),
                 });
                 txn.set(db.collection("records").doc(), {
                     type: "code-create",
@@ -1842,6 +1846,7 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
         txn.update(db.collection("claimCodes").doc(codeId), {
             activeFrom: activeFrom ?? null,
             activeUntil: activeUntil ?? null,
+            expiresAt: activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null,
         });
         txn.set(db.collection("records").doc(), {
             type: "event-code-time-window",
