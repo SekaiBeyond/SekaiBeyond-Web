@@ -39,7 +39,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
-      - name: Update CSP hashes in firebase.json
+      - name: Generate firebase.generated.json with CSP hashes
         run: npm run update-csp-hashes
 
       - name: Authenticate to Google Cloud
@@ -48,6 +48,6 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Deploy to Firebase
-        run: npx -y firebase-tools deploy --non-interactive --project "$FIREBASE_PROJECT_ID"
+        run: npx -y firebase-tools deploy --non-interactive --config firebase.generated.json --project "$FIREBASE_PROJECT_ID"
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}

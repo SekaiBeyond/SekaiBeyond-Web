@@ -31,8 +31,9 @@ while ((match = scriptRegex.exec(html)) !== null) {
 
 const hashes = [...hashSet];
 
-// Update firebase.json CSP
-const firebasePath = "firebase.json";
+// Emit firebase.generated.json so the committed firebase.json isn't mutated by local builds.
+const templatePath = "firebase.json";
+const outputPath = "firebase.generated.json";
 
 interface FirebaseConfig {
     hosting: {
@@ -45,7 +46,7 @@ interface FirebaseConfig {
     };
 }
 
-const firebase = JSON.parse(readFileSync(firebasePath, "utf-8")) as FirebaseConfig;
+const firebase = JSON.parse(readFileSync(templatePath, "utf-8")) as FirebaseConfig;
 
 for (const rule of firebase.hosting.headers) {
     for (const header of rule.headers) {
@@ -59,6 +60,6 @@ for (const rule of firebase.hosting.headers) {
     }
 }
 
-writeFileSync(firebasePath, JSON.stringify(firebase, null, 2) + "\n");
-console.log(`Updated CSP with ${hashes.length} inline script hashes:`);
+writeFileSync(outputPath, JSON.stringify(firebase, null, 2) + "\n");
+console.log(`Wrote ${outputPath} with ${hashes.length} inline script hashes:`);
 hashes.forEach((h) => console.log(`  ${h}`));
