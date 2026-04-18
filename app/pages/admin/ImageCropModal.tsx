@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useModalEffects } from '~/lib/useModalEffects';
-import { WEBP_QUALITY } from './utils';
+import { type ShowToast, WEBP_QUALITY } from './utils';
 
 interface ImageCropModalProps {
     file: File;
     aspect: number;
     onConfirm: (cropped: File) => void;
     onCancel: () => void;
+    showToast: ShowToast;
 }
 
 const DISPLAY_SIZE = 360;
 const OUTPUT_SIZE = 512;
 
-export const ImageCropModal = ({file, aspect, onConfirm, onCancel}: ImageCropModalProps) => {
+export const ImageCropModal = ({file, aspect, onConfirm, onCancel, showToast}: ImageCropModalProps) => {
     const {isEnglish} = useLanguage();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const dragRef = useRef<{startX: number; startY: number; ox: number; oy: number} | null>(null);
@@ -115,7 +116,7 @@ export const ImageCropModal = ({file, aspect, onConfirm, onCancel}: ImageCropMod
             const cropped = new File([blob], `crop-${Date.now()}.webp`, {type: 'image/webp'});
             onConfirm(cropped);
         } catch {
-            alert(isEnglish ? 'Failed to process image.' : '处理图片失败。');
+            showToast(isEnglish ? 'Failed to process image.' : '处理图片失败。', 'error');
             setSaving(false);
         }
     };

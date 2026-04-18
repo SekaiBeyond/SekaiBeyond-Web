@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { convertImageToWebp, validateImageFile } from './utils';
+import { convertImageToWebp, type ShowToast, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 
 interface ImageUploadFieldProps {
@@ -11,10 +11,11 @@ interface ImageUploadFieldProps {
     onCleanupPreview?: (url: string) => void;
     cropAspect?: number;
     convertToWebp?: boolean;
+    showToast: ShowToast;
 }
 
 export const ImageUploadField = ({
-                                     label, labelCn, preview, onFileChange, onCleanupPreview, cropAspect, convertToWebp,
+                                     label, labelCn, preview, onFileChange, onCleanupPreview, cropAspect, convertToWebp, showToast,
                                  }: ImageUploadFieldProps) => {
     const {isEnglish} = useLanguage();
     const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -24,7 +25,7 @@ export const ImageUploadField = ({
         const file = e.target.files?.[0];
         if (!file) return;
         if (cropAspect) {
-            if (!validateImageFile(file, isEnglish, {allowAnyImage: true})) {
+            if (!validateImageFile(file, isEnglish, showToast, {allowAnyImage: true})) {
                 e.target.value = '';
                 return;
             }
@@ -33,7 +34,7 @@ export const ImageUploadField = ({
             return;
         }
         if (convertToWebp) {
-            if (!validateImageFile(file, isEnglish, {allowAnyImage: true})) {
+            if (!validateImageFile(file, isEnglish, showToast, {allowAnyImage: true})) {
                 e.target.value = '';
                 return;
             }
@@ -41,17 +42,17 @@ export const ImageUploadField = ({
             setConverting(true);
             try {
                 const webp = await convertImageToWebp(file);
-                if (!validateImageFile(webp, isEnglish)) return;
+                if (!validateImageFile(webp, isEnglish, showToast)) return;
                 if (preview?.startsWith('blob:')) onCleanupPreview?.(preview);
                 onFileChange(webp, URL.createObjectURL(webp));
             } catch {
-                alert(isEnglish ? 'Failed to convert image.' : '转换图片失败。');
+                showToast(isEnglish ? 'Failed to convert image.' : '转换图片失败。', 'error');
             } finally {
                 setConverting(false);
             }
             return;
         }
-        if (!validateImageFile(file, isEnglish)) {
+        if (!validateImageFile(file, isEnglish, showToast)) {
             e.target.value = '';
             return;
         }
@@ -90,6 +91,7 @@ export const ImageUploadField = ({
                     aspect={cropAspect}
                     onConfirm={handleCropConfirm}
                     onCancel={() => setPendingFile(null)}
+                    showToast={showToast}
                 />
             )}
         </>

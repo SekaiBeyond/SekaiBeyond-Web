@@ -164,8 +164,13 @@ function validateStorageImageUrl(value: string, name: string): void {
     if (!value) return;
     try {
         const url = new URL(value);
-        if (url.protocol !== "https:" || url.hostname !== "firebasestorage.googleapis.com") {
-            throw new HttpsError("invalid-argument", `${name} must be a Firebase Storage URL.`);
+        const expectedPrefix = `/v0/b/${getStorage().bucket().name}/o/`;
+        if (
+            url.protocol !== "https:"
+            || url.hostname !== "firebasestorage.googleapis.com"
+            || !url.pathname.startsWith(expectedPrefix)
+        ) {
+            throw new HttpsError("invalid-argument", `${name} must be a Firebase Storage URL for this project.`);
         }
     } catch (e) {
         if (e instanceof HttpsError) throw e;
@@ -1949,6 +1954,7 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
     const name = sanitizeDisplayText(validateStr(input.name, "name", 100, true));
     const nameCn = sanitizeDisplayText(validateStr(input.nameCn, "nameCn", 100));
     if (!name) throw new HttpsError("invalid-argument", "name is required.");
+    const nameLower = name.toLowerCase();
     const docId = tagId ?? db.collection("eventLabels").doc().id;
 
     return adminTransaction(uid, async (txn, callerSnap) => {
@@ -1957,19 +1963,18 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
             if (!existing.exists) throw new HttpsError("not-found", "Tag not found.");
         }
 
-        const allTagsSnap = await txn.get(db.collection("eventLabels"));
-        for (const doc of allTagsSnap.docs) {
-            if (doc.id === tagId) continue;
-            if (doc.data().name === name) {
-                throw new HttpsError("already-exists", "A tag with this name already exists.");
-            }
+        const existingByNameLower = await txn.get(
+            db.collection("eventLabels").where("nameLower", "==", nameLower).limit(1),
+        );
+        if (!existingByNameLower.empty && existingByNameLower.docs[0].id !== tagId) {
+            throw new HttpsError("already-exists", "A tag with this name already exists.");
         }
 
         const ref = db.collection("eventLabels").doc(docId);
         if (tagId) {
-            txn.update(ref, {name, nameCn});
+            txn.update(ref, {name, nameLower, nameCn});
         } else {
-            txn.set(ref, {name, nameCn});
+            txn.set(ref, {name, nameLower, nameCn});
         }
         txn.set(db.collection("records").doc(), {
             type: tagId ? "tag-edit" : "tag-create",

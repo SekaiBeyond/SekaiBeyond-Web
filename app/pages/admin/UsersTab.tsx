@@ -9,6 +9,7 @@ import {
     onSnapshot,
     orderBy,
     query,
+    type QueryDocumentSnapshot,
     startAfter,
     startAt,
     where,
@@ -68,6 +69,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const [hasSearched, setHasSearched] = useState(false);
     const [updating, setUpdating] = useState(false);
     const [recentUsers, setRecentUsers] = useState<UserRecord[]>([]);
+    const [lastRecentSnap, setLastRecentSnap] = useState<QueryDocumentSnapshot | null>(null);
     const [loadingRecent, setLoadingRecent] = useState(false);
     const [hasMoreRecent, setHasMoreRecent] = useState(true);
     const [pendingDeletionExpiresAt, setPendingDeletionExpiresAt] = useState<Date | null>(null);
@@ -140,6 +142,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 const q = query(collection(db, 'users'), orderBy('joinedAt', 'desc'), limit(PAGE_SIZE));
                 const snapshot = await getDocs(q);
                 setRecentUsers(snapshot.docs.map(docToUserRecord));
+                setLastRecentSnap(snapshot.docs[snapshot.docs.length - 1] ?? null);
                 setHasMoreRecent(snapshot.docs.length === PAGE_SIZE);
             } finally {
                 setLoadingRecent(false);
@@ -151,20 +154,20 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     }, []);
 
     const loadMoreRecentUsers = async () => {
-        if (!hasMoreRecent || recentUsers.length === 0) return;
+        if (!hasMoreRecent || !lastRecentSnap) return;
         setLoadingRecent(true);
         try {
             const db = getFirebaseDb();
-            const lastUser = recentUsers[recentUsers.length - 1];
             const q = query(
                 collection(db, 'users'),
                 orderBy('joinedAt', 'desc'),
-                startAfter(lastUser.joinedAt),
+                startAfter(lastRecentSnap),
                 limit(PAGE_SIZE),
             );
             const snapshot = await getDocs(q);
             const newUsers = snapshot.docs.map(docToUserRecord);
             setRecentUsers(prev => [...prev, ...newUsers]);
+            setLastRecentSnap(snapshot.docs[snapshot.docs.length - 1] ?? lastRecentSnap);
             setHasMoreRecent(newUsers.length === PAGE_SIZE);
         } finally {
             setLoadingRecent(false);

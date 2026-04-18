@@ -6,6 +6,8 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_RAW_IMAGE_SIZE = 25 * 1024 * 1024; // 25MB, pre-crop browser-side sanity cap
 export const WEBP_QUALITY = 0.95;
 
+export type ShowToast = (message: string, type: 'success' | 'warning' | 'error') => void;
+
 export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData}): UserRecord => {
     const data = docSnap.data();
     return {
@@ -35,25 +37,26 @@ export const getClaimUrl = (code: string): string => {
 export const validateImageFile = (
     file: File,
     isEnglish: boolean,
+    showToast: ShowToast,
     opts?: {allowAnyImage?: boolean},
 ): boolean => {
     if (opts?.allowAnyImage) {
         if (!file.type.startsWith('image/')) {
-            alert(isEnglish ? 'Please select an image file.' : '请选择图片文件。');
+            showToast(isEnglish ? 'Please select an image file.' : '请选择图片文件。', 'error');
             return false;
         }
         if (file.size > MAX_RAW_IMAGE_SIZE) {
-            alert(isEnglish ? 'Image must be under 25MB.' : '图片大小不能超过 25MB。');
+            showToast(isEnglish ? 'Image must be under 25MB.' : '图片大小不能超过 25MB。', 'error');
             return false;
         }
         return true;
     }
     if (file.type !== 'image/webp') {
-        alert(isEnglish ? 'Please upload a WebP image.' : '请上传 WebP 格式的图片。');
+        showToast(isEnglish ? 'Please upload a WebP image.' : '请上传 WebP 格式的图片。', 'error');
         return false;
     }
     if (file.size > MAX_IMAGE_SIZE) {
-        alert(isEnglish ? 'Image must be under 5MB.' : '图片大小不能超过 5MB。');
+        showToast(isEnglish ? 'Image must be under 5MB.' : '图片大小不能超过 5MB。', 'error');
         return false;
     }
     return true;

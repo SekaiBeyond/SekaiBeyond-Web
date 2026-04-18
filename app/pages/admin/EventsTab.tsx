@@ -253,6 +253,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     }}
                                     onCleanupPreview={url => URL.revokeObjectURL(url)}
                                     convertToWebp
+                                    showToast={showToast}
                                 />
                                 <BilingualFormField
                                     label="Description" labelCn="描述"

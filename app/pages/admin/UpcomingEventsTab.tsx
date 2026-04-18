@@ -392,6 +392,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     }}
                                     onCleanupPreview={url => URL.revokeObjectURL(url)}
                                     convertToWebp
+                                    showToast={showToast}
                                 />
                                 <label>
                                     <span>{isEnglish ? 'Poster Credit' : '海报作者'}</span>

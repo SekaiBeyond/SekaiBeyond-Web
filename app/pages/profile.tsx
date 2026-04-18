@@ -700,6 +700,7 @@ export const ProfilePage = () => {
                     aspect={1}
                     onConfirm={handlePhotoCropConfirm}
                     onCancel={() => setPendingPhoto(null)}
+                    showToast={showToast}
                 />
             )}
         </>
