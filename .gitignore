@@ -10,6 +10,5 @@
 .firebaserc
 public/index.html
 /functions/lib
-functions/package-lock.json
 **/*.log
 **/build

@@ -26,7 +26,7 @@ jobs:
         run: npm ci
 
       - name: Install functions dependencies
-        run: npm install
+        run: npm ci
         working-directory: functions
 
       - name: Build
