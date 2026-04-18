@@ -4,11 +4,11 @@
   "type": "module",
   "scripts": {
     "build": "npm --prefix functions run build && react-router build",
-    "postbuild": "npx tsx scripts/update-csp-hashes.ts",
+    "update-csp-hashes": "npx tsx scripts/update-csp-hashes.ts",
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
-    "deploy": "npm run build && firebase deploy",
+    "deploy": "npm run build && npm run update-csp-hashes && firebase deploy",
     "deploy:rules": "firebase deploy --only functions,firestore,storage",
     "deploy:ttl": "for pair in rateLimits:expiresAt records:expiresAt users:deleteAt pastEvents:deleteAt upcomingEvents:deleteAt badges:deleteAt claimCodes:expiresAt badgeActivationCodes:expiresAt; do gcloud firestore fields ttls update ${pair#*:} --collection-group=${pair%:*} --enable-ttl --async --quiet || exit 1; done"
   },

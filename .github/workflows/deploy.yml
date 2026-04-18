@@ -39,6 +39,9 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
+      - name: Update CSP hashes in firebase.json
+        run: npm run update-csp-hashes
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:

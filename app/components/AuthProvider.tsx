@@ -78,6 +78,7 @@ interface AuthContextType {
     user: User | null;
     profile: UserProfile | null;
     loading: boolean;
+    authError: Error | null;
     signIn: () => Promise<void>;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
@@ -106,49 +107,60 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
     const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [authError, setAuthError] = useState<Error | null>(null);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(getFirebaseAuth(), async (firebaseUser) => {
             setUser(firebaseUser);
+            setAuthError(null);
 
-            if (firebaseUser) {
-                const userRef = doc(getFirebaseDb(), 'users', firebaseUser.uid);
-                const userSnap = await getDoc(userRef);
+            try {
+                if (firebaseUser) {
+                    const userRef = doc(getFirebaseDb(), 'users', firebaseUser.uid);
+                    const userSnap = await getDoc(userRef);
 
-                if (userSnap.exists()) {
-                    const data = userSnap.data();
-                    setProfile({
-                        displayName: data.displayName,
-                        email: firebaseUser.email ?? '',
-                        photoURL: data.photoURL,
-                        joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                        attendedEvents: data.attendedEvents ?? [],
-                        badges: data.badges ?? [],
-                        badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
-                        group: data.group ?? 'visitor',
-                        title: data.title ?? '',
-                    });
+                    if (userSnap.exists()) {
+                        const data = userSnap.data();
+                        setProfile({
+                            displayName: data.displayName,
+                            email: firebaseUser.email ?? '',
+                            photoURL: data.photoURL,
+                            joinedAt: data.joinedAt?.toDate() ?? new Date(),
+                            attendedEvents: data.attendedEvents ?? [],
+                            badges: data.badges ?? [],
+                            badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
+                            group: data.group ?? 'visitor',
+                            title: data.title ?? '',
+                        });
+                    } else {
+                        await callCreateUserProfile();
+                        const freshSnap = await getDoc(userRef);
+                        const data = freshSnap.data();
+                        if (!data) {
+                            throw new Error('Profile creation succeeded but document was not found.');
+                        }
+                        setProfile({
+                            displayName: data.displayName,
+                            email: firebaseUser.email ?? '',
+                            photoURL: data.photoURL,
+                            joinedAt: data.joinedAt?.toDate() ?? new Date(),
+                            attendedEvents: [],
+                            badges: [],
+                            badgeEarnedAt: {},
+                            group: 'visitor',
+                            title: '',
+                        });
+                    }
                 } else {
-                    await callCreateUserProfile();
-                    const freshSnap = await getDoc(userRef);
-                    const data = freshSnap.data()!;
-                    setProfile({
-                        displayName: data.displayName,
-                        email: firebaseUser.email ?? '',
-                        photoURL: data.photoURL,
-                        joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                        attendedEvents: [],
-                        badges: [],
-                        badgeEarnedAt: {},
-                        group: 'visitor',
-                        title: '',
-                    });
+                    setProfile(null);
                 }
-            } else {
+            } catch (error) {
+                console.error('AuthProvider: failed to load or create user profile', error);
                 setProfile(null);
+                setAuthError(error instanceof Error ? error : new Error(String(error)));
+            } finally {
+                setLoading(false);
             }
-
-            setLoading(false);
         });
 
         return () => unsubscribe();
@@ -208,6 +220,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         user,
         profile,
         loading,
+        authError,
         signIn,
         signOut,
         refreshProfile,
