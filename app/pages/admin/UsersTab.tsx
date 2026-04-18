@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import {
     collection,
     doc,
+    endAt,
     getDoc,
     getDocs,
     limit,
@@ -9,6 +10,7 @@ import {
     orderBy,
     query,
     startAfter,
+    startAt,
     where,
 } from 'firebase/firestore';
 import {
@@ -170,14 +172,41 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     };
 
     const searchUsers = async () => {
-        if (!searchQuery.trim()) return;
+        const q = searchQuery.trim();
+        if (!q) return;
         setSearching(true);
         setSelectedUser(null);
         try {
             const db = getFirebaseDb();
-            const q = query(collection(db, 'users'), where('email', '==', searchQuery.trim().toLowerCase()));
-            const snapshot = await getDocs(q);
-            setSearchResults(snapshot.docs.map(docToUserRecord));
+            const users = collection(db, 'users');
+            let records: UserRecord[];
+            if (q.includes('@')) {
+                const snap = await getDocs(query(users, where('email', '==', q.toLowerCase())));
+                records = snap.docs.map(docToUserRecord);
+            } else {
+                const prefixes = new Set<string>([q]);
+                const first = q.charAt(0);
+                if (first && first.toLowerCase() !== first.toUpperCase()) {
+                    prefixes.add(first.toUpperCase() + q.slice(1));
+                    prefixes.add(first.toLowerCase() + q.slice(1));
+                }
+                const snaps = await Promise.all(
+                    Array.from(prefixes).map(p => getDocs(query(
+                        users,
+                        orderBy('displayName'),
+                        startAt(p),
+                        endAt(p + '\uf8ff'),
+                        limit(PAGE_SIZE),
+                    ))),
+                );
+                const deduped = new Map<string, UserRecord>();
+                snaps.forEach(s => s.docs.forEach(d => {
+                    const r = docToUserRecord(d);
+                    deduped.set(r.uid, r);
+                }));
+                records = Array.from(deduped.values());
+            }
+            setSearchResults(records);
         } catch {
             showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error');
         } finally {
@@ -357,8 +386,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         <div className="admin-section">
             <div className="admin-search">
                 <input
-                    type="email"
-                    placeholder={isEnglish ? 'Search by email address...' : '输入邮箱地址搜索...'}
+                    type="text"
+                    placeholder={isEnglish ? 'Search by email or name...' : '输入邮箱或姓名搜索...'}
                     value={searchQuery}
                     onChange={(e) => {
                         setSearchQuery(e.target.value);
