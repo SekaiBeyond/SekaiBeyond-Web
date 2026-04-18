@@ -40,8 +40,8 @@ const toDatetimeLocal = (d: Date): string => {
 };
 
 interface EventForm {
-    name: string;
-    nameCn: string;
+    title: string;
+    titleCn: string;
     description: string;
     descriptionCn: string;
     location: string;
@@ -57,7 +57,7 @@ interface EventForm {
 }
 
 const emptyForm: EventForm = {
-    name: '', nameCn: '', description: '', descriptionCn: '',
+    title: '', titleCn: '', description: '', descriptionCn: '',
     location: '', locationCn: '', startAt: '', endAt: '',
     posterCredit: '', buyTicket: '', learnMore: '',
     customButtonText: '', customButtonTextCn: '', customButtonLink: '',
@@ -199,8 +199,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
 
     const openEdit = (event: UpcomingEvent) => {
         setForm({
-            name: event.name,
-            nameCn: event.nameCn,
+            title: event.title,
+            titleCn: event.titleCn,
             description: event.description,
             descriptionCn: event.descriptionCn,
             location: event.location,
@@ -221,7 +221,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     };
 
     const saveEvent = async () => {
-        if (!form.name.trim() || !form.startAt || !form.endAt) return;
+        if (!form.title.trim() || !form.startAt || !form.endAt) return;
         const startAt = new Date(form.startAt);
         const endAt = new Date(form.endAt);
         if (endAt <= startAt) {
@@ -238,8 +238,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
 
             await callSaveUpcomingEvent({
                 ...(editingEvent ? {eventId: editingEvent.id} : {}),
-                name: form.name,
-                nameCn: form.nameCn,
+                title: form.title,
+                titleCn: form.titleCn,
                 description: form.description,
                 descriptionCn: form.descriptionCn,
                 location: form.location,
@@ -274,8 +274,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
 
     const requestDeleteEvent = async (event: UpcomingEvent) => {
         if (!confirm(isEnglish
-            ? `Request deletion of "${event.name}"? It will be permanently deleted in about 48 hours unless cancelled.`
-            : `申请删除"${event.name}"？如不取消，约 48 小时后将被永久删除。`
+            ? `Request deletion of "${event.title}"? It will be permanently deleted in about 48 hours unless cancelled.`
+            : `申请删除"${event.title}"？如不取消，约 48 小时后将被永久删除。`
         )) return;
         setDeletionBusyId(event.id);
         try {
@@ -350,12 +350,12 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             </h4>
                             <div className="admin-form-grid">
                                 <BilingualFormField
-                                    label="Name" labelCn="名称"
-                                    value={form.name} valueCn={form.nameCn}
-                                    onChange={v => setForm(f => ({...f, name: v}))}
-                                    onChangeCn={v => setForm(f => ({...f, nameCn: v}))}
-                                    placeholder={isEnglish ? 'Event name' : '活动名称'}
-                                    placeholderCn={isEnglish ? 'Event name in Chinese' : '活动中文名称'}
+                                    label="Title" labelCn="标题"
+                                    value={form.title} valueCn={form.titleCn}
+                                    onChange={v => setForm(f => ({...f, title: v}))}
+                                    onChangeCn={v => setForm(f => ({...f, titleCn: v}))}
+                                    placeholder={isEnglish ? 'Event title' : '活动标题'}
+                                    placeholderCn={isEnglish ? 'Event title in Chinese' : '活动中文标题'}
                                 />
                                 <label>
                                     <span>{isEnglish ? 'Start Time' : '开始时间'}</span>
@@ -462,7 +462,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 <button
                                     className="admin-toggle-btn admin-toggle-save"
                                     onClick={saveEvent}
-                                    disabled={saving || !form.name.trim() || !form.startAt || !form.endAt}
+                                    disabled={saving || !form.title.trim() || !form.startAt || !form.endAt}
                                 >
                                     {saving
                                         ? (isEnglish ? 'Saving...' : '保存中...')
@@ -502,7 +502,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 )}
                                 <div className="admin-event-card-info">
                                     <span
-                                        className="admin-event-card-title">{isEnglish ? event.name : event.nameCn}</span>
+                                        className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
                                     <span className="admin-event-card-date">
                                         {event.startAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
                                             year: 'numeric', month: 'short', day: 'numeric',
@@ -541,7 +541,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <img src={selectedEvt.poster} alt="" className="admin-event-detail-img"/>
                                 )}
                                 <div>
-                                    <h3>{isEnglish ? selectedEvt.name : selectedEvt.nameCn}</h3>
+                                    <h3>{isEnglish ? selectedEvt.title : selectedEvt.titleCn}</h3>
                                     <p className="admin-event-detail-meta">
                                         <span>
                                             {selectedEvt.startAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {

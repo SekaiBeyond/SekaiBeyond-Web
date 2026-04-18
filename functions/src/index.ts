@@ -427,7 +427,7 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
         if (!eventId) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
 
         const [eventSnap, userSnap] = await Promise.all([
-            txn.get(db.collection("pastEvents").doc(eventId)),
+            txn.get(db.collection("upcomingEvents").doc(eventId)),
             txn.get(userRef),
         ]);
         // Forces retry if the event is concurrently deleted mid-claim
@@ -446,7 +446,7 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
             performedBy: uid,
             performedByName: userSnap.data()?.displayName ?? "",
             eventId,
-            eventTitle: eventSnap.data()?.title ?? eventId,
+            eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
             code,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -730,11 +730,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                     throw new HttpsError("permission-denied", "Insufficient permissions.");
                 }
 
-                const [pastSnap, upcomingSnap] = await Promise.all([
-                    txn.get(db.collection("pastEvents").doc(eventId)),
-                    txn.get(db.collection("upcomingEvents").doc(eventId)),
-                ]);
-                const eventSnap = pastSnap.exists ? pastSnap : upcomingSnap;
+                const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
                 if (!eventSnap.exists) {
                     throw new HttpsError("not-found", "Event not found.");
                 }
@@ -1350,8 +1346,8 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
 
     const input = request.data as Record<string, unknown>;
     const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : null;
-    const name = validateStr(input.name, "name", 200, true);
-    const nameCn = validateStr(input.nameCn, "nameCn", 200);
+    const title = validateStr(input.title, "title", 200, true);
+    const titleCn = validateStr(input.titleCn, "titleCn", 200);
     const description = validateStr(input.description, "description", 2000);
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const location = validateStr(input.location, "location", 200);
@@ -1380,7 +1376,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     }
 
     const data = {
-        name, nameCn, description, descriptionCn, location, locationCn,
+        title, titleCn, description, descriptionCn, location, locationCn,
         startAt, endAt, poster, posterCredit, buyTicket, learnMore,
         customButtonText, customButtonTextCn, customButtonLink,
     };
@@ -1397,7 +1393,13 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         }
         const ref = db.collection("upcomingEvents").doc(docId);
         if (eventId) {
-            txn.update(ref, {...data, published: wasPublished});
+            // Delete legacy name/nameCn fields on edit so pre-rename docs migrate cleanly.
+            txn.update(ref, {
+                ...data,
+                published: wasPublished,
+                name: FieldValue.delete(),
+                nameCn: FieldValue.delete(),
+            });
         } else {
             txn.set(ref, {...data, published: false});
         }
@@ -1405,7 +1407,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
             type: eventId ? "upcoming-event-edit" : "upcoming-event-create",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: name,
+            eventTitle: title,
             eventId: docId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -1481,7 +1483,7 @@ export const requestUpcomingEventDeletion = onCall({maxInstances: 10}, async (re
             type: "upcoming-event-deletion-requested",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: data.name ?? eventId,
+            eventTitle: data.title ?? data.name ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -1516,7 +1518,7 @@ export const cancelUpcomingEventDeletion = onCall({maxInstances: 10}, async (req
             type: "upcoming-event-deletion-cancelled",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: data.name ?? eventId,
+            eventTitle: data.title ?? data.name ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -1528,16 +1530,19 @@ export const cancelUpcomingEventDeletion = onCall({maxInstances: 10}, async (req
 
 /**
  * Firestore trigger fired when an upcoming event is deleted.
- * Only runs cleanup for TTL-triggered deletions (deleteAt was set).
- * Direct deletions (e.g. archiveUpcomingEvent) are skipped because the poster
- * is reused by the new pastEvent, and those flows manage their own cleanup.
+ * Always cascades claim-code cleanup (the event is gone either way).
+ * Poster cleanup and the "deleted" record are only written for TTL-triggered
+ * deletions; archiveUpcomingEvent reuses the poster on the new pastEvent and
+ * writes its own "upcoming-event-archive" record.
  */
 export const onUpcomingEventDeleted = onDocumentDeleted(
     {document: "upcomingEvents/{eventId}", maxInstances: 10},
     async (event) => {
         const data = event.data?.data();
         const eventId = event.params.eventId;
-        if (!data?.deleteAt) return;
+        if (!data) return;
+
+        const isTTLDelete = !!data.deleteAt;
 
         try {
             const codesSnap = await db.collection("claimCodes")
@@ -1550,6 +1555,8 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: cascade failed for ${eventId}`, err);
         }
 
+        if (!isTTLDelete) return;
+
         await deleteStorageFile(data.poster ?? "", ["upcoming-events/"])
             .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId}`));
 
@@ -1557,7 +1564,7 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             await db.collection("records").add({
                 type: "upcoming-event-deleted",
                 eventId,
-                eventTitle: data.name ?? "",
+                eventTitle: data.title ?? data.name ?? "",
                 timestamp: FieldValue.serverTimestamp(),
                 expiresAt: recordExpiresAt(),
             });
@@ -1579,11 +1586,19 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     const input = request.data as {eventId?: string; tagId?: string};
     const eventId = validateDocId(input.eventId, "eventId");
     const tagId = validateStr(input.tagId, "tagId", 128);
-    const newDocRef = db.collection("pastEvents").doc();
+    // Reuse the upcoming event's ID for the past event so users' attendedEvents
+    // and claim-code records remain valid across the archive boundary.
+    const newDocRef = db.collection("pastEvents").doc(eventId);
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        const [eventSnap, pastCollisionSnap] = await Promise.all([
+            txn.get(db.collection("upcomingEvents").doc(eventId)),
+            txn.get(newDocRef),
+        ]);
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        if (pastCollisionSnap.exists) {
+            throw new HttpsError("already-exists", "A past event with this ID already exists.");
+        }
         const eventData = eventSnap.data()!;
 
         const startDate: Date = eventData.startAt?.toDate?.() ?? new Date();
@@ -1591,8 +1606,8 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         const dateStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
 
         txn.set(newDocRef, {
-            title: eventData.name ?? "",
-            titleCn: eventData.nameCn ?? "",
+            title: eventData.title ?? eventData.name ?? "",
+            titleCn: eventData.titleCn ?? eventData.nameCn ?? "",
             date: dateStr,
             location: eventData.location ?? "",
             description: eventData.description ?? "",
@@ -1606,7 +1621,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             type: "upcoming-event-archive",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventData.name ?? eventId,
+            eventTitle: eventData.title ?? eventData.name ?? eventId,
             eventId: newDocRef.id,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -1810,7 +1825,7 @@ export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) 
         const codeData = codeSnap.data()!;
 
         const eventSnap = codeData.eventId
-            ? await txn.get(db.collection("pastEvents").doc(codeData.eventId))
+            ? await txn.get(db.collection("upcomingEvents").doc(codeData.eventId))
             : null;
 
         txn.update(db.collection("claimCodes").doc(codeId), {active: input.active});
@@ -1818,7 +1833,7 @@ export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) 
             type: input.active ? "event-code-activate" : "event-code-deactivate",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
+            eventTitle: eventSnap?.data()?.title ?? eventSnap?.data()?.name ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
             code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
@@ -1847,7 +1862,7 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
         const codeData = codeSnap.data()!;
 
         const eventSnap = codeData.eventId
-            ? await txn.get(db.collection("pastEvents").doc(codeData.eventId))
+            ? await txn.get(db.collection("upcomingEvents").doc(codeData.eventId))
             : null;
 
         txn.update(db.collection("claimCodes").doc(codeId), {
@@ -1859,7 +1874,7 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
             type: "event-code-time-window",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
+            eventTitle: eventSnap?.data()?.title ?? eventSnap?.data()?.name ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
             code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),

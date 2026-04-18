@@ -15,7 +15,14 @@ interface ImageUploadFieldProps {
 }
 
 export const ImageUploadField = ({
-                                     label, labelCn, preview, onFileChange, onCleanupPreview, cropAspect, convertToWebp, showToast,
+                                     label,
+                                     labelCn,
+                                     preview,
+                                     onFileChange,
+                                     onCleanupPreview,
+                                     cropAspect,
+                                     convertToWebp,
+                                     showToast,
                                  }: ImageUploadFieldProps) => {
     const {isEnglish} = useLanguage();
     const [pendingFile, setPendingFile] = useState<File | null>(null);

@@ -127,7 +127,7 @@ export const callSetPastEventPublished = (data: {eventId: string; published: boo
 
 export const callSaveUpcomingEvent = (data: {
     eventId?: string;
-    name: string; nameCn: string; description: string; descriptionCn: string;
+    title: string; titleCn: string; description: string; descriptionCn: string;
     location: string; locationCn: string; startAt: string; endAt: string;
     poster: string; posterCredit: string; buyTicket: string; learnMore: string;
     customButtonText: string; customButtonTextCn: string; customButtonLink: string;

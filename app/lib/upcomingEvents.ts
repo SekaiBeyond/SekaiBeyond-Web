@@ -4,8 +4,8 @@ import { getFirebaseDb } from './firebase';
 
 export interface UpcomingEvent {
     id: string;
-    name: string;
-    nameCn: string;
+    title: string;
+    titleCn: string;
     description: string;
     descriptionCn: string;
     location: string;
@@ -35,8 +35,9 @@ const mapDoc = (docSnap: FirestoreDocLike): UpcomingEvent => {
     const deleteAtRaw = data.deleteAt as {toDate?: () => Date} | undefined;
     return {
         id: docSnap.id,
-        name: (data.name as string) ?? '',
-        nameCn: (data.nameCn as string) ?? '',
+        // Fallback to legacy `name`/`nameCn` for docs predating the rename.
+        title: (data.title as string) ?? (data.name as string) ?? '',
+        titleCn: (data.titleCn as string) ?? (data.nameCn as string) ?? '',
         description: (data.description as string) ?? '',
         descriptionCn: (data.descriptionCn as string) ?? '',
         location: (data.location as string) ?? '',
