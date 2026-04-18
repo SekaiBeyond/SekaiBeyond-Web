@@ -63,7 +63,12 @@ export const callCreateUserProfile = () =>
     httpsCallable<Record<string, never>, {alreadyExists: boolean}>(getFunctions(), 'createUserProfile')({});
 
 export const callClaimEventCode = (data: {code: string}) =>
-    httpsCallable<{code: string}, {eventId: string}>(getFunctions(), 'claimEventCode')(data);
+    httpsCallable<{code: string}, {
+        eventId: string;
+        eventTitle: string;
+        eventTitleCn: string;
+        eventPoster: string;
+    }>(getFunctions(), 'claimEventCode')(data);
 
 export const callClaimBadgeActivationCode = (data: {code: string}) =>
     httpsCallable<{code: string}, {
@@ -249,6 +254,13 @@ export const functionsErrorCode = (err: unknown): string | null => {
     if (err instanceof FirebaseError && "details" in err) {
         const d = (err as FunctionsError).details as {code?: string} | undefined;
         return d?.code ?? null;
+    }
+    return null;
+};
+
+export const functionsErrorDetails = <T = unknown>(err: unknown): T | null => {
+    if (err instanceof FirebaseError && "details" in err) {
+        return ((err as FunctionsError).details as T | undefined) ?? null;
     }
     return null;
 };

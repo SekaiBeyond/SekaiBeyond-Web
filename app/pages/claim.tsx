@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callClaimEventCode, functionsErrorCode } from '~/lib/firebase';
-import { usePastEvents } from '~/lib/pastEvents';
-import { useTags } from '~/lib/tags';
+import { callClaimEventCode, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
 
 type ClaimState =
     'loading'
@@ -19,19 +17,22 @@ type ClaimState =
     | 'already-have'
     | 'error';
 
+interface EventInfo {
+    eventId: string;
+    eventTitle: string;
+    eventTitleCn: string;
+    eventPoster: string;
+}
+
 export const ClaimPage = () => {
     const [searchParams] = useSearchParams();
     const code = searchParams.get('code');
     const {user, profile, loading: authLoading, signIn, refreshProfile} = useAuth();
     const {isEnglish} = useLanguage();
-    const {pastEvents} = usePastEvents();
-    const {tags} = useTags();
 
     const [state, setState] = useState<ClaimState>('loading');
-    const [eventId, setEventId] = useState<string | null>(null);
+    const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
     const [retryCount, setRetryCount] = useState(0);
-
-    const event = pastEvents.find(e => e.id === eventId);
 
     useEffect(() => {
         if (!code) {
@@ -47,15 +48,33 @@ export const ClaimPage = () => {
         const claimEvent = async () => {
             setState('claiming');
             const result = await callClaimEventCode({code});
-            const claimedEventId = result.data.eventId;
-            setEventId(claimedEventId);
+            setEventInfo({
+                eventId: result.data.eventId,
+                eventTitle: result.data.eventTitle,
+                eventTitleCn: result.data.eventTitleCn,
+                eventPoster: result.data.eventPoster,
+            });
             setState('success');
             refreshProfile().catch(() => {
             });
         };
 
         claimEvent().catch((err) => {
-            switch (functionsErrorCode(err)) {
+            const errCode = functionsErrorCode(err);
+            if (errCode === 'already-have') {
+                const details = functionsErrorDetails<EventInfo & {code: string}>(err);
+                if (details) {
+                    setEventInfo({
+                        eventId: details.eventId,
+                        eventTitle: details.eventTitle,
+                        eventTitleCn: details.eventTitleCn,
+                        eventPoster: details.eventPoster,
+                    });
+                }
+                setState('already-have');
+                return;
+            }
+            switch (errCode) {
                 case 'not-active-yet':
                     setState('not-active-yet');
                     break;
@@ -64,9 +83,6 @@ export const ClaimPage = () => {
                     break;
                 case 'max-uses':
                     setState('max-uses');
-                    break;
-                case 'already-have':
-                    setState('already-have');
                     break;
                 case 'invalid':
                 case 'inactive':
@@ -143,9 +159,10 @@ export const ClaimPage = () => {
 
                 {(state === 'success' || state === 'already-have') && (
                     <>
-                        {event && (
+                        {eventInfo?.eventPoster && (
                             <div className="claim-badge-icon">
-                                <img src={event.icon} alt={isEnglish ? event.title : event.titleCn}/>
+                                <img src={eventInfo.eventPoster}
+                                     alt={isEnglish ? eventInfo.eventTitle : eventInfo.eventTitleCn}/>
                             </div>
                         )}
                         <h2>
@@ -153,16 +170,12 @@ export const ClaimPage = () => {
                                 ? (isEnglish ? 'Event Claimed!' : '签到成功！')
                                 : (isEnglish ? 'Already Checked In' : '已签到此活动')}
                         </h2>
-                        {event ? (
-                            <>
-                                <p className="claim-event-title">{isEnglish ? event.title : event.titleCn}</p>
-                                <p className="claim-event-category">{(() => {
-                                    const tag = tags.find(t => t.id === event.tagId);
-                                    return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
-                                })()}</p>
-                            </>
-                        ) : (
-                            <p className="claim-event-title">{eventId}</p>
+                        {eventInfo && (eventInfo.eventTitle || eventInfo.eventTitleCn) && (
+                            <p className="claim-event-title">
+                                {isEnglish
+                                    ? (eventInfo.eventTitle || eventInfo.eventTitleCn)
+                                    : (eventInfo.eventTitleCn || eventInfo.eventTitle)}
+                            </p>
                         )}
                     </>
                 )}

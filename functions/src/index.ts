@@ -434,9 +434,20 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
         if (!eventSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
         if (!userSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
 
+        const eventData = eventSnap.data()!;
+        const eventTitle: string = eventData.title ?? eventData.name ?? "";
+        const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
+        const eventPoster: string = eventData.poster ?? "";
+
         const attendedEvents: string[] = userSnap.data()!.attendedEvents ?? [];
         if (attendedEvents.includes(eventId)) {
-            throw new HttpsError("already-exists", "You already have this event.", {code: "already-have"});
+            throw new HttpsError("already-exists", "You already have this event.", {
+                code: "already-have",
+                eventId,
+                eventTitle,
+                eventTitleCn,
+                eventPoster,
+            });
         }
 
         txn.update(codeRef, {usedCount: FieldValue.increment(1)});
@@ -446,12 +457,12 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
             performedBy: uid,
             performedByName: userSnap.data()?.displayName ?? "",
             eventId,
-            eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+            eventTitle: eventTitle || eventId,
             code,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
-        return {eventId};
+        return {eventId, eventTitle, eventTitleCn, eventPoster};
     });
 });
 
@@ -1447,7 +1458,7 @@ export const setUpcomingEventPublished = onCall({maxInstances: 10}, async (reque
             type: input.published ? "upcoming-event-publish" : "upcoming-event-unpublish",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: snap.data()?.name ?? eventId,
+            eventTitle: snap.data()?.title ?? snap.data()?.name ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
