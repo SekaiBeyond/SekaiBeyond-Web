@@ -1,7 +1,7 @@
-import { type FirebaseApp, initializeApp } from "firebase/app";
+import { type FirebaseApp, FirebaseError, initializeApp } from "firebase/app";
 import { type Auth, getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { type Firestore, getFirestore } from "firebase/firestore";
-import { type Functions, getFunctions as _getFunctions, httpsCallable } from "firebase/functions";
+import { type Functions, type FunctionsError, getFunctions as _getFunctions, httpsCallable } from "firebase/functions";
 
 const requiredEnvVars = [
     'VITE_FIREBASE_API_KEY',
@@ -243,6 +243,14 @@ export const callUploadAvatar = async (file: File): Promise<string> => {
         contentType: file.type,
     });
     return result.data.url;
+};
+
+export const functionsErrorCode = (err: unknown): string | null => {
+    if (err instanceof FirebaseError && "details" in err) {
+        const d = (err as FunctionsError).details as {code?: string} | undefined;
+        return d?.code ?? null;
+    }
+    return null;
 };
 
 const googleProvider = new GoogleAuthProvider();

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { FirebaseError } from 'firebase/app';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callClaimBadgeActivationCode } from '~/lib/firebase';
+import { callClaimBadgeActivationCode, functionsErrorCode } from '~/lib/firebase';
 import type { BadgeDef } from '~/lib/types';
 import { useModalEffects } from '~/lib/useModalEffects';
 
@@ -72,22 +71,28 @@ export const RedeemModal = () => {
             });
         } catch (err) {
             setState('error');
-            const code = err instanceof FirebaseError ? err.code : '';
-            const msg = err instanceof FirebaseError ? err.message : '';
-            if (msg.includes('rate-limited')) {
-                setError(isEnglish ? 'Too many attempts. Please wait a moment.' : '尝试次数过多，请稍后再试。');
-            } else if (msg.includes('not-active-yet')) {
-                setError(isEnglish ? 'This code is not active yet.' : '此激活码尚未激活。');
-            } else if (msg.includes('expired')) {
-                setError(isEnglish ? 'This code has expired.' : '此激活码已过期。');
-            } else if (msg.includes('max-uses')) {
-                setError(isEnglish ? 'This code has reached its maximum uses.' : '此激活码已达到最大使用次数。');
-            } else if (code === 'functions/already-exists' || msg.includes('already-have')) {
-                setError(isEnglish ? 'You already have this badge.' : '您已拥有此徽章。');
-            } else if (code === 'functions/not-found' || code === 'functions/invalid-argument' || msg.includes('invalid') || msg.includes('inactive')) {
-                setError(isEnglish ? 'Invalid or deactivated code.' : '激活码无效或已被停用。');
-            } else {
-                setError(isEnglish ? 'Something went wrong. Please try again.' : '出错了，请重试。');
+            switch (functionsErrorCode(err)) {
+                case 'rate-limited':
+                    setError(isEnglish ? 'Too many attempts. Please wait a moment.' : '尝试次数过多，请稍后再试。');
+                    break;
+                case 'not-active-yet':
+                    setError(isEnglish ? 'This code is not active yet.' : '此激活码尚未激活。');
+                    break;
+                case 'expired':
+                    setError(isEnglish ? 'This code has expired.' : '此激活码已过期。');
+                    break;
+                case 'max-uses':
+                    setError(isEnglish ? 'This code has reached its maximum uses.' : '此激活码已达到最大使用次数。');
+                    break;
+                case 'already-have':
+                    setError(isEnglish ? 'You already have this badge.' : '您已拥有此徽章。');
+                    break;
+                case 'invalid':
+                case 'inactive':
+                    setError(isEnglish ? 'Invalid or deactivated code.' : '激活码无效或已被停用。');
+                    break;
+                default:
+                    setError(isEnglish ? 'Something went wrong. Please try again.' : '出错了，请重试。');
             }
         } finally {
             submittingRef.current = false;

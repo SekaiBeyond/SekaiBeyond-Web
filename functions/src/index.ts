@@ -47,7 +47,7 @@ async function checkRateLimit(uid: string): Promise<void> {
         }
 
         if (data.count >= RATE_LIMIT_MAX) {
-            throw new HttpsError("resource-exhausted", "rate-limited");
+            throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {code: "rate-limited"});
         }
 
         txn.update(ref, {count: FieldValue.increment(1)});
@@ -100,20 +100,22 @@ function validateCodeInTransaction(data: {
     usedCount?: number;
     maxUses?: number;
 }): void {
-    if (!data.active) throw new HttpsError("failed-precondition", "inactive");
+    if (!data.active) {
+        throw new HttpsError("failed-precondition", "This code is inactive.", {code: "inactive"});
+    }
 
     const now = new Date();
     if (data.activeFrom && new Date(data.activeFrom) > now) {
-        throw new HttpsError("failed-precondition", "not-active-yet");
+        throw new HttpsError("failed-precondition", "This code is not active yet.", {code: "not-active-yet"});
     }
     if (data.activeUntil && new Date(data.activeUntil) < now) {
-        throw new HttpsError("failed-precondition", "expired");
+        throw new HttpsError("failed-precondition", "This code has expired.", {code: "expired"});
     }
 
     const usedCount = data.usedCount ?? 0;
     const maxUses = data.maxUses ?? 0;
     if (maxUses > 0 && usedCount >= maxUses) {
-        throw new HttpsError("resource-exhausted", "max-uses");
+        throw new HttpsError("resource-exhausted", "This code has reached its maximum uses.", {code: "max-uses"});
     }
 }
 
@@ -404,7 +406,7 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
 
     const code = (request.data as {code?: string})?.code?.trim().toUpperCase();
     if (!code || !/^[A-Z0-9]{6,20}$/.test(code)) {
-        throw new HttpsError("invalid-argument", "invalid");
+        throw new HttpsError("invalid-argument", "Invalid or deactivated code.", {code: "invalid"});
     }
 
     const codeRef = db.collection("claimCodes").doc(code);
@@ -412,24 +414,24 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
 
     return db.runTransaction(async (txn) => {
         const freshCode = await txn.get(codeRef);
-        if (!freshCode.exists) throw new HttpsError("not-found", "invalid");
+        if (!freshCode.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
         const data = freshCode.data()!;
         validateCodeInTransaction(data);
 
         const eventId: string = data.eventId;
-        if (!eventId) throw new HttpsError("not-found", "invalid");
+        if (!eventId) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
 
         const [eventSnap, userSnap] = await Promise.all([
             txn.get(db.collection("pastEvents").doc(eventId)),
             txn.get(userRef),
         ]);
         // Forces retry if the event is concurrently deleted mid-claim
-        if (!eventSnap.exists) throw new HttpsError("not-found", "invalid");
-        if (!userSnap.exists) throw new HttpsError("not-found", "invalid");
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        if (!userSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
 
         const attendedEvents: string[] = userSnap.data()!.attendedEvents ?? [];
         if (attendedEvents.includes(eventId)) {
-            throw new HttpsError("already-exists", "already-have");
+            throw new HttpsError("already-exists", "You already have this event.", {code: "already-have"});
         }
 
         txn.update(codeRef, {usedCount: FieldValue.increment(1)});
@@ -458,7 +460,7 @@ export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (reques
 
     const code = (request.data as {code?: string})?.code?.trim().toUpperCase();
     if (!code || !/^[A-Z0-9]{6,20}$/.test(code)) {
-        throw new HttpsError("invalid-argument", "invalid");
+        throw new HttpsError("invalid-argument", "Invalid or deactivated code.", {code: "invalid"});
     }
 
     const codeRef = db.collection("badgeActivationCodes").doc(code);
@@ -466,24 +468,24 @@ export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (reques
 
     return db.runTransaction(async (txn) => {
         const freshCode = await txn.get(codeRef);
-        if (!freshCode.exists) throw new HttpsError("not-found", "invalid");
+        if (!freshCode.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
         const data = freshCode.data()!;
         validateCodeInTransaction(data);
 
         const badgeId: string = data.badgeId;
-        if (!badgeId) throw new HttpsError("not-found", "invalid");
+        if (!badgeId) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
 
         const [badgeSnap, userSnap] = await Promise.all([
             txn.get(db.collection("badges").doc(badgeId)),
             txn.get(userRef),
         ]);
-        if (!badgeSnap.exists) throw new HttpsError("not-found", "invalid");
-        if (!userSnap.exists) throw new HttpsError("not-found", "invalid");
+        if (!badgeSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        if (!userSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
         const badgeData = badgeSnap.data()!;
 
         const userBadges: string[] = userSnap.data()!.badges ?? [];
         if (userBadges.includes(badgeId)) {
-            throw new HttpsError("already-exists", "already-have");
+            throw new HttpsError("already-exists", "You already have this badge.", {code: "already-have"});
         }
 
         txn.update(codeRef, {usedCount: FieldValue.increment(1)});

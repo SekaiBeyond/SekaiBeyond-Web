@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { FirebaseError } from 'firebase/app';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callClaimEventCode } from '~/lib/firebase';
+import { callClaimEventCode, functionsErrorCode } from '~/lib/firebase';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
 
@@ -56,13 +55,26 @@ export const ClaimPage = () => {
         };
 
         claimEvent().catch((err) => {
-            const msg = err instanceof FirebaseError ? err.message : '';
-            if (msg.includes('not-active-yet')) setState('not-active-yet');
-            else if (msg.includes('expired')) setState('expired');
-            else if (msg.includes('max-uses')) setState('max-uses');
-            else if (msg.includes('already-have')) setState('already-have');
-            else if (msg.includes('invalid') || msg.includes('inactive')) setState('invalid');
-            else setState('error');
+            switch (functionsErrorCode(err)) {
+                case 'not-active-yet':
+                    setState('not-active-yet');
+                    break;
+                case 'expired':
+                    setState('expired');
+                    break;
+                case 'max-uses':
+                    setState('max-uses');
+                    break;
+                case 'already-have':
+                    setState('already-have');
+                    break;
+                case 'invalid':
+                case 'inactive':
+                    setState('invalid');
+                    break;
+                default:
+                    setState('error');
+            }
         });
     }, [code, user, profile, authLoading, retryCount]);
 
