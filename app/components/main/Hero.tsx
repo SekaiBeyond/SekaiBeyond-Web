@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
-import { FOUNDED_YEAR } from "~/constants";
+import { FOUNDED_DATE } from "~/constants";
 
 const generateBubbleStyles = () =>
     Array.from({length: 6}, () => ({
@@ -10,6 +10,14 @@ const generateBubbleStyles = () =>
         top: Math.random() * 100 + '%',
         animationDelay: Math.random() * 5 + 's'
     }));
+
+const yearsSince = (from: Date) => {
+    const now = new Date();
+    let years = now.getFullYear() - from.getFullYear();
+    const m = now.getMonth() - from.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < from.getDate())) years--;
+    return years;
+};
 
 export const Hero = () => {
     const {isEnglish} = useLanguage();
@@ -64,7 +72,7 @@ export const Hero = () => {
                         <div className="stat-label">{isEnglish ? "Events Per Year" : "年度活动"}</div>
                     </div>
                     <div className="stat-item">
-                        <div className="stat-number">{new Date().getFullYear() - FOUNDED_YEAR + 1}</div>
+                        <div className="stat-number">{yearsSince(FOUNDED_DATE)}</div>
                         <div className="stat-label">{isEnglish ? "Years Active" : "成立年数"}</div>
                     </div>
                     <div className="stat-item">

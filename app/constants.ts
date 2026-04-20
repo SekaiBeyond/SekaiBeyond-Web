@@ -1,4 +1,4 @@
-export const FOUNDED_YEAR = 2025; // Club founded 2024-12-05; first full year = 2025
+export const FOUNDED_DATE = new Date('2024-12-05T00:00:00Z');
 
 const RSO_EMAIL: string = "sekaibeyond@outlook.com"
 
