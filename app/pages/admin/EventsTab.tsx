@@ -40,7 +40,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [editingEvent, setEditingEvent] = useState<PastEvent | null>(null);
     const [eventForm, setEventForm] = useState({
         title: '', titleCn: '', tagId: '', date: '',
-        location: '', description: '', descriptionCn: '', icon: '',
+        location: '', locationCn: '',
+        description: '', descriptionCn: '', icon: '',
     });
     const [savingEvent, setSavingEvent] = useState(false);
     const [eventImage, setEventImage] = useState<File | null>(null);
@@ -63,7 +64,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const resetEventForm = () => {
         setEventForm({
             title: '', titleCn: '', tagId: '', date: '',
-            location: '', description: '', descriptionCn: '', icon: '',
+            location: '', locationCn: '',
+            description: '', descriptionCn: '', icon: '',
         });
         setEventImage(null);
         if (eventImagePreview?.startsWith('blob:')) URL.revokeObjectURL(eventImagePreview);
@@ -83,7 +85,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             : event.date;
         setEventForm({
             title: event.title, titleCn: event.titleCn, tagId: event.tagId,
-            date: normalizedDate, location: event.location,
+            date: normalizedDate,
+            location: event.location, locationCn: event.locationCn,
             description: event.description, descriptionCn: event.descriptionCn, icon: event.icon,
         });
         setEditingEvent(event);
@@ -120,6 +123,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 tagId: eventForm.tagId,
                 date: eventForm.date,
                 location: eventForm.location,
+                locationCn: eventForm.locationCn,
                 description: eventForm.description,
                 descriptionCn: eventForm.descriptionCn,
                 icon: iconUrl,
@@ -235,15 +239,14 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                         className="admin-search-input"
                                     />
                                 </label>
-                                <label>
-                                    <span>{isEnglish ? 'Location' : '地点'}</span>
-                                    <input
-                                        value={eventForm.location}
-                                        onChange={e => setEventForm(f => ({...f, location: e.target.value}))}
-                                        className="admin-search-input"
-                                        placeholder={isEnglish ? 'Event location' : '活动地点'}
-                                    />
-                                </label>
+                                <BilingualFormField
+                                    label="Location" labelCn="地点"
+                                    value={eventForm.location} valueCn={eventForm.locationCn}
+                                    onChange={v => setEventForm(f => ({...f, location: v}))}
+                                    onChangeCn={v => setEventForm(f => ({...f, locationCn: v}))}
+                                    placeholder={isEnglish ? 'Event location' : '活动地点'}
+                                    placeholderCn={isEnglish ? 'Location in Chinese' : '中文地点'}
+                                />
                                 <ImageUploadField
                                     label="Event Image" labelCn="活动图片"
                                     preview={eventImagePreview}
@@ -338,7 +341,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                             return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
                                         })()}</span>
                                         <span>{managedEvt.date}</span>
-                                        <span>{managedEvt.location}</span>
+                                        <span>{isEnglish ? managedEvt.location : (managedEvt.locationCn || managedEvt.location)}</span>
                                     </p>
                                 </div>
                             </div>

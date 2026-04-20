@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { type UpcomingEvent as UpcomingEventType, useUpcomingEvents } from "~/lib/upcomingEvents";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
@@ -136,11 +136,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
 
 export const UpcomingEvent = () => {
     const {isEnglish} = useLanguage();
-    const {upcomingEvents: allEvents} = useUpcomingEvents();
-    const activeEvents = useMemo(
-        () => allEvents.filter(e => e.endAt > new Date()),
-        [allEvents]
-    );
+    const {activeEvents} = useUpcomingEvents();
     const [selectedPoster, setSelectedPoster] = useState<string | null>(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isTransitioning, setIsTransitioning] = useState(false);

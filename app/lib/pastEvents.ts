@@ -9,6 +9,7 @@ export interface PastEvent {
     titleCn: string;
     date: string;
     location: string;
+    locationCn: string;
     description: string;
     descriptionCn: string;
     icon: string;
@@ -38,6 +39,7 @@ async function fetchPastEvents(force = false): Promise<PastEvent[]> {
                 titleCn: data.titleCn ?? '',
                 date: data.date ?? '',
                 location: data.location ?? '',
+                locationCn: data.locationCn ?? '',
                 description: data.description ?? '',
                 descriptionCn: data.descriptionCn ?? '',
                 icon: data.icon ?? '',

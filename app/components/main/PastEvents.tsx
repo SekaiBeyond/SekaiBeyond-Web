@@ -17,7 +17,7 @@ export const PastEvents = () => {
     const displayedEvents = showAll ? publishedEvents : publishedEvents.slice(0, 6);
 
     return (
-        <section id="events" className="section">
+        <section id="events" className="section" hidden={publishedEvents.length === 0}>
             <div className="section-header">
                 <h2 className="section-title">{isEnglish ? "Past Events" : "往期活动"}</h2>
                 <p className="section-subtitle">{isEnglish ? "Check out the amazing events we've hosted!" : "查看我们举办过的精彩活动！"}</p>
@@ -55,28 +55,30 @@ export const PastEvents = () => {
                             </div>
                             <div className="event-date">
                                 <span>📍</span>
-                                <span>{event.location}</span>
+                                <span>{(isEnglish ? event.location : (event.locationCn || event.location))}</span>
                             </div>
                             <p className="event-description">
-                                {isEnglish ? event.description : event.descriptionCn}<br/>
+                                {isEnglish ? event.description : event.descriptionCn}
                             </p>
                         </div>
                     </div>
                 ))}
             </div>
-            <div className="show-more-container">
-                <button
-                    onClick={() => setShowAll(!showAll)}
-                    className="show-more-btn"
-                >
-                    <span className="show-more-text">
-                        {showAll
-                            ? (isEnglish ? "Show Less" : "收起")
-                            : (isEnglish ? "Show More Events" : "查看更多活动")
-                        }
-                    </span>
-                </button>
-            </div>
+            {publishedEvents.length > 6 && (
+                <div className="show-more-container">
+                    <button
+                        onClick={() => setShowAll(!showAll)}
+                        className="show-more-btn"
+                    >
+                        <span className="show-more-text">
+                            {showAll
+                                ? (isEnglish ? "Show Less" : "收起")
+                                : (isEnglish ? "Show More Events" : "查看更多活动")
+                            }
+                        </span>
+                    </button>
+                </div>
+            )}
 
             {/* Event Image Modal */}
             {selectedImage && (

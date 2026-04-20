@@ -1272,12 +1272,13 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const tagId = validateStr(input.tagId, "tagId", 128);
     const date = validateStr(input.date, "date", 50, true);
     const location = validateStr(input.location, "location", 200);
+    const locationCn = validateStr(input.locationCn, "locationCn", 200);
     const description = validateStr(input.description, "description", 2000);
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const icon = validateStr(input.icon, "icon", 500);
     validateStorageImageUrl(icon, "icon");
 
-    const data = {title, titleCn, tagId, date, location, description, descriptionCn, icon};
+    const data = {title, titleCn, tagId, date, location, locationCn, description, descriptionCn, icon};
     const docId = eventId ?? db.collection("pastEvents").doc().id;
 
     const {result, oldIcon} = await adminTransaction(uid, async (txn, callerSnap) => {
@@ -1541,10 +1542,10 @@ export const cancelUpcomingEventDeletion = onCall({maxInstances: 10}, async (req
 
 /**
  * Firestore trigger fired when an upcoming event is deleted.
- * Always cascades claim-code cleanup (the event is gone either way).
- * Poster cleanup and the "deleted" record are only written for TTL-triggered
- * deletions; archiveUpcomingEvent reuses the poster on the new pastEvent and
- * writes its own "upcoming-event-archive" record.
+ * Always cascades claim-code and poster cleanup — both archive and TTL delete
+ * fully remove the upcoming event. The "upcoming-event-deleted" audit record is
+ * skipped when an archive happened (a pastEvents doc with the same ID exists),
+ * because archiveUpcomingEvent writes its own "upcoming-event-archive" record.
  */
 export const onUpcomingEventDeleted = onDocumentDeleted(
     {document: "upcomingEvents/{eventId}", maxInstances: 10},
@@ -1552,8 +1553,6 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         const data = event.data?.data();
         const eventId = event.params.eventId;
         if (!data) return;
-
-        const isTTLDelete = !!data.deleteAt;
 
         try {
             const codesSnap = await db.collection("claimCodes")
@@ -1566,10 +1565,19 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: cascade failed for ${eventId}`, err);
         }
 
-        if (!isTTLDelete) return;
-
         await deleteStorageFile(data.poster ?? "", ["upcoming-events/"])
             .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId}`));
+
+        // Skip the deleted-record write if this delete was the tail end of an
+        // archive — archiveUpcomingEvent already wrote an "upcoming-event-archive"
+        // record, and the past event reuses this ID.
+        let archived = false;
+        try {
+            archived = (await db.collection("pastEvents").doc(eventId).get()).exists;
+        } catch (err) {
+            console.error(`onUpcomingEventDeleted: archive check failed for ${eventId}`, err);
+        }
+        if (archived) return;
 
         try {
             await db.collection("records").add({
@@ -1587,7 +1595,9 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
 
 /**
  * Archive an upcoming event to past events (admin only).
- * Creates a past event, deletes the upcoming event, and creates an audit record.
+ * Creates a past-event template (text fields only — no icon, since the upcoming
+ * event's poster is hard-deleted by onUpcomingEventDeleted), then deletes the
+ * upcoming event and writes an audit record. Admin uploads a new icon later.
  */
 export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -1621,9 +1631,10 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             titleCn: eventData.titleCn ?? eventData.nameCn ?? "",
             date: dateStr,
             location: eventData.location ?? "",
+            locationCn: eventData.locationCn ?? "",
             description: eventData.description ?? "",
             descriptionCn: eventData.descriptionCn ?? "",
-            icon: eventData.poster ?? "",
+            icon: "",
             tagId,
             published: false,
         });

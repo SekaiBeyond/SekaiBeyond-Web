@@ -124,7 +124,8 @@ export const callSetUserTitle = (data: {targetUid: string; title?: string}) =>
 export const callSavePastEvent = (data: {
     eventId?: string;
     title: string; titleCn: string; tagId: string; date: string;
-    location: string; description: string; descriptionCn: string; icon: string;
+    location: string; locationCn: string;
+    description: string; descriptionCn: string; icon: string;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'savePastEvent')(data);
 
 export const callSetPastEventPublished = (data: {eventId: string; published: boolean}) =>
