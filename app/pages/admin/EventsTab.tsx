@@ -6,6 +6,7 @@ import {
     callSavePastEvent,
     callSetPastEventPublished,
     callUploadAdminImage,
+    functionsErrorCode,
 } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
@@ -173,8 +174,14 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             await callRequestEventDeletion({eventId: event.id});
             await refreshEvents();
             showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'warning');
-        } catch {
-            showToast(isEnglish ? 'Failed to schedule deletion.' : '计划删除失败。', 'error');
+        } catch (err) {
+            const code = functionsErrorCode(err);
+            const msg = code === 'deletion-already-pending'
+                ? (isEnglish
+                    ? 'Deletion already pending — cancel it first.'
+                    : '已在计划删除中，请先取消。')
+                : (isEnglish ? 'Failed to schedule deletion.' : '计划删除失败。');
+            showToast(msg, 'error');
         } finally {
             setDeletionBusyId(null);
         }
@@ -396,16 +403,15 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                         })} 前后执行。`}
                                 </p>
                             )}
+                            <h4 className="admin-badges-title admin-section-mb">
+                                {isEnglish ? 'Attendees' : '参加者'}
+                                {eventAttendees.length > 0 && (
+                                    <span className="admin-sub-tab-count">{eventAttendees.length}</span>
+                                )}
+                            </h4>
+                            <EventAttendeesList loading={searching} attendees={eventAttendees}/>
                         </>
                     )}
-
-                    <h4 className="admin-badges-title admin-section-mb">
-                        {isEnglish ? 'Attendees' : '参加者'}
-                        {eventAttendees.length > 0 && (
-                            <span className="admin-sub-tab-count">{eventAttendees.length}</span>
-                        )}
-                    </h4>
-                    <EventAttendeesList loading={searching} attendees={eventAttendees}/>
                 </div>
             )}
         </div>

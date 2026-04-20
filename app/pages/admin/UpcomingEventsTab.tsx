@@ -11,6 +11,7 @@ import {
     callSetUpcomingEventPublished,
     callToggleClaimCodeActive,
     callUploadAdminImage,
+    functionsErrorCode,
     getFirebaseDb,
 } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
@@ -172,6 +173,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
 
     const selectEvent = async (eventId: string) => {
         setSelectedEvent(eventId);
+        setShowArchive(false);
+        setArchiveTagId('');
         setEventSubTab('codes');
         setEventCode(null);
         setEventAttendees([]);
@@ -282,8 +285,14 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             await callRequestUpcomingEventDeletion({eventId: event.id});
             await refreshEvents();
             showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'warning');
-        } catch {
-            showToast(isEnglish ? 'Failed to schedule deletion.' : '计划删除失败。', 'error');
+        } catch (err) {
+            const code = functionsErrorCode(err);
+            const msg = code === 'deletion-already-pending'
+                ? (isEnglish
+                    ? 'Deletion already pending — cancel it first.'
+                    : '已在计划删除中，请先取消。')
+                : (isEnglish ? 'Failed to schedule deletion.' : '计划删除失败。');
+            showToast(msg, 'error');
         } finally {
             setDeletionBusyId(null);
         }
@@ -530,7 +539,14 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 </>
             ) : (
                 <div className="admin-event-detail">
-                    <button className="admin-back-btn" onClick={() => setSelectedEvent(null)}>
+                    <button
+                        className="admin-back-btn"
+                        onClick={() => {
+                            setSelectedEvent(null);
+                            setShowArchive(false);
+                            setArchiveTagId('');
+                        }}
+                    >
                         &larr; {isEnglish ? 'All Upcoming Events' : '所有活动预告'}
                     </button>
 

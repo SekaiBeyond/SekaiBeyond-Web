@@ -14,6 +14,7 @@ import { GROUP_LABELS } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
+import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { ActivityRecord, BadgeDef, RecordType } from './types';
 
 const PAGE_SIZE = 20;
@@ -38,6 +39,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
 
 interface RecordsTabProps {
     pastEvents: PastEvent[];
+    upcomingEvents: UpcomingEvent[];
     badgeDefs: BadgeDef[];
     onLookupUser: (uid: string) => void;
     onSelectBadge: (badgeId: string) => void;
@@ -47,6 +49,7 @@ interface RecordsTabProps {
 
 export const RecordsTab = ({
                                pastEvents,
+                               upcomingEvents,
                                badgeDefs,
                                onLookupUser,
                                onSelectBadge,
@@ -169,7 +172,14 @@ export const RecordsTab = ({
     const clickableUpcomingEvent = (eventId: string | undefined, eventTitle?: string): ReactNode => {
         const title = eventTitle ?? eventId ?? '';
         if (!eventId) return <span>{title}</span>;
-        return <span className="record-clickable-name" onClick={() => onSelectUpcomingEvent(eventId)}>{title}</span>;
+        if (upcomingEvents.some(e => e.id === eventId)) {
+            return <span className="record-clickable-name"
+                         onClick={() => onSelectUpcomingEvent(eventId)}>{title}</span>;
+        }
+        if (pastEvents.some(e => e.id === eventId)) {
+            return <span className="record-clickable-name" onClick={() => onSelectEvent(eventId)}>{title}</span>;
+        }
+        return <span>{title}</span>;
     };
 
     const getRecordLabel = (r: ActivityRecord): ReactNode => {

@@ -1623,8 +1623,15 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         const eventData = eventSnap.data()!;
 
         const startDate: Date = eventData.startAt?.toDate?.() ?? new Date();
-        const pad = (n: number) => String(n).padStart(2, "0");
-        const dateStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
+        // Format in the club's local timezone (UW Seattle) so late-evening
+        // events don't roll over into the next UTC day. The stored date string
+        // is later displayed with timeZone: 'UTC', matching this day exactly.
+        const dateStr = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "America/Los_Angeles",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+        }).format(startDate);
 
         txn.set(newDocRef, {
             title: eventData.title ?? eventData.name ?? "",

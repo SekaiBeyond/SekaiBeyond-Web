@@ -64,6 +64,9 @@ export const AdminPage = () => {
         if (tab === 'events' && event) {
             eventsTabRef.current?.selectManagedEvent(event);
         }
+        if (tab === 'upcoming' && event) {
+            upcomingTabRef.current?.selectEvent(event);
+        }
         urlParamsHandled.current = true;
     }, [loading, user, profile, searchParams]);
 
@@ -277,6 +280,7 @@ export const AdminPage = () => {
                 {activeTab === 'records' && (
                     <RecordsTab
                         pastEvents={pastEvents}
+                        upcomingEvents={upcomingEvents}
                         badgeDefs={badgeDefs}
                         onLookupUser={handleLookupUser}
                         onSelectBadge={handleSelectBadge}
