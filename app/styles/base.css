@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;700&family=Bubblegum+Sans&family=Fredoka:wght@700&display=swap');
+
+:root {
+    /* Colors */
+    --color-primary: #ff6b9d;
+    --color-accent: #ff8e53;
+    --color-yellow: #feca57;
+    --color-text: #4a5160;
+    --color-text-muted: #7a8190;
+    --color-text-light: #a0a8b8;
+    --color-text-body: #7a7a7a;
+    --color-text-secondary: #8a8a8a;
+    --color-error: #e05555;
+    --color-success: #4ecb71;
+    --color-purple: #9b59b6;
+    --color-link: #6c63ff;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, #ff6b9d, #ff8e53);
+    --gradient-title: linear-gradient(135deg, #ff6b9d, #ff8e53, #feca57);
+    --gradient-cta: linear-gradient(135deg, #ff6b9d, #feca57);
+    --gradient-logo: linear-gradient(135deg, #ff6b9d, #feca57, #ff6b9d);
+
+    /* Shadows */
+    --shadow-card: 0 8px 25px rgba(255, 150, 200, 0.15);
+    --shadow-primary: 0 8px 25px rgba(255, 107, 157, 0.3);
+    --shadow-soft: 0 4px 20px rgba(255, 150, 200, 0.1);
+    --shadow-hover: 0 15px 35px rgba(255, 150, 200, 0.25);
+
+    /* Fonts */
+    --font-body: 'Quicksand', 'Noto Sans SC', sans-serif;
+    --font-display: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-body);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)),
+    linear-gradient(135deg, #faf6e7 0%, #ffecdb 25%, #ffed92 50%, #ffbbd7 75%, #ace9ce 100%) fixed;
+    background-blend-mode: screen;
+    color: var(--color-text);
+    overflow-x: hidden;
+    min-height: 100vh;
+    scroll-behavior: smooth;
+}

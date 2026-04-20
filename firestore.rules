@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function callerGroup() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.group;
+    }
+
+    function isCoreStaffOrAbove() {
+      return callerGroup() in ['core-staff', 'president'];
+    }
+
+    match /users/{userId} {
+      // Users can read their own profile; admins can read any profile.
+      // Other users' public data is served via the getPublicProfile Cloud Function
+      // to avoid exposing email to all authenticated users.
+      allow read: if request.auth != null
+                  && (request.auth.uid == userId || isCoreStaffOrAbove());
+
+      // All user mutations (displayName, photoURL, badges, attendedEvents, group) via Cloud Functions
+    }
+
+    // Activity records — core-staff+ can read only; all writes via Cloud Functions
+    match /records/{recordId} {
+      allow read: if request.auth != null
+                  && isCoreStaffOrAbove();
+    }
+
+    // Event/badge claim codes — core-staff+ can read only; all mutations via Cloud Functions
+    match /claimCodes/{codeId} {
+      allow read: if request.auth != null
+                  && isCoreStaffOrAbove();
+    }
+
+    // Achievement badge definitions — readable by any logged-in user; all writes via Cloud Functions
+    match /badges/{badgeId} {
+      allow read: if request.auth != null;
+    }
+
+    // Badge activation codes — core-staff+ can read only; all mutations via Cloud Functions
+    match /badgeActivationCodes/{codeId} {
+      allow read: if request.auth != null
+                  && isCoreStaffOrAbove();
+    }
+
+    // Event labels — publicly readable; all writes via Cloud Functions
+    match /eventLabels/{labelId} {
+      allow read: if true;
+    }
+
+    // Past events — publicly readable; all writes via Cloud Functions
+    match /pastEvents/{eventId} {
+      allow read: if true;
+    }
+
+    // Rate-limit counters — server-only, no client access
+    match /rateLimits/{uid} {
+      allow read, write: if false;
+    }
+
+    // Upcoming events — public can read only published ones; staff can read all.
+    // All writes via Cloud Functions.
+    match /upcomingEvents/{eventId} {
+      allow read: if resource.data.published == true
+                  || (request.auth != null && isCoreStaffOrAbove());
+    }
+
+    // Deny all access to unlisted paths (safety net — Firestore denies by default,
+    // but an explicit rule prevents accidental exposure if new paths are added)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

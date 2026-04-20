@@ -1,4 +1,3 @@
-import React from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { BILIBILI_VIDEO, LINKS } from "~/constants";
 
@@ -21,16 +20,17 @@ export const Video = () => {
             <div className="video-content">
                 <div className="video-wrapper">
                     <iframe
-                        src={`//player.bilibili.com/player.html?isOutside=true&aid=${BILIBILI_VIDEO.aid}&bvid=${BILIBILI_VIDEO.bvid}&cid=${BILIBILI_VIDEO.cid}&p=${BILIBILI_VIDEO.p}&autoplay=0`}
+                        src={`https://player.bilibili.com/player.html?isOutside=true&aid=${BILIBILI_VIDEO.aid}&bvid=${BILIBILI_VIDEO.bvid}&cid=${BILIBILI_VIDEO.cid}&p=${BILIBILI_VIDEO.p}&autoplay=0`}
                         allowFullScreen={true}
                         title={isEnglish ? "Sekai Beyond Video" : "彼世界视频"}
                         autoFocus={false}
+                        sandbox="allow-scripts allow-same-origin allow-presentation"
                     />
                 </div>
 
                 <div className="video-info">
                     <div className="video-badge">
-                        <span className="badge-icon">🎬</span>
+                        <span className="video-badge-icon">🎬</span>
                         <span>{isEnglish ? "Featured Video" : "精选视频"}</span>
                     </div>
                     <p className="video-caption">

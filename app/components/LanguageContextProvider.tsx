@@ -1,6 +1,6 @@
-import React, { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, type FC, type ReactNode, useContext, useEffect, useState } from 'react';
 
-export type Language = 'en' | 'zh';
+type Language = 'en' | 'zh';
 
 interface LanguageContextType {
     currentLanguage: Language;
@@ -23,7 +23,7 @@ interface LanguageProviderProps {
     children: ReactNode;
 }
 
-export const LanguageProvider: React.FC<LanguageProviderProps> = ({children}) => {
+export const LanguageProvider: FC<LanguageProviderProps> = ({children}) => {
     const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
 
     useEffect(() => {
@@ -44,6 +44,10 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({children}) =>
         setCurrentLanguage(lang);
         localStorage.setItem('language', lang);
     };
+
+    useEffect(() => {
+        document.documentElement.lang = currentLanguage;
+    }, [currentLanguage]);
 
     const value: LanguageContextType = {
         currentLanguage,

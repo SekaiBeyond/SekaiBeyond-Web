@@ -1,10 +1,13 @@
-import React, { useState } from "react";
+import { useRef, useState } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
+import { useModalEffects } from "~/lib/useModalEffects";
 
 export const About = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isHovering, setIsHovering] = useState(false);
     const {isEnglish} = useLanguage();
+    const modalRef = useRef<HTMLDivElement>(null);
+    useModalEffects(isModalOpen, modalRef);
 
     return (
         <section id="about" className="about-section section">
@@ -16,7 +19,7 @@ export const About = () => {
             </div>
             <div className="about-content">
                 <div className="about-text">
-                    <h3>{isEnglish ? "A diverse anime club created as a space for students who love amines to freely explore" : "专为热爱二次元文化的学生们打造自由的探险之地"}</h3>
+                    <h3>{isEnglish ? "A diverse anime club created as a space for students who love anime to freely explore" : "专为热爱二次元文化的学生们打造自由的探险之地"}</h3>
                     {isEnglish ? (<p>
                             Here, we support you to become any version of yourself—whether you're a passionate
                             cosplayer, a creative artist, or an energetic dancer.<br/>
@@ -59,11 +62,13 @@ export const About = () => {
                     </div>
                 </div>
                 <div className="about-image">
-                    <div
+                    <button
+                        type="button"
                         className={`image-container ${isHovering ? 'hovering' : ''}`}
                         onMouseEnter={() => setIsHovering(true)}
                         onMouseLeave={() => setIsHovering(false)}
                         onClick={() => setIsModalOpen(true)}
+                        aria-label={isEnglish ? "Learn about Mika" : "了解米卡"}
                     >
                         <img
                             src="/images/mika.png"
@@ -71,21 +76,22 @@ export const About = () => {
                             className="about-main-image"
                         />
                         {isHovering && (
-                            <div className="hover-prompt">
+                            <span className="hover-prompt">
                                 <span className="click-hint">{isEnglish ? "Learn about Mika" : "了解米卡"}</span>
-                            </div>
+                            </span>
                         )}
-                    </div>
+                    </button>
                 </div>
             </div>
 
             {/* Modal */}
             {isModalOpen && (
-                <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+                <div ref={modalRef} className="modal-overlay" onClick={() => setIsModalOpen(false)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <button
                             className="modal-close"
                             onClick={() => setIsModalOpen(false)}
+                            aria-label={isEnglish ? "Close" : "关闭"}
                         >
                             ×
                         </button>

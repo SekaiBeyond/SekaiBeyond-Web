@@ -12,7 +12,7 @@
   <a href="https://sekaibeyond.com">Website</a> •
   <a href="#features">Features</a> •
   <a href="#getting-started">Getting Started</a> •
-  <a href="#deployment">Deployment</a> •
+  <a href="DEPLOY.md">Deployment</a> •
   <a href="#contributing">Contributing</a>
 </p>
 
@@ -24,28 +24,20 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
 ## Tech Stack
 
-| Technology | Purpose |
-|------------|---------|
-| [React](https://react.dev/) | UI Framework |
-| [React Router](https://reactrouter.com/) | Framework & SSR |
-| [TypeScript](https://www.typescriptlang.org/) | Type Safety |
-| [TailwindCSS](https://tailwindcss.com/) | Styling |
-| [Vite](https://vitejs.dev/) | Build Tool |
-
-## Features
-
-- 🚀 **Server-Side Rendering (SSR)** — Fast initial page loads and SEO optimization
-- ⚡ **Hot Module Replacement (HMR)** — Instant updates during development
-- 📦 **Optimized Builds** — Asset bundling and optimization for production
-- 🔄 **Data Loading & Mutations** — Efficient data handling with React Router
-- 🔒 **TypeScript** — Full type safety out of the box
-- 🎨 **TailwindCSS** — Utility-first CSS for rapid UI development
+| Technology                                    | Purpose                        |
+|-----------------------------------------------|--------------------------------|
+| [React](https://react.dev/)                   | UI Framework                   |
+| [React Router](https://reactrouter.com/)      | Framework & Routing            |
+| [TypeScript](https://www.typescriptlang.org/) | Type Safety                    |
+| [TailwindCSS](https://tailwindcss.com/)       | Styling                        |
+| [Vite](https://vitejs.dev/)                   | Build Tool                     |
+| [Firebase](https://firebase.google.com/)      | Auth, Firestore, Cloud Storage, Cloud Functions |
 
 ## Getting Started
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18 or higher recommended)
+- [Node.js](https://nodejs.org/) (v24 or higher recommended)
 - npm, yarn, pnpm, or bun
 
 ### Installation
@@ -75,33 +67,49 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server with HMR |
-| `npm run build` | Build for production |
-| `npm run start` | Run production server |
-| `npm run typecheck` | Run TypeScript compiler check |
-| `npm run deploy` | Build and deploy to GitHub Pages |
+| Command                | Description                                                       |
+|------------------------|-------------------------------------------------------------------|
+| `npm run dev`          | Start development server with HMR                                 |
+| `npm run build`        | Build for production                                              |
+| `npm run start`        | Run production server                                             |
+| `npm run typecheck`    | Run TypeScript compiler check                                     |
+| `npm run deploy`       | Build and deploy to Firebase                                      |
+| `npm run deploy:rules` | Deploy only functions, Firestore rules/indexes, and Storage rules |
+| `npm run deploy:ttl`   | Apply Firestore TTL policies via the gcloud CLI                   |
 
 ## Project Structure
 
 ```
 SekaiBeyond-Web/
-├── app/                    # Application source code
-│   ├── components/         # Reusable UI components
-│   ├── pages/              # Page components
-│   ├── routes/             # Route definitions
-│   ├── app.css             # Global styles
-│   ├── constants.ts        # Application constants
-│   ├── root.tsx            # Root component
-│   └── routes.ts           # Route configuration
-├── public/                 # Static assets
-│   └── images/             # Image assets
+├── app/                       # Application source code
+│   ├── components/            # Reusable UI components
+│   │   └── main/              # Main page sections
+│   ├── lib/                   # Firebase client & data hooks
+│   ├── pages/                 # Page components (admin, profile, claim, etc.)
+│   ├── routes/                # Route definitions
+│   ├── styles/                # Shared style modules
+│   ├── app.css                # Global styles
+│   ├── constants.ts           # Links, officers, and shared constants
+│   ├── root.tsx               # Root component
+│   └── routes.ts              # Route configuration
+├── functions/                 # Cloud Functions (callable endpoints & Firestore triggers)
+├── public/                    # Static assets
+│   └── images/                # Image assets & event posters
+├── scripts/                   # Build & deploy helpers (e.g. CSP hash updates)
+├── .env.example               # Environment variable template
+├── firebase.json              # Firebase project configuration
+├── firestore.indexes.json     # Composite index definitions
+├── firestore.rules            # Firestore security rules
+├── storage.rules              # Cloud Storage security rules
 ├── package.json
 ├── tsconfig.json
-├── react-router.config.ts  # React Router configuration
+├── react-router.config.ts     # React Router configuration
 └── vite.config.ts
 ```
+
+## Deployment
+
+See [DEPLOY.md](DEPLOY.md) for full deployment instructions, including Firebase setup, GitHub secrets, user groups, and the deployment workflow.
 
 ## Contributing
 
@@ -112,64 +120,6 @@ We welcome contributions from the community! Here's how you can help:
 3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
 4. **Push** to the branch (`git push origin feature/amazing-feature`)
 5. **Open** a Pull Request
-
-### Adding Upcoming Events
-
-Upcoming events are managed in `app/constants.ts` via the `UPCOMING_EVENTS` array. Each event is automatically hidden after its `END_AT` time passes. To add a new event:
-
-1. Place the event poster image in `public/images/`
-2. Add a new entry to the `UPCOMING_EVENTS` array in `app/constants.ts`:
-
-```ts
-{
-    START_AT: new Date('2026-06-01T14:00:00'),
-    END_AT: new Date('2026-06-01T18:00:00'),
-    NAME: "Event Name",
-    NAME_CN: "活动名称",
-    DESCRIPTION: "English description of the event.",
-    DESCRIPTION_CN: "活动的中文描述。",
-    LOCATION: "Event Location",
-    LOCATION_CN: "活动地点",
-    POSTER: "/images/your_poster.png",
-    // Optional fields:
-    BUY_TICKET: "https://ticket-link.com",
-    LEARN_MORE: "https://more-info.com",
-    CUSTOM_BUTTON_TEXT: "Sign Up",
-    CUSTOM_BUTTON_TEXT_CN: "报名",
-    CUSTOM_BUTTON_LINK: "https://signup-link.com",
-    POSTER_CREDIT: "Artist Name",
-}
-```
-
-> **Note:** Events are automatically filtered out once `END_AT` has passed. A validation check ensures `END_AT` is always later than `START_AT`.
-
-### Adding Past Events
-
-Past events are managed in `app/constants.ts` via the `PAST_EVENTS` array. To add a new past event:
-
-1. Place the event image in `public/images/events/`
-2. Add a new entry to the **top** of the `PAST_EVENTS` array (most recent first):
-
-```ts
-{
-    badge: "Festival",       // Short category label in English (e.g. "Gaming", "Music", "Food", "Cosplay", "Vendor")
-    badgeCn: "节日",          // Category label in Chinese
-    title: "Event Name",
-    titleCn: "活动名称",
-    date: "2026-06-01",      // Format: YYYY-MM-DD
-    location: "Venue Name, University of Washington",
-    description: "English description of the event.",
-    descriptionCn: "活动的中文描述。",
-    icon: "/images/events/your_event_image.jpg",
-}
-```
-
-### Development Guidelines
-
-- Follow the existing code style
-- Write meaningful commit messages
-- Add tests for new features when applicable
-- Update documentation as needed
 
 ## License
 

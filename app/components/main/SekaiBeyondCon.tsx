@@ -22,13 +22,13 @@ export const SekaiBeyondCon = () => {
                 {SEKAI_BEYOND_CON.map((edition: ConEdition) => (
                     <div key={edition.year} className="convention-banner">
                         <div className="con-decorations">
-                            <span className="con-deco" style={{top: '10%', left: '5%', animationDelay: '0s'}}>🌸</span>
-                            <span className="con-deco" style={{top: '20%', left: '80%', animationDelay: '5s'}}>🎨</span>
-                            <span className="con-deco" style={{top: '70%', left: '10%', animationDelay: '10s'}}>🎤</span>
-                            <span className="con-deco" style={{top: '60%', left: '90%', animationDelay: '15s'}}>🎸</span>
+                            <span className="con-deco">🌸</span>
+                            <span className="con-deco">🎨</span>
+                            <span className="con-deco">🎤</span>
+                            <span className="con-deco">🎸</span>
                         </div>
 
-                        <div style={{position: 'relative', zIndex: 2}}>
+                        <div className="con-banner-inner">
                             <span className="convention-label">
                                 {new Date(edition.date).getUTCFullYear()} {isEnglish ? "Edition" : "年度"}
                             </span>
@@ -49,11 +49,18 @@ export const SekaiBeyondCon = () => {
                                 {edition.locationCn && !isEnglish ? edition.locationCn : edition.location}
                             </p>
 
-                            <div className="convention-poster" onClick={() => setSelectedImage(edition.image)}>
-                                <img
-                                    src={edition.image}
-                                    alt={isEnglish ? `Sekai Beyond Con ${edition.year}` : `彼世界漫展 ${edition.year}`}
-                                />
+                            <div className="convention-poster">
+                                <button
+                                    type="button"
+                                    className="convention-poster-btn"
+                                    onClick={() => setSelectedImage(edition.image)}
+                                    aria-label={isEnglish ? `View Sekai Beyond Con ${edition.year} poster` : `查看${edition.year}年彼世界漫展海报`}
+                                >
+                                    <img
+                                        src={edition.image}
+                                        alt={isEnglish ? `Sekai Beyond Con ${edition.year}` : `彼世界漫展 ${edition.year}`}
+                                    />
+                                </button>
                             </div>
 
                             <div className="convention-features">

@@ -1,32 +1,43 @@
-import React from "react";
+import { useMemo } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
+import { FOUNDED_DATE } from "~/constants";
+
+const generateBubbleStyles = () =>
+    Array.from({length: 6}, () => ({
+        width: Math.random() * 25 + 10 + 'em',
+        height: Math.random() * 25 + 10 + 'em',
+        left: Math.random() * 100 + '%',
+        top: Math.random() * 100 + '%',
+        animationDelay: Math.random() * 5 + 's'
+    }));
+
+const yearsSince = (from: Date) => {
+    const now = new Date();
+    let years = now.getFullYear() - from.getFullYear();
+    const m = now.getMonth() - from.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < from.getDate())) years--;
+    return years;
+};
 
 export const Hero = () => {
     const {isEnglish} = useLanguage();
+    const bubbleStyles = useMemo(generateBubbleStyles, []);
 
     return (
         <section id="home" className="hero">
             <div className="hero-decoration">
-                {[...Array(6)].map((_, i) => (
+                {bubbleStyles.map((style, i) => (
                     <div
                         key={i}
                         className="bubble"
-                        style={{
-                            width: Math.random() * 25 + 10 + 'em',
-                            height: Math.random() * 25 + 10 + 'em',
-                            left: Math.random() * 100 + '%',
-                            top: Math.random() * 100 + '%',
-                            animationDelay: Math.random() * 5 + 's'
-                        }}
+                        style={style}
                     />
                 ))}
             </div>
             <div className="hero-content">
                 <span
                     className="hero-badge">{isEnglish ? 'Registered Student Organization @ University of Washington' : '华盛顿大学的学生社团'}</span>
-                <div className="hero-title-wrapper">
-                    <h1 className="hero-title">{isEnglish ? "Welcome to Sekai Beyond!" : "欢迎来到彼世界!"}</h1>
-                </div>
+                <h1 className="hero-title">{isEnglish ? "Welcome to Sekai Beyond!" : "欢迎来到彼世界!"}</h1>
                 <p className="hero-subtitle">{isEnglish ? "A creative community for anime, gaming, cosplay, and creation." : '一个面向动漫、游戏、Cosplay 与开发的创作社区'}
                 </p>
                 <p className="hero-description">
@@ -61,7 +72,7 @@ export const Hero = () => {
                         <div className="stat-label">{isEnglish ? "Events Per Year" : "年度活动"}</div>
                     </div>
                     <div className="stat-item">
-                        <div className="stat-number">1</div>
+                        <div className="stat-number">{yearsSince(FOUNDED_DATE)}</div>
                         <div className="stat-label">{isEnglish ? "Years Active" : "成立年数"}</div>
                     </div>
                     <div className="stat-item">

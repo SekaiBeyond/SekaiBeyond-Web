@@ -1,0 +1,37 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /avatars/{userId} {
+      // Avatars are publicly readable (shown on public profile pages)
+      allow read: if true;
+
+      // All writes and deletes via Cloud Functions (uploadAvatar, deleteAvatar)
+      // which enforce: group != visitor, magic bytes validation, size limit,
+      // content type, and atomic photoURL update on the user doc
+    }
+
+    match /events/{imageId} {
+      // Event images are publicly readable (used on landing page)
+      allow read: if true;
+      // Writes only via Cloud Function (Admin SDK bypasses rules)
+    }
+
+    match /upcoming-events/{imageId} {
+      // Upcoming event posters are publicly readable (used on landing page)
+      allow read: if true;
+      // Writes only via Cloud Function (Admin SDK bypasses rules)
+    }
+
+    match /badges/{imageId} {
+      // Badge images are publicly readable (shown on profile pages)
+      allow read: if true;
+      // Writes only via Cloud Function (Admin SDK bypasses rules)
+    }
+
+    // Deny all access to unlisted paths (safety net — Firestore denies by default,
+    // but an explicit rule prevents accidental exposure if new paths are added)
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

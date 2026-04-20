@@ -1,0 +1,204 @@
+/* Navigation */
+.navbar {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    padding: 15px 40px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 2px 20px rgba(255, 150, 200, 0.15);
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.nav-container {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+}
+
+.nav-actions {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.logo {
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 700;
+    background: var(--gradient-logo);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 3s linear infinite;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+}
+
+@keyframes shimmer {
+    to {
+        background-position: 200% center;
+    }
+}
+
+.nav-links {
+    display: flex;
+    gap: 30px;
+    list-style: none;
+}
+
+.nav-link {
+    color: #676b73;
+    text-decoration: none;
+    font-size: 16px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    position: relative;
+    padding: 8px 15px;
+    border-radius: 20px;
+}
+
+.nav-link:hover {
+    color: var(--color-primary);
+    background: rgba(255, 107, 157, 0.1);
+    transform: translateY(-2px);
+}
+
+/* Login Button */
+.login-btn {
+    padding: 8px 20px;
+    border: 2px solid var(--color-primary);
+    border-radius: 20px;
+    background: transparent;
+    color: var(--color-primary);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.login-btn:hover {
+    background: var(--color-primary);
+    color: white;
+    transform: translateY(-2px);
+}
+
+.user-dropdown-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.login-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--color-primary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    object-fit: cover;
+}
+
+.user-dropdown-wrapper:hover .login-avatar {
+    transform: scale(1.1);
+    box-shadow: 0 0 12px rgba(255, 107, 157, 0.4);
+}
+
+.user-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 220px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(20px);
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(255, 150, 200, 0.2);
+    padding: 8px 0;
+    padding-top: 18px;
+    z-index: 1001;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-6px);
+    transition: all 0.15s ease;
+}
+
+.user-dropdown-wrapper:hover .user-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.user-dropdown-header {
+    padding: 12px 16px;
+}
+
+.user-dropdown-name {
+    display: block;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--color-text);
+}
+
+.user-dropdown-email {
+    display: block;
+    font-size: 12px;
+    color: var(--color-text-light);
+    margin-top: 2px;
+}
+
+.user-dropdown-divider {
+    height: 1px;
+    background: rgba(255, 107, 157, 0.12);
+    margin: 4px 0;
+}
+
+.user-dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+    text-decoration: none;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.user-dropdown-item:hover {
+    background: rgba(255, 107, 157, 0.08);
+    color: var(--color-primary);
+}
+
+.user-dropdown-signout {
+    color: var(--color-error);
+}
+
+.user-dropdown-signout:hover {
+    background: rgba(255, 99, 99, 0.08);
+    color: var(--color-error);
+}
+
+.nav-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    cursor: pointer;
+    padding: 8px;
+    font-size: 24px;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.nav-toggle:hover {
+    transform: scale(1.1);
+}
