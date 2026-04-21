@@ -63,6 +63,16 @@ export interface UserProfile {
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
     title?: string;
+    eventStaffEvents: string[];
+}
+
+export function isEventStaff(profile: UserProfile, eventId: string): boolean {
+    return hasPermission(profile.group, 'staff')
+        && profile.eventStaffEvents.includes(eventId);
+}
+
+export function canAccessEventTickets(profile: UserProfile, eventId: string): boolean {
+    return hasPermission(profile.group, 'core-staff') || isEventStaff(profile, eventId);
 }
 
 function parseBadgeEarnedAt(raw: unknown): Record<string, Date> {
@@ -131,6 +141,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                             badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
                             group: data.group ?? 'visitor',
                             title: data.title ?? '',
+                            eventStaffEvents: data.eventStaffEvents ?? [],
                         });
                     } else {
                         await callCreateUserProfile();
@@ -149,6 +160,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                             badgeEarnedAt: {},
                             group: 'visitor',
                             title: '',
+                            eventStaffEvents: [],
                         });
                     }
                 } else {
@@ -191,6 +203,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                 badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
                 group: data.group ?? 'visitor',
                 title: data.title ?? '',
+                eventStaffEvents: data.eventStaffEvents ?? [],
             });
         }
     };

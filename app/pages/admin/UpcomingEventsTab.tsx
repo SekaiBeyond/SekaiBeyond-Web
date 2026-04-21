@@ -55,6 +55,7 @@ interface EventForm {
     customButtonText: string;
     customButtonTextCn: string;
     customButtonLink: string;
+    paid: boolean;
 }
 
 const emptyForm: EventForm = {
@@ -62,6 +63,7 @@ const emptyForm: EventForm = {
     location: '', locationCn: '', startAt: '', endAt: '',
     posterCredit: '', buyTicket: '', learnMore: '',
     customButtonText: '', customButtonTextCn: '', customButtonLink: '',
+    paid: false,
 };
 
 export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEventsTabProps>(({
@@ -216,6 +218,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             customButtonText: event.customButtonText,
             customButtonTextCn: event.customButtonTextCn,
             customButtonLink: event.customButtonLink,
+            paid: event.paid,
         });
         setEditingEvent(event);
         setPosterImage(null);
@@ -256,6 +259,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 customButtonText: form.customButtonText,
                 customButtonTextCn: form.customButtonTextCn,
                 customButtonLink: form.customButtonLink,
+                paid: form.paid,
             });
 
             await refreshEvents();
@@ -465,6 +469,18 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         className="admin-search-input"
                                         placeholder={isEnglish ? 'Optional' : '可选'}
                                     />
+                                </label>
+                                <label className="admin-form-grid-full admin-checkbox-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.paid}
+                                        onChange={e => setForm(f => ({...f, paid: e.target.checked}))}
+                                    />
+                                    <span>
+                                        {isEnglish
+                                            ? 'Paid event (enables ticket management)'
+                                            : '付费活动（启用门票管理）'}
+                                    </span>
                                 </label>
                             </div>
                             <div className="admin-btn-row">

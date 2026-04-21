@@ -5,8 +5,19 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.group;
     }
 
+    function callerEventStaffEvents() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.eventStaffEvents
+             ?? [];
+    }
+
     function isCoreStaffOrAbove() {
       return callerGroup() in ['core-staff', 'president'];
+    }
+
+    function isEventStaffFor(eventId) {
+      let g = callerGroup();
+      return g in ['staff', 'core-staff', 'president']
+          && eventId in callerEventStaffEvents();
     }
 
     match /users/{userId} {
@@ -50,6 +61,16 @@ service cloud.firestore {
     // Past events — publicly readable; all writes via Cloud Functions
     match /pastEvents/{eventId} {
       allow read: if true;
+
+      // Paid event subcollections (migrated from upcomingEvents on archive)
+      match /attendees/{attendeeId} {
+        allow read: if request.auth != null
+                    && (isCoreStaffOrAbove() || isEventStaffFor(eventId));
+      }
+      match /emailTemplate/{docId} {
+        allow read: if request.auth != null
+                    && isCoreStaffOrAbove();
+      }
     }
 
     // Rate-limit counters — server-only, no client access
@@ -62,6 +83,16 @@ service cloud.firestore {
     match /upcomingEvents/{eventId} {
       allow read: if resource.data.published == true
                   || (request.auth != null && isCoreStaffOrAbove());
+
+      // Paid event subcollections
+      match /attendees/{attendeeId} {
+        allow read: if request.auth != null
+                    && (isCoreStaffOrAbove() || isEventStaffFor(eventId));
+      }
+      match /emailTemplate/{docId} {
+        allow read: if request.auth != null
+                    && isCoreStaffOrAbove();
+      }
     }
 
     // Deny all access to unlisted paths (safety net — Firestore denies by default,

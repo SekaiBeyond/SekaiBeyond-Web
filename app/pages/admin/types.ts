@@ -41,6 +41,7 @@ export interface UserRecord {
     badges: string[];
     group: UserGroup;
     title?: string;
+    eventStaffEvents: string[];
 }
 
 export type Tab = 'users' | 'events' | 'upcoming' | 'badges' | 'tags' | 'records';

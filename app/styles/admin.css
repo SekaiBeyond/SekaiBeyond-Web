@@ -974,6 +974,26 @@
     white-space: nowrap;
 }
 
+.admin-checkbox-label {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.admin-checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.admin-checkbox-label span {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
 .admin-toast-container {
     position: fixed;
     top: 80px;

@@ -4,8 +4,14 @@ import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
+import { defineString } from "firebase-functions/params";
 
 import * as crypto from "crypto";
+
+// Public origin for ticket QR URLs (set via `firebase functions:config:set` or
+// the v2 parameterised config UI). Fallback keeps QR codes pointing at the prod
+// site if the param is unset.
+const PUBLIC_ORIGIN = defineString("PUBLIC_ORIGIN", {default: "https://sekaibeyond.com"});
 
 // Records are audit logs. Firestore TTL policy on `records.expiresAt`
 // auto-deletes documents past this point (configure in Firebase console).
@@ -277,6 +283,7 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
             attendedEvents: [],
             badges: [],
             group: "visitor",
+            eventStaffEvents: [],
         });
     });
 
@@ -1371,6 +1378,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const customButtonText = validateStr(input.customButtonText, "customButtonText", 100);
     const customButtonTextCn = validateStr(input.customButtonTextCn, "customButtonTextCn", 100);
     const customButtonLink = validateStr(input.customButtonLink, "customButtonLink", 500);
+    const paid = input.paid === true;
 
     validateStorageImageUrl(poster, "poster");
     validateUrl(buyTicket, "buyTicket");
@@ -1390,7 +1398,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const data = {
         title, titleCn, description, descriptionCn, location, locationCn,
         startAt, endAt, poster, posterCredit, buyTicket, learnMore,
-        customButtonText, customButtonTextCn, customButtonLink,
+        customButtonText, customButtonTextCn, customButtonLink, paid,
     };
     const docId = eventId ?? db.collection("upcomingEvents").doc().id;
 
@@ -1579,6 +1587,22 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         }
         if (archived) return;
 
+        // Clean up any orphaned subcollection docs (can occur if archive fails
+        // after Phase C partially completed, or on TTL-driven deletion).
+        try {
+            const orphanedOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+            for (const subCol of ["attendees", "emailTemplate"]) {
+                const snap = await db.collection("upcomingEvents").doc(eventId)
+                    .collection(subCol).get();
+                for (const d of snap.docs) {
+                    orphanedOps.push(b => b.delete(d.ref));
+                }
+            }
+            if (orphanedOps.length > 0) await commitInChunks(orphanedOps);
+        } catch (err) {
+            console.error(`onUpcomingEventDeleted: subcollection cleanup failed for ${eventId}`, err);
+        }
+
         try {
             await db.collection("records").add({
                 type: "upcoming-event-deleted",
@@ -1595,9 +1619,14 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
 
 /**
  * Archive an upcoming event to past events (admin only).
- * Creates a past-event template (text fields only — no icon, since the upcoming
- * event's poster is hard-deleted by onUpcomingEventDeleted), then deletes the
- * upcoming event and writes an audit record. Admin uploads a new icon later.
+ * Migrates the event along with its attendees and emailTemplate subcollections.
+ *
+ * Subcollection docs are copied to pastEvents BEFORE the archive transaction
+ * (which is required for the 500-op batch limit). If copy succeeds but the
+ * transaction fails, the copied subcollection docs in pastEvents are simply
+ * overwritten on the next retry (idempotent). The originals are deleted in
+ * chunks AFTER the transaction commits so onUpcomingEventDeleted never sees
+ * orphaned subcollection docs.
  */
 export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -1607,11 +1636,33 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     const input = request.data as {eventId?: string; tagId?: string};
     const eventId = validateDocId(input.eventId, "eventId");
     const tagId = validateStr(input.tagId, "tagId", 128);
-    // Reuse the upcoming event's ID for the past event so users' attendedEvents
-    // and claim-code records remain valid across the archive boundary.
     const newDocRef = db.collection("pastEvents").doc(eventId);
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    // ---- Phase A: stream-copy subcollections to pastEvents ----
+    const attendeesSrc = db.collection("upcomingEvents").doc(eventId).collection("attendees");
+    const emailTemplateSrc = db.collection("upcomingEvents").doc(eventId).collection("emailTemplate");
+
+    const [attendeesSnap, emailTemplateSnap] = await Promise.all([
+        attendeesSrc.get(),
+        emailTemplateSrc.get(),
+    ]);
+
+    const pastAttendeesCol = newDocRef.collection("attendees");
+    const pastEmailTemplateCol = newDocRef.collection("emailTemplate");
+
+    const copyOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+
+    for (const doc of attendeesSnap.docs) {
+        copyOps.push(b => b.set(pastAttendeesCol.doc(doc.id), doc.data()));
+    }
+    for (const doc of emailTemplateSnap.docs) {
+        copyOps.push(b => b.set(pastEmailTemplateCol.doc(doc.id), doc.data()));
+    }
+
+    if (copyOps.length > 0) await commitInChunks(copyOps);
+
+    // ---- Phase B: archive transaction (atomic) ----
+    const {pastEventId} = await adminTransaction(uid, async (txn, callerSnap) => {
         const [eventSnap, pastCollisionSnap] = await Promise.all([
             txn.get(db.collection("upcomingEvents").doc(eventId)),
             txn.get(newDocRef),
@@ -1623,14 +1674,9 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         const eventData = eventSnap.data()!;
 
         const startDate: Date = eventData.startAt?.toDate?.() ?? new Date();
-        // Format in the club's local timezone (UW Seattle) so late-evening
-        // events don't roll over into the next UTC day. The stored date string
-        // is later displayed with timeZone: 'UTC', matching this day exactly.
         const dateStr = new Intl.DateTimeFormat("en-CA", {
             timeZone: "America/Los_Angeles",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
+            year: "numeric", month: "2-digit", day: "2-digit",
         }).format(startDate);
 
         txn.set(newDocRef, {
@@ -1657,6 +1703,18 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         });
         return {pastEventId: newDocRef.id};
     });
+
+    // ---- Phase C: delete original subcollections in chunks ----
+    const deleteOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+    for (const doc of attendeesSnap.docs) {
+        deleteOps.push(b => b.delete(doc.ref));
+    }
+    for (const doc of emailTemplateSnap.docs) {
+        deleteOps.push(b => b.delete(doc.ref));
+    }
+    if (deleteOps.length > 0) await commitInChunks(deleteOps);
+
+    return {pastEventId};
 });
 
 /**
@@ -2217,3 +2275,770 @@ export const onUserDeleted = onDocumentDeleted(
         }
     }
 );
+
+// ---------------------------------------------------------------------------
+// Paid event ticketing
+// ---------------------------------------------------------------------------
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateEmail(value: unknown, name: string): string {
+    if (typeof value !== "string") {
+        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized.length === 0 || normalized.length > 320 || !EMAIL_RE.test(normalized)) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
+    }
+    return normalized;
+}
+
+function validateTicketCount(value: unknown): number {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 50) {
+        throw new HttpsError("invalid-argument", "ticketCount must be an integer between 1 and 50.");
+    }
+    return value;
+}
+
+interface NewTicket {
+    ticketId: string;
+    redeemed: boolean;
+    redeemedAt: Timestamp | null;
+    redeemedBy: string;
+    redeemedByName: string;
+    checkedIn: boolean;
+    checkedInAt: Timestamp | null;
+    voided: boolean;
+}
+
+function buildFreshTickets(count: number): {tickets: NewTicket[]; ticketIds: string[]} {
+    const tickets: NewTicket[] = [];
+    const ticketIds: string[] = [];
+    for (let i = 0; i < count; i++) {
+        const ticketId = crypto.randomUUID();
+        ticketIds.push(ticketId);
+        tickets.push({
+            ticketId,
+            redeemed: false,
+            redeemedAt: null,
+            redeemedBy: "",
+            redeemedByName: "",
+            checkedIn: false,
+            checkedInAt: null,
+            voided: false,
+        });
+    }
+    return {tickets, ticketIds};
+}
+
+function formatEventDateForEmail(startAt: Timestamp | undefined, locale: string): string {
+    if (!startAt) return "";
+    try {
+        return new Intl.DateTimeFormat(locale, {
+            timeZone: "America/Los_Angeles",
+            year: "numeric", month: "long", day: "numeric",
+            hour: "numeric", minute: "2-digit",
+        }).format(startAt.toDate());
+    } catch {
+        return "";
+    }
+}
+
+interface EmailTemplateDoc {
+    subject: string;
+    bodyHtml: string;
+    bodyCnHtml: string;
+}
+
+function buildDefaultEmailTemplate(eventData: FirebaseFirestore.DocumentData): EmailTemplateDoc {
+    const title = eventData.title ?? "";
+    const titleCn = eventData.titleCn ?? "";
+    return {
+        subject: `Your tickets for {{ eventTitle }}`,
+        bodyHtml: [
+            `<p>Hi {{ attendeeName }},</p>`,
+            `<p>Thank you for purchasing tickets to <strong>{{ eventTitle }}</strong>` +
+                (title ? "" : "") + `.</p>`,
+            `<p>Event date: {{ eventDate }}</p>`,
+            `<p>You purchased {{ ticketCount }} ticket(s). Please show the QR code(s) below at the door:</p>`,
+            `{{ ticketIds[] }}`,
+            `<p>— Sekai Beyond</p>`,
+        ].join("\n"),
+        bodyCnHtml: [
+            `<p>您好 {{ attendeeName }},</p>`,
+            `<p>感谢您购买 <strong>{{ eventTitleCn }}</strong>` +
+                (titleCn ? "" : "") + ` 的门票。</p>`,
+            `<p>活动日期：{{ eventDate }}</p>`,
+            `<p>您购买了 {{ ticketCount }} 张门票。请在入场时出示以下二维码：</p>`,
+            `{{ ticketIds[] }}`,
+            `<p>— Sekai Beyond</p>`,
+        ].join("\n"),
+    };
+}
+
+function renderTicketQrBlock(ticketIds: string[], eventId: string, qrDataUrls: string[]): string {
+    // One <div> per ticket with a QR image. Kept simple — email clients strip
+    // fancy styling, and this renders on Gmail/Apple Mail/Outlook.
+    return ticketIds.map((id, i) => {
+        const url = qrDataUrls[i];
+        return `<div style="margin:16px 0;text-align:center;">` +
+            `<img src="${url}" alt="Ticket ${id}" style="width:200px;height:200px;display:inline-block;"/>` +
+            `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
+            `</div>`;
+    }).join("\n");
+}
+
+async function generateTicketQrDataUrls(
+    ticketIds: string[], eventId: string
+): Promise<string[]> {
+    const QRCode = (await import("qrcode")).default;
+    const origin = PUBLIC_ORIGIN.value();
+    return Promise.all(ticketIds.map(id => {
+        const url = `${origin}/claim?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
+        return QRCode.toDataURL(url, {errorCorrectionLevel: "M", width: 400, margin: 1});
+    }));
+}
+
+function renderTemplate(
+    template: string,
+    data: {
+        attendeeEmail: string;
+        attendeeName: string;
+        eventTitle: string;
+        eventTitleCn: string;
+        eventDate: string;
+        ticketCount: number;
+        ticketBlock: string;
+    },
+): string {
+    return template
+        .replace(/{{\s*attendeeEmail\s*}}/g, data.attendeeEmail)
+        .replace(/{{\s*attendeeName\s*}}/g, data.attendeeName)
+        .replace(/{{\s*eventTitle\s*}}/g, data.eventTitle)
+        .replace(/{{\s*eventTitleCn\s*}}/g, data.eventTitleCn)
+        .replace(/{{\s*eventDate\s*}}/g, data.eventDate)
+        .replace(/{{\s*ticketCount\s*}}/g, String(data.ticketCount))
+        // {{ ticketIds[] }} — with optional surrounding <p>/<div> tags collapsed.
+        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, data.ticketBlock);
+}
+
+/**
+ * Import attendees for a paid event from a CSV-parsed payload (admin only).
+ *
+ * Re-imports (same email) replace the existing attendee doc — old tickets' UUIDs
+ * are overwritten with fresh ones, so any QR emails already sent for the old
+ * UUIDs become invalid automatically (redeemTicket's ticketIds lookup fails).
+ *
+ * Maintains the invariant: `attendees[x].tickets[i].ticketId` equals
+ * `attendees[x].ticketIds[i]`. `ticketIds` exists purely so we can
+ * `array-contains` query by ticketId in `redeemTicket`.
+ */
+export const importEventAttendees = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendees?: unknown};
+    const eventId = validateDocId(input.eventId, "eventId");
+    if (!Array.isArray(input.attendees) || input.attendees.length === 0) {
+        throw new HttpsError("invalid-argument", "attendees must be a non-empty array.");
+    }
+    if (input.attendees.length > 1000) {
+        throw new HttpsError("invalid-argument", "Too many attendees in a single import (max 1000).");
+    }
+
+    // Validate + normalize + dedupe (later row wins)
+    const normalized = new Map<string, {email: string; name: string; ticketCount: number}>();
+    for (const row of input.attendees) {
+        if (!row || typeof row !== "object") {
+            throw new HttpsError("invalid-argument", "Each attendee row must be an object.");
+        }
+        const r = row as Record<string, unknown>;
+        const email = validateEmail(r.email, "email");
+        const name = sanitizeDisplayText(validateStr(r.name, "name", 100, true));
+        if (!name) throw new HttpsError("invalid-argument", "name is required.");
+        const ticketCount = validateTicketCount(r.ticketCount);
+        normalized.set(email, {email, name, ticketCount});
+    }
+
+    // Admin check + event existence check in a lightweight transaction.
+    // We can't fit the whole import in one transaction (would violate the 500-op
+    // limit on large imports), so the big writes run as batched commits below.
+    await adminTransaction(uid, async (txn) => {
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+    });
+
+    const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
+
+    // Look up existing docs by email in parallel (queries in chunks to avoid
+    // the `in` operator's 30-value limit).
+    const emails = Array.from(normalized.keys());
+    const existingByEmail = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+    for (let i = 0; i < emails.length; i += 30) {
+        const chunk = emails.slice(i, i + 30);
+        const snap = await attendeesCol.where("email", "in", chunk).get();
+        for (const doc of snap.docs) {
+            const email = doc.data().email;
+            if (typeof email === "string") existingByEmail.set(email, doc);
+        }
+    }
+
+    const callerSnap = await db.collection("users").doc(uid).get();
+    const callerName = callerSnap.data()?.displayName ?? "";
+
+    let addedCount = 0;
+    let replacedCount = 0;
+    const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+
+    for (const row of normalized.values()) {
+        const {tickets, ticketIds} = buildFreshTickets(row.ticketCount);
+        const now = FieldValue.serverTimestamp();
+        const existing = existingByEmail.get(row.email);
+        if (existing) {
+            replacedCount++;
+            ops.push(b => b.set(existing.ref, {
+                email: row.email,
+                name: row.name,
+                ticketCount: row.ticketCount,
+                tickets,
+                ticketIds,
+                emailSent: false,
+                emailSentAt: null,
+                updatedAt: now,
+            }, {merge: true}));
+        } else {
+            addedCount++;
+            const newRef = attendeesCol.doc();
+            ops.push(b => b.set(newRef, {
+                email: row.email,
+                name: row.name,
+                ticketCount: row.ticketCount,
+                tickets,
+                ticketIds,
+                emailSent: false,
+                emailSentAt: null,
+                createdAt: now,
+                updatedAt: now,
+            }));
+        }
+    }
+
+    ops.push(b => b.set(db.collection("records").doc(), {
+        type: "ticket-import",
+        performedBy: uid,
+        performedByName: callerName,
+        eventId,
+        addedCount,
+        replacedCount,
+        timestamp: FieldValue.serverTimestamp(),
+        expiresAt: recordExpiresAt(),
+    }));
+
+    await commitInChunks(ops);
+
+    return {added: addedCount, replaced: replacedCount, total: normalized.size};
+});
+
+/**
+ * Redeem a ticket (event-staff for this event, or core-staff+).
+ *
+ * If the attendee's email matches a registered user, also marks them as
+ * checked-in and adds the event to their attendedEvents (writes `event-attend`
+ * record in addition to `ticket-redeem`). Otherwise leaves the users collection
+ * untouched — the attendee is still valid, just unregistered on-site.
+ *
+ * Already-redeemed tickets return a non-error success so the scanner can render
+ * yellow-state info (who/when). Voided tickets throw with {code: 'voided'}.
+ */
+export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; ticketId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+
+    const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
+
+    return db.runTransaction(async (txn) => {
+        const callerSnap = await txn.get(db.collection("users").doc(uid));
+        const callerData = callerSnap.data() ?? {};
+        const group = callerData.group ?? "visitor";
+        const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
+        const isCoreStaffOrAbove = ADMIN_GROUPS.includes(group);
+        const isEventStaff = (group === "staff" || group === "core-staff" || group === "president")
+            && callerEventStaff.includes(eventId);
+        if (!isCoreStaffOrAbove && !isEventStaff) {
+            throw new HttpsError("permission-denied", "Not authorized to scan tickets for this event.",
+                {code: "not-authorized"});
+        }
+
+        // Require event exists so stale eventIds can't haunt redemption.
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) {
+            throw new HttpsError("not-found", "Event not found.", {code: "event-missing"});
+        }
+
+        const attendeeQuery = await txn.get(
+            attendeesCol.where("ticketIds", "array-contains", ticketId).limit(1)
+        );
+        if (attendeeQuery.empty) {
+            throw new HttpsError("not-found", "Ticket not found.", {code: "invalid"});
+        }
+        const attendeeDoc = attendeeQuery.docs[0];
+        const attendeeData = attendeeDoc.data();
+        const tickets: NewTicket[] = (attendeeData.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) {
+            throw new HttpsError("not-found", "Ticket not found.", {code: "invalid"});
+        }
+        const ticket = tickets[idx];
+
+        if (ticket.voided) {
+            throw new HttpsError("failed-precondition", "This ticket has been voided.",
+                {code: "voided"});
+        }
+
+        const callerName: string = callerData.displayName ?? "";
+        const attendeeEmail: string = attendeeData.email ?? "";
+        const attendeeName: string = attendeeData.name ?? "";
+        const eventTitle: string = eventSnap.data()?.title ?? eventSnap.data()?.name ?? "";
+
+        if (ticket.redeemed) {
+            return {
+                alreadyRedeemed: true,
+                attendeeName,
+                attendeeEmail,
+                eventTitle,
+                ticketIndex: idx,
+                redeemedBy: ticket.redeemedByName,
+                redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
+            };
+        }
+
+        // Try to link to a registered user by email.
+        const matchingUserSnap = await txn.get(
+            db.collection("users").where("email", "==", attendeeEmail).limit(1)
+        );
+        const now = Timestamp.now();
+        let userCheckedIn = false;
+        if (!matchingUserSnap.empty) {
+            const userDoc = matchingUserSnap.docs[0];
+            const attended: string[] = userDoc.data().attendedEvents ?? [];
+            if (!attended.includes(eventId)) {
+                txn.update(userDoc.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
+                txn.set(db.collection("records").doc(), {
+                    type: "event-attend",
+                    performedBy: uid,
+                    performedByName: callerName,
+                    targetUid: userDoc.id,
+                    targetName: userDoc.data().displayName ?? "",
+                    targetEmail: attendeeEmail,
+                    eventId,
+                    eventTitle,
+                    timestamp: FieldValue.serverTimestamp(),
+                    expiresAt: recordExpiresAt(),
+                });
+            }
+            userCheckedIn = true;
+        }
+
+        tickets[idx] = {
+            ...ticket,
+            redeemed: true,
+            redeemedAt: now,
+            redeemedBy: uid,
+            redeemedByName: callerName,
+            checkedIn: userCheckedIn,
+            checkedInAt: userCheckedIn ? now : null,
+        };
+
+        txn.update(attendeeDoc.ref, {
+            tickets,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-redeem",
+            performedBy: uid,
+            performedByName: callerName,
+            eventId,
+            eventTitle,
+            targetEmail: attendeeEmail,
+            targetName: attendeeName,
+            code: ticketId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {
+            success: true,
+            attendeeName,
+            attendeeEmail,
+            eventTitle,
+            ticketIndex: idx,
+            userCheckedIn,
+        };
+    });
+});
+
+/**
+ * Void a single ticket (core-staff+). Idempotent; voiding a redeemed ticket
+ * blocks future scans but does not rewind the user's attendedEvents.
+ */
+export const voidTicket = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const attendeeRef = db.collection("upcomingEvents").doc(eventId)
+            .collection("attendees").doc(attendeeId);
+        const attendeeSnap = await txn.get(attendeeRef);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
+
+        tickets[idx] = {...tickets[idx], voided: true};
+
+        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-void",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            targetEmail: data.email ?? "",
+            targetName: data.name ?? "",
+            code: ticketId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {voided: true};
+    });
+});
+
+/**
+ * Delete an attendee and void all their tickets (core-staff+).
+ */
+export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendeeId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const attendeeRef = db.collection("upcomingEvents").doc(eventId)
+            .collection("attendees").doc(attendeeId);
+        const attendeeSnap = await txn.get(attendeeRef);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const voided = tickets.map(t => ({...t, voided: true}));
+        // Marking voided before delete: belt-and-suspenders against any read that
+        // races between the void and the doc delete.
+        txn.update(attendeeRef, {tickets: voided});
+        txn.delete(attendeeRef);
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-attendee-delete",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            targetEmail: data.email ?? "",
+            targetName: data.name ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {deleted: true, ticketCount: tickets.length};
+    });
+});
+
+/**
+ * Send ticket emails (core-staff+).
+ * Writes to `mail/{autoId}` documents consumed by the Firebase Trigger Email
+ * extension. Renders the event's email template (or a default) for each
+ * attendee with their tickets embedded as data-URL QR images.
+ */
+export const sendTicketEmails = onCall({maxInstances: 5, timeoutSeconds: 300}, async (request) => {
+    const uid = await requireAuth(request);
+    await requireAdmin(uid);
+
+    const input = request.data as {
+        eventId?: string;
+        mode?: string;
+        attendeeIds?: unknown;
+    };
+    const eventId = validateDocId(input.eventId, "eventId");
+    const mode = input.mode === "all" ? "all" : "unsent";
+    let attendeeIds: string[] | null = null;
+    if (Array.isArray(input.attendeeIds)) {
+        attendeeIds = input.attendeeIds.map(id => validateDocId(id, "attendeeId"));
+        if (attendeeIds.length > 500) {
+            throw new HttpsError("invalid-argument", "Too many attendee ids in a single send.");
+        }
+    }
+
+    const eventSnap = await db.collection("upcomingEvents").doc(eventId).get();
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+    const eventData = eventSnap.data()!;
+
+    // Load template (fallback to built-in default if admin hasn't saved one yet).
+    const templateRef = db.collection("upcomingEvents").doc(eventId)
+        .collection("emailTemplate").doc("default");
+    const templateSnap = await templateRef.get();
+    const template: EmailTemplateDoc = templateSnap.exists
+        ? {
+            subject: templateSnap.data()?.subject ?? "",
+            bodyHtml: templateSnap.data()?.bodyHtml ?? "",
+            bodyCnHtml: templateSnap.data()?.bodyCnHtml ?? "",
+        }
+        : buildDefaultEmailTemplate(eventData);
+
+    // Target attendees
+    const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
+    let targets: FirebaseFirestore.QueryDocumentSnapshot[];
+    if (attendeeIds && attendeeIds.length > 0) {
+        const snaps = await Promise.all(attendeeIds.map(id => attendeesCol.doc(id).get()));
+        targets = snaps.filter(s => s.exists) as FirebaseFirestore.QueryDocumentSnapshot[];
+        if (mode === "unsent") {
+            targets = targets.filter(s => s.data()?.emailSent !== true);
+        }
+    } else if (mode === "unsent") {
+        const snap = await attendeesCol.where("emailSent", "==", false).get();
+        targets = snap.docs;
+    } else {
+        const snap = await attendeesCol.get();
+        targets = snap.docs;
+    }
+
+    const eventTitle: string = eventData.title ?? eventData.name ?? "";
+    const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
+    const eventDateEn = formatEventDateForEmail(eventData.startAt, "en-US");
+    const eventDateCn = formatEventDateForEmail(eventData.startAt, "zh-CN");
+
+    const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+    let sentCount = 0;
+
+    for (const target of targets) {
+        const data = target.data();
+        const ticketIds: string[] = data.ticketIds ?? [];
+        if (ticketIds.length === 0) continue;
+
+        const qrDataUrls = await generateTicketQrDataUrls(ticketIds, eventId);
+        const ticketBlock = renderTicketQrBlock(ticketIds, eventId, qrDataUrls);
+
+        const renderedSubject = renderTemplate(template.subject, {
+            attendeeEmail: data.email ?? "",
+            attendeeName: data.name ?? "",
+            eventTitle, eventTitleCn,
+            eventDate: eventDateEn,
+            ticketCount: data.ticketCount ?? ticketIds.length,
+            ticketBlock: "",
+        });
+        const renderedBodyEn = renderTemplate(template.bodyHtml, {
+            attendeeEmail: data.email ?? "",
+            attendeeName: data.name ?? "",
+            eventTitle, eventTitleCn,
+            eventDate: eventDateEn,
+            ticketCount: data.ticketCount ?? ticketIds.length,
+            ticketBlock,
+        });
+        const renderedBodyCn = renderTemplate(template.bodyCnHtml, {
+            attendeeEmail: data.email ?? "",
+            attendeeName: data.name ?? "",
+            eventTitle, eventTitleCn,
+            eventDate: eventDateCn,
+            ticketCount: data.ticketCount ?? ticketIds.length,
+            ticketBlock,
+        });
+
+        // Bilingual: EN first, CN below, separated by a thin hr.
+        const html = renderedBodyCn
+            ? `${renderedBodyEn}\n<hr style="border:none;border-top:1px solid #ddd;margin:24px 0;"/>\n${renderedBodyCn}`
+            : renderedBodyEn;
+
+        const mailRef = db.collection("mail").doc();
+        ops.push(b => b.set(mailRef, {
+            to: data.email,
+            message: {subject: renderedSubject, html},
+        }));
+        ops.push(b => b.update(target.ref, {
+            emailSent: true,
+            emailSentAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        }));
+        sentCount++;
+    }
+
+    const callerSnap = await db.collection("users").doc(uid).get();
+    ops.push(b => b.set(db.collection("records").doc(), {
+        type: "ticket-email-send",
+        performedBy: uid,
+        performedByName: callerSnap.data()?.displayName ?? "",
+        eventId,
+        eventTitle,
+        sentCount,
+        timestamp: FieldValue.serverTimestamp(),
+        expiresAt: recordExpiresAt(),
+    }));
+
+    await commitInChunks(ops);
+
+    return {sentCount};
+});
+
+/**
+ * Upsert the event's email template (core-staff+).
+ * No HTML sanitization — editor is core-staff+ only, trusted.
+ */
+export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {
+        eventId?: string;
+        subject?: unknown;
+        bodyHtml?: unknown;
+        bodyCnHtml?: unknown;
+    };
+    const eventId = validateDocId(input.eventId, "eventId");
+    const subject = validateStr(input.subject, "subject", 500, true);
+    const bodyHtml = validateStr(input.bodyHtml, "bodyHtml", 20000);
+    const bodyCnHtml = validateStr(input.bodyCnHtml, "bodyCnHtml", 20000);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        const templateRef = db.collection("upcomingEvents").doc(eventId)
+            .collection("emailTemplate").doc("default");
+        txn.set(templateRef, {
+            subject, bodyHtml, bodyCnHtml,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: uid,
+        }, {merge: true});
+        txn.set(db.collection("records").doc(), {
+            type: "upcoming-event-email-template-update",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {saved: true};
+    });
+});
+
+/**
+ * Grant event-staff access for a specific event (core-staff+).
+ * Adds eventId to the target user's eventStaffEvents and ensures their group is
+ * at least 'staff'. Does not downgrade higher-tier users.
+ */
+export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {targetUid?: string; eventId?: string};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    const eventId = validateDocId(input.eventId, "eventId");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const [targetSnap, eventSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(targetUid)),
+            txn.get(db.collection("upcomingEvents").doc(eventId)),
+        ]);
+        if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+
+        const targetData = targetSnap.data()!;
+        const existing: string[] = targetData.eventStaffEvents ?? [];
+        if (existing.includes(eventId)) {
+            return {added: false};
+        }
+
+        // Presidents can touch anyone; core-staff can only manage <= staff.
+        const callerGroup = callerSnap.data()?.group;
+        if (callerGroup === "core-staff"
+            && !["visitor", "member", "staff"].includes(targetData.group)) {
+            throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
+        }
+
+        const updates: Record<string, unknown> = {
+            eventStaffEvents: FieldValue.arrayUnion(eventId),
+        };
+        // Auto-promote visitor/member to staff so the hierarchy matches the role.
+        if (targetData.group === "visitor" || targetData.group === "member") {
+            updates.group = "staff";
+        }
+
+        txn.update(db.collection("users").doc(targetUid), updates);
+        txn.set(db.collection("records").doc(), {
+            type: "event-staff-assign",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            eventId,
+            eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {added: true};
+    });
+});
+
+/**
+ * Revoke event-staff access for a specific event (core-staff+).
+ * Does not downgrade the user's group — they remain staff for other events (or,
+ * if they have no remaining eventStaffEvents, still explicitly staff until an
+ * admin reassigns them).
+ */
+export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {targetUid?: string; eventId?: string};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    const eventId = validateDocId(input.eventId, "eventId");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const targetSnap = await txn.get(db.collection("users").doc(targetUid));
+        if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
+        const targetData = targetSnap.data()!;
+        const existing: string[] = targetData.eventStaffEvents ?? [];
+        if (!existing.includes(eventId)) {
+            return {removed: false};
+        }
+
+        const callerGroup = callerSnap.data()?.group;
+        if (callerGroup === "core-staff"
+            && !["visitor", "member", "staff"].includes(targetData.group)) {
+            throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
+        }
+
+        txn.update(db.collection("users").doc(targetUid), {
+            eventStaffEvents: FieldValue.arrayRemove(eventId),
+        });
+        txn.set(db.collection("records").doc(), {
+            type: "event-staff-remove",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            eventId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {removed: true};
+    });
+});
