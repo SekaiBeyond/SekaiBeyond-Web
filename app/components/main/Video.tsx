@@ -4,6 +4,8 @@ import { BILIBILI_VIDEO, LINKS } from "~/constants";
 export const Video = () => {
     const {isEnglish} = useLanguage();
 
+    const bilibiliWatchUrl = `https://www.bilibili.com/video/${BILIBILI_VIDEO.bvid}`;
+
     return (
         <section id="video" className="video-section section">
             <div className="section-header">
@@ -18,7 +20,7 @@ export const Video = () => {
             </div>
 
             <div className="video-content">
-                <div className="video-wrapper">
+                <div className="video-wrapper video-wrapper--desktop">
                     <iframe
                         src={`https://player.bilibili.com/player.html?isOutside=true&aid=${BILIBILI_VIDEO.aid}&bvid=${BILIBILI_VIDEO.bvid}&cid=${BILIBILI_VIDEO.cid}&p=${BILIBILI_VIDEO.p}&autoplay=0`}
                         allowFullScreen={true}
@@ -27,6 +29,28 @@ export const Video = () => {
                         sandbox="allow-scripts allow-same-origin allow-presentation"
                     />
                 </div>
+
+                <a
+                    className="video-wrapper video-wrapper--mobile"
+                    href={bilibiliWatchUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={isEnglish ? "Watch on Bilibili" : "在B站观看"}
+                >
+                    <div className="video-mobile-card">
+                        <div className="video-mobile-play" aria-hidden="true">▶</div>
+                        <div className="video-mobile-text">
+                            <div className="video-mobile-title">
+                                {isEnglish ? "Watch on Bilibili" : "在B站观看"}
+                            </div>
+                            <div className="video-mobile-subtitle">
+                                {isEnglish
+                                    ? "Opens in the Bilibili app or website"
+                                    : "在 B 站 App 或网页中打开"}
+                            </div>
+                        </div>
+                    </div>
+                </a>
 
                 <div className="video-info">
                     <div className="video-badge">

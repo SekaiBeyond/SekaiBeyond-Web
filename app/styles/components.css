@@ -351,6 +351,53 @@
     border-radius: 20px;
 }
 
+.video-wrapper--mobile {
+    display: none;
+}
+
+.video-mobile-card {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    text-align: center;
+    background:
+        linear-gradient(135deg, rgba(26, 26, 46, 0.72), rgba(22, 33, 62, 0.72)),
+        url('/images/sekai_beyond_con_2025.jpg') center/cover no-repeat;
+    color: #fff;
+    border-radius: 20px;
+}
+
+.video-mobile-play {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    padding-left: 6px;
+    box-shadow: 0 10px 30px rgba(255, 107, 157, 0.5);
+}
+
+.video-mobile-title {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.video-mobile-subtitle {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-top: 4px;
+}
+
 .video-info {
     text-align: center;
     max-width: 600px;

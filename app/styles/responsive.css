@@ -235,6 +235,19 @@
         border-radius: 15px;
     }
 
+    .video-wrapper--desktop {
+        display: none;
+    }
+
+    .video-wrapper--mobile {
+        display: block;
+        text-decoration: none;
+    }
+
+    .video-mobile-card {
+        border-radius: 15px;
+    }
+
     .video-caption {
         font-size: 14px;
         padding: 0 10px;
