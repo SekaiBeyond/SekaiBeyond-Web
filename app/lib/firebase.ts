@@ -180,6 +180,14 @@ export const callDeleteEventAttendee = (data: {eventId: string; attendeeId: stri
     httpsCallable<typeof data, {deleted: boolean; ticketCount: number}>(
         getFunctions(), 'deleteEventAttendee')(data);
 
+export const callUpdateEventAttendee = (data: {
+    eventId: string;
+    attendeeId: string;
+    name: string;
+    ticketCount: number;
+}) => httpsCallable<typeof data, {updated: boolean; regenerated: boolean}>(
+    getFunctions(), 'updateEventAttendee')(data);
+
 export const callSendTicketEmails = (data: {
     eventId: string;
     mode?: 'unsent' | 'all';

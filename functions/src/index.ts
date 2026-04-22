@@ -2358,7 +2358,7 @@ function buildDefaultEmailTemplate(eventData: FirebaseFirestore.DocumentData): E
         bodyHtml: [
             `<p>Hi {{ attendeeName }},</p>`,
             `<p>Thank you for purchasing tickets to <strong>{{ eventTitle }}</strong>` +
-                (title ? "" : "") + `.</p>`,
+            (title ? "" : "") + `.</p>`,
             `<p>Event date: {{ eventDate }}</p>`,
             `<p>You purchased {{ ticketCount }} ticket(s). Please show the QR code(s) below at the door:</p>`,
             `{{ ticketIds[] }}`,
@@ -2367,7 +2367,7 @@ function buildDefaultEmailTemplate(eventData: FirebaseFirestore.DocumentData): E
         bodyCnHtml: [
             `<p>您好 {{ attendeeName }},</p>`,
             `<p>感谢您购买 <strong>{{ eventTitleCn }}</strong>` +
-                (titleCn ? "" : "") + ` 的门票。</p>`,
+            (titleCn ? "" : "") + ` 的门票。</p>`,
             `<p>活动日期：{{ eventDate }}</p>`,
             `<p>您购买了 {{ ticketCount }} 张门票。请在入场时出示以下二维码：</p>`,
             `{{ ticketIds[] }}`,
@@ -2723,6 +2723,71 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
         });
 
         return {voided: true};
+    });
+});
+
+/**
+ * Update a single attendee's name and/or ticketCount (core-staff+).
+ *
+ * Name-only change: tickets and `emailSent` are left untouched.
+ * ticketCount change: regenerates all ticket UUIDs (old QRs die because they
+ * leave the `ticketIds` array) and resets `emailSent=false` so the admin knows
+ * to resend.
+ */
+export const updateEventAttendee = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {
+        eventId?: string;
+        attendeeId?: string;
+        name?: unknown;
+        ticketCount?: unknown;
+    };
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const name = sanitizeDisplayText(validateStr(input.name, "name", 100, true));
+    if (!name) throw new HttpsError("invalid-argument", "name is required.");
+    const ticketCount = validateTicketCount(input.ticketCount);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const attendeeRef = db.collection("upcomingEvents").doc(eventId)
+            .collection("attendees").doc(attendeeId);
+        const attendeeSnap = await txn.get(attendeeRef);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const prevTicketCount: number = data.ticketCount ?? 0;
+
+        if (ticketCount === prevTicketCount) {
+            if (name === data.name) {
+                return {updated: false, regenerated: false};
+            }
+            txn.update(attendeeRef, {name, updatedAt: FieldValue.serverTimestamp()});
+            return {updated: true, regenerated: false};
+        }
+
+        const {tickets, ticketIds} = buildFreshTickets(ticketCount);
+        txn.update(attendeeRef, {
+            name,
+            ticketCount,
+            tickets,
+            ticketIds,
+            emailSent: false,
+            emailSentAt: null,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-regenerate",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            targetEmail: data.email ?? "",
+            targetName: name,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {updated: true, regenerated: true};
     });
 });
 

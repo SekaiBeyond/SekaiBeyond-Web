@@ -21,7 +21,7 @@ const PAGE_SIZE = 20;
 
 // Requires composite Firestore indexes: (type, timestamp) and (performedBy, timestamp)
 const TYPE_CATEGORIES: Record<string, RecordType[]> = {
-    role: ['group-assign', 'title-set'],
+    role: ['group-assign', 'title-set', 'event-staff-assign', 'event-staff-remove'],
     code: ['code-create', 'badge-code-activate', 'badge-code-deactivate', 'code-delete',
         'event-code-activate', 'event-code-deactivate', 'event-code-time-window'],
     attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend', 'event-claim'],
@@ -32,7 +32,10 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
         'past-event-publish', 'past-event-unpublish',
         'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete',
         'upcoming-event-deletion-requested', 'upcoming-event-deletion-cancelled', 'upcoming-event-deleted',
-        'upcoming-event-archive', 'upcoming-event-publish', 'upcoming-event-unpublish'],
+        'upcoming-event-archive', 'upcoming-event-publish', 'upcoming-event-unpublish',
+        'upcoming-event-email-template-update'],
+    ticket: ['ticket-import', 'ticket-redeem', 'ticket-void', 'ticket-attendee-delete',
+        'ticket-regenerate', 'ticket-email-send'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
 };
@@ -87,6 +90,9 @@ export const RecordsTab = ({
                 newGroup: data.newGroup,
                 oldTitle: data.oldTitle,
                 newTitle: data.newTitle,
+                addedCount: data.addedCount,
+                replacedCount: data.replacedCount,
+                sentCount: data.sentCount,
                 timestamp: data.timestamp?.toDate() ?? new Date(),
             };
         });
@@ -414,6 +420,62 @@ export const RecordsTab = ({
                     ? <>deleted account {name}</>
                     : <>删除了账号 {name}</>;
             }
+            case 'ticket-import': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                const added = r.addedCount ?? 0;
+                const replaced = r.replacedCount ?? 0;
+                return isEnglish
+                    ? <>imported attendees for {event} ({added} added, {replaced} replaced)</>
+                    : <>导入了 {event} 的参加者（新增 {added}，替换 {replaced}）</>;
+            }
+            case 'ticket-redeem': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>redeemed a ticket for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
+                    : <>为 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 验证了门票</>;
+            }
+            case 'ticket-void': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>voided a ticket for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
+                    : <>作废了 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 的一张门票</>;
+            }
+            case 'ticket-attendee-delete': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>removed attendee {r.targetName ?? r.targetEmail ?? ''} from {event}</>
+                    : <>将 {r.targetName ?? r.targetEmail ?? ''} 从 {event} 的名单中移除</>;
+            }
+            case 'ticket-regenerate': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>re-issued tickets for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
+                    : <>为 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 重新签发门票</>;
+            }
+            case 'ticket-email-send': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                const sent = r.sentCount ?? 0;
+                return isEnglish
+                    ? <>sent {sent} ticket email{sent === 1 ? '' : 's'} for {event}</>
+                    : <>为 {event} 发送了 {sent} 封门票邮件</>;
+            }
+            case 'upcoming-event-email-template-update':
+                return isEnglish
+                    ? <>updated the ticket email template
+                        for {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
+                    : <>更新了 {clickableUpcomingEvent(r.eventId, r.eventTitle)} 的门票邮件模板</>;
+            case 'event-staff-assign': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>granted {target} event-staff access to {event}</>
+                    : <>授予 {target} {event} 的活动工作人员权限</>;
+            }
+            case 'event-staff-remove': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>revoked {target}'s event-staff access to {event}</>
+                    : <>撤销了 {target} 对 {event} 的活动工作人员权限</>;
+            }
         }
     };
 
@@ -421,6 +483,8 @@ export const RecordsTab = ({
         switch (type) {
             case 'group-assign':
             case 'title-set':
+            case 'event-staff-assign':
+            case 'event-staff-remove':
                 return isEnglish ? 'Role' : '角色';
             case 'code-create':
             case 'badge-code-activate':
@@ -463,7 +527,15 @@ export const RecordsTab = ({
             case 'upcoming-event-archive':
             case 'upcoming-event-publish':
             case 'upcoming-event-unpublish':
+            case 'upcoming-event-email-template-update':
                 return isEnglish ? 'Event' : '活动';
+            case 'ticket-import':
+            case 'ticket-redeem':
+            case 'ticket-void':
+            case 'ticket-attendee-delete':
+            case 'ticket-regenerate':
+            case 'ticket-email-send':
+                return isEnglish ? 'Ticket' : '门票';
             case 'tag-create':
             case 'tag-edit':
             case 'tag-delete':
@@ -496,6 +568,7 @@ export const RecordsTab = ({
                     <option value="attend">{isEnglish ? 'Attend' : '签到'}</option>
                     <option value="badge">{isEnglish ? 'Badge' : '徽章'}</option>
                     <option value="event">{isEnglish ? 'Event' : '活动'}</option>
+                    <option value="ticket">{isEnglish ? 'Ticket' : '门票'}</option>
                     <option value="tag">{isEnglish ? 'Tag' : '标签'}</option>
                     <option value="account">{isEnglish ? 'Account' : '账号'}</option>
                 </select>

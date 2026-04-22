@@ -22,6 +22,7 @@ import { fetchEventAttendees, getClaimUrl } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { EventAttendeesList } from './EventAttendeesList';
 import { ImageUploadField } from './ImageUploadField';
+import { TicketsSubtab } from './TicketsSubtab';
 
 interface UpcomingEventsTabProps {
     upcomingEvents: UpcomingEvent[];
@@ -29,6 +30,8 @@ interface UpcomingEventsTabProps {
     refreshPastEvents: () => Promise<void>;
     tags: Tag[];
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    readOnly?: boolean;
+    eventStaffEvents?: string[];
 }
 
 export interface UpcomingEventsTabHandle {
@@ -72,6 +75,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                                                                   refreshPastEvents,
                                                                                                   tags,
                                                                                                   showToast,
+                                                                                                  readOnly = false,
+                                                                                                  eventStaffEvents = [],
                                                                                               }, forwardedRef) => {
     const {isEnglish} = useLanguage();
     const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
@@ -85,7 +90,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [archiveTagId, setArchiveTagId] = useState('');
     const [archiving, setArchiving] = useState(false);
     const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
-    const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees'>('codes');
+    const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees' | 'tickets'>('codes');
     const [eventCode, setEventCode] = useState<BadgeCode | null>(null);
     const [codeFrom, setCodeFrom] = useState('');
     const [codeUntil, setCodeUntil] = useState('');
@@ -177,7 +182,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         setSelectedEvent(eventId);
         setShowArchive(false);
         setArchiveTagId('');
-        setEventSubTab('codes');
+        const evt = upcomingEvents.find(e => e.id === eventId);
+        setEventSubTab(evt?.paid ? 'tickets' : 'codes');
         setEventCode(null);
         setEventAttendees([]);
         try {
@@ -711,6 +717,14 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         <span className="admin-sub-tab-count">{eventAttendees.length}</span>
                                     )}
                                 </button>
+                                {selectedEvt.paid && (
+                                    <button
+                                        className={`admin-sub-tab ${eventSubTab === 'tickets' ? 'admin-sub-tab-active' : ''}`}
+                                        onClick={() => setEventSubTab('tickets')}
+                                    >
+                                        {isEnglish ? 'Tickets' : '门票'}
+                                    </button>
+                                )}
                             </div>
 
                             {eventSubTab === 'codes' && (
@@ -816,6 +830,15 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
 
                             {eventSubTab === 'attendees' && (
                                 <EventAttendeesList loading={searchingAttendees} attendees={eventAttendees}/>
+                            )}
+
+                            {eventSubTab === 'tickets' && selectedEvt.paid && (
+                                <TicketsSubtab
+                                    event={selectedEvt}
+                                    readOnly={readOnly}
+                                    canScan={!readOnly || eventStaffEvents.includes(selectedEvt.id)}
+                                    showToast={showToast}
+                                />
                             )}
                         </>
                     )}

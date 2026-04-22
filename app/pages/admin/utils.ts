@@ -35,6 +35,10 @@ export const getClaimUrl = (code: string): string => {
     return `${window.location.origin}/claim?code=${code}`;
 };
 
+export const getTicketClaimUrl = (ticketId: string, eventId: string): string => {
+    return `${window.location.origin}/claim?ticket=${encodeURIComponent(ticketId)}&event=${encodeURIComponent(eventId)}`;
+};
+
 export const validateImageFile = (
     file: File,
     isEnglish: boolean,

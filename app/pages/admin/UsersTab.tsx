@@ -15,12 +15,15 @@ import {
     where,
 } from 'firebase/firestore';
 import {
+    callAssignEventStaff,
     callCancelAccountDeletion,
     callChangeUserGroup,
+    callRemoveEventStaff,
     callRequestAccountDeletion,
     callSetUserTitle,
     callToggleAttendance,
     callToggleUserBadge,
+    functionsErrorCode,
     getFirebaseDb,
 } from '~/lib/firebase';
 import type { User } from 'firebase/auth';
@@ -29,12 +32,14 @@ import {
     canManageUser,
     formatGroupWithTitle,
     GROUP_LABELS,
+    hasPermission,
     USER_GROUPS,
     type UserGroup,
     type UserProfile,
 } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { PastEvent } from '~/lib/pastEvents';
+import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { BadgeDef, UserRecord } from './types';
 import { docToUserRecord } from './utils';
 
@@ -42,6 +47,7 @@ const PAGE_SIZE = 10;
 
 interface UsersTabProps {
     pastEvents: PastEvent[];
+    upcomingEvents: UpcomingEvent[];
     badgeDefs: BadgeDef[];
     badgeDefsError: boolean;
     user: User;
@@ -55,6 +61,7 @@ export interface UsersTabHandle {
 
 export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                                        pastEvents,
+                                                                       upcomingEvents,
                                                                        badgeDefs,
                                                                        badgeDefsError,
                                                                        user,
@@ -77,6 +84,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const [pendingDeletionUids, setPendingDeletionUids] = useState<Set<string>>(new Set());
     const [titleInput, setTitleInput] = useState('');
     const [titleBusy, setTitleBusy] = useState(false);
+    const [eventStaffBusy, setEventStaffBusy] = useState(false);
+    const [eventStaffSelectId, setEventStaffSelectId] = useState('');
 
     useImperativeHandle(ref, () => ({
         lookupUserByUid: async (uid: string) => {
@@ -358,6 +367,57 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         }
     };
 
+    const assignEventStaff = async (userRecord: UserRecord, eventId: string) => {
+        setEventStaffBusy(true);
+        try {
+            await callAssignEventStaff({targetUid: userRecord.uid, eventId});
+            const updated = {
+                ...userRecord,
+                eventStaffEvents: userRecord.eventStaffEvents.includes(eventId)
+                    ? userRecord.eventStaffEvents
+                    : [...userRecord.eventStaffEvents, eventId],
+            };
+            if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
+            setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            setEventStaffSelectId('');
+            showToast(isEnglish ? 'Event staff access granted.' : '已授予活动工作人员权限。', 'success');
+        } catch (err) {
+            const code = functionsErrorCode(err);
+            showToast(
+                isEnglish
+                    ? `Failed to assign event staff${code ? ` (${code})` : ''}.`
+                    : `授予失败${code ? `（${code}）` : ''}。`,
+                'error',
+            );
+        } finally {
+            setEventStaffBusy(false);
+        }
+    };
+
+    const removeEventStaff = async (userRecord: UserRecord, eventId: string) => {
+        setEventStaffBusy(true);
+        try {
+            await callRemoveEventStaff({targetUid: userRecord.uid, eventId});
+            const updated = {
+                ...userRecord,
+                eventStaffEvents: userRecord.eventStaffEvents.filter(id => id !== eventId),
+            };
+            if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
+            setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            showToast(isEnglish ? 'Event staff access removed.' : '已撤销活动工作人员权限。', 'warning');
+        } catch (err) {
+            const code = functionsErrorCode(err);
+            showToast(
+                isEnglish
+                    ? `Failed to remove event staff${code ? ` (${code})` : ''}.`
+                    : `撤销失败${code ? `（${code}）` : ''}。`,
+                'error',
+            );
+        } finally {
+            setEventStaffBusy(false);
+        }
+    };
+
     const setTitle = async (userRecord: UserRecord) => {
         setTitleBusy(true);
         try {
@@ -561,6 +621,77 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 </p>
                             </div>
                         )}
+
+                        {canManage && hasPermission(selectedUser.group, 'staff') && (() => {
+                            const eventsById = new Map(upcomingEvents.map(e => [e.id, e]));
+                            const assigned = selectedUser.eventStaffEvents
+                                .map(id => eventsById.get(id) ?? {
+                                    id, title: id, titleCn: id,
+                                } as Pick<UpcomingEvent, 'id' | 'title' | 'titleCn'>);
+                            const unassigned = upcomingEvents.filter(
+                                e => !selectedUser.eventStaffEvents.includes(e.id),
+                            );
+                            return (
+                                <div className="admin-group-section">
+                                    <h4 className="admin-badges-title">
+                                        {isEnglish ? 'Event Staff Access' : '活动工作人员权限'}
+                                    </h4>
+                                    <p className="admin-title-hint">
+                                        {isEnglish
+                                            ? 'Grants this user ticket-scanning and attendee-viewing access for specific upcoming events.'
+                                            : '授予此用户对特定活动的门票扫描与参加者查看权限。'}
+                                    </p>
+                                    {assigned.length > 0 ? (
+                                        <div className="admin-event-staff-list">
+                                            {assigned.map((e) => (
+                                                <div key={e.id} className="admin-event-staff-row">
+                                                    <span className="admin-event-staff-name">
+                                                        {isEnglish ? (e.title || e.id) : (e.titleCn || e.title || e.id)}
+                                                    </span>
+                                                    <button
+                                                        className="admin-toggle-btn admin-toggle-revoke"
+                                                        onClick={() => removeEventStaff(selectedUser, e.id)}
+                                                        disabled={eventStaffBusy}
+                                                    >
+                                                        {isEnglish ? 'Remove' : '撤销'}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="admin-no-results">
+                                            {isEnglish ? 'No event-specific access yet.' : '尚未授予任何活动权限。'}
+                                        </p>
+                                    )}
+                                    {unassigned.length > 0 && (
+                                        <div className="admin-event-staff-add">
+                                            <select
+                                                className="admin-search-input"
+                                                value={eventStaffSelectId}
+                                                onChange={(e) => setEventStaffSelectId(e.target.value)}
+                                                disabled={eventStaffBusy}
+                                            >
+                                                <option value="">
+                                                    {isEnglish ? 'Select an event...' : '选择一个活动...'}
+                                                </option>
+                                                {unassigned.map((e) => (
+                                                    <option key={e.id} value={e.id}>
+                                                        {isEnglish ? (e.title || e.id) : (e.titleCn || e.title || e.id)}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-grant"
+                                                onClick={() => assignEventStaff(selectedUser, eventStaffSelectId)}
+                                                disabled={eventStaffBusy || !eventStaffSelectId}
+                                            >
+                                                {isEnglish ? 'Add' : '添加'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
 
                         <div className="admin-deletion-section">
                             <h4 className="admin-badges-title">

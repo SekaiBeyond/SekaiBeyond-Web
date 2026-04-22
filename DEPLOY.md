@@ -53,6 +53,28 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
    Without these policies, rate-limit entries and audit logs accumulate indefinitely, and deletion cooldowns will never fire the cleanup triggers.
 
+10. Install the **Firebase Trigger Email extension** — paid event ticketing relies on this extension to deliver per-attendee ticket emails. The `sendTicketEmails` Cloud Function writes documents to the `mail/{autoId}` collection; the extension picks them up and sends via your configured SMTP provider.
+
+    Install at [firebase.google.com/products/extensions/firebase-firestore-send-email](https://firebase.google.com/products/extensions/firebase-firestore-send-email) (or via Firebase Console > Extensions > Browse) with these settings:
+
+    | Setting              | Value                                               |
+    |----------------------|-----------------------------------------------------|
+    | Mail collection      | `mail` (default)                                    |
+    | SMTP connection URI  | `smtps://user:pass@smtp.example.com:465` (operator) |
+    | Default FROM address | e.g. `no-reply@yourclub.org`                        |
+    | TTL expiration       | optional — set to 7d or similar to auto-clean       |
+
+    Without this extension, ticket emails will be written to Firestore but never sent.
+
+11. Configure the `PUBLIC_ORIGIN` **Functions parameter** — `sendTicketEmails` embeds ticket-claim URLs (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into the QR images it generates. Set it to your deployed site's origin (e.g. `https://your-project.web.app` or your custom domain):
+
+    ```bash
+    firebase functions:params:set PUBLIC_ORIGIN=https://your-site.example.com
+    firebase deploy --only functions
+    ```
+
+    If unset, QR codes will encode `http://localhost` URLs and be useless in production.
+
 #### Firestore Indexes Explained
 
 Firestore requires composite indexes for queries that filter on multiple fields. Each index is a sorted table covering the fields in order, allowing O(1) lookups instead of O(n) collection scans.
