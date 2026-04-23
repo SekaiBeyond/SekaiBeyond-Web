@@ -11,6 +11,7 @@ import {
     getFirebaseDb,
 } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
+import { AttendeeAddModal } from './AttendeeAddModal';
 import { AttendeeEditModal } from './AttendeeEditModal';
 import { TicketScanner } from './TicketScanner';
 import type { ShowToast } from './utils';
@@ -61,6 +62,38 @@ interface ParseError {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const DEFAULT_TEMPLATE_SUBJECT = 'Your tickets for {{ eventTitle }}';
+
+const DEFAULT_TEMPLATE_BODY_EN = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2a2a2a;line-height:1.6;">
+  <h2 style="margin:0 0 16px;color:#ff6b9d;font-weight:600;">Hi {{ attendeeName }},</h2>
+
+  <p>You're confirmed for <strong>{{ eventTitle }}</strong>. We can't wait to see you there!</p>
+
+  <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#fff0f6;border:1px solid #ffd9e6;border-radius:10px;">
+    <tr>
+      <td style="padding:12px 18px;font-size:14px;color:#777;width:90px;">Date</td>
+      <td style="padding:12px 18px;font-size:14px;"><strong>{{ eventDate }}</strong></td>
+    </tr>
+    <tr>
+      <td style="padding:12px 18px;font-size:14px;color:#777;border-top:1px solid #ffd9e6;">Tickets</td>
+      <td style="padding:12px 18px;font-size:14px;border-top:1px solid #ffd9e6;"><strong>{{ ticketCount }}</strong></td>
+    </tr>
+  </table>
+
+  <p>Please show the QR code(s) below at the door &mdash; one scan per ticket.</p>
+
+  {{ ticketIds[] }}
+
+  <p style="font-size:13px;color:#666;margin-top:28px;"><strong>A few reminders:</strong></p>
+  <ul style="font-size:13px;color:#666;padding-left:20px;margin:8px 0;">
+    <li>Each QR code is valid for one entry only &mdash; please don't share or post them publicly.</li>
+    <li>Screenshots work fine; just keep your phone charged.</li>
+    <li>Trouble at the door? Just reply to this email and we'll sort it out.</li>
+  </ul>
+
+  <p style="margin-top:28px;">See you soon,<br/><strong>The Sekai Beyond team</strong></p>
+</div>`;
 
 const tsToDate = (t: unknown): Date | null => {
     if (!t) return null;
@@ -158,6 +191,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
     const [filterUnsent, setFilterUnsent] = useState(false);
 
     const [editingAttendee, setEditingAttendee] = useState<AttendeeData | null>(null);
+    const [addingAttendee, setAddingAttendee] = useState(false);
 
     const loadAttendees = useCallback(async () => {
         setLoadingAttendees(true);
@@ -337,6 +371,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                     onFilterUnsentChange={setFilterUnsent}
                     readOnly={readOnly}
                     onEdit={setEditingAttendee}
+                    onAdd={() => setAddingAttendee(true)}
                     onVoidTicket={voidTicketAction}
                     onResend={resendToAttendee}
                     onDelete={deleteAttendeeAction}
@@ -383,6 +418,16 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                     showToast={showToast}
                 />
             )}
+
+            {addingAttendee && (
+                <AttendeeAddModal
+                    eventId={eventId}
+                    existingAttendees={attendees}
+                    onClose={() => setAddingAttendee(false)}
+                    onAdded={() => void loadAttendees()}
+                    showToast={showToast}
+                />
+            )}
         </div>
     );
 }
@@ -400,6 +445,7 @@ interface AttendeesSectionProps {
     onFilterUnsentChange: (v: boolean) => void;
     readOnly: boolean;
     onEdit: (a: AttendeeData) => void;
+    onAdd: () => void;
     onVoidTicket: (a: AttendeeData, ticketId: string) => void;
     onResend: (a: AttendeeData) => void;
     onDelete: (a: AttendeeData) => void;
@@ -409,7 +455,7 @@ interface AttendeesSectionProps {
 function AttendeesSection({
                               loading, error, totals, attendees,
                               search, onSearchChange, filterUnsent, onFilterUnsentChange,
-                              readOnly, onEdit, onVoidTicket, onResend, onDelete, onRefresh,
+                              readOnly, onEdit, onAdd, onVoidTicket, onResend, onDelete, onRefresh,
                           }: AttendeesSectionProps) {
     const {isEnglish} = useLanguage();
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -441,6 +487,13 @@ function AttendeesSection({
                 <span>
                     <strong>{totals.unsent}</strong> {isEnglish ? 'unsent' : '未发送'}
                 </span>
+                <button
+                    className="admin-toggle-btn admin-toggle-save admin-tickets-refresh"
+                    onClick={onAdd}
+                    disabled={readOnly}
+                >
+                    {isEnglish ? 'Add Attendee' : '添加参加者'}
+                </button>
                 <button
                     className="admin-toggle-btn admin-toggle-edit admin-tickets-refresh"
                     onClick={onRefresh}
@@ -1024,21 +1077,32 @@ function TemplateSection({event, readOnly, showToast}: TemplateSectionProps) {
                 if (cancelled) return;
                 if (snap.exists()) {
                     const data = snap.data();
+                    // bodyCnHtml is intentionally dropped from the editor — the
+                    // template UI is English-only. Any legacy CN content is
+                    // cleared on the next save (see save() below).
                     const t: EmailTemplate = {
                         subject: (data.subject as string) ?? '',
                         bodyHtml: (data.bodyHtml as string) ?? '',
-                        bodyCnHtml: (data.bodyCnHtml as string) ?? '',
+                        bodyCnHtml: '',
                         updatedAt: tsToDate(data.updatedAt),
                         updatedBy: (data.updatedBy as string) ?? '',
                     };
                     setTemplate(t);
                     setInitialTemplate(t);
                 } else {
-                    const empty: EmailTemplate = {
+                    // No saved template yet: pre-fill the editor with defaults so
+                    // the admin can save-as-is or tweak. initialTemplate stays
+                    // empty so isDirty=true and Save is enabled.
+                    setTemplate({
+                        subject: DEFAULT_TEMPLATE_SUBJECT,
+                        bodyHtml: DEFAULT_TEMPLATE_BODY_EN,
+                        bodyCnHtml: '',
+                        updatedAt: null,
+                        updatedBy: '',
+                    });
+                    setInitialTemplate({
                         subject: '', bodyHtml: '', bodyCnHtml: '', updatedAt: null, updatedBy: '',
-                    };
-                    setTemplate(empty);
-                    setInitialTemplate(empty);
+                    });
                 }
             } catch (err) {
                 console.error('[template] load', err);
@@ -1057,8 +1121,24 @@ function TemplateSection({event, readOnly, showToast}: TemplateSectionProps) {
     }, [event.id, isEnglish, showToast]);
 
     const isDirty = template.subject !== initialTemplate.subject
-        || template.bodyHtml !== initialTemplate.bodyHtml
-        || template.bodyCnHtml !== initialTemplate.bodyCnHtml;
+        || template.bodyHtml !== initialTemplate.bodyHtml;
+
+    const isAtDefault = template.subject === DEFAULT_TEMPLATE_SUBJECT
+        && template.bodyHtml === DEFAULT_TEMPLATE_BODY_EN;
+
+    const resetToDefault = () => {
+        if (readOnly) return;
+        if (isAtDefault) return;
+        const ok = window.confirm(isEnglish
+            ? 'Reset the template fields to the default content? Unsaved changes will be lost. (You still need to click Save to persist.)'
+            : '将模板内容恢复为默认值？未保存的修改将丢失。（仍需点击保存才会生效。）');
+        if (!ok) return;
+        setTemplate(t => ({
+            ...t,
+            subject: DEFAULT_TEMPLATE_SUBJECT,
+            bodyHtml: DEFAULT_TEMPLATE_BODY_EN,
+        }));
+    };
 
     const save = async () => {
         if (readOnly || !isDirty) return;
@@ -1072,7 +1152,7 @@ function TemplateSection({event, readOnly, showToast}: TemplateSectionProps) {
                 eventId: event.id,
                 subject: template.subject,
                 bodyHtml: template.bodyHtml,
-                bodyCnHtml: template.bodyCnHtml,
+                bodyCnHtml: '',
             });
             setInitialTemplate({...template, updatedAt: new Date()});
             showToast(isEnglish ? 'Template saved.' : '模板已保存。', 'success');
@@ -1091,8 +1171,8 @@ function TemplateSection({event, readOnly, showToast}: TemplateSectionProps) {
         <div className="admin-tickets-template">
             <p className="admin-helper-text">
                 {isEnglish
-                    ? 'Supported placeholders: {{ attendeeName }}, {{ attendeeEmail }}, {{ eventTitle }}, {{ eventTitleCn }}, {{ eventDate }}, {{ ticketCount }}, {{ ticketIds[] }} (renders one QR per ticket).'
-                    : '可用占位符：{{ attendeeName }}、{{ attendeeEmail }}、{{ eventTitle }}、{{ eventTitleCn }}、{{ eventDate }}、{{ ticketCount }}、{{ ticketIds[] }}（为每张门票渲染一个二维码）。'}
+                    ? 'Supported placeholders: {{ attendeeName }}, {{ attendeeEmail }}, {{ eventTitle }}, {{ eventDate }}, {{ ticketCount }}, {{ ticketIds[] }} (renders one QR per ticket).'
+                    : '可用占位符：{{ attendeeName }}、{{ attendeeEmail }}、{{ eventTitle }}、{{ eventDate }}、{{ ticketCount }}、{{ ticketIds[] }}（为每张门票渲染一个二维码）。'}
             </p>
 
             <label className="admin-tickets-template-field">
@@ -1108,23 +1188,11 @@ function TemplateSection({event, readOnly, showToast}: TemplateSectionProps) {
             </label>
 
             <label className="admin-tickets-template-field">
-                <span>{isEnglish ? 'English Body (HTML)' : '英文正文（HTML）'}</span>
+                <span>{isEnglish ? 'Body (HTML)' : '正文（HTML）'}</span>
                 <textarea
                     className="admin-tickets-template-textarea"
                     value={template.bodyHtml}
                     onChange={(e) => setTemplate(t => ({...t, bodyHtml: e.target.value}))}
-                    maxLength={20000}
-                    readOnly={readOnly}
-                    rows={10}
-                />
-            </label>
-
-            <label className="admin-tickets-template-field">
-                <span>{isEnglish ? 'Chinese Body (HTML)' : '中文正文（HTML）'}</span>
-                <textarea
-                    className="admin-tickets-template-textarea"
-                    value={template.bodyCnHtml}
-                    onChange={(e) => setTemplate(t => ({...t, bodyCnHtml: e.target.value}))}
                     maxLength={20000}
                     readOnly={readOnly}
                     rows={10}
@@ -1146,6 +1214,14 @@ function TemplateSection({event, readOnly, showToast}: TemplateSectionProps) {
                     onClick={() => setShowPreview(true)}
                 >
                     {isEnglish ? 'Preview' : '预览'}
+                </button>
+                <button
+                    className="admin-toggle-btn admin-toggle-cancel"
+                    onClick={resetToDefault}
+                    disabled={readOnly || saving || isAtDefault}
+                    title={isEnglish ? 'Restore the default template content' : '恢复默认模板内容'}
+                >
+                    {isEnglish ? 'Reset to Default' : '恢复默认'}
                 </button>
             </div>
 
