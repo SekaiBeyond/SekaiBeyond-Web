@@ -1,12 +1,13 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 import { defineString } from "firebase-functions/params";
 
 import * as crypto from "crypto";
+import sanitizeHtml from "sanitize-html";
 
 // Public origin for ticket QR URLs (set via `firebase functions:config:set` or
 // the v2 parameterised config UI). Fallback keeps QR codes pointing at the prod
@@ -2350,31 +2351,35 @@ interface EmailTemplateDoc {
     bodyCnHtml: string;
 }
 
-function buildDefaultEmailTemplate(eventData: FirebaseFirestore.DocumentData): EmailTemplateDoc {
-    const title = eventData.title ?? "";
-    const titleCn = eventData.titleCn ?? "";
-    return {
-        subject: `Your tickets for {{ eventTitle }}`,
-        bodyHtml: [
-            `<p>Hi {{ attendeeName }},</p>`,
-            `<p>Thank you for purchasing tickets to <strong>{{ eventTitle }}</strong>` +
-            (title ? "" : "") + `.</p>`,
-            `<p>Event date: {{ eventDate }}</p>`,
-            `<p>You purchased {{ ticketCount }} ticket(s). Please show the QR code(s) below at the door:</p>`,
-            `{{ ticketIds[] }}`,
-            `<p>— Sekai Beyond</p>`,
-        ].join("\n"),
-        bodyCnHtml: [
-            `<p>您好 {{ attendeeName }},</p>`,
-            `<p>感谢您购买 <strong>{{ eventTitleCn }}</strong>` +
-            (titleCn ? "" : "") + ` 的门票。</p>`,
-            `<p>活动日期：{{ eventDate }}</p>`,
-            `<p>您购买了 {{ ticketCount }} 张门票。请在入场时出示以下二维码：</p>`,
-            `{{ ticketIds[] }}`,
-            `<p>— Sekai Beyond</p>`,
-        ].join("\n"),
-    };
-}
+// Allowlist for the ticket-email template HTML. Applied at save time in
+// updateEventEmailTemplate. Blocks <script>/<iframe>/<style>/event handlers and
+// restricts href to https/mailto, img src to https/data. QR images embedded at
+// send time use data: URLs — sanitize runs on the stored template only, so
+// rendered data URLs are never re-sanitized.
+const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
+    allowedTags: [
+        "p", "div", "span", "strong", "em", "b", "i", "u", "br", "hr",
+        "h1", "h2", "h3", "h4", "h5", "h6",
+        "ul", "ol", "li",
+        "a", "img",
+        "table", "thead", "tbody", "tr", "td", "th",
+        "code", "blockquote",
+    ],
+    allowedAttributes: {
+        "*": ["style", "class", "align", "width", "height"],
+        "a": ["href", "title", "target", "rel"],
+        "img": ["src", "alt", "title", "width", "height"],
+        "td": ["colspan", "rowspan", "valign"],
+        "th": ["colspan", "rowspan", "valign"],
+    },
+    allowedSchemes: ["https", "mailto"],
+    allowedSchemesByTag: {
+        img: ["https", "data"],
+    },
+    allowedSchemesAppliedToAttributes: ["href", "src"],
+    allowProtocolRelative: false,
+    disallowedTagsMode: "discard",
+};
 
 function renderTicketQrBlock(ticketIds: string[], eventId: string, qrDataUrls: string[]): string {
     // One <div> per ticket with a QR image. Kept simple — email clients strip
@@ -2831,143 +2836,242 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
     });
 });
 
+// Per-invocation attendee cap. Lower than the Resend free-tier daily cap so a
+// single event with >100 attendees must chunk across calls, surfacing progress
+// and giving the admin a place to cancel between chunks.
+const SEND_CHUNK_SIZE = 100;
+
 /**
  * Send ticket emails (core-staff+).
+ *
  * Writes to `mail/{autoId}` documents consumed by the Firebase Trigger Email
- * extension. Renders the event's email template (or a default) for each
- * attendee with their tickets embedded as data-URL QR images.
+ * extension. Renders the event's saved email template for each attendee with
+ * their tickets embedded as data-URL QR images.
+ *
+ * Chunked: processes at most SEND_CHUNK_SIZE attendees per invocation. The
+ * client loops until `hasMore === false`, passing back `nextCursor` for
+ * mode='all' continuation. mode='unsent' drains naturally (sent attendees
+ * leave the `emailSent==false` result set), so no cursor is needed there.
+ *
+ * Throws {code: 'no-template'} if the event's template hasn't been saved yet —
+ * the client surfaces a banner prompting the admin to save it first.
  */
-export const sendTicketEmails = onCall({maxInstances: 5, timeoutSeconds: 300}, async (request) => {
+export const sendTicketEmails = onCall(
+    {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB"},
+    async (request) => {
+        const uid = await requireAuth(request);
+        await requireAdmin(uid);
+
+        const input = request.data as {
+            eventId?: string;
+            mode?: string;
+            attendeeIds?: unknown;
+            cursor?: unknown;
+        };
+        const eventId = validateDocId(input.eventId, "eventId");
+        const mode = input.mode === "all" ? "all" : "unsent";
+        let attendeeIds: string[] | null = null;
+        if (Array.isArray(input.attendeeIds)) {
+            attendeeIds = input.attendeeIds.map(id => validateDocId(id, "attendeeId"));
+            if (attendeeIds.length > SEND_CHUNK_SIZE) {
+                throw new HttpsError("invalid-argument",
+                    `Too many attendee ids in a single send (max ${SEND_CHUNK_SIZE}).`);
+            }
+        }
+        const cursor = typeof input.cursor === "string" && input.cursor.length > 0
+            ? validateDocId(input.cursor, "cursor")
+            : null;
+
+        const eventSnap = await db.collection("upcomingEvents").doc(eventId).get();
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        const eventData = eventSnap.data()!;
+
+        // Load template — hard-fail if not saved. No server-side default.
+        const templateRef = db.collection("upcomingEvents").doc(eventId)
+            .collection("emailTemplate").doc("default");
+        const templateSnap = await templateRef.get();
+        if (!templateSnap.exists) {
+            throw new HttpsError("failed-precondition",
+                "Email template not saved for this event.", {code: "no-template"});
+        }
+        const templateData = templateSnap.data() ?? {};
+        const template: EmailTemplateDoc = {
+            subject: (templateData.subject as string) ?? "",
+            bodyHtml: (templateData.bodyHtml as string) ?? "",
+            bodyCnHtml: (templateData.bodyCnHtml as string) ?? "",
+        };
+        if (!template.subject.trim() || !template.bodyHtml.trim()) {
+            throw new HttpsError("failed-precondition",
+                "Email template is empty.", {code: "no-template"});
+        }
+
+        // Target attendees — capped at SEND_CHUNK_SIZE.
+        const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
+        let targets: FirebaseFirestore.QueryDocumentSnapshot[];
+        let queriedCount: number;
+        if (attendeeIds && attendeeIds.length > 0) {
+            const snaps = await Promise.all(attendeeIds.map(id => attendeesCol.doc(id).get()));
+            let filtered = snaps.filter(s => s.exists) as FirebaseFirestore.QueryDocumentSnapshot[];
+            if (mode === "unsent") {
+                filtered = filtered.filter(s => s.data()?.emailSent !== true);
+            }
+            targets = filtered.slice(0, SEND_CHUNK_SIZE);
+            queriedCount = filtered.length;
+        } else if (mode === "unsent") {
+            // Drain pattern: processed attendees leave the result set on next call.
+            const snap = await attendeesCol
+                .where("emailSent", "==", false)
+                .limit(SEND_CHUNK_SIZE)
+                .get();
+            targets = snap.docs;
+            queriedCount = snap.docs.length;
+        } else {
+            // Resend-all: cursor by doc id for stable chunked iteration.
+            let q = attendeesCol.orderBy(FieldPath.documentId())
+                .limit(SEND_CHUNK_SIZE);
+            if (cursor) q = q.startAfter(cursor);
+            const snap = await q.get();
+            targets = snap.docs;
+            queriedCount = snap.docs.length;
+        }
+
+        const eventTitle: string = eventData.title ?? eventData.name ?? "";
+        const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
+        const eventDateEn = formatEventDateForEmail(eventData.startAt, "en-US");
+        const eventDateCn = formatEventDateForEmail(eventData.startAt, "zh-CN");
+
+        const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+        let sentCount = 0;
+        let lastProcessedId: string | null = null;
+
+        for (const target of targets) {
+            lastProcessedId = target.id;
+            const data = target.data();
+            const ticketIds: string[] = data.ticketIds ?? [];
+            if (ticketIds.length === 0) continue;
+
+            const qrDataUrls = await generateTicketQrDataUrls(ticketIds, eventId);
+            const ticketBlock = renderTicketQrBlock(ticketIds, eventId, qrDataUrls);
+
+            const renderedSubject = renderTemplate(template.subject, {
+                attendeeEmail: data.email ?? "",
+                attendeeName: data.name ?? "",
+                eventTitle, eventTitleCn,
+                eventDate: eventDateEn,
+                ticketCount: data.ticketCount ?? ticketIds.length,
+                ticketBlock: "",
+            });
+            const renderedBodyEn = renderTemplate(template.bodyHtml, {
+                attendeeEmail: data.email ?? "",
+                attendeeName: data.name ?? "",
+                eventTitle, eventTitleCn,
+                eventDate: eventDateEn,
+                ticketCount: data.ticketCount ?? ticketIds.length,
+                ticketBlock,
+            });
+            const renderedBodyCn = renderTemplate(template.bodyCnHtml, {
+                attendeeEmail: data.email ?? "",
+                attendeeName: data.name ?? "",
+                eventTitle, eventTitleCn,
+                eventDate: eventDateCn,
+                ticketCount: data.ticketCount ?? ticketIds.length,
+                ticketBlock,
+            });
+
+            // Bilingual: EN first, CN below, separated by a thin hr.
+            const html = renderedBodyCn
+                ? `${renderedBodyEn}\n<hr style="border:none;border-top:1px solid #ddd;margin:24px 0;"/>\n${renderedBodyCn}`
+                : renderedBodyEn;
+
+            const mailRef = db.collection("mail").doc();
+            ops.push(b => b.set(mailRef, {
+                to: data.email,
+                message: {subject: renderedSubject, html},
+            }));
+            ops.push(b => b.update(target.ref, {
+                emailSent: true,
+                emailSentAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            }));
+            sentCount++;
+        }
+
+        // Only write an audit record when we actually sent something. Otherwise
+        // chunked loops would fill `records` with zero-count noise.
+        if (sentCount > 0) {
+            const callerSnap = await db.collection("users").doc(uid).get();
+            ops.push(b => b.set(db.collection("records").doc(), {
+                type: "ticket-email-send",
+                performedBy: uid,
+                performedByName: callerSnap.data()?.displayName ?? "",
+                eventId,
+                eventTitle,
+                sentCount,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            }));
+        }
+
+        if (ops.length > 0) await commitInChunks(ops);
+
+        // hasMore: the query returned a full chunk (there may be more).
+        // For attendeeIds, client controls chunking — never set hasMore.
+        const hasMore = !attendeeIds && queriedCount >= SEND_CHUNK_SIZE;
+        const nextCursor = mode === "all" && hasMore && lastProcessedId
+            ? lastProcessedId
+            : undefined;
+
+        return {sentCount, hasMore, ...(nextCursor ? {nextCursor} : {})};
+    });
+
+/**
+ * Return today's count of sent ticket emails across ALL events (core-staff+).
+ * Used to surface the Resend free-tier daily cap (100/day) in the admin UI.
+ * Day boundary is America/Los_Angeles midnight — matches the club's operating
+ * timezone and keeps the reset time predictable for admins.
+ */
+export const getTicketEmailQuota = onCall({maxInstances: 5}, async (request) => {
     const uid = await requireAuth(request);
     await requireAdmin(uid);
 
-    const input = request.data as {
-        eventId?: string;
-        mode?: string;
-        attendeeIds?: unknown;
-    };
-    const eventId = validateDocId(input.eventId, "eventId");
-    const mode = input.mode === "all" ? "all" : "unsent";
-    let attendeeIds: string[] | null = null;
-    if (Array.isArray(input.attendeeIds)) {
-        attendeeIds = input.attendeeIds.map(id => validateDocId(id, "attendeeId"));
-        if (attendeeIds.length > 500) {
-            throw new HttpsError("invalid-argument", "Too many attendee ids in a single send.");
-        }
+    // Start of today in America/Los_Angeles, expressed as a UTC Timestamp.
+    // UTC-now minus LA's elapsed-since-midnight equals LA midnight (UTC).
+    // hourCycle:'h23' pins the range to 0–23 (en-US hour12:false can return "24").
+    const now = new Date();
+    const laParts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "America/Los_Angeles",
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        hourCycle: "h23",
+    }).formatToParts(now);
+    const part = (t: string) => Number(laParts.find(p => p.type === t)?.value ?? "0");
+    const laMidnightMs = now.getTime()
+        - part("hour") * 3600_000
+        - part("minute") * 60_000
+        - part("second") * 1000
+        - now.getMilliseconds();
+    const startOfTodayLA = Timestamp.fromMillis(laMidnightMs);
+
+    // Uses the existing (type, timestamp) composite index.
+    const snap = await db.collection("records")
+        .where("type", "==", "ticket-email-send")
+        .where("timestamp", ">=", startOfTodayLA)
+        .get();
+    let sentToday = 0;
+    for (const d of snap.docs) {
+        const c = d.data().sentCount;
+        if (typeof c === "number" && Number.isFinite(c)) sentToday += c;
     }
-
-    const eventSnap = await db.collection("upcomingEvents").doc(eventId).get();
-    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-    const eventData = eventSnap.data()!;
-
-    // Load template (fallback to built-in default if admin hasn't saved one yet).
-    const templateRef = db.collection("upcomingEvents").doc(eventId)
-        .collection("emailTemplate").doc("default");
-    const templateSnap = await templateRef.get();
-    const template: EmailTemplateDoc = templateSnap.exists
-        ? {
-            subject: templateSnap.data()?.subject ?? "",
-            bodyHtml: templateSnap.data()?.bodyHtml ?? "",
-            bodyCnHtml: templateSnap.data()?.bodyCnHtml ?? "",
-        }
-        : buildDefaultEmailTemplate(eventData);
-
-    // Target attendees
-    const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
-    let targets: FirebaseFirestore.QueryDocumentSnapshot[];
-    if (attendeeIds && attendeeIds.length > 0) {
-        const snaps = await Promise.all(attendeeIds.map(id => attendeesCol.doc(id).get()));
-        targets = snaps.filter(s => s.exists) as FirebaseFirestore.QueryDocumentSnapshot[];
-        if (mode === "unsent") {
-            targets = targets.filter(s => s.data()?.emailSent !== true);
-        }
-    } else if (mode === "unsent") {
-        const snap = await attendeesCol.where("emailSent", "==", false).get();
-        targets = snap.docs;
-    } else {
-        const snap = await attendeesCol.get();
-        targets = snap.docs;
-    }
-
-    const eventTitle: string = eventData.title ?? eventData.name ?? "";
-    const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
-    const eventDateEn = formatEventDateForEmail(eventData.startAt, "en-US");
-    const eventDateCn = formatEventDateForEmail(eventData.startAt, "zh-CN");
-
-    const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
-    let sentCount = 0;
-
-    for (const target of targets) {
-        const data = target.data();
-        const ticketIds: string[] = data.ticketIds ?? [];
-        if (ticketIds.length === 0) continue;
-
-        const qrDataUrls = await generateTicketQrDataUrls(ticketIds, eventId);
-        const ticketBlock = renderTicketQrBlock(ticketIds, eventId, qrDataUrls);
-
-        const renderedSubject = renderTemplate(template.subject, {
-            attendeeEmail: data.email ?? "",
-            attendeeName: data.name ?? "",
-            eventTitle, eventTitleCn,
-            eventDate: eventDateEn,
-            ticketCount: data.ticketCount ?? ticketIds.length,
-            ticketBlock: "",
-        });
-        const renderedBodyEn = renderTemplate(template.bodyHtml, {
-            attendeeEmail: data.email ?? "",
-            attendeeName: data.name ?? "",
-            eventTitle, eventTitleCn,
-            eventDate: eventDateEn,
-            ticketCount: data.ticketCount ?? ticketIds.length,
-            ticketBlock,
-        });
-        const renderedBodyCn = renderTemplate(template.bodyCnHtml, {
-            attendeeEmail: data.email ?? "",
-            attendeeName: data.name ?? "",
-            eventTitle, eventTitleCn,
-            eventDate: eventDateCn,
-            ticketCount: data.ticketCount ?? ticketIds.length,
-            ticketBlock,
-        });
-
-        // Bilingual: EN first, CN below, separated by a thin hr.
-        const html = renderedBodyCn
-            ? `${renderedBodyEn}\n<hr style="border:none;border-top:1px solid #ddd;margin:24px 0;"/>\n${renderedBodyCn}`
-            : renderedBodyEn;
-
-        const mailRef = db.collection("mail").doc();
-        ops.push(b => b.set(mailRef, {
-            to: data.email,
-            message: {subject: renderedSubject, html},
-        }));
-        ops.push(b => b.update(target.ref, {
-            emailSent: true,
-            emailSentAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        }));
-        sentCount++;
-    }
-
-    const callerSnap = await db.collection("users").doc(uid).get();
-    ops.push(b => b.set(db.collection("records").doc(), {
-        type: "ticket-email-send",
-        performedBy: uid,
-        performedByName: callerSnap.data()?.displayName ?? "",
-        eventId,
-        eventTitle,
-        sentCount,
-        timestamp: FieldValue.serverTimestamp(),
-        expiresAt: recordExpiresAt(),
-    }));
-
-    await commitInChunks(ops);
-
-    return {sentCount};
+    return {sentToday, dailyCap: 100};
 });
 
 /**
  * Upsert the event's email template (core-staff+).
- * No HTML sanitization — editor is core-staff+ only, trusted.
+ *
+ * Body HTML is sanitized server-side with a narrow allowlist
+ * (EMAIL_HTML_SANITIZE_OPTIONS): strips <script>, <iframe>, <style>, event
+ * handlers, javascript: URLs, and any http:-scheme links. Even though editors
+ * are trusted, this bounds the blast radius if a core-staff account is
+ * compromised — attacker can't inject phishing-via-DKIM-signed-email.
  */
 export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -2980,8 +3084,13 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
     };
     const eventId = validateDocId(input.eventId, "eventId");
     const subject = validateStr(input.subject, "subject", 500, true);
-    const bodyHtml = validateStr(input.bodyHtml, "bodyHtml", 20000);
-    const bodyCnHtml = validateStr(input.bodyCnHtml, "bodyCnHtml", 20000);
+    const rawBodyHtml = validateStr(input.bodyHtml, "bodyHtml", 20000);
+    const rawBodyCnHtml = validateStr(input.bodyCnHtml, "bodyCnHtml", 20000);
+
+    const bodyHtml = sanitizeHtml(rawBodyHtml, EMAIL_HTML_SANITIZE_OPTIONS);
+    const bodyCnHtml = rawBodyCnHtml
+        ? sanitizeHtml(rawBodyCnHtml, EMAIL_HTML_SANITIZE_OPTIONS)
+        : "";
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));

@@ -192,8 +192,13 @@ export const callSendTicketEmails = (data: {
     eventId: string;
     mode?: 'unsent' | 'all';
     attendeeIds?: string[];
-}) => httpsCallable<typeof data, {sentCount: number}>(
+    cursor?: string;
+}) => httpsCallable<typeof data, {sentCount: number; hasMore: boolean; nextCursor?: string}>(
     getFunctions(), 'sendTicketEmails')(data);
+
+export const callGetTicketEmailQuota = () =>
+    httpsCallable<Record<string, never>, {sentToday: number; dailyCap: number}>(
+        getFunctions(), 'getTicketEmailQuota')({});
 
 export const callUpdateEventEmailTemplate = (data: {
     eventId: string;

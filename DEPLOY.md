@@ -23,7 +23,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
    Storage rules control access to user avatars and admin-uploaded images (event/badge images). Without deploying these, storage defaults to locked-down and all image uploads will fail.
 
-8. Deploy **Cloud Functions** — the app uses 43 callable Cloud Functions plus 4 Firestore-trigger functions for all data mutations (user profile creation, admin operations, badge/event management, image uploads, ticketing, TTL-driven deletions, etc.). Without these, the entire app is non-functional:
+8. Deploy **Cloud Functions** — the app uses 44 callable Cloud Functions plus 4 Firestore-trigger functions for all data mutations (user profile creation, admin operations, badge/event management, image uploads, ticketing, TTL-driven deletions, etc.). Without these, the entire app is non-functional:
 
    ```bash
    cd functions && npm install && npm run build && cd ..
