@@ -23,25 +23,27 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
    Storage rules control access to user avatars and admin-uploaded images (event/badge images). Without deploying these, storage defaults to locked-down and all image uploads will fail.
 
-8. Deploy **Cloud Functions** — the app uses 35 callable Cloud Functions plus 4 Firestore-trigger functions for all data mutations (user profile creation, admin operations, badge/event management, image uploads, TTL-driven deletions, etc.). Without these, the entire app is non-functional:
+8. Deploy **Cloud Functions** — the app uses 43 callable Cloud Functions plus 4 Firestore-trigger functions for all data mutations (user profile creation, admin operations, badge/event management, image uploads, ticketing, TTL-driven deletions, etc.). Without these, the entire app is non-functional:
 
    ```bash
    cd functions && npm install && npm run build && cd ..
    firebase deploy --only functions
    ```
 
-9. Configure **Firestore TTL Policies** — the app relies on TTL-based auto-expiry for rate limiting, audit-log retention, and deferred deletion of users/events/badges. Six TTL policies are required:
+9. Configure **Firestore TTL Policies** — the app relies on TTL-based auto-expiry for rate limiting, audit-log retention, deferred deletion of users/events/badges, and cleanup of expired claim/activation codes. Eight TTL policies are required:
 
-   | Collection        | Field       | Purpose                                 |
-   |-------------------|-------------|-----------------------------------------|
-   | `rateLimits`      | `expiresAt` | Clean up rate-limit windows             |
-   | `records`         | `expiresAt` | Audit-log retention (30 days)           |
-   | `users`           | `deleteAt`  | 48h cooldown for account deletion       |
-   | `pastEvents`      | `deleteAt`  | 48h cooldown for past-event deletion    |
-   | `upcomingEvents`  | `deleteAt`  | 48h cooldown for upcoming-event deletion |
-   | `badges`          | `deleteAt`  | 48h cooldown for badge deletion         |
+   | Collection              | Field       | Purpose                                                     |
+   |-------------------------|-------------|-------------------------------------------------------------|
+   | `rateLimits`            | `expiresAt` | Clean up rate-limit windows                                 |
+   | `records`               | `expiresAt` | Audit-log retention (30 days)                               |
+   | `claimCodes`            | `expiresAt` | Auto-expire event claim codes past their active window      |
+   | `badgeActivationCodes`  | `expiresAt` | Auto-expire badge activation codes past their active window |
+   | `users`                 | `deleteAt`  | 48h cooldown for account deletion                           |
+   | `pastEvents`            | `deleteAt`  | 48h cooldown for past-event deletion                        |
+   | `upcomingEvents`        | `deleteAt`  | 48h cooldown for upcoming-event deletion                    |
+   | `badges`                | `deleteAt`  | 48h cooldown for badge deletion                             |
 
-   The fastest way to create all six is via the included script (requires `gcloud` CLI authenticated to the project):
+   The fastest way to create all eight is via the included script (requires `gcloud` CLI authenticated to the project):
 
    ```bash
    npm run deploy:ttl
@@ -53,36 +55,75 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
    Without these policies, rate-limit entries and audit logs accumulate indefinitely, and deletion cooldowns will never fire the cleanup triggers.
 
-10. Install the **Firebase Trigger Email extension** — paid event ticketing relies on this extension to deliver per-attendee ticket emails. The `sendTicketEmails` Cloud Function writes documents to the `mail/{autoId}` collection; the extension picks them up and sends via your configured SMTP provider.
+10. Install the **Firebase Trigger Email extension** — paid event ticketing relies on this extension to deliver per-attendee ticket emails. The `sendTicketEmails` Cloud Function writes documents to the `mail/{autoId}` collection; the extension picks them up and sends via SMTP.
 
-    Install at [firebase.google.com/products/extensions/firebase-firestore-send-email](https://firebase.google.com/products/extensions/firebase-firestore-send-email) (or via Firebase Console > Extensions > Browse) with these settings:
+    Outbound mail is sent through **[Resend](https://resend.com)** — its free tier (3,000/mo, 100/day) covers the project's expected ~1,000 emails/month with headroom for event-day bursts, and its DNS setup plays cleanly with Cloudflare.
 
-    | Setting              | Value                                               |
-    |----------------------|-----------------------------------------------------|
-    | Mail collection      | `mail` (default)                                    |
-    | SMTP connection URI  | `smtps://user:pass@smtp.example.com:465` (operator) |
-    | Default FROM address | e.g. `no-reply@yourclub.org`                        |
-    | TTL expiration       | optional — set to 7d or similar to auto-clean       |
+    **Step A — Set up Resend and verify `sekaibeyond.com`**
+
+    1. Sign up at [resend.com](https://resend.com) and confirm your account email.
+    2. Go to **Domains** > **Add Domain**, enter `sekaibeyond.com`, and pick a region (EU/US — pick whichever is closer to your primary audience; this only affects bounce-handling MX hostnames).
+    3. Resend will display a set of DNS records to add. Typically:
+
+       | Type  | Name                              | Value                                                          | Notes                       |
+       |-------|-----------------------------------|----------------------------------------------------------------|-----------------------------|
+       | MX    | `send.sekaibeyond.com`            | `feedback-smtp.<region>.amazonses.com` (priority `10`)         | Bounce handling             |
+       | TXT   | `send.sekaibeyond.com`            | `v=spf1 include:amazonses.com ~all`                            | SPF for the sending subdomain |
+       | TXT   | `resend._domainkey.sekaibeyond.com` | (long DKIM key string — copy verbatim from Resend)           | DKIM signing key            |
+       | TXT   | `_dmarc.sekaibeyond.com`          | `v=DMARC1; p=none; rua=mailto:dmarc@sekaibeyond.com`           | DMARC (recommended)         |
+
+       > Copy the exact values from the Resend dashboard — the DKIM key in particular is a long opaque string that must match byte-for-byte.
+
+    4. In the Cloudflare dashboard for `sekaibeyond.com` > **DNS** > **Records**, add each row above. **Set Proxy status to "DNS only" (grey cloud) on every record** — Cloudflare's HTTP proxy will mangle DKIM lookups and break SPF/MX if left orange. (MX and TXT records can't be proxied anyway, but the UI will warn you on CNAMEs.)
+    5. Back in Resend, click **Verify DNS Records**. Propagation through Cloudflare is usually under a minute; the dashboard will turn each row green once it sees the record.
+    6. Go to **API Keys** > **Create API Key**, name it `sekaibeyond-firebase-extension`, scope it to **Sending access** only, and copy the key (starts with `re_`). You won't be able to view it again.
+
+    **Step B — Install the Trigger Email extension**
+
+    Install from [firebase.google.com/products/extensions/firebase-firestore-send-email](https://firebase.google.com/products/extensions/firebase-firestore-send-email) (or via Firebase Console > Extensions > Browse) with these settings:
+
+    | Setting              | Value                                                       |
+    |----------------------|-------------------------------------------------------------|
+    | Mail collection      | `mail` (default)                                            |
+    | SMTP connection URI  | `smtps://resend:<your-api-key>@smtp.resend.com:465`         |
+    | Default FROM address | `no-reply@sekaibeyond.com`                                  |
+    | TTL expiration       | optional — set to 7d or similar to auto-clean delivered docs |
+
+    > The username in the SMTP URI is the literal string `resend` — not your account email. The password is the `re_…` API key from Step A.6. URL-encode the key if it contains characters Firebase warns about (it normally doesn't).
+
+    **Step C — Send a test**
+
+    From the Resend dashboard > **Emails** > **Send Test**, send to your own inbox to confirm the domain is verified end-to-end. Then trigger a real ticket email through the admin panel and confirm it lands (check Resend's **Logs** tab if it doesn't — bounces, suppressions, and DKIM failures all surface there).
+
+    > If Cloudflare Email Routing is also handling inbound mail for `sekaibeyond.com`, leave its existing MX records on the apex (`sekaibeyond.com`) untouched — Resend's MX is on the `send.` subdomain and won't conflict.
 
     Without this extension, ticket emails will be written to Firestore but never sent.
 
-11. Configure the `PUBLIC_ORIGIN` **Functions parameter** — `sendTicketEmails` embeds ticket-claim URLs (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into the QR images it generates. Set it to your deployed site's origin (e.g. `https://your-project.web.app` or your custom domain):
+11. Configure the `PUBLIC_ORIGIN` **Functions parameter** — `sendTicketEmails` embeds ticket-claim URLs (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into the QR images it generates. Set it to your deployed site's origin (e.g. `https://your-project.web.app` or your custom domain).
+
+    For Cloud Functions v2, params declared via `defineString` are read from a dotenv file inside `functions/`. Create `functions/.env` (applies to all projects) or `functions/.env.<project-id>` (per-project override) containing:
+
+    ```
+    PUBLIC_ORIGIN=https://your-site.example.com
+    ```
+
+    Then redeploy Functions so the new value is picked up:
 
     ```bash
-    firebase functions:params:set PUBLIC_ORIGIN=https://your-site.example.com
     firebase deploy --only functions
     ```
 
-    If unset, QR codes will encode `http://localhost` URLs and be useless in production.
+    If unset, `PUBLIC_ORIGIN` falls back to the default baked into the code (`https://sekaibeyond.com` — see `functions/src/index.ts`). Forks that skip this step will send QR codes pointing at the original site instead of their own deployment.
 
 #### Firestore Indexes Explained
 
 Firestore requires composite indexes for queries that filter on multiple fields. Each index is a sorted table covering the fields in order, allowing O(1) lookups instead of O(n) collection scans.
 
-The app currently requires 5 composite indexes (defined in [`firestore.indexes.json`](firestore.indexes.json)):
+The app currently requires 6 composite indexes (defined in [`firestore.indexes.json`](firestore.indexes.json)):
 
 | Collection | Fields | Purpose |
 |---|---|---|
+| `attendees` | `[emailSent, createdAt]` | Admin tickets panel: query unsent attendees for bulk ticket-email send |
 | `badgeActivationCodes` | `[badgeId, createdAt desc]` | Admin panel: load codes for a badge |
 | `records` | `[type, timestamp desc]` | Activity log by type |
 | `records` | `[performedBy, timestamp desc]` | Activity log by user |
