@@ -437,7 +437,10 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         value={form.buyTicket}
                                         onChange={e => setForm(f => ({...f, buyTicket: e.target.value}))}
                                         className="admin-search-input"
-                                        placeholder={isEnglish ? 'Optional' : '可选'}
+                                        placeholder={isEnglish
+                                            ? (form.paid ? 'Optional' : 'Enable Paid event to edit')
+                                            : (form.paid ? '可选' : '启用付费活动后可编辑')}
+                                        disabled={!form.paid}
                                     />
                                 </label>
                                 <label>

@@ -15,16 +15,6 @@
       ]
     },
     {
-      "collectionGroup": "attendees",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "ticketIds",
-          "arrayConfig": "CONTAINS"
-        }
-      ]
-    },
-    {
       "collectionGroup": "badgeActivationCodes",
       "queryScope": "COLLECTION",
       "fields": [

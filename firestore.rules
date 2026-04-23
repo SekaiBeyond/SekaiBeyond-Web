@@ -6,8 +6,7 @@ service cloud.firestore {
     }
 
     function callerEventStaffEvents() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.eventStaffEvents
-             ?? [];
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('eventStaffEvents', []);
     }
 
     function isCoreStaffOrAbove() {
