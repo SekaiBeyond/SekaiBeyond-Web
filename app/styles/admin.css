@@ -1410,3 +1410,786 @@
     cursor: not-allowed;
 }
 
+/* ===== Admin Tickets (Upcoming Event → Tickets sub-tab) ===== */
+.admin-tickets-section {
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Third-level tab bar (Scan / Attendees / Import / Template / Send) */
+.admin-tickets-inner-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px;
+    background: rgba(255, 107, 157, 0.06);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+}
+
+.admin-tickets-inner-tabs .admin-sub-tab {
+    flex: 1 1 auto;
+    min-width: 110px;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+/* ----- Attendees section ----- */
+.admin-tickets-attendees {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.admin-tickets-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+.admin-tickets-stats strong {
+    color: var(--color-text);
+    font-size: 16px;
+    margin-right: 4px;
+}
+
+.admin-tickets-refresh {
+    margin-left: auto;
+    font-size: 13px;
+    padding: 6px 16px;
+}
+
+.admin-tickets-filters {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.admin-tickets-filters .admin-search-input {
+    flex: 1;
+    min-width: 220px;
+}
+
+.admin-tickets-filter-checkbox {
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 107, 157, 0.18);
+    border-radius: 14px;
+    white-space: nowrap;
+}
+
+/* Collapsible attendee row */
+.admin-tickets-attendee-row {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-tickets-attendee-row:hover {
+    border-color: rgba(255, 107, 157, 0.28);
+}
+
+.admin-tickets-attendee-summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.admin-tickets-attendee-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.admin-tickets-attendee-info .admin-user-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-tickets-attendee-info .admin-user-email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-tickets-attendee-stats {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-tickets-attendee-count {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-primary);
+    padding: 3px 10px;
+    background: rgba(255, 107, 157, 0.12);
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.admin-tickets-attendee-expand {
+    font-size: 14px;
+    color: var(--color-text-muted);
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.admin-tickets-attendee-detail {
+    border-top: 1px solid rgba(255, 107, 157, 0.12);
+    padding: 16px 18px;
+    background: rgba(255, 247, 251, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.admin-tickets-attendee-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-tickets-attendee-actions .admin-toggle-btn {
+    padding: 6px 16px;
+    font-size: 13px;
+}
+
+.admin-tickets-attendee-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 0 4px;
+}
+
+/* Status tags */
+.admin-tickets-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.admin-tickets-tag-fresh {
+    background: rgba(78, 203, 113, 0.15);
+    color: #2e7d4f;
+}
+
+.admin-tickets-tag-used {
+    background: rgba(33, 150, 243, 0.14);
+    color: #1565c0;
+}
+
+.admin-tickets-tag-voided {
+    background: rgba(224, 85, 85, 0.15);
+    color: var(--color-error);
+}
+
+.admin-tickets-tag-sent {
+    background: rgba(155, 89, 182, 0.14);
+    color: var(--color-purple);
+}
+
+.admin-tickets-tag-unsent {
+    background: rgba(254, 202, 87, 0.22);
+    color: #a15c00;
+}
+
+/* Tickets table (used in attendee detail + import preview) */
+.admin-tickets-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 13px;
+}
+
+.admin-tickets-table thead {
+    background: rgba(255, 107, 157, 0.08);
+}
+
+.admin-tickets-table th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-bottom: 1px solid rgba(255, 107, 157, 0.14);
+}
+
+.admin-tickets-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    color: var(--color-text);
+    vertical-align: middle;
+}
+
+.admin-tickets-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.admin-tickets-table tbody tr:hover {
+    background: rgba(255, 107, 157, 0.04);
+}
+
+.admin-tickets-ticket-id {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--color-text-muted);
+    cursor: help;
+}
+
+.admin-tickets-void-btn {
+    padding: 4px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(224, 85, 85, 0.35);
+    background: transparent;
+    color: var(--color-error);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-tickets-void-btn:hover:not(:disabled) {
+    background: var(--color-error);
+    color: white;
+}
+
+.admin-tickets-void-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.admin-tickets-redeemed-meta {
+    font-size: 12px;
+    color: var(--color-text);
+    line-height: 1.5;
+}
+
+.admin-tickets-redeemed-meta small {
+    color: var(--color-text-light);
+    font-size: 11px;
+}
+
+/* ----- Import section ----- */
+.admin-tickets-import {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+}
+
+.admin-tickets-import-file-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.admin-tickets-import-file-row input[type="file"] {
+    font-size: 13px;
+    color: var(--color-text);
+}
+
+.admin-tickets-import-filename {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    font-style: italic;
+    word-break: break-all;
+}
+
+.admin-tickets-import-errors {
+    padding: 12px 16px;
+    background: rgba(224, 85, 85, 0.08);
+    border: 1px solid rgba(224, 85, 85, 0.25);
+    border-radius: 12px;
+    color: #8a1f33;
+    font-size: 13px;
+}
+
+.admin-tickets-import-errors strong {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--color-error);
+}
+
+.admin-tickets-import-errors ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.admin-tickets-import-errors li {
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.admin-tickets-import-rownum {
+    font-weight: 700;
+    color: var(--color-error);
+}
+
+.admin-tickets-import-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-tickets-import-preview-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.admin-tickets-import-preview-header strong {
+    font-size: 14px;
+    color: var(--color-text);
+}
+
+.admin-tickets-import-preview-header .admin-helper-text {
+    margin: 0;
+    font-size: 12px;
+}
+
+/* ----- Template section ----- */
+.admin-tickets-template {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+}
+
+.admin-tickets-template-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-tickets-template-field > span {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-tickets-template-textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid rgba(255, 107, 157, 0.2);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--color-text);
+    font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    line-height: 1.5;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.3s ease;
+    box-sizing: border-box;
+}
+
+.admin-tickets-template-textarea:focus {
+    border-color: var(--color-primary);
+}
+
+.admin-tickets-template-textarea[readonly] {
+    background: rgba(0, 0, 0, 0.03);
+    cursor: default;
+}
+
+.admin-tickets-edit-warning {
+    padding: 10px 14px;
+    background: rgba(254, 202, 87, 0.15);
+    border: 1px solid rgba(254, 202, 87, 0.45);
+    border-radius: 12px;
+    color: #a15c00;
+    font-size: 13px;
+    margin: 0;
+}
+
+/* ----- Preview / Edit modal ----- */
+.admin-tickets-preview-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(30, 20, 40, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 1100;
+    animation: admin-tickets-modal-fade 0.2s ease;
+}
+
+@keyframes admin-tickets-modal-fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.admin-tickets-preview-content {
+    width: 100%;
+    max-width: 720px;
+    max-height: 90vh;
+    background: white;
+    border-radius: 18px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: admin-tickets-modal-rise 0.25s ease;
+}
+
+@keyframes admin-tickets-modal-rise {
+    from {
+        transform: translateY(16px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.admin-tickets-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 107, 157, 0.06);
+}
+
+.admin-tickets-preview-header strong {
+    font-size: 15px;
+    color: var(--color-text);
+}
+
+.admin-tickets-preview-close {
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 6px;
+    border-radius: 8px;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-tickets-preview-close:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--color-text);
+}
+
+.admin-tickets-preview-subject {
+    padding: 12px 20px;
+    background: rgba(255, 247, 251, 0.8);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    font-size: 13px;
+    color: var(--color-text);
+}
+
+.admin-tickets-preview-body {
+    padding: 20px;
+    overflow-y: auto;
+    font-size: 14px;
+    color: var(--color-text);
+    line-height: 1.6;
+}
+
+.admin-tickets-preview-body img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* When the modal is used for the attendee edit form (no body section) */
+.admin-tickets-preview-content:has(.admin-tickets-attendee-edit) {
+    max-width: 480px;
+}
+
+.admin-tickets-attendee-edit {
+    padding: 18px 20px;
+}
+
+/* ----- Send section ----- */
+.admin-tickets-send {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+}
+
+.admin-tickets-send-stats {
+    padding: 12px 16px;
+    background: rgba(255, 107, 157, 0.06);
+    border-radius: 12px;
+    color: var(--color-text);
+    font-size: 14px;
+}
+
+.admin-tickets-send-stats p {
+    margin: 0;
+}
+
+.admin-tickets-send-stats strong {
+    color: var(--color-primary);
+    font-size: 16px;
+}
+
+/* ----- Scanner section ----- */
+.admin-tickets-scanner {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.admin-tickets-scanner-viewport {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    aspect-ratio: 4 / 3;
+    margin: 0 auto;
+    background: #111;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 2px solid rgba(255, 107, 157, 0.25);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+}
+
+.admin-tickets-scanner-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.admin-tickets-scanner-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.admin-tickets-scanner-manual {
+    padding: 16px 18px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+}
+
+.admin-tickets-scanner-manual-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+    flex-wrap: wrap;
+}
+
+.admin-tickets-scanner-manual-row .admin-search-input {
+    flex: 1;
+    min-width: 200px;
+}
+
+.admin-tickets-scanner-manual-row .admin-toggle-btn {
+    flex-shrink: 0;
+}
+
+/* Scan result banner */
+.admin-tickets-scan-banner {
+    padding: 14px 18px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    animation: admin-tickets-banner-in 0.25s ease;
+}
+
+@keyframes admin-tickets-banner-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.admin-tickets-scan-banner strong {
+    font-size: 16px;
+    letter-spacing: 0.3px;
+}
+
+.admin-tickets-scan-banner .admin-user-email {
+    font-size: 12px;
+}
+
+.admin-tickets-scan-banner .admin-helper-text {
+    margin: 4px 0 0;
+    font-size: 12px;
+}
+
+.admin-tickets-scan-success {
+    background: rgba(78, 203, 113, 0.12);
+    border-color: rgba(78, 203, 113, 0.4);
+    color: #2e7d4f;
+}
+
+.admin-tickets-scan-success strong {
+    color: #2e7d4f;
+}
+
+.admin-tickets-scan-already {
+    background: rgba(254, 202, 87, 0.2);
+    border-color: rgba(254, 202, 87, 0.5);
+    color: #a15c00;
+}
+
+.admin-tickets-scan-already strong {
+    color: #a15c00;
+}
+
+.admin-tickets-scan-error {
+    background: rgba(224, 85, 85, 0.12);
+    border-color: rgba(224, 85, 85, 0.4);
+    color: #8a1f33;
+}
+
+.admin-tickets-scan-error strong {
+    color: var(--color-error);
+}
+
+/* ----- Responsive ----- */
+@media (max-width: 600px) {
+    .admin-tickets-inner-tabs .admin-sub-tab {
+        min-width: 90px;
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+
+    .admin-tickets-stats {
+        font-size: 12px;
+        padding: 12px 14px;
+    }
+
+    .admin-tickets-stats strong {
+        font-size: 14px;
+    }
+
+    .admin-tickets-refresh {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .admin-tickets-filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .admin-tickets-filter-checkbox {
+        justify-content: center;
+    }
+
+    .admin-tickets-attendee-summary {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .admin-tickets-attendee-info {
+        flex: 1 1 100%;
+        order: 1;
+    }
+
+    .admin-tickets-attendee-stats {
+        order: 2;
+        justify-content: flex-start;
+    }
+
+    .admin-tickets-attendee-expand {
+        order: 3;
+        margin-left: auto;
+    }
+
+    .admin-tickets-attendee-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .admin-tickets-attendee-actions .admin-toggle-btn {
+        width: 100%;
+    }
+
+    .admin-tickets-table {
+        font-size: 12px;
+    }
+
+    .admin-tickets-table th,
+    .admin-tickets-table td {
+        padding: 8px 8px;
+    }
+
+    .admin-tickets-scanner-manual-row {
+        flex-direction: column;
+    }
+
+    .admin-tickets-scanner-manual-row .admin-toggle-btn {
+        width: 100%;
+    }
+
+    .admin-tickets-preview-modal {
+        padding: 12px;
+    }
+
+    .admin-tickets-preview-content {
+        max-height: 95vh;
+        border-radius: 14px;
+    }
+}
