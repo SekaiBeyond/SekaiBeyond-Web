@@ -2353,9 +2353,9 @@ interface EmailTemplateDoc {
 
 // Allowlist for the ticket-email template HTML. Applied at save time in
 // updateEventEmailTemplate. Blocks <script>/<iframe>/<style>/event handlers and
-// restricts href to https/mailto, img src to https/data. QR images embedded at
-// send time use data: URLs — sanitize runs on the stored template only, so
-// rendered data URLs are never re-sanitized.
+// restricts href to https/mailto, img src to https/data. QR images for tickets
+// are injected post-sanitize as cid: references (see renderTicketQrBlock) —
+// Gmail strips data: URLs in img src, so QRs must ship as attachments.
 const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     allowedTags: [
         "p", "div", "span", "strong", "em", "b", "i", "u", "br", "hr",
@@ -2381,26 +2381,31 @@ const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     disallowedTagsMode: "discard",
 };
 
-function renderTicketQrBlock(ticketIds: string[], eventId: string, qrDataUrls: string[]): string {
-    // One <div> per ticket with a QR image. Kept simple — email clients strip
-    // fancy styling, and this renders on Gmail/Apple Mail/Outlook.
-    return ticketIds.map((id, i) => {
-        const url = qrDataUrls[i];
+function renderTicketQrBlock(ticketIds: string[]): string {
+    // One <div> per ticket. Images reference CID attachments added to the mail
+    // doc by sendTicketEmails — Gmail strips data: URLs in <img src>, so QRs
+    // ship as multipart/related inline attachments instead.
+    return ticketIds.map(id => {
         return `<div style="margin:16px 0;text-align:center;">` +
-            `<img src="${url}" alt="Ticket ${id}" style="width:200px;height:200px;display:inline-block;"/>` +
+            `<img src="cid:ticket-${id}" alt="Ticket ${id}" style="width:200px;height:200px;display:inline-block;"/>` +
             `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
             `</div>`;
     }).join("\n");
 }
 
-async function generateTicketQrDataUrls(
+async function generateTicketQrPngBase64(
     ticketIds: string[], eventId: string
 ): Promise<string[]> {
+    // Returns base64-encoded PNG bytes (no data: prefix) suitable for
+    // nodemailer attachments with encoding: "base64". Firestore stores the
+    // string as-is; the Trigger Email extension forwards it to nodemailer,
+    // which decodes it into the multipart/related MIME part.
     const QRCode = (await import("qrcode")).default;
     const origin = PUBLIC_ORIGIN.value();
-    return Promise.all(ticketIds.map(id => {
+    return Promise.all(ticketIds.map(async id => {
         const url = `${origin}/claim?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
-        return QRCode.toDataURL(url, {errorCorrectionLevel: "M", width: 400, margin: 1});
+        const buf = await QRCode.toBuffer(url, {errorCorrectionLevel: "M", width: 400, margin: 1});
+        return buf.toString("base64");
     }));
 }
 
@@ -2950,8 +2955,20 @@ export const sendTicketEmails = onCall(
             const ticketIds: string[] = data.ticketIds ?? [];
             if (ticketIds.length === 0) continue;
 
-            const qrDataUrls = await generateTicketQrDataUrls(ticketIds, eventId);
-            const ticketBlock = renderTicketQrBlock(ticketIds, eventId, qrDataUrls);
+            const qrPngBase64 = await generateTicketQrPngBase64(ticketIds, eventId);
+            const ticketBlock = renderTicketQrBlock(ticketIds);
+            // Inline attachments referenced by cid:ticket-<id> in ticketBlock.
+            // content + encoding:"base64" survives Firestore serialization as a
+            // plain string; nodemailer decodes it into a multipart/related MIME
+            // part so Gmail/Outlook/Apple Mail all render the QR inline.
+            const attachments = ticketIds.map((id, i) => ({
+                filename: `ticket-${id}.png`,
+                content: qrPngBase64[i],
+                encoding: "base64",
+                cid: `ticket-${id}`,
+                contentType: "image/png",
+                contentDisposition: "inline",
+            }));
 
             const renderedSubject = renderTemplate(template.subject, {
                 attendeeEmail: data.email ?? "",
@@ -2986,7 +3003,7 @@ export const sendTicketEmails = onCall(
             const mailRef = db.collection("mail").doc();
             ops.push(b => b.set(mailRef, {
                 to: data.email,
-                message: {subject: renderedSubject, html},
+                message: {subject: renderedSubject, html, attachments},
             }));
             ops.push(b => b.update(target.ref, {
                 emailSent: true,

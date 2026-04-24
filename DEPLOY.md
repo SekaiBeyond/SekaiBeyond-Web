@@ -62,38 +62,39 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
     **Step A — Set up Resend and verify `sekaibeyond.com`**
 
     1. Sign up at [resend.com](https://resend.com) and confirm your account email.
-    2. Go to **Domains** > **Add Domain**, enter `sekaibeyond.com`, and pick a region (EU/US — pick whichever is closer to your primary audience; this only affects bounce-handling MX hostnames).
-    3. Resend will display a set of DNS records to add. Typically:
-
-       | Type  | Name                              | Value                                                          | Notes                       |
-       |-------|-----------------------------------|----------------------------------------------------------------|-----------------------------|
-       | MX    | `send.sekaibeyond.com`            | `feedback-smtp.<region>.amazonses.com` (priority `10`)         | Bounce handling             |
-       | TXT   | `send.sekaibeyond.com`            | `v=spf1 include:amazonses.com ~all`                            | SPF for the sending subdomain |
-       | TXT   | `resend._domainkey.sekaibeyond.com` | (long DKIM key string — copy verbatim from Resend)           | DKIM signing key            |
-       | TXT   | `_dmarc.sekaibeyond.com`          | `v=DMARC1; p=none; rua=mailto:dmarc@sekaibeyond.com`           | DMARC (recommended)         |
-
-       > Copy the exact values from the Resend dashboard — the DKIM key in particular is a long opaque string that must match byte-for-byte.
-
-    4. In the Cloudflare dashboard for `sekaibeyond.com` > **DNS** > **Records**, add each row above. **Set Proxy status to "DNS only" (grey cloud) on every record** — Cloudflare's HTTP proxy will mangle DKIM lookups and break SPF/MX if left orange. (MX and TXT records can't be proxied anyway, but the UI will warn you on CNAMEs.)
-    5. Back in Resend, click **Verify DNS Records**. Propagation through Cloudflare is usually under a minute; the dashboard will turn each row green once it sees the record.
-    6. Go to **API Keys** > **Create API Key**, name it `sekaibeyond-firebase-extension`, scope it to **Sending access** only, and copy the key (starts with `re_`). You won't be able to view it again.
+    2. Go to **Domains** > **Add Domain**, enter `sekaibeyond.com`, and follow Resend's on-screen DNS setup instructions — it auto-detects Cloudflare and can provision the MX/SPF/DKIM/DMARC records for you via OAuth. Click **Verify DNS Records** once the dashboard shows everything green.
+    3. Go to **API Keys** > **Create API Key**, name it `sekaibeyond-firebase-extension`, scope it to **Sending access** only, and copy the key (starts with `re_`). You won't be able to view it again.
 
     **Step B — Install the Trigger Email extension**
 
-    Install from [firebase.google.com/products/extensions/firebase-firestore-send-email](https://firebase.google.com/products/extensions/firebase-firestore-send-email) (or via Firebase Console > Extensions > Browse) with these settings:
+    Install from [firebase.google.com/products/extensions/firebase-firestore-send-email](https://firebase.google.com/products/extensions/firebase-firestore-send-email) (or via Firebase Console > Extensions > Browse). **Leave every configuration parameter at its default except the ones listed below** — don't change settings you don't understand, or the install will fail or the app will break at runtime.
 
-    | Setting              | Value                                                       |
-    |----------------------|-------------------------------------------------------------|
-    | Mail collection      | `mail` (default)                                            |
-    | SMTP connection URI  | `smtps://resend:<your-api-key>@smtp.resend.com:465`         |
-    | Default FROM address | `no-reply@sekaibeyond.com`                                  |
-    | TTL expiration       | optional — set to 7d or similar to auto-clean delivered docs |
+    | Setting                     | Value                                                       |
+    |-----------------------------|-------------------------------------------------------------|
+    | Firestore Instance Location | Must match the region of the Firestore database created in Step 4. For a `nam5` database, pick **`United States (multi-region)`**. If this doesn't match the actual database region, the install fails partway through with `Database '(default)' does not exist in region '...'` and leaves stale Eventarc triggers behind that need to be cleaned up before retry. |
+    | SMTP connection URI         | `smtps://resend:<your-api-key>@smtp.resend.com:465`         |
+    | Default FROM address        | `no-reply@sekaibeyond.com`                                  |
+    | TTL expiration              | optional — set to 7d or similar to auto-clean delivered docs |
 
-    > The username in the SMTP URI is the literal string `resend` — not your account email. The password is the `re_…` API key from Step A.6. URL-encode the key if it contains characters Firebase warns about (it normally doesn't).
+    > The username in the SMTP URI is the literal string `resend` — not your account email. The password is the `re_…` API key from Step A.3. URL-encode the key if it contains characters Firebase warns about (it normally doesn't).
 
     **Step C — Send a test**
 
-    From the Resend dashboard > **Emails** > **Send Test**, send to your own inbox to confirm the domain is verified end-to-end. Then trigger a real ticket email through the admin panel and confirm it lands (check Resend's **Logs** tab if it doesn't — bounces, suppressions, and DKIM failures all surface there).
+    The easiest end-to-end test is to write a test document directly to the `mail` collection in Firebase Console > **Firestore** > **Start collection** (if it doesn't exist yet) and add a document with these fields:
+
+    ```json
+    {
+      "to": ["your-email@example.com"],
+      "message": {
+        "subject": "Resend + extension test",
+        "html": "<p>If you're reading this, the pipeline works.</p>"
+      }
+    }
+    ```
+
+    The extension should pick it up within a few seconds and append a `delivery` map to the doc — `delivery.state: "SUCCESS"` means it was handed to Resend; anything else (`ERROR`, `RETRY`) along with `delivery.error` tells you what broke. Cross-check against Resend's **Logs** tab in the dashboard, which surfaces bounces, suppressions, and DKIM failures that the extension itself can't see.
+
+    Once the manual test passes, trigger a real ticket email through the admin panel to confirm the production path works too.
 
     > If Cloudflare Email Routing is also handling inbound mail for `sekaibeyond.com`, leave its existing MX records on the apex (`sekaibeyond.com`) untouched — Resend's MX is on the `send.` subdomain and won't conflict.
 
@@ -106,6 +107,8 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
     ```
     PUBLIC_ORIGIN=https://your-site.example.com
     ```
+
+    > **Prefer the project-scoped filename** (e.g. `functions/.env.sekaibeyond-fc616`, where the suffix is the Firebase project ID from `.firebaserc`). Firebase loads it only when deploying to that project and it overrides `.env`, so values don't leak into future dev/staging projects. Firebase also rejects keys starting with `FIREBASE_`, `X_GOOGLE_`, or `EXT_` in `.env` — the project-scoped file sidesteps that class of deploy failure.
 
     Then redeploy Functions so the new value is picked up:
 
