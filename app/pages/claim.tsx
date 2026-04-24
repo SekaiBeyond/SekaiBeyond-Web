@@ -210,17 +210,21 @@ export const ClaimPage = () => {
                     <>
                         <h2>
                             {isTicketFlow
-                                ? (isEnglish ? 'Sign In to Redeem Ticket' : '登录以验证门票')
+                                ? (isEnglish ? 'Show This at the Door' : '请在入场时出示此二维码')
                                 : (isEnglish ? 'Sign In to Claim Event' : '登录以签到活动')}
                         </h2>
                         <p>
                             {isTicketFlow
-                                ? (isEnglish ? 'You need to sign in first to redeem this ticket.' : '请先登录以验证此门票。')
+                                ? (isEnglish
+                                    ? 'This ticket link is scanned by event staff at check-in. Keep this page (or the QR code from your email) handy when you arrive.'
+                                    : '此门票链接由活动工作人员在入场时扫描。请在到场时出示此页面或邮件中的二维码。')
                                 : (isEnglish ? 'You need to sign in first to check in for this event.' : '请先登录以签到此活动。')}
                         </p>
-                        <button onClick={signIn} className="profile-sign-in-btn">
-                            {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
-                        </button>
+                        {!isTicketFlow && (
+                            <button onClick={signIn} className="profile-sign-in-btn">
+                                {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
+                            </button>
+                        )}
                     </>
                 )}
 
@@ -313,10 +317,10 @@ export const ClaimPage = () => {
 
                 {state === 'ticket-not-authorized' && (
                     <>
-                        <h2>{isEnglish ? 'Not Authorized' : '无权操作'}</h2>
+                        <h2>{isEnglish ? 'Show This at the Door' : '请在入场时出示此二维码'}</h2>
                         <p>{isEnglish
-                            ? 'You are not authorized to redeem tickets for this event. Only event staff can scan tickets.'
-                            : '你没有权限验证此活动的门票。仅活动工作人员可以扫描门票。'}</p>
+                            ? 'This ticket link is scanned by event staff at check-in. Keep this page (or the QR code from your email) handy when you arrive.'
+                            : '此门票链接由活动工作人员在入场时扫描。请在到场时出示此页面或邮件中的二维码。'}</p>
                     </>
                 )}
 

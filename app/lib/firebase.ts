@@ -169,6 +169,9 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
         eventTitle: string;
         ticketIndex: number;
         userCheckedIn?: boolean;
+        // Display name of the staff member who first redeemed the ticket
+        // (server returns redeemedByName, not a raw UID). Only set when
+        // alreadyRedeemed is true.
         redeemedBy?: string;
         redeemedAt?: string | null;
     }>(getFunctions(), 'redeemTicket')(data);
@@ -197,7 +200,7 @@ export const callSendTicketEmails = (data: {
     getFunctions(), 'sendTicketEmails')(data);
 
 export const callGetTicketEmailQuota = () =>
-    httpsCallable<Record<string, never>, {sentToday: number; dailyCap: number}>(
+    httpsCallable<Record<string, never>, {sentToday: number; dailyCap: number; chunkSize: number}>(
         getFunctions(), 'getTicketEmailQuota')({});
 
 export const callUpdateEventEmailTemplate = (data: {

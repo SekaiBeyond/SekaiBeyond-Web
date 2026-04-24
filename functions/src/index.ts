@@ -1706,11 +1706,20 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     });
 
     // ---- Phase C: delete original subcollections in chunks ----
+    // Re-query the LIVE collections so any doc written between Phase A and
+    // Phase B (a concurrent attendee import / template edit) still gets wiped.
+    // Without this, late arrivals strand under upcomingEvents/{deletedId}/…
+    // and onUpcomingEventDeleted's fallback cleanup is skipped because the
+    // archive path wrote a pastEvents doc with the same id.
+    const [liveAttendees, liveTemplate] = await Promise.all([
+        attendeesSrc.get(),
+        emailTemplateSrc.get(),
+    ]);
     const deleteOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
-    for (const doc of attendeesSnap.docs) {
+    for (const doc of liveAttendees.docs) {
         deleteOps.push(b => b.delete(doc.ref));
     }
-    for (const doc of emailTemplateSnap.docs) {
+    for (const doc of liveTemplate.docs) {
         deleteOps.push(b => b.delete(doc.ref));
     }
     if (deleteOps.length > 0) await commitInChunks(deleteOps);
@@ -2356,6 +2365,11 @@ interface EmailTemplateDoc {
 // restricts href to https/mailto, img src to https/data. QR images for tickets
 // are injected post-sanitize as cid: references (see renderTicketQrBlock) —
 // Gmail strips data: URLs in img src, so QRs must ship as attachments.
+//
+// MUST STAY IN SYNC with app/lib/emailSanitize.ts EMAIL_HTML_SANITIZE_OPTIONS.
+// We duplicate because functions/ and the web app are separate tsc projects
+// with their own node_modules; any change here must also be applied there so
+// admin preview matches what actually gets sent.
 const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     allowedTags: [
         "p", "div", "span", "strong", "em", "b", "i", "u", "br", "hr",
@@ -2404,7 +2418,10 @@ async function generateTicketQrPngBase64(
     const origin = PUBLIC_ORIGIN.value();
     return Promise.all(ticketIds.map(async id => {
         const url = `${origin}/claim?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
-        const buf = await QRCode.toBuffer(url, {errorCorrectionLevel: "M", width: 400, margin: 1});
+        // 256 px keeps each ticket's QR comfortably under ~4 KB PNG (vs. ~12–20 KB
+        // at 400 px), so a 50-ticket attendee fits well within Firestore's 1 MB
+        // mail-doc limit. Error correction "M" still scans reliably at this size.
+        const buf = await QRCode.toBuffer(url, {errorCorrectionLevel: "M", width: 256, margin: 1});
         return buf.toString("base64");
     }));
 }
@@ -2774,6 +2791,17 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
                 return {updated: false, regenerated: false};
             }
             txn.update(attendeeRef, {name, updatedAt: FieldValue.serverTimestamp()});
+            txn.set(db.collection("records").doc(), {
+                type: "ticket-attendee-edit",
+                performedBy: uid,
+                performedByName: callerSnap.data()?.displayName ?? "",
+                eventId,
+                targetEmail: data.email ?? "",
+                oldName: data.name ?? "",
+                newName: name,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
             return {updated: true, regenerated: false};
         }
 
@@ -2845,6 +2873,46 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
 // single event with >100 attendees must chunk across calls, surfacing progress
 // and giving the admin a place to cancel between chunks.
 const SEND_CHUNK_SIZE = 100;
+
+// Resend free-tier daily cap. Enforced server-side in sendTicketEmails and
+// surfaced read-only via getTicketEmailQuota.
+const RESEND_DAILY_CAP = 100;
+
+/**
+ * Returns today's sent-email count and the Resend daily cap.
+ * Day boundary is America/Los_Angeles midnight — matches the club's operating
+ * timezone and keeps the reset time predictable for admins.
+ */
+async function computeTicketEmailQuota(): Promise<{sentToday: number; dailyCap: number}> {
+    // Start of today in America/Los_Angeles, expressed as a UTC Timestamp.
+    // UTC-now minus LA's elapsed-since-midnight equals LA midnight (UTC).
+    // hourCycle:'h23' pins the range to 0–23 (en-US hour12:false can return "24").
+    const now = new Date();
+    const laParts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "America/Los_Angeles",
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        hourCycle: "h23",
+    }).formatToParts(now);
+    const part = (t: string) => Number(laParts.find(p => p.type === t)?.value ?? "0");
+    const laMidnightMs = now.getTime()
+        - part("hour") * 3600_000
+        - part("minute") * 60_000
+        - part("second") * 1000
+        - now.getMilliseconds();
+    const startOfTodayLA = Timestamp.fromMillis(laMidnightMs);
+
+    // Uses the existing (type, timestamp) composite index.
+    const snap = await db.collection("records")
+        .where("type", "==", "ticket-email-send")
+        .where("timestamp", ">=", startOfTodayLA)
+        .get();
+    let sentToday = 0;
+    for (const d of snap.docs) {
+        const c = d.data().sentCount;
+        if (typeof c === "number" && Number.isFinite(c)) sentToday += c;
+    }
+    return {sentToday, dailyCap: RESEND_DAILY_CAP};
+}
 
 /**
  * Send ticket emails (core-staff+).
@@ -2924,8 +2992,11 @@ export const sendTicketEmails = onCall(
             queriedCount = filtered.length;
         } else if (mode === "unsent") {
             // Drain pattern: processed attendees leave the result set on next call.
+            // orderBy createdAt gives FIFO fairness across chunks — uses the
+            // existing (emailSent, createdAt) composite index.
             const snap = await attendeesCol
                 .where("emailSent", "==", false)
+                .orderBy("createdAt", "asc")
                 .limit(SEND_CHUNK_SIZE)
                 .get();
             targets = snap.docs;
@@ -2945,15 +3016,41 @@ export const sendTicketEmails = onCall(
         const eventDateEn = formatEventDateForEmail(eventData.startAt, "en-US");
         const eventDateCn = formatEventDateForEmail(eventData.startAt, "zh-CN");
 
+        // Enforce the Resend daily cap server-side so a buggy/malicious client
+        // (or parallel admins) can't blow past it. Caps the chunk at whatever
+        // is still available today.
+        const {sentToday, dailyCap} = await computeTicketEmailQuota();
+        const remainingToday = Math.max(0, dailyCap - sentToday);
+        if (remainingToday === 0) {
+            throw new HttpsError("resource-exhausted",
+                "Daily Resend cap reached.", {code: "quota-exceeded"});
+        }
+
         const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
         let sentCount = 0;
         let lastProcessedId: string | null = null;
 
         for (const target of targets) {
             lastProcessedId = target.id;
+            if (sentCount >= remainingToday) break;
             const data = target.data();
             const ticketIds: string[] = data.ticketIds ?? [];
-            if (ticketIds.length === 0) continue;
+            if (ticketIds.length === 0) {
+                // Defensive: ticketCount validation prevents this at import
+                // time, but a bad merge / failed partial batch could leave an
+                // attendee with emailSent=false and no ticketIds. Mark sent so
+                // the mode='unsent' drain doesn't spin on the same doc forever.
+                console.warn(
+                    `[sendTicketEmails] attendee ${target.id} has no ticketIds;` +
+                    " marking sent to avoid infinite drain"
+                );
+                ops.push(b => b.update(target.ref, {
+                    emailSent: true,
+                    emailSentAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                }));
+                continue;
+            }
 
             const qrPngBase64 = await generateTicketQrPngBase64(ticketIds, eventId);
             const ticketBlock = renderTicketQrBlock(ticketIds);
@@ -3042,43 +3139,16 @@ export const sendTicketEmails = onCall(
     });
 
 /**
- * Return today's count of sent ticket emails across ALL events (core-staff+).
- * Used to surface the Resend free-tier daily cap (100/day) in the admin UI.
- * Day boundary is America/Los_Angeles midnight — matches the club's operating
- * timezone and keeps the reset time predictable for admins.
+ * Return today's count of sent ticket emails across ALL events (core-staff+)
+ * plus the server's per-invocation chunk size. Clients use the quota to surface
+ * the Resend free-tier cap and chunkSize to match the server's chunk loop.
  */
 export const getTicketEmailQuota = onCall({maxInstances: 5}, async (request) => {
     const uid = await requireAuth(request);
     await requireAdmin(uid);
 
-    // Start of today in America/Los_Angeles, expressed as a UTC Timestamp.
-    // UTC-now minus LA's elapsed-since-midnight equals LA midnight (UTC).
-    // hourCycle:'h23' pins the range to 0–23 (en-US hour12:false can return "24").
-    const now = new Date();
-    const laParts = new Intl.DateTimeFormat("en-GB", {
-        timeZone: "America/Los_Angeles",
-        hour: "2-digit", minute: "2-digit", second: "2-digit",
-        hourCycle: "h23",
-    }).formatToParts(now);
-    const part = (t: string) => Number(laParts.find(p => p.type === t)?.value ?? "0");
-    const laMidnightMs = now.getTime()
-        - part("hour") * 3600_000
-        - part("minute") * 60_000
-        - part("second") * 1000
-        - now.getMilliseconds();
-    const startOfTodayLA = Timestamp.fromMillis(laMidnightMs);
-
-    // Uses the existing (type, timestamp) composite index.
-    const snap = await db.collection("records")
-        .where("type", "==", "ticket-email-send")
-        .where("timestamp", ">=", startOfTodayLA)
-        .get();
-    let sentToday = 0;
-    for (const d of snap.docs) {
-        const c = d.data().sentCount;
-        if (typeof c === "number" && Number.isFinite(c)) sentToday += c;
-    }
-    return {sentToday, dailyCap: 100};
+    const {sentToday, dailyCap} = await computeTicketEmailQuota();
+    return {sentToday, dailyCap, chunkSize: SEND_CHUNK_SIZE};
 });
 
 /**

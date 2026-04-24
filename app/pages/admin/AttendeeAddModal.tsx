@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportEventAttendees, functionsErrorCode } from '~/lib/firebase';
-import type { AttendeeData } from './TicketsSubtab';
+import type { AttendeeData } from './tickets/types';
 import type { ShowToast } from './utils';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

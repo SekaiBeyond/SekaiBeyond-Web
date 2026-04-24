@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUpdateEventAttendee, functionsErrorCode } from '~/lib/firebase';
-import type { AttendeeData } from './TicketsSubtab';
+import type { AttendeeData } from './tickets/types';
 import type { ShowToast } from './utils';
 
 interface AttendeeEditModalProps {

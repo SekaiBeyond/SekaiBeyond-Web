@@ -35,7 +35,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
         'upcoming-event-archive', 'upcoming-event-publish', 'upcoming-event-unpublish',
         'upcoming-event-email-template-update'],
     ticket: ['ticket-import', 'ticket-redeem', 'ticket-void', 'ticket-attendee-delete',
-        'ticket-regenerate', 'ticket-email-send'],
+        'ticket-attendee-edit', 'ticket-regenerate', 'ticket-email-send'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
 };
@@ -90,6 +90,8 @@ export const RecordsTab = ({
                 newGroup: data.newGroup,
                 oldTitle: data.oldTitle,
                 newTitle: data.newTitle,
+                oldName: data.oldName,
+                newName: data.newName,
                 addedCount: data.addedCount,
                 replacedCount: data.replacedCount,
                 sentCount: data.sentCount,
@@ -446,6 +448,15 @@ export const RecordsTab = ({
                     ? <>removed attendee {r.targetName ?? r.targetEmail ?? ''} from {event}</>
                     : <>将 {r.targetName ?? r.targetEmail ?? ''} 从 {event} 的名单中移除</>;
             }
+            case 'ticket-attendee-edit': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                const oldName = r.oldName ?? '';
+                const newName = r.newName ?? '';
+                const email = r.targetEmail ?? '';
+                return isEnglish
+                    ? <>renamed attendee {oldName || email} to {newName} at {event}</>
+                    : <>将 {event} 的参加者 {oldName || email} 改名为 {newName}</>;
+            }
             case 'ticket-regenerate': {
                 const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
                 return isEnglish
@@ -533,6 +544,7 @@ export const RecordsTab = ({
             case 'ticket-redeem':
             case 'ticket-void':
             case 'ticket-attendee-delete':
+            case 'ticket-attendee-edit':
             case 'ticket-regenerate':
             case 'ticket-email-send':
                 return isEnglish ? 'Ticket' : '门票';

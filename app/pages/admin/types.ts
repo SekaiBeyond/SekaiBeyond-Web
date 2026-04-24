@@ -97,6 +97,7 @@ export type RecordType =
     | 'ticket-redeem'
     | 'ticket-void'
     | 'ticket-attendee-delete'
+    | 'ticket-attendee-edit'
     | 'ticket-regenerate'
     | 'ticket-email-send'
     | 'event-staff-assign'
@@ -121,6 +122,8 @@ export interface ActivityRecord {
     newGroup?: UserGroup;
     oldTitle?: string;
     newTitle?: string;
+    oldName?: string;
+    newName?: string;
     addedCount?: number;
     replacedCount?: number;
     sentCount?: number;

@@ -203,6 +203,12 @@ Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deplo
 
 You can also trigger a deployment manually from the **Actions** tab > **Deploy to Firebase** > **Run workflow**.
 
+### Lockfiles
+
+The root `package-lock.json` is intentionally not committed (see `.gitignore`). The root `package.json` dependency set is small and pinned to stable, actively-maintained packages, so `npm install` in CI or a fresh clone resolves to the same effective tree without the extra churn of tracking the lockfile through every transitive bump. If a future dependency change requires a pinned lockfile (e.g. a semver-range-sensitive package, a native dep that needs exact-version resolution, or a supply-chain hardening requirement), restore it by removing the `package-lock.json` line from `.gitignore` and committing the generated file.
+
+`functions/package-lock.json` **is** committed — Cloud Functions deploys run `npm ci` against it and the functions runtime is much more sensitive to transitive-dep drift (native modules, Node-version-specific builds).
+
 ### Manual deploy (escape hatch)
 
 If CI is unavailable, you can still deploy from your local machine:

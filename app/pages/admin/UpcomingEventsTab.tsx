@@ -22,7 +22,7 @@ import { fetchEventAttendees, getClaimUrl } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { EventAttendeesList } from './EventAttendeesList';
 import { ImageUploadField } from './ImageUploadField';
-import { TicketsSubtab } from './TicketsSubtab';
+import { TicketsSubtab } from './tickets/TicketsSubtab';
 
 interface UpcomingEventsTabProps {
     upcomingEvents: UpcomingEvent[];
