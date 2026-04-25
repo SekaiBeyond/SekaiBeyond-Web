@@ -321,6 +321,7 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         photoURL: data.photoURL ?? "",
         joinedAt: data.joinedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
         attendedEvents: data.attendedEvents ?? [],
+        eventStaffEvents: data.eventStaffEvents ?? [],
         badges: data.badges ?? [],
         badgeEarnedAt,
         group: data.group ?? "visitor",
@@ -443,6 +444,10 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
         if (!userSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
 
         const eventData = eventSnap.data()!;
+        // Paid events use tickets — reject stale code URLs from before a paid toggle.
+        if (eventData.paid === true) {
+            throw new HttpsError("failed-precondition", "Invalid or deactivated code.", {code: "invalid"});
+        }
         const eventTitle: string = eventData.title ?? eventData.name ?? "";
         const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
         const eventPoster: string = eventData.poster ?? "";
@@ -753,6 +758,10 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                 if (!eventSnap.exists) {
                     throw new HttpsError("not-found", "Event not found.");
                 }
+                if (eventSnap.data()?.paid === true) {
+                    throw new HttpsError("failed-precondition",
+                        "Paid events use tickets, not check-in codes.");
+                }
 
                 const [existing, existingCodes] = await Promise.all([
                     txn.get(codeRef),
@@ -923,7 +932,8 @@ export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) =>
 /**
  * Firestore trigger fired when a past event is deleted.
  * Only runs cleanup for TTL-triggered deletions (deleteAt was set).
- * Cascades: deletes claim codes, removes from users' attendedEvents, deletes storage icon.
+ * Cascades: deletes claim codes, removes from users' attendedEvents and
+ * eventStaffEvents, deletes storage icon.
  */
 export const onPastEventDeleted = onDocumentDeleted(
     {document: "pastEvents/{eventId}", maxInstances: 10},
@@ -933,14 +943,18 @@ export const onPastEventDeleted = onDocumentDeleted(
         if (!data?.deleteAt) return;
 
         try {
-            const [codesSnap, attendeesSnap] = await Promise.all([
+            const [codesSnap, attendeesSnap, staffSnap] = await Promise.all([
                 db.collection("claimCodes").where("eventId", "==", eventId).get(),
                 db.collection("users").where("attendedEvents", "array-contains", eventId).get(),
+                db.collection("users").where("eventStaffEvents", "array-contains", eventId).get(),
             ]);
             const cascadeOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
                 ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
                 ...attendeesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
                     b.update(d.ref, {attendedEvents: FieldValue.arrayRemove(eventId)})
+                ),
+                ...staffSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
+                    b.update(d.ref, {eventStaffEvents: FieldValue.arrayRemove(eventId)})
                 ),
             ];
             if (cascadeOps.length > 0) await commitInChunks(cascadeOps);
@@ -1412,6 +1426,18 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
             prevPoster = existing.data()?.poster ?? "";
             wasPublished = existing.data()?.published ?? false;
         }
+
+        // Paid events use tickets, not check-in codes — purge any claim codes
+        // that exist for this event (e.g., left over from a free→paid toggle).
+        // Reads must happen before writes inside the transaction.
+        let codesToDelete: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+        if (paid && eventId) {
+            const codesSnap = await txn.get(
+                db.collection("claimCodes").where("eventId", "==", eventId)
+            );
+            codesToDelete = codesSnap.docs;
+        }
+
         const ref = db.collection("upcomingEvents").doc(docId);
         if (eventId) {
             // Delete legacy name/nameCn fields on edit so pre-rename docs migrate cleanly.
@@ -1424,6 +1450,23 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         } else {
             txn.set(ref, {...data, published: false});
         }
+
+        for (const codeDoc of codesToDelete) {
+            txn.delete(codeDoc.ref);
+        }
+        if (codesToDelete.length > 0) {
+            txn.set(db.collection("records").doc(), {
+                type: "code-delete-paid-conversion",
+                performedBy: uid,
+                performedByName: callerSnap.data()?.displayName ?? "",
+                eventTitle: title,
+                eventId: docId,
+                deletedCount: codesToDelete.length,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        }
+
         txn.set(db.collection("records").doc(), {
             type: eventId ? "upcoming-event-edit" : "upcoming-event-create",
             performedBy: uid,
@@ -1579,7 +1622,8 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
 
         // Skip the deleted-record write if this delete was the tail end of an
         // archive — archiveUpcomingEvent already wrote an "upcoming-event-archive"
-        // record, and the past event reuses this ID.
+        // record, and the past event reuses this ID (so eventStaffEvents
+        // references stay valid and we must NOT purge them).
         let archived = false;
         try {
             archived = (await db.collection("pastEvents").doc(eventId).get()).exists;
@@ -1587,6 +1631,20 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: archive check failed for ${eventId}`, err);
         }
         if (archived) return;
+
+        // Hard delete (TTL-driven or admin abort) — purge eventStaffEvents
+        // references from users so stale event IDs don't haunt assignments.
+        try {
+            const staffSnap = await db.collection("users")
+                .where("eventStaffEvents", "array-contains", eventId).get();
+            const staffOps = staffSnap.docs.map(d =>
+                (b: FirebaseFirestore.WriteBatch) =>
+                    b.update(d.ref, {eventStaffEvents: FieldValue.arrayRemove(eventId)})
+            );
+            if (staffOps.length > 0) await commitInChunks(staffOps);
+        } catch (err) {
+            console.error(`onUpcomingEventDeleted: eventStaffEvents cascade failed for ${eventId}`, err);
+        }
 
         // Clean up any orphaned subcollection docs (can occur if archive fails
         // after Phase C partially completed, or on TTL-driven deletion).
@@ -2591,8 +2649,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         const group = callerData.group ?? "visitor";
         const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
         const isCoreStaffOrAbove = ADMIN_GROUPS.includes(group);
-        const isEventStaff = (group === "staff" || group === "core-staff" || group === "president")
-            && callerEventStaff.includes(eventId);
+        const isEventStaff = callerEventStaff.includes(eventId);
         if (!isCoreStaffOrAbove && !isEventStaff) {
             throw new HttpsError("permission-denied", "Not authorized to scan tickets for this event.",
                 {code: "not-authorized"});
@@ -3204,8 +3261,15 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
 
 /**
  * Grant event-staff access for a specific event (core-staff+).
- * Adds eventId to the target user's eventStaffEvents and ensures their group is
- * at least 'staff'. Does not downgrade higher-tier users.
+ *
+ * Event-staff is independent of the global staff group — assigning here does
+ * not change the user's group. The role only grants ticket-scanning and
+ * attendee-viewing access for this specific event.
+ *
+ * Side effect: auto-marks the staffer as having attended the event
+ * (adds eventId to attendedEvents, flips checkedIn on their attendee doc if one
+ * exists). The reverse (removeEventStaff) does NOT rewind attendance — staff
+ * who actually showed up should stay attended even if their role is revoked.
  */
 export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -3223,10 +3287,9 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
 
         const targetData = targetSnap.data()!;
+        const targetEmail: string = targetData.email ?? "";
         const existing: string[] = targetData.eventStaffEvents ?? [];
-        if (existing.includes(eventId)) {
-            return {added: false};
-        }
+        const alreadyStaff = existing.includes(eventId);
 
         // Presidents can touch anyone; core-staff can only manage <= staff.
         const callerGroup = callerSnap.data()?.group;
@@ -3235,27 +3298,76 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
             throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
         }
 
-        const updates: Record<string, unknown> = {
-            eventStaffEvents: FieldValue.arrayUnion(eventId),
-        };
-        // Auto-promote visitor/member to staff so the hierarchy matches the role.
-        if (targetData.group === "visitor" || targetData.group === "member") {
-            updates.group = "staff";
+        // Look up an attendee doc by email so we can flip checkedIn for paid events.
+        // Reads must precede writes inside a Firestore transaction.
+        let attendeeDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+        if (targetEmail) {
+            const attendeeQuery = await txn.get(
+                db.collection("upcomingEvents").doc(eventId).collection("attendees")
+                    .where("email", "==", targetEmail).limit(1)
+            );
+            if (!attendeeQuery.empty) attendeeDoc = attendeeQuery.docs[0];
         }
 
-        txn.update(db.collection("users").doc(targetUid), updates);
-        txn.set(db.collection("records").doc(), {
-            type: "event-staff-assign",
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            targetUid,
-            targetName: targetData.displayName ?? "",
-            eventId,
-            eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
-        return {added: true};
+        const eventTitle: string = eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId;
+        const callerName: string = callerSnap.data()?.displayName ?? "";
+        const targetName: string = targetData.displayName ?? "";
+        const attendedEvents: string[] = targetData.attendedEvents ?? [];
+        const alreadyAttended = attendedEvents.includes(eventId);
+
+        if (alreadyStaff && alreadyAttended) {
+            return {added: false};
+        }
+
+        const userUpdates: Record<string, unknown> = {};
+        if (!alreadyStaff) userUpdates.eventStaffEvents = FieldValue.arrayUnion(eventId);
+        if (!alreadyAttended) userUpdates.attendedEvents = FieldValue.arrayUnion(eventId);
+        if (Object.keys(userUpdates).length > 0) {
+            txn.update(db.collection("users").doc(targetUid), userUpdates);
+        }
+
+        if (attendeeDoc) {
+            const attendeeData = attendeeDoc.data();
+            const tickets = (attendeeData.tickets ?? []) as Array<Record<string, unknown>>;
+            const now = Timestamp.now();
+            const updatedTickets = tickets.map((t) => t.checkedIn
+                ? t
+                : {...t, checkedIn: true, checkedInAt: now}
+            );
+            txn.update(attendeeDoc.ref, {
+                tickets: updatedTickets,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        if (!alreadyStaff) {
+            txn.set(db.collection("records").doc(), {
+                type: "event-staff-assign",
+                performedBy: uid,
+                performedByName: callerName,
+                targetUid,
+                targetName,
+                eventId,
+                eventTitle,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        }
+        if (!alreadyAttended) {
+            txn.set(db.collection("records").doc(), {
+                type: "event-attend",
+                performedBy: uid,
+                performedByName: callerName,
+                targetUid,
+                targetName,
+                targetEmail,
+                eventId,
+                eventTitle,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        }
+        return {added: !alreadyStaff};
     });
 });
 

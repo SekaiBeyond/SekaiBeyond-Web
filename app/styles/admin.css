@@ -667,6 +667,15 @@
     margin: 8px 0 0;
 }
 
+.admin-warning-hint {
+    color: #b95400;
+    background: rgba(254, 202, 87, 0.18);
+    border: 1px solid rgba(254, 156, 56, 0.45);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-weight: 500;
+}
+
 /* Admin Badge Codes */
 .admin-generate-btn {
     display: block;

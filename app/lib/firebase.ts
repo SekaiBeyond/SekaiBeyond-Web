@@ -254,7 +254,8 @@ export const callDeleteTag = (data: {tagId: string}) =>
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {
         displayName: string; photoURL: string; joinedAt: string;
-        attendedEvents: string[]; badges: string[];
+        attendedEvents: string[]; eventStaffEvents: string[];
+        badges: string[];
         badgeEarnedAt: Record<string, string>;
         group: string;
         title?: string;

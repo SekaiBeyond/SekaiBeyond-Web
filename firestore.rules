@@ -14,9 +14,7 @@ service cloud.firestore {
     }
 
     function isEventStaffFor(eventId) {
-      let g = callerGroup();
-      return g in ['staff', 'core-staff', 'president']
-          && eventId in callerEventStaffEvents();
+      return eventId in callerEventStaffEvents();
     }
 
     match /users/{userId} {

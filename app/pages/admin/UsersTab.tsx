@@ -32,7 +32,6 @@ import {
     canManageUser,
     formatGroupWithTitle,
     GROUP_LABELS,
-    hasPermission,
     USER_GROUPS,
     type UserGroup,
     type UserProfile,
@@ -376,6 +375,9 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 eventStaffEvents: userRecord.eventStaffEvents.includes(eventId)
                     ? userRecord.eventStaffEvents
                     : [...userRecord.eventStaffEvents, eventId],
+                attendedEvents: userRecord.attendedEvents.includes(eventId)
+                    ? userRecord.attendedEvents
+                    : [...userRecord.attendedEvents, eventId],
             };
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
@@ -622,7 +624,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                             </div>
                         )}
 
-                        {canManage && hasPermission(selectedUser.group, 'staff') && (() => {
+                        {canManage && (() => {
                             const eventsById = new Map(upcomingEvents.map(e => [e.id, e]));
                             const assigned = selectedUser.eventStaffEvents
                                 .map(id => eventsById.get(id) ?? {
@@ -638,8 +640,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                     </h4>
                                     <p className="admin-title-hint">
                                         {isEnglish
-                                            ? 'Grants this user ticket-scanning and attendee-viewing access for specific upcoming events.'
-                                            : '授予此用户对特定活动的门票扫描与参加者查看权限。'}
+                                            ? 'Grants ticket-scanning and attendee-viewing for the event, and auto-marks the user as attended (independent of their global group).'
+                                            : '授予此用户该活动的门票扫描与参加者查看权限，并自动标记为已参加（独立于全局用户组）。'}
                                     </p>
                                     {assigned.length > 0 ? (
                                         <div className="admin-event-staff-list">

@@ -67,8 +67,7 @@ export interface UserProfile {
 }
 
 export function isEventStaff(profile: UserProfile, eventId: string): boolean {
-    return hasPermission(profile.group, 'staff')
-        && profile.eventStaffEvents.includes(eventId);
+    return profile.eventStaffEvents.includes(eventId);
 }
 
 export function canAccessEventTickets(profile: UserProfile, eventId: string): boolean {
