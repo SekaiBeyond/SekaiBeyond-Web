@@ -22,6 +22,7 @@ import {
     callSetUserTitle,
     callToggleAttendance,
     callToggleUserBadge,
+    functionsErrorCode,
     getFirebaseDb,
 } from '~/lib/firebase';
 import type { User } from 'firebase/auth';
@@ -238,8 +239,14 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     : (isEnglish ? 'Attendance granted.' : '已添加参加记录。'),
                 has ? 'warning' : 'success',
             );
-        } catch {
-            showToast(isEnglish ? 'Failed to update attendance.' : '更新签到状态失败。', 'error');
+        } catch (err) {
+            const code = functionsErrorCode(err);
+            const msg = code === 'has-staff'
+                ? (isEnglish
+                    ? 'User is event staff for this event. Remove them as staff before adding as attendee.'
+                    : '该用户是此活动的工作人员，请先撤销其工作人员身份再添加为参加者。')
+                : (isEnglish ? 'Failed to update attendance.' : '更新签到状态失败。');
+            showToast(msg, 'error');
         } finally {
             setUpdating(false);
         }

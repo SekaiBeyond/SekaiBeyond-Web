@@ -212,7 +212,8 @@ export const callUpdateEventEmailTemplate = (data: {
     getFunctions(), 'updateEventEmailTemplate')(data);
 
 export const callAssignEventStaff = (data: {targetUid: string; eventId: string}) =>
-    httpsCallable<typeof data, {added: boolean}>(getFunctions(), 'assignEventStaff')(data);
+    httpsCallable<typeof data, {added: boolean; attendeeRemoved: boolean}>(
+        getFunctions(), 'assignEventStaff')(data);
 
 export const callRemoveEventStaff = (data: {targetUid: string; eventId: string}) =>
     httpsCallable<typeof data, {removed: boolean}>(getFunctions(), 'removeEventStaff')(data);

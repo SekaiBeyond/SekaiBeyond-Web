@@ -13,9 +13,9 @@ import type { Tag } from '~/lib/tags';
 import type { UserRecord } from './types';
 import { fetchEventAttendees, fetchEventStaffCount } from './utils';
 import { BilingualFormField } from './BilingualFormField';
-import { EventAttendeesList } from './EventAttendeesList';
 import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
+import { PastEventAttendeesSection } from './PastEventAttendeesSection';
 
 interface EventsTabProps {
     pastEvents: PastEvent[];
@@ -435,7 +435,13 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             </div>
 
                             {eventSubTab === 'attendees' && (
-                                <EventAttendeesList loading={searching} attendees={eventAttendees}/>
+                                <PastEventAttendeesSection
+                                    eventId={managedEvt.id}
+                                    attendees={eventAttendees}
+                                    loading={searching}
+                                    onReload={() => loadEventAttendees(managedEvt.id)}
+                                    showToast={showToast}
+                                />
                             )}
 
                             {eventSubTab === 'staff' && (
@@ -443,6 +449,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     eventId={managedEvt.id}
                                     showToast={showToast}
                                     onCountChange={setStaffCount}
+                                    onAttendeeRemoved={() => loadEventAttendees(managedEvt.id)}
                                 />
                             )}
                         </>

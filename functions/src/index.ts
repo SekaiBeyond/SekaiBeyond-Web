@@ -1878,6 +1878,10 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
 /**
  * Toggle event attendance for a user (admin only).
  * Enforces hierarchy: core-staff can only manage visitor/member/staff.
+ *
+ * Rejects grant=true with `has-staff` if the user is event-staff for this
+ * event — staff and attendees are mutually exclusive (admin must remove the
+ * staff role first).
  */
 export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -1896,12 +1900,30 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
         const callerGroup = callerSnap.data()!.group;
         const targetSnap = await txn.get(db.collection("users").doc(targetUid));
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
-        if (callerGroup !== "president" && !["visitor", "member", "staff"].includes(targetSnap.data()!.group)) {
+        const targetData = targetSnap.data()!;
+        // Hierarchy guard, but allow self-edits — admins managing their own
+        // attendance shouldn't be blocked by the "above your level" check.
+        if (
+            targetUid !== uid
+            && callerGroup !== "president"
+            && !["visitor", "member", "staff"].includes(targetData.group)
+        ) {
             throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
         }
 
         const eventSnap = await txn.get(db.collection("pastEvents").doc(eventId));
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+
+        if (grant) {
+            const staffEvents: string[] = targetData.eventStaffEvents ?? [];
+            if (staffEvents.includes(eventId)) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "User is event staff for this event. Remove them as staff before adding as attendee.",
+                    {code: "has-staff"},
+                );
+            }
+        }
 
         txn.update(db.collection("users").doc(targetUid), {
             attendedEvents: grant ? FieldValue.arrayUnion(eventId) : FieldValue.arrayRemove(eventId),
@@ -1911,7 +1933,7 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
             performedBy: uid,
             performedByName: callerSnap.data()!.displayName ?? "",
             targetUid,
-            targetName: targetSnap.data()!.displayName ?? "",
+            targetName: targetData.displayName ?? "",
             eventTitle: eventSnap.data()!.title ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
@@ -3322,13 +3344,26 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
  * not change the user's group. The role only grants ticket-scanning and
  * attendee-viewing access for this specific event.
  *
- * Staff and attendees are mutually exclusive: rejects with `has-ticket` if the
- * target already has an attendee doc for this event.
+ * Staff and attendees are mutually exclusive in the admin UI. The two
+ * "attendees" sources we have to keep in sync:
+ *   - paid events: per-event `attendees` subcollection (one doc per email,
+ *     holds tickets);
+ *   - free events: each user's `attendedEvents` array (driven by claim codes
+ *     or admin toggleAttendance).
  *
- * Side effect: auto-marks the staffer as having attended the event by adding
- * eventId to attendedEvents. The reverse (removeEventStaff) does NOT rewind
- * attendance — staff who actually showed up should stay attended even if their
- * role is revoked.
+ * Behavior by event lifecycle:
+ *   - upcoming + has attendee subcollection doc: reject with `has-ticket` —
+ *     live tickets may already be distributed and must be voided explicitly
+ *     via the tickets tab.
+ *   - upcoming, no attendee doc: auto-mark the staffer as attended (they will
+ *     be there). Existing semantic, preserved.
+ *   - past: scrub attendee state so the user only appears as staff. Deletes
+ *     any attendee subcollection doc (logged as `ticket-attendee-delete` with
+ *     reason `staff-assignment`) and removes eventId from `attendedEvents`
+ *     (logged as `event-unattend`). Skips the auto-attend write path.
+ *
+ * `removeEventStaff` does NOT re-add attendance — converting back is a manual
+ * step via toggleAttendance / re-import.
  */
 export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -3347,26 +3382,32 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         const eventCollection = upcomingSnap.exists ? "upcomingEvents" : "pastEvents";
+        const isPastEvent = !upcomingSnap.exists;
 
         const targetData = targetSnap.data()!;
         const targetEmail: string = targetData.email ?? "";
         const existing: string[] = targetData.eventStaffEvents ?? [];
         const alreadyStaff = existing.includes(eventId);
 
-        // Staff and attendees are mutually exclusive — reject if user already
-        // has a ticket for this event. Admin must delete the attendee record
-        // first via the tickets tab.
+        // Past events delete the attendee doc to enforce the staff/attendee
+        // exclusivity; upcoming events reject so the admin voids live tickets
+        // explicitly.
+        let attendeeToRemove: FirebaseFirestore.QueryDocumentSnapshot | null = null;
         if (targetEmail) {
             const attendeeQuery = await txn.get(
                 db.collection(eventCollection).doc(eventId).collection("attendees")
                     .where("email", "==", targetEmail).limit(1)
             );
             if (!attendeeQuery.empty) {
-                throw new HttpsError(
-                    "failed-precondition",
-                    "User already has a ticket for this event. Delete their attendee record before assigning as staff.",
-                    {code: "has-ticket"},
-                );
+                if (isPastEvent) {
+                    attendeeToRemove = attendeeQuery.docs[0];
+                } else {
+                    throw new HttpsError(
+                        "failed-precondition",
+                        "User already has a ticket for this event. Delete their attendee record before assigning as staff.",
+                        {code: "has-ticket"},
+                    );
+                }
             }
         }
 
@@ -3376,15 +3417,42 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         const attendedEvents: string[] = targetData.attendedEvents ?? [];
         const alreadyAttended = attendedEvents.includes(eventId);
 
-        if (alreadyStaff && alreadyAttended) {
-            return {added: false};
+        // Past: pull eventId out of attendedEvents so the user doesn't show in
+        // the free-event attendees list. Upcoming: auto-attend (legacy).
+        const attendanceAction: "add" | "remove" | "none" = isPastEvent
+            ? (alreadyAttended ? "remove" : "none")
+            : (alreadyAttended ? "none" : "add");
+
+        if (alreadyStaff && attendanceAction === "none" && !attendeeToRemove) {
+            return {added: false, attendeeRemoved: false};
         }
 
         const userUpdates: Record<string, unknown> = {};
         if (!alreadyStaff) userUpdates.eventStaffEvents = FieldValue.arrayUnion(eventId);
-        if (!alreadyAttended) userUpdates.attendedEvents = FieldValue.arrayUnion(eventId);
+        if (attendanceAction === "add") {
+            userUpdates.attendedEvents = FieldValue.arrayUnion(eventId);
+        } else if (attendanceAction === "remove") {
+            userUpdates.attendedEvents = FieldValue.arrayRemove(eventId);
+        }
         if (Object.keys(userUpdates).length > 0) {
             txn.update(db.collection("users").doc(targetUid), userUpdates);
+        }
+
+        if (attendeeToRemove) {
+            const attendeeData = attendeeToRemove.data();
+            txn.delete(attendeeToRemove.ref);
+            txn.set(db.collection("records").doc(), {
+                type: "ticket-attendee-delete",
+                performedBy: uid,
+                performedByName: callerName,
+                eventId,
+                eventTitle,
+                targetEmail: attendeeData.email ?? targetEmail,
+                targetName: attendeeData.name ?? targetName,
+                reason: "staff-assignment",
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
         }
 
         if (!alreadyStaff) {
@@ -3400,7 +3468,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
                 expiresAt: recordExpiresAt(),
             });
         }
-        if (!alreadyAttended) {
+        if (attendanceAction === "add") {
             txn.set(db.collection("records").doc(), {
                 type: "event-attend",
                 performedBy: uid,
@@ -3413,8 +3481,25 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
                 timestamp: FieldValue.serverTimestamp(),
                 expiresAt: recordExpiresAt(),
             });
+        } else if (attendanceAction === "remove") {
+            txn.set(db.collection("records").doc(), {
+                type: "event-unattend",
+                performedBy: uid,
+                performedByName: callerName,
+                targetUid,
+                targetName,
+                targetEmail,
+                eventId,
+                eventTitle,
+                reason: "staff-assignment",
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
         }
-        return {added: !alreadyStaff};
+        return {
+            added: !alreadyStaff,
+            attendeeRemoved: attendeeToRemove !== null || attendanceAction === "remove",
+        };
     });
 });
 
