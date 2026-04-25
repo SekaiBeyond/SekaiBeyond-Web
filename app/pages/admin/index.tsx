@@ -271,7 +271,6 @@ export const AdminPage = () => {
                     <UsersTab
                         ref={usersTabRef}
                         pastEvents={pastEvents}
-                        upcomingEvents={upcomingEvents}
                         badgeDefs={badgeDefs}
                         badgeDefsError={badgeDefsError}
                         user={user}

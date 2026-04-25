@@ -3279,12 +3279,15 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
     const eventId = validateDocId(input.eventId, "eventId");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const [targetSnap, eventSnap] = await Promise.all([
+        const [targetSnap, upcomingSnap, pastSnap] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
             txn.get(db.collection("upcomingEvents").doc(eventId)),
+            txn.get(db.collection("pastEvents").doc(eventId)),
         ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
+        const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        const eventCollection = upcomingSnap.exists ? "upcomingEvents" : "pastEvents";
 
         const targetData = targetSnap.data()!;
         const targetEmail: string = targetData.email ?? "";
@@ -3303,7 +3306,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         let attendeeDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
         if (targetEmail) {
             const attendeeQuery = await txn.get(
-                db.collection("upcomingEvents").doc(eventId).collection("attendees")
+                db.collection(eventCollection).doc(eventId).collection("attendees")
                     .where("email", "==", targetEmail).limit(1)
             );
             if (!attendeeQuery.empty) attendeeDoc = attendeeQuery.docs[0];

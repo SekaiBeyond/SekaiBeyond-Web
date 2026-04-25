@@ -14,6 +14,7 @@ import type { UserRecord } from './types';
 import { fetchEventAttendees } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { EventAttendeesList } from './EventAttendeesList';
+import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
 
 interface EventsTabProps {
@@ -48,10 +49,12 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [eventImage, setEventImage] = useState<File | null>(null);
     const [eventImagePreview, setEventImagePreview] = useState<string | null>(null);
     const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
+    const [eventSubTab, setEventSubTab] = useState<'attendees' | 'staff'>('attendees');
 
     const selectManagedEvent = async (eventId: string) => {
         setManagedEvent(eventId);
         setEventAttendees([]);
+        setEventSubTab('attendees');
         try {
             await loadEventAttendees(eventId);
         } catch (err) {
@@ -403,13 +406,31 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                         })} 前后执行。`}
                                 </p>
                             )}
-                            <h4 className="admin-badges-title admin-section-mb">
-                                {isEnglish ? 'Attendees' : '参加者'}
-                                {eventAttendees.length > 0 && (
-                                    <span className="admin-sub-tab-count">{eventAttendees.length}</span>
-                                )}
-                            </h4>
-                            <EventAttendeesList loading={searching} attendees={eventAttendees}/>
+                            <div className="admin-sub-tabs">
+                                <button
+                                    className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
+                                    onClick={() => setEventSubTab('attendees')}
+                                >
+                                    {isEnglish ? 'Attendees' : '参加者'}
+                                    {eventAttendees.length > 0 && (
+                                        <span className="admin-sub-tab-count">{eventAttendees.length}</span>
+                                    )}
+                                </button>
+                                <button
+                                    className={`admin-sub-tab ${eventSubTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
+                                    onClick={() => setEventSubTab('staff')}
+                                >
+                                    {isEnglish ? 'Staff' : '工作人员'}
+                                </button>
+                            </div>
+
+                            {eventSubTab === 'attendees' && (
+                                <EventAttendeesList loading={searching} attendees={eventAttendees}/>
+                            )}
+
+                            {eventSubTab === 'staff' && (
+                                <EventStaffSection eventId={managedEvt.id} showToast={showToast}/>
+                            )}
                         </>
                     )}
                 </div>

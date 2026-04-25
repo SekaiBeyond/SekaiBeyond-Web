@@ -185,6 +185,22 @@
     font-size: 20px;
     color: var(--color-text);
     margin-bottom: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.admin-detail-profile-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    font-size: 14px;
+    transition: color 0.15s ease;
+}
+
+.admin-detail-profile-link:hover {
+    color: var(--color-primary);
 }
 
 .admin-detail-header p {
