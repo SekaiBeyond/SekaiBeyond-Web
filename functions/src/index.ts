@@ -777,6 +777,16 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                 // Deactivate old codes
                 for (const oldDoc of existingCodes.docs) {
                     txn.update(oldDoc.ref, {active: false});
+                    txn.set(db.collection("records").doc(), {
+                        type: "event-code-deactivate",
+                        performedBy: uid,
+                        performedByName: callerSnap.data()?.displayName ?? "",
+                        eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+                        eventId,
+                        code: oldDoc.data().code ?? oldDoc.id,
+                        timestamp: FieldValue.serverTimestamp(),
+                        expiresAt: recordExpiresAt(),
+                    });
                 }
                 txn.set(codeRef, {
                     code,
@@ -1453,15 +1463,13 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
 
         for (const codeDoc of codesToDelete) {
             txn.delete(codeDoc.ref);
-        }
-        if (codesToDelete.length > 0) {
             txn.set(db.collection("records").doc(), {
-                type: "code-delete-paid-conversion",
+                type: "event-code-deactivate",
                 performedBy: uid,
                 performedByName: callerSnap.data()?.displayName ?? "",
                 eventTitle: title,
                 eventId: docId,
-                deletedCount: codesToDelete.length,
+                code: codeDoc.data().code ?? codeDoc.id,
                 timestamp: FieldValue.serverTimestamp(),
                 expiresAt: recordExpiresAt(),
             });
@@ -2547,9 +2555,10 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
     // Admin check + event existence check in a lightweight transaction.
     // We can't fit the whole import in one transaction (would violate the 500-op
     // limit on large imports), so the big writes run as batched commits below.
-    await adminTransaction(uid, async (txn) => {
+    const eventTitle = await adminTransaction(uid, async (txn) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        return (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId) as string;
     });
 
     const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
@@ -2635,6 +2644,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         performedBy: uid,
         performedByName: callerName,
         eventId,
+        eventTitle,
         addedCount,
         replacedCount,
         timestamp: FieldValue.serverTimestamp(),
@@ -2801,9 +2811,12 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
     const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const attendeeRef = db.collection("upcomingEvents").doc(eventId)
-            .collection("attendees").doc(attendeeId);
-        const attendeeSnap = await txn.get(attendeeRef);
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
         if (!attendeeSnap.exists) {
             throw new HttpsError("not-found", "Attendee not found.");
         }
@@ -2816,12 +2829,17 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
 
         tickets[idx] = {...tickets[idx], voided: true};
 
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
         txn.set(db.collection("records").doc(), {
             type: "ticket-void",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
+            eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
             code: ticketId,
@@ -2857,14 +2875,20 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
     const ticketCount = validateTicketCount(input.ticketCount);
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const attendeeRef = db.collection("upcomingEvents").doc(eventId)
-            .collection("attendees").doc(attendeeId);
-        const attendeeSnap = await txn.get(attendeeRef);
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
         if (!attendeeSnap.exists) {
             throw new HttpsError("not-found", "Attendee not found.");
         }
         const data = attendeeSnap.data()!;
         const prevTicketCount: number = data.ticketCount ?? 0;
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
 
         if (ticketCount === prevTicketCount) {
             if (name === data.name) {
@@ -2876,6 +2900,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
                 performedBy: uid,
                 performedByName: callerSnap.data()?.displayName ?? "",
                 eventId,
+                eventTitle,
                 targetEmail: data.email ?? "",
                 oldName: data.name ?? "",
                 newName: name,
@@ -2900,6 +2925,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
+            eventTitle,
             targetEmail: data.email ?? "",
             targetName: name,
             timestamp: FieldValue.serverTimestamp(),
@@ -2920,9 +2946,12 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
     const attendeeId = validateDocId(input.attendeeId, "attendeeId");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const attendeeRef = db.collection("upcomingEvents").doc(eventId)
-            .collection("attendees").doc(attendeeId);
-        const attendeeSnap = await txn.get(attendeeRef);
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
         if (!attendeeSnap.exists) {
             throw new HttpsError("not-found", "Attendee not found.");
         }
@@ -2931,6 +2960,9 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             (t: Record<string, unknown>) => t as unknown as NewTicket
         );
         const voided = tickets.map(t => ({...t, voided: true}));
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
         // Marking voided before delete: belt-and-suspenders against any read that
         // races between the void and the doc delete.
         txn.update(attendeeRef, {tickets: voided});
@@ -2940,6 +2972,7 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
+            eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
             timestamp: FieldValue.serverTimestamp(),
@@ -3399,13 +3432,22 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
     const eventId = validateDocId(input.eventId, "eventId");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const targetSnap = await txn.get(db.collection("users").doc(targetUid));
+        const [targetSnap, upcomingSnap, pastSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(targetUid)),
+            txn.get(db.collection("upcomingEvents").doc(eventId)),
+            txn.get(db.collection("pastEvents").doc(eventId)),
+        ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         const targetData = targetSnap.data()!;
         const existing: string[] = targetData.eventStaffEvents ?? [];
         if (!existing.includes(eventId)) {
             return {removed: false};
         }
+
+        const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
 
         txn.update(db.collection("users").doc(targetUid), {
             eventStaffEvents: FieldValue.arrayRemove(eventId),
@@ -3417,6 +3459,7 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
             targetUid,
             targetName: targetData.displayName ?? "",
             eventId,
+            eventTitle,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
