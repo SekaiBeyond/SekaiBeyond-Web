@@ -7,7 +7,7 @@ import { callGetPublicProfile, getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { isValidHttpUrl } from '~/lib/urls';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
@@ -139,8 +139,10 @@ export const ProfilePage = () => {
     const {tags} = useTags();
     const tagMap = useMemo(() => new Map(tags.map(t => [t.id, t])), [tags]);
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const viewUid = searchParams.get('uid');
     const isViewingOther = !!viewUid && viewUid !== user?.uid;
+    const wasAuthorized = useRef(false);
     const [viewedProfile, setViewedProfile] = useState<ViewedProfile | null>(null);
     const [loadingViewed, setLoadingViewed] = useState(false);
     const [editingName, setEditingName] = useState(false);
@@ -164,6 +166,17 @@ export const ProfilePage = () => {
         setToasts(prev => [...prev, {id, message, type}]);
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
     }, []);
+
+    useEffect(() => {
+        if (loading || isViewingOther) return;
+        if (user && profile) {
+            wasAuthorized.current = true;
+            return;
+        }
+        if (wasAuthorized.current && !user) {
+            navigate('/', {replace: true});
+        }
+    }, [loading, user, profile, isViewingOther, navigate]);
 
     const badgeIds = isViewingOther ? viewedProfile?.badges : profile?.badges;
     const badgeIdsKey = badgeIds?.slice().sort().join(',') ?? '';

@@ -7,7 +7,7 @@ import { getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useTags } from '~/lib/tags';
 import type { BadgeDef, Tab } from './types';
 import { UsersTab, type UsersTabHandle } from './UsersTab';
@@ -57,12 +57,25 @@ export const AdminPage = () => {
     }, []);
     const {tags, refresh: refreshTags} = useTags();
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const urlParamsHandled = useRef(false);
+    const wasAuthorized = useRef(false);
     const usersTabRef = useRef<UsersTabHandle>(null);
     const eventsTabRef = useRef<EventsTabHandle>(null);
     const upcomingTabRef = useRef<UpcomingEventsTabHandle>(null);
     const badgesTabRef = useRef<BadgesTabHandle>(null);
     const pendingAction = useRef<{type: string; id: string} | null>(null);
+
+    useEffect(() => {
+        if (loading) return;
+        if (user && profile && (isCoreStaffOrAbove || isEventStaffOnly)) {
+            wasAuthorized.current = true;
+            return;
+        }
+        if (wasAuthorized.current && !user) {
+            navigate('/', {replace: true});
+        }
+    }, [loading, user, profile, isCoreStaffOrAbove, isEventStaffOnly, navigate]);
 
     useEffect(() => {
         if (urlParamsHandled.current) return;
