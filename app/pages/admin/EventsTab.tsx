@@ -11,7 +11,7 @@ import {
 import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
 import type { UserRecord } from './types';
-import { fetchEventAttendees } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { EventAttendeesList } from './EventAttendeesList';
 import { EventStaffSection } from './EventStaffSection';
@@ -50,16 +50,23 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [eventImagePreview, setEventImagePreview] = useState<string | null>(null);
     const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
     const [eventSubTab, setEventSubTab] = useState<'attendees' | 'staff'>('attendees');
+    const [staffCount, setStaffCount] = useState<number | null>(null);
 
     const selectManagedEvent = async (eventId: string) => {
         setManagedEvent(eventId);
         setEventAttendees([]);
+        setStaffCount(null);
         setEventSubTab('attendees');
         try {
             await loadEventAttendees(eventId);
         } catch (err) {
             console.error('Failed to load attendees:', err);
             showToast(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。', 'error');
+        }
+        try {
+            setStaffCount(await fetchEventStaffCount(eventId));
+        } catch {
+            // Non-fatal — count badge just won't appear.
         }
     };
 
@@ -421,6 +428,9 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     onClick={() => setEventSubTab('staff')}
                                 >
                                     {isEnglish ? 'Staff' : '工作人员'}
+                                    {staffCount != null && staffCount > 0 && (
+                                        <span className="admin-sub-tab-count">{staffCount}</span>
+                                    )}
                                 </button>
                             </div>
 
@@ -429,7 +439,11 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             )}
 
                             {eventSubTab === 'staff' && (
-                                <EventStaffSection eventId={managedEvt.id} showToast={showToast}/>
+                                <EventStaffSection
+                                    eventId={managedEvt.id}
+                                    showToast={showToast}
+                                    onCountChange={setStaffCount}
+                                />
                             )}
                         </>
                     )}

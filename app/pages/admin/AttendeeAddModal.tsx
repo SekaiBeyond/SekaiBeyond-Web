@@ -65,12 +65,14 @@ export function AttendeeAddModal({
             onClose();
         } catch (err) {
             const code = functionsErrorCode(err);
-            showToast(
-                isEnglish
+            const msg = code === 'has-staff'
+                ? (isEnglish
+                    ? `${trimmedEmail} is event staff for this event. Remove them as staff before adding as an attendee.`
+                    : `${trimmedEmail} 是该活动的工作人员，请先撤销其工作人员身份再添加为参加者。`)
+                : (isEnglish
                     ? `Failed to add attendee${code ? ` (${code})` : ''}.`
-                    : `添加参加者失败${code ? `（${code}）` : ''}。`,
-                'error',
-            );
+                    : `添加参加者失败${code ? `（${code}）` : ''}。`);
+            showToast(msg, 'error');
         } finally {
             setSaving(false);
         }

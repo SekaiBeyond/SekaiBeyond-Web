@@ -2567,6 +2567,29 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         }
     }
 
+    // Reject the whole import if any imported email belongs to a current
+    // event-staff for this event — staff and attendees are mutually exclusive.
+    const usersCol = db.collection("users");
+    const staffConflicts: string[] = [];
+    for (let i = 0; i < emails.length; i += 30) {
+        const chunk = emails.slice(i, i + 30);
+        const snap = await usersCol.where("email", "in", chunk).get();
+        for (const doc of snap.docs) {
+            const data = doc.data();
+            const staffEvents: string[] = data.eventStaffEvents ?? [];
+            if (staffEvents.includes(eventId) && typeof data.email === "string") {
+                staffConflicts.push(data.email);
+            }
+        }
+    }
+    if (staffConflicts.length > 0) {
+        throw new HttpsError(
+            "failed-precondition",
+            `${staffConflicts.length} user(s) are event staff for this event and cannot be imported as attendees: ${staffConflicts.join(", ")}. Remove them as staff first or omit them from the import.`,
+            {code: "has-staff", emails: staffConflicts},
+        );
+    }
+
     const callerSnap = await db.collection("users").doc(uid).get();
     const callerName = callerSnap.data()?.displayName ?? "";
 
@@ -3266,10 +3289,13 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
  * not change the user's group. The role only grants ticket-scanning and
  * attendee-viewing access for this specific event.
  *
- * Side effect: auto-marks the staffer as having attended the event
- * (adds eventId to attendedEvents, flips checkedIn on their attendee doc if one
- * exists). The reverse (removeEventStaff) does NOT rewind attendance — staff
- * who actually showed up should stay attended even if their role is revoked.
+ * Staff and attendees are mutually exclusive: rejects with `has-ticket` if the
+ * target already has an attendee doc for this event.
+ *
+ * Side effect: auto-marks the staffer as having attended the event by adding
+ * eventId to attendedEvents. The reverse (removeEventStaff) does NOT rewind
+ * attendance — staff who actually showed up should stay attended even if their
+ * role is revoked.
  */
 export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -3294,22 +3320,21 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         const existing: string[] = targetData.eventStaffEvents ?? [];
         const alreadyStaff = existing.includes(eventId);
 
-        // Presidents can touch anyone; core-staff can only manage <= staff.
-        const callerGroup = callerSnap.data()?.group;
-        if (callerGroup === "core-staff"
-            && !["visitor", "member", "staff"].includes(targetData.group)) {
-            throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
-        }
-
-        // Look up an attendee doc by email so we can flip checkedIn for paid events.
-        // Reads must precede writes inside a Firestore transaction.
-        let attendeeDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+        // Staff and attendees are mutually exclusive — reject if user already
+        // has a ticket for this event. Admin must delete the attendee record
+        // first via the tickets tab.
         if (targetEmail) {
             const attendeeQuery = await txn.get(
                 db.collection(eventCollection).doc(eventId).collection("attendees")
                     .where("email", "==", targetEmail).limit(1)
             );
-            if (!attendeeQuery.empty) attendeeDoc = attendeeQuery.docs[0];
+            if (!attendeeQuery.empty) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "User already has a ticket for this event. Delete their attendee record before assigning as staff.",
+                    {code: "has-ticket"},
+                );
+            }
         }
 
         const eventTitle: string = eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId;
@@ -3327,20 +3352,6 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         if (!alreadyAttended) userUpdates.attendedEvents = FieldValue.arrayUnion(eventId);
         if (Object.keys(userUpdates).length > 0) {
             txn.update(db.collection("users").doc(targetUid), userUpdates);
-        }
-
-        if (attendeeDoc) {
-            const attendeeData = attendeeDoc.data();
-            const tickets = (attendeeData.tickets ?? []) as Array<Record<string, unknown>>;
-            const now = Timestamp.now();
-            const updatedTickets = tickets.map((t) => t.checkedIn
-                ? t
-                : {...t, checkedIn: true, checkedInAt: now}
-            );
-            txn.update(attendeeDoc.ref, {
-                tickets: updatedTickets,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
         }
 
         if (!alreadyStaff) {
@@ -3394,12 +3405,6 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
         const existing: string[] = targetData.eventStaffEvents ?? [];
         if (!existing.includes(eventId)) {
             return {removed: false};
-        }
-
-        const callerGroup = callerSnap.data()?.group;
-        if (callerGroup === "core-staff"
-            && !["visitor", "member", "staff"].includes(targetData.group)) {
-            throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
         }
 
         txn.update(db.collection("users").doc(targetUid), {

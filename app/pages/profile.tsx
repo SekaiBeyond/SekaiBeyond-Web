@@ -475,8 +475,8 @@ export const ProfilePage = () => {
             group: viewedProfile!.group,
             title: viewedProfile!.title ?? '',
         };
-    const attendedSet = new Set(dp.attendedEvents);
     const staffedSet = new Set(dp.eventStaffEvents);
+    const attendedSet = new Set([...dp.attendedEvents, ...dp.eventStaffEvents]);
     const attendedEvents = pastEvents
         .filter(e => attendedSet.has(e.id))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());

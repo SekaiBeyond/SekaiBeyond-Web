@@ -8,11 +8,12 @@ import type { UserRecord } from './types';
 interface EventStaffSectionProps {
     eventId: string;
     showToast: ShowToast;
+    onCountChange?: (count: number) => void;
 }
 
 const SEARCH_LIMIT = 8;
 
-export function EventStaffSection({eventId, showToast}: EventStaffSectionProps) {
+export function EventStaffSection({eventId, showToast, onCountChange}: EventStaffSectionProps) {
     const {isEnglish} = useLanguage();
     const [staffList, setStaffList] = useState<UserRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -35,6 +36,7 @@ export function EventStaffSection({eventId, showToast}: EventStaffSectionProps) 
                 const snap = await getDocs(q);
                 if (stale) return;
                 setStaffList(snap.docs.map(docToUserRecord));
+                onCountChange?.(snap.size);
             } catch {
                 if (!stale) {
                     showToast(
@@ -50,7 +52,7 @@ export function EventStaffSection({eventId, showToast}: EventStaffSectionProps) 
         return () => {
             stale = true;
         };
-    }, [eventId, isEnglish, showToast]);
+    }, [eventId, isEnglish, showToast, onCountChange]);
 
     const runSearch = async () => {
         const q = searchQuery.trim();
@@ -103,13 +105,18 @@ export function EventStaffSection({eventId, showToast}: EventStaffSectionProps) 
         setBusyUid(user.uid);
         try {
             await callAssignEventStaff({targetUid: user.uid, eventId});
-            setStaffList(prev => prev.some(u => u.uid === user.uid) ? prev : [...prev, {
-                ...user,
-                eventStaffEvents: [...user.eventStaffEvents, eventId],
-                attendedEvents: user.attendedEvents.includes(eventId)
-                    ? user.attendedEvents
-                    : [...user.attendedEvents, eventId],
-            }]);
+            setStaffList(prev => {
+                if (prev.some(u => u.uid === user.uid)) return prev;
+                const next = [...prev, {
+                    ...user,
+                    eventStaffEvents: [...user.eventStaffEvents, eventId],
+                    attendedEvents: user.attendedEvents.includes(eventId)
+                        ? user.attendedEvents
+                        : [...user.attendedEvents, eventId],
+                }];
+                onCountChange?.(next.length);
+                return next;
+            });
             setSearchResults(prev => prev.filter(u => u.uid !== user.uid));
             showToast(
                 isEnglish ? `${user.displayName} added as event staff.` : `已添加 ${user.displayName} 为工作人员。`,
@@ -117,12 +124,14 @@ export function EventStaffSection({eventId, showToast}: EventStaffSectionProps) 
             );
         } catch (err) {
             const code = functionsErrorCode(err);
-            showToast(
-                isEnglish
+            const msg = code === 'has-ticket'
+                ? (isEnglish
+                    ? `${user.displayName} has a ticket for this event. Delete their attendee record before assigning as staff.`
+                    : `${user.displayName} 已有该活动的门票，请先删除其参加者记录再设为工作人员。`)
+                : (isEnglish
                     ? `Failed to add staff${code ? ` (${code})` : ''}.`
-                    : `添加失败${code ? `（${code}）` : ''}。`,
-                'error',
-            );
+                    : `添加失败${code ? `（${code}）` : ''}。`);
+            showToast(msg, 'error');
         } finally {
             setBusyUid(null);
         }
@@ -136,7 +145,11 @@ export function EventStaffSection({eventId, showToast}: EventStaffSectionProps) 
         setBusyUid(user.uid);
         try {
             await callRemoveEventStaff({targetUid: user.uid, eventId});
-            setStaffList(prev => prev.filter(u => u.uid !== user.uid));
+            setStaffList(prev => {
+                const next = prev.filter(u => u.uid !== user.uid);
+                onCountChange?.(next.length);
+                return next;
+            });
             showToast(
                 isEnglish ? `${user.displayName} removed from event staff.` : `已撤销 ${user.displayName} 的权限。`,
                 'warning',

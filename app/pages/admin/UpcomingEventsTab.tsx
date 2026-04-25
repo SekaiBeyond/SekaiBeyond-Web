@@ -18,7 +18,7 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { QRCodeSVG } from 'qrcode.react';
 import type { BadgeCode, UserRecord } from './types';
-import { fetchEventAttendees, getClaimUrl } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount, getClaimUrl } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { EventAttendeesList } from './EventAttendeesList';
 import { EventStaffSection } from './EventStaffSection';
@@ -98,6 +98,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [generatingCode, setGeneratingCode] = useState(false);
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
     const [searchingAttendees, setSearchingAttendees] = useState(false);
+    const [staffCount, setStaffCount] = useState<number | null>(null);
 
     const loadEventCode = async (eventId: string) => {
         const db = getFirebaseDb();
@@ -187,6 +188,12 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         setEventSubTab(evt?.paid ? 'tickets' : 'codes');
         setEventCode(null);
         setEventAttendees([]);
+        setStaffCount(null);
+        void fetchEventStaffCount(eventId)
+            .then(setStaffCount)
+            .catch(() => {
+                /* Non-fatal — count badge just won't appear. */
+            });
         // Paid events use tickets, not check-in codes — skip the load.
         if (evt?.paid) return;
         try {
@@ -272,7 +279,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             });
 
             await refreshEvents();
-            // If the currently-open event just flipped to paid, drop the tabs
+            // If the currently open event just flipped to paid, drop the tabs
             // that are hidden for paid (codes, attendees) and clear cached state.
             if (editingEvent && editingEvent.id === selectedEvent && form.paid) {
                 setEventCode(null);
@@ -501,7 +508,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                             : '付费活动（启用门票管理）'}
                                     </span>
                                 </label>
-                                {editingEvent && editingEvent.paid === false && form.paid && (
+                                {editingEvent && !editingEvent.paid && form.paid && (
                                     <p className="admin-form-grid-full admin-title-hint admin-warning-hint">
                                         {isEnglish
                                             ? 'Switching to paid will delete this event’s check-in code. Attendee management moves to the Tickets tab; existing attendance records are kept.'
@@ -732,7 +739,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
                                         onClick={() => {
                                             setEventSubTab('attendees');
-                                            loadEventAttendees(selectedEvent!);
+                                            loadEventAttendees(selectedEvent!).then();
                                         }}
                                     >
                                         {isEnglish ? 'Attendees' : '参加者'}
@@ -755,6 +762,9 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         onClick={() => setEventSubTab('staff')}
                                     >
                                         {isEnglish ? 'Staff' : '工作人员'}
+                                        {staffCount != null && staffCount > 0 && (
+                                            <span className="admin-sub-tab-count">{staffCount}</span>
+                                        )}
                                     </button>
                                 )}
                             </div>
@@ -846,7 +856,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                         const msg = isEnglish
                                                             ? 'This will deactivate the current code and generate a new one. Users with the old QR code will no longer be able to check in. Continue?'
                                                             : '此操作将停用当前签到码并生成新码。持有旧二维码的用户将无法签到。是否继续？';
-                                                        if (window.confirm(msg)) generateEventCodeFn(selectedEvent!);
+                                                        if (window.confirm(msg)) generateEventCodeFn(selectedEvent!).then();
                                                     }}
                                                     disabled={generatingCode}
                                                 >
@@ -865,7 +875,11 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             )}
 
                             {eventSubTab === 'staff' && !readOnly && (
-                                <EventStaffSection eventId={selectedEvt.id} showToast={showToast}/>
+                                <EventStaffSection
+                                    eventId={selectedEvt.id}
+                                    showToast={showToast}
+                                    onCountChange={setStaffCount}
+                                />
                             )}
 
                             {eventSubTab === 'tickets' && selectedEvt.paid && (
