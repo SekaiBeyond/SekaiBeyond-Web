@@ -17,7 +17,7 @@ import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { TagsTab } from './TagsTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
-import { PolicyTab } from './PolicyTab';
+import { SiteConfigTab } from './SiteConfigTab';
 
 type ToastType = 'success' | 'warning' | 'error';
 
@@ -95,8 +95,10 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(firstEventId);
             }
         } else {
-            if (tab === 'events' || tab === 'upcoming' || tab === 'badges' || tab === 'tags' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'policy') {
+            if (tab === 'events' || tab === 'upcoming' || tab === 'badges' || tab === 'tags' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config') {
                 setActiveTab(tab);
+            } else if (tab === 'policy') {
+                setActiveTab('config');
             }
             if (tab === 'events' && event) {
                 eventsTabRef.current?.selectManagedEvent(event);
@@ -227,7 +229,7 @@ export const AdminPage = () => {
                             className={`admin-tab ${activeTab === 'users' ? 'admin-tab-active' : ''}`}
                             onClick={() => setActiveTab('users')}
                         >
-                            {isEnglish ? 'Users' : '用户'}
+                            {isEnglish ? 'Users Management' : '用户管理'}
                         </button>
                     )}
                     {!isEventStaffOnly && (
@@ -262,10 +264,10 @@ export const AdminPage = () => {
                     )}
                     {!isEventStaffOnly && (
                         <button
-                            className={`admin-tab ${activeTab === 'records' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('records')}
+                            className={`admin-tab ${activeTab === 'config' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('config')}
                         >
-                            {isEnglish ? 'Records' : '操作记录'}
+                            {isEnglish ? 'Site Config' : '网站配置'}
                         </button>
                     )}
                     {!isEventStaffOnly && (
@@ -278,10 +280,10 @@ export const AdminPage = () => {
                     )}
                     {!isEventStaffOnly && (
                         <button
-                            className={`admin-tab ${activeTab === 'policy' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('policy')}
+                            className={`admin-tab ${activeTab === 'records' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('records')}
                         >
-                            {isEnglish ? 'Policy' : '政策'}
+                            {isEnglish ? 'Records' : '操作记录'}
                         </button>
                     )}
                 </div>
@@ -359,8 +361,8 @@ export const AdminPage = () => {
                     <ToolsTab/>
                 )}
 
-                {activeTab === 'policy' && !isEventStaffOnly && (
-                    <PolicyTab showToast={showToast}/>
+                {activeTab === 'config' && !isEventStaffOnly && (
+                    <SiteConfigTab showToast={showToast}/>
                 )}
             </div>
         </>

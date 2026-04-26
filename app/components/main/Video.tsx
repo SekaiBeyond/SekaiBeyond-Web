@@ -1,10 +1,13 @@
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { BILIBILI_VIDEO, LINKS } from "~/constants";
+import { useSiteConfig } from "~/lib/siteConfig";
 
 export const Video = () => {
     const {isEnglish} = useLanguage();
+    const {config} = useSiteConfig();
 
-    const bilibiliWatchUrl = `https://www.bilibili.com/video/${BILIBILI_VIDEO.bvid}`;
+    const bvid = config.bilibiliVideoBvid || BILIBILI_VIDEO.bvid;
+    const bilibiliWatchUrl = `https://www.bilibili.com/video/${bvid}`;
 
     return (
         <section id="video" className="video-section section">
@@ -22,7 +25,7 @@ export const Video = () => {
             <div className="video-content">
                 <div className="video-wrapper video-wrapper--desktop">
                     <iframe
-                        src={`https://player.bilibili.com/player.html?isOutside=true&aid=${BILIBILI_VIDEO.aid}&bvid=${BILIBILI_VIDEO.bvid}&cid=${BILIBILI_VIDEO.cid}&p=${BILIBILI_VIDEO.p}&autoplay=0`}
+                        src={`https://player.bilibili.com/player.html?isOutside=true&bvid=${bvid}&autoplay=0`}
                         allowFullScreen={true}
                         title={isEnglish ? "Sekai Beyond Video" : "彼世界视频"}
                         autoFocus={false}

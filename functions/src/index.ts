@@ -3683,3 +3683,33 @@ export const savePolicy = onCall({maxInstances: 10}, async (request) => {
         return {saved: true};
     });
 });
+
+export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const input = request.data as Record<string, unknown>;
+    const bvid = validateStr(input.bilibiliVideoBvid, "bilibiliVideoBvid", 100);
+
+    if (bvid && !/^BV[a-zA-Z0-9]+$/.test(bvid)) {
+        throw new HttpsError("invalid-argument", "Invalid Bilibili BV ID format.");
+    }
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        txn.set(db.collection("config").doc("main"), {
+            bilibiliVideoBvid: bvid,
+            updatedBy: uid,
+            updatedByName: callerSnap.data()?.displayName ?? "",
+            updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        txn.set(db.collection("records").doc(), {
+            type: "config-update",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {saved: true};
+    });
+});
