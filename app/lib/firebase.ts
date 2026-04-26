@@ -271,3 +271,5 @@ const googleProvider = new GoogleAuthProvider();
 export const signInWithGoogle = () => signInWithPopup(getFirebaseAuth(), googleProvider);
 
 export const signOut = () => firebaseSignOut(getFirebaseAuth());
+
+// Contributed via automated bounty system
