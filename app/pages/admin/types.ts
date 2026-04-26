@@ -44,7 +44,7 @@ export interface UserRecord {
     eventStaffEvents: string[];
 }
 
-export type Tab = 'users' | 'events' | 'upcoming' | 'badges' | 'tags' | 'records' | 'tools';
+export type Tab = 'users' | 'events' | 'upcoming' | 'badges' | 'tags' | 'records' | 'tools' | 'policy';
 
 export type RecordType =
     'group-assign'
@@ -102,7 +102,8 @@ export type RecordType =
     | 'ticket-email-send'
     | 'event-staff-assign'
     | 'event-staff-remove'
-    | 'upcoming-event-email-template-update';
+    | 'upcoming-event-email-template-update'
+    | 'policy-update';
 
 export interface ActivityRecord {
     id: string;

@@ -24,6 +24,10 @@ export const Footer = () => {
                         }}>
                             {labelFor(link)}
                         </a>
+                    ) : link.href.startsWith("/") ? (
+                        <a key={link.id} href={link.href} className="footer-link">
+                            {labelFor(link)}
+                        </a>
                     ) : (
                         <a key={link.id} href={link.href} className="footer-link" target="_blank"
                            rel="noopener noreferrer">

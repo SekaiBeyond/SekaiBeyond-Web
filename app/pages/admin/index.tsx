@@ -17,6 +17,7 @@ import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { TagsTab } from './TagsTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
+import { PolicyTab } from './PolicyTab';
 
 type ToastType = 'success' | 'warning' | 'error';
 
@@ -94,7 +95,7 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(firstEventId);
             }
         } else {
-            if (tab === 'events' || tab === 'upcoming' || tab === 'badges' || tab === 'tags' || tab === 'records' || tab === 'users' || tab === 'tools') {
+            if (tab === 'events' || tab === 'upcoming' || tab === 'badges' || tab === 'tags' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'policy') {
                 setActiveTab(tab);
             }
             if (tab === 'events' && event) {
@@ -275,6 +276,14 @@ export const AdminPage = () => {
                             {isEnglish ? 'Tools' : '工具'}
                         </button>
                     )}
+                    {!isEventStaffOnly && (
+                        <button
+                            className={`admin-tab ${activeTab === 'policy' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('policy')}
+                        >
+                            {isEnglish ? 'Policy' : '政策'}
+                        </button>
+                    )}
                 </div>
 
                 {activeTab === 'users' && !isEventStaffOnly && (
@@ -348,6 +357,10 @@ export const AdminPage = () => {
 
                 {activeTab === 'tools' && !isEventStaffOnly && (
                     <ToolsTab/>
+                )}
+
+                {activeTab === 'policy' && !isEventStaffOnly && (
+                    <PolicyTab showToast={showToast}/>
                 )}
             </div>
         </>

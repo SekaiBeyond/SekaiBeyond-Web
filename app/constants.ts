@@ -170,7 +170,13 @@ export const FOOTER_LINKS: NavLink[] = [
         href: LINKS.email,
         labelEn: 'Contact Us',
         labelCn: '联系我们',
-    }
+    },
+    {
+        id: 'policy',
+        href: '/policy',
+        labelEn: 'Policy',
+        labelCn: '政策',
+    },
 ];
 
 export const NAVIGATION_LINKS: NavLink[] = [

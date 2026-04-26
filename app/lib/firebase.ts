@@ -218,6 +218,9 @@ export const callAssignEventStaff = (data: {targetUid: string; eventId: string})
 export const callRemoveEventStaff = (data: {targetUid: string; eventId: string}) =>
     httpsCallable<typeof data, {removed: boolean}>(getFunctions(), 'removeEventStaff')(data);
 
+export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
+    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'savePolicy')(data);
+
 export const callSaveBadge = (data: {
     badgeId?: string;
     name: string; nameCn: string; description: string; descriptionCn: string;

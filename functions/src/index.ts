@@ -3655,3 +3655,31 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
         return {removed: true};
     });
 });
+
+export const savePolicy = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const input = request.data as Record<string, unknown>;
+    const contentEn = validateStr(input.contentEn, "contentEn", 20000);
+    const contentCn = validateStr(input.contentCn, "contentCn", 20000);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        txn.set(db.collection("policy").doc("main"), {
+            contentEn,
+            contentCn,
+            updatedBy: uid,
+            updatedByName: callerSnap.data()?.displayName ?? "",
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        txn.set(db.collection("records").doc(), {
+            type: "policy-update",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {saved: true};
+    });
+});
