@@ -125,14 +125,6 @@ export const SiteConfigTab = ({showToast}: SiteConfigTabProps) => {
                         ? (isEnglish ? 'Saving...' : '保存中...')
                         : (isEnglish ? 'Save Video' : '保存视频')}
                 </button>
-                <a
-                    href="/#video"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="admin-toggle-btn admin-toggle-edit"
-                >
-                    {isEnglish ? 'Preview ↗' : '预览 ↗'}
-                </a>
             </div>
 
             <div className="admin-divider"/>
@@ -175,14 +167,6 @@ export const SiteConfigTab = ({showToast}: SiteConfigTabProps) => {
                         ? (isEnglish ? 'Saving...' : '保存中...')
                         : (isEnglish ? 'Save Policy' : '保存政策')}
                 </button>
-                <a
-                    href="/policy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="admin-toggle-btn admin-toggle-edit"
-                >
-                    {isEnglish ? 'Preview ↗' : '预览 ↗'}
-                </a>
             </div>
         </div>
     );

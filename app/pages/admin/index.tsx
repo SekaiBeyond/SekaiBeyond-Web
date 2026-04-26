@@ -49,6 +49,8 @@ export const AdminPage = () => {
     }, [upcomingEvents, isEventStaffOnly, profile]);
 
     const [activeTab, setActiveTab] = useState<Tab>('users');
+    const [upcomingInDetail, setUpcomingInDetail] = useState(false);
+    const [eventsInDetail, setEventsInDetail] = useState(false);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [badgeDefsError, setBadgeDefsError] = useState(false);
     const [toasts, setToasts] = useState<Toast[]>([]);
@@ -87,7 +89,7 @@ export const AdminPage = () => {
         const tab = searchParams.get('tab');
         const event = searchParams.get('event');
         if (isEventStaffOnly) {
-            setActiveTab('upcoming');
+            setActiveTab('events');
             const firstEventId = event && profile.eventStaffEvents.includes(event)
                 ? event
                 : profile.eventStaffEvents[0];
@@ -95,8 +97,10 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(firstEventId);
             }
         } else {
-            if (tab === 'events' || tab === 'upcoming' || tab === 'badges' || tab === 'tags' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config') {
+            if (tab === 'events' || tab === 'badges' || tab === 'tags' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config') {
                 setActiveTab(tab);
+            } else if (tab === 'upcoming') {
+                setActiveTab('events');
             } else if (tab === 'policy') {
                 setActiveTab('config');
             }
@@ -155,7 +159,7 @@ export const AdminPage = () => {
     }, []);
 
     const handleSelectUpcomingEvent = useCallback((eventId: string) => {
-        setActiveTab('upcoming');
+        setActiveTab('events');
         pendingAction.current = {type: 'selectUpcomingEvent', id: eventId};
     }, []);
 
@@ -232,19 +236,11 @@ export const AdminPage = () => {
                             {isEnglish ? 'Users Management' : '用户管理'}
                         </button>
                     )}
-                    {!isEventStaffOnly && (
-                        <button
-                            className={`admin-tab ${activeTab === 'events' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('events')}
-                        >
-                            {isEnglish ? 'Past Events' : '往期活动'}
-                        </button>
-                    )}
                     <button
-                        className={`admin-tab ${activeTab === 'upcoming' ? 'admin-tab-active' : ''}`}
-                        onClick={() => setActiveTab('upcoming')}
+                        className={`admin-tab ${activeTab === 'events' ? 'admin-tab-active' : ''}`}
+                        onClick={() => setActiveTab('events')}
                     >
-                        {isEnglish ? 'Upcoming Events' : '活动预告'}
+                        {isEnglish ? 'Events' : '活动管理'}
                     </button>
                     {!isEventStaffOnly && (
                         <button
@@ -300,27 +296,44 @@ export const AdminPage = () => {
                     />
                 )}
 
-                {activeTab === 'events' && !isEventStaffOnly && (
-                    <EventsTab
-                        ref={eventsTabRef}
-                        pastEvents={pastEvents}
-                        refreshEvents={refreshEvents}
-                        tags={tags}
-                        showToast={showToast}
-                    />
-                )}
-
-                {activeTab === 'upcoming' && (
-                    <UpcomingEventsTab
-                        ref={upcomingTabRef}
-                        upcomingEvents={scopedUpcomingEvents}
-                        refreshEvents={refreshUpcoming}
-                        refreshPastEvents={refreshEvents}
-                        tags={tags}
-                        showToast={showToast}
-                        readOnly={!isCoreStaffOrAbove}
-                        eventStaffEvents={profile.eventStaffEvents}
-                    />
+                {activeTab === 'events' && (
+                    <>
+                        <div style={eventsInDetail ? {display: 'none'} : undefined}>
+                            {!upcomingInDetail && (
+                                <h4 className="admin-badges-title">
+                                    {isEnglish ? 'Upcoming Events' : '活动预告'}
+                                </h4>
+                            )}
+                            <UpcomingEventsTab
+                                ref={upcomingTabRef}
+                                upcomingEvents={scopedUpcomingEvents}
+                                refreshEvents={refreshUpcoming}
+                                refreshPastEvents={refreshEvents}
+                                tags={tags}
+                                showToast={showToast}
+                                readOnly={!isCoreStaffOrAbove}
+                                eventStaffEvents={profile.eventStaffEvents}
+                                onDetailChange={setUpcomingInDetail}
+                            />
+                        </div>
+                        {!isEventStaffOnly && (
+                            <div style={upcomingInDetail ? {display: 'none'} : undefined}>
+                                {!eventsInDetail && (
+                                    <h4 className="admin-badges-title admin-section-mt">
+                                        {isEnglish ? 'Past Events' : '往期活动'}
+                                    </h4>
+                                )}
+                                <EventsTab
+                                    ref={eventsTabRef}
+                                    pastEvents={pastEvents}
+                                    refreshEvents={refreshEvents}
+                                    tags={tags}
+                                    showToast={showToast}
+                                    onDetailChange={setEventsInDetail}
+                                />
+                            </div>
+                        )}
+                    </>
                 )}
 
                 {activeTab === 'badges' && !isEventStaffOnly && (

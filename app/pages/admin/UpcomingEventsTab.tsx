@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -33,6 +33,7 @@ interface UpcomingEventsTabProps {
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     readOnly?: boolean;
     eventStaffEvents?: string[];
+    onDetailChange?: (inDetail: boolean) => void;
 }
 
 export interface UpcomingEventsTabHandle {
@@ -78,9 +79,14 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                                                                   showToast,
                                                                                                   readOnly = false,
                                                                                                   eventStaffEvents = [],
+                                                                                                  onDetailChange,
                                                                                               }, forwardedRef) => {
     const {isEnglish} = useLanguage();
     const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
+
+    useEffect(() => {
+        onDetailChange?.(selectedEvent !== null);
+    }, [selectedEvent, onDetailChange]);
     const [showForm, setShowForm] = useState(false);
     const [editingEvent, setEditingEvent] = useState<UpcomingEvent | null>(null);
     const [form, setForm] = useState<EventForm>(emptyForm);

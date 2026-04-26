@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     callCancelEventDeletion,
@@ -22,6 +22,7 @@ interface EventsTabProps {
     refreshEvents: () => Promise<void>;
     tags: Tag[];
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    onDetailChange?: (inDetail: boolean) => void;
 }
 
 export interface EventsTabHandle {
@@ -33,9 +34,14 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                                                           refreshEvents,
                                                                           tags,
                                                                           showToast,
+                                                                          onDetailChange,
                                                                       }, forwardedRef) => {
     const {isEnglish} = useLanguage();
     const [managedEvent, setManagedEvent] = useState<string | null>(null);
+
+    useEffect(() => {
+        onDetailChange?.(managedEvent !== null);
+    }, [managedEvent, onDetailChange]);
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
     const [searching, setSearching] = useState(false);
     const [showCreateEvent, setShowCreateEvent] = useState(false);
