@@ -290,7 +290,7 @@ export const callDeleteAvatar = () =>
     httpsCallable<Record<string, never>, {photoURL: string}>(getFunctions(), 'deleteAvatar')({});
 
 export const callRequestAccountDeletion = (data: {targetUid?: string} = {}) =>
-    httpsCallable<{targetUid?: string}, {expiresAt: string}>(
+    httpsCallable<{targetUid?: string}, {deleteAt: string}>(
         getFunctions(), 'requestAccountDeletion'
     )(data);
 

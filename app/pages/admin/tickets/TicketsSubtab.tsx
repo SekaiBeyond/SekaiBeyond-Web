@@ -276,6 +276,10 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                         onAttendeeUpdated(updated);
                         setEditingAttendee(null);
                     }}
+                    onRegenerated={() => {
+                        setEditingAttendee(null);
+                        void loadAttendees();
+                    }}
                     showToast={showToast}
                 />
             )}

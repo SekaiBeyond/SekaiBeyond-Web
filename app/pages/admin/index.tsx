@@ -36,9 +36,10 @@ export const AdminPage = () => {
     const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => b.date.localeCompare(a.date)), [rawPastEvents]);
 
     const isCoreStaffOrAbove = !!profile && hasPermission(profile.group, 'core-staff');
+    // Event-staff is a per-event tag, independent of the global user group —
+    // any user with eventStaffEvents can access the scanner UI for those events.
     const isEventStaffOnly = !!profile
         && !isCoreStaffOrAbove
-        && profile.group === 'staff'
         && profile.eventStaffEvents.length > 0;
 
     const scopedUpcomingEvents = useMemo(() => {

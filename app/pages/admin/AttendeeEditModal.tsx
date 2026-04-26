@@ -8,11 +8,22 @@ interface AttendeeEditModalProps {
     eventId: string;
     attendee: AttendeeData;
     onClose: () => void;
+    // Name-only edit: optimistic update with the patched attendee.
+    // Regenerated edit: ticket UUIDs are minted server-side, so the parent must
+    // refetch instead of trusting a placeholder array.
     onSaved: (updated: AttendeeData) => void;
+    onRegenerated: () => void;
     showToast: ShowToast;
 }
 
-export function AttendeeEditModal({eventId, attendee, onClose, onSaved, showToast}: AttendeeEditModalProps) {
+export function AttendeeEditModal({
+                                      eventId,
+                                      attendee,
+                                      onClose,
+                                      onSaved,
+                                      onRegenerated,
+                                      showToast
+                                  }: AttendeeEditModalProps) {
     const {isEnglish} = useLanguage();
     const [name, setName] = useState(attendee.name);
     const [ticketCount, setTicketCount] = useState(String(attendee.ticketCount));
@@ -42,28 +53,16 @@ export function AttendeeEditModal({eventId, attendee, onClose, onSaved, showToas
                 ticketCount: newCount,
             });
             const regenerated = result.data.regenerated;
-            const updated: AttendeeData = {
-                ...attendee,
-                name: name.trim(),
-                ticketCount: newCount,
-                ...(regenerated ? {
-                    tickets: Array.from({length: newCount}, () => ({
-                        ticketId: '',
-                        redeemed: false,
-                        redeemedAt: null,
-                        redeemedBy: '',
-                        redeemedByName: '',
-                        checkedIn: false,
-                        checkedInAt: null,
-                        voided: false,
-                    })),
-                    ticketIds: [],
-                    emailSent: false,
-                    emailSentAt: null,
-                } : {}),
-                updatedAt: new Date(),
-            };
-            onSaved(updated);
+            if (regenerated) {
+                onRegenerated();
+            } else {
+                onSaved({
+                    ...attendee,
+                    name: name.trim(),
+                    ticketCount: newCount,
+                    updatedAt: new Date(),
+                });
+            }
             showToast(
                 regenerated
                     ? (isEnglish ? 'Attendee updated — tickets re-issued.' : '参加者已更新，门票已重新签发。')

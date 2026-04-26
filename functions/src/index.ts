@@ -3062,13 +3062,9 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
         const tickets: NewTicket[] = (data.tickets ?? []).map(
             (t: Record<string, unknown>) => t as unknown as NewTicket
         );
-        const voided = tickets.map(t => ({...t, voided: true}));
         const eventTitle: string = eventSnap.exists
             ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
             : eventId;
-        // Marking voided before delete: belt-and-suspenders against any read that
-        // races between the void and the doc delete.
-        txn.update(attendeeRef, {tickets: voided});
         txn.delete(attendeeRef);
         txn.set(db.collection("records").doc(), {
             type: "ticket-attendee-delete",
@@ -3302,6 +3298,10 @@ export const sendTicketEmails = onCall(
                 contentDisposition: "inline",
             }));
 
+            // Strip control chars (CR/LF in particular) from the rendered subject
+            // so a stray newline in eventTitle/attendeeName can't escape the
+            // Subject: header and inject extra fields. nodemailer's own header
+            // encoder already guards against this; this is defense-in-depth.
             const renderedSubject = renderTemplate(template.subject, {
                 attendeeEmail: data.email ?? "",
                 attendeeName: data.name ?? "",
@@ -3309,7 +3309,7 @@ export const sendTicketEmails = onCall(
                 eventDate: eventDateEn,
                 ticketCount: data.ticketCount ?? ticketIds.length,
                 ticketBlock: "",
-            }, false);
+            }, false).replace(/[\x00-\x1F\x7F]+/g, " ").trim();
             const renderedBodyEn = renderTemplate(template.bodyHtml, {
                 attendeeEmail: data.email ?? "",
                 attendeeName: data.name ?? "",
@@ -3488,18 +3488,20 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         const existing: string[] = targetData.eventStaffEvents ?? [];
         const alreadyStaff = existing.includes(eventId);
 
-        // Past events delete the attendee doc to enforce the staff/attendee
+        // Past events delete the attendee doc(s) to enforce the staff/attendee
         // exclusivity; upcoming events reject so the admin voids live tickets
-        // explicitly.
-        let attendeeToRemove: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+        // explicitly. Enumerate all matches without a limit so a partial-import
+        // failure that left duplicate attendee docs for the same email is fully
+        // cleaned up here, not just the first hit.
+        const attendeesToRemove: FirebaseFirestore.QueryDocumentSnapshot[] = [];
         if (targetEmail) {
             const attendeeQuery = await txn.get(
                 db.collection(eventCollection).doc(eventId).collection("attendees")
-                    .where("email", "==", targetEmail).limit(1)
+                    .where("email", "==", targetEmail)
             );
             if (!attendeeQuery.empty) {
                 if (isPastEvent) {
-                    attendeeToRemove = attendeeQuery.docs[0];
+                    attendeesToRemove.push(...attendeeQuery.docs);
                 } else {
                     throw new HttpsError(
                         "failed-precondition",
@@ -3522,7 +3524,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
             ? (alreadyAttended ? "remove" : "none")
             : (alreadyAttended ? "none" : "add");
 
-        if (alreadyStaff && attendanceAction === "none" && !attendeeToRemove) {
+        if (alreadyStaff && attendanceAction === "none" && attendeesToRemove.length === 0) {
             return {added: false, attendeeRemoved: false};
         }
 
@@ -3537,9 +3539,9 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
             txn.update(db.collection("users").doc(targetUid), userUpdates);
         }
 
-        if (attendeeToRemove) {
-            const attendeeData = attendeeToRemove.data();
-            txn.delete(attendeeToRemove.ref);
+        for (const attendeeDoc of attendeesToRemove) {
+            const attendeeData = attendeeDoc.data();
+            txn.delete(attendeeDoc.ref);
             txn.set(db.collection("records").doc(), {
                 type: "ticket-attendee-delete",
                 performedBy: uid,
@@ -3606,7 +3608,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         }
         return {
             added: !alreadyStaff,
-            attendeeRemoved: attendeeToRemove !== null || attendanceAction === "remove",
+            attendeeRemoved: attendeesToRemove.length > 0 || attendanceAction === "remove",
         };
     });
 });
