@@ -486,6 +486,23 @@
     object-fit: cover;
 }
 
+.profile-event-staff-tag {
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #ff6b9d, #fecc57);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(255, 107, 157, 0.35);
+}
+
 
 .profile-event-info {
     min-width: 0;

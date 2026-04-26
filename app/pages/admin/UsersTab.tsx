@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { FaExternalLinkAlt } from 'react-icons/fa';
 import {
     collection,
     doc,
@@ -21,6 +22,7 @@ import {
     callSetUserTitle,
     callToggleAttendance,
     callToggleUserBadge,
+    functionsErrorCode,
     getFirebaseDb,
 } from '~/lib/firebase';
 import type { User } from 'firebase/auth';
@@ -237,8 +239,14 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     : (isEnglish ? 'Attendance granted.' : '已添加参加记录。'),
                 has ? 'warning' : 'success',
             );
-        } catch {
-            showToast(isEnglish ? 'Failed to update attendance.' : '更新签到状态失败。', 'error');
+        } catch (err) {
+            const code = functionsErrorCode(err);
+            const msg = code === 'has-staff'
+                ? (isEnglish
+                    ? 'User is event staff for this event. Remove them as staff before adding as attendee.'
+                    : '该用户是此活动的工作人员，请先撤销其工作人员身份再添加为参加者。')
+                : (isEnglish ? 'Failed to update attendance.' : '更新签到状态失败。');
+            showToast(msg, 'error');
         } finally {
             setUpdating(false);
         }
@@ -486,7 +494,19 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                             <img src={selectedUser.photoURL} alt="" className="admin-detail-avatar"
                                  referrerPolicy="no-referrer"/>
                             <div>
-                                <h3>{selectedUser.displayName}</h3>
+                                <h3>
+                                    {selectedUser.displayName}
+                                    <a
+                                        href={`/profile?uid=${selectedUser.uid}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="admin-detail-profile-link"
+                                        title={isEnglish ? 'Open profile page' : '打开个人主页'}
+                                        aria-label={isEnglish ? 'Open profile page' : '打开个人主页'}
+                                    >
+                                        <FaExternalLinkAlt/>
+                                    </a>
+                                </h3>
                                 <p>{selectedUser.email}</p>
                                 <p className="admin-detail-joined">
                                     {isEnglish ? 'Joined: ' : '加入时间：'}

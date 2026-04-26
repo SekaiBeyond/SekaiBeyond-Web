@@ -137,6 +137,7 @@ export const callSaveUpcomingEvent = (data: {
     location: string; locationCn: string; startAt: string; endAt: string;
     poster: string; posterCredit: string; buyTicket: string; learnMore: string;
     customButtonText: string; customButtonTextCn: string; customButtonLink: string;
+    paid: boolean;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'saveUpcomingEvent')(data);
 
 export const callRequestUpcomingEventDeletion = (data: {eventId: string}) =>
@@ -150,6 +151,72 @@ export const callSetUpcomingEventPublished = (data: {eventId: string; published:
 
 export const callArchiveUpcomingEvent = (data: {eventId: string; tagId: string}) =>
     httpsCallable<typeof data, {pastEventId: string}>(getFunctions(), 'archiveUpcomingEvent')(data);
+
+// ---- Paid event ticketing ----
+
+export const callImportEventAttendees = (data: {
+    eventId: string;
+    attendees: Array<{email: string; name: string; ticketCount: number}>;
+}) => httpsCallable<typeof data, {added: number; replaced: number; total: number}>(
+    getFunctions(), 'importEventAttendees')(data);
+
+export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
+    httpsCallable<typeof data, {
+        success?: boolean;
+        alreadyRedeemed?: boolean;
+        attendeeName: string;
+        attendeeEmail: string;
+        eventTitle: string;
+        ticketIndex: number;
+        userCheckedIn?: boolean;
+        // Display name of the staff member who first redeemed the ticket
+        // (server returns redeemedByName, not a raw UID). Only set when
+        // alreadyRedeemed is true.
+        redeemedBy?: string;
+        redeemedAt?: string | null;
+    }>(getFunctions(), 'redeemTicket')(data);
+
+export const callVoidTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
+    httpsCallable<typeof data, {voided: boolean}>(getFunctions(), 'voidTicket')(data);
+
+export const callDeleteEventAttendee = (data: {eventId: string; attendeeId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean; ticketCount: number}>(
+        getFunctions(), 'deleteEventAttendee')(data);
+
+export const callUpdateEventAttendee = (data: {
+    eventId: string;
+    attendeeId: string;
+    name: string;
+    ticketCount: number;
+}) => httpsCallable<typeof data, {updated: boolean; regenerated: boolean}>(
+    getFunctions(), 'updateEventAttendee')(data);
+
+export const callSendTicketEmails = (data: {
+    eventId: string;
+    mode?: 'unsent' | 'all';
+    attendeeIds?: string[];
+    cursor?: string;
+}) => httpsCallable<typeof data, {sentCount: number; hasMore: boolean; nextCursor?: string}>(
+    getFunctions(), 'sendTicketEmails')(data);
+
+export const callGetTicketEmailQuota = () =>
+    httpsCallable<Record<string, never>, {sentToday: number; dailyCap: number; chunkSize: number}>(
+        getFunctions(), 'getTicketEmailQuota')({});
+
+export const callUpdateEventEmailTemplate = (data: {
+    eventId: string;
+    subject: string;
+    bodyHtml: string;
+    bodyCnHtml: string;
+}) => httpsCallable<typeof data, {saved: boolean}>(
+    getFunctions(), 'updateEventEmailTemplate')(data);
+
+export const callAssignEventStaff = (data: {targetUid: string; eventId: string}) =>
+    httpsCallable<typeof data, {added: boolean; attendeeRemoved: boolean}>(
+        getFunctions(), 'assignEventStaff')(data);
+
+export const callRemoveEventStaff = (data: {targetUid: string; eventId: string}) =>
+    httpsCallable<typeof data, {removed: boolean}>(getFunctions(), 'removeEventStaff')(data);
 
 export const callSaveBadge = (data: {
     badgeId?: string;
@@ -188,7 +255,8 @@ export const callDeleteTag = (data: {tagId: string}) =>
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {
         displayName: string; photoURL: string; joinedAt: string;
-        attendedEvents: string[]; badges: string[];
+        attendedEvents: string[]; eventStaffEvents: string[];
+        badges: string[];
         badgeEarnedAt: Record<string, string>;
         group: string;
         title?: string;
@@ -222,7 +290,7 @@ export const callDeleteAvatar = () =>
     httpsCallable<Record<string, never>, {photoURL: string}>(getFunctions(), 'deleteAvatar')({});
 
 export const callRequestAccountDeletion = (data: {targetUid?: string} = {}) =>
-    httpsCallable<{targetUid?: string}, {expiresAt: string}>(
+    httpsCallable<{targetUid?: string}, {deleteAt: string}>(
         getFunctions(), 'requestAccountDeletion'
     )(data);
 

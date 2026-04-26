@@ -20,6 +20,7 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
         badges: data.badges ?? [],
         group: data.group ?? 'visitor',
         title: data.title ?? '',
+        eventStaffEvents: data.eventStaffEvents ?? [],
     };
 };
 
@@ -30,8 +31,19 @@ export const fetchEventAttendees = async (eventId: string): Promise<UserRecord[]
     return snapshot.docs.map(docToUserRecord);
 };
 
+export const fetchEventStaffCount = async (eventId: string): Promise<number> => {
+    const db = getFirebaseDb();
+    const q = query(collection(db, 'users'), where('eventStaffEvents', 'array-contains', eventId));
+    const snapshot = await getDocs(q);
+    return snapshot.size;
+};
+
 export const getClaimUrl = (code: string): string => {
     return `${window.location.origin}/claim?code=${code}`;
+};
+
+export const getTicketClaimUrl = (ticketId: string, eventId: string): string => {
+    return `${window.location.origin}/claim?ticket=${encodeURIComponent(ticketId)}&event=${encodeURIComponent(eventId)}`;
 };
 
 export const validateImageFile = (

@@ -41,9 +41,10 @@ export interface UserRecord {
     badges: string[];
     group: UserGroup;
     title?: string;
+    eventStaffEvents: string[];
 }
 
-export type Tab = 'users' | 'events' | 'upcoming' | 'badges' | 'tags' | 'records';
+export type Tab = 'users' | 'events' | 'upcoming' | 'badges' | 'tags' | 'records' | 'tools';
 
 export type RecordType =
     'group-assign'
@@ -91,7 +92,17 @@ export type RecordType =
     | 'account-deletion-requested'
     | 'account-deletion-cancelled'
     | 'account-deleted'
-    | 'title-set';
+    | 'title-set'
+    | 'ticket-import'
+    | 'ticket-redeem'
+    | 'ticket-void'
+    | 'ticket-attendee-delete'
+    | 'ticket-attendee-edit'
+    | 'ticket-regenerate'
+    | 'ticket-email-send'
+    | 'event-staff-assign'
+    | 'event-staff-remove'
+    | 'upcoming-event-email-template-update';
 
 export interface ActivityRecord {
     id: string;
@@ -111,5 +122,10 @@ export interface ActivityRecord {
     newGroup?: UserGroup;
     oldTitle?: string;
     newTitle?: string;
+    oldName?: string;
+    newName?: string;
+    addedCount?: number;
+    replacedCount?: number;
+    sentCount?: number;
     timestamp: Date;
 }

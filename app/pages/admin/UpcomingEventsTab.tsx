@@ -18,10 +18,12 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { QRCodeSVG } from 'qrcode.react';
 import type { BadgeCode, UserRecord } from './types';
-import { fetchEventAttendees, getClaimUrl } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount, getClaimUrl } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { EventAttendeesList } from './EventAttendeesList';
+import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
+import { TicketsSubtab } from './tickets/TicketsSubtab';
 
 interface UpcomingEventsTabProps {
     upcomingEvents: UpcomingEvent[];
@@ -29,6 +31,8 @@ interface UpcomingEventsTabProps {
     refreshPastEvents: () => Promise<void>;
     tags: Tag[];
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    readOnly?: boolean;
+    eventStaffEvents?: string[];
 }
 
 export interface UpcomingEventsTabHandle {
@@ -55,6 +59,7 @@ interface EventForm {
     customButtonText: string;
     customButtonTextCn: string;
     customButtonLink: string;
+    paid: boolean;
 }
 
 const emptyForm: EventForm = {
@@ -62,6 +67,7 @@ const emptyForm: EventForm = {
     location: '', locationCn: '', startAt: '', endAt: '',
     posterCredit: '', buyTicket: '', learnMore: '',
     customButtonText: '', customButtonTextCn: '', customButtonLink: '',
+    paid: false,
 };
 
 export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEventsTabProps>(({
@@ -70,6 +76,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                                                                   refreshPastEvents,
                                                                                                   tags,
                                                                                                   showToast,
+                                                                                                  readOnly = false,
+                                                                                                  eventStaffEvents = [],
                                                                                               }, forwardedRef) => {
     const {isEnglish} = useLanguage();
     const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
@@ -83,13 +91,14 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [archiveTagId, setArchiveTagId] = useState('');
     const [archiving, setArchiving] = useState(false);
     const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
-    const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees'>('codes');
+    const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees' | 'staff' | 'tickets'>('codes');
     const [eventCode, setEventCode] = useState<BadgeCode | null>(null);
     const [codeFrom, setCodeFrom] = useState('');
     const [codeUntil, setCodeUntil] = useState('');
     const [generatingCode, setGeneratingCode] = useState(false);
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
     const [searchingAttendees, setSearchingAttendees] = useState(false);
+    const [staffCount, setStaffCount] = useState<number | null>(null);
 
     const loadEventCode = async (eventId: string) => {
         const db = getFirebaseDb();
@@ -175,9 +184,18 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         setSelectedEvent(eventId);
         setShowArchive(false);
         setArchiveTagId('');
-        setEventSubTab('codes');
+        const evt = upcomingEvents.find(e => e.id === eventId);
+        setEventSubTab(evt?.paid ? 'tickets' : 'codes');
         setEventCode(null);
         setEventAttendees([]);
+        setStaffCount(null);
+        void fetchEventStaffCount(eventId)
+            .then(setStaffCount)
+            .catch(() => {
+                /* Non-fatal — count badge just won't appear. */
+            });
+        // Paid events use tickets, not check-in codes — skip the load.
+        if (evt?.paid) return;
         try {
             await loadEventCode(eventId);
         } catch (err) {
@@ -216,6 +234,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             customButtonText: event.customButtonText,
             customButtonTextCn: event.customButtonTextCn,
             customButtonLink: event.customButtonLink,
+            paid: event.paid,
         });
         setEditingEvent(event);
         setPosterImage(null);
@@ -230,6 +249,16 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         if (endAt <= startAt) {
             showToast(isEnglish ? 'End time must be after start time.' : '结束时间必须晚于开始时间。', 'error');
             return;
+        }
+        // Paid → free is asymmetric: the server keeps the attendees and
+        // emailTemplate subcollections (so an accidental flip can be undone),
+        // but the tickets tab disappears from the admin UI. Make the trade-off
+        // explicit so the admin doesn't think the data is gone.
+        if (editingEvent && editingEvent.paid && !form.paid) {
+            const ok = confirm(isEnglish
+                ? 'Switching this event from paid to free will hide the tickets tab. Attendee and ticket data is kept on the server so you can switch back, but it will no longer be visible here. To permanently delete attendees, do that from the tickets tab before switching. Continue?'
+                : '将此活动从付费切换为免费将隐藏门票选项卡。服务器上的参与者与门票数据会保留以便切换回去，但此处将不再显示。如需永久删除参与者，请先在门票选项卡中操作再切换。是否继续？');
+            if (!ok) return;
         }
         setSaving(true);
         try {
@@ -256,9 +285,17 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 customButtonText: form.customButtonText,
                 customButtonTextCn: form.customButtonTextCn,
                 customButtonLink: form.customButtonLink,
+                paid: form.paid,
             });
 
             await refreshEvents();
+            // If the currently open event just flipped to paid, drop the tabs
+            // that are hidden for paid (codes, attendees) and clear cached state.
+            if (editingEvent && editingEvent.id === selectedEvent && form.paid) {
+                setEventCode(null);
+                setEventAttendees([]);
+                setEventSubTab(prev => (prev === 'codes' || prev === 'attendees') ? 'tickets' : prev);
+            }
             showToast(
                 editingEvent
                     ? (isEnglish ? 'Event updated.' : '活动已更新。')
@@ -427,7 +464,10 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         value={form.buyTicket}
                                         onChange={e => setForm(f => ({...f, buyTicket: e.target.value}))}
                                         className="admin-search-input"
-                                        placeholder={isEnglish ? 'Optional' : '可选'}
+                                        placeholder={isEnglish
+                                            ? (form.paid ? 'Optional' : 'Enable Paid event to edit')
+                                            : (form.paid ? '可选' : '启用付费活动后可编辑')}
+                                        disabled={!form.paid}
                                     />
                                 </label>
                                 <label>
@@ -466,6 +506,25 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         placeholder={isEnglish ? 'Optional' : '可选'}
                                     />
                                 </label>
+                                <label className="admin-form-grid-full admin-checkbox-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.paid}
+                                        onChange={e => setForm(f => ({...f, paid: e.target.checked}))}
+                                    />
+                                    <span>
+                                        {isEnglish
+                                            ? 'Paid event (enables ticket management)'
+                                            : '付费活动（启用门票管理）'}
+                                    </span>
+                                </label>
+                                {editingEvent && !editingEvent.paid && form.paid && (
+                                    <p className="admin-form-grid-full admin-title-hint admin-warning-hint">
+                                        {isEnglish
+                                            ? 'Switching to paid will delete this event’s check-in code. Attendee management moves to the Tickets tab; existing attendance records are kept.'
+                                            : '切换为付费活动将删除该活动的签到码。参加者将通过门票页面管理；已有的签到记录会保留。'}
+                                    </p>
+                                )}
                             </div>
                             <div className="admin-btn-row">
                                 <button
@@ -677,27 +736,50 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             )}
 
                             <div className="admin-sub-tabs">
-                                <button
-                                    className={`admin-sub-tab ${eventSubTab === 'codes' ? 'admin-sub-tab-active' : ''}`}
-                                    onClick={() => setEventSubTab('codes')}
-                                >
-                                    {isEnglish ? 'Check-in Code' : '签到码'}
-                                </button>
-                                <button
-                                    className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
-                                    onClick={() => {
-                                        setEventSubTab('attendees');
-                                        loadEventAttendees(selectedEvent!);
-                                    }}
-                                >
-                                    {isEnglish ? 'Attendees' : '参加者'}
-                                    {eventAttendees.length > 0 && (
-                                        <span className="admin-sub-tab-count">{eventAttendees.length}</span>
-                                    )}
-                                </button>
+                                {!selectedEvt.paid && (
+                                    <button
+                                        className={`admin-sub-tab ${eventSubTab === 'codes' ? 'admin-sub-tab-active' : ''}`}
+                                        onClick={() => setEventSubTab('codes')}
+                                    >
+                                        {isEnglish ? 'Check-in Code' : '签到码'}
+                                    </button>
+                                )}
+                                {!selectedEvt.paid && (
+                                    <button
+                                        className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
+                                        onClick={() => {
+                                            setEventSubTab('attendees');
+                                            loadEventAttendees(selectedEvent!).then();
+                                        }}
+                                    >
+                                        {isEnglish ? 'Attendees' : '参加者'}
+                                        {eventAttendees.length > 0 && (
+                                            <span className="admin-sub-tab-count">{eventAttendees.length}</span>
+                                        )}
+                                    </button>
+                                )}
+                                {selectedEvt.paid && (
+                                    <button
+                                        className={`admin-sub-tab ${eventSubTab === 'tickets' ? 'admin-sub-tab-active' : ''}`}
+                                        onClick={() => setEventSubTab('tickets')}
+                                    >
+                                        {isEnglish ? 'Tickets' : '门票'}
+                                    </button>
+                                )}
+                                {!readOnly && (
+                                    <button
+                                        className={`admin-sub-tab ${eventSubTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
+                                        onClick={() => setEventSubTab('staff')}
+                                    >
+                                        {isEnglish ? 'Staff' : '工作人员'}
+                                        {staffCount != null && staffCount > 0 && (
+                                            <span className="admin-sub-tab-count">{staffCount}</span>
+                                        )}
+                                    </button>
+                                )}
                             </div>
 
-                            {eventSubTab === 'codes' && (
+                            {eventSubTab === 'codes' && !selectedEvt.paid && (
                                 <div className="admin-codes-section">
                                     {!eventCode ? (
                                         <>
@@ -784,7 +866,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                         const msg = isEnglish
                                                             ? 'This will deactivate the current code and generate a new one. Users with the old QR code will no longer be able to check in. Continue?'
                                                             : '此操作将停用当前签到码并生成新码。持有旧二维码的用户将无法签到。是否继续？';
-                                                        if (window.confirm(msg)) generateEventCodeFn(selectedEvent!);
+                                                        if (window.confirm(msg)) generateEventCodeFn(selectedEvent!).then();
                                                     }}
                                                     disabled={generatingCode}
                                                 >
@@ -798,8 +880,31 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 </div>
                             )}
 
-                            {eventSubTab === 'attendees' && (
-                                <EventAttendeesList loading={searchingAttendees} attendees={eventAttendees}/>
+                            {eventSubTab === 'attendees' && !selectedEvt.paid && (
+                                <EventAttendeesList
+                                    loading={searchingAttendees}
+                                    attendees={eventAttendees}
+                                    eventId={selectedEvt.id}
+                                    onReload={() => loadEventAttendees(selectedEvt.id)}
+                                    showToast={showToast}
+                                />
+                            )}
+
+                            {eventSubTab === 'staff' && !readOnly && (
+                                <EventStaffSection
+                                    eventId={selectedEvt.id}
+                                    showToast={showToast}
+                                    onCountChange={setStaffCount}
+                                />
+                            )}
+
+                            {eventSubTab === 'tickets' && selectedEvt.paid && (
+                                <TicketsSubtab
+                                    event={selectedEvt}
+                                    readOnly={readOnly}
+                                    canScan={!readOnly || eventStaffEvents.includes(selectedEvt.id)}
+                                    showToast={showToast}
+                                />
                             )}
                         </>
                     )}

@@ -11,10 +11,11 @@ import {
 import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
 import type { UserRecord } from './types';
-import { fetchEventAttendees } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount } from './utils';
 import { BilingualFormField } from './BilingualFormField';
-import { EventAttendeesList } from './EventAttendeesList';
+import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
+import { PastEventAttendeesSection } from './PastEventAttendeesSection';
 
 interface EventsTabProps {
     pastEvents: PastEvent[];
@@ -48,15 +49,24 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [eventImage, setEventImage] = useState<File | null>(null);
     const [eventImagePreview, setEventImagePreview] = useState<string | null>(null);
     const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
+    const [eventSubTab, setEventSubTab] = useState<'attendees' | 'staff'>('attendees');
+    const [staffCount, setStaffCount] = useState<number | null>(null);
 
     const selectManagedEvent = async (eventId: string) => {
         setManagedEvent(eventId);
         setEventAttendees([]);
+        setStaffCount(null);
+        setEventSubTab('attendees');
         try {
             await loadEventAttendees(eventId);
         } catch (err) {
             console.error('Failed to load attendees:', err);
             showToast(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。', 'error');
+        }
+        try {
+            setStaffCount(await fetchEventStaffCount(eventId));
+        } catch {
+            // Non-fatal — count badge just won't appear.
         }
     };
 
@@ -403,13 +413,45 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                         })} 前后执行。`}
                                 </p>
                             )}
-                            <h4 className="admin-badges-title admin-section-mb">
-                                {isEnglish ? 'Attendees' : '参加者'}
-                                {eventAttendees.length > 0 && (
-                                    <span className="admin-sub-tab-count">{eventAttendees.length}</span>
-                                )}
-                            </h4>
-                            <EventAttendeesList loading={searching} attendees={eventAttendees}/>
+                            <div className="admin-sub-tabs">
+                                <button
+                                    className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
+                                    onClick={() => setEventSubTab('attendees')}
+                                >
+                                    {isEnglish ? 'Attendees' : '参加者'}
+                                    {eventAttendees.length > 0 && (
+                                        <span className="admin-sub-tab-count">{eventAttendees.length}</span>
+                                    )}
+                                </button>
+                                <button
+                                    className={`admin-sub-tab ${eventSubTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
+                                    onClick={() => setEventSubTab('staff')}
+                                >
+                                    {isEnglish ? 'Staff' : '工作人员'}
+                                    {staffCount != null && staffCount > 0 && (
+                                        <span className="admin-sub-tab-count">{staffCount}</span>
+                                    )}
+                                </button>
+                            </div>
+
+                            {eventSubTab === 'attendees' && (
+                                <PastEventAttendeesSection
+                                    eventId={managedEvt.id}
+                                    attendees={eventAttendees}
+                                    loading={searching}
+                                    onReload={() => loadEventAttendees(managedEvt.id)}
+                                    showToast={showToast}
+                                />
+                            )}
+
+                            {eventSubTab === 'staff' && (
+                                <EventStaffSection
+                                    eventId={managedEvt.id}
+                                    showToast={showToast}
+                                    onCountChange={setStaffCount}
+                                    onAttendeeRemoved={() => loadEventAttendees(managedEvt.id)}
+                                />
+                            )}
                         </>
                     )}
                 </div>

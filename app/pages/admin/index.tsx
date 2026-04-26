@@ -7,7 +7,7 @@ import { getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useTags } from '~/lib/tags';
 import type { BadgeDef, Tab } from './types';
 import { UsersTab, type UsersTabHandle } from './UsersTab';
@@ -16,6 +16,7 @@ import { UpcomingEventsTab, type UpcomingEventsTabHandle } from './UpcomingEvent
 import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { TagsTab } from './TagsTab';
 import { RecordsTab } from './RecordsTab';
+import { ToolsTab } from './ToolsTab';
 
 type ToastType = 'success' | 'warning' | 'error';
 
@@ -34,6 +35,18 @@ export const AdminPage = () => {
     const {upcomingEvents, refresh: refreshUpcoming} = useAllUpcomingEvents();
     const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => b.date.localeCompare(a.date)), [rawPastEvents]);
 
+    const isCoreStaffOrAbove = !!profile && hasPermission(profile.group, 'core-staff');
+    // Event-staff is a per-event tag, independent of the global user group —
+    // any user with eventStaffEvents can access the scanner UI for those events.
+    const isEventStaffOnly = !!profile
+        && !isCoreStaffOrAbove
+        && profile.eventStaffEvents.length > 0;
+
+    const scopedUpcomingEvents = useMemo(() => {
+        if (!isEventStaffOnly || !profile) return upcomingEvents;
+        return upcomingEvents.filter(e => profile.eventStaffEvents.includes(e.id));
+    }, [upcomingEvents, isEventStaffOnly, profile]);
+
     const [activeTab, setActiveTab] = useState<Tab>('users');
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [badgeDefsError, setBadgeDefsError] = useState(false);
@@ -46,7 +59,9 @@ export const AdminPage = () => {
     }, []);
     const {tags, refresh: refreshTags} = useTags();
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const urlParamsHandled = useRef(false);
+    const wasAuthorized = useRef(false);
     const usersTabRef = useRef<UsersTabHandle>(null);
     const eventsTabRef = useRef<EventsTabHandle>(null);
     const upcomingTabRef = useRef<UpcomingEventsTabHandle>(null);
@@ -54,24 +69,46 @@ export const AdminPage = () => {
     const pendingAction = useRef<{type: string; id: string} | null>(null);
 
     useEffect(() => {
-        if (urlParamsHandled.current) return;
-        if (loading || !user || !profile || !hasPermission(profile.group, 'core-staff')) return;
-        const tab = searchParams.get('tab');
-        const event = searchParams.get('event');
-        if (tab === 'events' || tab === 'upcoming' || tab === 'badges' || tab === 'tags' || tab === 'records' || tab === 'users') {
-            setActiveTab(tab);
+        if (loading) return;
+        if (user && profile && (isCoreStaffOrAbove || isEventStaffOnly)) {
+            wasAuthorized.current = true;
+            return;
         }
-        if (tab === 'events' && event) {
-            eventsTabRef.current?.selectManagedEvent(event);
+        if (wasAuthorized.current && !user) {
+            navigate('/', {replace: true});
         }
-        if (tab === 'upcoming' && event) {
-            upcomingTabRef.current?.selectEvent(event);
-        }
-        urlParamsHandled.current = true;
-    }, [loading, user, profile, searchParams]);
+    }, [loading, user, profile, isCoreStaffOrAbove, isEventStaffOnly, navigate]);
 
     useEffect(() => {
-        if (loading || !user || !profile || !hasPermission(profile.group, 'core-staff')) return;
+        if (urlParamsHandled.current) return;
+        if (loading || !user || !profile) return;
+        if (!isCoreStaffOrAbove && !isEventStaffOnly) return;
+        const tab = searchParams.get('tab');
+        const event = searchParams.get('event');
+        if (isEventStaffOnly) {
+            setActiveTab('upcoming');
+            const firstEventId = event && profile.eventStaffEvents.includes(event)
+                ? event
+                : profile.eventStaffEvents[0];
+            if (firstEventId) {
+                upcomingTabRef.current?.selectEvent(firstEventId);
+            }
+        } else {
+            if (tab === 'events' || tab === 'upcoming' || tab === 'badges' || tab === 'tags' || tab === 'records' || tab === 'users' || tab === 'tools') {
+                setActiveTab(tab);
+            }
+            if (tab === 'events' && event) {
+                eventsTabRef.current?.selectManagedEvent(event);
+            }
+            if (tab === 'upcoming' && event) {
+                upcomingTabRef.current?.selectEvent(event);
+            }
+        }
+        urlParamsHandled.current = true;
+    }, [loading, user, profile, searchParams, isCoreStaffOrAbove, isEventStaffOnly]);
+
+    useEffect(() => {
+        if (loading || !user || !profile || !isCoreStaffOrAbove) return;
         const loadBadgeDefinitions = async () => {
             const db = getFirebaseDb();
             const snapshot = await getDocs(collection(db, 'badges'));
@@ -97,7 +134,7 @@ export const AdminPage = () => {
         loadBadgeDefinitions().catch(() => {
             setBadgeDefsError(true);
         });
-    }, [loading, user, profile]);
+    }, [loading, user, profile, isCoreStaffOrAbove]);
 
     const handleLookupUser = useCallback((uid: string) => {
         setActiveTab('users');
@@ -149,7 +186,7 @@ export const AdminPage = () => {
         );
     }
 
-    if (!user || !profile || !hasPermission(profile.group, 'core-staff')) {
+    if (!user || !profile || (!isCoreStaffOrAbove && !isEventStaffOnly)) {
         return (
             <div className="profile-login-prompt">
                 <div className="profile-login-card">
@@ -184,45 +221,63 @@ export const AdminPage = () => {
             </nav>
             <div className="profile-page">
                 <div className="admin-tabs">
-                    <button
-                        className={`admin-tab ${activeTab === 'users' ? 'admin-tab-active' : ''}`}
-                        onClick={() => setActiveTab('users')}
-                    >
-                        {isEnglish ? 'User Lookup' : '用户查询'}
-                    </button>
-                    <button
-                        className={`admin-tab ${activeTab === 'events' ? 'admin-tab-active' : ''}`}
-                        onClick={() => setActiveTab('events')}
-                    >
-                        {isEnglish ? 'Past Events' : '往期活动'}
-                    </button>
+                    {!isEventStaffOnly && (
+                        <button
+                            className={`admin-tab ${activeTab === 'users' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('users')}
+                        >
+                            {isEnglish ? 'Users' : '用户'}
+                        </button>
+                    )}
+                    {!isEventStaffOnly && (
+                        <button
+                            className={`admin-tab ${activeTab === 'events' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('events')}
+                        >
+                            {isEnglish ? 'Past Events' : '往期活动'}
+                        </button>
+                    )}
                     <button
                         className={`admin-tab ${activeTab === 'upcoming' ? 'admin-tab-active' : ''}`}
                         onClick={() => setActiveTab('upcoming')}
                     >
                         {isEnglish ? 'Upcoming Events' : '活动预告'}
                     </button>
-                    <button
-                        className={`admin-tab ${activeTab === 'badges' ? 'admin-tab-active' : ''}`}
-                        onClick={() => setActiveTab('badges')}
-                    >
-                        {isEnglish ? 'Badges' : '徽章'}
-                    </button>
-                    <button
-                        className={`admin-tab ${activeTab === 'tags' ? 'admin-tab-active' : ''}`}
-                        onClick={() => setActiveTab('tags')}
-                    >
-                        {isEnglish ? 'Tags' : '标签'}
-                    </button>
-                    <button
-                        className={`admin-tab ${activeTab === 'records' ? 'admin-tab-active' : ''}`}
-                        onClick={() => setActiveTab('records')}
-                    >
-                        {isEnglish ? 'Records' : '操作记录'}
-                    </button>
+                    {!isEventStaffOnly && (
+                        <button
+                            className={`admin-tab ${activeTab === 'badges' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('badges')}
+                        >
+                            {isEnglish ? 'Badges' : '徽章'}
+                        </button>
+                    )}
+                    {!isEventStaffOnly && (
+                        <button
+                            className={`admin-tab ${activeTab === 'tags' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('tags')}
+                        >
+                            {isEnglish ? 'Tags' : '标签'}
+                        </button>
+                    )}
+                    {!isEventStaffOnly && (
+                        <button
+                            className={`admin-tab ${activeTab === 'records' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('records')}
+                        >
+                            {isEnglish ? 'Records' : '操作记录'}
+                        </button>
+                    )}
+                    {!isEventStaffOnly && (
+                        <button
+                            className={`admin-tab ${activeTab === 'tools' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('tools')}
+                        >
+                            {isEnglish ? 'Tools' : '工具'}
+                        </button>
+                    )}
                 </div>
 
-                {activeTab === 'users' && (
+                {activeTab === 'users' && !isEventStaffOnly && (
                     <UsersTab
                         ref={usersTabRef}
                         pastEvents={pastEvents}
@@ -234,7 +289,7 @@ export const AdminPage = () => {
                     />
                 )}
 
-                {activeTab === 'events' && (
+                {activeTab === 'events' && !isEventStaffOnly && (
                     <EventsTab
                         ref={eventsTabRef}
                         pastEvents={pastEvents}
@@ -247,15 +302,17 @@ export const AdminPage = () => {
                 {activeTab === 'upcoming' && (
                     <UpcomingEventsTab
                         ref={upcomingTabRef}
-                        upcomingEvents={upcomingEvents}
+                        upcomingEvents={scopedUpcomingEvents}
                         refreshEvents={refreshUpcoming}
                         refreshPastEvents={refreshEvents}
                         tags={tags}
                         showToast={showToast}
+                        readOnly={!isCoreStaffOrAbove}
+                        eventStaffEvents={profile.eventStaffEvents}
                     />
                 )}
 
-                {activeTab === 'badges' && (
+                {activeTab === 'badges' && !isEventStaffOnly && (
                     badgeDefsError ? (
                         <div className="admin-section">
                             <p className="admin-no-results">
@@ -273,11 +330,11 @@ export const AdminPage = () => {
                     )
                 )}
 
-                {activeTab === 'tags' && (
+                {activeTab === 'tags' && !isEventStaffOnly && (
                     <TagsTab tags={tags} refreshTags={refreshTags} showToast={showToast}/>
                 )}
 
-                {activeTab === 'records' && (
+                {activeTab === 'records' && !isEventStaffOnly && (
                     <RecordsTab
                         pastEvents={pastEvents}
                         upcomingEvents={upcomingEvents}
@@ -287,6 +344,10 @@ export const AdminPage = () => {
                         onSelectEvent={handleSelectEvent}
                         onSelectUpcomingEvent={handleSelectUpcomingEvent}
                     />
+                )}
+
+                {activeTab === 'tools' && !isEventStaffOnly && (
+                    <ToolsTab/>
                 )}
             </div>
         </>

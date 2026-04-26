@@ -33,6 +33,10 @@ export const RedeemModal = () => {
         return () => window.removeEventListener('open-redeem-modal', handler);
     }, [user, profile]);
 
+    useEffect(() => {
+        if (!user || !profile) setShow(false);
+    }, [user, profile]);
+
     const close = () => setShow(false);
 
     const handleSubmit = async (e: React.FormEvent) => {

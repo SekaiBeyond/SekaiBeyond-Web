@@ -7,7 +7,7 @@ import { callGetPublicProfile, getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { isValidHttpUrl } from '~/lib/urls';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
@@ -24,6 +24,7 @@ interface ViewedProfile {
     photoURL: string;
     joinedAt: Date;
     attendedEvents: string[];
+    eventStaffEvents: string[];
     badges: string[];
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
@@ -93,15 +94,21 @@ const BadgeCard = ({badge, earnedDate, isEnglish, active, onToggle}: {
     </div>
 );
 
-const EventCard = ({event, isEnglish, showAdminLink, tagLabel}: {
+const EventCard = ({event, isEnglish, showAdminLink, tagLabel, wasStaff}: {
     event: PastEvent;
     isEnglish: boolean;
     showAdminLink?: boolean;
     tagLabel?: string;
+    wasStaff?: boolean;
 }) => (
     <div className="profile-event-card">
         <div className="profile-event-icon-wrapper">
             <img src={event.icon} alt={isEnglish ? event.title : event.titleCn} className="profile-event-icon"/>
+            {wasStaff && (
+                <span className="profile-event-staff-tag">
+                    {isEnglish ? 'Staff' : '工作人员'}
+                </span>
+            )}
         </div>
         <div className="profile-event-info">
             <span
@@ -132,8 +139,10 @@ export const ProfilePage = () => {
     const {tags} = useTags();
     const tagMap = useMemo(() => new Map(tags.map(t => [t.id, t])), [tags]);
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const viewUid = searchParams.get('uid');
     const isViewingOther = !!viewUid && viewUid !== user?.uid;
+    const wasAuthorized = useRef(false);
     const [viewedProfile, setViewedProfile] = useState<ViewedProfile | null>(null);
     const [loadingViewed, setLoadingViewed] = useState(false);
     const [editingName, setEditingName] = useState(false);
@@ -157,6 +166,17 @@ export const ProfilePage = () => {
         setToasts(prev => [...prev, {id, message, type}]);
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
     }, []);
+
+    useEffect(() => {
+        if (loading || isViewingOther) return;
+        if (user && profile) {
+            wasAuthorized.current = true;
+            return;
+        }
+        if (wasAuthorized.current && !user) {
+            navigate('/', {replace: true});
+        }
+    }, [loading, user, profile, isViewingOther, navigate]);
 
     const badgeIds = isViewingOther ? viewedProfile?.badges : profile?.badges;
     const badgeIdsKey = badgeIds?.slice().sort().join(',') ?? '';
@@ -236,6 +256,7 @@ export const ProfilePage = () => {
                     photoURL: data.photoURL ?? '',
                     joinedAt: data.joinedAt ? new Date(data.joinedAt) : new Date(),
                     attendedEvents: data.attendedEvents ?? [],
+                    eventStaffEvents: data.eventStaffEvents ?? [],
                     badges: data.badges ?? [],
                     badgeEarnedAt: earnedAt,
                     group: (data.group ?? 'visitor') as UserGroup,
@@ -441,6 +462,7 @@ export const ProfilePage = () => {
             joinedAt: profile!.joinedAt,
             badges: profile!.badges,
             attendedEvents: profile!.attendedEvents,
+            eventStaffEvents: profile!.eventStaffEvents,
             group: profile!.group,
             title: profile!.title ?? '',
         }
@@ -449,10 +471,12 @@ export const ProfilePage = () => {
             joinedAt: viewedProfile!.joinedAt,
             badges: viewedProfile!.badges,
             attendedEvents: viewedProfile!.attendedEvents,
+            eventStaffEvents: viewedProfile!.eventStaffEvents,
             group: viewedProfile!.group,
             title: viewedProfile!.title ?? '',
         };
-    const attendedSet = new Set(dp.attendedEvents);
+    const staffedSet = new Set(dp.eventStaffEvents);
+    const attendedSet = new Set([...dp.attendedEvents, ...dp.eventStaffEvents]);
     const attendedEvents = pastEvents
         .filter(e => attendedSet.has(e.id))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -673,6 +697,7 @@ export const ProfilePage = () => {
                                     event={event}
                                     isEnglish={isEnglish}
                                     showAdminLink={isStaff}
+                                    wasStaff={staffedSet.has(event.id)}
                                     tagLabel={(() => {
                                         const tag = tagMap.get(event.tagId);
                                         return tag ? (isEnglish ? tag.name : tag.nameCn) : '';

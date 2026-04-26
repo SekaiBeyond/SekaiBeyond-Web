@@ -1,11 +1,29 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
+import { defineInt, defineString } from "firebase-functions/params";
 
 import * as crypto from "crypto";
+import sanitizeHtml from "sanitize-html";
+
+// Public origin for ticket QR URLs (set via the v2 parameterised config UI or
+// functions/.env.<project>). Required — no default, so a misconfigured
+// staging/dev project can't silently mint QRs that point at production.
+// generateTicketQrPngBase64 throws failed-precondition when this is empty.
+const PUBLIC_ORIGIN = defineString("PUBLIC_ORIGIN");
+
+// Email-provider daily cap (Resend free tier = 100). Server-enforced in
+// sendTicketEmails and surfaced read-only via getTicketEmailQuota.
+const RESEND_DAILY_CAP_PARAM = defineInt("RESEND_DAILY_CAP", {default: 100});
+// Per-invocation attendee cap. Lower than the daily cap so a single event with
+// >cap attendees must chunk across calls, surfacing progress and giving the
+// admin a place to cancel between chunks.
+const SEND_CHUNK_SIZE_PARAM = defineInt("SEND_CHUNK_SIZE", {default: 100});
+// Max attendee rows accepted per importEventAttendees call.
+const IMPORT_MAX_ROWS_PARAM = defineInt("IMPORT_MAX_ROWS", {default: 1000});
 
 // Records are audit logs. Firestore TTL policy on `records.expiresAt`
 // auto-deletes documents past this point (configure in Firebase console).
@@ -66,11 +84,13 @@ async function requireAuth(request: CallableRequest<unknown>): Promise<string> {
 }
 
 async function requireAdmin(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {
-    const snap = await db.collection("users").doc(uid).get();
-    if (!ADMIN_GROUPS.includes(snap.data()?.group)) {
-        throw new HttpsError("permission-denied", "Insufficient permissions.");
-    }
-    return snap;
+    return db.runTransaction(async (txn) => {
+        const snap = await txn.get(db.collection("users").doc(uid));
+        if (!ADMIN_GROUPS.includes(snap.data()?.group)) {
+            throw new HttpsError("permission-denied", "Insufficient permissions.");
+        }
+        return snap;
+    });
 }
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -277,6 +297,7 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
             attendedEvents: [],
             badges: [],
             group: "visitor",
+            eventStaffEvents: [],
         });
     });
 
@@ -308,11 +329,25 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         const iso = v?.toDate?.()?.toISOString();
         if (iso) badgeEarnedAt[k] = iso;
     }
+
+    // Restrict eventStaffEvents to past events only — upcoming-event ids would
+    // leak unpublished events whose titles are otherwise gated by Firestore rules.
+    const rawStaffEvents: string[] = data.eventStaffEvents ?? [];
+    const eventStaffEvents: string[] = [];
+    if (rawStaffEvents.length > 0) {
+        const refs = rawStaffEvents.map(id => db.collection("pastEvents").doc(id));
+        const snaps = await db.getAll(...refs);
+        for (let i = 0; i < snaps.length; i++) {
+            if (snaps[i].exists) eventStaffEvents.push(rawStaffEvents[i]);
+        }
+    }
+
     return {
         displayName: data.displayName ?? "",
         photoURL: data.photoURL ?? "",
         joinedAt: data.joinedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
         attendedEvents: data.attendedEvents ?? [],
+        eventStaffEvents,
         badges: data.badges ?? [],
         badgeEarnedAt,
         group: data.group ?? "visitor",
@@ -435,6 +470,10 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
         if (!userSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
 
         const eventData = eventSnap.data()!;
+        // Paid events use tickets — reject stale code URLs from before a paid toggle.
+        if (eventData.paid === true) {
+            throw new HttpsError("failed-precondition", "Invalid or deactivated code.", {code: "invalid"});
+        }
         const eventTitle: string = eventData.title ?? eventData.name ?? "";
         const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
         const eventPoster: string = eventData.poster ?? "";
@@ -624,13 +663,13 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     }
 
     const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
     const userSnap = await db.collection("users").doc(uid).get();
     const group = userSnap.data()?.group;
     if (!group || group === "visitor") {
         throw new HttpsError("permission-denied", "Visitors cannot upload avatars.");
     }
-
-    await checkRateLimit(uid);
 
     const input = request.data as {data?: string; contentType?: string};
     const dataBase64 = input.data;
@@ -679,13 +718,13 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     }
 
     const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
     const userSnap = await db.collection("users").doc(uid).get();
     const group = userSnap.data()?.group;
     if (!group || group === "visitor") {
         throw new HttpsError("permission-denied", "Visitors cannot delete avatars.");
     }
-
-    await checkRateLimit(uid);
 
     const userRef = db.collection("users").doc(uid);
 
@@ -745,6 +784,10 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                 if (!eventSnap.exists) {
                     throw new HttpsError("not-found", "Event not found.");
                 }
+                if (eventSnap.data()?.paid === true) {
+                    throw new HttpsError("failed-precondition",
+                        "Paid events use tickets, not check-in codes.");
+                }
 
                 const [existing, existingCodes] = await Promise.all([
                     txn.get(codeRef),
@@ -760,6 +803,16 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                 // Deactivate old codes
                 for (const oldDoc of existingCodes.docs) {
                     txn.update(oldDoc.ref, {active: false});
+                    txn.set(db.collection("records").doc(), {
+                        type: "event-code-deactivate",
+                        performedBy: uid,
+                        performedByName: callerSnap.data()?.displayName ?? "",
+                        eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+                        eventId,
+                        code: oldDoc.data().code ?? oldDoc.id,
+                        timestamp: FieldValue.serverTimestamp(),
+                        expiresAt: recordExpiresAt(),
+                    });
                 }
                 txn.set(codeRef, {
                     code,
@@ -915,7 +968,8 @@ export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) =>
 /**
  * Firestore trigger fired when a past event is deleted.
  * Only runs cleanup for TTL-triggered deletions (deleteAt was set).
- * Cascades: deletes claim codes, removes from users' attendedEvents, deletes storage icon.
+ * Cascades: deletes claim codes, removes from users' attendedEvents and
+ * eventStaffEvents, deletes storage icon.
  */
 export const onPastEventDeleted = onDocumentDeleted(
     {document: "pastEvents/{eventId}", maxInstances: 10},
@@ -925,14 +979,18 @@ export const onPastEventDeleted = onDocumentDeleted(
         if (!data?.deleteAt) return;
 
         try {
-            const [codesSnap, attendeesSnap] = await Promise.all([
+            const [codesSnap, attendeesSnap, staffSnap] = await Promise.all([
                 db.collection("claimCodes").where("eventId", "==", eventId).get(),
                 db.collection("users").where("attendedEvents", "array-contains", eventId).get(),
+                db.collection("users").where("eventStaffEvents", "array-contains", eventId).get(),
             ]);
             const cascadeOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
                 ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
                 ...attendeesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
                     b.update(d.ref, {attendedEvents: FieldValue.arrayRemove(eventId)})
+                ),
+                ...staffSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
+                    b.update(d.ref, {eventStaffEvents: FieldValue.arrayRemove(eventId)})
                 ),
             ];
             if (cascadeOps.length > 0) await commitInChunks(cascadeOps);
@@ -1105,7 +1163,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 
     // Title can only be set when assigning staff or core-staff
     const title = input.title;
-    if (title !== undefined && (typeof title !== "string" || title.length > 100)) {
+    if (title != null && (typeof title !== "string" || title.length > 100)) {
         throw new HttpsError("invalid-argument", "Invalid title.");
     }
     if (title && !["staff", "core-staff"].includes(newGroup)) {
@@ -1200,7 +1258,7 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const title = input.title;
 
-    if (title !== undefined && (typeof title !== "string" || title.length > 100)) {
+    if (title != null && (typeof title !== "string" || title.length > 100)) {
         throw new HttpsError("invalid-argument", "Invalid title.");
     }
 
@@ -1350,6 +1408,15 @@ export const setPastEventPublished = onCall({maxInstances: 10}, async (request) 
 /**
  * Create or update an upcoming event (admin only).
  * Accepts ISO date strings for startAt/endAt, converts to Firestore Timestamps.
+ *
+ * Paid toggle is asymmetric on purpose:
+ *   - free → paid: claim codes for this event are purged (logged as
+ *     `event-code-deactivate`). Tickets become the single source of truth.
+ *   - paid → free: the `attendees` and `emailTemplate` subcollections are
+ *     left intact so an accidental flip can be undone without re-importing
+ *     attendees. The admin UI surfaces a confirmation when this is happening
+ *     and attendees exist; if you genuinely want to delete them, do it via
+ *     the tickets tab before flipping back to free.
  */
 export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -1371,6 +1438,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const customButtonText = validateStr(input.customButtonText, "customButtonText", 100);
     const customButtonTextCn = validateStr(input.customButtonTextCn, "customButtonTextCn", 100);
     const customButtonLink = validateStr(input.customButtonLink, "customButtonLink", 500);
+    const paid = input.paid === true;
 
     validateStorageImageUrl(poster, "poster");
     validateUrl(buyTicket, "buyTicket");
@@ -1390,7 +1458,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const data = {
         title, titleCn, description, descriptionCn, location, locationCn,
         startAt, endAt, poster, posterCredit, buyTicket, learnMore,
-        customButtonText, customButtonTextCn, customButtonLink,
+        customButtonText, customButtonTextCn, customButtonLink, paid,
     };
     const docId = eventId ?? db.collection("upcomingEvents").doc().id;
 
@@ -1403,6 +1471,18 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
             prevPoster = existing.data()?.poster ?? "";
             wasPublished = existing.data()?.published ?? false;
         }
+
+        // Paid events use tickets, not check-in codes — purge any claim codes
+        // that exist for this event (e.g., left over from a free→paid toggle).
+        // Reads must happen before writes inside the transaction.
+        let codesToDelete: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+        if (paid && eventId) {
+            const codesSnap = await txn.get(
+                db.collection("claimCodes").where("eventId", "==", eventId)
+            );
+            codesToDelete = codesSnap.docs;
+        }
+
         const ref = db.collection("upcomingEvents").doc(docId);
         if (eventId) {
             // Delete legacy name/nameCn fields on edit so pre-rename docs migrate cleanly.
@@ -1415,6 +1495,21 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         } else {
             txn.set(ref, {...data, published: false});
         }
+
+        for (const codeDoc of codesToDelete) {
+            txn.delete(codeDoc.ref);
+            txn.set(db.collection("records").doc(), {
+                type: "event-code-deactivate",
+                performedBy: uid,
+                performedByName: callerSnap.data()?.displayName ?? "",
+                eventTitle: title,
+                eventId: docId,
+                code: codeDoc.data().code ?? codeDoc.id,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        }
+
         txn.set(db.collection("records").doc(), {
             type: eventId ? "upcoming-event-edit" : "upcoming-event-create",
             performedBy: uid,
@@ -1570,7 +1665,8 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
 
         // Skip the deleted-record write if this delete was the tail end of an
         // archive — archiveUpcomingEvent already wrote an "upcoming-event-archive"
-        // record, and the past event reuses this ID.
+        // record, and the past event reuses this ID (so eventStaffEvents
+        // references stay valid and we must NOT purge them).
         let archived = false;
         try {
             archived = (await db.collection("pastEvents").doc(eventId).get()).exists;
@@ -1578,6 +1674,36 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: archive check failed for ${eventId}`, err);
         }
         if (archived) return;
+
+        // Hard delete (TTL-driven or admin abort) — purge eventStaffEvents
+        // references from users so stale event IDs don't haunt assignments.
+        try {
+            const staffSnap = await db.collection("users")
+                .where("eventStaffEvents", "array-contains", eventId).get();
+            const staffOps = staffSnap.docs.map(d =>
+                (b: FirebaseFirestore.WriteBatch) =>
+                    b.update(d.ref, {eventStaffEvents: FieldValue.arrayRemove(eventId)})
+            );
+            if (staffOps.length > 0) await commitInChunks(staffOps);
+        } catch (err) {
+            console.error(`onUpcomingEventDeleted: eventStaffEvents cascade failed for ${eventId}`, err);
+        }
+
+        // Clean up any orphaned subcollection docs (can occur if archive fails
+        // after Phase C partially completed, or on TTL-driven deletion).
+        try {
+            const orphanedOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+            for (const subCol of ["attendees", "emailTemplate"]) {
+                const snap = await db.collection("upcomingEvents").doc(eventId)
+                    .collection(subCol).get();
+                for (const d of snap.docs) {
+                    orphanedOps.push(b => b.delete(d.ref));
+                }
+            }
+            if (orphanedOps.length > 0) await commitInChunks(orphanedOps);
+        } catch (err) {
+            console.error(`onUpcomingEventDeleted: subcollection cleanup failed for ${eventId}`, err);
+        }
 
         try {
             await db.collection("records").add({
@@ -1595,9 +1721,14 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
 
 /**
  * Archive an upcoming event to past events (admin only).
- * Creates a past-event template (text fields only — no icon, since the upcoming
- * event's poster is hard-deleted by onUpcomingEventDeleted), then deletes the
- * upcoming event and writes an audit record. Admin uploads a new icon later.
+ * Migrates the event along with its attendees and emailTemplate subcollections.
+ *
+ * Subcollection docs are copied to pastEvents BEFORE the archive transaction
+ * (which is required for the 500-op batch limit). If copy succeeds but the
+ * transaction fails, the copied subcollection docs in pastEvents are simply
+ * overwritten on the next retry (idempotent). The originals are deleted in
+ * chunks AFTER the transaction commits so onUpcomingEventDeleted never sees
+ * orphaned subcollection docs.
  */
 export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -1607,11 +1738,33 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     const input = request.data as {eventId?: string; tagId?: string};
     const eventId = validateDocId(input.eventId, "eventId");
     const tagId = validateStr(input.tagId, "tagId", 128);
-    // Reuse the upcoming event's ID for the past event so users' attendedEvents
-    // and claim-code records remain valid across the archive boundary.
     const newDocRef = db.collection("pastEvents").doc(eventId);
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    // ---- Phase A: stream-copy subcollections to pastEvents ----
+    const attendeesSrc = db.collection("upcomingEvents").doc(eventId).collection("attendees");
+    const emailTemplateSrc = db.collection("upcomingEvents").doc(eventId).collection("emailTemplate");
+
+    const [attendeesSnap, emailTemplateSnap] = await Promise.all([
+        attendeesSrc.get(),
+        emailTemplateSrc.get(),
+    ]);
+
+    const pastAttendeesCol = newDocRef.collection("attendees");
+    const pastEmailTemplateCol = newDocRef.collection("emailTemplate");
+
+    const copyOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+
+    for (const doc of attendeesSnap.docs) {
+        copyOps.push(b => b.set(pastAttendeesCol.doc(doc.id), doc.data()));
+    }
+    for (const doc of emailTemplateSnap.docs) {
+        copyOps.push(b => b.set(pastEmailTemplateCol.doc(doc.id), doc.data()));
+    }
+
+    if (copyOps.length > 0) await commitInChunks(copyOps);
+
+    // ---- Phase B: archive transaction (atomic) ----
+    const {pastEventId} = await adminTransaction(uid, async (txn, callerSnap) => {
         const [eventSnap, pastCollisionSnap] = await Promise.all([
             txn.get(db.collection("upcomingEvents").doc(eventId)),
             txn.get(newDocRef),
@@ -1623,14 +1776,9 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         const eventData = eventSnap.data()!;
 
         const startDate: Date = eventData.startAt?.toDate?.() ?? new Date();
-        // Format in the club's local timezone (UW Seattle) so late-evening
-        // events don't roll over into the next UTC day. The stored date string
-        // is later displayed with timeZone: 'UTC', matching this day exactly.
         const dateStr = new Intl.DateTimeFormat("en-CA", {
             timeZone: "America/Los_Angeles",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
+            year: "numeric", month: "2-digit", day: "2-digit",
         }).format(startDate);
 
         txn.set(newDocRef, {
@@ -1657,6 +1805,27 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         });
         return {pastEventId: newDocRef.id};
     });
+
+    // ---- Phase C: delete original subcollections in chunks ----
+    // Re-query the LIVE collections so any doc written between Phase A and
+    // Phase B (a concurrent attendee import / template edit) still gets wiped.
+    // Without this, late arrivals strand under upcomingEvents/{deletedId}/…
+    // and onUpcomingEventDeleted's fallback cleanup is skipped because the
+    // archive path wrote a pastEvents doc with the same id.
+    const [liveAttendees, liveTemplate] = await Promise.all([
+        attendeesSrc.get(),
+        emailTemplateSrc.get(),
+    ]);
+    const deleteOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+    for (const doc of liveAttendees.docs) {
+        deleteOps.push(b => b.delete(doc.ref));
+    }
+    for (const doc of liveTemplate.docs) {
+        deleteOps.push(b => b.delete(doc.ref));
+    }
+    if (deleteOps.length > 0) await commitInChunks(deleteOps);
+
+    return {pastEventId};
 });
 
 /**
@@ -1744,6 +1913,14 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
 /**
  * Toggle event attendance for a user (admin only).
  * Enforces hierarchy: core-staff can only manage visitor/member/staff.
+ *
+ * Looks up the event in `upcomingEvents` first, then `pastEvents`. Paid
+ * upcoming events are rejected — their attendance is driven by tickets, so
+ * admins must use the Tickets tab.
+ *
+ * Rejects grant=true with `has-staff` if the user is event-staff for this
+ * event — staff and attendees are mutually exclusive (admin must remove the
+ * staff role first).
  */
 export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -1760,14 +1937,49 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         const callerGroup = callerSnap.data()!.group;
-        const targetSnap = await txn.get(db.collection("users").doc(targetUid));
+        const [targetSnap, upcomingSnap, pastSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(targetUid)),
+            txn.get(db.collection("upcomingEvents").doc(eventId)),
+            txn.get(db.collection("pastEvents").doc(eventId)),
+        ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
-        if (callerGroup !== "president" && !["visitor", "member", "staff"].includes(targetSnap.data()!.group)) {
+        const targetData = targetSnap.data()!;
+        // Hierarchy guard, but allow self-edits — admins managing their own
+        // attendance shouldn't be blocked by the "above your level" check.
+        if (
+            targetUid !== uid
+            && callerGroup !== "president"
+            && !["visitor", "member", "staff"].includes(targetData.group)
+        ) {
             throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
         }
 
-        const eventSnap = await txn.get(db.collection("pastEvents").doc(eventId));
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        let eventSnap;
+        if (upcomingSnap.exists) {
+            if (upcomingSnap.data()!.paid === true) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "Paid events use tickets — manage attendance via the Tickets tab.",
+                    {code: "paid-event"},
+                );
+            }
+            eventSnap = upcomingSnap;
+        } else if (pastSnap.exists) {
+            eventSnap = pastSnap;
+        } else {
+            throw new HttpsError("not-found", "Event not found.");
+        }
+
+        if (grant) {
+            const staffEvents: string[] = targetData.eventStaffEvents ?? [];
+            if (staffEvents.includes(eventId)) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "User is event staff for this event. Remove them as staff before adding as attendee.",
+                    {code: "has-staff"},
+                );
+            }
+        }
 
         txn.update(db.collection("users").doc(targetUid), {
             attendedEvents: grant ? FieldValue.arrayUnion(eventId) : FieldValue.arrayRemove(eventId),
@@ -1777,7 +1989,7 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
             performedBy: uid,
             performedByName: callerSnap.data()!.displayName ?? "",
             targetUid,
-            targetName: targetSnap.data()!.displayName ?? "",
+            targetName: targetData.displayName ?? "",
             eventTitle: eventSnap.data()!.title ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
@@ -2217,3 +2429,1235 @@ export const onUserDeleted = onDocumentDeleted(
         }
     }
 );
+
+// ---------------------------------------------------------------------------
+// Paid event ticketing
+// ---------------------------------------------------------------------------
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateEmail(value: unknown, name: string): string {
+    if (typeof value !== "string") {
+        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized.length === 0 || normalized.length > 320 || !EMAIL_RE.test(normalized)) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
+    }
+    return normalized;
+}
+
+function validateTicketCount(value: unknown): number {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 50) {
+        throw new HttpsError("invalid-argument", "ticketCount must be an integer between 1 and 50.");
+    }
+    return value;
+}
+
+interface NewTicket {
+    ticketId: string;
+    redeemed: boolean;
+    redeemedAt: Timestamp | null;
+    redeemedBy: string;
+    redeemedByName: string;
+    checkedIn: boolean;
+    checkedInAt: Timestamp | null;
+    voided: boolean;
+}
+
+function buildFreshTickets(count: number): {tickets: NewTicket[]; ticketIds: string[]} {
+    const tickets: NewTicket[] = [];
+    const ticketIds: string[] = [];
+    for (let i = 0; i < count; i++) {
+        const ticketId = crypto.randomUUID();
+        ticketIds.push(ticketId);
+        tickets.push({
+            ticketId,
+            redeemed: false,
+            redeemedAt: null,
+            redeemedBy: "",
+            redeemedByName: "",
+            checkedIn: false,
+            checkedInAt: null,
+            voided: false,
+        });
+    }
+    return {tickets, ticketIds};
+}
+
+function formatEventDateForEmail(startAt: Timestamp | undefined, locale: string): string {
+    if (!startAt) return "";
+    try {
+        return new Intl.DateTimeFormat(locale, {
+            timeZone: "America/Los_Angeles",
+            year: "numeric", month: "long", day: "numeric",
+            hour: "numeric", minute: "2-digit",
+        }).format(startAt.toDate());
+    } catch {
+        return "";
+    }
+}
+
+interface EmailTemplateDoc {
+    subject: string;
+    bodyHtml: string;
+    bodyCnHtml: string;
+}
+
+// Allowlist for the ticket-email template HTML. Applied at save time in
+// updateEventEmailTemplate. Blocks <script>/<iframe>/<style>/event handlers and
+// restricts href to https/mailto, img src to https/data. QR images for tickets
+// are injected post-sanitize as cid: references (see renderTicketQrBlock) —
+// Gmail strips data: URLs in img src, so QRs must ship as attachments.
+//
+// MUST STAY IN SYNC with app/lib/emailSanitize.ts EMAIL_HTML_SANITIZE_OPTIONS.
+// We duplicate because functions/ and the web app are separate tsc projects
+// with their own node_modules; any change here must also be applied there so
+// admin preview matches what actually gets sent.
+const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
+    allowedTags: [
+        "p", "div", "span", "strong", "em", "b", "i", "u", "br", "hr",
+        "h1", "h2", "h3", "h4", "h5", "h6",
+        "ul", "ol", "li",
+        "a", "img",
+        "table", "thead", "tbody", "tr", "td", "th",
+        "code", "blockquote",
+    ],
+    allowedAttributes: {
+        "*": ["style", "class", "align", "width", "height"],
+        "a": ["href", "title", "target", "rel"],
+        "img": ["src", "alt", "title", "width", "height"],
+        "td": ["colspan", "rowspan", "valign"],
+        "th": ["colspan", "rowspan", "valign"],
+    },
+    allowedSchemes: ["https", "mailto"],
+    allowedSchemesByTag: {
+        img: ["https", "data"],
+    },
+    allowedSchemesAppliedToAttributes: ["href", "src"],
+    allowProtocolRelative: false,
+    disallowedTagsMode: "discard",
+};
+
+function renderTicketQrBlock(ticketIds: string[]): string {
+    // One <div> per ticket. Images reference CID attachments added to the mail
+    // doc by sendTicketEmails — Gmail strips data: URLs in <img src>, so QRs
+    // ship as multipart/related inline attachments instead.
+    return ticketIds.map(id => {
+        return `<div style="margin:16px 0;text-align:center;">` +
+            `<img src="cid:ticket-${id}" alt="Ticket ${id}" style="width:200px;height:200px;display:inline-block;"/>` +
+            `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
+            `</div>`;
+    }).join("\n");
+}
+
+async function generateTicketQrPngBase64(
+    ticketIds: string[], eventId: string
+): Promise<string[]> {
+    // Returns base64-encoded PNG bytes (no data: prefix) suitable for
+    // nodemailer attachments with encoding: "base64". Firestore stores the
+    // string as-is; the Trigger Email extension forwards it to nodemailer,
+    // which decodes it into the multipart/related MIME part.
+    const QRCode = (await import("qrcode")).default;
+    const origin = PUBLIC_ORIGIN.value();
+    if (!origin) {
+        throw new HttpsError(
+            "failed-precondition",
+            "PUBLIC_ORIGIN is not configured for this Cloud Functions deployment.",
+        );
+    }
+    return Promise.all(ticketIds.map(async id => {
+        const url = `${origin}/claim?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
+        // 256 px keeps each ticket's QR comfortably under ~4 KB PNG (vs. ~12–20 KB
+        // at 400 px), so a 50-ticket attendee fits well within Firestore's 1 MB
+        // mail-doc limit. Error correction "M" still scans reliably at this size.
+        const buf = await QRCode.toBuffer(url, {errorCorrectionLevel: "M", width: 256, margin: 1});
+        return buf.toString("base64");
+    }));
+}
+
+// Escape user-supplied strings before substitution into HTML email bodies.
+// Template HTML itself is sanitized at save time (updateEventEmailTemplate),
+// but substitutions land in the already-sanitized output, so we escape here
+// to keep an attendee with name like '<img src=x onerror=...>' from injecting.
+const escapeHtml = (s: string): string => s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+function renderTemplate(
+    template: string,
+    data: {
+        attendeeEmail: string;
+        attendeeName: string;
+        eventTitle: string;
+        eventTitleCn: string;
+        eventDate: string;
+        ticketCount: number;
+        ticketBlock: string;
+    },
+    // True when rendering into HTML (body). False for plain-text contexts
+    // (subject line) — entity-encoding subject text would surface literally
+    // in inboxes (e.g. "Jones &amp; Co").
+    htmlContext: boolean,
+): string {
+    const sub = htmlContext ? escapeHtml : (s: string) => s;
+    return template
+        .replace(/{{\s*attendeeEmail\s*}}/g, sub(data.attendeeEmail))
+        .replace(/{{\s*attendeeName\s*}}/g, sub(data.attendeeName))
+        .replace(/{{\s*eventTitle\s*}}/g, sub(data.eventTitle))
+        .replace(/{{\s*eventTitleCn\s*}}/g, sub(data.eventTitleCn))
+        .replace(/{{\s*eventDate\s*}}/g, sub(data.eventDate))
+        .replace(/{{\s*ticketCount\s*}}/g, String(data.ticketCount))
+        // {{ ticketIds[] }} — with optional surrounding <p>/<div> tags collapsed.
+        // ticketBlock is server-built HTML, never escaped.
+        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, data.ticketBlock);
+}
+
+/**
+ * Import attendees for a paid event from a CSV-parsed payload (admin only).
+ *
+ * Re-imports (same email) replace the existing attendee doc — old tickets' UUIDs
+ * are overwritten with fresh ones, so any QR emails already sent for the old
+ * UUIDs become invalid automatically (redeemTicket's ticketIds lookup fails).
+ *
+ * Maintains the invariant: `attendees[x].tickets[i].ticketId` equals
+ * `attendees[x].ticketIds[i]`. `ticketIds` exists purely so we can
+ * `array-contains` query by ticketId in `redeemTicket`.
+ */
+export const importEventAttendees = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendees?: unknown};
+    const eventId = validateDocId(input.eventId, "eventId");
+    if (!Array.isArray(input.attendees) || input.attendees.length === 0) {
+        throw new HttpsError("invalid-argument", "attendees must be a non-empty array.");
+    }
+    const importMax = IMPORT_MAX_ROWS_PARAM.value();
+    if (input.attendees.length > importMax) {
+        throw new HttpsError("invalid-argument",
+            `Too many attendees in a single import (max ${importMax}).`);
+    }
+
+    // Validate + normalize + dedupe (later row wins)
+    const normalized = new Map<string, {email: string; name: string; ticketCount: number}>();
+    for (const row of input.attendees) {
+        if (!row || typeof row !== "object") {
+            throw new HttpsError("invalid-argument", "Each attendee row must be an object.");
+        }
+        const r = row as Record<string, unknown>;
+        const email = validateEmail(r.email, "email");
+        const name = sanitizeDisplayText(validateStr(r.name, "name", 100, true));
+        if (!name) throw new HttpsError("invalid-argument", "name is required.");
+        const ticketCount = validateTicketCount(r.ticketCount);
+        normalized.set(email, {email, name, ticketCount});
+    }
+
+    // Admin check + event existence check in a lightweight transaction.
+    // We can't fit the whole import in one transaction (would violate the 500-op
+    // limit on large imports), so the big writes run as batched commits below.
+    const eventTitle = await adminTransaction(uid, async (txn) => {
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        return (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId) as string;
+    });
+
+    const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
+
+    // Look up existing docs by email in parallel (queries in chunks to avoid
+    // the `in` operator's 30-value limit).
+    const emails = Array.from(normalized.keys());
+    const existingByEmail = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+    for (let i = 0; i < emails.length; i += 30) {
+        const chunk = emails.slice(i, i + 30);
+        const snap = await attendeesCol.where("email", "in", chunk).get();
+        for (const doc of snap.docs) {
+            const email = doc.data().email;
+            if (typeof email === "string") existingByEmail.set(email, doc);
+        }
+    }
+
+    // Reject the whole import if any imported email belongs to a current
+    // event-staff for this event — staff and attendees are mutually exclusive.
+    const usersCol = db.collection("users");
+    const staffConflicts: string[] = [];
+    for (let i = 0; i < emails.length; i += 30) {
+        const chunk = emails.slice(i, i + 30);
+        const snap = await usersCol.where("email", "in", chunk).get();
+        for (const doc of snap.docs) {
+            const data = doc.data();
+            const staffEvents: string[] = data.eventStaffEvents ?? [];
+            if (staffEvents.includes(eventId) && typeof data.email === "string") {
+                staffConflicts.push(data.email);
+            }
+        }
+    }
+    if (staffConflicts.length > 0) {
+        throw new HttpsError(
+            "failed-precondition",
+            `${staffConflicts.length} user(s) are event staff for this event and cannot be imported as attendees: ${staffConflicts.join(", ")}. Remove them as staff first or omit them from the import.`,
+            {code: "has-staff", emails: staffConflicts},
+        );
+    }
+
+    const callerSnap = await db.collection("users").doc(uid).get();
+    const callerName = callerSnap.data()?.displayName ?? "";
+
+    let addedCount = 0;
+    let replacedCount = 0;
+    const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+
+    for (const row of normalized.values()) {
+        const {tickets, ticketIds} = buildFreshTickets(row.ticketCount);
+        const now = FieldValue.serverTimestamp();
+        const existing = existingByEmail.get(row.email);
+        if (existing) {
+            replacedCount++;
+            ops.push(b => b.set(existing.ref, {
+                email: row.email,
+                name: row.name,
+                ticketCount: row.ticketCount,
+                tickets,
+                ticketIds,
+                emailSent: false,
+                emailSentAt: null,
+                updatedAt: now,
+            }, {merge: true}));
+        } else {
+            addedCount++;
+            const newRef = attendeesCol.doc();
+            ops.push(b => b.set(newRef, {
+                email: row.email,
+                name: row.name,
+                ticketCount: row.ticketCount,
+                tickets,
+                ticketIds,
+                emailSent: false,
+                emailSentAt: null,
+                createdAt: now,
+                updatedAt: now,
+            }));
+        }
+    }
+
+    ops.push(b => b.set(db.collection("records").doc(), {
+        type: "ticket-import",
+        performedBy: uid,
+        performedByName: callerName,
+        eventId,
+        eventTitle,
+        addedCount,
+        replacedCount,
+        timestamp: FieldValue.serverTimestamp(),
+        expiresAt: recordExpiresAt(),
+    }));
+
+    await commitInChunks(ops);
+
+    return {added: addedCount, replaced: replacedCount, total: normalized.size};
+});
+
+/**
+ * Redeem a ticket (event-staff for this event, or core-staff+).
+ *
+ * If the attendee's email matches a registered user, also marks them as
+ * checked-in and adds the event to their attendedEvents (writes `event-attend`
+ * record in addition to `ticket-redeem`). Otherwise leaves the users collection
+ * untouched — the attendee is still valid, just unregistered on-site.
+ *
+ * Already-redeemed tickets return a non-error success so the scanner can render
+ * yellow-state info (who/when). Voided tickets throw with {code: 'voided'}.
+ */
+export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; ticketId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+
+    const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
+
+    return db.runTransaction(async (txn) => {
+        const callerSnap = await txn.get(db.collection("users").doc(uid));
+        const callerData = callerSnap.data() ?? {};
+        const group = callerData.group ?? "visitor";
+        const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
+        const isCoreStaffOrAbove = ADMIN_GROUPS.includes(group);
+        const isEventStaff = callerEventStaff.includes(eventId);
+        if (!isCoreStaffOrAbove && !isEventStaff) {
+            throw new HttpsError("permission-denied", "Not authorized to scan tickets for this event.",
+                {code: "not-authorized"});
+        }
+
+        // Require event exists so stale eventIds can't haunt redemption.
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) {
+            throw new HttpsError("not-found", "Event not found.", {code: "event-missing"});
+        }
+
+        const attendeeQuery = await txn.get(
+            attendeesCol.where("ticketIds", "array-contains", ticketId).limit(1)
+        );
+        if (attendeeQuery.empty) {
+            throw new HttpsError("not-found", "Ticket not found.", {code: "invalid"});
+        }
+        const attendeeDoc = attendeeQuery.docs[0];
+        const attendeeData = attendeeDoc.data();
+        const tickets: NewTicket[] = (attendeeData.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) {
+            throw new HttpsError("not-found", "Ticket not found.", {code: "invalid"});
+        }
+        const ticket = tickets[idx];
+
+        if (ticket.voided) {
+            throw new HttpsError("failed-precondition", "This ticket has been voided.",
+                {code: "voided"});
+        }
+
+        const callerName: string = callerData.displayName ?? "";
+        const attendeeEmail: string = attendeeData.email ?? "";
+        const attendeeName: string = attendeeData.name ?? "";
+        const eventTitle: string = eventSnap.data()?.title ?? eventSnap.data()?.name ?? "";
+
+        if (ticket.redeemed) {
+            return {
+                alreadyRedeemed: true,
+                attendeeName,
+                attendeeEmail,
+                eventTitle,
+                ticketIndex: idx,
+                redeemedBy: ticket.redeemedByName,
+                redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
+            };
+        }
+
+        // Try to link to a registered user by email.
+        const matchingUserSnap = await txn.get(
+            db.collection("users").where("email", "==", attendeeEmail).limit(1)
+        );
+        const now = Timestamp.now();
+        let userCheckedIn = false;
+        if (!matchingUserSnap.empty) {
+            const userDoc = matchingUserSnap.docs[0];
+            const attended: string[] = userDoc.data().attendedEvents ?? [];
+            if (!attended.includes(eventId)) {
+                txn.update(userDoc.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
+                txn.set(db.collection("records").doc(), {
+                    type: "event-attend",
+                    performedBy: uid,
+                    performedByName: callerName,
+                    targetUid: userDoc.id,
+                    targetName: userDoc.data().displayName ?? "",
+                    targetEmail: attendeeEmail,
+                    eventId,
+                    eventTitle,
+                    timestamp: FieldValue.serverTimestamp(),
+                    expiresAt: recordExpiresAt(),
+                });
+            }
+            userCheckedIn = true;
+        }
+
+        tickets[idx] = {
+            ...ticket,
+            redeemed: true,
+            redeemedAt: now,
+            redeemedBy: uid,
+            redeemedByName: callerName,
+            checkedIn: userCheckedIn,
+            checkedInAt: userCheckedIn ? now : null,
+        };
+
+        txn.update(attendeeDoc.ref, {
+            tickets,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-redeem",
+            performedBy: uid,
+            performedByName: callerName,
+            eventId,
+            eventTitle,
+            targetEmail: attendeeEmail,
+            targetName: attendeeName,
+            code: ticketId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {
+            success: true,
+            attendeeName,
+            attendeeEmail,
+            eventTitle,
+            ticketIndex: idx,
+            userCheckedIn,
+        };
+    });
+});
+
+/**
+ * Void a single ticket (core-staff+). Idempotent; voiding a redeemed ticket
+ * blocks future scans but does not rewind the user's attendedEvents.
+ */
+export const voidTicket = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
+
+        tickets[idx] = {...tickets[idx], voided: true};
+
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+
+        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-void",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle,
+            targetEmail: data.email ?? "",
+            targetName: data.name ?? "",
+            code: ticketId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {voided: true};
+    });
+});
+
+/**
+ * Update a single attendee's name and/or ticketCount (core-staff+).
+ *
+ * Name-only change: tickets and `emailSent` are left untouched.
+ * ticketCount change: regenerates all ticket UUIDs (old QRs die because they
+ * leave the `ticketIds` array) and resets `emailSent=false` so the admin knows
+ * to resend.
+ */
+export const updateEventAttendee = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {
+        eventId?: string;
+        attendeeId?: string;
+        name?: unknown;
+        ticketCount?: unknown;
+    };
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const name = sanitizeDisplayText(validateStr(input.name, "name", 100, true));
+    if (!name) throw new HttpsError("invalid-argument", "name is required.");
+    const ticketCount = validateTicketCount(input.ticketCount);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const prevTicketCount: number = data.ticketCount ?? 0;
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+
+        if (ticketCount === prevTicketCount) {
+            if (name === data.name) {
+                return {updated: false, regenerated: false};
+            }
+            txn.update(attendeeRef, {name, updatedAt: FieldValue.serverTimestamp()});
+            txn.set(db.collection("records").doc(), {
+                type: "ticket-attendee-edit",
+                performedBy: uid,
+                performedByName: callerSnap.data()?.displayName ?? "",
+                eventId,
+                eventTitle,
+                targetEmail: data.email ?? "",
+                oldName: data.name ?? "",
+                newName: name,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+            return {updated: true, regenerated: false};
+        }
+
+        const {tickets, ticketIds} = buildFreshTickets(ticketCount);
+        txn.update(attendeeRef, {
+            name,
+            ticketCount,
+            tickets,
+            ticketIds,
+            emailSent: false,
+            emailSentAt: null,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-regenerate",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle,
+            targetEmail: data.email ?? "",
+            targetName: name,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {updated: true, regenerated: true};
+    });
+});
+
+/**
+ * Delete an attendee and void all their tickets (core-staff+).
+ */
+export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendeeId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+        txn.delete(attendeeRef);
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-attendee-delete",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle,
+            targetEmail: data.email ?? "",
+            targetName: data.name ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {deleted: true, ticketCount: tickets.length};
+    });
+});
+
+/**
+ * Returns today's sent-email count and the configured daily cap.
+ * Day boundary is America/Los_Angeles midnight — matches the club's operating
+ * timezone and keeps the reset time predictable for admins.
+ */
+async function computeTicketEmailQuota(): Promise<{sentToday: number; dailyCap: number}> {
+    // Start of today in America/Los_Angeles, expressed as a UTC Timestamp.
+    // UTC-now minus LA's elapsed-since-midnight equals LA midnight (UTC).
+    // hourCycle:'h23' pins the range to 0–23 (en-US hour12:false can return "24").
+    const now = new Date();
+    const laParts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "America/Los_Angeles",
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        hourCycle: "h23",
+    }).formatToParts(now);
+    const part = (t: string) => Number(laParts.find(p => p.type === t)?.value ?? "0");
+    const laMidnightMs = now.getTime()
+        - part("hour") * 3600_000
+        - part("minute") * 60_000
+        - part("second") * 1000
+        - now.getMilliseconds();
+    const startOfTodayLA = Timestamp.fromMillis(laMidnightMs);
+
+    // Uses the existing (type, timestamp) composite index.
+    const snap = await db.collection("records")
+        .where("type", "==", "ticket-email-send")
+        .where("timestamp", ">=", startOfTodayLA)
+        .get();
+    let sentToday = 0;
+    for (const d of snap.docs) {
+        const c = d.data().sentCount;
+        if (typeof c === "number" && Number.isFinite(c)) sentToday += c;
+    }
+    return {sentToday, dailyCap: RESEND_DAILY_CAP_PARAM.value()};
+}
+
+/**
+ * Send ticket emails (core-staff+).
+ *
+ * Writes to `mail/{autoId}` documents consumed by the Firebase Trigger Email
+ * extension. Renders the event's saved email template for each attendee with
+ * their tickets embedded as data-URL QR images.
+ *
+ * Chunked: processes at most SEND_CHUNK_SIZE attendees per invocation. The
+ * client loops until `hasMore === false`, passing back `nextCursor` for
+ * mode='all' continuation. mode='unsent' drains naturally (sent attendees
+ * leave the `emailSent==false` result set), so no cursor is needed there.
+ *
+ * Throws {code: 'no-template'} if the event's template hasn't been saved yet —
+ * the client surfaces a banner prompting the admin to save it first.
+ */
+export const sendTicketEmails = onCall(
+    {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB"},
+    async (request) => {
+        const uid = await requireAuth(request);
+        await requireAdmin(uid);
+
+        const input = request.data as {
+            eventId?: string;
+            mode?: string;
+            attendeeIds?: unknown;
+            cursor?: unknown;
+        };
+        const eventId = validateDocId(input.eventId, "eventId");
+        const mode = input.mode === "all" ? "all" : "unsent";
+        const chunkSize = SEND_CHUNK_SIZE_PARAM.value();
+        let attendeeIds: string[] | null = null;
+        if (Array.isArray(input.attendeeIds)) {
+            attendeeIds = input.attendeeIds.map(id => validateDocId(id, "attendeeId"));
+            if (attendeeIds.length > chunkSize) {
+                throw new HttpsError("invalid-argument",
+                    `Too many attendee ids in a single send (max ${chunkSize}).`);
+            }
+        }
+        const cursor = typeof input.cursor === "string" && input.cursor.length > 0
+            ? validateDocId(input.cursor, "cursor")
+            : null;
+
+        const eventSnap = await db.collection("upcomingEvents").doc(eventId).get();
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        const eventData = eventSnap.data()!;
+
+        // Load template — hard-fail if not saved. No server-side default.
+        const templateRef = db.collection("upcomingEvents").doc(eventId)
+            .collection("emailTemplate").doc("default");
+        const templateSnap = await templateRef.get();
+        if (!templateSnap.exists) {
+            throw new HttpsError("failed-precondition",
+                "Email template not saved for this event.", {code: "no-template"});
+        }
+        const templateData = templateSnap.data() ?? {};
+        const template: EmailTemplateDoc = {
+            subject: (templateData.subject as string) ?? "",
+            bodyHtml: (templateData.bodyHtml as string) ?? "",
+            bodyCnHtml: (templateData.bodyCnHtml as string) ?? "",
+        };
+        if (!template.subject.trim() || !template.bodyHtml.trim()) {
+            throw new HttpsError("failed-precondition",
+                "Email template is empty.", {code: "no-template"});
+        }
+
+        // Target attendees — capped at chunkSize.
+        const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
+        let targets: FirebaseFirestore.QueryDocumentSnapshot[];
+        let queriedCount: number;
+        if (attendeeIds && attendeeIds.length > 0) {
+            const snaps = await Promise.all(attendeeIds.map(id => attendeesCol.doc(id).get()));
+            let filtered = snaps.filter(s => s.exists) as FirebaseFirestore.QueryDocumentSnapshot[];
+            if (mode === "unsent") {
+                filtered = filtered.filter(s => s.data()?.emailSent !== true);
+            }
+            targets = filtered.slice(0, chunkSize);
+            queriedCount = filtered.length;
+        } else if (mode === "unsent") {
+            // Drain pattern: processed attendees leave the result set on next call.
+            // orderBy createdAt gives FIFO fairness across chunks — uses the
+            // existing (emailSent, createdAt) composite index.
+            const snap = await attendeesCol
+                .where("emailSent", "==", false)
+                .orderBy("createdAt", "asc")
+                .limit(chunkSize)
+                .get();
+            targets = snap.docs;
+            queriedCount = snap.docs.length;
+        } else {
+            // Resend-all: cursor by doc id for stable chunked iteration.
+            let q = attendeesCol.orderBy(FieldPath.documentId())
+                .limit(chunkSize);
+            if (cursor) q = q.startAfter(cursor);
+            const snap = await q.get();
+            targets = snap.docs;
+            queriedCount = snap.docs.length;
+        }
+
+        const eventTitle: string = eventData.title ?? eventData.name ?? "";
+        const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
+        const eventDateEn = formatEventDateForEmail(eventData.startAt, "en-US");
+        const eventDateCn = formatEventDateForEmail(eventData.startAt, "zh-CN");
+
+        // Enforce the Resend daily cap server-side so a buggy/malicious client
+        // (or parallel admins) can't blow past it. Caps the chunk at whatever
+        // is still available today.
+        const {sentToday, dailyCap} = await computeTicketEmailQuota();
+        const remainingToday = Math.max(0, dailyCap - sentToday);
+        if (remainingToday === 0) {
+            throw new HttpsError("resource-exhausted",
+                "Daily Resend cap reached.", {code: "quota-exceeded"});
+        }
+
+        const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+        let sentCount = 0;
+        let lastProcessedId: string | null = null;
+
+        // Walk targets in order to preserve the cap and cursor semantics, but
+        // only collect work — actual QR generation runs in parallel below.
+        // Defective attendees (no ticketIds) are marked sent without consuming
+        // from remainingToday; matches the original sequential loop.
+        const ticketlessTargets: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+        const sendableTargets: {
+            target: FirebaseFirestore.QueryDocumentSnapshot;
+            data: FirebaseFirestore.DocumentData;
+            ticketIds: string[];
+        }[] = [];
+        for (const target of targets) {
+            lastProcessedId = target.id;
+            if (sentCount >= remainingToday) break;
+            const data = target.data();
+            const ticketIds: string[] = data.ticketIds ?? [];
+            if (ticketIds.length === 0) {
+                ticketlessTargets.push(target);
+                continue;
+            }
+            sendableTargets.push({target, data, ticketIds});
+            sentCount++;
+        }
+
+        // Parallelize QR PNG generation across all sendable attendees. Each
+        // attendee's QRs are still generated in parallel inside
+        // generateTicketQrPngBase64; this adds a second axis so 100 attendees
+        // don't sit behind 99 sequential awaits.
+        const qrPerAttendee = await Promise.all(
+            sendableTargets.map(s => generateTicketQrPngBase64(s.ticketIds, eventId))
+        );
+
+        // Defective attendees: ticketCount validation prevents this at import
+        // time, but a bad merge / failed partial batch could leave an attendee
+        // with emailSent=false and no ticketIds. Mark sent so the mode='unsent'
+        // drain doesn't spin on the same doc forever.
+        for (const target of ticketlessTargets) {
+            console.warn(
+                `[sendTicketEmails] attendee ${target.id} has no ticketIds;` +
+                " marking sent to avoid infinite drain"
+            );
+            ops.push(b => b.update(target.ref, {
+                emailSent: true,
+                emailSentAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            }));
+        }
+
+        for (let i = 0; i < sendableTargets.length; i++) {
+            const {target, data, ticketIds} = sendableTargets[i];
+            const qrPngBase64 = qrPerAttendee[i];
+            const ticketBlock = renderTicketQrBlock(ticketIds);
+            // Inline attachments referenced by cid:ticket-<id> in ticketBlock.
+            // content + encoding:"base64" survives Firestore serialization as a
+            // plain string; nodemailer decodes it into a multipart/related MIME
+            // part so Gmail/Outlook/Apple Mail all render the QR inline.
+            const attachments = ticketIds.map((id, j) => ({
+                filename: `ticket-${id}.png`,
+                content: qrPngBase64[j],
+                encoding: "base64",
+                cid: `ticket-${id}`,
+                contentType: "image/png",
+                contentDisposition: "inline",
+            }));
+
+            // Strip control chars (CR/LF in particular) from the rendered subject
+            // so a stray newline in eventTitle/attendeeName can't escape the
+            // Subject: header and inject extra fields. nodemailer's own header
+            // encoder already guards against this; this is defense-in-depth.
+            const renderedSubject = renderTemplate(template.subject, {
+                attendeeEmail: data.email ?? "",
+                attendeeName: data.name ?? "",
+                eventTitle, eventTitleCn,
+                eventDate: eventDateEn,
+                ticketCount: data.ticketCount ?? ticketIds.length,
+                ticketBlock: "",
+            }, false).replace(/[\x00-\x1F\x7F]+/g, " ").trim();
+            const renderedBodyEn = renderTemplate(template.bodyHtml, {
+                attendeeEmail: data.email ?? "",
+                attendeeName: data.name ?? "",
+                eventTitle, eventTitleCn,
+                eventDate: eventDateEn,
+                ticketCount: data.ticketCount ?? ticketIds.length,
+                ticketBlock,
+            }, true);
+            const renderedBodyCn = renderTemplate(template.bodyCnHtml, {
+                attendeeEmail: data.email ?? "",
+                attendeeName: data.name ?? "",
+                eventTitle, eventTitleCn,
+                eventDate: eventDateCn,
+                ticketCount: data.ticketCount ?? ticketIds.length,
+                ticketBlock,
+            }, true);
+
+            // Bilingual: EN first, CN below, separated by a thin hr.
+            const html = renderedBodyCn
+                ? `${renderedBodyEn}\n<hr style="border:none;border-top:1px solid #ddd;margin:24px 0;"/>\n${renderedBodyCn}`
+                : renderedBodyEn;
+
+            const mailRef = db.collection("mail").doc();
+            ops.push(b => b.set(mailRef, {
+                to: data.email,
+                message: {subject: renderedSubject, html, attachments},
+            }));
+            ops.push(b => b.update(target.ref, {
+                emailSent: true,
+                emailSentAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            }));
+        }
+
+        // Only write an audit record when we actually sent something. Otherwise
+        // chunked loops would fill `records` with zero-count noise.
+        if (sentCount > 0) {
+            const callerSnap = await db.collection("users").doc(uid).get();
+            ops.push(b => b.set(db.collection("records").doc(), {
+                type: "ticket-email-send",
+                performedBy: uid,
+                performedByName: callerSnap.data()?.displayName ?? "",
+                eventId,
+                eventTitle,
+                sentCount,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            }));
+        }
+
+        if (ops.length > 0) await commitInChunks(ops);
+
+        // hasMore: the query returned a full chunk (there may be more).
+        // For attendeeIds, client controls chunking — never set hasMore.
+        const hasMore = !attendeeIds && queriedCount >= chunkSize;
+        const nextCursor = mode === "all" && hasMore && lastProcessedId
+            ? lastProcessedId
+            : undefined;
+
+        return {sentCount, hasMore, ...(nextCursor ? {nextCursor} : {})};
+    });
+
+/**
+ * Return today's count of sent ticket emails across ALL events (core-staff+)
+ * plus the server's per-invocation chunk size. Clients use the quota to surface
+ * the Resend free-tier cap and chunkSize to match the server's chunk loop.
+ */
+export const getTicketEmailQuota = onCall({maxInstances: 5}, async (request) => {
+    const uid = await requireAuth(request);
+    await requireAdmin(uid);
+
+    const {sentToday, dailyCap} = await computeTicketEmailQuota();
+    return {sentToday, dailyCap, chunkSize: SEND_CHUNK_SIZE_PARAM.value()};
+});
+
+/**
+ * Upsert the event's email template (core-staff+).
+ *
+ * Body HTML is sanitized server-side with a narrow allowlist
+ * (EMAIL_HTML_SANITIZE_OPTIONS): strips <script>, <iframe>, <style>, event
+ * handlers, javascript: URLs, and any http:-scheme links. Even though editors
+ * are trusted, this bounds the blast radius if a core-staff account is
+ * compromised — attacker can't inject phishing-via-DKIM-signed-email.
+ */
+export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {
+        eventId?: string;
+        subject?: unknown;
+        bodyHtml?: unknown;
+        bodyCnHtml?: unknown;
+    };
+    const eventId = validateDocId(input.eventId, "eventId");
+    const subject = validateStr(input.subject, "subject", 500, true);
+    const rawBodyHtml = validateStr(input.bodyHtml, "bodyHtml", 20000);
+    const rawBodyCnHtml = validateStr(input.bodyCnHtml, "bodyCnHtml", 20000);
+
+    const bodyHtml = sanitizeHtml(rawBodyHtml, EMAIL_HTML_SANITIZE_OPTIONS);
+    const bodyCnHtml = rawBodyCnHtml
+        ? sanitizeHtml(rawBodyCnHtml, EMAIL_HTML_SANITIZE_OPTIONS)
+        : "";
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        const templateRef = db.collection("upcomingEvents").doc(eventId)
+            .collection("emailTemplate").doc("default");
+        txn.set(templateRef, {
+            subject, bodyHtml, bodyCnHtml,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: uid,
+        }, {merge: true});
+        txn.set(db.collection("records").doc(), {
+            type: "upcoming-event-email-template-update",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {saved: true};
+    });
+});
+
+/**
+ * Grant event-staff access for a specific event (core-staff+).
+ *
+ * Event-staff is independent of the global staff group — assigning here does
+ * not change the user's group. The role only grants ticket-scanning and
+ * attendee-viewing access for this specific event.
+ *
+ * Staff and attendees are mutually exclusive in the admin UI. The two
+ * "attendees" sources we have to keep in sync:
+ *   - paid events: per-event `attendees` subcollection (one doc per email,
+ *     holds tickets);
+ *   - free events: each user's `attendedEvents` array (driven by claim codes
+ *     or admin toggleAttendance).
+ *
+ * Behavior by event lifecycle:
+ *   - upcoming + has attendee subcollection doc: reject with `has-ticket` —
+ *     live tickets may already be distributed and must be voided explicitly
+ *     via the tickets tab.
+ *   - upcoming, no attendee doc: auto-mark the staffer as attended (they will
+ *     be there). Existing semantic, preserved.
+ *   - past: scrub attendee state so the user only appears as staff. Deletes
+ *     any attendee subcollection doc (logged as `ticket-attendee-delete` with
+ *     reason `staff-assignment`) and removes eventId from `attendedEvents`
+ *     (logged as `event-unattend`). Skips the auto-attend write path.
+ *
+ * `removeEventStaff` does NOT re-add attendance — converting back is a manual
+ * step via toggleAttendance / re-import.
+ */
+export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {targetUid?: string; eventId?: string};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    const eventId = validateDocId(input.eventId, "eventId");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const [targetSnap, upcomingSnap, pastSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(targetUid)),
+            txn.get(db.collection("upcomingEvents").doc(eventId)),
+            txn.get(db.collection("pastEvents").doc(eventId)),
+        ]);
+        if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
+        const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        const eventCollection = upcomingSnap.exists ? "upcomingEvents" : "pastEvents";
+        const isPastEvent = !upcomingSnap.exists;
+
+        const targetData = targetSnap.data()!;
+        const targetEmail: string = targetData.email ?? "";
+        const existing: string[] = targetData.eventStaffEvents ?? [];
+        const alreadyStaff = existing.includes(eventId);
+
+        // Past events delete the attendee doc(s) to enforce the staff/attendee
+        // exclusivity; upcoming events reject so the admin voids live tickets
+        // explicitly. Enumerate all matches without a limit so a partial-import
+        // failure that left duplicate attendee docs for the same email is fully
+        // cleaned up here, not just the first hit.
+        const attendeesToRemove: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+        if (targetEmail) {
+            const attendeeQuery = await txn.get(
+                db.collection(eventCollection).doc(eventId).collection("attendees")
+                    .where("email", "==", targetEmail)
+            );
+            if (!attendeeQuery.empty) {
+                if (isPastEvent) {
+                    attendeesToRemove.push(...attendeeQuery.docs);
+                } else {
+                    throw new HttpsError(
+                        "failed-precondition",
+                        "User already has a ticket for this event. Delete their attendee record before assigning as staff.",
+                        {code: "has-ticket"},
+                    );
+                }
+            }
+        }
+
+        const eventTitle: string = eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId;
+        const callerName: string = callerSnap.data()?.displayName ?? "";
+        const targetName: string = targetData.displayName ?? "";
+        const attendedEvents: string[] = targetData.attendedEvents ?? [];
+        const alreadyAttended = attendedEvents.includes(eventId);
+
+        // Past: pull eventId out of attendedEvents so the user doesn't show in
+        // the free-event attendees list. Upcoming: auto-attend (legacy).
+        const attendanceAction: "add" | "remove" | "none" = isPastEvent
+            ? (alreadyAttended ? "remove" : "none")
+            : (alreadyAttended ? "none" : "add");
+
+        if (alreadyStaff && attendanceAction === "none" && attendeesToRemove.length === 0) {
+            return {added: false, attendeeRemoved: false};
+        }
+
+        const userUpdates: Record<string, unknown> = {};
+        if (!alreadyStaff) userUpdates.eventStaffEvents = FieldValue.arrayUnion(eventId);
+        if (attendanceAction === "add") {
+            userUpdates.attendedEvents = FieldValue.arrayUnion(eventId);
+        } else if (attendanceAction === "remove") {
+            userUpdates.attendedEvents = FieldValue.arrayRemove(eventId);
+        }
+        if (Object.keys(userUpdates).length > 0) {
+            txn.update(db.collection("users").doc(targetUid), userUpdates);
+        }
+
+        for (const attendeeDoc of attendeesToRemove) {
+            const attendeeData = attendeeDoc.data();
+            txn.delete(attendeeDoc.ref);
+            txn.set(db.collection("records").doc(), {
+                type: "ticket-attendee-delete",
+                performedBy: uid,
+                performedByName: callerName,
+                eventId,
+                eventTitle,
+                targetEmail: attendeeData.email ?? targetEmail,
+                targetName: attendeeData.name ?? targetName,
+                reason: "staff-assignment",
+                // Snapshot per-ticket state so the audit trail is self-contained
+                // — staff-assignment on a past event is the one path that erases
+                // redemption/check-in history, and we still want to be able to
+                // answer "did this person actually attend?" later. Bounded by
+                // record TTL (RECORD_RETENTION_DAYS).
+                ticketSnapshot: {
+                    ticketCount: attendeeData.ticketCount ?? 0,
+                    tickets: attendeeData.tickets ?? [],
+                },
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        }
+
+        if (!alreadyStaff) {
+            txn.set(db.collection("records").doc(), {
+                type: "event-staff-assign",
+                performedBy: uid,
+                performedByName: callerName,
+                targetUid,
+                targetName,
+                eventId,
+                eventTitle,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        }
+        if (attendanceAction === "add") {
+            txn.set(db.collection("records").doc(), {
+                type: "event-attend",
+                performedBy: uid,
+                performedByName: callerName,
+                targetUid,
+                targetName,
+                targetEmail,
+                eventId,
+                eventTitle,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        } else if (attendanceAction === "remove") {
+            txn.set(db.collection("records").doc(), {
+                type: "event-unattend",
+                performedBy: uid,
+                performedByName: callerName,
+                targetUid,
+                targetName,
+                targetEmail,
+                eventId,
+                eventTitle,
+                reason: "staff-assignment",
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        }
+        return {
+            added: !alreadyStaff,
+            attendeeRemoved: attendeesToRemove.length > 0 || attendanceAction === "remove",
+        };
+    });
+});
+
+/**
+ * Revoke event-staff access for a specific event (core-staff+).
+ * Does not downgrade the user's group — they remain staff for other events (or,
+ * if they have no remaining eventStaffEvents, still explicitly staff until an
+ * admin reassigns them).
+ */
+export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {targetUid?: string; eventId?: string};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+    const eventId = validateDocId(input.eventId, "eventId");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const [targetSnap, upcomingSnap, pastSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(targetUid)),
+            txn.get(db.collection("upcomingEvents").doc(eventId)),
+            txn.get(db.collection("pastEvents").doc(eventId)),
+        ]);
+        if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
+        const targetData = targetSnap.data()!;
+        const existing: string[] = targetData.eventStaffEvents ?? [];
+        if (!existing.includes(eventId)) {
+            return {removed: false};
+        }
+
+        const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+
+        txn.update(db.collection("users").doc(targetUid), {
+            eventStaffEvents: FieldValue.arrayRemove(eventId),
+        });
+        txn.set(db.collection("records").doc(), {
+            type: "event-staff-remove",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            eventId,
+            eventTitle,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {removed: true};
+    });
+});

@@ -20,6 +20,7 @@ export interface UpcomingEvent {
     customButtonTextCn: string;
     customButtonLink: string;
     published: boolean;
+    paid: boolean;
     deleteAt: Date | null;
 }
 
@@ -52,6 +53,7 @@ const mapDoc = (docSnap: FirestoreDocLike): UpcomingEvent => {
         customButtonTextCn: (data.customButtonTextCn as string) ?? '',
         customButtonLink: (data.customButtonLink as string) ?? '',
         published: (data.published as boolean) ?? false,
+        paid: (data.paid as boolean) ?? false,
         deleteAt: deleteAtRaw?.toDate?.() ?? null,
     };
 };
