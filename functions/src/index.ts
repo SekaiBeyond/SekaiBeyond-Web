@@ -4,15 +4,26 @@ import { FieldPath, FieldValue, getFirestore, Timestamp } from "firebase-admin/f
 import { getStorage } from "firebase-admin/storage";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
-import { defineString } from "firebase-functions/params";
+import { defineInt, defineString } from "firebase-functions/params";
 
 import * as crypto from "crypto";
 import sanitizeHtml from "sanitize-html";
 
-// Public origin for ticket QR URLs (set via `firebase functions:config:set` or
-// the v2 parameterised config UI). Fallback keeps QR codes pointing at the prod
-// site if the param is unset.
-const PUBLIC_ORIGIN = defineString("PUBLIC_ORIGIN", {default: "https://sekaibeyond.com"});
+// Public origin for ticket QR URLs (set via the v2 parameterised config UI or
+// functions/.env.<project>). Required — no default, so a misconfigured
+// staging/dev project can't silently mint QRs that point at production.
+// generateTicketQrPngBase64 throws failed-precondition when this is empty.
+const PUBLIC_ORIGIN = defineString("PUBLIC_ORIGIN");
+
+// Email-provider daily cap (Resend free tier = 100). Server-enforced in
+// sendTicketEmails and surfaced read-only via getTicketEmailQuota.
+const RESEND_DAILY_CAP_PARAM = defineInt("RESEND_DAILY_CAP", {default: 100});
+// Per-invocation attendee cap. Lower than the daily cap so a single event with
+// >cap attendees must chunk across calls, surfacing progress and giving the
+// admin a place to cancel between chunks.
+const SEND_CHUNK_SIZE_PARAM = defineInt("SEND_CHUNK_SIZE", {default: 100});
+// Max attendee rows accepted per importEventAttendees call.
+const IMPORT_MAX_ROWS_PARAM = defineInt("IMPORT_MAX_ROWS", {default: 1000});
 
 // Records are audit logs. Firestore TTL policy on `records.expiresAt`
 // auto-deletes documents past this point (configure in Firebase console).
@@ -73,11 +84,13 @@ async function requireAuth(request: CallableRequest<unknown>): Promise<string> {
 }
 
 async function requireAdmin(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {
-    const snap = await db.collection("users").doc(uid).get();
-    if (!ADMIN_GROUPS.includes(snap.data()?.group)) {
-        throw new HttpsError("permission-denied", "Insufficient permissions.");
-    }
-    return snap;
+    return db.runTransaction(async (txn) => {
+        const snap = await txn.get(db.collection("users").doc(uid));
+        if (!ADMIN_GROUPS.includes(snap.data()?.group)) {
+            throw new HttpsError("permission-denied", "Insufficient permissions.");
+        }
+        return snap;
+    });
 }
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -316,12 +329,25 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         const iso = v?.toDate?.()?.toISOString();
         if (iso) badgeEarnedAt[k] = iso;
     }
+
+    // Restrict eventStaffEvents to past events only — upcoming-event ids would
+    // leak unpublished events whose titles are otherwise gated by Firestore rules.
+    const rawStaffEvents: string[] = data.eventStaffEvents ?? [];
+    const eventStaffEvents: string[] = [];
+    if (rawStaffEvents.length > 0) {
+        const refs = rawStaffEvents.map(id => db.collection("pastEvents").doc(id));
+        const snaps = await db.getAll(...refs);
+        for (let i = 0; i < snaps.length; i++) {
+            if (snaps[i].exists) eventStaffEvents.push(rawStaffEvents[i]);
+        }
+    }
+
     return {
         displayName: data.displayName ?? "",
         photoURL: data.photoURL ?? "",
         joinedAt: data.joinedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
         attendedEvents: data.attendedEvents ?? [],
-        eventStaffEvents: data.eventStaffEvents ?? [],
+        eventStaffEvents,
         badges: data.badges ?? [],
         badgeEarnedAt,
         group: data.group ?? "visitor",
@@ -637,13 +663,13 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     }
 
     const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
     const userSnap = await db.collection("users").doc(uid).get();
     const group = userSnap.data()?.group;
     if (!group || group === "visitor") {
         throw new HttpsError("permission-denied", "Visitors cannot upload avatars.");
     }
-
-    await checkRateLimit(uid);
 
     const input = request.data as {data?: string; contentType?: string};
     const dataBase64 = input.data;
@@ -692,13 +718,13 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     }
 
     const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
     const userSnap = await db.collection("users").doc(uid).get();
     const group = userSnap.data()?.group;
     if (!group || group === "visitor") {
         throw new HttpsError("permission-denied", "Visitors cannot delete avatars.");
     }
-
-    await checkRateLimit(uid);
 
     const userRef = db.collection("users").doc(uid);
 
@@ -1382,6 +1408,15 @@ export const setPastEventPublished = onCall({maxInstances: 10}, async (request) 
 /**
  * Create or update an upcoming event (admin only).
  * Accepts ISO date strings for startAt/endAt, converts to Firestore Timestamps.
+ *
+ * Paid toggle is asymmetric on purpose:
+ *   - free → paid: claim codes for this event are purged (logged as
+ *     `event-code-deactivate`). Tickets become the single source of truth.
+ *   - paid → free: the `attendees` and `emailTemplate` subcollections are
+ *     left intact so an accidental flip can be undone without re-importing
+ *     attendees. The admin UI surfaces a confirmation when this is happening
+ *     and attendees exist; if you genuinely want to delete them, do it via
+ *     the tickets tab before flipping back to free.
  */
 export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -2504,6 +2539,12 @@ async function generateTicketQrPngBase64(
     // which decodes it into the multipart/related MIME part.
     const QRCode = (await import("qrcode")).default;
     const origin = PUBLIC_ORIGIN.value();
+    if (!origin) {
+        throw new HttpsError(
+            "failed-precondition",
+            "PUBLIC_ORIGIN is not configured for this Cloud Functions deployment.",
+        );
+    }
     return Promise.all(ticketIds.map(async id => {
         const url = `${origin}/claim?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
         // 256 px keeps each ticket's QR comfortably under ~4 KB PNG (vs. ~12–20 KB
@@ -2513,6 +2554,17 @@ async function generateTicketQrPngBase64(
         return buf.toString("base64");
     }));
 }
+
+// Escape user-supplied strings before substitution into HTML email bodies.
+// Template HTML itself is sanitized at save time (updateEventEmailTemplate),
+// but substitutions land in the already-sanitized output, so we escape here
+// to keep an attendee with name like '<img src=x onerror=...>' from injecting.
+const escapeHtml = (s: string): string => s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 function renderTemplate(
     template: string,
@@ -2525,15 +2577,21 @@ function renderTemplate(
         ticketCount: number;
         ticketBlock: string;
     },
+    // True when rendering into HTML (body). False for plain-text contexts
+    // (subject line) — entity-encoding subject text would surface literally
+    // in inboxes (e.g. "Jones &amp; Co").
+    htmlContext: boolean,
 ): string {
+    const sub = htmlContext ? escapeHtml : (s: string) => s;
     return template
-        .replace(/{{\s*attendeeEmail\s*}}/g, data.attendeeEmail)
-        .replace(/{{\s*attendeeName\s*}}/g, data.attendeeName)
-        .replace(/{{\s*eventTitle\s*}}/g, data.eventTitle)
-        .replace(/{{\s*eventTitleCn\s*}}/g, data.eventTitleCn)
-        .replace(/{{\s*eventDate\s*}}/g, data.eventDate)
+        .replace(/{{\s*attendeeEmail\s*}}/g, sub(data.attendeeEmail))
+        .replace(/{{\s*attendeeName\s*}}/g, sub(data.attendeeName))
+        .replace(/{{\s*eventTitle\s*}}/g, sub(data.eventTitle))
+        .replace(/{{\s*eventTitleCn\s*}}/g, sub(data.eventTitleCn))
+        .replace(/{{\s*eventDate\s*}}/g, sub(data.eventDate))
         .replace(/{{\s*ticketCount\s*}}/g, String(data.ticketCount))
         // {{ ticketIds[] }} — with optional surrounding <p>/<div> tags collapsed.
+        // ticketBlock is server-built HTML, never escaped.
         .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, data.ticketBlock);
 }
 
@@ -2556,8 +2614,10 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
     if (!Array.isArray(input.attendees) || input.attendees.length === 0) {
         throw new HttpsError("invalid-argument", "attendees must be a non-empty array.");
     }
-    if (input.attendees.length > 1000) {
-        throw new HttpsError("invalid-argument", "Too many attendees in a single import (max 1000).");
+    const importMax = IMPORT_MAX_ROWS_PARAM.value();
+    if (input.attendees.length > importMax) {
+        throw new HttpsError("invalid-argument",
+            `Too many attendees in a single import (max ${importMax}).`);
     }
 
     // Validate + normalize + dedupe (later row wins)
@@ -3004,17 +3064,8 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
     });
 });
 
-// Per-invocation attendee cap. Lower than the Resend free-tier daily cap so a
-// single event with >100 attendees must chunk across calls, surfacing progress
-// and giving the admin a place to cancel between chunks.
-const SEND_CHUNK_SIZE = 100;
-
-// Resend free-tier daily cap. Enforced server-side in sendTicketEmails and
-// surfaced read-only via getTicketEmailQuota.
-const RESEND_DAILY_CAP = 100;
-
 /**
- * Returns today's sent-email count and the Resend daily cap.
+ * Returns today's sent-email count and the configured daily cap.
  * Day boundary is America/Los_Angeles midnight — matches the club's operating
  * timezone and keeps the reset time predictable for admins.
  */
@@ -3046,7 +3097,7 @@ async function computeTicketEmailQuota(): Promise<{sentToday: number; dailyCap: 
         const c = d.data().sentCount;
         if (typeof c === "number" && Number.isFinite(c)) sentToday += c;
     }
-    return {sentToday, dailyCap: RESEND_DAILY_CAP};
+    return {sentToday, dailyCap: RESEND_DAILY_CAP_PARAM.value()};
 }
 
 /**
@@ -3078,12 +3129,13 @@ export const sendTicketEmails = onCall(
         };
         const eventId = validateDocId(input.eventId, "eventId");
         const mode = input.mode === "all" ? "all" : "unsent";
+        const chunkSize = SEND_CHUNK_SIZE_PARAM.value();
         let attendeeIds: string[] | null = null;
         if (Array.isArray(input.attendeeIds)) {
             attendeeIds = input.attendeeIds.map(id => validateDocId(id, "attendeeId"));
-            if (attendeeIds.length > SEND_CHUNK_SIZE) {
+            if (attendeeIds.length > chunkSize) {
                 throw new HttpsError("invalid-argument",
-                    `Too many attendee ids in a single send (max ${SEND_CHUNK_SIZE}).`);
+                    `Too many attendee ids in a single send (max ${chunkSize}).`);
             }
         }
         const cursor = typeof input.cursor === "string" && input.cursor.length > 0
@@ -3113,7 +3165,7 @@ export const sendTicketEmails = onCall(
                 "Email template is empty.", {code: "no-template"});
         }
 
-        // Target attendees — capped at SEND_CHUNK_SIZE.
+        // Target attendees — capped at chunkSize.
         const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
         let targets: FirebaseFirestore.QueryDocumentSnapshot[];
         let queriedCount: number;
@@ -3123,7 +3175,7 @@ export const sendTicketEmails = onCall(
             if (mode === "unsent") {
                 filtered = filtered.filter(s => s.data()?.emailSent !== true);
             }
-            targets = filtered.slice(0, SEND_CHUNK_SIZE);
+            targets = filtered.slice(0, chunkSize);
             queriedCount = filtered.length;
         } else if (mode === "unsent") {
             // Drain pattern: processed attendees leave the result set on next call.
@@ -3132,14 +3184,14 @@ export const sendTicketEmails = onCall(
             const snap = await attendeesCol
                 .where("emailSent", "==", false)
                 .orderBy("createdAt", "asc")
-                .limit(SEND_CHUNK_SIZE)
+                .limit(chunkSize)
                 .get();
             targets = snap.docs;
             queriedCount = snap.docs.length;
         } else {
             // Resend-all: cursor by doc id for stable chunked iteration.
             let q = attendeesCol.orderBy(FieldPath.documentId())
-                .limit(SEND_CHUNK_SIZE);
+                .limit(chunkSize);
             if (cursor) q = q.startAfter(cursor);
             const snap = await q.get();
             targets = snap.docs;
@@ -3165,37 +3217,64 @@ export const sendTicketEmails = onCall(
         let sentCount = 0;
         let lastProcessedId: string | null = null;
 
+        // Walk targets in order to preserve the cap and cursor semantics, but
+        // only collect work — actual QR generation runs in parallel below.
+        // Defective attendees (no ticketIds) are marked sent without consuming
+        // from remainingToday; matches the original sequential loop.
+        const ticketlessTargets: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+        const sendableTargets: {
+            target: FirebaseFirestore.QueryDocumentSnapshot;
+            data: FirebaseFirestore.DocumentData;
+            ticketIds: string[];
+        }[] = [];
         for (const target of targets) {
             lastProcessedId = target.id;
             if (sentCount >= remainingToday) break;
             const data = target.data();
             const ticketIds: string[] = data.ticketIds ?? [];
             if (ticketIds.length === 0) {
-                // Defensive: ticketCount validation prevents this at import
-                // time, but a bad merge / failed partial batch could leave an
-                // attendee with emailSent=false and no ticketIds. Mark sent so
-                // the mode='unsent' drain doesn't spin on the same doc forever.
-                console.warn(
-                    `[sendTicketEmails] attendee ${target.id} has no ticketIds;` +
-                    " marking sent to avoid infinite drain"
-                );
-                ops.push(b => b.update(target.ref, {
-                    emailSent: true,
-                    emailSentAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp(),
-                }));
+                ticketlessTargets.push(target);
                 continue;
             }
+            sendableTargets.push({target, data, ticketIds});
+            sentCount++;
+        }
 
-            const qrPngBase64 = await generateTicketQrPngBase64(ticketIds, eventId);
+        // Parallelize QR PNG generation across all sendable attendees. Each
+        // attendee's QRs are still generated in parallel inside
+        // generateTicketQrPngBase64; this adds a second axis so 100 attendees
+        // don't sit behind 99 sequential awaits.
+        const qrPerAttendee = await Promise.all(
+            sendableTargets.map(s => generateTicketQrPngBase64(s.ticketIds, eventId))
+        );
+
+        // Defective attendees: ticketCount validation prevents this at import
+        // time, but a bad merge / failed partial batch could leave an attendee
+        // with emailSent=false and no ticketIds. Mark sent so the mode='unsent'
+        // drain doesn't spin on the same doc forever.
+        for (const target of ticketlessTargets) {
+            console.warn(
+                `[sendTicketEmails] attendee ${target.id} has no ticketIds;` +
+                " marking sent to avoid infinite drain"
+            );
+            ops.push(b => b.update(target.ref, {
+                emailSent: true,
+                emailSentAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            }));
+        }
+
+        for (let i = 0; i < sendableTargets.length; i++) {
+            const {target, data, ticketIds} = sendableTargets[i];
+            const qrPngBase64 = qrPerAttendee[i];
             const ticketBlock = renderTicketQrBlock(ticketIds);
             // Inline attachments referenced by cid:ticket-<id> in ticketBlock.
             // content + encoding:"base64" survives Firestore serialization as a
             // plain string; nodemailer decodes it into a multipart/related MIME
             // part so Gmail/Outlook/Apple Mail all render the QR inline.
-            const attachments = ticketIds.map((id, i) => ({
+            const attachments = ticketIds.map((id, j) => ({
                 filename: `ticket-${id}.png`,
-                content: qrPngBase64[i],
+                content: qrPngBase64[j],
                 encoding: "base64",
                 cid: `ticket-${id}`,
                 contentType: "image/png",
@@ -3209,7 +3288,7 @@ export const sendTicketEmails = onCall(
                 eventDate: eventDateEn,
                 ticketCount: data.ticketCount ?? ticketIds.length,
                 ticketBlock: "",
-            });
+            }, false);
             const renderedBodyEn = renderTemplate(template.bodyHtml, {
                 attendeeEmail: data.email ?? "",
                 attendeeName: data.name ?? "",
@@ -3217,7 +3296,7 @@ export const sendTicketEmails = onCall(
                 eventDate: eventDateEn,
                 ticketCount: data.ticketCount ?? ticketIds.length,
                 ticketBlock,
-            });
+            }, true);
             const renderedBodyCn = renderTemplate(template.bodyCnHtml, {
                 attendeeEmail: data.email ?? "",
                 attendeeName: data.name ?? "",
@@ -3225,7 +3304,7 @@ export const sendTicketEmails = onCall(
                 eventDate: eventDateCn,
                 ticketCount: data.ticketCount ?? ticketIds.length,
                 ticketBlock,
-            });
+            }, true);
 
             // Bilingual: EN first, CN below, separated by a thin hr.
             const html = renderedBodyCn
@@ -3242,7 +3321,6 @@ export const sendTicketEmails = onCall(
                 emailSentAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             }));
-            sentCount++;
         }
 
         // Only write an audit record when we actually sent something. Otherwise
@@ -3265,7 +3343,7 @@ export const sendTicketEmails = onCall(
 
         // hasMore: the query returned a full chunk (there may be more).
         // For attendeeIds, client controls chunking — never set hasMore.
-        const hasMore = !attendeeIds && queriedCount >= SEND_CHUNK_SIZE;
+        const hasMore = !attendeeIds && queriedCount >= chunkSize;
         const nextCursor = mode === "all" && hasMore && lastProcessedId
             ? lastProcessedId
             : undefined;
@@ -3283,7 +3361,7 @@ export const getTicketEmailQuota = onCall({maxInstances: 5}, async (request) => 
     await requireAdmin(uid);
 
     const {sentToday, dailyCap} = await computeTicketEmailQuota();
-    return {sentToday, dailyCap, chunkSize: SEND_CHUNK_SIZE};
+    return {sentToday, dailyCap, chunkSize: SEND_CHUNK_SIZE_PARAM.value()};
 });
 
 /**
@@ -3450,6 +3528,15 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
                 targetEmail: attendeeData.email ?? targetEmail,
                 targetName: attendeeData.name ?? targetName,
                 reason: "staff-assignment",
+                // Snapshot per-ticket state so the audit trail is self-contained
+                // — staff-assignment on a past event is the one path that erases
+                // redemption/check-in history, and we still want to be able to
+                // answer "did this person actually attend?" later. Bounded by
+                // record TTL (RECORD_RETENTION_DAYS).
+                ticketSnapshot: {
+                    ticketCount: attendeeData.ticketCount ?? 0,
+                    tickets: attendeeData.tickets ?? [],
+                },
                 timestamp: FieldValue.serverTimestamp(),
                 expiresAt: recordExpiresAt(),
             });

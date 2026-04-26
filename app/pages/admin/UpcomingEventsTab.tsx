@@ -250,6 +250,16 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             showToast(isEnglish ? 'End time must be after start time.' : '结束时间必须晚于开始时间。', 'error');
             return;
         }
+        // Paid → free is asymmetric: the server keeps the attendees and
+        // emailTemplate subcollections (so an accidental flip can be undone),
+        // but the tickets tab disappears from the admin UI. Make the trade-off
+        // explicit so the admin doesn't think the data is gone.
+        if (editingEvent && editingEvent.paid && !form.paid) {
+            const ok = confirm(isEnglish
+                ? 'Switching this event from paid to free will hide the tickets tab. Attendee and ticket data is kept on the server so you can switch back, but it will no longer be visible here. To permanently delete attendees, do that from the tickets tab before switching. Continue?'
+                : '将此活动从付费切换为免费将隐藏门票选项卡。服务器上的参与者与门票数据会保留以便切换回去，但此处将不再显示。如需永久删除参与者，请先在门票选项卡中操作再切换。是否继续？');
+            if (!ok) return;
+        }
         setSaving(true);
         try {
             let posterUrl = editingEvent?.poster ?? '';
