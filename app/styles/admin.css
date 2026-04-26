@@ -117,6 +117,11 @@
     border: 2px solid rgba(255, 107, 157, 0.2);
 }
 
+.admin-user-info {
+    flex: 1;
+    min-width: 0;
+}
+
 .admin-user-name {
     font-weight: 700;
     color: var(--color-text);
@@ -754,9 +759,22 @@
     border: 1px solid #e8e8e8;
 }
 
+.admin-single-code-narrow {
+    max-width: 420px;
+    margin: 20px auto 0;
+}
+
+.admin-single-code-qr {
+    width: min(280px, 100%);
+}
+
+.admin-single-code-qr canvas,
 .admin-single-code-qr svg {
     display: block;
     border-radius: 8px;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
 }
 
 .admin-code-url {
@@ -1036,6 +1054,10 @@
     gap: 12px;
     margin-bottom: 16px;
     flex-wrap: wrap;
+}
+
+.admin-tools-header .admin-back-btn {
+    margin-bottom: 0;
 }
 
 .admin-tools-title {

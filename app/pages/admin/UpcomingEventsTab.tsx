@@ -881,7 +881,13 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             )}
 
                             {eventSubTab === 'attendees' && !selectedEvt.paid && (
-                                <EventAttendeesList loading={searchingAttendees} attendees={eventAttendees}/>
+                                <EventAttendeesList
+                                    loading={searchingAttendees}
+                                    attendees={eventAttendees}
+                                    eventId={selectedEvt.id}
+                                    onReload={() => loadEventAttendees(selectedEvt.id)}
+                                    showToast={showToast}
+                                />
                             )}
 
                             {eventSubTab === 'staff' && !readOnly && (

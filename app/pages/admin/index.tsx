@@ -225,7 +225,7 @@ export const AdminPage = () => {
                             className={`admin-tab ${activeTab === 'users' ? 'admin-tab-active' : ''}`}
                             onClick={() => setActiveTab('users')}
                         >
-                            {isEnglish ? 'User Lookup' : '用户查询'}
+                            {isEnglish ? 'Users' : '用户'}
                         </button>
                     )}
                     {!isEventStaffOnly && (

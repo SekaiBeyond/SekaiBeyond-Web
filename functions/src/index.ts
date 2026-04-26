@@ -1163,7 +1163,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 
     // Title can only be set when assigning staff or core-staff
     const title = input.title;
-    if (title !== undefined && (typeof title !== "string" || title.length > 100)) {
+    if (title != null && (typeof title !== "string" || title.length > 100)) {
         throw new HttpsError("invalid-argument", "Invalid title.");
     }
     if (title && !["staff", "core-staff"].includes(newGroup)) {
@@ -1258,7 +1258,7 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const title = input.title;
 
-    if (title !== undefined && (typeof title !== "string" || title.length > 100)) {
+    if (title != null && (typeof title !== "string" || title.length > 100)) {
         throw new HttpsError("invalid-argument", "Invalid title.");
     }
 
@@ -1914,6 +1914,10 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
  * Toggle event attendance for a user (admin only).
  * Enforces hierarchy: core-staff can only manage visitor/member/staff.
  *
+ * Looks up the event in `upcomingEvents` first, then `pastEvents`. Paid
+ * upcoming events are rejected — their attendance is driven by tickets, so
+ * admins must use the Tickets tab.
+ *
  * Rejects grant=true with `has-staff` if the user is event-staff for this
  * event — staff and attendees are mutually exclusive (admin must remove the
  * staff role first).
@@ -1933,7 +1937,11 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         const callerGroup = callerSnap.data()!.group;
-        const targetSnap = await txn.get(db.collection("users").doc(targetUid));
+        const [targetSnap, upcomingSnap, pastSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(targetUid)),
+            txn.get(db.collection("upcomingEvents").doc(eventId)),
+            txn.get(db.collection("pastEvents").doc(eventId)),
+        ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         const targetData = targetSnap.data()!;
         // Hierarchy guard, but allow self-edits — admins managing their own
@@ -1946,8 +1954,21 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
             throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
         }
 
-        const eventSnap = await txn.get(db.collection("pastEvents").doc(eventId));
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        let eventSnap;
+        if (upcomingSnap.exists) {
+            if (upcomingSnap.data()!.paid === true) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "Paid events use tickets — manage attendance via the Tickets tab.",
+                    {code: "paid-event"},
+                );
+            }
+            eventSnap = upcomingSnap;
+        } else if (pastSnap.exists) {
+            eventSnap = pastSnap;
+        } else {
+            throw new HttpsError("not-found", "Event not found.");
+        }
 
         if (grant) {
             const staffEvents: string[] = targetData.eventStaffEvents ?? [];

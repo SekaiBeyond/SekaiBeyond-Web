@@ -115,7 +115,7 @@ const QrGeneratorTool = ({onBack}: QrGeneratorToolProps) => {
                         : '请输入有效的 http(s) 链接以生成二维码。'}
                 </p>
             ) : (
-                <div className="admin-single-code">
+                <div className="admin-single-code admin-single-code-narrow">
                     <div ref={qrWrapRef} className="admin-single-code-qr">
                         <QRCodeCanvas
                             value={trimmed}

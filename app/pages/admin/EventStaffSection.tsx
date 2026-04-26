@@ -209,7 +209,7 @@ export function EventStaffSection({
                         <div key={u.uid} className="admin-user-row">
                             <img src={u.photoURL} alt="" className="admin-user-avatar"
                                  referrerPolicy="no-referrer"/>
-                            <div>
+                            <div className="admin-user-info">
                                 <div className="admin-user-name">{u.displayName}</div>
                                 <div className="admin-user-email">{u.email}</div>
                             </div>
@@ -262,7 +262,7 @@ export function EventStaffSection({
                     <div key={u.uid} className="admin-user-row">
                         <img src={u.photoURL} alt="" className="admin-user-avatar"
                              referrerPolicy="no-referrer"/>
-                        <div>
+                        <div className="admin-user-info">
                             <div className="admin-user-name">{u.displayName}</div>
                             <div className="admin-user-email">{u.email}</div>
                         </div>
