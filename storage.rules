@@ -28,6 +28,12 @@ service firebase.storage {
       // Writes only via Cloud Function (Admin SDK bypasses rules)
     }
 
+    match /config/{file} {
+      // Config assets (e.g. video cover) are publicly readable
+      allow read: if true;
+      // Writes only via Cloud Function (Admin SDK bypasses rules)
+    }
+
     // Deny all access to unlisted paths (safety net — Firestore denies by default,
     // but an explicit rule prevents accidental exposure if new paths are added)
     match /{allPaths=**} {

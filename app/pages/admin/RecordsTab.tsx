@@ -38,6 +38,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
         'ticket-attendee-edit', 'ticket-regenerate', 'ticket-email-send'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
+    config: ['policy-update', 'config-update'],
 };
 
 interface RecordsTabProps {
@@ -487,6 +488,10 @@ export const RecordsTab = ({
                     ? <>revoked {target}'s event-staff access to {event}</>
                     : <>撤销了 {target} 对 {event} 的活动工作人员权限</>;
             }
+            case 'policy-update':
+                return isEnglish ? <>updated policy content</> : <>更新了政策内容</>;
+            case 'config-update':
+                return isEnglish ? <>updated site config</> : <>更新了网站配置</>;
         }
     };
 
@@ -556,6 +561,9 @@ export const RecordsTab = ({
             case 'account-deletion-cancelled':
             case 'account-deleted':
                 return isEnglish ? 'Account' : '账号';
+            case 'policy-update':
+            case 'config-update':
+                return isEnglish ? 'Config' : '配置';
             default:
                 return type;
         }
@@ -583,6 +591,7 @@ export const RecordsTab = ({
                     <option value="ticket">{isEnglish ? 'Ticket' : '门票'}</option>
                     <option value="tag">{isEnglish ? 'Tag' : '标签'}</option>
                     <option value="account">{isEnglish ? 'Account' : '账号'}</option>
+                    <option value="config">{isEnglish ? 'Config' : '配置'}</option>
                 </select>
                 <select
                     className="record-filter-select"

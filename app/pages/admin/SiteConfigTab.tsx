@@ -114,6 +114,21 @@ export const SiteConfigTab = ({showToast}: SiteConfigTabProps) => {
                         <code>https://www.bilibili.com/video/{previewBvid}</code>
                     </span>
                 </label>
+                <div>
+                    <span style={{fontSize: 13, fontWeight: 600, color: 'var(--color-text)'}}>
+                        {isEnglish ? 'Cover Preview' : '封面预览'}
+                    </span>
+                    {config.bilibiliVideoCoverUrl
+                        ? <img
+                            className="admin-video-cover-preview"
+                            src={config.bilibiliVideoCoverUrl}
+                            alt={isEnglish ? 'Video cover' : '视频封面'}
+                        />
+                        : <div className="admin-video-cover-placeholder">
+                            {isEnglish ? 'Cover will appear after saving' : '保存后将显示封面'}
+                        </div>
+                    }
+                </div>
             </div>
             <div className="admin-btn-row admin-mt-12">
                 <button

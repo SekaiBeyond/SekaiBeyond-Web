@@ -4,9 +4,10 @@ import { getFirebaseDb } from './firebase';
 
 export interface SiteConfig {
     bilibiliVideoBvid: string;
+    bilibiliVideoCoverUrl: string;
 }
 
-const DEFAULT_CONFIG: SiteConfig = {bilibiliVideoBvid: ''};
+const DEFAULT_CONFIG: SiteConfig = {bilibiliVideoBvid: '', bilibiliVideoCoverUrl: ''};
 
 let cachedConfig: SiteConfig | null = null;
 let fetchPromise: Promise<SiteConfig> | null = null;
@@ -22,6 +23,7 @@ async function fetchConfig(force = false): Promise<SiteConfig> {
         const data = snap.data();
         const config: SiteConfig = {
             bilibiliVideoBvid: data?.bilibiliVideoBvid ?? '',
+            bilibiliVideoCoverUrl: data?.bilibiliVideoCoverUrl ?? '',
         };
         cachedConfig = config;
         fetchPromise = null;

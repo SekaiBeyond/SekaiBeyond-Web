@@ -3696,9 +3696,43 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("invalid-argument", "Invalid Bilibili BV ID format.");
     }
 
+    let coverUrl = '';
+    if (bvid) {
+        try {
+            const apiResp = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`, {
+                headers: {'User-Agent': 'Mozilla/5.0'},
+                signal: AbortSignal.timeout(5000),
+            });
+            if (apiResp.ok) {
+                const json = await apiResp.json() as {code: number; data?: {pic?: string}};
+                const pic = json?.data?.pic ?? '';
+                const picUrl = pic.startsWith('http:') ? 'https:' + pic.slice(5) : pic;
+                if (picUrl) {
+                    const imgResp = await fetch(picUrl, {
+                        headers: {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.bilibili.com/'},
+                        signal: AbortSignal.timeout(10000),
+                    });
+                    if (imgResp.ok) {
+                        const contentType = imgResp.headers.get('content-type') ?? 'image/jpeg';
+                        const buffer = Buffer.from(await imgResp.arrayBuffer());
+                        const bucket = getStorage().bucket();
+                        const file = bucket.file('config/video-cover');
+                        await file.save(buffer, {
+                            metadata: {contentType, cacheControl: 'public, max-age=31536000, immutable'},
+                        });
+                        coverUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent('config/video-cover')}?alt=media&t=${Date.now()}`;
+                    }
+                }
+            }
+        } catch {
+            // Cover fetch is best-effort; proceed without it
+        }
+    }
+
     return adminTransaction(uid, async (txn, callerSnap) => {
         txn.set(db.collection("config").doc("main"), {
             bilibiliVideoBvid: bvid,
+            bilibiliVideoCoverUrl: coverUrl,
             updatedBy: uid,
             updatedByName: callerSnap.data()?.displayName ?? "",
             updatedAt: FieldValue.serverTimestamp(),

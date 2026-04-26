@@ -8,6 +8,7 @@ export const Video = () => {
 
     const bvid = config.bilibiliVideoBvid || BILIBILI_VIDEO.bvid;
     const bilibiliWatchUrl = `https://www.bilibili.com/video/${bvid}`;
+    const coverUrl = config.bilibiliVideoCoverUrl;
 
     return (
         <section id="video" className="video-section section">
@@ -40,7 +41,10 @@ export const Video = () => {
                     rel="noopener noreferrer"
                     aria-label={isEnglish ? "Watch on Bilibili" : "在B站观看"}
                 >
-                    <div className="video-mobile-card">
+                    <div
+                        className="video-mobile-card"
+                        style={coverUrl ? {background: `linear-gradient(135deg, rgba(26, 26, 46, 0.72), rgba(22, 33, 62, 0.72)), url('${coverUrl}') center/cover no-repeat`} : undefined}
+                    >
                         <div className="video-mobile-play" aria-hidden="true">▶</div>
                         <div className="video-mobile-text">
                             <div className="video-mobile-title">
