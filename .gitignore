@@ -13,5 +13,3 @@ public/index.html
 /functions/lib
 **/*.log
 **/build
-functions/.env.sekaibeyond-fc616
-package-lock.json

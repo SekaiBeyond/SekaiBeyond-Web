@@ -4,26 +4,20 @@ import { FieldPath, FieldValue, getFirestore, Timestamp } from "firebase-admin/f
 import { getStorage } from "firebase-admin/storage";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
-import { defineInt, defineString } from "firebase-functions/params";
 
 import * as crypto from "crypto";
 import sanitizeHtml from "sanitize-html";
 
-// Public origin for ticket QR URLs (set via the v2 parameterised config UI or
-// functions/.env.<project>). Required — no default, so a misconfigured
-// staging/dev project can't silently mint QRs that point at production.
-// generateTicketQrPngBase64 throws failed-precondition when this is empty.
-const PUBLIC_ORIGIN = defineString("PUBLIC_ORIGIN");
-
-// Email-provider daily cap (Resend free tier = 100). Server-enforced in
-// sendTicketEmails and surfaced read-only via getTicketEmailQuota.
-const RESEND_DAILY_CAP_PARAM = defineInt("RESEND_DAILY_CAP", {default: 100});
-// Per-invocation attendee cap. Lower than the daily cap so a single event with
-// >cap attendees must chunk across calls, surfacing progress and giving the
-// admin a place to cancel between chunks.
-const SEND_CHUNK_SIZE_PARAM = defineInt("SEND_CHUNK_SIZE", {default: 100});
-// Max attendee rows accepted per importEventAttendees call.
-const IMPORT_MAX_ROWS_PARAM = defineInt("IMPORT_MAX_ROWS", {default: 1000});
+// Config read from process.env so non-interactive CI deploys work without a
+// committed dotenv file. Override in production by setting env vars on the
+// Cloud Function (functions/.env.<project>, gcloud functions deploy
+// --update-env-vars, or the v2 parameterised config UI). Explicit empty
+// PUBLIC_ORIGIN passes through so generateTicketQrPngBase64's
+// failed-precondition guard still fires for misconfigured forks.
+const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN ?? "https://sekaibeyond.com";
+const RESEND_DAILY_CAP = Number(process.env.RESEND_DAILY_CAP) || 100;
+const SEND_CHUNK_SIZE = Number(process.env.SEND_CHUNK_SIZE) || 100;
+const IMPORT_MAX_ROWS = Number(process.env.IMPORT_MAX_ROWS) || 1000;
 
 // Records are audit logs. Firestore TTL policy on `records.expiresAt`
 // auto-deletes documents past this point (configure in Firebase console).
@@ -2559,7 +2553,7 @@ async function generateTicketQrPngBase64(
     // string as-is; the Trigger Email extension forwards it to nodemailer,
     // which decodes it into the multipart/related MIME part.
     const QRCode = (await import("qrcode")).default;
-    const origin = PUBLIC_ORIGIN.value();
+    const origin = PUBLIC_ORIGIN;
     if (!origin) {
         throw new HttpsError(
             "failed-precondition",
@@ -2635,7 +2629,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
     if (!Array.isArray(input.attendees) || input.attendees.length === 0) {
         throw new HttpsError("invalid-argument", "attendees must be a non-empty array.");
     }
-    const importMax = IMPORT_MAX_ROWS_PARAM.value();
+    const importMax = IMPORT_MAX_ROWS;
     if (input.attendees.length > importMax) {
         throw new HttpsError("invalid-argument",
             `Too many attendees in a single import (max ${importMax}).`);
@@ -3114,7 +3108,7 @@ async function computeTicketEmailQuota(): Promise<{sentToday: number; dailyCap: 
         const c = d.data().sentCount;
         if (typeof c === "number" && Number.isFinite(c)) sentToday += c;
     }
-    return {sentToday, dailyCap: RESEND_DAILY_CAP_PARAM.value()};
+    return {sentToday, dailyCap: RESEND_DAILY_CAP};
 }
 
 /**
@@ -3146,7 +3140,7 @@ export const sendTicketEmails = onCall(
         };
         const eventId = validateDocId(input.eventId, "eventId");
         const mode = input.mode === "all" ? "all" : "unsent";
-        const chunkSize = SEND_CHUNK_SIZE_PARAM.value();
+        const chunkSize = SEND_CHUNK_SIZE;
         let attendeeIds: string[] | null = null;
         if (Array.isArray(input.attendeeIds)) {
             attendeeIds = input.attendeeIds.map(id => validateDocId(id, "attendeeId"));
@@ -3382,7 +3376,7 @@ export const getTicketEmailQuota = onCall({maxInstances: 5}, async (request) => 
     await requireAdmin(uid);
 
     const {sentToday, dailyCap} = await computeTicketEmailQuota();
-    return {sentToday, dailyCap, chunkSize: SEND_CHUNK_SIZE_PARAM.value()};
+    return {sentToday, dailyCap, chunkSize: SEND_CHUNK_SIZE};
 });
 
 /**

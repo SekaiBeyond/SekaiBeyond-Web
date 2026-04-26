@@ -100,15 +100,13 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     Without this extension, ticket emails will be written to Firestore but never sent.
 
-11. Configure the `PUBLIC_ORIGIN` **Functions parameter** — `sendTicketEmails` embeds ticket-claim URLs (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into the QR images it generates. Set it to your deployed site's origin (e.g. `https://your-project.web.app` or your custom domain).
+11. Override `PUBLIC_ORIGIN` for forks — `sendTicketEmails` embeds ticket-claim URLs (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into the QR images it generates. Without this, forks will send QR codes pointing at the original site (`https://sekaibeyond.com`, the in-source default — see `functions/src/index.ts`) instead of their own deployment.
 
-    For Cloud Functions v2, params declared via `defineString` are read from a dotenv file inside `functions/`. Create `functions/.env` (applies to all projects) or `functions/.env.<project-id>` (per-project override) containing:
+    The function reads `process.env.PUBLIC_ORIGIN` at runtime, so any of these will work:
 
-    ```
-    PUBLIC_ORIGIN=https://your-site.example.com
-    ```
-
-    > **Prefer the project-scoped filename** (e.g. `functions/.env.sekaibeyond-fc616`, where the suffix is the Firebase project ID from `.firebaserc`). Firebase loads it only when deploying to that project and it overrides `.env`, so values don't leak into future dev/staging projects. Firebase also rejects keys starting with `FIREBASE_`, `X_GOOGLE_`, or `EXT_` in `.env` — the project-scoped file sidesteps that class of deploy failure.
+    - **Project-scoped dotenv (recommended):** create `functions/.env.<project-id>` (e.g. `functions/.env.sekaibeyond-fc616`, suffix from `.firebaserc`) containing `PUBLIC_ORIGIN=https://your-site.example.com`. Firebase loads it only when deploying to that project, so values don't leak into other environments. (Project-scoped also sidesteps Firebase's rejection of `FIREBASE_`/`X_GOOGLE_`/`EXT_`-prefixed keys in plain `.env`.)
+    - **Generic dotenv:** `functions/.env` applies to every project this repo deploys to.
+    - **gcloud:** `gcloud functions deploy <name> --update-env-vars PUBLIC_ORIGIN=...` (per function — tedious for this codebase since there are many).
 
     Then redeploy Functions so the new value is picked up:
 
@@ -116,7 +114,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
     firebase deploy --only functions
     ```
 
-    If unset, `PUBLIC_ORIGIN` falls back to the default baked into the code (`https://sekaibeyond.com` — see `functions/src/index.ts`). Forks that skip this step will send QR codes pointing at the original site instead of their own deployment.
+    The same mechanism applies to the optional caps `RESEND_DAILY_CAP` (default 100), `SEND_CHUNK_SIZE` (default 100), and `IMPORT_MAX_ROWS` (default 1000). See `functions/.env.example` for the full list.
 
 #### Firestore Indexes Explained
 
