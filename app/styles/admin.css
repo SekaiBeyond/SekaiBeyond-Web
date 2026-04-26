@@ -790,8 +790,13 @@
     transition: all 0.2s ease;
 }
 
-.admin-copy-btn:hover {
+.admin-copy-btn:hover:not(:disabled) {
     background: #8e44ad;
+}
+
+.admin-copy-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .admin-code-active-tag {
@@ -985,6 +990,59 @@
 
 .admin-mt-8 {
     margin-top: 8px;
+}
+
+.admin-tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.admin-tools-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px 20px;
+    background: white;
+    border: 1px solid rgba(255, 107, 157, 0.2);
+    border-radius: 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    font-family: inherit;
+}
+
+.admin-tools-card:hover {
+    border-color: var(--color-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(255, 107, 157, 0.15);
+}
+
+.admin-tools-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-tools-card-desc {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.4;
+}
+
+.admin-tools-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.admin-tools-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0;
 }
 
 .admin-mt-12 {
