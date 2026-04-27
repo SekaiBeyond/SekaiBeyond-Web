@@ -11,6 +11,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { isValidHttpUrl } from '~/lib/urls';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
+import { MAX_IMAGE_SIZE_MB } from '~/constants';
 
 interface BadgeDef extends BaseBadgeDef {
     holderPct?: number;
@@ -332,7 +333,7 @@ export const ProfilePage = () => {
         setEditingName(false);
     };
 
-    const MAX_RAW_PHOTO_SIZE = 25 * 1024 * 1024; // 25 MB, pre-crop browser-side sanity cap
+    const MAX_RAW_PHOTO_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
     const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -343,7 +344,7 @@ export const ProfilePage = () => {
             return;
         }
         if (file.size > MAX_RAW_PHOTO_SIZE) {
-            showToast(isEnglish ? 'Image must be under 25 MB.' : '图片大小不能超过 25 MB。', 'error');
+            showToast(isEnglish ? `Image must be under ${MAX_IMAGE_SIZE_MB} MB.` : `图片大小不能超过 ${MAX_IMAGE_SIZE_MB} MB。`, 'error');
             return;
         }
         setPendingPhoto(file);

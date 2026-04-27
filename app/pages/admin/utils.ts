@@ -1,9 +1,10 @@
 import { collection, type DocumentData, getDocs, query, where } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
 import type { UserRecord } from './types';
+import { MAX_IMAGE_SIZE_MB } from '~/constants';
 
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
-const MAX_RAW_IMAGE_SIZE = 25 * 1024 * 1024; // 25MB, pre-crop browser-side sanity cap
+const MAX_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+const MAX_RAW_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 export const WEBP_QUALITY = 0.95;
 
 export type ShowToast = (message: string, type: 'success' | 'warning' | 'error') => void;
@@ -68,7 +69,7 @@ export const validateImageFile = (
         return false;
     }
     if (file.size > MAX_IMAGE_SIZE) {
-        showToast(isEnglish ? 'Image must be under 5MB.' : '图片大小不能超过 5MB。', 'error');
+        showToast(isEnglish ? `Image must be under ${MAX_IMAGE_SIZE_MB}MB.` : `图片大小不能超过 ${MAX_IMAGE_SIZE_MB}MB。`, 'error');
         return false;
     }
     return true;

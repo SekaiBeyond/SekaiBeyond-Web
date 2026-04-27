@@ -224,7 +224,8 @@ function sanitizeDisplayText(value: string): string {
 }
 
 const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "badges/"];
-const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
+const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
 function validateStoragePath(path: string): void {
     if (path.includes("..") || path.includes("\0") || path.includes("//")) {
