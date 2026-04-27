@@ -44,7 +44,7 @@ export interface UserRecord {
     eventStaffEvents: string[];
 }
 
-export type Tab = 'users' | 'events' | 'badges' | 'tags' | 'records' | 'tools' | 'config';
+export type Tab = 'users' | 'events' | 'badges' | 'records' | 'tools' | 'config';
 
 export type RecordType =
     'group-assign'

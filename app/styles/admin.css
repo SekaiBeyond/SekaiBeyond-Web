@@ -1227,6 +1227,38 @@
     color: #999;
 }
 
+/* Collapsible section headers (Events tab) */
+.admin-section-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    background: none;
+    border: none;
+    margin-bottom: 14px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+}
+
+.admin-section-header-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-section-chevron {
+    font-size: 22px;
+    color: var(--color-text-muted);
+    transform: rotate(-90deg);
+    transition: transform 0.25s ease;
+    line-height: 1;
+}
+
+.admin-section-chevron-open {
+    transform: rotate(0deg);
+}
+
 .admin-tag-card {
     cursor: default;
 }

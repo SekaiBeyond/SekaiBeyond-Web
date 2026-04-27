@@ -51,6 +51,9 @@ export const AdminPage = () => {
     const [activeTab, setActiveTab] = useState<Tab>('users');
     const [upcomingInDetail, setUpcomingInDetail] = useState(false);
     const [eventsInDetail, setEventsInDetail] = useState(false);
+    const [upcomingOpen, setUpcomingOpen] = useState(true);
+    const [pastOpen, setPastOpen] = useState(true);
+    const [tagsOpen, setTagsOpen] = useState(true);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [badgeDefsError, setBadgeDefsError] = useState(false);
     const [toasts, setToasts] = useState<Toast[]>([]);
@@ -97,8 +100,10 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(firstEventId);
             }
         } else {
-            if (tab === 'events' || tab === 'badges' || tab === 'tags' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config') {
+            if (tab === 'events' || tab === 'badges' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config') {
                 setActiveTab(tab);
+            } else if (tab === 'tags') {
+                setActiveTab('events');
             } else if (tab === 'upcoming') {
                 setActiveTab('events');
             } else if (tab === 'policy') {
@@ -155,11 +160,13 @@ export const AdminPage = () => {
 
     const handleSelectEvent = useCallback((eventId: string) => {
         setActiveTab('events');
+        setPastOpen(true);
         pendingAction.current = {type: 'selectEvent', id: eventId};
     }, []);
 
     const handleSelectUpcomingEvent = useCallback((eventId: string) => {
         setActiveTab('events');
+        setUpcomingOpen(true);
         pendingAction.current = {type: 'selectUpcomingEvent', id: eventId};
     }, []);
 
@@ -252,14 +259,6 @@ export const AdminPage = () => {
                     )}
                     {!isEventStaffOnly && (
                         <button
-                            className={`admin-tab ${activeTab === 'tags' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('tags')}
-                        >
-                            {isEnglish ? 'Tags' : '标签'}
-                        </button>
-                    )}
-                    {!isEventStaffOnly && (
-                        <button
                             className={`admin-tab ${activeTab === 'config' ? 'admin-tab-active' : ''}`}
                             onClick={() => setActiveTab('config')}
                         >
@@ -300,37 +299,70 @@ export const AdminPage = () => {
                     <>
                         <div style={eventsInDetail ? {display: 'none'} : undefined}>
                             {!upcomingInDetail && (
-                                <h4 className="admin-badges-title">
-                                    {isEnglish ? 'Upcoming Events' : '活动预告'}
-                                </h4>
+                                <button
+                                    className="admin-section-header"
+                                    onClick={() => setUpcomingOpen(v => !v)}
+                                >
+                                    <span className="admin-section-header-title">
+                                        {isEnglish ? 'Upcoming Events' : '活动预告'}
+                                    </span>
+                                    <span
+                                        className={`admin-section-chevron${upcomingOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
+                                </button>
                             )}
-                            <UpcomingEventsTab
-                                ref={upcomingTabRef}
-                                upcomingEvents={scopedUpcomingEvents}
-                                refreshEvents={refreshUpcoming}
-                                refreshPastEvents={refreshEvents}
-                                tags={tags}
-                                showToast={showToast}
-                                readOnly={!isCoreStaffOrAbove}
-                                eventStaffEvents={profile.eventStaffEvents}
-                                onDetailChange={setUpcomingInDetail}
-                            />
+                            <div style={!upcomingOpen && !upcomingInDetail ? {display: 'none'} : undefined}>
+                                <UpcomingEventsTab
+                                    ref={upcomingTabRef}
+                                    upcomingEvents={scopedUpcomingEvents}
+                                    refreshEvents={refreshUpcoming}
+                                    refreshPastEvents={refreshEvents}
+                                    tags={tags}
+                                    showToast={showToast}
+                                    readOnly={!isCoreStaffOrAbove}
+                                    eventStaffEvents={profile.eventStaffEvents}
+                                    onDetailChange={setUpcomingInDetail}
+                                />
+                            </div>
                         </div>
                         {!isEventStaffOnly && (
                             <div style={upcomingInDetail ? {display: 'none'} : undefined}>
                                 {!eventsInDetail && (
-                                    <h4 className="admin-badges-title admin-section-mt">
-                                        {isEnglish ? 'Past Events' : '往期活动'}
-                                    </h4>
+                                    <button
+                                        className="admin-section-header admin-section-mt"
+                                        onClick={() => setPastOpen(v => !v)}
+                                    >
+                                        <span className="admin-section-header-title">
+                                            {isEnglish ? 'Past Events' : '往期活动'}
+                                        </span>
+                                        <span
+                                            className={`admin-section-chevron${pastOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
+                                    </button>
                                 )}
-                                <EventsTab
-                                    ref={eventsTabRef}
-                                    pastEvents={pastEvents}
-                                    refreshEvents={refreshEvents}
-                                    tags={tags}
-                                    showToast={showToast}
-                                    onDetailChange={setEventsInDetail}
-                                />
+                                <div style={!pastOpen && !eventsInDetail ? {display: 'none'} : undefined}>
+                                    <EventsTab
+                                        ref={eventsTabRef}
+                                        pastEvents={pastEvents}
+                                        refreshEvents={refreshEvents}
+                                        tags={tags}
+                                        showToast={showToast}
+                                        onDetailChange={setEventsInDetail}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        {!isEventStaffOnly && !upcomingInDetail && !eventsInDetail && (
+                            <div>
+                                <button
+                                    className="admin-section-header admin-section-mt"
+                                    onClick={() => setTagsOpen(v => !v)}
+                                >
+                                    <span className="admin-section-header-title">
+                                        {isEnglish ? 'Tags' : '标签'}
+                                    </span>
+                                    <span
+                                        className={`admin-section-chevron${tagsOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
+                                </button>
+                                {tagsOpen && <TagsTab tags={tags} refreshTags={refreshTags} showToast={showToast}/>}
                             </div>
                         )}
                     </>
@@ -352,10 +384,6 @@ export const AdminPage = () => {
                             showToast={showToast}
                         />
                     )
-                )}
-
-                {activeTab === 'tags' && !isEventStaffOnly && (
-                    <TagsTab tags={tags} refreshTags={refreshTags} showToast={showToast}/>
                 )}
 
                 {activeTab === 'records' && !isEventStaffOnly && (
