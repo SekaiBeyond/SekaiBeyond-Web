@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install root dependencies
@@ -51,3 +51,9 @@ jobs:
         run: npx -y firebase-tools deploy --non-interactive --config firebase.generated.json --project "$FIREBASE_PROJECT_ID"
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Firestore TTL Policies
+        run: npm run deploy:ttl
