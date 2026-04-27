@@ -508,7 +508,7 @@ export const ProfilePage = () => {
 
                 <div className="profile-header">
                     <div
-                        className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
+                        className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : isOwnProfile ? 'profile-avatar-visitor-hint' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
                         {!avatarError && displayedPhoto ? (
                             <img
                                 src={displayedPhoto}
@@ -565,6 +565,23 @@ export const ProfilePage = () => {
                                     onChange={handlePhotoSelect}
                                     hidden
                                 />
+                            </>
+                        )}
+                        {!canEdit && isOwnProfile && (
+                            <>
+                                <div className="profile-avatar-hint-overlay">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                         strokeLinecap="round" strokeLinejoin="round"
+                                         className="profile-avatar-hint-icon">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                    </svg>
+                                </div>
+                                <span className="profile-avatar-hint-tooltip">
+                                    {isEnglish
+                                        ? 'Visitors cannot set a profile photo. Become a member or staff to upload one.'
+                                        : '访客无法设置头像。成为成员或工作人员后即可上传。'}
+                                </span>
                             </>
                         )}
                     </div>

@@ -113,7 +113,7 @@ export const ImageCropModal = ({file, aspect, onConfirm, onCancel, showToast}: I
                 out.toBlob(b => resolve(b), 'image/webp', WEBP_QUALITY)
             );
             if (!blob) throw new Error('encode-failed');
-            const cropped = new File([blob], `crop-${Date.now()}.webp`, {type: 'image/webp'});
+            const cropped = new File([blob], `crop-${Date.now()}`, {type: blob.type});
             onConfirm(cropped);
         } catch {
             showToast(isEnglish ? 'Failed to process image.' : '处理图片失败。', 'error');

@@ -681,6 +681,57 @@
     background: #e03033;
 }
 
+.profile-avatar-visitor-hint {
+    cursor: default;
+}
+
+.profile-avatar-hint-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.profile-avatar-visitor-hint:hover .profile-avatar-hint-overlay {
+    opacity: 1;
+}
+
+.profile-avatar-hint-icon {
+    width: 26px;
+    height: 26px;
+    color: #fff;
+}
+
+.profile-avatar-hint-tooltip {
+    position: absolute;
+    bottom: -44px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 5px 9px;
+    border-radius: 6px;
+    white-space: normal;
+    width: max-content;
+    max-width: 180px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.profile-avatar-visitor-hint:hover .profile-avatar-hint-tooltip {
+    opacity: 1;
+}
+
 .profile-name-row {
     display: flex;
     align-items: center;

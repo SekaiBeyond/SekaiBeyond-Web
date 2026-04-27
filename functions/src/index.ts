@@ -673,8 +673,8 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("invalid-argument", "Missing data or contentType.");
     }
 
-    if (contentType !== "image/webp") {
-        throw new HttpsError("invalid-argument", "Only image/webp is allowed.");
+    if (!["image/webp", "image/jpeg", "image/png"].includes(contentType)) {
+        throw new HttpsError("invalid-argument", "Only image/webp, image/jpeg, or image/png are allowed.");
     }
 
     const buffer = Buffer.from(dataBase64, "base64");
