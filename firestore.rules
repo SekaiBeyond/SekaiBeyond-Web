@@ -50,6 +50,12 @@ service cloud.firestore {
                   && isCoreStaffOrAbove();
     }
 
+    // Staff claim codes — core-staff+ can read only; all mutations via Cloud Functions
+    match /staffClaimCodes/{codeId} {
+      allow read: if request.auth != null
+                  && isCoreStaffOrAbove();
+    }
+
     // Event labels — publicly readable; all writes via Cloud Functions
     match /eventLabels/{labelId} {
       allow read: if true;

@@ -534,6 +534,23 @@
     margin-top: 4px;
 }
 
+.admin-max-uses-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--color-text-light);
+    margin-top: 8px;
+}
+
+.admin-number-input {
+    width: 100px;
+    padding: 6px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    font-size: 14px;
+}
+
 /* Admin Responsive */
 @media (max-width: 600px) {
     .admin-search {

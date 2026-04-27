@@ -8,6 +8,7 @@ export interface BadgeCode {
     active: boolean;
     activeFrom: string | null;
     activeUntil: string | null;
+    maxUses?: number;
 }
 
 export interface BadgeActivationCode {

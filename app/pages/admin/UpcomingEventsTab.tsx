@@ -5,11 +5,14 @@ import {
     callArchiveUpcomingEvent,
     callCancelUpcomingEventDeletion,
     callGenerateEventCode,
+    callGenerateStaffCode,
     callRequestUpcomingEventDeletion,
     callSaveClaimCodeTimeWindow,
+    callSaveStaffCodeTimeWindow,
     callSaveUpcomingEvent,
     callSetUpcomingEventPublished,
     callToggleClaimCodeActive,
+    callToggleStaffCodeActive,
     callUploadAdminImage,
     functionsErrorCode,
     getFirebaseDb,
@@ -102,6 +105,11 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [codeFrom, setCodeFrom] = useState('');
     const [codeUntil, setCodeUntil] = useState('');
     const [generatingCode, setGeneratingCode] = useState(false);
+    const [staffCode, setStaffCode] = useState<BadgeCode | null>(null);
+    const [staffCodeFrom, setStaffCodeFrom] = useState('');
+    const [staffCodeUntil, setStaffCodeUntil] = useState('');
+    const [staffCodeMaxUses, setStaffCodeMaxUses] = useState(0);
+    const [generatingStaffCode, setGeneratingStaffCode] = useState(false);
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
     const [searchingAttendees, setSearchingAttendees] = useState(false);
     const [staffCount, setStaffCount] = useState<number | null>(null);
@@ -186,6 +194,93 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         }
     };
 
+    const loadStaffCode = async (eventId: string) => {
+        const db = getFirebaseDb();
+        const codesRef = collection(db, 'staffClaimCodes');
+        const q = query(codesRef, where('eventId', '==', eventId));
+        const snapshot = await getDocs(q);
+        const codes: BadgeCode[] = snapshot.docs.map(docSnap => {
+            const data = docSnap.data();
+            return {
+                id: docSnap.id,
+                code: data.code,
+                eventId: data.eventId ?? '',
+                active: data.active ?? true,
+                activeFrom: data.activeFrom ?? null,
+                activeUntil: data.activeUntil ?? null,
+                maxUses: data.maxUses ?? 0,
+            };
+        });
+        const active = codes.find(c => c.active);
+        const picked = active ?? codes[0] ?? null;
+        setStaffCode(picked);
+        setStaffCodeFrom(picked?.activeFrom ?? '');
+        setStaffCodeUntil(picked?.activeUntil ?? '');
+        setStaffCodeMaxUses(picked?.maxUses ?? 0);
+    };
+
+    const generateStaffCodeFn = async (eventId: string) => {
+        setGeneratingStaffCode(true);
+        try {
+            const result = await callGenerateStaffCode({eventId});
+            const {id, code} = result.data;
+            setStaffCode({id, code, eventId, active: true, activeFrom: null, activeUntil: null});
+            setStaffCodeFrom('');
+            setStaffCodeUntil('');
+            showToast(isEnglish ? 'Staff code generated.' : '工作人员码已生成。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to generate staff code.' : '生成工作人员码失败。', 'error');
+        } finally {
+            setGeneratingStaffCode(false);
+        }
+    };
+
+    const toggleStaffCodeActiveFn = async () => {
+        if (!staffCode) return;
+        const newActive = !staffCode.active;
+        try {
+            await callToggleStaffCodeActive({codeId: staffCode.id, active: newActive});
+            setStaffCode({...staffCode, active: newActive});
+            showToast(
+                newActive
+                    ? (isEnglish ? 'Staff code enabled.' : '工作人员码已启用。')
+                    : (isEnglish ? 'Staff code disabled.' : '工作人员码已停用。'),
+                newActive ? 'success' : 'warning',
+            );
+        } catch {
+            showToast(isEnglish ? 'Failed to update staff code status.' : '更新工作人员码状态失败。', 'error');
+        }
+    };
+
+    const saveStaffCodeTimeWindowFn = async () => {
+        if (!staffCode) return;
+        const activeFrom = staffCodeFrom || null;
+        const activeUntil = staffCodeUntil || null;
+        try {
+            await callSaveStaffCodeTimeWindow({codeId: staffCode.id, activeFrom, activeUntil});
+            setStaffCode({...staffCode, activeFrom, activeUntil});
+            showToast(isEnglish ? 'Time window saved.' : '时间窗口已保存。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to save time window.' : '保存时间窗口失败。', 'error');
+        }
+    };
+
+    const saveStaffCodeMaxUsesFn = async () => {
+        if (!staffCode) return;
+        try {
+            await callSaveStaffCodeTimeWindow({
+                codeId: staffCode.id,
+                activeFrom: staffCode.activeFrom,
+                activeUntil: staffCode.activeUntil,
+                maxUses: staffCodeMaxUses
+            });
+            setStaffCode({...staffCode, maxUses: staffCodeMaxUses});
+            showToast(isEnglish ? 'Max uses saved.' : '最大次数已保存。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to save max uses.' : '保存最大次数失败。', 'error');
+        }
+    };
+
     const selectEvent = async (eventId: string) => {
         setSelectedEvent(eventId);
         setShowArchive(false);
@@ -193,6 +288,10 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         const evt = upcomingEvents.find(e => e.id === eventId);
         setEventSubTab(evt?.paid ? 'tickets' : 'codes');
         setEventCode(null);
+        setStaffCode(null);
+        setStaffCodeFrom('');
+        setStaffCodeUntil('');
+        setStaffCodeMaxUses(0);
         setEventAttendees([]);
         setStaffCount(null);
         void fetchEventStaffCount(eventId)
@@ -200,6 +299,10 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             .catch(() => {
                 /* Non-fatal — count badge just won't appear. */
             });
+        void loadStaffCode(eventId).catch((err) => {
+            console.error('Failed to load staff code:', err);
+            showToast(isEnglish ? 'Failed to load staff code.' : '加载工作人员码失败。', 'error');
+        });
         // Paid events use tickets, not check-in codes — skip the load.
         if (evt?.paid) return;
         try {
@@ -897,11 +1000,128 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             )}
 
                             {eventSubTab === 'staff' && !readOnly && (
-                                <EventStaffSection
-                                    eventId={selectedEvt.id}
-                                    showToast={showToast}
-                                    onCountChange={setStaffCount}
-                                />
+                                <>
+                                    <div className="admin-codes-section">
+                                        <p className="admin-section-label">
+                                            {isEnglish ? 'Staff Claim Code' : '工作人员码'}
+                                        </p>
+                                        {!staffCode ? (
+                                            <>
+                                                <p className="admin-no-results">
+                                                    {isEnglish ? 'No staff code yet.' : '暂无工作人员码。'}
+                                                </p>
+                                                <button
+                                                    className="admin-generate-btn"
+                                                    onClick={() => generateStaffCodeFn(selectedEvent!)}
+                                                    disabled={generatingStaffCode}
+                                                >
+                                                    {generatingStaffCode
+                                                        ? (isEnglish ? 'Generating...' : '生成中...')
+                                                        : (isEnglish ? '+ Generate Staff Code' : '+ 生成工作人员码')}
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <div className="admin-single-code">
+                                                <div className="admin-code-url">
+                                                    <input
+                                                        readOnly
+                                                        value={staffCode.code}
+                                                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                                                        className="admin-code-input"
+                                                    />
+                                                    <button
+                                                        className="admin-copy-btn"
+                                                        onClick={() => navigator.clipboard.writeText(staffCode.code)}
+                                                    >
+                                                        {isEnglish ? 'Copy' : '复制'}
+                                                    </button>
+                                                </div>
+                                                <span
+                                                    className={staffCode.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
+                                                    {staffCode.active
+                                                        ? (isEnglish ? 'Active' : '启用')
+                                                        : (isEnglish ? 'Disabled' : '已停用')}
+                                                </span>
+                                                <div className="admin-code-time-inputs">
+                                                    <label>
+                                                        <span>{isEnglish ? 'Active from' : '开始时间'}</span>
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={staffCodeFrom}
+                                                            onChange={(e) => setStaffCodeFrom(e.target.value)}
+                                                            className="admin-datetime-input"
+                                                        />
+                                                    </label>
+                                                    <label>
+                                                        <span>{isEnglish ? 'Active until' : '结束时间'}</span>
+                                                        <input
+                                                            type="datetime-local"
+                                                            value={staffCodeUntil}
+                                                            onChange={(e) => setStaffCodeUntil(e.target.value)}
+                                                            className="admin-datetime-input"
+                                                        />
+                                                    </label>
+                                                    <button
+                                                        className="admin-toggle-btn admin-toggle-save"
+                                                        onClick={saveStaffCodeTimeWindowFn}
+                                                        disabled={staffCodeFrom === (staffCode.activeFrom ?? '') && staffCodeUntil === (staffCode.activeUntil ?? '')}
+                                                    >
+                                                        {isEnglish ? 'Save' : '保存'}
+                                                    </button>
+                                                </div>
+                                                <p className="admin-time-hint">
+                                                    {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
+                                                </p>
+                                                <label className="admin-max-uses-label">
+                                                    <span>{isEnglish ? 'Max uses (0 = unlimited)' : '最大使用次数（0 = 不限）'}</span>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={staffCodeMaxUses}
+                                                        onChange={(e) => setStaffCodeMaxUses(Number(e.target.value))}
+                                                        className="admin-number-input"
+                                                    />
+                                                </label>
+                                                <button
+                                                    className="admin-toggle-btn admin-toggle-save"
+                                                    onClick={saveStaffCodeMaxUsesFn}
+                                                    disabled={staffCodeMaxUses === (staffCode.maxUses ?? 0)}
+                                                >
+                                                    {isEnglish ? 'Save Max Uses' : '保存最大次数'}
+                                                </button>
+                                                <div className="admin-single-code-actions">
+                                                    <button
+                                                        className={`admin-toggle-btn ${staffCode.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                                        onClick={toggleStaffCodeActiveFn}
+                                                    >
+                                                        {staffCode.active
+                                                            ? (isEnglish ? 'Disable' : '停用')
+                                                            : (isEnglish ? 'Enable' : '启用')}
+                                                    </button>
+                                                    <button
+                                                        className="admin-toggle-btn admin-toggle-revoke"
+                                                        onClick={() => {
+                                                            const msg = isEnglish
+                                                                ? 'This will deactivate the current staff code and generate a new one. Users with the old code will no longer be able to join as staff. Continue?'
+                                                                : '此操作将停用当前工作人员码并生成新码。持有旧码的用户将无法再通过该码加入。是否继续？';
+                                                            if (window.confirm(msg)) generateStaffCodeFn(selectedEvent!).then();
+                                                        }}
+                                                        disabled={generatingStaffCode}
+                                                    >
+                                                        {generatingStaffCode
+                                                            ? (isEnglish ? 'Regenerating...' : '重新生成中...')
+                                                            : (isEnglish ? 'Regenerate' : '重新生成')}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <EventStaffSection
+                                        eventId={selectedEvt.id}
+                                        showToast={showToast}
+                                        onCountChange={setStaffCount}
+                                    />
+                                </>
                             )}
 
                             {eventSubTab === 'tickets' && selectedEvt.paid && (

@@ -252,6 +252,35 @@ export const callToggleBadgeCodeActive = (data: {codeId: string; active: boolean
 export const callDeleteBadgeActivationCode = (data: {codeId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteBadgeActivationCode')(data);
 
+export const callGenerateStaffCode = (data: {
+    eventId: string;
+    activeFrom?: string;
+    activeUntil?: string;
+    maxUses?: number;
+}) =>
+    httpsCallable<typeof data, {id: string; code: string}>(
+        getFunctions(), 'generateStaffCode'
+    )(data);
+
+export const callClaimStaffCode = (data: {code: string}) =>
+    httpsCallable<{code: string}, {
+        eventId: string;
+        eventTitle: string;
+        eventTitleCn: string;
+        eventPoster: string;
+    }>(getFunctions(), 'claimStaffCode')(data);
+
+export const callToggleStaffCodeActive = (data: {codeId: string; active: boolean}) =>
+    httpsCallable<typeof data, {active: boolean}>(getFunctions(), 'toggleStaffCodeActive')(data);
+
+export const callSaveStaffCodeTimeWindow = (data: {
+    codeId: string;
+    activeFrom?: string | null;
+    activeUntil?: string | null;
+    maxUses?: number;
+}) =>
+    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveStaffCodeTimeWindow')(data);
+
 export const callSaveTag = (data: {tagId?: string; name: string; nameCn: string}) =>
     httpsCallable<typeof data, {tagId: string}>(getFunctions(), 'saveTag')(data);
 
