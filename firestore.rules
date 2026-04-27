@@ -19,10 +19,15 @@ service cloud.firestore {
 
     match /users/{userId} {
       // Users can read their own profile; admins can read any profile.
+      // Event-staff can read profiles of users who share at least one staff event with them
+      // (needed for the event staff list in the admin panel).
       // Other users' public data is served via the getPublicProfile Cloud Function
       // to avoid exposing email to all authenticated users.
       allow read: if request.auth != null
-                  && (request.auth.uid == userId || isCoreStaffOrAbove());
+                  && (request.auth.uid == userId
+                      || isCoreStaffOrAbove()
+                      || (callerEventStaffEvents().size() > 0
+                          && resource.data.get('eventStaffEvents', []).hasAny(callerEventStaffEvents())));
 
       // All user mutations (displayName, photoURL, badges, attendedEvents, group) via Cloud Functions
     }
@@ -81,11 +86,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Upcoming events — public can read only published ones; staff can read all.
+    // Upcoming events — public can read only published ones; staff can read all;
+    // event-staff can read events they are assigned to.
     // All writes via Cloud Functions.
     match /upcomingEvents/{eventId} {
       allow read: if resource.data.published == true
-                  || (request.auth != null && isCoreStaffOrAbove());
+                  || (request.auth != null && isCoreStaffOrAbove())
+                  || (request.auth != null && isEventStaffFor(eventId));
 
       // Paid event subcollections
       match /attendees/{attendeeId} {

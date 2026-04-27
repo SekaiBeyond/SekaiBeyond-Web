@@ -162,6 +162,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
 
     const tabVisible = (t: TicketsSection) => {
         if (t === 'scan') return canScan;
+        if (t === 'import' || t === 'template' || t === 'send') return !readOnly;
         return true;
     };
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 
 export interface UpcomingEvent {
@@ -229,6 +229,49 @@ export function useAllUpcomingEvents(): {
     const refresh = useCallback(async () => {
         await refreshAllUpcomingEvents();
     }, []);
+
+    return {upcomingEvents, loading, refresh};
+}
+
+// ---------- Per-ID fetch (event-staff) ----------
+
+/** Fetch specific upcoming events by ID. Safe for event-staff users who lack collection-level read access. */
+export function useUpcomingEventsByIds(ids: string[]): {
+    upcomingEvents: UpcomingEvent[];
+    loading: boolean;
+    refresh: () => Promise<void>;
+} {
+    const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
+    const [loading, setLoading] = useState(ids.length > 0);
+    const idsKey = ids.join(',');
+
+    const fetchById = useCallback(async (eventIds: string[]) => {
+        if (eventIds.length === 0) {
+            setUpcomingEvents([]);
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        try {
+            const db = getFirebaseDb();
+            const snaps = await Promise.all(eventIds.map(id => getDoc(doc(db, 'upcomingEvents', id))));
+            setUpcomingEvents(snaps.filter(s => s.exists()).map(mapDoc));
+        } catch (err) {
+            console.error('[useUpcomingEventsByIds]', err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchById(ids);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [idsKey]);
+
+    const refresh = useCallback(async () => {
+        await fetchById(ids);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [idsKey]);
 
     return {upcomingEvents, loading, refresh};
 }

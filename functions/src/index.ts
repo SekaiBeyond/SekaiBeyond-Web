@@ -1819,6 +1819,22 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     }
     if (deleteOps.length > 0) await commitInChunks(deleteOps);
 
+    // ---- Phase D: remove event from assigned users' eventStaffEvents ----
+    // Once archived, event staff no longer need admin panel access for this event.
+    try {
+        const staffUsersSnap = await db.collection("users")
+            .where("eventStaffEvents", "array-contains", eventId)
+            .get();
+        if (!staffUsersSnap.empty) {
+            const cleanupOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = staffUsersSnap.docs
+                .map(d => (b: FirebaseFirestore.WriteBatch) =>
+                    b.update(d.ref, {eventStaffEvents: FieldValue.arrayRemove(eventId)}));
+            await commitInChunks(cleanupOps);
+        }
+    } catch (err) {
+        console.error(`archiveUpcomingEvent: eventStaffEvents cleanup failed for ${eventId}`, err);
+    }
+
     return {pastEventId};
 });
 

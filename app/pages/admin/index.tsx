@@ -6,7 +6,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { usePastEvents } from '~/lib/pastEvents';
-import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
+import { useAllUpcomingEvents, useUpcomingEventsByIds } from '~/lib/upcomingEvents';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTags } from '~/lib/tags';
 import type { BadgeDef, Tab } from './types';
@@ -33,20 +33,24 @@ export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
     const {pastEvents: rawPastEvents, refresh: refreshEvents} = usePastEvents();
-    const {upcomingEvents, refresh: refreshUpcoming} = useAllUpcomingEvents();
+    const {upcomingEvents: allUpcomingEvents, refresh: refreshAllUpcoming} = useAllUpcomingEvents();
+    // Per-ID fetch for event-staff: avoids collection-level permission errors.
+    const staffEventIds = profile?.eventStaffEvents ?? [];
+    const {upcomingEvents: staffUpcomingEvents, refresh: refreshStaffUpcoming} = useUpcomingEventsByIds(staffEventIds);
     const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => b.date.localeCompare(a.date)), [rawPastEvents]);
 
     const isCoreStaffOrAbove = !!profile && hasPermission(profile.group, 'core-staff');
     // Event-staff is a per-event tag, independent of the global user group —
     // any user with eventStaffEvents can access the scanner UI for those events.
+    // Access expires naturally: archiveUpcomingEvent removes the event from each
+    // assigned user's eventStaffEvents, so the array empties once all events are done.
     const isEventStaffOnly = !!profile
         && !isCoreStaffOrAbove
         && profile.eventStaffEvents.length > 0;
 
-    const scopedUpcomingEvents = useMemo(() => {
-        if (!isEventStaffOnly || !profile) return upcomingEvents;
-        return upcomingEvents.filter(e => profile.eventStaffEvents.includes(e.id));
-    }, [upcomingEvents, isEventStaffOnly, profile]);
+    // Core-staff sees all events; event-staff only sees their assigned ones (fetched by ID).
+    const upcomingEvents = isCoreStaffOrAbove ? allUpcomingEvents : staffUpcomingEvents;
+    const refreshUpcoming = isCoreStaffOrAbove ? refreshAllUpcoming : refreshStaffUpcoming;
 
     const [activeTab, setActiveTab] = useState<Tab>('users');
     const [upcomingInDetail, setUpcomingInDetail] = useState(false);
@@ -313,7 +317,7 @@ export const AdminPage = () => {
                             <div style={!upcomingOpen && !upcomingInDetail ? {display: 'none'} : undefined}>
                                 <UpcomingEventsTab
                                     ref={upcomingTabRef}
-                                    upcomingEvents={scopedUpcomingEvents}
+                                    upcomingEvents={upcomingEvents}
                                     refreshEvents={refreshUpcoming}
                                     refreshPastEvents={refreshEvents}
                                     tags={tags}

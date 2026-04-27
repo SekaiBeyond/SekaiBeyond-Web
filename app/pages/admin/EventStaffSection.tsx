@@ -8,6 +8,7 @@ import type { UserRecord } from './types';
 interface EventStaffSectionProps {
     eventId: string;
     showToast: ShowToast;
+    readOnly?: boolean;
     onCountChange?: (count: number) => void;
     onAttendeeRemoved?: () => void;
 }
@@ -17,6 +18,7 @@ const SEARCH_LIMIT = 8;
 export function EventStaffSection({
                                       eventId,
                                       showToast,
+                                      readOnly = false,
                                       onCountChange,
                                       onAttendeeRemoved,
                                   }: EventStaffSectionProps) {
@@ -213,22 +215,24 @@ export function EventStaffSection({
                                 <div className="admin-user-name">{u.displayName}</div>
                                 <div className="admin-user-email">{u.email}</div>
                             </div>
-                            <button
-                                className="admin-toggle-btn admin-toggle-revoke"
-                                onClick={() => removeStaff(u)}
-                                disabled={busyUid === u.uid}
-                            >
-                                {busyUid === u.uid
-                                    ? (isEnglish ? 'Removing...' : '撤销中...')
-                                    : (isEnglish ? 'Remove' : '撤销')}
-                            </button>
+                            {!readOnly && (
+                                <button
+                                    className="admin-toggle-btn admin-toggle-revoke"
+                                    onClick={() => removeStaff(u)}
+                                    disabled={busyUid === u.uid}
+                                >
+                                    {busyUid === u.uid
+                                        ? (isEnglish ? 'Removing...' : '撤销中...')
+                                        : (isEnglish ? 'Remove' : '撤销')}
+                                </button>
+                            )}
                         </div>
                     ))}
                 </>
             )}
 
-            <div className="admin-event-staff-add"
-                 style={{marginTop: 16, flexDirection: 'column', alignItems: 'stretch', gap: 8}}>
+            {!readOnly && <div className="admin-event-staff-add"
+                               style={{marginTop: 16, flexDirection: 'column', alignItems: 'stretch', gap: 8}}>
                 <div className="admin-search">
                     <input
                         type="text"
@@ -277,7 +281,7 @@ export function EventStaffSection({
                         </button>
                     </div>
                 ))}
-            </div>
+            </div>}
         </div>
     );
 }

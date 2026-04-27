@@ -299,10 +299,12 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             .catch(() => {
                 /* Non-fatal — count badge just won't appear. */
             });
-        void loadStaffCode(eventId).catch((err) => {
-            console.error('Failed to load staff code:', err);
-            showToast(isEnglish ? 'Failed to load staff code.' : '加载工作人员码失败。', 'error');
-        });
+        if (!readOnly) {
+            void loadStaffCode(eventId).catch((err) => {
+                console.error('Failed to load staff code:', err);
+                showToast(isEnglish ? 'Failed to load staff code.' : '加载工作人员码失败。', 'error');
+            });
+        }
         // Paid events use tickets, not check-in codes — skip the load.
         if (evt?.paid) return;
         try {
@@ -658,11 +660,11 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 </button>
                             </div>
                         </div>
-                    ) : (
+                    ) : !readOnly ? (
                         <button className="admin-generate-btn admin-section-mb" onClick={openCreate}>
                             {isEnglish ? '+ New Upcoming Event' : '+ 新建活动预告'}
                         </button>
-                    )}
+                    ) : null}
                     <div className="admin-event-grid">
                         {upcomingEvents.map((event) => (
                             <button
@@ -875,17 +877,15 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         {isEnglish ? 'Tickets' : '门票'}
                                     </button>
                                 )}
-                                {!readOnly && (
-                                    <button
-                                        className={`admin-sub-tab ${eventSubTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
-                                        onClick={() => setEventSubTab('staff')}
-                                    >
-                                        {isEnglish ? 'Staff' : '工作人员'}
-                                        {staffCount != null && staffCount > 0 && (
-                                            <span className="admin-sub-tab-count">{staffCount}</span>
-                                        )}
-                                    </button>
-                                )}
+                                <button
+                                    className={`admin-sub-tab ${eventSubTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
+                                    onClick={() => setEventSubTab('staff')}
+                                >
+                                    {isEnglish ? 'Staff' : '工作人员'}
+                                    {staffCount != null && staffCount > 0 && (
+                                        <span className="admin-sub-tab-count">{staffCount}</span>
+                                    )}
+                                </button>
                             </div>
 
                             {eventSubTab === 'codes' && !selectedEvt.paid && (
@@ -1000,128 +1000,129 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             )}
 
                             {eventSubTab === 'staff' && !readOnly && (
-                                <>
-                                    <div className="admin-codes-section">
-                                        <p className="admin-section-label">
-                                            {isEnglish ? 'Staff Claim Code' : '工作人员码'}
-                                        </p>
-                                        {!staffCode ? (
-                                            <>
-                                                <p className="admin-no-results">
-                                                    {isEnglish ? 'No staff code yet.' : '暂无工作人员码。'}
-                                                </p>
+                                <div className="admin-codes-section">
+                                    <p className="admin-section-label">
+                                        {isEnglish ? 'Staff Claim Code' : '工作人员码'}
+                                    </p>
+                                    {!staffCode ? (
+                                        <>
+                                            <p className="admin-no-results">
+                                                {isEnglish ? 'No staff code yet.' : '暂无工作人员码。'}
+                                            </p>
+                                            <button
+                                                className="admin-generate-btn"
+                                                onClick={() => generateStaffCodeFn(selectedEvent!)}
+                                                disabled={generatingStaffCode}
+                                            >
+                                                {generatingStaffCode
+                                                    ? (isEnglish ? 'Generating...' : '生成中...')
+                                                    : (isEnglish ? '+ Generate Staff Code' : '+ 生成工作人员码')}
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <div className="admin-single-code">
+                                            <div className="admin-code-url">
+                                                <input
+                                                    readOnly
+                                                    value={staffCode.code}
+                                                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                                                    className="admin-code-input"
+                                                />
                                                 <button
-                                                    className="admin-generate-btn"
-                                                    onClick={() => generateStaffCodeFn(selectedEvent!)}
-                                                    disabled={generatingStaffCode}
+                                                    className="admin-copy-btn"
+                                                    onClick={() => navigator.clipboard.writeText(staffCode.code)}
                                                 >
-                                                    {generatingStaffCode
-                                                        ? (isEnglish ? 'Generating...' : '生成中...')
-                                                        : (isEnglish ? '+ Generate Staff Code' : '+ 生成工作人员码')}
+                                                    {isEnglish ? 'Copy' : '复制'}
                                                 </button>
-                                            </>
-                                        ) : (
-                                            <div className="admin-single-code">
-                                                <div className="admin-code-url">
-                                                    <input
-                                                        readOnly
-                                                        value={staffCode.code}
-                                                        onClick={(e) => (e.target as HTMLInputElement).select()}
-                                                        className="admin-code-input"
-                                                    />
-                                                    <button
-                                                        className="admin-copy-btn"
-                                                        onClick={() => navigator.clipboard.writeText(staffCode.code)}
-                                                    >
-                                                        {isEnglish ? 'Copy' : '复制'}
-                                                    </button>
-                                                </div>
-                                                <span
-                                                    className={staffCode.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
+                                            </div>
+                                            <span
+                                                className={staffCode.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
                                                     {staffCode.active
                                                         ? (isEnglish ? 'Active' : '启用')
                                                         : (isEnglish ? 'Disabled' : '已停用')}
                                                 </span>
-                                                <div className="admin-code-time-inputs">
-                                                    <label>
-                                                        <span>{isEnglish ? 'Active from' : '开始时间'}</span>
-                                                        <input
-                                                            type="datetime-local"
-                                                            value={staffCodeFrom}
-                                                            onChange={(e) => setStaffCodeFrom(e.target.value)}
-                                                            className="admin-datetime-input"
-                                                        />
-                                                    </label>
-                                                    <label>
-                                                        <span>{isEnglish ? 'Active until' : '结束时间'}</span>
-                                                        <input
-                                                            type="datetime-local"
-                                                            value={staffCodeUntil}
-                                                            onChange={(e) => setStaffCodeUntil(e.target.value)}
-                                                            className="admin-datetime-input"
-                                                        />
-                                                    </label>
-                                                    <button
-                                                        className="admin-toggle-btn admin-toggle-save"
-                                                        onClick={saveStaffCodeTimeWindowFn}
-                                                        disabled={staffCodeFrom === (staffCode.activeFrom ?? '') && staffCodeUntil === (staffCode.activeUntil ?? '')}
-                                                    >
-                                                        {isEnglish ? 'Save' : '保存'}
-                                                    </button>
-                                                </div>
-                                                <p className="admin-time-hint">
-                                                    {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
-                                                </p>
-                                                <label className="admin-max-uses-label">
-                                                    <span>{isEnglish ? 'Max uses (0 = unlimited)' : '最大使用次数（0 = 不限）'}</span>
+                                            <div className="admin-code-time-inputs">
+                                                <label>
+                                                    <span>{isEnglish ? 'Active from' : '开始时间'}</span>
                                                     <input
-                                                        type="number"
-                                                        min="0"
-                                                        value={staffCodeMaxUses}
-                                                        onChange={(e) => setStaffCodeMaxUses(Number(e.target.value))}
-                                                        className="admin-number-input"
+                                                        type="datetime-local"
+                                                        value={staffCodeFrom}
+                                                        onChange={(e) => setStaffCodeFrom(e.target.value)}
+                                                        className="admin-datetime-input"
+                                                    />
+                                                </label>
+                                                <label>
+                                                    <span>{isEnglish ? 'Active until' : '结束时间'}</span>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={staffCodeUntil}
+                                                        onChange={(e) => setStaffCodeUntil(e.target.value)}
+                                                        className="admin-datetime-input"
                                                     />
                                                 </label>
                                                 <button
                                                     className="admin-toggle-btn admin-toggle-save"
-                                                    onClick={saveStaffCodeMaxUsesFn}
-                                                    disabled={staffCodeMaxUses === (staffCode.maxUses ?? 0)}
+                                                    onClick={saveStaffCodeTimeWindowFn}
+                                                    disabled={staffCodeFrom === (staffCode.activeFrom ?? '') && staffCodeUntil === (staffCode.activeUntil ?? '')}
                                                 >
-                                                    {isEnglish ? 'Save Max Uses' : '保存最大次数'}
+                                                    {isEnglish ? 'Save' : '保存'}
                                                 </button>
-                                                <div className="admin-single-code-actions">
-                                                    <button
-                                                        className={`admin-toggle-btn ${staffCode.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                                        onClick={toggleStaffCodeActiveFn}
-                                                    >
-                                                        {staffCode.active
-                                                            ? (isEnglish ? 'Disable' : '停用')
-                                                            : (isEnglish ? 'Enable' : '启用')}
-                                                    </button>
-                                                    <button
-                                                        className="admin-toggle-btn admin-toggle-revoke"
-                                                        onClick={() => {
-                                                            const msg = isEnglish
-                                                                ? 'This will deactivate the current staff code and generate a new one. Users with the old code will no longer be able to join as staff. Continue?'
-                                                                : '此操作将停用当前工作人员码并生成新码。持有旧码的用户将无法再通过该码加入。是否继续？';
-                                                            if (window.confirm(msg)) generateStaffCodeFn(selectedEvent!).then();
-                                                        }}
-                                                        disabled={generatingStaffCode}
-                                                    >
-                                                        {generatingStaffCode
-                                                            ? (isEnglish ? 'Regenerating...' : '重新生成中...')
-                                                            : (isEnglish ? 'Regenerate' : '重新生成')}
-                                                    </button>
-                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                    <EventStaffSection
-                                        eventId={selectedEvt.id}
-                                        showToast={showToast}
-                                        onCountChange={setStaffCount}
-                                    />
-                                </>
+                                            <p className="admin-time-hint">
+                                                {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
+                                            </p>
+                                            <label className="admin-max-uses-label">
+                                                <span>{isEnglish ? 'Max uses (0 = unlimited)' : '最大使用次数（0 = 不限）'}</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={staffCodeMaxUses}
+                                                    onChange={(e) => setStaffCodeMaxUses(Number(e.target.value))}
+                                                    className="admin-number-input"
+                                                />
+                                            </label>
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-save"
+                                                onClick={saveStaffCodeMaxUsesFn}
+                                                disabled={staffCodeMaxUses === (staffCode.maxUses ?? 0)}
+                                            >
+                                                {isEnglish ? 'Save Max Uses' : '保存最大次数'}
+                                            </button>
+                                            <div className="admin-single-code-actions">
+                                                <button
+                                                    className={`admin-toggle-btn ${staffCode.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                                    onClick={toggleStaffCodeActiveFn}
+                                                >
+                                                    {staffCode.active
+                                                        ? (isEnglish ? 'Disable' : '停用')
+                                                        : (isEnglish ? 'Enable' : '启用')}
+                                                </button>
+                                                <button
+                                                    className="admin-toggle-btn admin-toggle-revoke"
+                                                    onClick={() => {
+                                                        const msg = isEnglish
+                                                            ? 'This will deactivate the current staff code and generate a new one. Users with the old code will no longer be able to join as staff. Continue?'
+                                                            : '此操作将停用当前工作人员码并生成新码。持有旧码的用户将无法再通过该码加入。是否继续？';
+                                                        if (window.confirm(msg)) generateStaffCodeFn(selectedEvent!).then();
+                                                    }}
+                                                    disabled={generatingStaffCode}
+                                                >
+                                                    {generatingStaffCode
+                                                        ? (isEnglish ? 'Regenerating...' : '重新生成中...')
+                                                        : (isEnglish ? 'Regenerate' : '重新生成')}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {eventSubTab === 'staff' && (
+                                <EventStaffSection
+                                    eventId={selectedEvt.id}
+                                    showToast={showToast}
+                                    readOnly={readOnly}
+                                    onCountChange={setStaffCount}
+                                />
                             )}
 
                             {eventSubTab === 'tickets' && selectedEvt.paid && (
