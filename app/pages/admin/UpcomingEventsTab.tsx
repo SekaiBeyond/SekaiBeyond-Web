@@ -742,64 +742,68 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     </p>
                                 </div>
                             </div>
-                            <div className="admin-form-actions admin-section-mb">
-                                <button
-                                    className="admin-toggle-btn admin-toggle-edit"
-                                    onClick={() => {
-                                        setSelectedEvent(null);
-                                        openEdit(selectedEvt);
-                                    }}
-                                >
-                                    {isEnglish ? 'Edit Event' : '编辑活动'}
-                                </button>
-                                <button
-                                    className={`admin-toggle-btn ${selectedEvt.published ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                    onClick={() => togglePublish(selectedEvt)}
-                                >
-                                    {selectedEvt.published
-                                        ? (isEnglish ? 'Unpublish' : '取消发布')
-                                        : (isEnglish ? 'Publish' : '发布')}
-                                </button>
-                                {selectedEvt.deleteAt ? (
-                                    <button
-                                        className="admin-toggle-btn admin-toggle-grant"
-                                        onClick={() => cancelDeleteEvent(selectedEvt)}
-                                        disabled={deletionBusyId === selectedEvt.id}
-                                    >
-                                        {deletionBusyId === selectedEvt.id
-                                            ? (isEnglish ? 'Working...' : '处理中...')
-                                            : (isEnglish ? 'Cancel deletion' : '取消删除')}
-                                    </button>
-                                ) : (
-                                    <button
-                                        className="admin-toggle-btn admin-toggle-revoke"
-                                        onClick={() => requestDeleteEvent(selectedEvt)}
-                                        disabled={deletionBusyId === selectedEvt.id}
-                                    >
-                                        {deletionBusyId === selectedEvt.id
-                                            ? (isEnglish ? 'Working...' : '处理中...')
-                                            : (isEnglish ? 'Delete Event' : '删除活动')}
-                                    </button>
-                                )}
-                                <button
-                                    className="admin-toggle-btn admin-toggle-archive"
-                                    onClick={() => setShowArchive(!showArchive)}
-                                >
-                                    {isEnglish ? 'Archive to Past Events' : '归档到往期活动'}
-                                </button>
-                            </div>
-                            {selectedEvt.deleteAt && (
-                                <p className="admin-helper-text">
-                                    {isEnglish
-                                        ? `Pending deletion — scheduled around ${selectedEvt.deleteAt.toLocaleString('en-US', {
-                                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                                        })}.`
-                                        : `待删除 — 预计于 ${selectedEvt.deleteAt.toLocaleString('zh-CN', {
-                                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                                        })} 前后执行。`}
-                                </p>
+                            {!readOnly && (
+                                <>
+                                    <div className="admin-form-actions admin-section-mb">
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-edit"
+                                            onClick={() => {
+                                                setSelectedEvent(null);
+                                                openEdit(selectedEvt);
+                                            }}
+                                        >
+                                            {isEnglish ? 'Edit Event' : '编辑活动'}
+                                        </button>
+                                        <button
+                                            className={`admin-toggle-btn ${selectedEvt.published ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                            onClick={() => togglePublish(selectedEvt)}
+                                        >
+                                            {selectedEvt.published
+                                                ? (isEnglish ? 'Unpublish' : '取消发布')
+                                                : (isEnglish ? 'Publish' : '发布')}
+                                        </button>
+                                        {selectedEvt.deleteAt ? (
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-grant"
+                                                onClick={() => cancelDeleteEvent(selectedEvt)}
+                                                disabled={deletionBusyId === selectedEvt.id}
+                                            >
+                                                {deletionBusyId === selectedEvt.id
+                                                    ? (isEnglish ? 'Working...' : '处理中...')
+                                                    : (isEnglish ? 'Cancel deletion' : '取消删除')}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-revoke"
+                                                onClick={() => requestDeleteEvent(selectedEvt)}
+                                                disabled={deletionBusyId === selectedEvt.id}
+                                            >
+                                                {deletionBusyId === selectedEvt.id
+                                                    ? (isEnglish ? 'Working...' : '处理中...')
+                                                    : (isEnglish ? 'Delete Event' : '删除活动')}
+                                            </button>
+                                        )}
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-archive"
+                                            onClick={() => setShowArchive(!showArchive)}
+                                        >
+                                            {isEnglish ? 'Archive to Past Events' : '归档到往期活动'}
+                                        </button>
+                                    </div>
+                                    {selectedEvt.deleteAt && (
+                                        <p className="admin-helper-text">
+                                            {isEnglish
+                                                ? `Pending deletion — scheduled around ${selectedEvt.deleteAt.toLocaleString('en-US', {
+                                                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                                                })}.`
+                                                : `待删除 — 预计于 ${selectedEvt.deleteAt.toLocaleString('zh-CN', {
+                                                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                                                })} 前后执行。`}
+                                        </p>
+                                    )}
+                                </>
                             )}
-                            {showArchive && (
+                            {!readOnly && showArchive && (
                                 <div className="admin-create-badge-form admin-section-mb">
                                     <h4 className="admin-badges-title">
                                         {isEnglish ? 'Archive Event' : '归档活动'}
@@ -895,15 +899,17 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                             <p className="admin-no-results">
                                                 {isEnglish ? 'No check-in code yet.' : '暂无签到码。'}
                                             </p>
-                                            <button
-                                                className="admin-generate-btn"
-                                                onClick={() => generateEventCodeFn(selectedEvent!)}
-                                                disabled={generatingCode}
-                                            >
-                                                {generatingCode
-                                                    ? (isEnglish ? 'Generating...' : '生成中...')
-                                                    : (isEnglish ? '+ Generate Code' : '+ 生成签到码')}
-                                            </button>
+                                            {!readOnly && (
+                                                <button
+                                                    className="admin-generate-btn"
+                                                    onClick={() => generateEventCodeFn(selectedEvent!)}
+                                                    disabled={generatingCode}
+                                                >
+                                                    {generatingCode
+                                                        ? (isEnglish ? 'Generating...' : '生成中...')
+                                                        : (isEnglish ? '+ Generate Code' : '+ 生成签到码')}
+                                                </button>
+                                            )}
                                         </>
                                     ) : (
                                         <div className="admin-single-code">
@@ -930,60 +936,64 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                     ? (isEnglish ? 'Active' : '启用')
                                                     : (isEnglish ? 'Disabled' : '已停用')}
                                             </span>
-                                            <div className="admin-code-time-inputs">
-                                                <label>
-                                                    <span>{isEnglish ? 'Active from' : '开始时间'}</span>
-                                                    <input
-                                                        type="datetime-local"
-                                                        value={codeFrom}
-                                                        onChange={(e) => setCodeFrom(e.target.value)}
-                                                        className="admin-datetime-input"
-                                                    />
-                                                </label>
-                                                <label>
-                                                    <span>{isEnglish ? 'Active until' : '结束时间'}</span>
-                                                    <input
-                                                        type="datetime-local"
-                                                        value={codeUntil}
-                                                        onChange={(e) => setCodeUntil(e.target.value)}
-                                                        className="admin-datetime-input"
-                                                    />
-                                                </label>
-                                                <button
-                                                    className="admin-toggle-btn admin-toggle-save"
-                                                    onClick={saveCodeTimeWindow}
-                                                    disabled={codeFrom === (eventCode.activeFrom ?? '') && codeUntil === (eventCode.activeUntil ?? '')}
-                                                >
-                                                    {isEnglish ? 'Save' : '保存'}
-                                                </button>
-                                            </div>
-                                            <p className="admin-time-hint">
-                                                {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
-                                            </p>
-                                            <div className="admin-single-code-actions">
-                                                <button
-                                                    className={`admin-toggle-btn ${eventCode.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                                    onClick={toggleCodeActive}
-                                                >
-                                                    {eventCode.active
-                                                        ? (isEnglish ? 'Disable' : '停用')
-                                                        : (isEnglish ? 'Enable' : '启用')}
-                                                </button>
-                                                <button
-                                                    className="admin-toggle-btn admin-toggle-revoke"
-                                                    onClick={() => {
-                                                        const msg = isEnglish
-                                                            ? 'This will deactivate the current code and generate a new one. Users with the old QR code will no longer be able to check in. Continue?'
-                                                            : '此操作将停用当前签到码并生成新码。持有旧二维码的用户将无法签到。是否继续？';
-                                                        if (window.confirm(msg)) generateEventCodeFn(selectedEvent!).then();
-                                                    }}
-                                                    disabled={generatingCode}
-                                                >
-                                                    {generatingCode
-                                                        ? (isEnglish ? 'Regenerating...' : '重新生成中...')
-                                                        : (isEnglish ? 'Regenerate' : '重新生成')}
-                                                </button>
-                                            </div>
+                                            {!readOnly && (
+                                                <>
+                                                    <div className="admin-code-time-inputs">
+                                                        <label>
+                                                            <span>{isEnglish ? 'Active from' : '开始时间'}</span>
+                                                            <input
+                                                                type="datetime-local"
+                                                                value={codeFrom}
+                                                                onChange={(e) => setCodeFrom(e.target.value)}
+                                                                className="admin-datetime-input"
+                                                            />
+                                                        </label>
+                                                        <label>
+                                                            <span>{isEnglish ? 'Active until' : '结束时间'}</span>
+                                                            <input
+                                                                type="datetime-local"
+                                                                value={codeUntil}
+                                                                onChange={(e) => setCodeUntil(e.target.value)}
+                                                                className="admin-datetime-input"
+                                                            />
+                                                        </label>
+                                                        <button
+                                                            className="admin-toggle-btn admin-toggle-save"
+                                                            onClick={saveCodeTimeWindow}
+                                                            disabled={codeFrom === (eventCode.activeFrom ?? '') && codeUntil === (eventCode.activeUntil ?? '')}
+                                                        >
+                                                            {isEnglish ? 'Save' : '保存'}
+                                                        </button>
+                                                    </div>
+                                                    <p className="admin-time-hint">
+                                                        {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
+                                                    </p>
+                                                    <div className="admin-single-code-actions">
+                                                        <button
+                                                            className={`admin-toggle-btn ${eventCode.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                                            onClick={toggleCodeActive}
+                                                        >
+                                                            {eventCode.active
+                                                                ? (isEnglish ? 'Disable' : '停用')
+                                                                : (isEnglish ? 'Enable' : '启用')}
+                                                        </button>
+                                                        <button
+                                                            className="admin-toggle-btn admin-toggle-revoke"
+                                                            onClick={() => {
+                                                                const msg = isEnglish
+                                                                    ? 'This will deactivate the current code and generate a new one. Users with the old QR code will no longer be able to check in. Continue?'
+                                                                    : '此操作将停用当前签到码并生成新码。持有旧二维码的用户将无法签到。是否继续？';
+                                                                if (window.confirm(msg)) generateEventCodeFn(selectedEvent!).then();
+                                                            }}
+                                                            disabled={generatingCode}
+                                                        >
+                                                            {generatingCode
+                                                                ? (isEnglish ? 'Regenerating...' : '重新生成中...')
+                                                                : (isEnglish ? 'Regenerate' : '重新生成')}
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -996,6 +1006,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     eventId={selectedEvt.id}
                                     onReload={() => loadEventAttendees(selectedEvt.id)}
                                     showToast={showToast}
+                                    readOnly={readOnly}
                                 />
                             )}
 

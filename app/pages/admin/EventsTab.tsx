@@ -23,6 +23,7 @@ interface EventsTabProps {
     tags: Tag[];
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     onDetailChange?: (inDetail: boolean) => void;
+    readOnly?: boolean;
 }
 
 export interface EventsTabHandle {
@@ -35,6 +36,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                                                           tags,
                                                                           showToast,
                                                                           onDetailChange,
+                                                                          readOnly = false,
                                                                       }, forwardedRef) => {
     const {isEnglish} = useLanguage();
     const [managedEvent, setManagedEvent] = useState<string | null>(null);
@@ -222,7 +224,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         <div className="admin-section">
             {!managedEvent ? (
                 <>
-                    {showCreateEvent ? (
+                    {!readOnly && showCreateEvent ? (
                         <div className="admin-create-badge-form">
                             <h4 className="admin-badges-title">
                                 {editingEvent
@@ -314,11 +316,11 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 </button>
                             </div>
                         </div>
-                    ) : (
+                    ) : !readOnly ? (
                         <button className="admin-generate-btn admin-section-mb" onClick={openCreateEvent}>
                             {isEnglish ? '+ New Event' : '+ 新建活动'}
                         </button>
-                    )}
+                    ) : null}
                     <div className="admin-event-grid">
                         {pastEvents.map((event) => (
                             <button
@@ -368,46 +370,48 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     </p>
                                 </div>
                             </div>
-                            <div className="admin-form-actions admin-section-mb">
-                                <button
-                                    className="admin-toggle-btn admin-toggle-edit"
-                                    onClick={() => {
-                                        setManagedEvent(null);
-                                        openEditEvent(managedEvt);
-                                    }}
-                                >
-                                    {isEnglish ? 'Edit Event' : '编辑活动'}
-                                </button>
-                                <button
-                                    className={`admin-toggle-btn ${managedEvt.published ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                    onClick={() => togglePublish(managedEvt)}
-                                >
-                                    {managedEvt.published
-                                        ? (isEnglish ? 'Unpublish' : '取消发布')
-                                        : (isEnglish ? 'Publish' : '发布')}
-                                </button>
-                                {managedEvt.deleteAt ? (
+                            {!readOnly && (
+                                <div className="admin-form-actions admin-section-mb">
                                     <button
-                                        className="admin-toggle-btn admin-toggle-grant"
-                                        onClick={() => cancelDeleteEvent(managedEvt)}
-                                        disabled={deletionBusyId === managedEvt.id}
+                                        className="admin-toggle-btn admin-toggle-edit"
+                                        onClick={() => {
+                                            setManagedEvent(null);
+                                            openEditEvent(managedEvt);
+                                        }}
                                     >
-                                        {deletionBusyId === managedEvt.id
-                                            ? (isEnglish ? 'Working...' : '处理中...')
-                                            : (isEnglish ? 'Cancel deletion' : '取消删除')}
+                                        {isEnglish ? 'Edit Event' : '编辑活动'}
                                     </button>
-                                ) : (
                                     <button
-                                        className="admin-toggle-btn admin-toggle-revoke"
-                                        onClick={() => requestDeleteEvent(managedEvt)}
-                                        disabled={deletionBusyId === managedEvt.id}
+                                        className={`admin-toggle-btn ${managedEvt.published ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                        onClick={() => togglePublish(managedEvt)}
                                     >
-                                        {deletionBusyId === managedEvt.id
-                                            ? (isEnglish ? 'Working...' : '处理中...')
-                                            : (isEnglish ? 'Delete Event' : '删除活动')}
+                                        {managedEvt.published
+                                            ? (isEnglish ? 'Unpublish' : '取消发布')
+                                            : (isEnglish ? 'Publish' : '发布')}
                                     </button>
-                                )}
-                            </div>
+                                    {managedEvt.deleteAt ? (
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-grant"
+                                            onClick={() => cancelDeleteEvent(managedEvt)}
+                                            disabled={deletionBusyId === managedEvt.id}
+                                        >
+                                            {deletionBusyId === managedEvt.id
+                                                ? (isEnglish ? 'Working...' : '处理中...')
+                                                : (isEnglish ? 'Cancel deletion' : '取消删除')}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-revoke"
+                                            onClick={() => requestDeleteEvent(managedEvt)}
+                                            disabled={deletionBusyId === managedEvt.id}
+                                        >
+                                            {deletionBusyId === managedEvt.id
+                                                ? (isEnglish ? 'Working...' : '处理中...')
+                                                : (isEnglish ? 'Delete Event' : '删除活动')}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                             {managedEvt.deleteAt && (
                                 <p className="admin-helper-text">
                                     {isEnglish
@@ -447,6 +451,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     loading={searching}
                                     onReload={() => loadEventAttendees(managedEvt.id)}
                                     showToast={showToast}
+                                    readOnly={readOnly}
                                 />
                             )}
 
@@ -456,6 +461,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     showToast={showToast}
                                     onCountChange={setStaffCount}
                                     onAttendeeRemoved={() => loadEventAttendees(managedEvt.id)}
+                                    readOnly={readOnly}
                                 />
                             )}
                         </>

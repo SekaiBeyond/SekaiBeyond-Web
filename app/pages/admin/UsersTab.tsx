@@ -49,6 +49,7 @@ interface UsersTabProps {
     user: User;
     profile: UserProfile;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    readOnly?: boolean;
 }
 
 export interface UsersTabHandle {
@@ -62,6 +63,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                                        user,
                                                                        profile,
                                                                        showToast,
+                                                                       readOnly = false,
                                                                    }, ref) => {
     const {isEnglish} = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
@@ -529,27 +531,29 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 {formatGroupWithTitle(selectedUser.group, selectedUser.title, isEnglish)}
                             </span>
                             </div>
-                            <div className="admin-group-actions">
-                                {USER_GROUPS.map((g) => {
-                                    const isCurrent = selectedUser.group === g;
-                                    const reason = getGroupDisabledReason(selectedUser, g);
-                                    const isDisabled = updating || isCurrent || reason !== null;
-                                    return (
-                                        <button
-                                            key={g}
-                                            className={`admin-group-btn ${isCurrent ? 'admin-group-btn-active' : ''}`}
-                                            onClick={() => changeUserGroup(selectedUser, g)}
-                                            disabled={isDisabled}
-                                            title={reason ?? undefined}
-                                        >
-                                            {isEnglish ? GROUP_LABELS[g].en : GROUP_LABELS[g].zh}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                            {!readOnly && (
+                                <div className="admin-group-actions">
+                                    {USER_GROUPS.map((g) => {
+                                        const isCurrent = selectedUser.group === g;
+                                        const reason = getGroupDisabledReason(selectedUser, g);
+                                        const isDisabled = updating || isCurrent || reason !== null;
+                                        return (
+                                            <button
+                                                key={g}
+                                                className={`admin-group-btn ${isCurrent ? 'admin-group-btn-active' : ''}`}
+                                                onClick={() => changeUserGroup(selectedUser, g)}
+                                                disabled={isDisabled}
+                                                title={reason ?? undefined}
+                                            >
+                                                {isEnglish ? GROUP_LABELS[g].en : GROUP_LABELS[g].zh}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
 
-                        {canManage && ['staff', 'core-staff'].includes(selectedUser.group) && (
+                        {!readOnly && canManage && ['staff', 'core-staff'].includes(selectedUser.group) && (
                             <div className="admin-group-section">
                                 <h4 className="admin-badges-title">
                                     {isEnglish ? 'Title' : '头衔'}
@@ -582,7 +586,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                             </div>
                         )}
 
-                        <div className="admin-deletion-section">
+                        {!readOnly && <div className="admin-deletion-section">
                             <h4 className="admin-badges-title">
                                 {isEnglish ? 'Account Deletion' : '账号删除'}
                             </h4>
@@ -620,7 +624,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                     {isEnglish ? 'Request account deletion' : '申请删除账号'}
                                 </button>
                             )}
-                        </div>
+                        </div>}
 
                         {badgeDefsError && (
                             <p className="admin-no-results">
@@ -650,16 +654,21 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                     <span
                                                         className="admin-badge-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
                                                 </div>
-                                                <button
-                                                    className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                                    onClick={() => toggleUserBadge(selectedUser, bd.id)}
-                                                    disabled={updating || !canManage}
-                                                    title={manageTooltip}
-                                                >
-                                                    {has
-                                                        ? (isEnglish ? 'Revoke' : '撤销')
-                                                        : (isEnglish ? 'Grant' : '授予')}
-                                                </button>
+                                                {readOnly
+                                                    ? <span
+                                                        className={`admin-user-group-tag ${has ? 'data-group-member' : ''}`}
+                                                        style={{opacity: has ? 1 : 0.35}}>{has ? (isEnglish ? 'Has badge' : '已持有') : (isEnglish ? 'No badge' : '未持有')}</span>
+                                                    : <button
+                                                        className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                                        onClick={() => toggleUserBadge(selectedUser, bd.id)}
+                                                        disabled={updating || !canManage}
+                                                        title={manageTooltip}
+                                                    >
+                                                        {has
+                                                            ? (isEnglish ? 'Revoke' : '撤销')
+                                                            : (isEnglish ? 'Grant' : '授予')}
+                                                    </button>
+                                                }
                                             </div>
                                         );
                                     })}
@@ -685,16 +694,20 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                             className="admin-badge-name">{isEnglish ? event.title : event.titleCn}</span>
                                             <span className="admin-badge-date">{event.date}</span>
                                         </div>
-                                        <button
-                                            className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                            onClick={() => toggleAttendance(selectedUser, event.id)}
-                                            disabled={updating || !canManage}
-                                            title={manageTooltip}
-                                        >
-                                            {has
-                                                ? (isEnglish ? 'Revoke' : '撤销')
-                                                : (isEnglish ? 'Grant' : '授予')}
-                                        </button>
+                                        {readOnly
+                                            ? <span className={`admin-user-group-tag ${has ? 'data-group-member' : ''}`}
+                                                    style={{opacity: has ? 1 : 0.35}}>{has ? (isEnglish ? 'Attended' : '已参加') : (isEnglish ? 'Not attended' : '未参加')}</span>
+                                            : <button
+                                                className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                                onClick={() => toggleAttendance(selectedUser, event.id)}
+                                                disabled={updating || !canManage}
+                                                title={manageTooltip}
+                                            >
+                                                {has
+                                                    ? (isEnglish ? 'Revoke' : '撤销')
+                                                    : (isEnglish ? 'Grant' : '授予')}
+                                            </button>
+                                        }
                                     </div>
                                 );
                             })}

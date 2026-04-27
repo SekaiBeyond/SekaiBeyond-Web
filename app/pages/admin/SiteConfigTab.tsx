@@ -7,6 +7,7 @@ import { BILIBILI_VIDEO } from '~/constants';
 
 interface SiteConfigTabProps {
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    readOnly?: boolean;
 }
 
 function parseBvid(input: string): string {
@@ -14,7 +15,7 @@ function parseBvid(input: string): string {
     return match ? match[0] : '';
 }
 
-export const SiteConfigTab = ({showToast}: SiteConfigTabProps) => {
+export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps) => {
     const {isEnglish} = useLanguage();
 
     const {config, loading: configLoading, refresh: refreshConfig} = useSiteConfig();
@@ -106,7 +107,8 @@ export const SiteConfigTab = ({showToast}: SiteConfigTabProps) => {
                         className="admin-search-input"
                         type="text"
                         value={bvidInput}
-                        onChange={e => setBvidInput(e.target.value)}
+                        onChange={e => !readOnly && setBvidInput(e.target.value)}
+                        readOnly={readOnly}
                         placeholder="BV1GsfjB7E6J or https://www.bilibili.com/video/BV..."
                     />
                     <span className="admin-helper-text" style={{marginTop: 4, display: 'block'}}>
@@ -130,17 +132,19 @@ export const SiteConfigTab = ({showToast}: SiteConfigTabProps) => {
                     }
                 </div>
             </div>
-            <div className="admin-btn-row admin-mt-12">
-                <button
-                    className="admin-toggle-btn admin-toggle-save"
-                    onClick={saveVideo}
-                    disabled={savingVideo}
-                >
-                    {savingVideo
-                        ? (isEnglish ? 'Saving...' : '保存中...')
-                        : (isEnglish ? 'Save Video' : '保存视频')}
-                </button>
-            </div>
+            {!readOnly && (
+                <div className="admin-btn-row admin-mt-12">
+                    <button
+                        className="admin-toggle-btn admin-toggle-save"
+                        onClick={saveVideo}
+                        disabled={savingVideo}
+                    >
+                        {savingVideo
+                            ? (isEnglish ? 'Saving...' : '保存中...')
+                            : (isEnglish ? 'Save Video' : '保存视频')}
+                    </button>
+                </div>
+            )}
 
             <div className="admin-divider"/>
 
@@ -158,7 +162,8 @@ export const SiteConfigTab = ({showToast}: SiteConfigTabProps) => {
                     <textarea
                         className="admin-search-input policy-textarea"
                         value={contentEn}
-                        onChange={e => setContentEn(e.target.value)}
+                        onChange={e => !readOnly && setContentEn(e.target.value)}
+                        readOnly={readOnly}
                         placeholder={isEnglish ? 'Enter policy content in English...' : '请输入英文政策内容...'}
                     />
                 </label>
@@ -167,22 +172,25 @@ export const SiteConfigTab = ({showToast}: SiteConfigTabProps) => {
                     <textarea
                         className="admin-search-input policy-textarea"
                         value={contentCn}
-                        onChange={e => setContentCn(e.target.value)}
+                        onChange={e => !readOnly && setContentCn(e.target.value)}
+                        readOnly={readOnly}
                         placeholder={isEnglish ? 'Enter policy content in Chinese...' : '请输入中文政策内容...'}
                     />
                 </label>
             </div>
-            <div className="admin-btn-row admin-mt-12">
-                <button
-                    className="admin-toggle-btn admin-toggle-save"
-                    onClick={savePolicy}
-                    disabled={savingPolicy}
-                >
-                    {savingPolicy
-                        ? (isEnglish ? 'Saving...' : '保存中...')
-                        : (isEnglish ? 'Save Policy' : '保存政策')}
-                </button>
-            </div>
+            {!readOnly && (
+                <div className="admin-btn-row admin-mt-12">
+                    <button
+                        className="admin-toggle-btn admin-toggle-save"
+                        onClick={savePolicy}
+                        disabled={savingPolicy}
+                    >
+                        {savingPolicy
+                            ? (isEnglish ? 'Saving...' : '保存中...')
+                            : (isEnglish ? 'Save Policy' : '保存政策')}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

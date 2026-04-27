@@ -12,6 +12,7 @@ interface PastEventAttendeesSectionProps {
     loading: boolean;
     onReload: () => void | Promise<void>;
     showToast: ShowToast;
+    readOnly?: boolean;
 }
 
 const SEARCH_LIMIT = 8;
@@ -22,6 +23,7 @@ export function PastEventAttendeesSection({
                                               loading,
                                               onReload,
                                               showToast,
+                                              readOnly = false,
                                           }: PastEventAttendeesSectionProps) {
     const {isEnglish} = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
@@ -181,22 +183,24 @@ export function PastEventAttendeesSection({
                             <span className="admin-user-group-tag" data-group={u.group}>
                                 {formatGroupWithTitle(u.group, u.title, isEnglish)}
                             </span>
-                            <button
-                                className="admin-toggle-btn admin-toggle-revoke"
-                                onClick={() => removeAttendee(u)}
-                                disabled={busyUid === u.uid}
-                            >
-                                {busyUid === u.uid
-                                    ? (isEnglish ? 'Removing...' : '移除中...')
-                                    : (isEnglish ? 'Remove' : '移除')}
-                            </button>
+                            {!readOnly && (
+                                <button
+                                    className="admin-toggle-btn admin-toggle-revoke"
+                                    onClick={() => removeAttendee(u)}
+                                    disabled={busyUid === u.uid}
+                                >
+                                    {busyUid === u.uid
+                                        ? (isEnglish ? 'Removing...' : '移除中...')
+                                        : (isEnglish ? 'Remove' : '移除')}
+                                </button>
+                            )}
                         </div>
                     ))}
                 </>
             )}
 
-            <div className="admin-event-staff-add"
-                 style={{marginTop: 16, flexDirection: 'column', alignItems: 'stretch', gap: 8}}>
+            {!readOnly && <div className="admin-event-staff-add"
+                               style={{marginTop: 16, flexDirection: 'column', alignItems: 'stretch', gap: 8}}>
                 <div className="admin-search">
                     <input
                         type="text"
@@ -247,7 +251,7 @@ export function PastEventAttendeesSection({
                         </button>
                     </div>
                 ))}
-            </div>
+            </div>}
         </div>
     );
 }

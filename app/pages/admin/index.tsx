@@ -40,17 +40,20 @@ export const AdminPage = () => {
     const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => b.date.localeCompare(a.date)), [rawPastEvents]);
 
     const isCoreStaffOrAbove = !!profile && hasPermission(profile.group, 'core-staff');
+    // Staff group (level 2): view-only admin access + Tools. Superset of event-staff access.
+    const isStaffGroup = !!profile && hasPermission(profile.group, 'staff') && !isCoreStaffOrAbove;
     // Event-staff is a per-event tag, independent of the global user group —
-    // any user with eventStaffEvents can access the scanner UI for those events.
+    // any user below staff group with eventStaffEvents can access the scanner UI for those events.
     // Access expires naturally: archiveUpcomingEvent removes the event from each
     // assigned user's eventStaffEvents, so the array empties once all events are done.
     const isEventStaffOnly = !!profile
         && !isCoreStaffOrAbove
+        && !isStaffGroup
         && profile.eventStaffEvents.length > 0;
 
-    // Core-staff sees all events; event-staff only sees their assigned ones (fetched by ID).
-    const upcomingEvents = isCoreStaffOrAbove ? allUpcomingEvents : staffUpcomingEvents;
-    const refreshUpcoming = isCoreStaffOrAbove ? refreshAllUpcoming : refreshStaffUpcoming;
+    // Core-staff and staff group see all events; event-staff only sees their assigned ones.
+    const upcomingEvents = (isCoreStaffOrAbove || isStaffGroup) ? allUpcomingEvents : staffUpcomingEvents;
+    const refreshUpcoming = (isCoreStaffOrAbove || isStaffGroup) ? refreshAllUpcoming : refreshStaffUpcoming;
 
     const [activeTab, setActiveTab] = useState<Tab>('users');
     const [upcomingInDetail, setUpcomingInDetail] = useState(false);
@@ -80,19 +83,19 @@ export const AdminPage = () => {
 
     useEffect(() => {
         if (loading) return;
-        if (user && profile && (isCoreStaffOrAbove || isEventStaffOnly)) {
+        if (user && profile && (isCoreStaffOrAbove || isStaffGroup || isEventStaffOnly)) {
             wasAuthorized.current = true;
             return;
         }
         if (wasAuthorized.current && !user) {
             navigate('/', {replace: true});
         }
-    }, [loading, user, profile, isCoreStaffOrAbove, isEventStaffOnly, navigate]);
+    }, [loading, user, profile, isCoreStaffOrAbove, isStaffGroup, isEventStaffOnly, navigate]);
 
     useEffect(() => {
         if (urlParamsHandled.current) return;
         if (loading || !user || !profile) return;
-        if (!isCoreStaffOrAbove && !isEventStaffOnly) return;
+        if (!isCoreStaffOrAbove && !isStaffGroup && !isEventStaffOnly) return;
         const tab = searchParams.get('tab');
         const event = searchParams.get('event');
         if (isEventStaffOnly) {
@@ -102,6 +105,24 @@ export const AdminPage = () => {
                 : profile.eventStaffEvents[0];
             if (firstEventId) {
                 upcomingTabRef.current?.selectEvent(firstEventId);
+            }
+        } else if (isStaffGroup) {
+            if (tab === 'events' || tab === 'tools' || tab === 'users' || tab === 'badges' || tab === 'records' || tab === 'config') {
+                setActiveTab(tab);
+            } else if (tab === 'tags') {
+                setActiveTab('events');
+            } else if (tab === 'upcoming') {
+                setActiveTab('events');
+            } else if (tab === 'policy') {
+                setActiveTab('config');
+            } else {
+                setActiveTab('users');
+            }
+            if (tab === 'events' && event) {
+                eventsTabRef.current?.selectManagedEvent(event);
+            }
+            if (tab === 'upcoming' && event) {
+                upcomingTabRef.current?.selectEvent(event);
             }
         } else {
             if (tab === 'events' || tab === 'badges' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config') {
@@ -121,10 +142,10 @@ export const AdminPage = () => {
             }
         }
         urlParamsHandled.current = true;
-    }, [loading, user, profile, searchParams, isCoreStaffOrAbove, isEventStaffOnly]);
+    }, [loading, user, profile, searchParams, isCoreStaffOrAbove, isStaffGroup, isEventStaffOnly]);
 
     useEffect(() => {
-        if (loading || !user || !profile || !isCoreStaffOrAbove) return;
+        if (loading || !user || !profile || (!isCoreStaffOrAbove && !isStaffGroup)) return;
         const loadBadgeDefinitions = async () => {
             const db = getFirebaseDb();
             const snapshot = await getDocs(collection(db, 'badges'));
@@ -150,7 +171,7 @@ export const AdminPage = () => {
         loadBadgeDefinitions().catch(() => {
             setBadgeDefsError(true);
         });
-    }, [loading, user, profile, isCoreStaffOrAbove]);
+    }, [loading, user, profile, isCoreStaffOrAbove, isStaffGroup]);
 
     const handleLookupUser = useCallback((uid: string) => {
         setActiveTab('users');
@@ -204,7 +225,7 @@ export const AdminPage = () => {
         );
     }
 
-    if (!user || !profile || (!isCoreStaffOrAbove && !isEventStaffOnly)) {
+    if (!user || !profile || (!isCoreStaffOrAbove && !isStaffGroup && !isEventStaffOnly)) {
         return (
             <div className="profile-login-prompt">
                 <div className="profile-login-card">
@@ -239,7 +260,7 @@ export const AdminPage = () => {
             </nav>
             <div className="profile-page">
                 <div className="admin-tabs">
-                    {!isEventStaffOnly && (
+                    {(isCoreStaffOrAbove || isStaffGroup) && (
                         <button
                             className={`admin-tab ${activeTab === 'users' ? 'admin-tab-active' : ''}`}
                             onClick={() => setActiveTab('users')}
@@ -253,7 +274,7 @@ export const AdminPage = () => {
                     >
                         {isEnglish ? 'Events' : '活动管理'}
                     </button>
-                    {!isEventStaffOnly && (
+                    {(isCoreStaffOrAbove || isStaffGroup) && (
                         <button
                             className={`admin-tab ${activeTab === 'badges' ? 'admin-tab-active' : ''}`}
                             onClick={() => setActiveTab('badges')}
@@ -261,7 +282,7 @@ export const AdminPage = () => {
                             {isEnglish ? 'Badges' : '徽章'}
                         </button>
                     )}
-                    {!isEventStaffOnly && (
+                    {(isCoreStaffOrAbove || isStaffGroup) && (
                         <button
                             className={`admin-tab ${activeTab === 'config' ? 'admin-tab-active' : ''}`}
                             onClick={() => setActiveTab('config')}
@@ -269,7 +290,7 @@ export const AdminPage = () => {
                             {isEnglish ? 'Site Config' : '网站配置'}
                         </button>
                     )}
-                    {!isEventStaffOnly && (
+                    {(isCoreStaffOrAbove || isStaffGroup) && (
                         <button
                             className={`admin-tab ${activeTab === 'tools' ? 'admin-tab-active' : ''}`}
                             onClick={() => setActiveTab('tools')}
@@ -277,7 +298,7 @@ export const AdminPage = () => {
                             {isEnglish ? 'Tools' : '工具'}
                         </button>
                     )}
-                    {!isEventStaffOnly && (
+                    {(isCoreStaffOrAbove || isStaffGroup) && (
                         <button
                             className={`admin-tab ${activeTab === 'records' ? 'admin-tab-active' : ''}`}
                             onClick={() => setActiveTab('records')}
@@ -287,7 +308,7 @@ export const AdminPage = () => {
                     )}
                 </div>
 
-                {activeTab === 'users' && !isEventStaffOnly && (
+                {activeTab === 'users' && (isCoreStaffOrAbove || isStaffGroup) && (
                     <UsersTab
                         ref={usersTabRef}
                         pastEvents={pastEvents}
@@ -296,6 +317,7 @@ export const AdminPage = () => {
                         user={user}
                         profile={profile}
                         showToast={showToast}
+                        readOnly={isStaffGroup}
                     />
                 )}
 
@@ -328,7 +350,7 @@ export const AdminPage = () => {
                                 />
                             </div>
                         </div>
-                        {!isEventStaffOnly && (
+                        {(isCoreStaffOrAbove || isStaffGroup) && (
                             <div style={upcomingInDetail ? {display: 'none'} : undefined}>
                                 {!eventsInDetail && (
                                     <button
@@ -350,11 +372,12 @@ export const AdminPage = () => {
                                         tags={tags}
                                         showToast={showToast}
                                         onDetailChange={setEventsInDetail}
+                                        readOnly={isStaffGroup}
                                     />
                                 </div>
                             </div>
                         )}
-                        {!isEventStaffOnly && !upcomingInDetail && !eventsInDetail && (
+                        {(isCoreStaffOrAbove || isStaffGroup) && !upcomingInDetail && !eventsInDetail && (
                             <div>
                                 <button
                                     className="admin-section-header admin-section-mt"
@@ -366,13 +389,14 @@ export const AdminPage = () => {
                                     <span
                                         className={`admin-section-chevron${tagsOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
                                 </button>
-                                {tagsOpen && <TagsTab tags={tags} refreshTags={refreshTags} showToast={showToast}/>}
+                                {tagsOpen && <TagsTab tags={tags} refreshTags={refreshTags} showToast={showToast}
+                                                      readOnly={isStaffGroup}/>}
                             </div>
                         )}
                     </>
                 )}
 
-                {activeTab === 'badges' && !isEventStaffOnly && (
+                {activeTab === 'badges' && (isCoreStaffOrAbove || isStaffGroup) && (
                     badgeDefsError ? (
                         <div className="admin-section">
                             <p className="admin-no-results">
@@ -386,11 +410,12 @@ export const AdminPage = () => {
                             setBadgeDefs={setBadgeDefs}
                             user={user}
                             showToast={showToast}
+                            readOnly={isStaffGroup}
                         />
                     )
                 )}
 
-                {activeTab === 'records' && !isEventStaffOnly && (
+                {activeTab === 'records' && (isCoreStaffOrAbove || isStaffGroup) && (
                     <RecordsTab
                         pastEvents={pastEvents}
                         upcomingEvents={upcomingEvents}
@@ -402,12 +427,12 @@ export const AdminPage = () => {
                     />
                 )}
 
-                {activeTab === 'tools' && !isEventStaffOnly && (
+                {activeTab === 'tools' && (isCoreStaffOrAbove || isStaffGroup) && (
                     <ToolsTab/>
                 )}
 
-                {activeTab === 'config' && !isEventStaffOnly && (
-                    <SiteConfigTab showToast={showToast}/>
+                {activeTab === 'config' && (isCoreStaffOrAbove || isStaffGroup) && (
+                    <SiteConfigTab showToast={showToast} readOnly={isStaffGroup}/>
                 )}
             </div>
         </>

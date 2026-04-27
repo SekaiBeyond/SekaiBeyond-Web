@@ -11,6 +11,7 @@ interface EventAttendeesListProps {
     eventId?: string;
     onReload?: () => void | Promise<void>;
     showToast?: ShowToast;
+    readOnly?: boolean;
 }
 
 export function EventAttendeesList({
@@ -19,10 +20,11 @@ export function EventAttendeesList({
                                        eventId,
                                        onReload,
                                        showToast,
+                                       readOnly = false,
                                    }: EventAttendeesListProps) {
     const {isEnglish} = useLanguage();
     const [busyUid, setBusyUid] = useState<string | null>(null);
-    const canRemove = !!(eventId && onReload && showToast);
+    const canRemove = !readOnly && !!(eventId && onReload && showToast);
 
     const removeAttendee = async (user: UserRecord) => {
         if (!eventId || !onReload || !showToast) return;

@@ -13,35 +13,39 @@ service cloud.firestore {
       return callerGroup() in ['core-staff', 'president'];
     }
 
+    function isStaffOrAbove() {
+      return callerGroup() in ['staff', 'core-staff', 'president'];
+    }
+
     function isEventStaffFor(eventId) {
       return eventId in callerEventStaffEvents();
     }
 
     match /users/{userId} {
-      // Users can read their own profile; admins can read any profile.
+      // Users can read their own profile; staff+ can read any profile.
       // Event-staff can read profiles of users who share at least one staff event with them
       // (needed for the event staff list in the admin panel).
       // Other users' public data is served via the getPublicProfile Cloud Function
       // to avoid exposing email to all authenticated users.
       allow read: if request.auth != null
                   && (request.auth.uid == userId
-                      || isCoreStaffOrAbove()
+                      || isStaffOrAbove()
                       || (callerEventStaffEvents().size() > 0
                           && resource.data.get('eventStaffEvents', []).hasAny(callerEventStaffEvents())));
 
       // All user mutations (displayName, photoURL, badges, attendedEvents, group) via Cloud Functions
     }
 
-    // Activity records — core-staff+ can read only; all writes via Cloud Functions
+    // Activity records — staff+ can read only; all writes via Cloud Functions
     match /records/{recordId} {
       allow read: if request.auth != null
-                  && isCoreStaffOrAbove();
+                  && isStaffOrAbove();
     }
 
-    // Event/badge claim codes — core-staff+ can read only; all mutations via Cloud Functions
+    // Event/badge claim codes — staff+ can read only; all mutations via Cloud Functions
     match /claimCodes/{codeId} {
       allow read: if request.auth != null
-                  && isCoreStaffOrAbove();
+                  && isStaffOrAbove();
     }
 
     // Achievement badge definitions — readable by any logged-in user; all writes via Cloud Functions
@@ -86,12 +90,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Upcoming events — public can read only published ones; staff can read all;
+    // Upcoming events — public can read only published ones; staff+ can read all;
     // event-staff can read events they are assigned to.
     // All writes via Cloud Functions.
     match /upcomingEvents/{eventId} {
       allow read: if resource.data.published == true
-                  || (request.auth != null && isCoreStaffOrAbove())
+                  || (request.auth != null && isStaffOrAbove())
                   || (request.auth != null && isEventStaffFor(eventId));
 
       // Paid event subcollections

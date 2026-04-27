@@ -37,6 +37,7 @@ interface BadgesTabProps {
     setBadgeDefs: React.Dispatch<React.SetStateAction<BadgeDef[]>>;
     user: User;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    readOnly?: boolean;
 }
 
 export interface BadgesTabHandle {
@@ -66,6 +67,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                                                           setBadgeDefs,
                                                                           user,
                                                                           showToast,
+                                                                          readOnly = false,
                                                                       }, ref) => {
     const {isEnglish} = useLanguage();
 
@@ -129,7 +131,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         setBadgeHolderLastDoc(null);
         setHasMoreBadgeHolders(false);
         await loadBadgeHolders(bd.id);
-        await loadBadgeActivationCodes(bd.id);
+        if (!readOnly) await loadBadgeActivationCodes(bd.id);
     };
 
     useImperativeHandle(ref, () => ({
@@ -426,7 +428,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     if (!selectedBadgeDef) {
         return (
             <div className="admin-section">
-                {showCreateBadge ? (
+                {!readOnly && showCreateBadge ? (
                     <div className="admin-create-badge-form">
                         <h4 className="admin-badges-title">
                             {isEnglish ? 'Create New Badge' : '创建新徽章'}
@@ -480,11 +482,11 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             </button>
                         </div>
                     </div>
-                ) : (
+                ) : !readOnly ? (
                     <button className="admin-generate-btn" onClick={() => setShowCreateBadge(true)}>
                         {isEnglish ? '+ Create Badge' : '+ 创建徽章'}
                     </button>
-                )}
+                ) : null}
 
                 {badgeDefs.length === 0 && !showCreateBadge && (
                     <p className="admin-no-results">
@@ -552,7 +554,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     </div>
                 </div>
 
-                {editingBadgeDef ? (
+                {!readOnly && (editingBadgeDef ? (
                     <div className="admin-create-badge-form admin-section-mb">
                         <h4 className="admin-badges-title">{isEnglish ? 'Edit Badge' : '编辑徽章'}</h4>
                         <div className="admin-form-grid">
@@ -644,7 +646,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             </p>
                         )}
                     </>
-                )}
+                ))}
 
                 <h4 className="admin-badges-title">
                     {isEnglish ? 'Badge Holders' : '徽章持有者'}
@@ -676,111 +678,118 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     </button>
                 )}
 
-                {/* Activation Codes */}
-                <h4 className="admin-badges-title admin-section-mt">
-                    {isEnglish ? 'Activation Codes' : '激活码'}
-                    {badgeActivationCodes.length > 0 &&
-                        <span className="admin-badges-count">{badgeActivationCodes.length}</span>}
-                </h4>
+                {/* Activation Codes — hidden in read-only mode (staff cannot read that collection) */}
+                {!readOnly && (
+                    <>
+                        <h4 className="admin-badges-title admin-section-mt">
+                            {isEnglish ? 'Activation Codes' : '激活码'}
+                            {badgeActivationCodes.length > 0 &&
+                                <span className="admin-badges-count">{badgeActivationCodes.length}</span>}
+                        </h4>
 
-                <div className="admin-activation-create-form">
-                    <div className="admin-code-time-inputs">
-                        <label>
-                            <span>{isEnglish ? 'Max Uses' : '最大使用次数'}</span>
-                            <div className="admin-activation-meta">
-                                <input
-                                    type="number" min="1"
-                                    value={newCodeUnlimited ? '' : newCodeMaxUses}
-                                    disabled={newCodeUnlimited}
-                                    onChange={e => {
-                                        setNewCodeUnlimited(false);
-                                        const val = parseInt(e.target.value);
-                                        setNewCodeMaxUses(isNaN(val) ? 1 : Math.max(1, val));
-                                    }}
-                                    className="admin-search-input"
-                                    placeholder={newCodeUnlimited ? '∞' : undefined}
-                                />
-                                <label className="admin-unlimited-label">
-                                    <input
-                                        type="checkbox" checked={newCodeUnlimited}
-                                        onChange={e => {
-                                            setNewCodeUnlimited(e.target.checked);
-                                            if (e.target.checked) setNewCodeMaxUses(0);
-                                            else setNewCodeMaxUses(100);
-                                        }}
-                                    />
-                                    {isEnglish ? 'Unlimited' : '无限次'}
+                        <div className="admin-activation-create-form">
+                            <div className="admin-code-time-inputs">
+                                <label>
+                                    <span>{isEnglish ? 'Max Uses' : '最大使用次数'}</span>
+                                    <div className="admin-activation-meta">
+                                        <input
+                                            type="number" min="1"
+                                            value={newCodeUnlimited ? '' : newCodeMaxUses}
+                                            disabled={newCodeUnlimited}
+                                            onChange={e => {
+                                                setNewCodeUnlimited(false);
+                                                const val = parseInt(e.target.value);
+                                                setNewCodeMaxUses(isNaN(val) ? 1 : Math.max(1, val));
+                                            }}
+                                            className="admin-search-input"
+                                            placeholder={newCodeUnlimited ? '∞' : undefined}
+                                        />
+                                        <label className="admin-unlimited-label">
+                                            <input
+                                                type="checkbox" checked={newCodeUnlimited}
+                                                onChange={e => {
+                                                    setNewCodeUnlimited(e.target.checked);
+                                                    if (e.target.checked) setNewCodeMaxUses(0);
+                                                    else setNewCodeMaxUses(100);
+                                                }}
+                                            />
+                                            {isEnglish ? 'Unlimited' : '无限次'}
+                                        </label>
+                                    </div>
+                                </label>
+                                <label>
+                                    <span>{isEnglish ? 'Active From' : '生效时间'}</span>
+                                    <input type="datetime-local" value={newCodeFrom}
+                                           onChange={e => setNewCodeFrom(e.target.value)}
+                                           className="admin-search-input"/>
+                                </label>
+                                <label>
+                                    <span>{isEnglish ? 'Active Until' : '失效时间'}</span>
+                                    <input type="datetime-local" value={newCodeUntil}
+                                           onChange={e => setNewCodeUntil(e.target.value)}
+                                           className="admin-search-input"/>
                                 </label>
                             </div>
-                        </label>
-                        <label>
-                            <span>{isEnglish ? 'Active From' : '生效时间'}</span>
-                            <input type="datetime-local" value={newCodeFrom}
-                                   onChange={e => setNewCodeFrom(e.target.value)} className="admin-search-input"/>
-                        </label>
-                        <label>
-                            <span>{isEnglish ? 'Active Until' : '失效时间'}</span>
-                            <input type="datetime-local" value={newCodeUntil}
-                                   onChange={e => setNewCodeUntil(e.target.value)} className="admin-search-input"/>
-                        </label>
-                    </div>
-                    <button
-                        className="admin-generate-btn admin-mt-12"
-                        onClick={() => createBadgeActivationCode(selectedBadgeDef.id)}
-                        disabled={generatingActivationCode}>
-                        {generatingActivationCode
-                            ? (isEnglish ? 'Generating...' : '生成中...')
-                            : (isEnglish ? '+ Generate Activation Code' : '+ 生成激活码')}
-                    </button>
-                </div>
-
-                {loadingActivationCodes && <div className="profile-spinner admin-spinner-center"/>}
-                {!loadingActivationCodes && badgeActivationCodes.length === 0 && (
-                    <p className="admin-no-results">{isEnglish ? 'No activation codes yet.' : '暂无激活码。'}</p>
-                )}
-
-                {!loadingActivationCodes && badgeActivationCodes.map((ac) => (
-                    <div key={ac.id} className="admin-single-code admin-mt-12">
-                        <div className="admin-activation-meta">
-                            <span className={ac.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
-                                {ac.active ? (isEnglish ? 'Active' : '活跃') : (isEnglish ? 'Inactive' : '已停用')}
-                            </span>
-                            <span className="admin-activation-usage">
-                                {ac.maxUses === 0
-                                    ? (isEnglish ? `Used ${ac.usedCount} / ∞ times` : `已使用 ${ac.usedCount} / ∞ 次`)
-                                    : (isEnglish ? `Used ${ac.usedCount} / ${ac.maxUses} times` : `已使用 ${ac.usedCount} / ${ac.maxUses} 次`)}
-                            </span>
-                            {ac.activeFrom && (
-                                <span className="admin-activation-time">
-                                    {isEnglish ? 'From: ' : '从：'}{new Date(ac.activeFrom).toLocaleString()}
-                                </span>
-                            )}
-                            {ac.activeUntil && (
-                                <span className="admin-activation-time">
-                                    {isEnglish ? 'Until: ' : '至：'}{new Date(ac.activeUntil).toLocaleString()}
-                                </span>
-                            )}
-                        </div>
-                        <div className="admin-code-url">
-                            <input readOnly value={ac.code} className="admin-code-input"/>
-                            <button className="admin-copy-btn" onClick={() => navigator.clipboard.writeText(ac.code)}>
-                                {isEnglish ? 'Copy' : '复制'}
-                            </button>
-                        </div>
-                        <div className="admin-single-code-actions">
                             <button
-                                className={`admin-toggle-btn ${ac.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                onClick={() => toggleActivationCodeActive(ac)}
-                            >
-                                {ac.active ? (isEnglish ? 'Deactivate' : '停用') : (isEnglish ? 'Activate' : '激活')}
-                            </button>
-                            <button className="admin-toggle-btn admin-toggle-revoke"
-                                    onClick={() => deleteActivationCode(ac)}>
-                                {isEnglish ? 'Delete' : '删除'}
+                                className="admin-generate-btn admin-mt-12"
+                                onClick={() => createBadgeActivationCode(selectedBadgeDef.id)}
+                                disabled={generatingActivationCode}>
+                                {generatingActivationCode
+                                    ? (isEnglish ? 'Generating...' : '生成中...')
+                                    : (isEnglish ? '+ Generate Activation Code' : '+ 生成激活码')}
                             </button>
                         </div>
-                    </div>
-                ))}
+
+                        {loadingActivationCodes && <div className="profile-spinner admin-spinner-center"/>}
+                        {!loadingActivationCodes && badgeActivationCodes.length === 0 && (
+                            <p className="admin-no-results">{isEnglish ? 'No activation codes yet.' : '暂无激活码。'}</p>
+                        )}
+
+                        {!loadingActivationCodes && badgeActivationCodes.map((ac) => (
+                            <div key={ac.id} className="admin-single-code admin-mt-12">
+                                <div className="admin-activation-meta">
+                                    <span className={ac.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
+                                        {ac.active ? (isEnglish ? 'Active' : '活跃') : (isEnglish ? 'Inactive' : '已停用')}
+                                    </span>
+                                    <span className="admin-activation-usage">
+                                        {ac.maxUses === 0
+                                            ? (isEnglish ? `Used ${ac.usedCount} / ∞ times` : `已使用 ${ac.usedCount} / ∞ 次`)
+                                            : (isEnglish ? `Used ${ac.usedCount} / ${ac.maxUses} times` : `已使用 ${ac.usedCount} / ${ac.maxUses} 次`)}
+                                    </span>
+                                    {ac.activeFrom && (
+                                        <span className="admin-activation-time">
+                                            {isEnglish ? 'From: ' : '从：'}{new Date(ac.activeFrom).toLocaleString()}
+                                        </span>
+                                    )}
+                                    {ac.activeUntil && (
+                                        <span className="admin-activation-time">
+                                            {isEnglish ? 'Until: ' : '至：'}{new Date(ac.activeUntil).toLocaleString()}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="admin-code-url">
+                                    <input readOnly value={ac.code} className="admin-code-input"/>
+                                    <button className="admin-copy-btn"
+                                            onClick={() => navigator.clipboard.writeText(ac.code)}>
+                                        {isEnglish ? 'Copy' : '复制'}
+                                    </button>
+                                </div>
+                                <div className="admin-single-code-actions">
+                                    <button
+                                        className={`admin-toggle-btn ${ac.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                                        onClick={() => toggleActivationCodeActive(ac)}
+                                    >
+                                        {ac.active ? (isEnglish ? 'Deactivate' : '停用') : (isEnglish ? 'Activate' : '激活')}
+                                    </button>
+                                    <button className="admin-toggle-btn admin-toggle-revoke"
+                                            onClick={() => deleteActivationCode(ac)}>
+                                        {isEnglish ? 'Delete' : '删除'}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </>
+                )}
             </div>
         </div>
     );

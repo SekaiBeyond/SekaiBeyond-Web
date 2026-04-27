@@ -153,29 +153,28 @@ export function AttendeesSection({
 
                         {isExpanded && (
                             <div className="admin-tickets-attendee-detail">
-                                <div className="admin-tickets-attendee-actions">
-                                    <button
-                                        className="admin-toggle-btn admin-toggle-edit"
-                                        onClick={() => onEdit(a)}
-                                        disabled={readOnly}
-                                    >
-                                        {isEnglish ? 'Edit' : '编辑'}
-                                    </button>
-                                    <button
-                                        className="admin-toggle-btn admin-toggle-save"
-                                        onClick={() => onResend(a)}
-                                        disabled={readOnly}
-                                    >
-                                        {isEnglish ? 'Resend Email' : '重发邮件'}
-                                    </button>
-                                    <button
-                                        className="admin-toggle-btn admin-toggle-revoke"
-                                        onClick={() => onDelete(a)}
-                                        disabled={readOnly}
-                                    >
-                                        {isEnglish ? 'Remove' : '移除'}
-                                    </button>
-                                </div>
+                                {!readOnly && (
+                                    <div className="admin-tickets-attendee-actions">
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-edit"
+                                            onClick={() => onEdit(a)}
+                                        >
+                                            {isEnglish ? 'Edit' : '编辑'}
+                                        </button>
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-save"
+                                            onClick={() => onResend(a)}
+                                        >
+                                            {isEnglish ? 'Resend Email' : '重发邮件'}
+                                        </button>
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-revoke"
+                                            onClick={() => onDelete(a)}
+                                        >
+                                            {isEnglish ? 'Remove' : '移除'}
+                                        </button>
+                                    </div>
+                                )}
                                 <table className="admin-tickets-table">
                                     <thead>
                                     <tr>

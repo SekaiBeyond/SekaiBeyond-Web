@@ -12,9 +12,10 @@ interface TagsTabProps {
     tags: Tag[];
     refreshTags: () => Promise<void>;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    readOnly?: boolean;
 }
 
-export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
+export const TagsTab = ({tags, refreshTags, showToast, readOnly = false}: TagsTabProps) => {
     const {isEnglish} = useLanguage();
     const [showCreate, setShowCreate] = useState(false);
     const [name, setName] = useState('');
@@ -89,7 +90,7 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
 
     return (
         <div className="admin-section">
-            {showCreate ? (
+            {!readOnly && (showCreate ? (
                 <div className="admin-create-badge-form">
                     <h4 className="admin-badges-title">
                         {isEnglish ? 'Create New Tag' : '创建新标签'}
@@ -133,7 +134,7 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
                 <button className="admin-generate-btn admin-section-mb" onClick={() => setShowCreate(true)}>
                     {isEnglish ? '+ New Tag' : '+ 新建标签'}
                 </button>
-            )}
+            ))}
 
             {tags.length === 0 && !showCreate && (
                 <p className="admin-no-results">{isEnglish ? 'No tags yet.' : '暂无标签。'}</p>
@@ -181,23 +182,25 @@ export const TagsTab = ({tags, refreshTags, showToast}: TagsTabProps) => {
                                     {tag.nameCn && (
                                         <span className="admin-event-card-date">{tag.nameCn}</span>
                                     )}
-                                    <div className="admin-tag-actions">
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
-                                            onClick={() => openEdit(tag)}
-                                        >
-                                            {isEnglish ? 'Edit' : '编辑'}
-                                        </button>
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                                            onClick={() => deleteTag(tag)}
-                                            disabled={deletingId === tag.id}
-                                        >
-                                            {deletingId === tag.id
-                                                ? (isEnglish ? 'Deleting...' : '删除中...')
-                                                : (isEnglish ? 'Delete' : '删除')}
-                                        </button>
-                                    </div>
+                                    {!readOnly && (
+                                        <div className="admin-tag-actions">
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                                                onClick={() => openEdit(tag)}
+                                            >
+                                                {isEnglish ? 'Edit' : '编辑'}
+                                            </button>
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
+                                                onClick={() => deleteTag(tag)}
+                                                disabled={deletingId === tag.id}
+                                            >
+                                                {deletingId === tag.id
+                                                    ? (isEnglish ? 'Deleting...' : '删除中...')
+                                                    : (isEnglish ? 'Delete' : '删除')}
+                                            </button>
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
