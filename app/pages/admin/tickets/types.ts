@@ -34,6 +34,9 @@ export interface ParsedRow {
     email: string;
     name: string;
     ticketCount: number;
+    existingName?: string;
+    existingTicketCount?: number;
+    action?: 'add' | 'skip' | 'override';
 }
 
 export interface ParseError {

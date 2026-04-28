@@ -2641,7 +2641,7 @@ function renderTemplate(
 export const importEventAttendees = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
 
-    const input = request.data as {eventId?: string; attendees?: unknown};
+    const input = request.data as {eventId?: string; attendees?: unknown; onDuplicate?: string};
     const eventId = validateDocId(input.eventId, "eventId");
     if (!Array.isArray(input.attendees) || input.attendees.length === 0) {
         throw new HttpsError("invalid-argument", "attendees must be a non-empty array.");
@@ -2718,12 +2718,22 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
 
     let addedCount = 0;
     let replacedCount = 0;
+    let skippedCount = 0;
     const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
 
+    const onDuplicate = input.onDuplicate === "override" ? "override" : "skip";
+
     for (const row of normalized.values()) {
+        const existing = existingByEmail.get(row.email);
+
+        if (existing && onDuplicate === "skip") {
+            skippedCount++;
+            continue;
+        }
+
         const {tickets, ticketIds} = buildFreshTickets(row.ticketCount);
         const now = FieldValue.serverTimestamp();
-        const existing = existingByEmail.get(row.email);
+
         if (existing) {
             replacedCount++;
             ops.push(b => b.set(existing.ref, {
@@ -2767,7 +2777,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
 
     await commitInChunks(ops);
 
-    return {added: addedCount, replaced: replacedCount, total: normalized.size};
+    return {added: addedCount, replaced: replacedCount, skipped: skippedCount, total: normalized.size};
 });
 
 /**

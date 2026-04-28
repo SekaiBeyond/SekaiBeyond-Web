@@ -157,7 +157,8 @@ export const callArchiveUpcomingEvent = (data: {eventId: string; tagId: string})
 export const callImportEventAttendees = (data: {
     eventId: string;
     attendees: Array<{email: string; name: string; ticketCount: number}>;
-}) => httpsCallable<typeof data, {added: number; replaced: number; total: number}>(
+    onDuplicate?: 'skip' | 'override';
+}) => httpsCallable<typeof data, {added: number; replaced: number; skipped: number; total: number}>(
     getFunctions(), 'importEventAttendees')(data);
 
 export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>

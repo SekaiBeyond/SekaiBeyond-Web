@@ -3,19 +3,20 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportEventAttendees, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 import { EMAIL_RE } from './helpers';
-import type { ParsedRow, ParseError } from './types';
+import type { AttendeeData, ParsedRow, ParseError } from './types';
 
 const MAX_PREVIEW = 50;
 const MAX_IMPORT_ROWS = 1000;
 
 interface ImportSectionProps {
     eventId: string;
+    existingAttendees?: AttendeeData[];
     readOnly: boolean;
     showToast: ShowToast;
     onImported: () => void;
 }
 
-export function ImportSection({eventId, readOnly, showToast, onImported}: ImportSectionProps) {
+export function ImportSection({eventId, existingAttendees, readOnly, showToast, onImported}: ImportSectionProps) {
     const {isEnglish} = useLanguage();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -24,24 +25,34 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
     const [importing, setImporting] = useState(false);
     const [busy, setBusy] = useState(false);
 
-    const validateRows = (fields: string[], records: Record<string, string>[]) => {
+    const [rawFields, setRawFields] = useState<string[]>([]);
+    const [rawRecords, setRawRecords] = useState<Record<string, string>[]>([]);
+    const [emailCol, setEmailCol] = useState<string>('');
+    const [nameCol, setNameCol] = useState<string>('');
+    const [countCol, setCountCol] = useState<string>('');
+    const [rowActions, setRowActions] = useState<Record<string, 'skip' | 'override'>>({});
+
+    const clearForm = () => {
+        setRows([]);
+        setErrors([]);
+        setFileName('');
+        setRawFields([]);
+        setRawRecords([]);
+        setEmailCol('');
+        setNameCol('');
+        setCountCol('');
+        setRowActions({});
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const validateRows = (emailKey: string, nameKey: string, countKey: string, records: Record<string, string>[]) => {
+        const existingEmails = new Map(existingAttendees?.map(a => [a.email.toLowerCase(), {
+            name: a.name,
+            ticketCount: a.ticketCount
+        }]) || []);
         const parsedRows: ParsedRow[] = [];
         const errs: ParseError[] = [];
         const seen = new Map<string, number>();
-
-        const fieldName = (keys: string[], ...candidates: string[]) => {
-            const lower = keys.map(k => k.toLowerCase().trim());
-            for (const c of candidates) {
-                const idx = lower.indexOf(c);
-                if (idx >= 0) return keys[idx];
-            }
-            return null;
-        };
-
-        const emailKey = fieldName(fields, 'email', 'e-mail');
-        const nameKey = fieldName(fields, 'name', 'full name', 'display name');
-        const countKey = fieldName(fields, 'ticketcount', 'ticket count',
-            'ticket_count', 'tickets', 'quantity', 'count');
 
         if (!emailKey || !nameKey || !countKey) {
             return {
@@ -49,8 +60,8 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
                 errors: [{
                     row: 0,
                     message: isEnglish
-                        ? 'File must have columns: email, name, ticketCount (or "tickets").'
-                        : '文件需要包含列：email、name、ticketCount（或"tickets"）。',
+                        ? 'Please select columns for Email, Name, and Ticket Count.'
+                        : '请选择用于邮箱、姓名和门票数量的列。',
                 }],
             };
         }
@@ -103,12 +114,23 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
                 });
             }
             seen.set(email, parsedRows.length);
-            parsedRows.push({email, name, ticketCount: count});
+            parsedRows.push({
+                email,
+                name,
+                ticketCount: count,
+                existingName: existingEmails.get(email)?.name,
+                existingTicketCount: existingEmails.get(email)?.ticketCount,
+                action: existingEmails.has(email) ? 'skip' : 'add'
+            });
         });
 
         const deduped = new Map<string, ParsedRow>();
         for (const r of parsedRows) deduped.set(r.email, r);
-        const finalRows = Array.from(deduped.values());
+        const finalRows = Array.from(deduped.values()).sort((a, b) => {
+            if (a.action !== 'add' && b.action === 'add') return -1;
+            if (a.action === 'add' && b.action !== 'add') return 1;
+            return 0;
+        });
 
         if (finalRows.length > MAX_IMPORT_ROWS) {
             errs.push({
@@ -120,6 +142,55 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
         }
 
         return {rows: finalRows, errors: errs};
+    };
+
+    const processFile = (fields: string[], records: Record<string, string>[]) => {
+        setRawFields(fields);
+        setRawRecords(records);
+
+        const fieldName = (keys: string[], ...candidates: string[]) => {
+            const lower = keys.map(k => k.toLowerCase().trim());
+            for (const c of candidates) {
+                const idx = lower.indexOf(c);
+                if (idx >= 0) return keys[idx];
+            }
+            return '';
+        };
+
+        const eCol = fieldName(fields, 'email', 'e-mail');
+        const nCol = fieldName(fields, 'name', 'full name', 'display name');
+        const cCol = fieldName(fields, 'ticketcount', 'ticket count',
+            'ticket_count', 'tickets', 'quantity', 'count');
+
+        setEmailCol(eCol);
+        setNameCol(nCol);
+        setCountCol(cCol);
+
+        const {rows: finalRows, errors: errs} = validateRows(eCol, nCol, cCol, records);
+        setRows(finalRows);
+        setErrors(errs);
+    };
+
+    const handleMappingChange = (type: 'email' | 'name' | 'count', val: string) => {
+        let e = emailCol;
+        let n = nameCol;
+        let c = countCol;
+        if (type === 'email') {
+            setEmailCol(val);
+            e = val;
+        }
+        if (type === 'name') {
+            setNameCol(val);
+            n = val;
+        }
+        if (type === 'count') {
+            setCountCol(val);
+            c = val;
+        }
+
+        const {rows: finalRows, errors: errs} = validateRows(e, n, c, rawRecords);
+        setRows(finalRows);
+        setErrors(errs);
     };
 
     const parseExcel = async (file: File) => {
@@ -180,9 +251,7 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
             if (isExcel) {
                 try {
                     const {fields, records} = await parseExcel(file);
-                    const {rows: finalRows, errors: errs} = validateRows(fields, records);
-                    setRows(finalRows);
-                    setErrors(errs);
+                    processFile(fields, records);
                 } catch (err) {
                     console.error('[import] excel parse error', err);
                     setErrors([{
@@ -198,9 +267,7 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
                         skipEmptyLines: 'greedy',
                         complete: (res) => {
                             const fields = res.meta.fields ?? [];
-                            const {rows: finalRows, errors: errs} = validateRows(fields, res.data);
-                            setRows(finalRows);
-                            setErrors(errs);
+                            processFile(fields, res.data);
                             resolve();
                         },
                         error: (err: Error) => {
@@ -224,24 +291,39 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
     const confirmImport = async () => {
         if (readOnly) return;
         if (rows.length === 0) return;
+
+        const finalSubmitRows = rows.map(r => ({
+            ...r,
+            action: r.action === 'add' ? 'add' : (rowActions[r.email] || 'skip')
+        }));
+
+        const toSend = finalSubmitRows.filter(r => r.action !== 'skip');
+        const manuallySkipped = finalSubmitRows.filter(r => r.action === 'skip').length;
+
+        if (toSend.length === 0) {
+            showToast(isEnglish ? 'No attendees to import after skipping.' : '跳过后没有可导入的参加者。', 'warning');
+            return;
+        }
+
         const ok = window.confirm(isEnglish
-            ? `Import ${rows.length} attendees? Existing emails will have their tickets re-issued.`
-            : `导入 ${rows.length} 位参加者？已存在的邮箱将重新签发门票。`);
+            ? `Import ${toSend.length} attendees (${manuallySkipped} skipped)?`
+            : `导入 ${toSend.length} 位参加者（跳过 ${manuallySkipped} 位）？`);
         if (!ok) return;
+
         setImporting(true);
         try {
-            const result = await callImportEventAttendees({eventId, attendees: rows});
-            const {added, replaced, total} = result.data;
+            // We pass onDuplicate: 'override' because we've already filtered out the ones we want to skip locally.
+            // Any existing ones remaining in 'toSend' are explicitly meant to be overridden.
+            const result = await callImportEventAttendees({eventId, attendees: toSend, onDuplicate: 'override'});
+            const {added, replaced, skipped, total} = result.data;
+            const totalSkipped = skipped + manuallySkipped;
             showToast(
                 isEnglish
-                    ? `Imported ${total}: ${added} new, ${replaced} replaced.`
-                    : `已导入 ${total} 位：新增 ${added}，替换 ${replaced}。`,
+                    ? `Imported: ${added} new, ${replaced} replaced, ${totalSkipped} skipped.`
+                    : `共处理：新增 ${added}，替换 ${replaced}，跳过 ${totalSkipped}。`,
                 'success',
             );
-            setRows([]);
-            setErrors([]);
-            setFileName('');
-            if (fileInputRef.current) fileInputRef.current.value = '';
+            clearForm();
             onImported();
         } catch (err) {
             const code = functionsErrorCode(err);
@@ -264,14 +346,14 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
         }
     };
 
-    const canImport = !readOnly && !importing && rows.length > 0 && errors.filter(e => e.row === 0).length === 0;
+    const canImport = !readOnly && !importing && rows.length > 0 && errors.filter(e => e.row === 0).length === 0 && !!emailCol && !!nameCol && !!countCol;
 
     return (
         <div className="admin-tickets-import">
             <p className="admin-helper-text">
                 {isEnglish
-                    ? 'Upload a CSV or Excel file with columns: email, name, ticketCount (or "tickets"). Re-importing an existing email re-issues their tickets.'
-                    : '上传 CSV 或 Excel 文件，需包含列：email、name、ticketCount（或"tickets"）。重复导入相同邮箱会重新签发该人的门票。'}
+                    ? 'Upload a CSV or Excel file to begin importing tickets. Existing emails will have their tickets re-issued.'
+                    : '上传 CSV 或 Excel 文件开始导入门票。重复导入相同邮箱会重新签发该人的门票。'}
             </p>
             <div className="admin-tickets-import-file-row">
                 <input
@@ -284,8 +366,61 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
                 {fileName && <span className="admin-tickets-import-filename">{fileName}</span>}
             </div>
 
+            {rawFields.length > 0 && (
+                <div style={{marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                    <div className="admin-tickets-import-mapping"
+                         style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
+                        <label style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                            <span style={{
+                                fontWeight: 500,
+                                fontSize: '13px'
+                            }}>{isEnglish ? 'Email Column:' : '邮箱列：'}</span>
+                            <select value={emailCol} onChange={e => handleMappingChange('email', e.target.value)}
+                                    disabled={readOnly || busy} style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                border: '1px solid var(--border-color, #ccc)'
+                            }}>
+                                <option value="">-- {isEnglish ? 'Select' : '选择'} --</option>
+                                {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </label>
+                        <label style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                            <span style={{
+                                fontWeight: 500,
+                                fontSize: '13px'
+                            }}>{isEnglish ? 'Name Column:' : '姓名列：'}</span>
+                            <select value={nameCol} onChange={e => handleMappingChange('name', e.target.value)}
+                                    disabled={readOnly || busy} style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                border: '1px solid var(--border-color, #ccc)'
+                            }}>
+                                <option value="">-- {isEnglish ? 'Select' : '选择'} --</option>
+                                {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </label>
+                        <label style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                            <span style={{
+                                fontWeight: 500,
+                                fontSize: '13px'
+                            }}>{isEnglish ? 'Tickets Column:' : '门票数量列：'}</span>
+                            <select value={countCol} onChange={e => handleMappingChange('count', e.target.value)}
+                                    disabled={readOnly || busy} style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                border: '1px solid var(--border-color, #ccc)'
+                            }}>
+                                <option value="">-- {isEnglish ? 'Select' : '选择'} --</option>
+                                {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </label>
+                    </div>
+                </div>
+            )}
+
             {errors.length > 0 && (
-                <div className="admin-tickets-import-errors">
+                <div className="admin-tickets-import-errors" style={{marginTop: '1rem'}}>
                     <strong>{isEnglish ? 'Issues' : '问题'}</strong>
                     <ul>
                         {errors.slice(0, 20).map((e, i) => (
@@ -310,7 +445,7 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
             )}
 
             {rows.length > 0 && (
-                <>
+                <div style={{marginTop: '1rem'}}>
                     <div className="admin-tickets-import-preview">
                         <div className="admin-tickets-import-preview-header">
                             <strong>
@@ -319,7 +454,7 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
                                     : `预览（${rows.length} 行）`}
                             </strong>
                             {rows.length > MAX_PREVIEW && (
-                                <span className="admin-helper-text">
+                                <span className="admin-helper-text" style={{marginLeft: '1rem'}}>
                                     {isEnglish
                                         ? `Showing first ${MAX_PREVIEW}.`
                                         : `仅显示前 ${MAX_PREVIEW} 行。`}
@@ -333,6 +468,7 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
                                 <th>{isEnglish ? 'Email' : '邮箱'}</th>
                                 <th>{isEnglish ? 'Name' : '姓名'}</th>
                                 <th>{isEnglish ? 'Tickets' : '门票数'}</th>
+                                <th>{isEnglish ? 'Action' : '操作'}</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -340,14 +476,65 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
                                 <tr key={`${r.email}-${i}`}>
                                     <td>{i + 1}</td>
                                     <td>{r.email}</td>
-                                    <td>{r.name}</td>
-                                    <td>{r.ticketCount}</td>
+                                    <td>
+                                        {r.existingName !== undefined && r.existingName !== r.name ? (
+                                            <>
+                                                <span style={{
+                                                    textDecoration: 'line-through',
+                                                    color: 'var(--text-color-light, #888)',
+                                                    marginRight: '6px'
+                                                }}>{r.existingName}</span>
+                                                <span style={{
+                                                    color: 'var(--success-color, #28a745)',
+                                                    fontWeight: 'bold'
+                                                }}>{r.name}</span>
+                                            </>
+                                        ) : r.name}
+                                    </td>
+                                    <td>
+                                        {r.existingTicketCount !== undefined && r.existingTicketCount !== r.ticketCount ? (
+                                            <>
+                                                <span style={{
+                                                    textDecoration: 'line-through',
+                                                    color: 'var(--text-color-light, #888)',
+                                                    marginRight: '6px'
+                                                }}>{r.existingTicketCount}</span>
+                                                <span style={{
+                                                    color: 'var(--success-color, #28a745)',
+                                                    fontWeight: 'bold'
+                                                }}>{r.ticketCount}</span>
+                                            </>
+                                        ) : r.ticketCount}
+                                    </td>
+                                    <td>
+                                        {r.action === 'add' ? (
+                                            <span
+                                                style={{color: 'var(--success-color, #28a745)'}}>{isEnglish ? 'Add New' : '新增'}</span>
+                                        ) : (
+                                            <select
+                                                value={rowActions[r.email] || 'skip'}
+                                                onChange={e => setRowActions(prev => ({
+                                                    ...prev,
+                                                    [r.email]: e.target.value as 'skip' | 'override'
+                                                }))}
+                                                disabled={readOnly || busy}
+                                                style={{
+                                                    padding: '2px 4px',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid var(--border-color, #ccc)'
+                                                }}
+                                            >
+                                                <option value="skip">{isEnglish ? 'Skip' : '跳过'}</option>
+                                                <option value="override">{isEnglish ? 'Override' : '覆盖'}</option>
+                                            </select>
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                             </tbody>
                         </table>
                     </div>
-                    <div className="admin-btn-row">
+                    <div className="admin-btn-row" style={{marginTop: '1rem'}}>
                         <button
                             className="admin-toggle-btn admin-toggle-save"
                             onClick={confirmImport}
@@ -359,18 +546,13 @@ export function ImportSection({eventId, readOnly, showToast, onImported}: Import
                         </button>
                         <button
                             className="admin-toggle-btn admin-toggle-cancel"
-                            onClick={() => {
-                                setRows([]);
-                                setErrors([]);
-                                setFileName('');
-                                if (fileInputRef.current) fileInputRef.current.value = '';
-                            }}
+                            onClick={clearForm}
                             disabled={importing}
                         >
                             {isEnglish ? 'Clear' : '清空'}
                         </button>
                     </div>
-                </>
+                </div>
             )}
         </div>
     );

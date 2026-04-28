@@ -243,6 +243,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
             {section === 'import' && (
                 <ImportSection
                     eventId={eventId}
+                    existingAttendees={attendees}
                     readOnly={readOnly}
                     showToast={showToast}
                     onImported={() => void loadAttendees()}
