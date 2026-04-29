@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     callCancelEventDeletion,
@@ -59,8 +59,10 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
     const [eventSubTab, setEventSubTab] = useState<'attendees' | 'staff'>('attendees');
     const [staffCount, setStaffCount] = useState<number | null>(null);
+    const selectGenRef = useRef(0);
 
     const selectManagedEvent = async (eventId: string) => {
+        const gen = ++selectGenRef.current;
         setManagedEvent(eventId);
         setEventAttendees([]);
         setStaffCount(null);
@@ -68,11 +70,14 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         try {
             await loadEventAttendees(eventId);
         } catch (err) {
+            if (selectGenRef.current !== gen) return;
             console.error('Failed to load attendees:', err);
             showToast(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。', 'error');
         }
         try {
-            setStaffCount(await fetchEventStaffCount(eventId));
+            const count = await fetchEventStaffCount(eventId);
+            if (selectGenRef.current !== gen) return;
+            setStaffCount(count);
         } catch {
             // Non-fatal — count badge just won't appear.
         }
@@ -115,13 +120,17 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     };
 
     const loadEventAttendees = async (eventId: string) => {
+        const gen = selectGenRef.current;
         setSearching(true);
         try {
-            setEventAttendees(await fetchEventAttendees(eventId));
+            const list = await fetchEventAttendees(eventId);
+            if (selectGenRef.current !== gen) return;
+            setEventAttendees(list);
         } catch {
+            if (selectGenRef.current !== gen) return;
             showToast(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。', 'error');
         } finally {
-            setSearching(false);
+            if (selectGenRef.current === gen) setSearching(false);
         }
     };
 

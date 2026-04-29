@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportEventAttendees, functionsErrorCode } from '~/lib/firebase';
+import { useModalEffects } from '~/lib/useModalEffects';
 import type { AttendeeData } from './tickets/types';
 import type { ShowToast } from './utils';
 
@@ -18,10 +19,20 @@ export function AttendeeAddModal({
                                      eventId, existingAttendees, onClose, onAdded, showToast,
                                  }: AttendeeAddModalProps) {
     const {isEnglish} = useLanguage();
+    const overlayRef = useRef<HTMLDivElement>(null);
+    useModalEffects(true, overlayRef);
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
     const [ticketCount, setTicketCount] = useState('1');
     const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !saving) onClose();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [saving, onClose]);
 
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedName = name.trim();
@@ -79,7 +90,7 @@ export function AttendeeAddModal({
     };
 
     return (
-        <div className="admin-tickets-preview-modal" onClick={onClose}>
+        <div ref={overlayRef} className="admin-tickets-preview-modal" onClick={onClose}>
             <div
                 className="admin-tickets-preview-content"
                 onClick={(e) => e.stopPropagation()}

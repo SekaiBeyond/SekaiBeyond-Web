@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUpdateEventEmailTemplate, getFirebaseDb } from '~/lib/firebase';
+import { useModalEffects } from '~/lib/useModalEffects';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { ShowToast } from '../utils';
 import { DEFAULT_TEMPLATE_BODY_EN, DEFAULT_TEMPLATE_SUBJECT, renderSamplePreview, tsToDate, } from './helpers';
@@ -24,6 +25,17 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
+    const previewOverlayRef = useRef<HTMLDivElement>(null);
+    useModalEffects(showPreview, previewOverlayRef);
+
+    useEffect(() => {
+        if (!showPreview) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setShowPreview(false);
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [showPreview]);
 
     useEffect(() => {
         let cancelled = false;
@@ -196,7 +208,8 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
             )}
 
             {showPreview && (
-                <div className="admin-tickets-preview-modal" onClick={() => setShowPreview(false)}>
+                <div ref={previewOverlayRef} className="admin-tickets-preview-modal"
+                     onClick={() => setShowPreview(false)}>
                     <div
                         className="admin-tickets-preview-content"
                         onClick={(e) => e.stopPropagation()}

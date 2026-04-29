@@ -461,78 +461,80 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                 </span>
                             )}
                         </div>
-                        <table className="admin-tickets-table">
-                            <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>{isEnglish ? 'Email' : '邮箱'}</th>
-                                <th>{isEnglish ? 'Name' : '姓名'}</th>
-                                <th>{isEnglish ? 'Tickets' : '门票数'}</th>
-                                <th>{isEnglish ? 'Action' : '操作'}</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {rows.slice(0, MAX_PREVIEW).map((r, i) => (
-                                <tr key={`${r.email}-${i}`}>
-                                    <td>{i + 1}</td>
-                                    <td>{r.email}</td>
-                                    <td>
-                                        {r.existingName !== undefined && r.existingName !== r.name ? (
-                                            <>
+                        <div className="admin-tickets-table-wrap">
+                            <table className="admin-tickets-table">
+                                <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>{isEnglish ? 'Email' : '邮箱'}</th>
+                                    <th>{isEnglish ? 'Name' : '姓名'}</th>
+                                    <th>{isEnglish ? 'Tickets' : '门票数'}</th>
+                                    <th>{isEnglish ? 'Action' : '操作'}</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {rows.slice(0, MAX_PREVIEW).map((r, i) => (
+                                    <tr key={`${r.email}-${i}`}>
+                                        <td>{i + 1}</td>
+                                        <td>{r.email}</td>
+                                        <td>
+                                            {r.existingName !== undefined && r.existingName !== r.name ? (
+                                                <>
                                                 <span style={{
                                                     textDecoration: 'line-through',
                                                     color: 'var(--text-color-light, #888)',
                                                     marginRight: '6px'
                                                 }}>{r.existingName}</span>
-                                                <span style={{
-                                                    color: 'var(--success-color, #28a745)',
-                                                    fontWeight: 'bold'
-                                                }}>{r.name}</span>
-                                            </>
-                                        ) : r.name}
-                                    </td>
-                                    <td>
-                                        {r.existingTicketCount !== undefined && r.existingTicketCount !== r.ticketCount ? (
-                                            <>
+                                                    <span style={{
+                                                        color: 'var(--success-color, #28a745)',
+                                                        fontWeight: 'bold'
+                                                    }}>{r.name}</span>
+                                                </>
+                                            ) : r.name}
+                                        </td>
+                                        <td>
+                                            {r.existingTicketCount !== undefined && r.existingTicketCount !== r.ticketCount ? (
+                                                <>
                                                 <span style={{
                                                     textDecoration: 'line-through',
                                                     color: 'var(--text-color-light, #888)',
                                                     marginRight: '6px'
                                                 }}>{r.existingTicketCount}</span>
-                                                <span style={{
-                                                    color: 'var(--success-color, #28a745)',
-                                                    fontWeight: 'bold'
-                                                }}>{r.ticketCount}</span>
-                                            </>
-                                        ) : r.ticketCount}
-                                    </td>
-                                    <td>
-                                        {r.action === 'add' ? (
-                                            <span
-                                                style={{color: 'var(--success-color, #28a745)'}}>{isEnglish ? 'Add New' : '新增'}</span>
-                                        ) : (
-                                            <select
-                                                value={rowActions[r.email] || 'skip'}
-                                                onChange={e => setRowActions(prev => ({
-                                                    ...prev,
-                                                    [r.email]: e.target.value as 'skip' | 'override'
-                                                }))}
-                                                disabled={readOnly || busy}
-                                                style={{
-                                                    padding: '2px 4px',
-                                                    borderRadius: '4px',
-                                                    border: '1px solid var(--border-color, #ccc)'
-                                                }}
-                                            >
-                                                <option value="skip">{isEnglish ? 'Skip' : '跳过'}</option>
-                                                <option value="override">{isEnglish ? 'Override' : '覆盖'}</option>
-                                            </select>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                            </tbody>
-                        </table>
+                                                    <span style={{
+                                                        color: 'var(--success-color, #28a745)',
+                                                        fontWeight: 'bold'
+                                                    }}>{r.ticketCount}</span>
+                                                </>
+                                            ) : r.ticketCount}
+                                        </td>
+                                        <td>
+                                            {r.action === 'add' ? (
+                                                <span
+                                                    style={{color: 'var(--success-color, #28a745)'}}>{isEnglish ? 'Add New' : '新增'}</span>
+                                            ) : (
+                                                <select
+                                                    value={rowActions[r.email] || 'skip'}
+                                                    onChange={e => setRowActions(prev => ({
+                                                        ...prev,
+                                                        [r.email]: e.target.value as 'skip' | 'override'
+                                                    }))}
+                                                    disabled={readOnly || busy}
+                                                    style={{
+                                                        padding: '2px 4px',
+                                                        borderRadius: '4px',
+                                                        border: '1px solid var(--border-color, #ccc)'
+                                                    }}
+                                                >
+                                                    <option value="skip">{isEnglish ? 'Skip' : '跳过'}</option>
+                                                    <option value="override">{isEnglish ? 'Override' : '覆盖'}</option>
+                                                </select>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                     <div className="admin-btn-row" style={{marginTop: '1rem'}}>
                         <button

@@ -175,70 +175,72 @@ export function AttendeesSection({
                                         </button>
                                     </div>
                                 )}
-                                <table className="admin-tickets-table">
-                                    <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>{isEnglish ? 'Ticket ID' : '门票 ID'}</th>
-                                        <th>{isEnglish ? 'Status' : '状态'}</th>
-                                        <th>{isEnglish ? 'Redeemed By' : '验证人'}</th>
-                                        <th></th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    {a.tickets.map((t, i) => (
-                                        <tr key={t.ticketId}>
-                                            <td>{i + 1}</td>
-                                            <td className="admin-tickets-ticket-id" title={t.ticketId}>
-                                                {t.ticketId.slice(0, 8)}…
-                                            </td>
-                                            <td>
-                                                {t.voided ? (
-                                                    <span className="admin-tickets-tag admin-tickets-tag-voided">
+                                <div className="admin-tickets-table-wrap">
+                                    <table className="admin-tickets-table">
+                                        <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>{isEnglish ? 'Ticket ID' : '门票 ID'}</th>
+                                            <th>{isEnglish ? 'Status' : '状态'}</th>
+                                            <th>{isEnglish ? 'Redeemed By' : '验证人'}</th>
+                                            <th></th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        {a.tickets.map((t, i) => (
+                                            <tr key={t.ticketId}>
+                                                <td>{i + 1}</td>
+                                                <td className="admin-tickets-ticket-id" title={t.ticketId}>
+                                                    {t.ticketId.slice(0, 8)}…
+                                                </td>
+                                                <td>
+                                                    {t.voided ? (
+                                                        <span className="admin-tickets-tag admin-tickets-tag-voided">
                                                         {isEnglish ? 'Voided' : '作废'}
                                                     </span>
-                                                ) : t.redeemed ? (
-                                                    <span className="admin-tickets-tag admin-tickets-tag-used">
+                                                    ) : t.redeemed ? (
+                                                        <span className="admin-tickets-tag admin-tickets-tag-used">
                                                         {isEnglish ? 'Redeemed' : '已验证'}
                                                     </span>
-                                                ) : (
-                                                    <span className="admin-tickets-tag admin-tickets-tag-fresh">
+                                                    ) : (
+                                                        <span className="admin-tickets-tag admin-tickets-tag-fresh">
                                                         {isEnglish ? 'Valid' : '有效'}
                                                     </span>
-                                                )}
-                                            </td>
-                                            <td>
-                                                {t.redeemed ? (
-                                                    <span className="admin-tickets-redeemed-meta">
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    {t.redeemed ? (
+                                                        <span className="admin-tickets-redeemed-meta">
                                                         {t.redeemedByName || '—'}
-                                                        {t.redeemedAt && (
-                                                            <><br/>
-                                                                <small>
-                                                                    {t.redeemedAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
-                                                                        month: 'short', day: 'numeric',
-                                                                        hour: '2-digit', minute: '2-digit',
-                                                                    })}
-                                                                </small>
-                                                            </>
-                                                        )}
+                                                            {t.redeemedAt && (
+                                                                <><br/>
+                                                                    <small>
+                                                                        {t.redeemedAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                                                                            month: 'short', day: 'numeric',
+                                                                            hour: '2-digit', minute: '2-digit',
+                                                                        })}
+                                                                    </small>
+                                                                </>
+                                                            )}
                                                     </span>
-                                                ) : '—'}
-                                            </td>
-                                            <td>
-                                                {!t.voided && (
-                                                    <button
-                                                        className="admin-tickets-void-btn"
-                                                        onClick={() => onVoidTicket(a, t.ticketId)}
-                                                        disabled={readOnly}
-                                                    >
-                                                        {isEnglish ? 'Void' : '作废'}
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    </tbody>
-                                </table>
+                                                    ) : '—'}
+                                                </td>
+                                                <td>
+                                                    {!t.voided && (
+                                                        <button
+                                                            className="admin-tickets-void-btn"
+                                                            onClick={() => onVoidTicket(a, t.ticketId)}
+                                                            disabled={readOnly}
+                                                        >
+                                                            {isEnglish ? 'Void' : '作废'}
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         )}
                     </div>

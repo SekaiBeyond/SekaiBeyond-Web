@@ -83,7 +83,7 @@ export function PastEventAttendeesSection({
                         users,
                         orderBy('displayName'),
                         startAt(p),
-                        endAt(p + ''),
+                        endAt(p + ''),
                         limit(SEARCH_LIMIT),
                     ))),
                 );

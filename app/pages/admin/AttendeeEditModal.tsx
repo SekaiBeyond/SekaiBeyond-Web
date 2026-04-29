@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUpdateEventAttendee, functionsErrorCode } from '~/lib/firebase';
+import { useModalEffects } from '~/lib/useModalEffects';
 import type { AttendeeData } from './tickets/types';
 import type { ShowToast } from './utils';
 
@@ -25,9 +26,19 @@ export function AttendeeEditModal({
                                       showToast
                                   }: AttendeeEditModalProps) {
     const {isEnglish} = useLanguage();
+    const overlayRef = useRef<HTMLDivElement>(null);
+    useModalEffects(true, overlayRef);
     const [name, setName] = useState(attendee.name);
     const [ticketCount, setTicketCount] = useState(String(attendee.ticketCount));
     const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !saving) onClose();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [saving, onClose]);
 
     const newCount = parseInt(ticketCount, 10);
     const countValid = Number.isInteger(newCount) && newCount >= 1 && newCount <= 50;
@@ -83,7 +94,7 @@ export function AttendeeEditModal({
     };
 
     return (
-        <div className="admin-tickets-preview-modal" onClick={onClose}>
+        <div ref={overlayRef} className="admin-tickets-preview-modal" onClick={onClose}>
             <div
                 className="admin-tickets-preview-content"
                 onClick={(e) => e.stopPropagation()}

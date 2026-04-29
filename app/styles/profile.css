@@ -939,8 +939,9 @@
 
     .profile-page {
         padding-top: 70px;
-        padding-left: 16px;
-        padding-right: 16px;
+        padding-left: max(20px, env(safe-area-inset-left));
+        padding-right: max(20px, env(safe-area-inset-right));
+        overflow-x: hidden;
     }
 
     .profile-header {

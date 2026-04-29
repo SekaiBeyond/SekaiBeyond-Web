@@ -79,7 +79,7 @@ export const LoginButton = () => {
                     >
                         {isEnglish ? 'Redeem Code' : '兑换激活码'}
                     </button>
-                    {profile && (hasPermission(profile.group, 'core-staff') || profile.eventStaffEvents.length > 0) && (
+                    {profile && (hasPermission(profile.group, 'staff') || profile.eventStaffEvents.length > 0) && (
                         <Link to="/admin" className="user-dropdown-item" onClick={closeDropdown}>
                             {isEnglish ? 'Admin Panel' : '管理面板'}
                         </Link>

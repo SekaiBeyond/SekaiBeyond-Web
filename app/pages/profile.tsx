@@ -744,7 +744,9 @@ export const ProfilePage = () => {
                     <div className="badge-modal-content" onClick={e => e.stopPropagation()}>
                         <button className="badge-modal-close" onClick={() => setSelectedBadge(null)}>×</button>
                         <div className="badge-modal-header">
-                            <img src={selectedBadge.imageUrl} alt={isEnglish ? selectedBadge.name : selectedBadge.nameCn} className="badge-modal-icon"/>
+                            <img src={selectedBadge.imageUrl}
+                                 alt={isEnglish ? selectedBadge.name : selectedBadge.nameCn}
+                                 className="badge-modal-icon"/>
                             <h3 className="badge-modal-title">{isEnglish ? selectedBadge.name : selectedBadge.nameCn}</h3>
                         </div>
                         <p className="badge-modal-desc">{isEnglish ? selectedBadge.description : selectedBadge.descriptionCn}</p>

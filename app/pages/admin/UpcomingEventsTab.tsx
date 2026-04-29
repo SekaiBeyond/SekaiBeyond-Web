@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -113,12 +113,15 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
     const [searchingAttendees, setSearchingAttendees] = useState(false);
     const [staffCount, setStaffCount] = useState<number | null>(null);
+    const selectGenRef = useRef(0);
 
     const loadEventCode = async (eventId: string) => {
+        const gen = selectGenRef.current;
         const db = getFirebaseDb();
         const codesRef = collection(db, 'claimCodes');
         const q = query(codesRef, where('eventId', '==', eventId));
         const snapshot = await getDocs(q);
+        if (selectGenRef.current !== gen) return;
         const codes: BadgeCode[] = snapshot.docs.map(docSnap => {
             const data = docSnap.data();
             return {
@@ -195,10 +198,12 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     };
 
     const loadStaffCode = async (eventId: string) => {
+        const gen = selectGenRef.current;
         const db = getFirebaseDb();
         const codesRef = collection(db, 'staffClaimCodes');
         const q = query(codesRef, where('eventId', '==', eventId));
         const snapshot = await getDocs(q);
+        if (selectGenRef.current !== gen) return;
         const codes: BadgeCode[] = snapshot.docs.map(docSnap => {
             const data = docSnap.data();
             return {
@@ -282,6 +287,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     };
 
     const selectEvent = async (eventId: string) => {
+        const gen = ++selectGenRef.current;
         setSelectedEvent(eventId);
         setShowArchive(false);
         setArchiveTagId('');
@@ -295,12 +301,15 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         setEventAttendees([]);
         setStaffCount(null);
         void fetchEventStaffCount(eventId)
-            .then(setStaffCount)
+            .then(c => {
+                if (selectGenRef.current === gen) setStaffCount(c);
+            })
             .catch(() => {
                 /* Non-fatal — count badge just won't appear. */
             });
         if (!readOnly) {
             void loadStaffCode(eventId).catch((err) => {
+                if (selectGenRef.current !== gen) return;
                 console.error('Failed to load staff code:', err);
                 showToast(isEnglish ? 'Failed to load staff code.' : '加载工作人员码失败。', 'error');
             });
@@ -310,6 +319,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         try {
             await loadEventCode(eventId);
         } catch (err) {
+            if (selectGenRef.current !== gen) return;
             console.error('Failed to load event code:', err);
             showToast(isEnglish ? 'Failed to load event code.' : '加载活动码失败。', 'error');
         }
