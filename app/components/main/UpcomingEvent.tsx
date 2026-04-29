@@ -136,7 +136,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
 
 export const UpcomingEvent = () => {
     const {isEnglish} = useLanguage();
-    const {activeEvents} = useUpcomingEvents();
+    const {activeEvents, loading} = useUpcomingEvents();
     const [selectedPoster, setSelectedPoster] = useState<string | null>(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isTransitioning, setIsTransitioning] = useState(false);
@@ -176,52 +176,60 @@ export const UpcomingEvent = () => {
     const currentEvent = activeEvents[currentIndex];
 
     return (
-        <section id="upcoming" className="section" hidden={activeEvents.length === 0}>
+        <section id="upcoming" className="section" hidden={!loading && activeEvents.length === 0}>
             <div className="section-header">
                 <h2 className="section-title">{sectionTitle}</h2>
             </div>
 
-            {currentEvent && (
-                <div
-                    className={`carousel-slide${isTransitioning ? (slideDirection === 'left' ? ' carousel-slide--hidden-left' : ' carousel-slide--hidden-right') : ''}`}
-                >
-                    <EventCard
-                        event={currentEvent}
-                        isEnglish={isEnglish}
-                        onPosterClick={() => setSelectedPoster(currentEvent.poster)}
-                    />
+            {loading ? (
+                <div className="loading-container">
+                    <div className="loader"></div>
                 </div>
-            )}
-
-            {hasMultipleEvents && (
-                <div className="carousel-nav">
-                    <button
-                        className="carousel-nav-btn"
-                        onClick={goToPrevious}
-                        aria-label={isEnglish ? "Previous event" : "上一个活动"}
-                    >
-                        ‹
-                    </button>
-
-                    <div className="carousel-dots">
-                        {activeEvents.map((_, index) => (
-                            <button
-                                key={index}
-                                className={`carousel-dot${currentIndex === index ? ' carousel-dot--active' : ''}`}
-                                onClick={() => switchEvent(index, index > currentIndex ? 'left' : 'right')}
-                                aria-label={`${isEnglish ? "Go to event" : "前往活动"} ${index + 1}`}
+            ) : (
+                <>
+                    {currentEvent && (
+                        <div
+                            className={`carousel-slide${isTransitioning ? (slideDirection === 'left' ? ' carousel-slide--hidden-left' : ' carousel-slide--hidden-right') : ''}`}
+                        >
+                            <EventCard
+                                event={currentEvent}
+                                isEnglish={isEnglish}
+                                onPosterClick={() => setSelectedPoster(currentEvent.poster)}
                             />
-                        ))}
-                    </div>
+                        </div>
+                    )}
 
-                    <button
-                        className="carousel-nav-btn"
-                        onClick={goToNext}
-                        aria-label={isEnglish ? "Next event" : "下一个活动"}
-                    >
-                        ›
-                    </button>
-                </div>
+                    {hasMultipleEvents && (
+                        <div className="carousel-nav">
+                            <button
+                                className="carousel-nav-btn"
+                                onClick={goToPrevious}
+                                aria-label={isEnglish ? "Previous event" : "上一个活动"}
+                            >
+                                ‹
+                            </button>
+
+                            <div className="carousel-dots">
+                                {activeEvents.map((_, index) => (
+                                    <button
+                                        key={index}
+                                        className={`carousel-dot${currentIndex === index ? ' carousel-dot--active' : ''}`}
+                                        onClick={() => switchEvent(index, index > currentIndex ? 'left' : 'right')}
+                                        aria-label={`${isEnglish ? "Go to event" : "前往活动"} ${index + 1}`}
+                                    />
+                                ))}
+                            </div>
+
+                            <button
+                                className="carousel-nav-btn"
+                                onClick={goToNext}
+                                aria-label={isEnglish ? "Next event" : "下一个活动"}
+                            >
+                                ›
+                            </button>
+                        </div>
+                    )}
+                </>
             )}
 
             {selectedPoster && (

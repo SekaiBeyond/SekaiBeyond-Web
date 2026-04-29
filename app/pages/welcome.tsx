@@ -9,40 +9,45 @@ import { PastEvents } from "~/components/main/PastEvents";
 import { UpcomingEvent } from "~/components/main/UpcomingEvent";
 import { SekaiBeyondCon } from "~/components/main/SekaiBeyondCon";
 import { GoToTop } from "~/components/GoToTop";
+import { useHashScroll } from "~/lib/useHashScroll";
 
-export const Welcome = () => (
-    <>
-        {/* Navigation */}
-        <Navigation/>
+export const Welcome = () => {
+    useHashScroll();
 
-        {/* Hero Section */}
-        <Hero/>
+    return (
+        <>
+            {/* Navigation */}
+            <Navigation/>
 
-        {/* About Section */}
-        <About/>
+            {/* Hero Section */}
+            <Hero/>
 
-        {/* Video Section */}
-        <Video/>
+            {/* About Section */}
+            <About/>
 
-        {/* Sekai Beyond Con Section */}
-        <SekaiBeyondCon/>
+            {/* Video Section */}
+            <Video/>
 
-        {/* Past Events Section */}
-        <PastEvents/>
+            {/* Sekai Beyond Con Section */}
+            <SekaiBeyondCon/>
 
-        {/* Upcoming Event Section */}
-        <UpcomingEvent/>
+            {/* Past Events Section */}
+            <PastEvents/>
 
-        {/* Team Section */}
-        <Team/>
+            {/* Upcoming Event Section */}
+            <UpcomingEvent/>
 
-        {/* Contact Section */}
-        <Contact/>
+            {/* Team Section */}
+            <Team/>
 
-        {/* Footer */}
-        <Footer/>
+            {/* Contact Section */}
+            <Contact/>
 
-        {/* Go to Top Button */}
-        <GoToTop/>
-    </>
-);
+            {/* Footer */}
+            <Footer/>
+
+            {/* Go to Top Button */}
+            <GoToTop/>
+        </>
+    );
+};
