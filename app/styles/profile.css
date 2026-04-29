@@ -451,6 +451,106 @@
     display: block;
 }
 
+/* Badge Modal */
+.badge-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 20px;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.badge-modal-content {
+    background: white;
+    border-radius: 24px;
+    padding: 32px;
+    width: 100%;
+    max-width: 400px;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.badge-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(0, 0, 0, 0.05);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--color-text-muted);
+}
+
+.badge-modal-icon {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    border: 4px solid var(--color-primary);
+    margin-bottom: 16px;
+    object-fit: cover;
+}
+
+.badge-modal-title {
+    font-size: 22px;
+    color: var(--color-text);
+    margin-bottom: 12px;
+    font-family: var(--font-display);
+}
+
+.badge-modal-desc {
+    font-size: 15px;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+.badge-modal-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    text-align: left;
+}
+
+.badge-modal-meta p {
+    font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.badge-modal-meta strong {
+    color: var(--color-text);
+    font-weight: 700;
+}
+
+.badge-modal-creator-link {
+    color: var(--color-link);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.badge-modal-creator-link:hover {
+    text-decoration: underline;
+}
+
 /* Event cards */
 .profile-event-grid {
     display: grid;
@@ -467,6 +567,7 @@
     background: rgba(255, 255, 255, 0.85);
     box-shadow: 0 2px 12px rgba(255, 150, 200, 0.08);
     transition: transform 0.2s ease;
+    overflow: hidden;
 }
 
 .profile-event-card:hover {
@@ -505,7 +606,9 @@
 
 
 .profile-event-info {
+    flex: 1;
     min-width: 0;
+    overflow: hidden;
 }
 
 .profile-event-category {
@@ -535,6 +638,7 @@
 }
 
 .profile-event-title-link {
+    display: block;
     color: inherit;
     text-decoration: none;
     transition: color 0.2s;
@@ -825,9 +929,39 @@
 
 /* Profile Responsive */
 @media (max-width: 600px) {
+    .profile-nav {
+        padding: 12px 15px;
+    }
+
+    .profile-nav-home {
+        font-size: 20px;
+    }
+
+    .profile-page {
+        padding-top: 70px;
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
     .profile-header {
         flex-direction: column;
         text-align: center;
+        padding: 24px;
+        gap: 16px;
+    }
+
+    .profile-name-row {
+        justify-content: center;
+    }
+
+    .profile-name-edit-group {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .profile-name-input {
+        font-size: 20px;
+        max-width: 240px;
     }
 
     .profile-name {
@@ -836,22 +970,51 @@
 
     .profile-stats {
         flex-direction: column;
+        gap: 12px;
+    }
+
+    .profile-stat {
+        padding: 16px;
     }
 
     .badge-grid {
         justify-content: center;
+        gap: 16px;
+    }
+
+    .badge-tooltip {
+        display: none !important;
     }
 
     .profile-event-grid {
         grid-template-columns: 1fr;
     }
 
-    .profile-nav {
-        padding: 12px 20px;
+    .profile-avatar-overlay,
+    .profile-avatar-delete {
+        opacity: 1;
     }
 
-    .profile-nav-home {
-        font-size: 22px;
+    .profile-avatar-delete {
+        top: 0;
+        right: 0;
+    }
+
+    .profile-avatar-hint-overlay {
+        display: none;
+    }
+
+    .profile-avatar-hint-tooltip {
+        position: static;
+        transform: none;
+        opacity: 1;
+        width: 100%;
+        max-width: none;
+        margin-top: 8px;
+        background: rgba(0, 0, 0, 0.05);
+        color: var(--color-text-muted);
+        pointer-events: auto;
+        padding: 8px 12px;
     }
 }
 
