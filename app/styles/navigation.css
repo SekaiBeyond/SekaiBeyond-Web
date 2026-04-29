@@ -104,7 +104,14 @@
     object-fit: cover;
 }
 
-.user-dropdown-wrapper:hover .login-avatar {
+@media (hover: hover) {
+    .user-dropdown-wrapper:hover .login-avatar {
+        transform: scale(1.1);
+        box-shadow: 0 0 12px rgba(255, 107, 157, 0.4);
+    }
+}
+
+.user-dropdown-wrapper.active .login-avatar {
     transform: scale(1.1);
     box-shadow: 0 0 12px rgba(255, 107, 157, 0.4);
 }
@@ -127,7 +134,15 @@
     transition: all 0.15s ease;
 }
 
-.user-dropdown-wrapper:hover .user-dropdown {
+@media (hover: hover) {
+    .user-dropdown-wrapper:hover .user-dropdown {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+}
+
+.user-dropdown-wrapper.active .user-dropdown {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);

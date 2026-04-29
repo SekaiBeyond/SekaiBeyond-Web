@@ -1370,14 +1370,17 @@
 }
 
 /* Record type tag colors — grouped by color */
-.record-type-group-assign {
+.record-type-group-assign,
+.record-type-title-set,
+.record-type-event-staff-assign,
+.record-type-event-staff-remove {
     background: rgba(255, 152, 0, 0.12);
     color: #e65100;
 }
 
 .record-type-code-create,
-.record-type-code-activate,
-.record-type-code-deactivate,
+.record-type-badge-code-activate,
+.record-type-badge-code-deactivate,
 .record-type-code-delete,
 .record-type-event-code-activate,
 .record-type-event-code-deactivate,
@@ -1387,7 +1390,8 @@
 }
 
 .record-type-badge-grant,
-.record-type-event-attend {
+.record-type-event-attend,
+.record-type-event-claim {
     background: rgba(76, 175, 80, 0.12);
     color: #388e3c;
 }
@@ -1399,9 +1403,13 @@
 }
 
 .record-type-achievement-grant,
+.record-type-badge-claim,
 .record-type-badge-create,
 .record-type-badge-edit,
-.record-type-badge-delete {
+.record-type-badge-delete,
+.record-type-badge-deletion-requested,
+.record-type-badge-deletion-cancelled,
+.record-type-badge-deleted {
     background: rgba(255, 193, 7, 0.15);
     color: #f57f17;
 }
@@ -1413,7 +1421,12 @@
 
 .record-type-event-create,
 .record-type-event-edit,
-.record-type-event-delete {
+.record-type-event-delete,
+.record-type-event-deletion-requested,
+.record-type-event-deletion-cancelled,
+.record-type-event-deleted,
+.record-type-past-event-publish,
+.record-type-past-event-unpublish {
     background: rgba(33, 150, 243, 0.12);
     color: #1565c0;
 }
@@ -1421,14 +1434,42 @@
 .record-type-upcoming-event-create,
 .record-type-upcoming-event-edit,
 .record-type-upcoming-event-delete,
+.record-type-upcoming-event-deletion-requested,
+.record-type-upcoming-event-deletion-cancelled,
+.record-type-upcoming-event-deleted,
 .record-type-upcoming-event-archive,
 .record-type-upcoming-event-publish,
 .record-type-upcoming-event-unpublish,
+.record-type-upcoming-event-email-template-update,
 .record-type-tag-create,
 .record-type-tag-edit,
 .record-type-tag-delete {
     background: rgba(0, 150, 136, 0.12);
     color: #00796b;
+}
+
+.record-type-ticket-import,
+.record-type-ticket-redeem,
+.record-type-ticket-void,
+.record-type-ticket-attendee-delete,
+.record-type-ticket-attendee-edit,
+.record-type-ticket-regenerate,
+.record-type-ticket-email-send {
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--color-primary);
+}
+
+.record-type-account-deletion-requested,
+.record-type-account-deletion-cancelled,
+.record-type-account-deleted {
+    background: rgba(208, 37, 69, 0.12);
+    color: #b31c37;
+}
+
+.record-type-policy-update,
+.record-type-config-update {
+    background: rgba(122, 129, 144, 0.12);
+    color: #4a5160;
 }
 
 .record-content {

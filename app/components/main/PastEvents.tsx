@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 import { usePastEvents } from "~/lib/pastEvents";
@@ -10,9 +10,20 @@ export const PastEvents = () => {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const {pastEvents, loading} = usePastEvents();
     const {tags} = useTags();
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth <= 768);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     const publishedEvents = pastEvents.filter(e => e.published);
-    const displayedEvents = showAll ? publishedEvents : publishedEvents.slice(0, 6);
+    const initialCount = isMobile ? 3 : 6;
+    const displayedEvents = showAll ? publishedEvents : publishedEvents.slice(0, initialCount);
 
     return (
         <section id="events" className="section" hidden={!loading && publishedEvents.length === 0}>
@@ -68,7 +79,7 @@ export const PastEvents = () => {
                             </div>
                         ))}
                     </div>
-                    {publishedEvents.length > 6 && (
+                    {publishedEvents.length > initialCount && (
                         <div className="show-more-container">
                             <button
                                 onClick={() => setShowAll(!showAll)}

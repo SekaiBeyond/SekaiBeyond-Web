@@ -90,7 +90,11 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                             onClick={onPosterClick}
                             aria-label={isEnglish ? "View event poster" : "查看活动海报"}
                         >
-                            <img src={event.poster} alt={isEnglish ? "Event Poster" : "活动海报"}/>
+                            <img
+                                key={event.poster}
+                                src={event.poster}
+                                alt={isEnglish ? "Event Poster" : "活动海报"}
+                            />
                         </button>
                         {event.posterCredit ? (
                             <p className="poster-credit">
@@ -173,6 +177,34 @@ export const UpcomingEvent = () => {
         switchEvent(newIndex, 'left');
     };
 
+    // Touch swipe support
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+    const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+    const minSwipeDistance = 50;
+
+    const onTouchStart = (e: React.TouchEvent) => {
+        setTouchEnd(null);
+        setTouchStart(e.targetTouches[0].clientX);
+    };
+
+    const onTouchMove = (e: React.TouchEvent) => {
+        setTouchEnd(e.targetTouches[0].clientX);
+    };
+
+    const onTouchEnd = () => {
+        if (!touchStart || !touchEnd) return;
+        const distance = touchStart - touchEnd;
+        const isLeftSwipe = distance > minSwipeDistance;
+        const isRightSwipe = distance < -minSwipeDistance;
+
+        if (isLeftSwipe) {
+            goToNext();
+        } else if (isRightSwipe) {
+            goToPrevious();
+        }
+    };
+
     const currentEvent = activeEvents[currentIndex];
 
     return (
@@ -186,12 +218,18 @@ export const UpcomingEvent = () => {
                     <div className="loader"></div>
                 </div>
             ) : (
-                <>
+                <div
+                    onTouchStart={onTouchStart}
+                    onTouchMove={onTouchMove}
+                    onTouchEnd={onTouchEnd}
+                    style={{touchAction: 'pan-y'}}
+                >
                     {currentEvent && (
                         <div
                             className={`carousel-slide${isTransitioning ? (slideDirection === 'left' ? ' carousel-slide--hidden-left' : ' carousel-slide--hidden-right') : ''}`}
                         >
                             <EventCard
+                                key={currentEvent.id}
                                 event={currentEvent}
                                 isEnglish={isEnglish}
                                 onPosterClick={() => setSelectedPoster(currentEvent.poster)}
@@ -229,7 +267,7 @@ export const UpcomingEvent = () => {
                             </button>
                         </div>
                     )}
-                </>
+                </div>
             )}
 
             {selectedPoster && (
