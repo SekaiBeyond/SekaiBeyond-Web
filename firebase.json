@@ -49,6 +49,10 @@
     ],
     "rewrites": [
       {
+        "source": "/api/ticket-qr",
+        "function": "serveTicketQr"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

@@ -31,7 +31,7 @@ export const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     },
     allowedSchemes: ['https', 'mailto'],
     allowedSchemesByTag: {
-        img: ['https', 'data'],
+        img: ['https', 'data', 'cid'],
     },
     allowedSchemesAppliedToAttributes: ['href', 'src'],
     allowProtocolRelative: false,

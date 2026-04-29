@@ -3,7 +3,7 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldPath, FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
-import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
+import { type CallableRequest, HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 
 import * as crypto from "crypto";
 import sanitizeHtml from "sanitize-html";
@@ -2543,49 +2543,61 @@ const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     },
     allowedSchemes: ["https", "mailto"],
     allowedSchemesByTag: {
-        img: ["https", "data"],
+        img: ["https", "data", "cid"],
     },
     allowedSchemesAppliedToAttributes: ["href", "src"],
     allowProtocolRelative: false,
     disallowedTagsMode: "discard",
 };
 
-function renderTicketQrBlock(ticketIds: string[]): string {
-    // One <div> per ticket. Images reference CID attachments added to the mail
-    // doc by sendTicketEmails — Gmail strips data: URLs in <img src>, so QRs
-    // ship as multipart/related inline attachments instead.
+function renderTicketQrBlock(ticketIds: string[], eventId: string): string {
+    // One <div> per ticket. Images reference the serverless QR generation endpoint.
+    const origin = PUBLIC_ORIGIN;
     return ticketIds.map(id => {
+        const qrUrl = `${origin}/api/ticket-qr?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
         return `<div style="margin:16px 0;text-align:center;">` +
-            `<img src="cid:ticket-${id}" alt="Ticket ${id}" style="width:200px;height:200px;display:inline-block;"/>` +
+            `<img src="${qrUrl}" alt="Ticket ${id}" style="width:200px;height:200px;display:inline-block;"/>` +
             `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
             `</div>`;
     }).join("\n");
 }
 
-async function generateTicketQrPngBase64(
-    ticketIds: string[], eventId: string
-): Promise<string[]> {
-    // Returns base64-encoded PNG bytes (no data: prefix) suitable for
-    // nodemailer attachments with encoding: "base64". Firestore stores the
-    // string as-is; the Trigger Email extension forwards it to nodemailer,
-    // which decodes it into the multipart/related MIME part.
-    const QRCode = (await import("qrcode")).default;
+/**
+ * HTTP endpoint to generate and serve ticket QR codes on the fly.
+ * Allows email templates to use standard <img src="https://..."> without
+ * exposing the data URI or relying on CID attachments which fail over SMTP.
+ */
+export const serveTicketQr = onRequest({maxInstances: 10, memory: "256MiB"}, async (req, res) => {
+    const ticketId = req.query.ticket as string;
+    const eventId = req.query.event as string;
+    if (!ticketId || !eventId) {
+        res.status(400).send("Missing ticket or event parameter");
+        return;
+    }
+
     const origin = PUBLIC_ORIGIN;
     if (!origin) {
-        throw new HttpsError(
-            "failed-precondition",
-            "PUBLIC_ORIGIN is not configured for this Cloud Functions deployment.",
-        );
+        res.status(500).send("PUBLIC_ORIGIN is not configured");
+        return;
     }
-    return Promise.all(ticketIds.map(async id => {
-        const url = `${origin}/claim?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
-        // 256 px keeps each ticket's QR comfortably under ~4 KB PNG (vs. ~12–20 KB
-        // at 400 px), so a 50-ticket attendee fits well within Firestore's 1 MB
-        // mail-doc limit. Error correction "M" still scans reliably at this size.
+
+    try {
+        const url = `${origin}/claim?ticket=${encodeURIComponent(ticketId)}&event=${encodeURIComponent(eventId)}`;
+        const QRCode = (await import("qrcode")).default;
+
+        // 256 px keeps each ticket's QR comfortably small. Error correction "M"
+        // scans reliably at this size.
         const buf = await QRCode.toBuffer(url, {errorCorrectionLevel: "M", width: 256, margin: 1});
-        return buf.toString("base64");
-    }));
-}
+
+        res.set("Content-Type", "image/png");
+        // Cache aggressively since ticket UUIDs are immutable and unique
+        res.set("Cache-Control", "public, max-age=31536000, s-maxage=31536000");
+        res.send(buf);
+    } catch (err) {
+        console.error("[serveTicketQr] Error generating QR:", err);
+        res.status(500).send("Failed to generate QR code");
+    }
+});
 
 // Escape user-supplied strings before substitution into HTML email bodies.
 // Template HTML itself is sanitized at save time (updateEventEmailTemplate),
@@ -3278,14 +3290,6 @@ export const sendTicketEmails = onCall(
             sentCount++;
         }
 
-        // Parallelize QR PNG generation across all sendable attendees. Each
-        // attendee's QRs are still generated in parallel inside
-        // generateTicketQrPngBase64; this adds a second axis so 100 attendees
-        // don't sit behind 99 sequential awaits.
-        const qrPerAttendee = await Promise.all(
-            sendableTargets.map(s => generateTicketQrPngBase64(s.ticketIds, eventId))
-        );
-
         // Defective attendees: ticketCount validation prevents this at import
         // time, but a bad merge / failed partial batch could leave an attendee
         // with emailSent=false and no ticketIds. Mark sent so the mode='unsent'
@@ -3304,20 +3308,7 @@ export const sendTicketEmails = onCall(
 
         for (let i = 0; i < sendableTargets.length; i++) {
             const {target, data, ticketIds} = sendableTargets[i];
-            const qrPngBase64 = qrPerAttendee[i];
-            const ticketBlock = renderTicketQrBlock(ticketIds);
-            // Inline attachments referenced by cid:ticket-<id> in ticketBlock.
-            // content + encoding:"base64" survives Firestore serialization as a
-            // plain string; nodemailer decodes it into a multipart/related MIME
-            // part so Gmail/Outlook/Apple Mail all render the QR inline.
-            const attachments = ticketIds.map((id, j) => ({
-                filename: `ticket-${id}.png`,
-                content: qrPngBase64[j],
-                encoding: "base64",
-                cid: `ticket-${id}`,
-                contentType: "image/png",
-                contentDisposition: "inline",
-            }));
+            const ticketBlock = renderTicketQrBlock(ticketIds, eventId);
 
             // Strip control chars (CR/LF in particular) from the rendered subject
             // so a stray newline in eventTitle/attendeeName can't escape the
@@ -3356,7 +3347,7 @@ export const sendTicketEmails = onCall(
             const mailRef = db.collection("mail").doc();
             ops.push(b => b.set(mailRef, {
                 to: data.email,
-                message: {subject: renderedSubject, html, attachments},
+                message: {subject: renderedSubject, html},
             }));
             ops.push(b => b.update(target.ref, {
                 emailSent: true,
