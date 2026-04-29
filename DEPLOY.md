@@ -126,6 +126,7 @@ The app currently requires 6 composite indexes (defined in [`firestore.indexes.j
 |---|---|---|
 | `attendees` | `[emailSent, createdAt]` | Admin tickets panel: query unsent attendees for bulk ticket-email send |
 | `badgeActivationCodes` | `[badgeId, createdAt desc]` | Admin panel: load codes for a badge |
+| `records` | `[type, timestamp]` | Admin tickets panel: query today's ticket-email send quota |
 | `records` | `[type, timestamp desc]` | Activity log by type |
 | `records` | `[performedBy, timestamp desc]` | Activity log by user |
 | `records` | `[type, performedBy, timestamp desc]` | Activity log filtered by type and user |
