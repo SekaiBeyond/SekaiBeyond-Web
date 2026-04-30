@@ -2563,12 +2563,34 @@ const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     disallowedTagsMode: "discard",
 };
 
-function renderTicketQrBlock(ticketIds: string[], eventId: string): string {
+function renderTicketQrBlock(tickets: any[], eventId: string): string {
     // One <div> per ticket. Images reference the serverless QR generation endpoint.
     const origin = PUBLIC_ORIGIN;
-    return ticketIds.map(id => {
+    return tickets.map(ticket => {
+        const id = typeof ticket === "string" ? ticket : (ticket.ticketId ?? "");
+        const typeRaw = typeof ticket === "string" ? "normal" : (ticket.type ?? "normal");
+
+        let typeLabel = "General Admission";
+        let bgColor = "#ff6b9d"; // brand pink
+        let textColor = "#ffffff";
+
+        if (typeRaw === "early-bird" || typeRaw === "earlybird") {
+            typeLabel = "Early Bird";
+            bgColor = "#1abc9c"; // teal
+        } else if (typeRaw === "vip") {
+            typeLabel = "VIP";
+            bgColor = "#f39c12"; // gold
+        } else if (typeRaw === "guest" || typeRaw === "嘉宾") {
+            typeLabel = "Guest";
+            bgColor = "#3498db"; // blue
+        } else if (typeRaw === "Comp Ticket" || typeRaw === "comp" || typeRaw === "赠票") {
+            typeLabel = "Comp Ticket";
+            bgColor = "#95a5a6"; // gray
+        }
+
         const qrUrl = `${origin}/api/ticket-qr?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
         return `<div style="margin:16px 0;text-align:center;">` +
+            `<div style="display:inline-block;background-color:${bgColor};color:${textColor};font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">${typeLabel}</div><br/>` +
             `<img src="${qrUrl}" alt="Ticket ${id}" style="width:200px;height:200px;display:inline-block;"/>` +
             `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
             `</div>`;
@@ -3326,17 +3348,19 @@ export const sendTicketEmails = onCall(
             target: FirebaseFirestore.QueryDocumentSnapshot;
             data: FirebaseFirestore.DocumentData;
             ticketIds: string[];
+            tickets: any[];
         }[] = [];
         for (const target of targets) {
             lastProcessedId = target.id;
             if (sentCount >= remainingToday) break;
             const data = target.data();
             const ticketIds: string[] = data.ticketIds ?? [];
+            const tickets: any[] = data.tickets ?? [];
             if (ticketIds.length === 0) {
                 ticketlessTargets.push(target);
                 continue;
             }
-            sendableTargets.push({target, data, ticketIds});
+            sendableTargets.push({target, data, ticketIds, tickets});
             sentCount++;
         }
 
@@ -3357,8 +3381,9 @@ export const sendTicketEmails = onCall(
         }
 
         for (let i = 0; i < sendableTargets.length; i++) {
-            const {target, data, ticketIds} = sendableTargets[i];
-            const ticketBlock = renderTicketQrBlock(ticketIds, eventId);
+            const {target, data, ticketIds, tickets} = sendableTargets[i];
+            const qrItems = tickets.length >= ticketIds.length ? tickets : ticketIds;
+            const ticketBlock = renderTicketQrBlock(qrItems, eventId);
 
             // Strip control chars (CR/LF in particular) from the rendered subject,
             // so a stray newline in eventTitle/attendeeName can't escape the

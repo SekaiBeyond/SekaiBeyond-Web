@@ -7,34 +7,47 @@ export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const DEFAULT_TEMPLATE_SUBJECT = 'Your tickets for {{ eventTitle }}';
 
-export const DEFAULT_TEMPLATE_BODY_EN = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;color:#2a2a2a;line-height:1.6;">
-  <h2 style="margin:0 0 16px;color:#ff6b9d;font-weight:600;">Hi {{ attendeeName }},</h2>
+export const DEFAULT_TEMPLATE_BODY_EN = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background-color:#ffffff;border:1px solid #eaeaea;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+  <div style="background-color:#ff6b9d;padding:32px 24px;text-align:center;">
+    <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:0.5px;">Sekai Beyond</h1>
+    <p style="margin:8px 0 0;color:#ffe6f0;font-size:16px;">Your Official Tickets</p>
+  </div>
+  
+  <div style="padding:32px 24px;">
+    <h2 style="margin:0 0 16px;color:#2a2a2a;font-size:20px;font-weight:600;">Hi {{ attendeeName }},</h2>
+    <p style="margin:0 0 24px;color:#4a4a4a;font-size:16px;line-height:1.6;">You're officially confirmed for <strong>{{ eventTitle }}</strong>. We can't wait to see you there!</p>
 
-  <p>You're confirmed for <strong>{{ eventTitle }}</strong>. We can't wait to see you there!</p>
+    <div style="background-color:#f9f9f9;border-left:4px solid #ff6b9d;border-radius:4px;padding:20px;margin-bottom:32px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="padding:0 0 12px;font-size:14px;color:#666666;width:80px;vertical-align:top;">Date</td>
+          <td style="padding:0 0 12px;font-size:15px;color:#2a2a2a;font-weight:600;">{{ eventDate }}</td>
+        </tr>
+        <tr>
+          <td style="padding:0;font-size:14px;color:#666666;width:80px;vertical-align:top;">Tickets</td>
+          <td style="padding:0;font-size:15px;color:#2a2a2a;font-weight:600;">{{ ticketCount }}</td>
+        </tr>
+      </table>
+    </div>
 
-  <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#fff0f6;border:1px solid #ffd9e6;border-radius:10px;">
-    <tr>
-      <td style="padding:12px 18px;font-size:14px;color:#777;width:90px;">Date</td>
-      <td style="padding:12px 18px;font-size:14px;"><strong>{{ eventDate }}</strong></td>
-    </tr>
-    <tr>
-      <td style="padding:12px 18px;font-size:14px;color:#777;border-top:1px solid #ffd9e6;">Tickets</td>
-      <td style="padding:12px 18px;font-size:14px;border-top:1px solid #ffd9e6;"><strong>{{ ticketCount }}</strong></td>
-    </tr>
-  </table>
+    <div style="text-align:center;margin-bottom:32px;">
+      <p style="margin:0 0 16px;color:#4a4a4a;font-size:15px;font-weight:500;">Please present the QR code(s) below at the door for scanning.</p>
+      {{ ticketIds[] }}
+    </div>
 
-  <p>Please show the QR code(s) below at the door &mdash; one scan per ticket.</p>
+    <hr style="border:none;border-top:1px solid #eaeaea;margin:32px 0;" />
 
-  {{ ticketIds[] }}
+    <div style="background-color:#fff0f6;border-radius:8px;padding:20px;">
+      <p style="margin:0 0 12px;color:#ff6b9d;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Important Reminders</p>
+      <ul style="margin:0;padding-left:20px;color:#4a4a4a;font-size:14px;line-height:1.6;">
+        <li style="margin-bottom:8px;">Each QR code is valid for <strong>one entry only</strong>. Please do not share or post them publicly.</li>
+        <li style="margin-bottom:8px;">Screenshots work perfectly fine &mdash; just ensure your phone is charged.</li>
+        <li>Having trouble at the door? Simply contact us at <strong><a href="mailto:sekaibeyond@outlook.com" style="color:#ff6b9d;text-decoration:none;">sekaibeyond@outlook.com</a></strong> and we'll sort it out.</li>
+      </ul>
+    </div>
 
-  <p style="font-size:13px;color:#666;margin-top:28px;"><strong>A few reminders:</strong></p>
-  <ul style="font-size:13px;color:#666;padding-left:20px;margin:8px 0;">
-    <li>Each QR code is valid for one entry only &mdash; please don't share or post them publicly.</li>
-    <li>Screenshots work fine; just keep your phone charged.</li>
-    <li>Trouble at the door? Just reply to this email and we'll sort it out.</li>
-  </ul>
-
-  <p style="margin-top:28px;">See you soon,<br/><strong>The Sekai Beyond team</strong></p>
+    <p style="margin:32px 0 0;color:#4a4a4a;font-size:15px;line-height:1.6;">See you soon,<br/><strong style="color:#2a2a2a;">The Sekai Beyond Team</strong></p>
+  </div>
 </div>`;
 
 export const tsToDate = (t: unknown): Date | null => {
@@ -99,8 +112,11 @@ export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEven
         ticketCount: 2,
     };
     const ticketBlock = `<div style="padding:16px;border:1px dashed #aaa;text-align:center;margin:12px 0;">` +
-        `<strong>[QR for each ticket rendered here at send time]</strong><br/>` +
-        `<code>ticket-uuid-1</code><br/><code>ticket-uuid-2</code></div>`;
+        `<strong>[QR for each ticket rendered here at send time]</strong><br/><br/>` +
+        `<div style="display:inline-block;background-color:#ff6b9d;color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">General Admission</div><br/>` +
+        `<code>ticket-uuid-1</code><br/><br/>` +
+        `<div style="display:inline-block;background-color:#f39c12;color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">VIP</div><br/>` +
+        `<code>ticket-uuid-2</code></div>`;
     const render = (tpl: string) => tpl
         .replace(/{{\s*attendeeEmail\s*}}/g, sampleData.attendeeEmail)
         .replace(/{{\s*attendeeName\s*}}/g, sampleData.attendeeName)

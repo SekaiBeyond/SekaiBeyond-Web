@@ -110,7 +110,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 return;
             }
 
-            let type: TicketType = 'normal';
+            let type: string = 'normal';
             if (typeRaw === 'early-bird' || typeRaw === 'earlybird') type = 'early-bird';
             else if (typeRaw === 'vip') type = 'vip';
             else if (typeRaw === 'comp ticket' || typeRaw === 'comp' || typeRaw === '赠票') type = 'Comp Ticket';
