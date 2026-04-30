@@ -11,7 +11,15 @@ type ScanStatus =
 
 type JsQRFn = (data: Uint8ClampedArray, w: number, h: number) => {data: string} | null;
 
+interface CachedRedemption {
+    ticketId: string;
+    attendeeName: string;
+    attendeeEmail: string;
+    userCheckedIn: boolean;
+}
+
 const DEDUPE_MS = 3000;
+const CACHE_SIZE = 20;
 
 interface TicketScannerProps {
     eventId: string;
@@ -28,6 +36,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
     const cancelledRef = useRef(false);
     const jsQRRef = useRef<JsQRFn | null>(null);
     const lastScanRef = useRef<{ticketId: string; at: number} | null>(null);
+    const redeemedCacheRef = useRef<CachedRedemption[]>([]);
 
     const [cameraActive, setCameraActive] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
@@ -51,6 +60,19 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         const last = lastScanRef.current;
         const now = Date.now();
         if (last && last.ticketId === ticketId && now - last.at < DEDUPE_MS) return;
+
+        // Check RAM cache for "immediate" success on repeat scans in the same session
+        const cached = redeemedCacheRef.current.find(c => c.ticketId === ticketId);
+        if (cached) {
+            setStatus({
+                kind: 'success',
+                attendeeName: cached.attendeeName,
+                attendeeEmail: cached.attendeeEmail,
+                userCheckedIn: cached.userCheckedIn,
+            });
+            return;
+        }
+
         lastScanRef.current = {ticketId, at: now};
         setBusy(true);
         try {
@@ -65,12 +87,19 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                     redeemedAt: d.redeemedAt ?? null,
                 });
             } else {
-                setStatus({
-                    kind: 'success',
+                const successData = {
                     attendeeName: d.attendeeName ?? '',
                     attendeeEmail: d.attendeeEmail ?? '',
                     userCheckedIn: !!d.userCheckedIn,
-                });
+                };
+                setStatus({kind: 'success', ...successData});
+
+                // Update RAM cache
+                redeemedCacheRef.current = [
+                    {ticketId, ...successData},
+                    ...redeemedCacheRef.current,
+                ].slice(0, CACHE_SIZE);
+
                 onRedeemed();
             }
         } catch (err) {

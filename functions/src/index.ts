@@ -11,7 +11,7 @@ import sanitizeHtml from "sanitize-html";
 // Config read from process.env so non-interactive CI deploys work without a
 // committed dotenv file. Override in production by setting env vars on the
 // Cloud Function (functions/.env.<project>, gcloud functions deploy
-// --update-env-vars, or the v2 parameterised config UI). Explicit empty
+// --update-env-vars, or the v2 parameterized config UI). Explicit empty
 // PUBLIC_ORIGIN passes through so generateTicketQrPngBase64's
 // failed-precondition guard still fires for misconfigured forks.
 const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN ?? "https://sekaibeyond.com";
@@ -286,8 +286,8 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
         }
         txn.set(userRef, {
             displayName,
-            email: typeof email === "string" ? email : "",
-            photoURL: typeof photoURL === "string" ? photoURL.slice(0, 500) : "",
+            email,
+            photoURL: photoURL.slice(0, 500),
             joinedAt: FieldValue.serverTimestamp(),
             attendedEvents: [],
             badges: [],
@@ -704,7 +704,7 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * Delete a user's avatar and reset photoURL to their Google profile picture.
+ * Delete a user's avatar and reset the photoURL to their Google profile picture.
  * Deletes the storage file and resets photoURL to the OAuth picture or empty string.
  */
 export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
@@ -732,7 +732,7 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
 
     // Reset to Google OAuth photo or empty string
     const googlePhoto = request.auth.token.picture ?? "";
-    const photoURL = typeof googlePhoto === "string" ? googlePhoto.slice(0, 500) : "";
+    const photoURL = googlePhoto.slice(0, 500);
     await userRef.update({photoURL});
 
     return {photoURL};
@@ -1133,7 +1133,7 @@ const VALID_GROUPS = ["visitor", "member", "staff", "core-staff", "president"];
  * Change a user's group (admin only).
  * Runs in a transaction to guarantee the audit record's oldGroup is accurate.
  * Enforces the same hierarchy rules as Firestore rules:
- * - Cannot change own group
+ * - Cannot change their own group
  * - Core-staff can only manage visitor/member/staff and assign up to staff
  * - President can manage and assign any group
  */
@@ -1158,11 +1158,13 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 
     // Title can only be set when assigning staff or core-staff
     const title = input.title;
-    if (title != null && (typeof title !== "string" || title.length > 100)) {
-        throw new HttpsError("invalid-argument", "Invalid title.");
-    }
-    if (title && !["staff", "core-staff"].includes(newGroup)) {
-        throw new HttpsError("invalid-argument", "Title can only be set for staff or core-staff.");
+    if (title) {
+        if (title?.length > 100) {
+            throw new HttpsError("invalid-argument", "Invalid title.");
+        }
+        if (!["staff", "core-staff"].includes(newGroup)) {
+            throw new HttpsError("invalid-argument", "Title can only be set for staff or core-staff.");
+        }
     }
 
     await checkRateLimit(uid);
@@ -1241,7 +1243,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 /**
  * Set or clear a user's title.
  * Only president/core-staff can set title for staff/core-staff users.
- * Title is cleared automatically when group changes to visitor/member/president.
+ * Title is cleared automatically when the group changes to visitor/member/president.
  */
 export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) {
@@ -1253,7 +1255,7 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const title = input.title;
 
-    if (title != null && (typeof title !== "string" || title.length > 100)) {
+    if (title != null && title.length > 100) {
         throw new HttpsError("invalid-argument", "Invalid title.");
     }
 
@@ -1658,10 +1660,10 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         await deleteStorageFile(data.poster ?? "", ["upcoming-events/"])
             .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId}`));
 
-        // Skip the deleted-record write if this delete was the tail end of an
+        // Skip the deleted-record write if this deletion was the tail end of an
         // archive — archiveUpcomingEvent already wrote an "upcoming-event-archive"
         // record, and the past event reuses this ID (so eventStaffEvents
-        // references stay valid and we must NOT purge them).
+        // references stay valid, and we must NOT purge them).
         let archived = false;
         try {
             archived = (await db.collection("pastEvents").doc(eventId).get()).exists;
@@ -1722,7 +1724,7 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
  * (which is required for the 500-op batch limit). If copy succeeds but the
  * transaction fails, the copied subcollection docs in pastEvents are simply
  * overwritten on the next retry (idempotent). The originals are deleted in
- * chunks AFTER the transaction commits so onUpcomingEventDeleted never sees
+ * chunks AFTER the transaction commits, so onUpcomingEventDeleted never sees
  * orphaned subcollection docs.
  */
 export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
@@ -2058,7 +2060,7 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * Toggle active status on an event claim code (admin only).
+ * Toggle the active status on an event claim code (admin only).
  */
 export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -2096,7 +2098,7 @@ export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) 
 });
 
 /**
- * Update time window on an event claim code (admin only).
+ * Update the time window on an event claim code (admin only).
  */
 export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -2137,7 +2139,7 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
 });
 
 /**
- * Toggle active status on a badge activation code (admin only).
+ * Toggle the active status on a badge activation code (admin only).
  */
 export const toggleBadgeCodeActive = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -2348,7 +2350,7 @@ export const requestAccountDeletion = onCall({maxInstances: 10}, async (request)
 
 /**
  * Cancel a pending account deletion.
- * Target user can always cancel their own; admins must pass hierarchy check.
+ * Target users can always cancel their own; admins must pass hierarchy check.
  * Clears deleteAt on the user doc so Firestore TTL never fires.
  */
 export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) => {
@@ -2524,7 +2526,7 @@ interface EmailTemplateDoc {
 // MUST STAY IN SYNC with app/lib/emailSanitize.ts EMAIL_HTML_SANITIZE_OPTIONS.
 // We duplicate because functions/ and the web app are separate tsc projects
 // with their own node_modules; any change here must also be applied there so
-// admin preview matches what actually gets sent.
+//  the admin preview matches what actually gets sent.
 const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     allowedTags: [
         "p", "div", "span", "strong", "em", "b", "i", "u", "br", "hr",
@@ -2636,7 +2638,7 @@ function renderTemplate(
         .replace(/{{\s*ticketCount\s*}}/g, String(data.ticketCount))
         // {{ ticketIds[] }} — with optional surrounding <p>/<div> tags collapsed.
         // ticketBlock is server-built HTML, never escaped.
-        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, data.ticketBlock);
+        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[]\s*}}(\s*<\/p>|\s*<\/div>)?/g, data.ticketBlock);
 }
 
 /**
@@ -2796,12 +2798,14 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
  * Redeem a ticket (event-staff for this event, or core-staff+).
  *
  * If the attendee's email matches a registered user, also marks them as
- * checked-in and adds the event to their attendedEvents (writes `event-attend`
- * record in addition to `ticket-redeem`). Otherwise leaves the users collection
- * untouched — the attendee is still valid, just unregistered on-site.
+ * checked-in and adds the event to their attendedEvents. Otherwise, leaves the
+ * users collection untouched — the attendee is still valid, just unregistered
+ * on-site.
  *
- * Already-redeemed tickets return a non-error success so the scanner can render
- * yellow-state info (who/when). Voided tickets throw with {code: 'voided'}.
+ * Already-redeemed tickets return a non-error success, so the scanner can render
+ * yellow-state info (who/when). A 15-second grace period applies: if scanned
+ * again within 15s of the first redemption, it still returns a success.
+ * Voided tickets thrown with {code: 'voided'}.
  */
 export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
@@ -2857,41 +2861,36 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         const attendeeName: string = attendeeData.name ?? "";
         const eventTitle: string = eventSnap.data()?.title ?? eventSnap.data()?.name ?? "";
 
+        const now = Timestamp.now();
+        const REDEEM_GRACE_PERIOD_MS = 15_000;
+
         if (ticket.redeemed) {
-            return {
-                alreadyRedeemed: true,
-                attendeeName,
-                attendeeEmail,
-                eventTitle,
-                ticketIndex: idx,
-                redeemedBy: ticket.redeemedByName,
-                redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
-            };
+            const redeemedAtMs = ticket.redeemedAt?.toMillis?.() ?? 0;
+            const isWithinGracePeriod = (now.toMillis() - redeemedAtMs) < REDEEM_GRACE_PERIOD_MS;
+
+            if (!isWithinGracePeriod) {
+                return {
+                    alreadyRedeemed: true,
+                    attendeeName,
+                    attendeeEmail,
+                    eventTitle,
+                    ticketIndex: idx,
+                    redeemedBy: ticket.redeemedByName,
+                    redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
+                };
+            }
         }
 
         // Try to link to a registered user by email.
         const matchingUserSnap = await txn.get(
             db.collection("users").where("email", "==", attendeeEmail).limit(1)
         );
-        const now = Timestamp.now();
         let userCheckedIn = false;
         if (!matchingUserSnap.empty) {
             const userDoc = matchingUserSnap.docs[0];
             const attended: string[] = userDoc.data().attendedEvents ?? [];
             if (!attended.includes(eventId)) {
                 txn.update(userDoc.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
-                txn.set(db.collection("records").doc(), {
-                    type: "event-attend",
-                    performedBy: uid,
-                    performedByName: callerName,
-                    targetUid: userDoc.id,
-                    targetName: userDoc.data().displayName ?? "",
-                    targetEmail: attendeeEmail,
-                    eventId,
-                    eventTitle,
-                    timestamp: FieldValue.serverTimestamp(),
-                    expiresAt: recordExpiresAt(),
-                });
             }
             userCheckedIn = true;
         }
@@ -2909,18 +2908,6 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         txn.update(attendeeDoc.ref, {
             tickets,
             updatedAt: FieldValue.serverTimestamp(),
-        });
-        txn.set(db.collection("records").doc(), {
-            type: "ticket-redeem",
-            performedBy: uid,
-            performedByName: callerName,
-            eventId,
-            eventTitle,
-            targetEmail: attendeeEmail,
-            targetName: attendeeName,
-            code: ticketId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
         });
 
         return {
@@ -3228,7 +3215,7 @@ export const sendTicketEmails = onCall(
             targets = filtered.slice(0, chunkSize);
             queriedCount = filtered.length;
         } else if (mode === "unsent") {
-            // Drain pattern: processed attendees leave the result set on next call.
+            // Drain pattern: processed attendees leave the result set on the next call.
             // orderBy createdAt gives FIFO fairness across chunks — uses the
             // existing (emailSent, createdAt) composite index.
             const snap = await attendeesCol
@@ -3267,7 +3254,7 @@ export const sendTicketEmails = onCall(
         let sentCount = 0;
         let lastProcessedId: string | null = null;
 
-        // Walk targets in order to preserve the cap and cursor semantics, but
+        // Walk targets to preserve the cap and cursor semantics, but
         // only collect work — actual QR generation runs in parallel below.
         // Defective attendees (no ticketIds) are marked sent without consuming
         // from remainingToday; matches the original sequential loop.
@@ -3310,7 +3297,7 @@ export const sendTicketEmails = onCall(
             const {target, data, ticketIds} = sendableTargets[i];
             const ticketBlock = renderTicketQrBlock(ticketIds, eventId);
 
-            // Strip control chars (CR/LF in particular) from the rendered subject
+            // Strip control chars (CR/LF in particular) from the rendered subject,
             // so a stray newline in eventTitle/attendeeName can't escape the
             // Subject: header and inject extra fields. nodemailer's own header
             // encoder already guards against this; this is defense-in-depth.
@@ -3356,8 +3343,8 @@ export const sendTicketEmails = onCall(
             }));
         }
 
-        // Only write an audit record when we actually sent something. Otherwise
-        // chunked loops would fill `records` with zero-count noise.
+        // Only write an audit record when we actually sent something.
+        // Otherwise, chunked loops would fill `records` with zero-count noise.
         if (sentCount > 0) {
             const callerSnap = await db.collection("users").doc(uid).get();
             ops.push(b => b.set(db.collection("records").doc(), {
@@ -3375,7 +3362,7 @@ export const sendTicketEmails = onCall(
         if (ops.length > 0) await commitInChunks(ops);
 
         // hasMore: the query returned a full chunk (there may be more).
-        // For attendeeIds, client controls chunking — never set hasMore.
+        // For attendeeIds, the client controls chunking — never set hasMore.
         const hasMore = !attendeeIds && queriedCount >= chunkSize;
         const nextCursor = mode === "all" && hasMore && lastProcessedId
             ? lastProcessedId
@@ -3402,7 +3389,7 @@ export const getTicketEmailQuota = onCall({maxInstances: 5}, async (request) => 
  *
  * Body HTML is sanitized server-side with a narrow allowlist
  * (EMAIL_HTML_SANITIZE_OPTIONS): strips <script>, <iframe>, <style>, event
- * handlers, javascript: URLs, and any http:-scheme links. Even though editors
+ * handlers, JavaScript: URLs, and any http:-scheme links. Even though editors
  * are trusted, this bounds the blast radius if a core-staff account is
  * compromised — attacker can't inject phishing-via-DKIM-signed-email.
  */
@@ -3449,7 +3436,7 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
 });
 
 /**
- * Grant event-staff access for a specific event (core-staff+).
+ * Grant event-staff access to a specific event (core-staff+).
  *
  * Event-staff is independent of the global staff group — assigning here does
  * not change the user's group. The role only grants ticket-scanning and
@@ -3465,12 +3452,12 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
  * Behavior by event lifecycle:
  *   - upcoming + has attendee subcollection doc: reject with `has-ticket` —
  *     live tickets may already be distributed and must be voided explicitly
- *     via the tickets tab.
+ *     via the 'tickets' tab.
  *   - upcoming, no attendee doc: auto-mark the staffer as attended (they will
  *     be there). Existing semantic, preserved.
  *   - past: scrub attendee state so the user only appears as staff. Deletes
  *     any attendee subcollection doc (logged as `ticket-attendee-delete` with
- *     reason `staff-assignment`) and removes eventId from `attendedEvents`
+ *      the reason `staff-assignment`) and removes eventId from `attendedEvents`
  *     (logged as `event-unattend`). Skips the auto-attend write path.
  *
  * `removeEventStaff` does NOT re-add attendance — converting back is a manual
@@ -3502,7 +3489,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
 
         // Past events delete the attendee doc(s) to enforce the staff/attendee
         // exclusivity; upcoming events reject so the admin voids live tickets
-        // explicitly. Enumerate all matches without a limit so a partial-import
+        // explicitly. List all matches without a limit, so a partial-import
         // failure that left duplicate attendee docs for the same email is fully
         // cleaned up here, not just the first hit.
         const attendeesToRemove: FirebaseFirestore.QueryDocumentSnapshot[] = [];
