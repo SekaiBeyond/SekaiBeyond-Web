@@ -2704,29 +2704,6 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         }
     }
 
-    // Reject the whole import if any imported email belongs to a current
-    // event-staff for this event — staff and attendees are mutually exclusive.
-    const usersCol = db.collection("users");
-    const staffConflicts: string[] = [];
-    for (let i = 0; i < emails.length; i += 30) {
-        const chunk = emails.slice(i, i + 30);
-        const snap = await usersCol.where("email", "in", chunk).get();
-        for (const doc of snap.docs) {
-            const data = doc.data();
-            const staffEvents: string[] = data.eventStaffEvents ?? [];
-            if (staffEvents.includes(eventId) && typeof data.email === "string") {
-                staffConflicts.push(data.email);
-            }
-        }
-    }
-    if (staffConflicts.length > 0) {
-        throw new HttpsError(
-            "failed-precondition",
-            `${staffConflicts.length} user(s) are event staff for this event and cannot be imported as attendees: ${staffConflicts.join(", ")}. Remove them as staff first or omit them from the import.`,
-            {code: "has-staff", emails: staffConflicts},
-        );
-    }
-
     const callerSnap = await db.collection("users").doc(uid).get();
     const callerName = callerSnap.data()?.displayName ?? "";
 
@@ -3442,22 +3419,17 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
  * not change the user's group. The role only grants ticket-scanning and
  * attendee-viewing access for this specific event.
  *
- * Staff and attendees are mutually exclusive in the admin UI. The two
- * "attendees" sources we have to keep in sync:
+ * For free events, staff and attendees are mutually exclusive in the admin UI.
+ * The "attendees" sources:
  *   - paid events: per-event `attendees` subcollection (one doc per email,
- *     holds tickets);
+ *     holds tickets). Attendees CAN be staff for paid events.
  *   - free events: each user's `attendedEvents` array (driven by claim codes
  *     or admin toggleAttendance).
  *
  * Behavior by event lifecycle:
- *   - upcoming + has attendee subcollection doc: reject with `has-ticket` —
- *     live tickets may already be distributed and must be voided explicitly
- *     via the 'tickets' tab.
- *   - upcoming, no attendee doc: auto-mark the staffer as attended (they will
+ *   - upcoming: auto-mark the staffer as attended (they will
  *     be there). Existing semantic, preserved.
- *   - past: scrub attendee state so the user only appears as staff. Deletes
- *     any attendee subcollection doc (logged as `ticket-attendee-delete` with
- *      the reason `staff-assignment`) and removes eventId from `attendedEvents`
+ *   - past: removes eventId from `attendedEvents`
  *     (logged as `event-unattend`). Skips the auto-attend write path.
  *
  * `removeEventStaff` does NOT re-add attendance — converting back is a manual
@@ -3479,37 +3451,12 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        const eventCollection = upcomingSnap.exists ? "upcomingEvents" : "pastEvents";
         const isPastEvent = !upcomingSnap.exists;
 
         const targetData = targetSnap.data()!;
         const targetEmail: string = targetData.email ?? "";
         const existing: string[] = targetData.eventStaffEvents ?? [];
         const alreadyStaff = existing.includes(eventId);
-
-        // Past events delete the attendee doc(s) to enforce the staff/attendee
-        // exclusivity; upcoming events reject so the admin voids live tickets
-        // explicitly. List all matches without a limit, so a partial-import
-        // failure that left duplicate attendee docs for the same email is fully
-        // cleaned up here, not just the first hit.
-        const attendeesToRemove: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-        if (targetEmail) {
-            const attendeeQuery = await txn.get(
-                db.collection(eventCollection).doc(eventId).collection("attendees")
-                    .where("email", "==", targetEmail)
-            );
-            if (!attendeeQuery.empty) {
-                if (isPastEvent) {
-                    attendeesToRemove.push(...attendeeQuery.docs);
-                } else {
-                    throw new HttpsError(
-                        "failed-precondition",
-                        "User already has a ticket for this event. Delete their attendee record before assigning as staff.",
-                        {code: "has-ticket"},
-                    );
-                }
-            }
-        }
 
         const eventTitle: string = eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId;
         const callerName: string = callerSnap.data()?.displayName ?? "";
@@ -3523,7 +3470,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
             ? (alreadyAttended ? "remove" : "none")
             : (alreadyAttended ? "none" : "add");
 
-        if (alreadyStaff && attendanceAction === "none" && attendeesToRemove.length === 0) {
+        if (alreadyStaff && attendanceAction === "none") {
             return {added: false, attendeeRemoved: false};
         }
 
@@ -3536,32 +3483,6 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         }
         if (Object.keys(userUpdates).length > 0) {
             txn.update(db.collection("users").doc(targetUid), userUpdates);
-        }
-
-        for (const attendeeDoc of attendeesToRemove) {
-            const attendeeData = attendeeDoc.data();
-            txn.delete(attendeeDoc.ref);
-            txn.set(db.collection("records").doc(), {
-                type: "ticket-attendee-delete",
-                performedBy: uid,
-                performedByName: callerName,
-                eventId,
-                eventTitle,
-                targetEmail: attendeeData.email ?? targetEmail,
-                targetName: attendeeData.name ?? targetName,
-                reason: "staff-assignment",
-                // Snapshot per-ticket state so the audit trail is self-contained
-                // — staff-assignment on a past event is the one path that erases
-                // redemption/check-in history, and we still want to be able to
-                // answer "did this person actually attend?" later. Bounded by
-                // record TTL (RECORD_RETENTION_DAYS).
-                ticketSnapshot: {
-                    ticketCount: attendeeData.ticketCount ?? 0,
-                    tickets: attendeeData.tickets ?? [],
-                },
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
         }
 
         if (!alreadyStaff) {
@@ -3607,7 +3528,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         }
         return {
             added: !alreadyStaff,
-            attendeeRemoved: attendeesToRemove.length > 0 || attendanceAction === "remove",
+            attendeeRemoved: attendanceAction === "remove",
         };
     });
 });

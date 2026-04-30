@@ -1,6 +1,6 @@
 import { type ChangeEvent, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callImportEventAttendees, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
+import { callImportEventAttendees, functionsErrorCode } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 import { EMAIL_RE } from './helpers';
 import type { AttendeeData, ParsedRow, ParseError } from './types';
@@ -328,18 +328,9 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         } catch (err) {
             const code = functionsErrorCode(err);
             let msg: string;
-            if (code === 'has-staff') {
-                const details = functionsErrorDetails<{emails?: string[]}>(err);
-                const emails = details?.emails ?? [];
-                const list = emails.slice(0, 5).join(', ') + (emails.length > 5 ? `, +${emails.length - 5}` : '');
-                msg = isEnglish
-                    ? `Import blocked: ${emails.length} email(s) are event staff for this event and cannot be attendees: ${list}. Remove them as staff first or omit them from the import.`
-                    : `导入被阻止：${emails.length} 个邮箱是该活动的工作人员，不能同时作为参加者：${list}。请先撤销其工作人员身份，或从导入中移除这些邮箱。`;
-            } else {
-                msg = isEnglish
-                    ? `Import failed${code ? ` (${code})` : ''}.`
-                    : `导入失败${code ? `（${code}）` : ''}。`;
-            }
+            msg = isEnglish
+                ? `Import failed${code ? ` (${code})` : ''}.`
+                : `导入失败${code ? ` (${code})` : ''}。`;
             showToast(msg, 'error');
         } finally {
             setImporting(false);
