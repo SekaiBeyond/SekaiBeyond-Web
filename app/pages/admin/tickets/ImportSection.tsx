@@ -30,6 +30,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
     const [emailCol, setEmailCol] = useState<string>('');
     const [nameCol, setNameCol] = useState<string>('');
     const [countCol, setCountCol] = useState<string>('');
+    const [typeCol, setTypeCol] = useState<string>('');
     const [rowActions, setRowActions] = useState<Record<string, 'skip' | 'override'>>({});
 
     const clearForm = () => {
@@ -41,14 +42,16 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         setEmailCol('');
         setNameCol('');
         setCountCol('');
+        setTypeCol('');
         setRowActions({});
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const validateRows = (emailKey: string, nameKey: string, countKey: string, records: Record<string, string>[]) => {
+    const validateRows = (emailKey: string, nameKey: string, countKey: string, typeKey: string, records: Record<string, string>[]) => {
         const existingEmails = new Map(existingAttendees?.map(a => [a.email.toLowerCase(), {
             name: a.name,
-            ticketCount: a.ticketCount
+            ticketCount: a.ticketCount,
+            type: a.tickets[0]?.type || 'normal',
         }]) || []);
         const parsedRows: ParsedRow[] = [];
         const errs: ParseError[] = [];
@@ -71,6 +74,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
             const email = (row[emailKey] ?? '').trim().toLowerCase();
             const name = (row[nameKey] ?? '').trim();
             const countRaw = (row[countKey] ?? '').trim();
+            const typeRaw = (typeKey ? (row[typeKey] ?? '').trim().toLowerCase() : 'normal');
 
             if (!email && !name && !countRaw) return;
 
@@ -105,6 +109,13 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 });
                 return;
             }
+
+            let type: TicketType = 'normal';
+            if (typeRaw === 'early-bird' || typeRaw === 'earlybird') type = 'early-bird';
+            else if (typeRaw === 'vip') type = 'vip';
+            else if (typeRaw === 'comp ticket' || typeRaw === 'comp' || typeRaw === '赠票') type = 'Comp Ticket';
+            else if (typeRaw === 'guest' || typeRaw === '嘉宾') type = 'guest';
+
             if (seen.has(email)) {
                 errs.push({
                     row: rowNum,
@@ -114,13 +125,16 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 });
             }
             seen.set(email, parsedRows.length);
+            const existing = existingEmails.get(email);
             parsedRows.push({
                 email,
                 name,
                 ticketCount: count,
-                existingName: existingEmails.get(email)?.name,
-                existingTicketCount: existingEmails.get(email)?.ticketCount,
-                action: existingEmails.has(email) ? 'skip' : 'add'
+                type,
+                existingName: existing?.name,
+                existingTicketCount: existing?.ticketCount,
+                existingType: existing?.type,
+                action: existing ? 'skip' : 'add'
             });
         });
 
@@ -161,20 +175,23 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         const nCol = fieldName(fields, 'name', 'full name', 'display name');
         const cCol = fieldName(fields, 'ticketcount', 'ticket count',
             'ticket_count', 'tickets', 'quantity', 'count');
+        const tCol = fieldName(fields, 'type', 'ticket type', 'ticket_type', 'category');
 
         setEmailCol(eCol);
         setNameCol(nCol);
         setCountCol(cCol);
+        setTypeCol(tCol);
 
-        const {rows: finalRows, errors: errs} = validateRows(eCol, nCol, cCol, records);
+        const {rows: finalRows, errors: errs} = validateRows(eCol, nCol, cCol, tCol, records);
         setRows(finalRows);
         setErrors(errs);
     };
 
-    const handleMappingChange = (type: 'email' | 'name' | 'count', val: string) => {
+    const handleMappingChange = (type: 'email' | 'name' | 'count' | 'type', val: string) => {
         let e = emailCol;
         let n = nameCol;
         let c = countCol;
+        let t = typeCol;
         if (type === 'email') {
             setEmailCol(val);
             e = val;
@@ -187,8 +204,12 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
             setCountCol(val);
             c = val;
         }
+        if (type === 'type') {
+            setTypeCol(val);
+            t = val;
+        }
 
-        const {rows: finalRows, errors: errs} = validateRows(e, n, c, rawRecords);
+        const {rows: finalRows, errors: errs} = validateRows(e, n, c, t, rawRecords);
         setRows(finalRows);
         setErrors(errs);
     };
@@ -406,6 +427,21 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                 {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
                         </label>
+                        <label style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                            <span style={{
+                                fontWeight: 500,
+                                fontSize: '13px'
+                            }}>{isEnglish ? 'Type Column:' : '门票类型列：'}</span>
+                            <select value={typeCol} onChange={e => handleMappingChange('type', e.target.value)}
+                                    disabled={readOnly || busy} style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                border: '1px solid var(--border-color, #ccc)'
+                            }}>
+                                <option value="">-- {isEnglish ? 'Select (Optional)' : '选择（可选）'} --</option>
+                                {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </label>
                     </div>
                 </div>
             )}
@@ -460,6 +496,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                     <th>{isEnglish ? 'Email' : '邮箱'}</th>
                                     <th>{isEnglish ? 'Name' : '姓名'}</th>
                                     <th>{isEnglish ? 'Tickets' : '门票数'}</th>
+                                    <th>{isEnglish ? 'Type' : '类型'}</th>
                                     <th>{isEnglish ? 'Action' : '操作'}</th>
                                 </tr>
                                 </thead>
@@ -497,6 +534,21 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                                     }}>{r.ticketCount}</span>
                                                 </>
                                             ) : r.ticketCount}
+                                        </td>
+                                        <td>
+                                            {r.existingType !== undefined && r.existingType !== r.type ? (
+                                                <>
+                                                <span style={{
+                                                    textDecoration: 'line-through',
+                                                    color: 'var(--text-color-light, #888)',
+                                                    marginRight: '6px'
+                                                }}>{r.existingType}</span>
+                                                    <span style={{
+                                                        color: 'var(--success-color, #28a745)',
+                                                        fontWeight: 'bold'
+                                                    }}>{r.type}</span>
+                                                </>
+                                            ) : r.type}
                                         </td>
                                         <td>
                                             {r.action === 'add' ? (

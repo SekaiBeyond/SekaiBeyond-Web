@@ -1896,6 +1896,49 @@
     color: #a15c00;
 }
 
+.admin-tickets-tag-type-normal {
+    background: rgba(108, 117, 125, 0.15);
+    color: #495057;
+}
+
+.admin-tickets-tag-type-early-bird {
+    background: rgba(255, 193, 7, 0.15);
+    color: #856404;
+}
+
+.admin-tickets-tag-type-vip {
+    background: rgba(233, 30, 99, 0.15);
+    color: #c2185b;
+    border: 1px solid rgba(233, 30, 99, 0.3);
+}
+
+.admin-tickets-tag-type-comp-ticket {
+    background: rgba(40, 167, 69, 0.15);
+    color: #1e7e34;
+}
+
+.admin-tickets-tag-type-guest {
+    background: rgba(23, 162, 184, 0.15);
+    color: #117a8b;
+}
+
+select.admin-tickets-tag {
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: inherit;
+    outline: none;
+}
+
+select.admin-tickets-tag:hover {
+    border-color: rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+select.admin-tickets-tag:focus {
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
 /* Tickets table (used in attendee detail + import preview) */
 .admin-tickets-table-wrap {
     width: 100%;

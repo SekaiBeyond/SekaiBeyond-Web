@@ -156,7 +156,7 @@ export const callArchiveUpcomingEvent = (data: {eventId: string; tagId: string})
 
 export const callImportEventAttendees = (data: {
     eventId: string;
-    attendees: Array<{email: string; name: string; ticketCount: number}>;
+    attendees: Array<{email: string; name: string; ticketCount: number; type: string}>;
     onDuplicate?: 'skip' | 'override';
 }) => httpsCallable<typeof data, {added: number; replaced: number; skipped: number; total: number}>(
     getFunctions(), 'importEventAttendees')(data);
@@ -169,6 +169,7 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
         attendeeEmail: string;
         eventTitle: string;
         ticketIndex: number;
+        ticketType: string;
         userCheckedIn?: boolean;
         // Display name of the staff member who first redeemed the ticket
         // (server returns redeemedByName, not a raw UID). Only set when
@@ -189,8 +190,17 @@ export const callUpdateEventAttendee = (data: {
     attendeeId: string;
     name: string;
     ticketCount: number;
+    type: string;
 }) => httpsCallable<typeof data, {updated: boolean; regenerated: boolean}>(
     getFunctions(), 'updateEventAttendee')(data);
+
+export const callUpdateTicketType = (data: {
+    eventId: string;
+    attendeeId: string;
+    ticketId: string;
+    type: string;
+}) => httpsCallable<typeof data, {updated: boolean}>(
+    getFunctions(), 'updateTicketType')(data);
 
 export const callSendTicketEmails = (data: {
     eventId: string;

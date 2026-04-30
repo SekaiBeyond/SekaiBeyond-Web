@@ -5,8 +5,15 @@ import { callRedeemTicket, functionsErrorCode } from '~/lib/firebase';
 type ScanStatus =
     | {kind: 'idle'}
     | {kind: 'scanning'}
-    | {kind: 'success'; attendeeName: string; attendeeEmail: string; userCheckedIn: boolean}
-    | {kind: 'already'; attendeeName: string; attendeeEmail: string; redeemedBy: string; redeemedAt: string | null}
+    | {kind: 'success'; attendeeName: string; attendeeEmail: string; ticketType: string; userCheckedIn: boolean}
+    | {
+    kind: 'already';
+    attendeeName: string;
+    attendeeEmail: string;
+    ticketType: string;
+    redeemedBy: string;
+    redeemedAt: string | null
+}
     | {kind: 'error'; reason: string};
 
 type JsQRFn = (data: Uint8ClampedArray, w: number, h: number) => {data: string} | null;
@@ -15,6 +22,7 @@ interface CachedRedemption {
     ticketId: string;
     attendeeName: string;
     attendeeEmail: string;
+    ticketType: string;
     userCheckedIn: boolean;
 }
 
@@ -68,6 +76,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 kind: 'success',
                 attendeeName: cached.attendeeName,
                 attendeeEmail: cached.attendeeEmail,
+                ticketType: cached.ticketType,
                 userCheckedIn: cached.userCheckedIn,
             });
             return;
@@ -83,6 +92,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                     kind: 'already',
                     attendeeName: d.attendeeName ?? '',
                     attendeeEmail: d.attendeeEmail ?? '',
+                    ticketType: d.ticketType ?? 'normal',
                     redeemedBy: d.redeemedBy ?? '',
                     redeemedAt: d.redeemedAt ?? null,
                 });
@@ -90,6 +100,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 const successData = {
                     attendeeName: d.attendeeName ?? '',
                     attendeeEmail: d.attendeeEmail ?? '',
+                    ticketType: d.ticketType ?? 'normal',
                     userCheckedIn: !!d.userCheckedIn,
                 };
                 setStatus({kind: 'success', ...successData});
@@ -305,7 +316,9 @@ function ResultBanner({status, isEnglish}: {status: ScanStatus; isEnglish: boole
         return (
             <div className="admin-tickets-scan-banner admin-tickets-scan-success">
                 <strong>{isEnglish ? '✓ Redeemed' : '✓ 验证成功'}</strong>
-                <div>{status.attendeeName}</div>
+                <div>{status.attendeeName} <span
+                    className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{status.ticketType}</span>
+                </div>
                 <div className="admin-user-email">{status.attendeeEmail}</div>
                 <div className="admin-helper-text">
                     {status.userCheckedIn
@@ -319,7 +332,9 @@ function ResultBanner({status, isEnglish}: {status: ScanStatus; isEnglish: boole
         return (
             <div className="admin-tickets-scan-banner admin-tickets-scan-already">
                 <strong>{isEnglish ? '! Already redeemed' : '! 此门票已验证'}</strong>
-                <div>{status.attendeeName}</div>
+                <div>{status.attendeeName} <span
+                    className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{status.ticketType}</span>
+                </div>
                 <div className="admin-user-email">{status.attendeeEmail}</div>
                 <div className="admin-helper-text">
                     {isEnglish ? 'Redeemed by ' : '验证人：'}

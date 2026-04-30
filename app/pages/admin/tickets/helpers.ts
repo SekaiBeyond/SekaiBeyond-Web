@@ -53,6 +53,7 @@ export const mapAttendeeDoc = (
         const tk = t as Record<string, unknown>;
         return {
             ticketId: (tk.ticketId as string) ?? '',
+            type: (tk.type as any) ?? 'normal',
             redeemed: (tk.redeemed as boolean) ?? false,
             redeemedAt: tsToDate(tk.redeemedAt),
             redeemedBy: (tk.redeemedBy as string) ?? '',

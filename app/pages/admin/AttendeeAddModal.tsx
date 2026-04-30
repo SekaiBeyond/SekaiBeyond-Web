@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportEventAttendees, functionsErrorCode } from '~/lib/firebase';
 import { useModalEffects } from '~/lib/useModalEffects';
-import type { AttendeeData } from './tickets/types';
+import { type AttendeeData, TICKET_TYPES, type TicketType } from './tickets/types';
 import type { ShowToast } from './utils';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -24,6 +24,7 @@ export function AttendeeAddModal({
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
     const [ticketCount, setTicketCount] = useState('1');
+    const [type, setType] = useState<TicketType>('normal');
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -61,7 +62,7 @@ export function AttendeeAddModal({
         try {
             const result = await callImportEventAttendees({
                 eventId,
-                attendees: [{email: trimmedEmail, name: trimmedName, ticketCount: parsedCount}],
+                attendees: [{email: trimmedEmail, name: trimmedName, ticketCount: parsedCount, type}],
             });
             const {added, replaced} = result.data;
             showToast(
@@ -133,6 +134,22 @@ export function AttendeeAddModal({
                             max={50}
                             disabled={saving}
                         />
+                    </label>
+
+                    <label className="admin-tickets-template-field">
+                        <span>{isEnglish ? 'Ticket Type' : '门票类型'}</span>
+                        <select
+                            className="admin-search-input"
+                            value={type}
+                            onChange={(e) => setType(e.target.value as TicketType)}
+                            disabled={saving}
+                        >
+                            {TICKET_TYPES.map(t => (
+                                <option key={t.value} value={t.value}>
+                                    {isEnglish ? t.labelEn : t.labelCn}
+                                </option>
+                            ))}
+                        </select>
                     </label>
 
                     {duplicate && (

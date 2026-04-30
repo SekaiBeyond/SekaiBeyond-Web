@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUpdateEventAttendee, functionsErrorCode } from '~/lib/firebase';
 import { useModalEffects } from '~/lib/useModalEffects';
-import type { AttendeeData } from './tickets/types';
+import { type AttendeeData, TICKET_TYPES, type TicketType } from './tickets/types';
 import type { ShowToast } from './utils';
 
 interface AttendeeEditModalProps {
@@ -30,6 +30,7 @@ export function AttendeeEditModal({
     useModalEffects(true, overlayRef);
     const [name, setName] = useState(attendee.name);
     const [ticketCount, setTicketCount] = useState(String(attendee.ticketCount));
+    const [type, setType] = useState<TicketType>(attendee.tickets[0]?.type || 'normal');
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -45,14 +46,15 @@ export function AttendeeEditModal({
     const nameValid = name.trim().length > 0 && name.trim().length <= 100;
     const countChanged = countValid && newCount !== attendee.ticketCount;
     const nameChanged = nameValid && name.trim() !== attendee.name;
-    const canSave = !saving && nameValid && countValid && (nameChanged || countChanged);
+    const typeChanged = type !== (attendee.tickets[0]?.type || 'normal');
+    const canSave = !saving && nameValid && countValid && (nameChanged || countChanged || typeChanged);
 
     const save = async () => {
         if (!canSave) return;
-        if (countChanged) {
+        if (countChanged || typeChanged) {
             const ok = window.confirm(isEnglish
-                ? 'Changing ticket count will re-issue ALL tickets for this attendee. Old QR codes will stop working. Continue?'
-                : '修改门票数量会重新签发该参加者的全部门票，旧二维码将立即失效。是否继续？');
+                ? 'Changing ticket count or type will re-issue ALL tickets for this attendee. Old QR codes will stop working. Continue?'
+                : '修改门票数量或类型会重新签发该参加者的全部门票，旧二维码将立即失效。是否继续？');
             if (!ok) return;
         }
         setSaving(true);
@@ -62,6 +64,7 @@ export function AttendeeEditModal({
                 attendeeId: attendee.id,
                 name: name.trim(),
                 ticketCount: newCount,
+                type,
             });
             const regenerated = result.data.regenerated;
             if (regenerated) {
@@ -140,11 +143,27 @@ export function AttendeeEditModal({
                         />
                     </label>
 
-                    {countChanged && (
+                    <label className="admin-tickets-template-field">
+                        <span>{isEnglish ? 'Ticket Type' : '门票类型'}</span>
+                        <select
+                            className="admin-search-input"
+                            value={type}
+                            onChange={(e) => setType(e.target.value as TicketType)}
+                            disabled={saving}
+                        >
+                            {TICKET_TYPES.map(t => (
+                                <option key={t.value} value={t.value}>
+                                    {isEnglish ? t.labelEn : t.labelCn}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
+                    {(countChanged || typeChanged) && (
                         <p className="admin-helper-text admin-tickets-edit-warning">
                             {isEnglish
-                                ? 'Changing the count will re-issue ALL tickets and reset the email-sent status.'
-                                : '修改数量会重新签发所有门票，并重置邮件发送状态。'}
+                                ? 'Changing the count or type will re-issue ALL tickets and reset the email-sent status.'
+                                : '修改数量或类型会重新签发所有门票，并重置邮件发送状态。'}
                         </p>
                     )}
 

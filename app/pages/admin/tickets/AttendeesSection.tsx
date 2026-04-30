@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { ticketStatusCounts } from './helpers';
-import type { AttendeeData, AttendeeTotals } from './types';
+import { type AttendeeData, type AttendeeTotals, TICKET_TYPES, type TicketType } from './types';
 
 interface AttendeesSectionProps {
     loading: boolean;
@@ -16,15 +16,29 @@ interface AttendeesSectionProps {
     onEdit: (a: AttendeeData) => void;
     onAdd: () => void;
     onVoidTicket: (a: AttendeeData, ticketId: string) => void;
+    onUpdateTicketType: (a: AttendeeData, ticketId: string, newType: TicketType) => void;
     onResend: (a: AttendeeData) => void;
     onDelete: (a: AttendeeData) => void;
     onRefresh: () => void;
 }
 
 export function AttendeesSection({
-                                     loading, error, totals, attendees,
-                                     search, onSearchChange, filterUnsent, onFilterUnsentChange,
-                                     readOnly, onEdit, onAdd, onVoidTicket, onResend, onDelete, onRefresh,
+                                     loading,
+                                     error,
+                                     totals,
+                                     attendees,
+                                     search,
+                                     onSearchChange,
+                                     filterUnsent,
+                                     onFilterUnsentChange,
+                                     readOnly,
+                                     onEdit,
+                                     onAdd,
+                                     onVoidTicket,
+                                     onUpdateTicketType,
+                                     onResend,
+                                     onDelete,
+                                     onRefresh,
                                  }: AttendeesSectionProps) {
     const {isEnglish} = useLanguage();
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -107,6 +121,7 @@ export function AttendeesSection({
             {attendees.map((a) => {
                 const {used, voided, remaining} = ticketStatusCounts(a);
                 const isExpanded = expanded.has(a.id);
+                const ticketType = a.tickets[0]?.type || 'normal';
                 return (
                     <div key={a.id} className="admin-tickets-attendee-row">
                         <div
@@ -118,6 +133,12 @@ export function AttendeesSection({
                                 <div className="admin-user-email">{a.email}</div>
                             </div>
                             <div className="admin-tickets-attendee-stats">
+                                <span
+                                    className={`admin-tickets-tag admin-tickets-tag-type-${ticketType.toLowerCase().replace(/\s+/g, '-')}`}>
+                                    {ticketType === 'Comp Ticket' ? (isEnglish ? 'Comp' : '赠票') :
+                                        ticketType === 'early-bird' ? (isEnglish ? 'Early Bird' : '早鸟') :
+                                            ticketType.toUpperCase()}
+                                </span>
                                 <span className="admin-tickets-attendee-count">
                                     {a.ticketCount} {isEnglish ? 'tickets' : '张'}
                                 </span>
@@ -181,6 +202,7 @@ export function AttendeesSection({
                                         <tr>
                                             <th>#</th>
                                             <th>{isEnglish ? 'Ticket ID' : '门票 ID'}</th>
+                                            <th>{isEnglish ? 'Type' : '类型'}</th>
                                             <th>{isEnglish ? 'Status' : '状态'}</th>
                                             <th>{isEnglish ? 'Redeemed By' : '验证人'}</th>
                                             <th></th>
@@ -192,6 +214,33 @@ export function AttendeesSection({
                                                 <td>{i + 1}</td>
                                                 <td className="admin-tickets-ticket-id" title={t.ticketId}>
                                                     {t.ticketId.slice(0, 8)}…
+                                                </td>
+                                                <td>
+                                                    {readOnly ? (
+                                                        <span
+                                                            className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}>
+                                                            {t.type || 'normal'}
+                                                        </span>
+                                                    ) : (
+                                                        <select
+                                                            className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}
+                                                            value={t.type || 'normal'}
+                                                            onChange={(e) => onUpdateTicketType(a, t.ticketId, e.target.value as TicketType)}
+                                                            style={{
+                                                                cursor: 'pointer',
+                                                                border: '1px solid transparent',
+                                                                appearance: 'none',
+                                                                WebkitAppearance: 'none',
+                                                                textAlign: 'center',
+                                                            }}
+                                                        >
+                                                            {TICKET_TYPES.map(tt => (
+                                                                <option key={tt.value} value={tt.value}>
+                                                                    {isEnglish ? tt.labelEn : tt.labelCn}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     {t.voided ? (

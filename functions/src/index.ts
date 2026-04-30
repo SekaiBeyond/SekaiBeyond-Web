@@ -2467,8 +2467,18 @@ function validateTicketCount(value: unknown): number {
     return value;
 }
 
+const VALID_TICKET_TYPES = ["normal", "early-bird", "vip", "Comp Ticket", "guest"];
+
+function validateTicketType(value: unknown): string {
+    if (typeof value !== "string" || !VALID_TICKET_TYPES.includes(value)) {
+        return "normal";
+    }
+    return value;
+}
+
 interface NewTicket {
     ticketId: string;
+    type: string;
     redeemed: boolean;
     redeemedAt: Timestamp | null;
     redeemedBy: string;
@@ -2478,7 +2488,7 @@ interface NewTicket {
     voided: boolean;
 }
 
-function buildFreshTickets(count: number): {tickets: NewTicket[]; ticketIds: string[]} {
+function buildFreshTickets(count: number, type = "normal"): {tickets: NewTicket[]; ticketIds: string[]} {
     const tickets: NewTicket[] = [];
     const ticketIds: string[] = [];
     for (let i = 0; i < count; i++) {
@@ -2486,6 +2496,7 @@ function buildFreshTickets(count: number): {tickets: NewTicket[]; ticketIds: str
         ticketIds.push(ticketId);
         tickets.push({
             ticketId,
+            type,
             redeemed: false,
             redeemedAt: null,
             redeemedBy: "",
@@ -2667,7 +2678,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
     }
 
     // Validate + normalize + dedupe (later row wins)
-    const normalized = new Map<string, {email: string; name: string; ticketCount: number}>();
+    const normalized = new Map<string, {email: string; name: string; ticketCount: number; type: string}>();
     for (const row of input.attendees) {
         if (!row || typeof row !== "object") {
             throw new HttpsError("invalid-argument", "Each attendee row must be an object.");
@@ -2677,7 +2688,8 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         const name = sanitizeDisplayText(validateStr(r.name, "name", 100, true));
         if (!name) throw new HttpsError("invalid-argument", "name is required.");
         const ticketCount = validateTicketCount(r.ticketCount);
-        normalized.set(email, {email, name, ticketCount});
+        const type = validateTicketType(r.type);
+        normalized.set(email, {email, name, ticketCount, type});
     }
 
     // Admin check + event existence check in a lightweight transaction.
@@ -2722,7 +2734,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
             continue;
         }
 
-        const {tickets, ticketIds} = buildFreshTickets(row.ticketCount);
+        const {tickets, ticketIds} = buildFreshTickets(row.ticketCount, row.type);
         const now = FieldValue.serverTimestamp();
 
         if (existing) {
@@ -2852,6 +2864,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                     attendeeEmail,
                     eventTitle,
                     ticketIndex: idx,
+                    ticketType: ticket.type || "normal",
                     redeemedBy: ticket.redeemedByName,
                     redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
                 };
@@ -2893,6 +2906,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
             attendeeEmail,
             eventTitle,
             ticketIndex: idx,
+            ticketType: ticket.type || "normal",
             userCheckedIn,
         };
     });
@@ -2967,12 +2981,14 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
         attendeeId?: string;
         name?: unknown;
         ticketCount?: unknown;
+        type?: unknown;
     };
     const eventId = validateDocId(input.eventId, "eventId");
     const attendeeId = validateDocId(input.attendeeId, "attendeeId");
     const name = sanitizeDisplayText(validateStr(input.name, "name", 100, true));
     if (!name) throw new HttpsError("invalid-argument", "name is required.");
     const ticketCount = validateTicketCount(input.ticketCount);
+    const type = validateTicketType(input.type);
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         const eventRef = db.collection("upcomingEvents").doc(eventId);
@@ -2986,11 +3002,17 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
         }
         const data = attendeeSnap.data()!;
         const prevTicketCount: number = data.ticketCount ?? 0;
+        const prevTickets: NewTicket[] = (data.tickets ?? []) as NewTicket[];
+        const prevType = prevTickets[0]?.type ?? "normal";
+
         const eventTitle: string = eventSnap.exists
             ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
             : eventId;
 
-        if (ticketCount === prevTicketCount) {
+        const countChanged = ticketCount !== prevTicketCount;
+        const typeChanged = type !== prevType;
+
+        if (!countChanged && !typeChanged) {
             if (name === data.name) {
                 return {updated: false, regenerated: false};
             }
@@ -3010,7 +3032,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             return {updated: true, regenerated: false};
         }
 
-        const {tickets, ticketIds} = buildFreshTickets(ticketCount);
+        const {tickets, ticketIds} = buildFreshTickets(ticketCount, type);
         txn.update(attendeeRef, {
             name,
             ticketCount,
@@ -3032,6 +3054,70 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             expiresAt: recordExpiresAt(),
         });
         return {updated: true, regenerated: true};
+    });
+});
+
+/**
+ * Update the type of a single ticket (core-staff+).
+ * Does not regenerate the ticketId, so existing QR codes remain valid.
+ */
+export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {
+        eventId?: string;
+        attendeeId?: string;
+        ticketId?: string;
+        type?: unknown;
+    };
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+    const type = validateTicketType(input.type);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
+
+        const oldType = tickets[idx].type || "normal";
+        if (oldType === type) return {updated: false};
+
+        tickets[idx] = {...tickets[idx], type};
+
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+
+        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-type-edit",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle,
+            targetEmail: data.email ?? "",
+            targetName: data.name ?? "",
+            code: ticketId,
+            oldType,
+            newType: type,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {updated: true};
     });
 });
 

@@ -4,6 +4,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     callDeleteEventAttendee,
     callSendTicketEmails,
+    callUpdateTicketType,
     callVoidTicket,
     functionsErrorCode,
     getFirebaseDb,
@@ -18,7 +19,7 @@ import { ImportSection } from './ImportSection';
 import { SendSection } from './SendSection';
 import { TemplateSection } from './TemplateSection';
 import { mapAttendeeDoc } from './helpers';
-import type { AttendeeData, TicketsSection } from './types';
+import { type AttendeeData, type TicketsSection, type TicketType } from './types';
 
 interface TicketsSubtabProps {
     event: UpcomingEvent;
@@ -111,6 +112,20 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
             showToast(isEnglish ? 'Ticket voided.' : '门票已作废。', 'warning');
         } catch {
             showToast(isEnglish ? 'Failed to void ticket.' : '作废门票失败。', 'error');
+        }
+    };
+
+    const updateTicketTypeAction = async (a: AttendeeData, ticketId: string, newType: TicketType) => {
+        if (readOnly) return;
+        try {
+            await callUpdateTicketType({eventId, attendeeId: a.id, ticketId, type: newType});
+            const updatedTickets = a.tickets.map(t =>
+                t.ticketId === ticketId ? {...t, type: newType} : t,
+            );
+            onAttendeeUpdated({...a, tickets: updatedTickets});
+            showToast(isEnglish ? 'Ticket type updated.' : '门票类型已更新。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to update ticket type.' : '更新门票类型失败。', 'error');
         }
     };
 
@@ -234,6 +249,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                     onEdit={setEditingAttendee}
                     onAdd={() => setAddingAttendee(true)}
                     onVoidTicket={voidTicketAction}
+                    onUpdateTicketType={updateTicketTypeAction}
                     onResend={resendToAttendee}
                     onDelete={deleteAttendeeAction}
                     onRefresh={() => void loadAttendees()}
