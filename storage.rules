@@ -16,8 +16,8 @@ service firebase.storage {
       // Writes only via Cloud Function (Admin SDK bypasses rules)
     }
 
-    match /upcoming-events/{imageId} {
-      // Upcoming event posters are publicly readable (used on landing page)
+    match /upcoming-events/{allPaths=**} {
+      // Upcoming event posters and header backgrounds are publicly readable
       allow read: if true;
       // Writes only via Cloud Function (Admin SDK bypasses rules)
     }

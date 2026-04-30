@@ -223,7 +223,7 @@ function sanitizeDisplayText(value: string): string {
     return value.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, " ").trim();
 }
 
-const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "badges/"];
+const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "upcoming-events/headers/", "badges/"];
 const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
 const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
@@ -1429,6 +1429,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const location = validateStr(input.location, "location", 200);
     const locationCn = validateStr(input.locationCn, "locationCn", 200);
     const poster = validateStr(input.poster, "poster", 500);
+    const emailHeaderBg = validateStr(input.emailHeaderBg, "emailHeaderBg", 500);
     const posterCredit = validateStr(input.posterCredit, "posterCredit", 200);
     const buyTicket = validateStr(input.buyTicket, "buyTicket", 500);
     const learnMore = validateStr(input.learnMore, "learnMore", 500);
@@ -1438,6 +1439,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const paid = input.paid === true;
 
     validateStorageImageUrl(poster, "poster");
+    validateStorageImageUrl(emailHeaderBg, "emailHeaderBg");
     validateUrl(buyTicket, "buyTicket");
     validateUrl(learnMore, "learnMore");
     validateUrl(customButtonLink, "customButtonLink");
@@ -1454,18 +1456,20 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
 
     const data = {
         title, titleCn, description, descriptionCn, location, locationCn,
-        startAt, endAt, poster, posterCredit, buyTicket, learnMore,
+        startAt, endAt, poster, emailHeaderBg, posterCredit, buyTicket, learnMore,
         customButtonText, customButtonTextCn, customButtonLink, paid,
     };
     const docId = eventId ?? db.collection("upcomingEvents").doc().id;
 
-    const {result, oldPoster} = await adminTransaction(uid, async (txn, callerSnap) => {
+    const {result, oldPoster, oldEmailHeaderBg} = await adminTransaction(uid, async (txn, callerSnap) => {
         let prevPoster = "";
+        let prevEmailHeaderBg = "";
         let wasPublished = false;
         if (eventId) {
             const existing = await txn.get(db.collection("upcomingEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
             prevPoster = existing.data()?.poster ?? "";
+            prevEmailHeaderBg = existing.data()?.emailHeaderBg ?? "";
             wasPublished = existing.data()?.published ?? false;
         }
 
@@ -1516,12 +1520,16 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
-        return {result: {eventId: docId}, oldPoster: prevPoster};
+        return {result: {eventId: docId}, oldPoster: prevPoster, oldEmailHeaderBg: prevEmailHeaderBg};
     });
 
     if (oldPoster && oldPoster !== poster) {
         await deleteStorageFile(oldPoster, ["upcoming-events/"])
             .catch(logStorageCleanupError(`saveUpcomingEvent ${docId}`));
+    }
+    if (oldEmailHeaderBg && oldEmailHeaderBg !== emailHeaderBg) {
+        await deleteStorageFile(oldEmailHeaderBg, ["upcoming-events/headers/"])
+            .catch(logStorageCleanupError(`saveUpcomingEvent ${docId} header`));
     }
 
     return result;
@@ -1659,6 +1667,8 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
 
         await deleteStorageFile(data.poster ?? "", ["upcoming-events/"])
             .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId}`));
+        await deleteStorageFile(data.emailHeaderBg ?? "", ["upcoming-events/headers/"])
+            .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId} header`));
 
         // Skip the deleted-record write if this deletion was the tail end of an
         // archive — archiveUpcomingEvent already wrote an "upcoming-event-archive"
@@ -2653,6 +2663,7 @@ function renderTemplate(
         eventTitle: string;
         eventTitleCn: string;
         eventDate: string;
+        emailHeaderBg: string;
         ticketCount: number;
         ticketBlock: string;
     },
@@ -2662,12 +2673,24 @@ function renderTemplate(
     htmlContext: boolean,
 ): string {
     const sub = htmlContext ? escapeHtml : (s: string) => s;
+    // CSS background-image is unreliable in email clients (Outlook strips it
+    // entirely; several others ignore it). Render a real <img> instead so the
+    // header artwork shows everywhere. URL is validated as a Firebase Storage
+    // URL at save time (validateStorageImageUrl) so it's safe to interpolate.
+    const headerImage = data.emailHeaderBg
+        ? `<img src="${data.emailHeaderBg}" alt="${sub(data.eventTitle)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
+        : `<div style="background-color:#ff6b9d;height:120px;"></div>`;
+
     return template
         .replace(/{{\s*attendeeEmail\s*}}/g, sub(data.attendeeEmail))
         .replace(/{{\s*attendeeName\s*}}/g, sub(data.attendeeName))
         .replace(/{{\s*eventTitle\s*}}/g, sub(data.eventTitle))
         .replace(/{{\s*eventTitleCn\s*}}/g, sub(data.eventTitleCn))
         .replace(/{{\s*eventDate\s*}}/g, sub(data.eventDate))
+        .replace(/{{\s*eventHeader\s*}}/g, headerImage)
+        // Back-compat: drop the old CSS-based placeholder so any saved template
+        // that still references it doesn't ship the literal `{{...}}` string.
+        .replace(/{{\s*eventHeaderBgStyle\s*}}/g, "")
         .replace(/{{\s*ticketCount\s*}}/g, String(data.ticketCount))
         // {{ ticketIds[] }} — with optional surrounding <p>/<div> tags collapsed.
         // ticketBlock is server-built HTML, never escaped.
@@ -3322,6 +3345,7 @@ export const sendTicketEmails = onCall(
 
         const eventTitle: string = eventData.title ?? eventData.name ?? "";
         const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
+        const emailHeaderBg: string = eventData.emailHeaderBg ?? "";
         const eventDateEn = formatEventDateForEmail(eventData.startAt, "en-US");
         const eventDateCn = formatEventDateForEmail(eventData.startAt, "zh-CN");
 
@@ -3394,6 +3418,7 @@ export const sendTicketEmails = onCall(
                 attendeeName: data.name ?? "",
                 eventTitle, eventTitleCn,
                 eventDate: eventDateEn,
+                emailHeaderBg,
                 ticketCount: data.ticketCount ?? ticketIds.length,
                 ticketBlock: "",
             }, false).replace(/[\x00-\x1F\x7F]+/g, " ").trim();
@@ -3402,6 +3427,7 @@ export const sendTicketEmails = onCall(
                 attendeeName: data.name ?? "",
                 eventTitle, eventTitleCn,
                 eventDate: eventDateEn,
+                emailHeaderBg,
                 ticketCount: data.ticketCount ?? ticketIds.length,
                 ticketBlock,
             }, true);
@@ -3410,6 +3436,7 @@ export const sendTicketEmails = onCall(
                 attendeeName: data.name ?? "",
                 eventTitle, eventTitleCn,
                 eventDate: eventDateCn,
+                emailHeaderBg,
                 ticketCount: data.ticketCount ?? ticketIds.length,
                 ticketBlock,
             }, true);

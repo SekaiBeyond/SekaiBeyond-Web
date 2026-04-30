@@ -4,7 +4,7 @@ import { useModalEffects } from '~/lib/useModalEffects';
 import { type ShowToast, WEBP_QUALITY } from './utils';
 
 interface ImageCropModalProps {
-    file: File;
+    imageSource: File | string;
     aspect: number;
     onConfirm: (cropped: File) => void;
     onCancel: () => void;
@@ -14,7 +14,7 @@ interface ImageCropModalProps {
 const DISPLAY_SIZE = 360;
 const OUTPUT_SIZE = 512;
 
-export const ImageCropModal = ({file, aspect, onConfirm, onCancel, showToast}: ImageCropModalProps) => {
+export const ImageCropModal = ({imageSource, aspect, onConfirm, onCancel, showToast}: ImageCropModalProps) => {
     const {isEnglish} = useLanguage();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const dragRef = useRef<{startX: number; startY: number; ox: number; oy: number} | null>(null);
@@ -32,8 +32,12 @@ export const ImageCropModal = ({file, aspect, onConfirm, onCancel, showToast}: I
     const boxH = DISPLAY_SIZE / aspect;
 
     useEffect(() => {
-        const url = URL.createObjectURL(file);
+        const isString = typeof imageSource === 'string';
+        const url = isString ? imageSource : URL.createObjectURL(imageSource);
         const img = new Image();
+        if (isString) {
+            img.crossOrigin = "anonymous";
+        }
         img.onload = () => {
             const ms = Math.max(boxW / img.width, boxH / img.height);
             setMinScale(ms);
@@ -43,8 +47,10 @@ export const ImageCropModal = ({file, aspect, onConfirm, onCancel, showToast}: I
         };
         img.onerror = () => setLoadError(true);
         img.src = url;
-        return () => URL.revokeObjectURL(url);
-    }, [file, boxW, boxH]);
+        return () => {
+            if (!isString) URL.revokeObjectURL(url);
+        };
+    }, [imageSource, boxW, boxH]);
 
     useEffect(() => {
         const canvas = canvasRef.current;

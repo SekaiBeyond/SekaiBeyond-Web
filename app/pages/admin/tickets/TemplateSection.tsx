@@ -143,8 +143,8 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         <div className="admin-tickets-template">
             <p className="admin-helper-text">
                 {isEnglish
-                    ? 'Supported placeholders: {{ attendeeName }}, {{ attendeeEmail }}, {{ eventTitle }}, {{ eventDate }}, {{ ticketCount }}, {{ ticketIds[] }} (renders one QR per ticket).'
-                    : '可用占位符：{{ attendeeName }}、{{ attendeeEmail }}、{{ eventTitle }}、{{ eventDate }}、{{ ticketCount }}、{{ ticketIds[] }}（为每张门票渲染一个二维码）。'}
+                    ? 'Supported placeholders: {{ attendeeName }}, {{ attendeeEmail }}, {{ eventTitle }}, {{ eventDate }}, {{ eventHeader }} (renders cropped header image as <img>), {{ ticketCount }}, {{ ticketIds[] }} (renders one QR per ticket).'
+                    : '可用占位符：{{ attendeeName }}、{{ attendeeEmail }}、{{ eventTitle }}、{{ eventDate }}、{{ eventHeader }}（将裁剪的页眉图作为 <img> 渲染）、{{ ticketCount }}、{{ ticketIds[] }}（为每张门票渲染一个二维码）。'}
             </p>
 
             <label className="admin-tickets-template-field">

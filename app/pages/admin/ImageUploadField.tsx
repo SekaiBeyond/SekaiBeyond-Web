@@ -94,7 +94,7 @@ export const ImageUploadField = ({
             </label>
             {pendingFile && cropAspect && (
                 <ImageCropModal
-                    file={pendingFile}
+                    imageSource={pendingFile}
                     aspect={cropAspect}
                     onConfirm={handleCropConfirm}
                     onCancel={() => setPendingFile(null)}

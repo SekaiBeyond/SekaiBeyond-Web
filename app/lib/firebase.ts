@@ -135,7 +135,8 @@ export const callSaveUpcomingEvent = (data: {
     eventId?: string;
     title: string; titleCn: string; description: string; descriptionCn: string;
     location: string; locationCn: string; startAt: string; endAt: string;
-    poster: string; posterCredit: string; buyTicket: string; learnMore: string;
+    poster: string; emailHeaderBg: string; posterCredit: string;
+    buyTicket: string; learnMore: string;
     customButtonText: string; customButtonTextCn: string; customButtonLink: string;
     paid: boolean;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'saveUpcomingEvent')(data);

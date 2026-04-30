@@ -26,6 +26,7 @@ import { BilingualFormField } from './BilingualFormField';
 import { EventAttendeesList } from './EventAttendeesList';
 import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
+import { ImageCropModal } from './ImageCropModal';
 import { TicketsSubtab } from './tickets/TicketsSubtab';
 
 interface UpcomingEventsTabProps {
@@ -95,6 +96,9 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [form, setForm] = useState<EventForm>(emptyForm);
     const [posterImage, setPosterImage] = useState<File | null>(null);
     const [posterPreview, setPosterPreview] = useState<string | null>(null);
+    const [emailHeaderBgImage, setEmailHeaderBgImage] = useState<File | null>(null);
+    const [emailHeaderBgPreview, setEmailHeaderBgPreview] = useState<string | null>(null);
+    const [showPosterCropModal, setShowPosterCropModal] = useState(false);
     const [saving, setSaving] = useState(false);
     const [showArchive, setShowArchive] = useState(false);
     const [archiveTagId, setArchiveTagId] = useState('');
@@ -331,6 +335,9 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         setPosterImage(null);
         if (posterPreview?.startsWith('blob:')) URL.revokeObjectURL(posterPreview);
         setPosterPreview(null);
+        setEmailHeaderBgImage(null);
+        if (emailHeaderBgPreview?.startsWith('blob:')) URL.revokeObjectURL(emailHeaderBgPreview);
+        setEmailHeaderBgPreview(null);
     };
 
     const openCreate = () => {
@@ -360,6 +367,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         setEditingEvent(event);
         setPosterImage(null);
         setPosterPreview(event.poster || null);
+        setEmailHeaderBgImage(null);
+        setEmailHeaderBgPreview(event.emailHeaderBg || null);
         setShowForm(true);
     };
 
@@ -388,6 +397,13 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 const imageId = crypto.randomUUID();
                 posterUrl = await callUploadAdminImage(posterImage, `upcoming-events/${imageId}.webp`);
             }
+            let emailHeaderBgUrl = editingEvent?.emailHeaderBg ?? '';
+            if (emailHeaderBgImage) {
+                const imageId = crypto.randomUUID();
+                emailHeaderBgUrl = await callUploadAdminImage(emailHeaderBgImage, `upcoming-events/headers/${imageId}.webp`);
+            } else if (!emailHeaderBgPreview) {
+                emailHeaderBgUrl = '';
+            }
 
             await callSaveUpcomingEvent({
                 ...(editingEvent ? {eventId: editingEvent.id} : {}),
@@ -400,6 +416,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 startAt: startAt.toISOString(),
                 endAt: endAt.toISOString(),
                 poster: posterUrl,
+                emailHeaderBg: emailHeaderBgUrl,
                 posterCredit: form.posterCredit,
                 buyTicket: form.buyTicket,
                 learnMore: form.learnMore,
@@ -561,6 +578,29 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     convertToWebp
                                     showToast={showToast}
                                 />
+                                <div className="admin-tickets-template-field">
+                                    <ImageUploadField
+                                        label="Email Header Background" labelCn="邮件页眉背景"
+                                        preview={emailHeaderBgPreview}
+                                        onFileChange={(file, url) => {
+                                            setEmailHeaderBgImage(file);
+                                            setEmailHeaderBgPreview(url);
+                                        }}
+                                        onCleanupPreview={url => URL.revokeObjectURL(url)}
+                                        convertToWebp
+                                        showToast={showToast}
+                                    />
+                                    {(posterPreview || posterImage) && (
+                                        <button
+                                            type="button"
+                                            className="admin-toggle-btn admin-toggle-edit"
+                                            style={{marginTop: '4px', alignSelf: 'flex-start'}}
+                                            onClick={() => setShowPosterCropModal(true)}
+                                        >
+                                            {isEnglish ? 'Crop from Poster' : '从海报裁剪'}
+                                        </button>
+                                    )}
+                                </div>
                                 <label>
                                     <span>{isEnglish ? 'Poster Credit' : '海报作者'}</span>
                                     <input
@@ -669,6 +709,19 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     {isEnglish ? 'Cancel' : '取消'}
                                 </button>
                             </div>
+                            {showPosterCropModal && (posterImage || posterPreview) && (
+                                <ImageCropModal
+                                    imageSource={posterImage || posterPreview!}
+                                    aspect={4} // 600x150
+                                    onConfirm={(cropped) => {
+                                        setEmailHeaderBgImage(cropped);
+                                        setEmailHeaderBgPreview(URL.createObjectURL(cropped));
+                                        setShowPosterCropModal(false);
+                                    }}
+                                    onCancel={() => setShowPosterCropModal(false)}
+                                    showToast={showToast}
+                                />
+                            )}
                         </div>
                     ) : !readOnly ? (
                         <button className="admin-generate-btn admin-section-mb" onClick={openCreate}>

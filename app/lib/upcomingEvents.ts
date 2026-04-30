@@ -13,6 +13,7 @@ export interface UpcomingEvent {
     startAt: Date;
     endAt: Date;
     poster: string;
+    emailHeaderBg: string;
     posterCredit: string;
     buyTicket: string;
     learnMore: string;
@@ -46,6 +47,7 @@ const mapDoc = (docSnap: FirestoreDocLike): UpcomingEvent => {
         startAt: startAtRaw?.toDate?.() ?? new Date(),
         endAt: endAtRaw?.toDate?.() ?? new Date(),
         poster: (data.poster as string) ?? '',
+        emailHeaderBg: (data.emailHeaderBg as string) ?? '',
         posterCredit: (data.posterCredit as string) ?? '',
         buyTicket: (data.buyTicket as string) ?? '',
         learnMore: (data.learnMore as string) ?? '',
