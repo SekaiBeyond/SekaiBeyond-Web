@@ -204,6 +204,7 @@ export function AttendeesSection({
                                             <th>{isEnglish ? 'Ticket ID' : '门票 ID'}</th>
                                             <th>{isEnglish ? 'Type' : '类型'}</th>
                                             <th>{isEnglish ? 'Status' : '状态'}</th>
+                                            <th>{isEnglish ? 'Created' : '创建时间'}</th>
                                             <th>{isEnglish ? 'Redeemed By' : '验证人'}</th>
                                             <th></th>
                                         </tr>
@@ -256,6 +257,16 @@ export function AttendeesSection({
                                                         {isEnglish ? 'Valid' : '有效'}
                                                     </span>
                                                     )}
+                                                </td>
+                                                <td>
+                                                    {t.createdAt ? (
+                                                        <span className="admin-tickets-redeemed-meta">
+                                                            {t.createdAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                                                                month: 'short', day: 'numeric', year: 'numeric',
+                                                                hour: '2-digit', minute: '2-digit',
+                                                            })}
+                                                        </span>
+                                                    ) : '—'}
                                                 </td>
                                                 <td>
                                                     {t.redeemed ? (

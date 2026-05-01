@@ -11,6 +11,7 @@ export const TICKET_TYPES: {value: TicketType; labelEn: string; labelCn: string}
 export interface TicketData {
     ticketId: string;
     type: TicketType;
+    createdAt: Date | null;
     redeemed: boolean;
     redeemedAt: Date | null;
     redeemedBy: string;

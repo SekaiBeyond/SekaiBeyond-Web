@@ -2489,6 +2489,7 @@ function validateTicketType(value: unknown): string {
 interface NewTicket {
     ticketId: string;
     type: string;
+    createdAt: Timestamp;
     redeemed: boolean;
     redeemedAt: Timestamp | null;
     redeemedBy: string;
@@ -2507,6 +2508,7 @@ function buildFreshTickets(count: number, type = "normal"): {tickets: NewTicket[
         tickets.push({
             ticketId,
             type,
+            createdAt: Timestamp.now(),
             redeemed: false,
             redeemedAt: null,
             redeemedBy: "",

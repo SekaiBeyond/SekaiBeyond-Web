@@ -77,6 +77,7 @@ export const mapAttendeeDoc = (
         return {
             ticketId: (tk.ticketId as string) ?? '',
             type: (tk.type as any) ?? 'normal',
+            createdAt: tsToDate(tk.createdAt),
             redeemed: (tk.redeemed as boolean) ?? false,
             redeemedAt: tsToDate(tk.redeemedAt),
             redeemedBy: (tk.redeemedBy as string) ?? '',
