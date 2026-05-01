@@ -100,7 +100,42 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     Without this extension, ticket emails will be written to Firestore but never sent.
 
-11. Override `PUBLIC_ORIGIN` for forks — `sendTicketEmails` embeds ticket-claim URLs (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into the QR images it generates. Without this, forks will send QR codes pointing at the original site (`https://sekaibeyond.com`, the in-source default — see `functions/src/index.ts`) instead of their own deployment.
+11. Configure **Firebase App Check** — the app initializes App Check with reCAPTCHA v3 to protect Firestore, Storage, and callable Functions from unauthorized clients. If App Check is enforced in Firebase Console without the steps below, all reads/writes will fail with `FirebaseError: Missing or insufficient permissions`.
+
+    **Step A — Create a reCAPTCHA v3 site key**
+
+    1. Go to [google.com/recaptcha/admin](https://www.google.com/recaptcha/admin) and register a new site:
+       - Type: **reCAPTCHA v3**
+       - Domains: add **every** domain the site is served from — e.g. `sekaibeyond.com`, `www.sekaibeyond.com`, `<project-id>.web.app`, `<project-id>.firebaseapp.com`, and any custom preview hosts. Missing domains here is the #1 cause of post-enforcement permission errors.
+    2. Copy the **site key** and the **secret key**.
+
+    **Step B — Register the web app in Firebase App Check**
+
+    1. Firebase Console > **App Check** > **Apps** > select your web app > **reCAPTCHA v3**.
+    2. Paste the **secret key** from Step A.2 and save.
+    3. Leave Firestore / Storage / Functions enforcement **off** until Step D verifies tokens are flowing.
+
+    **Step C — Wire the site key into the build**
+
+    Add `VITE_RECAPTCHA_SITE_KEY=<site-key>` to:
+    - GitHub repo secrets (see [GitHub Repository Secrets](#2-github-repository-secrets) below) — required for production builds.
+    - Local `.env` — required for `npm run dev` to obtain real tokens.
+
+    Vite inlines `VITE_*` at build time, so the bundle must be rebuilt after the secret is added or App Check will silently no-op in production.
+
+    **Step D — Verify before enforcing**
+
+    Deploy, then open the production site with DevTools > Network:
+    - `firebaseappcheck.googleapis.com/v1/.../exchangeRecaptchaV3Token` should return **200**. A 4xx means the site key, secret, or registered domain doesn't match.
+    - A Firestore request should include the `X-Firebase-AppCheck` header.
+
+    Only once both checks pass, go to App Check > **APIs** and click **Enforce** for Firestore, Storage, and Cloud Functions.
+
+    **Optional — Debug tokens for local development**
+
+    For local dev (or staging hosts not registered with reCAPTCHA), set `VITE_APP_CHECK_DEBUG_TOKEN=true` in `.env`. The first page load logs a debug token to the browser console; copy it into Firebase Console > App Check > Apps > **Manage debug tokens** to allow that specific token through enforced services. Set `VITE_APP_CHECK_DEBUG_TOKEN=<token>` in `.env` to reuse the same token across sessions.
+
+12. Override `PUBLIC_ORIGIN` for forks — `sendTicketEmails` embeds ticket-claim URLs (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into the QR images it generates. Without this, forks will send QR codes pointing at the original site (`https://sekaibeyond.com`, the in-source default — see `functions/src/index.ts`) instead of their own deployment.
 
     The function reads `process.env.PUBLIC_ORIGIN` at runtime, so any of these will work:
 
@@ -144,6 +179,7 @@ Go to your repo > **Settings** > **Secrets and variables** > **Actions**, and ad
 | `VITE_FIREBASE_STORAGE_BUCKET`      | `your-project.firebasestorage.app`  |
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Your sender ID                      |
 | `VITE_FIREBASE_APP_ID`              | Your app ID                         |
+| `VITE_RECAPTCHA_SITE_KEY`           | reCAPTCHA v3 site key (App Check)   |
 | `FIREBASE_SERVICE_ACCOUNT`          | Service account JSON (see below)    |
 
 The `VITE_*` secrets are injected as build-time environment variables. `FIREBASE_SERVICE_ACCOUNT` authenticates the deploy step.

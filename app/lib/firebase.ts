@@ -1,4 +1,5 @@
 import { type FirebaseApp, FirebaseError, initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { type Auth, getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { type Firestore, getFirestore } from "firebase/firestore";
 import { type Functions, type FunctionsError, getFunctions as _getFunctions, httpsCallable } from "firebase/functions";
@@ -34,6 +35,27 @@ let functions: Functions;
 function getFirebaseApp() {
     if (!app) {
         app = initializeApp(firebaseConfig);
+
+        if (typeof window !== "undefined") {
+            const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+
+            // Enable debug token if VITE_APP_CHECK_DEBUG_TOKEN is provided.
+            // Set it to 'true' in .env to generate a token in the console, 
+            // or paste a specific debug token.
+            if (import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN) {
+                (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = 
+                    import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN === 'true' 
+                        ? true 
+                        : import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN;
+            }
+
+            if (siteKey) {
+                initializeAppCheck(app, {
+                    provider: new ReCaptchaV3Provider(siteKey),
+                    isTokenAutoRefreshEnabled: true,
+                });
+            }
+        }
     }
     return app;
 }
