@@ -2726,7 +2726,13 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
     }
 
     // Validate + normalize + dedupe (later row wins)
-    const normalized = new Map<string, {email: string; name: string; ticketCount: number; type: string}>();
+    const normalized = new Map<string, {
+        email: string;
+        name: string;
+        ticketCount: number;
+        type: string;
+        timestamp?: Date
+    }>();
     for (const row of input.attendees) {
         if (!row || typeof row !== "object") {
             throw new HttpsError("invalid-argument", "Each attendee row must be an object.");
@@ -2737,7 +2743,14 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         if (!name) throw new HttpsError("invalid-argument", "name is required.");
         const ticketCount = validateTicketCount(r.ticketCount);
         const type = validateTicketType(r.type);
-        normalized.set(email, {email, name, ticketCount, type});
+
+        let timestamp: Date | undefined;
+        if (r.timestamp && typeof r.timestamp === "string") {
+            const parsed = new Date(r.timestamp);
+            if (!isNaN(parsed.getTime())) timestamp = parsed;
+        }
+
+        normalized.set(email, {email, name, ticketCount, type, timestamp});
     }
 
     // Admin check + event existence check in a lightweight transaction.
@@ -2784,10 +2797,16 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
 
         const {tickets, ticketIds} = buildFreshTickets(row.ticketCount, row.type);
         const now = FieldValue.serverTimestamp();
+        const customDate = row.timestamp ? Timestamp.fromDate(row.timestamp) : undefined;
+
+        // For replaced records, we only update `updatedAt` unless a custom timestamp is provided, 
+        // in which case it might make sense to update `createdAt` to that too if we want it to act as the original import date.
+        // Let's just update `updatedAt` for replaced, and `createdAt`/`updatedAt` for new. 
+        // Actually, if a custom timestamp is provided, let's set `createdAt` to it for both added and replaced, so the ticket acts like it was created then.
 
         if (existing) {
             replacedCount++;
-            ops.push(b => b.set(existing.ref, {
+            const dataToUpdate: any = {
                 email: row.email,
                 name: row.name,
                 ticketCount: row.ticketCount,
@@ -2795,8 +2814,10 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
                 ticketIds,
                 emailSent: false,
                 emailSentAt: null,
-                updatedAt: now,
-            }, {merge: true}));
+                updatedAt: customDate || now,
+            };
+            if (customDate) dataToUpdate.createdAt = customDate;
+            ops.push(b => b.set(existing.ref, dataToUpdate, {merge: true}));
         } else {
             addedCount++;
             const newRef = attendeesCol.doc();
@@ -2808,8 +2829,8 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
                 ticketIds,
                 emailSent: false,
                 emailSentAt: null,
-                createdAt: now,
-                updatedAt: now,
+                createdAt: customDate || now,
+                updatedAt: customDate || now,
             }));
         }
     }

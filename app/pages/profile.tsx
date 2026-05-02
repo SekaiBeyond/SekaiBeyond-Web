@@ -791,7 +791,7 @@ export const ProfilePage = () => {
             )}
             {pendingPhoto && (
                 <ImageCropModal
-                    file={pendingPhoto}
+                    imageSource={pendingPhoto}
                     aspect={1}
                     onConfirm={handlePhotoCropConfirm}
                     onCancel={() => setPendingPhoto(null)}

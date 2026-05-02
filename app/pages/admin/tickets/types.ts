@@ -47,6 +47,7 @@ export interface ParsedRow {
     name: string;
     ticketCount: number;
     type: TicketType;
+    timestamp?: string;
     existingName?: string;
     existingTicketCount?: number;
     existingType?: TicketType;

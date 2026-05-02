@@ -3,7 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportEventAttendees, functionsErrorCode } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 import { EMAIL_RE } from './helpers';
-import type { AttendeeData, ParsedRow, ParseError } from './types';
+import type { AttendeeData, ParsedRow, ParseError, TicketType } from './types';
 
 const MAX_PREVIEW = 50;
 const MAX_IMPORT_ROWS = 1000;
@@ -31,6 +31,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
     const [nameCol, setNameCol] = useState<string>('');
     const [countCol, setCountCol] = useState<string>('');
     const [typeCol, setTypeCol] = useState<string>('');
+    const [timestampCol, setTimestampCol] = useState<string>('');
     const [rowActions, setRowActions] = useState<Record<string, 'skip' | 'override'>>({});
 
     const clearForm = () => {
@@ -43,11 +44,44 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         setNameCol('');
         setCountCol('');
         setTypeCol('');
+        setTimestampCol('');
         setRowActions({});
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const validateRows = (emailKey: string, nameKey: string, countKey: string, typeKey: string, records: Record<string, string>[]) => {
+    const parseImportDate = (dStr: string): string | undefined => {
+        if (!dStr) return undefined;
+        let s = dStr.trim();
+        const isoDate = new Date(s);
+        if (!isNaN(isoDate.getTime()) && !s.includes('上午') && !s.includes('下午')) {
+            return isoDate.toISOString();
+        }
+        s = s.replace(/-/g, '/');
+        let isPM = false;
+        let isAM = false;
+        if (s.includes('下午')) {
+            isPM = true;
+            s = s.replace('下午', '').trim();
+        } else if (s.includes('上午')) {
+            isAM = true;
+            s = s.replace('上午', '').trim();
+        }
+        if (s.match(/pm$/i)) {
+            isPM = true;
+            s = s.replace(/pm$/i, '').trim();
+        }
+        if (s.match(/am$/i)) {
+            isAM = true;
+            s = s.replace(/am$/i, '').trim();
+        }
+        const d = new Date(s);
+        if (isNaN(d.getTime())) return undefined;
+        if (isPM && d.getHours() < 12) d.setHours(d.getHours() + 12);
+        else if (isAM && d.getHours() === 12) d.setHours(0);
+        return d.toISOString();
+    };
+
+    const validateRows = (emailKey: string, nameKey: string, countKey: string, typeKey: string, timestampKey: string, records: Record<string, string>[]) => {
         const existingEmails = new Map(existingAttendees?.map(a => [a.email.toLowerCase(), {
             name: a.name,
             ticketCount: a.ticketCount,
@@ -57,14 +91,14 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         const errs: ParseError[] = [];
         const seen = new Map<string, number>();
 
-        if (!emailKey || !nameKey || !countKey) {
+        if (!emailKey || !nameKey) {
             return {
                 rows: [],
                 errors: [{
                     row: 0,
                     message: isEnglish
-                        ? 'Please select columns for Email, Name, and Ticket Count.'
-                        : '请选择用于邮箱、姓名和门票数量的列。',
+                        ? 'Please select columns for Email and Name.'
+                        : '请选择用于邮箱和姓名的列。',
                 }],
             };
         }
@@ -73,10 +107,11 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
             const rowNum = i + 2;
             const email = (row[emailKey] ?? '').trim().toLowerCase();
             const name = (row[nameKey] ?? '').trim();
-            const countRaw = (row[countKey] ?? '').trim();
+            const countRaw = countKey ? (row[countKey] ?? '').trim() : '';
             const typeRaw = (typeKey ? (row[typeKey] ?? '').trim().toLowerCase() : 'normal');
+            const timestampRaw = (timestampKey ? (row[timestampKey] ?? '').trim() : '');
 
-            if (!email && !name && !countRaw) return;
+            if (!email && !name && !countRaw && !timestampRaw) return;
 
             if (!EMAIL_RE.test(email)) {
                 errs.push({
@@ -99,22 +134,34 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 });
                 return;
             }
-            const count = parseInt(countRaw, 10);
-            if (!Number.isInteger(count) || count < 1 || count > 50) {
-                errs.push({
-                    row: rowNum,
-                    message: isEnglish
-                        ? `ticketCount must be 1–50 (got "${countRaw}").`
-                        : `门票数量需为 1–50（当前为"${countRaw}"）。`,
-                });
-                return;
+            let count = 1;
+            if (countRaw) {
+                count = parseInt(countRaw, 10);
+                if (!Number.isInteger(count) || count < 1 || count > 50) {
+                    errs.push({
+                        row: rowNum,
+                        message: isEnglish
+                            ? `ticketCount must be 1–50 (got "${countRaw}").`
+                            : `门票数量需为 1–50（当前为"${countRaw}"）。`,
+                    });
+                    return;
+                }
             }
 
-            let type: string = 'normal';
+            let type: TicketType = 'normal';
             if (typeRaw === 'early-bird' || typeRaw === 'earlybird') type = 'early-bird';
             else if (typeRaw === 'vip') type = 'vip';
             else if (typeRaw === 'comp ticket' || typeRaw === 'comp' || typeRaw === '赠票') type = 'Comp Ticket';
             else if (typeRaw === 'guest' || typeRaw === '嘉宾') type = 'guest';
+
+            const timestamp = timestampRaw ? parseImportDate(timestampRaw) : undefined;
+            if (timestampRaw && !timestamp) {
+                errs.push({
+                    row: rowNum,
+                    message: isEnglish ? `Invalid timestamp: "${timestampRaw}"` : `时间戳无效："${timestampRaw}"`,
+                });
+                return;
+            }
 
             if (seen.has(email)) {
                 errs.push({
@@ -131,6 +178,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 name,
                 ticketCount: count,
                 type,
+                timestamp,
                 existingName: existing?.name,
                 existingTicketCount: existing?.ticketCount,
                 existingType: existing?.type,
@@ -176,22 +224,25 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         const cCol = fieldName(fields, 'ticketcount', 'ticket count',
             'ticket_count', 'tickets', 'quantity', 'count');
         const tCol = fieldName(fields, 'type', 'ticket type', 'ticket_type', 'category');
+        const tsCol = fieldName(fields, 'timestamp', 'date', 'created at', 'created_at', 'time');
 
         setEmailCol(eCol);
         setNameCol(nCol);
         setCountCol(cCol);
         setTypeCol(tCol);
+        setTimestampCol(tsCol);
 
-        const {rows: finalRows, errors: errs} = validateRows(eCol, nCol, cCol, tCol, records);
+        const {rows: finalRows, errors: errs} = validateRows(eCol, nCol, cCol, tCol, tsCol, records);
         setRows(finalRows);
         setErrors(errs);
     };
 
-    const handleMappingChange = (type: 'email' | 'name' | 'count' | 'type', val: string) => {
+    const handleMappingChange = (type: 'email' | 'name' | 'count' | 'type' | 'timestamp', val: string) => {
         let e = emailCol;
         let n = nameCol;
         let c = countCol;
         let t = typeCol;
+        let ts = timestampCol;
         if (type === 'email') {
             setEmailCol(val);
             e = val;
@@ -208,8 +259,12 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
             setTypeCol(val);
             t = val;
         }
+        if (type === 'timestamp') {
+            setTimestampCol(val);
+            ts = val;
+        }
 
-        const {rows: finalRows, errors: errs} = validateRows(e, n, c, t, rawRecords);
+        const {rows: finalRows, errors: errs} = validateRows(e, n, c, t, ts, rawRecords);
         setRows(finalRows);
         setErrors(errs);
     };
@@ -358,7 +413,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         }
     };
 
-    const canImport = !readOnly && !importing && rows.length > 0 && errors.filter(e => e.row === 0).length === 0 && !!emailCol && !!nameCol && !!countCol;
+    const canImport = !readOnly && !importing && rows.length > 0 && errors.filter(e => e.row === 0).length === 0 && !!emailCol && !!nameCol;
 
     return (
         <div className="admin-tickets-import">
@@ -382,7 +437,13 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 <div style={{marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem'}}>
                     <div className="admin-tickets-import-mapping"
                          style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
-                        <label style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                        <label style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            flex: '1 1 160px',
+                            minWidth: 0
+                        }}>
                             <span style={{
                                 fontWeight: 500,
                                 fontSize: '13px'
@@ -391,13 +452,21 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                     disabled={readOnly || busy} style={{
                                 padding: '4px 8px',
                                 borderRadius: '4px',
-                                border: '1px solid var(--border-color, #ccc)'
+                                border: '1px solid var(--border-color, #ccc)',
+                                width: '100%',
+                                textOverflow: 'ellipsis'
                             }}>
                                 <option value="">-- {isEnglish ? 'Select' : '选择'} --</option>
                                 {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
                         </label>
-                        <label style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                        <label style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            flex: '1 1 160px',
+                            minWidth: 0
+                        }}>
                             <span style={{
                                 fontWeight: 500,
                                 fontSize: '13px'
@@ -406,13 +475,21 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                     disabled={readOnly || busy} style={{
                                 padding: '4px 8px',
                                 borderRadius: '4px',
-                                border: '1px solid var(--border-color, #ccc)'
+                                border: '1px solid var(--border-color, #ccc)',
+                                width: '100%',
+                                textOverflow: 'ellipsis'
                             }}>
                                 <option value="">-- {isEnglish ? 'Select' : '选择'} --</option>
                                 {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
                         </label>
-                        <label style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                        <label style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            flex: '1 1 160px',
+                            minWidth: 0
+                        }}>
                             <span style={{
                                 fontWeight: 500,
                                 fontSize: '13px'
@@ -421,13 +498,21 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                     disabled={readOnly || busy} style={{
                                 padding: '4px 8px',
                                 borderRadius: '4px',
-                                border: '1px solid var(--border-color, #ccc)'
+                                border: '1px solid var(--border-color, #ccc)',
+                                width: '100%',
+                                textOverflow: 'ellipsis'
                             }}>
-                                <option value="">-- {isEnglish ? 'Select' : '选择'} --</option>
+                                <option value="">-- {isEnglish ? 'Select (Optional)' : '选择（可选）'} --</option>
                                 {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
                         </label>
-                        <label style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                        <label style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            flex: '1 1 160px',
+                            minWidth: 0
+                        }}>
                             <span style={{
                                 fontWeight: 500,
                                 fontSize: '13px'
@@ -436,7 +521,33 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                     disabled={readOnly || busy} style={{
                                 padding: '4px 8px',
                                 borderRadius: '4px',
-                                border: '1px solid var(--border-color, #ccc)'
+                                border: '1px solid var(--border-color, #ccc)',
+                                width: '100%',
+                                textOverflow: 'ellipsis'
+                            }}>
+                                <option value="">-- {isEnglish ? 'Select (Optional)' : '选择（可选）'} --</option>
+                                {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </label>
+                        <label style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            flex: '1 1 160px',
+                            minWidth: 0
+                        }}>
+                            <span style={{
+                                fontWeight: 500,
+                                fontSize: '13px'
+                            }}>{isEnglish ? 'Timestamp Column:' : '时间戳列：'}</span>
+                            <select value={timestampCol}
+                                    onChange={e => handleMappingChange('timestamp', e.target.value)}
+                                    disabled={readOnly || busy} style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                border: '1px solid var(--border-color, #ccc)',
+                                width: '100%',
+                                textOverflow: 'ellipsis'
                             }}>
                                 <option value="">-- {isEnglish ? 'Select (Optional)' : '选择（可选）'} --</option>
                                 {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
@@ -497,6 +608,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                     <th>{isEnglish ? 'Name' : '姓名'}</th>
                                     <th>{isEnglish ? 'Tickets' : '门票数'}</th>
                                     <th>{isEnglish ? 'Type' : '类型'}</th>
+                                    {timestampCol && <th>{isEnglish ? 'Time' : '时间'}</th>}
                                     <th>{isEnglish ? 'Action' : '操作'}</th>
                                 </tr>
                                 </thead>
@@ -550,6 +662,9 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                                 </>
                                             ) : r.type}
                                         </td>
+                                        {timestampCol && (
+                                            <td>{r.timestamp ? new Date(r.timestamp).toLocaleString(isEnglish ? 'en-US' : 'zh-CN') : '-'}</td>
+                                        )}
                                         <td>
                                             {r.action === 'add' ? (
                                                 <span
