@@ -43,9 +43,9 @@ function getFirebaseApp() {
             // Set it to 'true' in .env to generate a token in the console, 
             // or paste a specific debug token.
             if (import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN) {
-                (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = 
-                    import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN === 'true' 
-                        ? true 
+                (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN =
+                    import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN === 'true'
+                        ? true
                         : import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN;
             }
 

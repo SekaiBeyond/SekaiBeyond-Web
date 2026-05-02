@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldPath, FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
-import { getStorage } from "firebase-admin/storage";
+import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { type CallableRequest, HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 
@@ -428,7 +428,7 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
         metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
     });
 
-    const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+    const downloadUrl = await getDownloadURL(file);
     return {url: downloadUrl};
 });
 
@@ -695,7 +695,8 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
         metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
     });
 
-    const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&t=${Date.now()}`;
+    const baseDownloadUrl = await getDownloadURL(file);
+    const downloadUrl = `${baseDownloadUrl}&t=${Date.now()}`;
 
     // Atomically set photoURL on the user doc so clients can't set arbitrary URLs
     await db.collection("users").doc(uid).update({photoURL: downloadUrl});
@@ -3786,7 +3787,8 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
                         await file.save(buffer, {
                             metadata: {contentType, cacheControl: 'public, max-age=31536000, immutable'},
                         });
-                        coverUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent('config/video-cover')}?alt=media&t=${Date.now()}`;
+                        const baseCoverUrl = await getDownloadURL(file);
+                        coverUrl = `${baseCoverUrl}&t=${Date.now()}`;
                     }
                 }
             }
