@@ -63,9 +63,15 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: rainbow-wave 4s ease-in-out infinite;
     line-height: 1.25;
     letter-spacing: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .hero-title {
+        animation: rainbow-wave 4s ease-in-out infinite;
+        will-change: background-position;
+    }
 }
 
 @keyframes rainbow-wave {

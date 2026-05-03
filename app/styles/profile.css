@@ -166,7 +166,7 @@
     width: 100%;
     padding: 15px 40px;
     background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(8px);
     box-shadow: 0 2px 20px rgba(255, 150, 200, 0.15);
     z-index: 1000;
     display: flex;
