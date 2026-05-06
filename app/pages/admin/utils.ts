@@ -3,9 +3,9 @@ import { getFirebaseDb } from '~/lib/firebase';
 import type { UserRecord } from './types';
 import { MAX_IMAGE_SIZE_MB } from '~/constants';
 
-const MAX_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
-const MAX_RAW_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 export const WEBP_QUALITY = 0.95;
+
+const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
 export type ShowToast = (message: string, type: 'success' | 'warning' | 'error') => void;
 
@@ -43,37 +43,24 @@ export const getClaimUrl = (code: string): string => {
     return `${window.location.origin}/claim?code=${code}`;
 };
 
-export const getTicketClaimUrl = (ticketId: string, eventId: string): string => {
-    return `${window.location.origin}/claim?ticket=${encodeURIComponent(ticketId)}&event=${encodeURIComponent(eventId)}`;
-};
-
-export const validateImageFile = (
-    file: File,
-    isEnglish: boolean,
-    showToast: ShowToast,
-    opts?: {allowAnyImage?: boolean},
-): boolean => {
-    if (opts?.allowAnyImage) {
-        if (!file.type.startsWith('image/')) {
+export function validateImageFile(f: File, isEnglish: boolean, showToast: ShowToast, allowAnyImage: boolean = false): boolean {
+    // validate image file type
+    if (allowAnyImage) {
+        if (!f.type.startsWith('image/')) {
             showToast(isEnglish ? 'Please select an image file.' : '请选择图片文件。', 'error');
             return false;
         }
-        if (file.size > MAX_RAW_IMAGE_SIZE) {
-            showToast(isEnglish ? 'Image must be under 25MB.' : '图片大小不能超过 25MB。', 'error');
-            return false;
-        }
-        return true;
-    }
-    if (file.type !== 'image/webp') {
+    } else if (f.type !== 'image/webp') {
         showToast(isEnglish ? 'Please upload a WebP image.' : '请上传 WebP 格式的图片。', 'error');
         return false;
     }
-    if (file.size > MAX_IMAGE_SIZE) {
-        showToast(isEnglish ? `Image must be under ${MAX_IMAGE_SIZE_MB}MB.` : `图片大小不能超过 ${MAX_IMAGE_SIZE_MB}MB。`, 'error');
+    // validate image size
+    if (f.size > MAX_IMAGE_SIZE_BYTES) {
+        showToast(isEnglish ? `Image must be under ${MAX_IMAGE_SIZE_MB} MB.` : `图片大小不能超过 ${MAX_IMAGE_SIZE_MB} MB。`, 'error');
         return false;
     }
     return true;
-};
+}
 
 export const convertImageToWebp = async (file: File): Promise<File> => {
     if (file.type === 'image/webp') return file;

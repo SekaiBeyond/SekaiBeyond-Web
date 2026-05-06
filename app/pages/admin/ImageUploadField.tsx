@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { convertImageToWebp, type ShowToast, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
@@ -32,7 +32,7 @@ export const ImageUploadField = ({
         const file = e.target.files?.[0];
         if (!file) return;
         if (cropAspect) {
-            if (!validateImageFile(file, isEnglish, showToast, {allowAnyImage: true})) {
+            if (!validateImageFile(file, isEnglish, showToast, true)) {
                 e.target.value = '';
                 return;
             }
@@ -41,7 +41,7 @@ export const ImageUploadField = ({
             return;
         }
         if (convertToWebp) {
-            if (!validateImageFile(file, isEnglish, showToast, {allowAnyImage: true})) {
+            if (!validateImageFile(file, isEnglish, showToast, true)) {
                 e.target.value = '';
                 return;
             }

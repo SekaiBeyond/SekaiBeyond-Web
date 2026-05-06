@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useModalEffects } from '~/lib/useModalEffects';
 import { type ShowToast, WEBP_QUALITY } from './utils';

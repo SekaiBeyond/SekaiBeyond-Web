@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { formatGroupWithTitle, hasPermission, useAuth, type UserGroup } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
@@ -11,7 +11,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { isValidHttpUrl } from '~/lib/urls';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
-import { MAX_IMAGE_SIZE_MB } from '~/constants';
+import { validateImageFile } from "~/pages/admin/utils";
 
 interface BadgeDef extends BaseBadgeDef {
     holderPct?: number;
@@ -335,20 +335,11 @@ export const ProfilePage = () => {
         setEditingName(false);
     };
 
-    const MAX_RAW_PHOTO_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
-
     const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (fileInputRef.current) fileInputRef.current.value = '';
         if (!file || !profile || !user) return;
-        if (!file.type.startsWith('image/')) {
-            showToast(isEnglish ? 'Please select an image file.' : '请选择图片文件。', 'error');
-            return;
-        }
-        if (file.size > MAX_RAW_PHOTO_SIZE) {
-            showToast(isEnglish ? `Image must be under ${MAX_IMAGE_SIZE_MB} MB.` : `图片大小不能超过 ${MAX_IMAGE_SIZE_MB} MB。`, 'error');
-            return;
-        }
+        if (!validateImageFile(file, isEnglish, showToast, true)) return;
         setPendingPhoto(file);
     };
 
@@ -739,65 +730,65 @@ export const ProfilePage = () => {
                     </section>
                 )}
             </div>
-                {selectedBadge && (
-                    <div className="badge-modal-overlay" onClick={() => setSelectedBadge(null)}>
-                        <div className="badge-modal-content" onClick={e => e.stopPropagation()}>
-                            <button className="badge-modal-close" onClick={() => setSelectedBadge(null)}>×</button>
-                            <div className="badge-modal-header">
-                                <img src={selectedBadge.imageUrl}
-                                     alt={isEnglish ? selectedBadge.name : selectedBadge.nameCn}
-                                     className="badge-modal-icon"/>
-                                <h3 className="badge-modal-title">{isEnglish ? selectedBadge.name : selectedBadge.nameCn}</h3>
-                            </div>
-                            <p className="badge-modal-desc">{isEnglish ? selectedBadge.description : selectedBadge.descriptionCn}</p>
-                            <div className="badge-modal-meta">
-                                {earnedDates[selectedBadge.id] && (
-                                    <p className="badge-modal-date">
-                                        <strong>{isEnglish ? 'Earned' : '获得于'}</strong>
-                                        {earnedDates[selectedBadge.id].toLocaleDateString(
-                                            isEnglish ? 'en-US' : 'zh-CN',
-                                            {year: 'numeric', month: 'short', day: 'numeric'}
-                                        )}
-                                    </p>
-                                )}
-                                {selectedBadge.holderPct != null && (
-                                    <p className="badge-modal-pct">
-                                        <strong>{isEnglish ? 'Rarity' : '稀有度'}</strong>
-                                        {isEnglish
-                                            ? `${selectedBadge.holderPct}% of members`
-                                            : `${selectedBadge.holderPct}% 的成员拥有`}
-                                    </p>
-                                )}
-                                {selectedBadge.createdByName && (
-                                    <p className="badge-modal-creator">
-                                        <strong>{isEnglish ? 'Created by' : '创作者'}</strong>
-                                        {selectedBadge.createdByUid ? (
-                                            <a href={`/profile?uid=${selectedBadge.createdByUid}`}
-                                               className="badge-modal-creator-link">
-                                                {selectedBadge.createdByName}
-                                            </a>
-                                        ) : (selectedBadge.createdByLink && isValidHttpUrl(selectedBadge.createdByLink)) ? (
-                                            <a href={selectedBadge.createdByLink} target="_blank"
-                                               rel="noopener noreferrer"
-                                               className="badge-modal-creator-link">
-                                                {selectedBadge.createdByName}
-                                            </a>
-                                        ) : selectedBadge.createdByName}
-                                    </p>
-                                )}
-                            </div>
+            {selectedBadge && (
+                <div className="badge-modal-overlay" onClick={() => setSelectedBadge(null)}>
+                    <div className="badge-modal-content" onClick={e => e.stopPropagation()}>
+                        <button className="badge-modal-close" onClick={() => setSelectedBadge(null)}>×</button>
+                        <div className="badge-modal-header">
+                            <img src={selectedBadge.imageUrl}
+                                 alt={isEnglish ? selectedBadge.name : selectedBadge.nameCn}
+                                 className="badge-modal-icon"/>
+                            <h3 className="badge-modal-title">{isEnglish ? selectedBadge.name : selectedBadge.nameCn}</h3>
+                        </div>
+                        <p className="badge-modal-desc">{isEnglish ? selectedBadge.description : selectedBadge.descriptionCn}</p>
+                        <div className="badge-modal-meta">
+                            {earnedDates[selectedBadge.id] && (
+                                <p className="badge-modal-date">
+                                    <strong>{isEnglish ? 'Earned' : '获得于'}</strong>
+                                    {earnedDates[selectedBadge.id].toLocaleDateString(
+                                        isEnglish ? 'en-US' : 'zh-CN',
+                                        {year: 'numeric', month: 'short', day: 'numeric'}
+                                    )}
+                                </p>
+                            )}
+                            {selectedBadge.holderPct != null && (
+                                <p className="badge-modal-pct">
+                                    <strong>{isEnglish ? 'Rarity' : '稀有度'}</strong>
+                                    {isEnglish
+                                        ? `${selectedBadge.holderPct}% of members`
+                                        : `${selectedBadge.holderPct}% 的成员拥有`}
+                                </p>
+                            )}
+                            {selectedBadge.createdByName && (
+                                <p className="badge-modal-creator">
+                                    <strong>{isEnglish ? 'Created by' : '创作者'}</strong>
+                                    {selectedBadge.createdByUid ? (
+                                        <a href={`/profile?uid=${selectedBadge.createdByUid}`}
+                                           className="badge-modal-creator-link">
+                                            {selectedBadge.createdByName}
+                                        </a>
+                                    ) : (selectedBadge.createdByLink && isValidHttpUrl(selectedBadge.createdByLink)) ? (
+                                        <a href={selectedBadge.createdByLink} target="_blank"
+                                           rel="noopener noreferrer"
+                                           className="badge-modal-creator-link">
+                                            {selectedBadge.createdByName}
+                                        </a>
+                                    ) : selectedBadge.createdByName}
+                                </p>
+                            )}
                         </div>
                     </div>
-                )}
-                {pendingPhoto && (
-                    <ImageCropModal
-                        imageSource={pendingPhoto}
-                        aspect={1}
-                        onConfirm={handlePhotoCropConfirm}
-                        onCancel={() => setPendingPhoto(null)}
-                        showToast={showToast}
-                    />
-                )}
+                </div>
+            )}
+            {pendingPhoto && (
+                <ImageCropModal
+                    imageSource={pendingPhoto}
+                    aspect={1}
+                    onConfirm={handlePhotoCropConfirm}
+                    onCancel={() => setPendingPhoto(null)}
+                    showToast={showToast}
+                />
+            )}
         </>
     );
 };

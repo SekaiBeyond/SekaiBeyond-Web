@@ -10,7 +10,6 @@
 
 <p align="center">
   <a href="https://sekaibeyond.com">Website</a> •
-  <a href="#features">Features</a> •
   <a href="#getting-started">Getting Started</a> •
   <a href="DEPLOY.md">Deployment</a> •
   <a href="#contributing">Contributing</a>
@@ -76,36 +75,6 @@ This repository contains the source code for the official **Sekai Beyond** websi
 | `npm run deploy`       | Build and deploy to Firebase                                      |
 | `npm run deploy:rules` | Deploy only functions, Firestore rules/indexes, and Storage rules |
 | `npm run deploy:ttl`   | Apply Firestore TTL policies via the gcloud CLI                   |
-
-## Project Structure
-
-```
-SekaiBeyond-Web/
-├── app/                       # Application source code
-│   ├── components/            # Reusable UI components
-│   │   └── main/              # Main page sections
-│   ├── lib/                   # Firebase client & data hooks
-│   ├── pages/                 # Page components (admin, profile, claim, etc.)
-│   ├── routes/                # Route definitions
-│   ├── styles/                # Shared style modules
-│   ├── app.css                # Global styles
-│   ├── constants.ts           # Links, officers, and shared constants
-│   ├── root.tsx               # Root component
-│   └── routes.ts              # Route configuration
-├── functions/                 # Cloud Functions (callable endpoints & Firestore triggers)
-├── public/                    # Static assets
-│   └── images/                # Image assets & event posters
-├── scripts/                   # Build & deploy helpers (e.g. CSP hash updates)
-├── .env.example               # Environment variable template
-├── firebase.json              # Firebase project configuration
-├── firestore.indexes.json     # Composite index definitions
-├── firestore.rules            # Firestore security rules
-├── storage.rules              # Cloud Storage security rules
-├── package.json
-├── tsconfig.json
-├── react-router.config.ts     # React Router configuration
-└── vite.config.ts
-```
 
 ## Deployment
 
