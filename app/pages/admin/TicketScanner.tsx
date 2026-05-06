@@ -5,6 +5,7 @@ import { callRedeemTicket, functionsErrorCode } from '~/lib/firebase';
 type ScanStatus =
     | {kind: 'idle'}
     | {kind: 'scanning'}
+    | {kind: 'loading'; ticketId: string}
     | {kind: 'success'; attendeeName: string; attendeeEmail: string; ticketType: string; userCheckedIn: boolean}
     | {
     kind: 'already';
@@ -84,6 +85,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
 
         lastScanRef.current = {ticketId, at: now};
         setBusy(true);
+        setStatus({kind: 'loading', ticketId});
         try {
             const result = await callRedeemTicket({eventId, ticketId});
             const d = result.data;
@@ -312,6 +314,14 @@ function parseTicketUrl(raw: string): {ticketId: string; eventId: string} | null
 
 function ResultBanner({status, isEnglish}: {status: ScanStatus; isEnglish: boolean}) {
     if (status.kind === 'idle' || status.kind === 'scanning') return null;
+    if (status.kind === 'loading') {
+        return (
+            <div className="admin-tickets-scan-banner admin-tickets-scan-loading">
+                <strong>{isEnglish ? 'Detecting...' : '检测中...'}</strong>
+                <div>{isEnglish ? 'Ticket ID:' : '门票 ID：'} {status.ticketId}</div>
+            </div>
+        );
+    }
     if (status.kind === 'success') {
         return (
             <div className="admin-tickets-scan-banner admin-tickets-scan-success">

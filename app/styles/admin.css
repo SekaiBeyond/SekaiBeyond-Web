@@ -2498,6 +2498,16 @@ select.admin-tickets-tag:focus {
     color: var(--color-error);
 }
 
+.admin-tickets-scan-loading {
+    background: rgba(85, 172, 238, 0.12);
+    border-color: rgba(85, 172, 238, 0.4);
+    color: #1c5b8b;
+}
+
+.admin-tickets-scan-loading strong {
+    color: #1c5b8b;
+}
+
 /* ----- Responsive ----- */
 @media (max-width: 600px) {
     .admin-tickets-inner-tabs .admin-sub-tab {
