@@ -37,23 +37,6 @@ export interface ConEdition {
     }[];
 }
 
-export const SEKAI_BEYOND_CON: ConEdition[] = [
-    {
-        year: 2025,
-        date: '2025-10-11',
-        location: 'Husky Union Building',
-        description: 'Sekai Beyond\'s first convention brought anime, comics, games, and novel fans together for a full day of creativity and celebration. From the dazzling KiraKira IdolFest and spirited cosplay competition to the bustling artist alley and energetic band performances, guests cheered, connected, and shared their passions in a vibrant community atmosphere.',
-        descriptionCn: 'Sekai Beyond 首届漫展汇聚了动漫、漫画、游戏与小说（ACGN）爱好者，共度充满创意与热情的一天。从闪耀的 KiraKira 偶像祭、热血的角色扮演比赛，到热闹的艺术家街与活力四射的乐队演出，现场观众为之欢呼、交流，共同在充满活力的社区氛围中分享他们的热爱。',
-        image: '/images/sekai_beyond_con_2025.jpg',
-        highlights: [
-            {labelEn: 'KiraKira IdolFest', labelCn: '闪耀偶像祭', icon: '🎤'},
-            {labelEn: 'Cosplay Competition', labelCn: '角色扮演比赛', icon: '🌸'},
-            {labelEn: 'Artist Alley', labelCn: '艺术家街', icon: '🎨'},
-            {labelEn: 'Band Performances', labelCn: '乐队演出', icon: '🎸'},
-        ],
-    },
-];
-
 export interface NavLink {
     id: string;
     href: string;

@@ -223,7 +223,7 @@ function sanitizeDisplayText(value: string): string {
     return value.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, " ").trim();
 }
 
-const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "upcoming-events/headers/", "badges/", "team/"];
+const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "upcoming-events/headers/", "badges/", "team/", "config/"];
 const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
 const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
@@ -3778,10 +3778,36 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     await checkRateLimit(uid);
 
     const input = request.data as Record<string, unknown>;
-    const bvid = validateStr(input.bilibiliVideoBvid, "bilibiliVideoBvid", 100);
+
+    const bvid = input.bilibiliVideoBvid !== undefined
+        ? validateStr(input.bilibiliVideoBvid, "bilibiliVideoBvid", 100)
+        : undefined;
 
     if (bvid && !/^BV[a-zA-Z0-9]+$/.test(bvid)) {
         throw new HttpsError("invalid-argument", "Invalid Bilibili BV ID format.");
+    }
+
+    const conEditionRaw = input.conEdition;
+    let conEdition: any | undefined = undefined;
+    if (conEditionRaw === null) {
+        conEdition = null;
+    } else if (conEditionRaw !== undefined) {
+        const ed = conEditionRaw as Record<string, any>;
+        conEdition = {
+            year: Number(ed.year),
+            date: validateISODate(ed.date, "date") || "",
+            location: validateStr(ed.location, "location", 200, true),
+            locationCn: validateStr(ed.locationCn, "locationCn", 200),
+            description: validateStr(ed.description, "description", 2000, true),
+            descriptionCn: validateStr(ed.descriptionCn, "descriptionCn", 2000, true),
+            image: validateStr(ed.image, "image", 500, true),
+            highlights: Array.isArray(ed.highlights) ? ed.highlights.map((h: any) => ({
+                labelEn: validateStr(h.labelEn, "highlight labelEn", 100, true),
+                labelCn: validateStr(h.labelCn, "highlight labelCn", 100, true),
+                icon: validateStr(h.icon, "highlight icon", 50, true),
+            })) : [],
+        };
+        validateStorageImageUrl(conEdition.image, "convention image");
     }
 
     let coverUrl = '';
@@ -3819,13 +3845,20 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     }
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        txn.set(db.collection("config").doc("main"), {
-            bilibiliVideoBvid: bvid,
-            bilibiliVideoCoverUrl: coverUrl,
+        const updateData: Record<string, any> = {
             updatedBy: uid,
             updatedByName: callerSnap.data()?.displayName ?? "",
             updatedAt: FieldValue.serverTimestamp(),
-        }, {merge: true});
+        };
+        if (bvid !== undefined) {
+            updateData.bilibiliVideoBvid = bvid;
+            updateData.bilibiliVideoCoverUrl = coverUrl;
+        }
+        if (conEdition !== undefined) {
+            updateData.conEdition = conEdition;
+        }
+
+        txn.set(db.collection("config").doc("main"), updateData, {merge: true});
         txn.set(db.collection("records").doc(), {
             type: "config-update",
             performedBy: uid,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
+import type { ConEdition } from '~/constants';
 
 export interface TeamMemberConfig {
     id: string;
@@ -16,9 +17,15 @@ export interface SiteConfig {
     bilibiliVideoBvid: string;
     bilibiliVideoCoverUrl: string;
     teamMembers: TeamMemberConfig[];
+    conEdition: ConEdition | null;
 }
 
-const DEFAULT_CONFIG: SiteConfig = {bilibiliVideoBvid: '', bilibiliVideoCoverUrl: '', teamMembers: []};
+const DEFAULT_CONFIG: SiteConfig = {
+    bilibiliVideoBvid: '',
+    bilibiliVideoCoverUrl: '',
+    teamMembers: [],
+    conEdition: null,
+};
 
 let cachedConfig: SiteConfig | null = null;
 let fetchPromise: Promise<SiteConfig> | null = null;
@@ -36,6 +43,7 @@ async function fetchConfig(force = false): Promise<SiteConfig> {
             bilibiliVideoBvid: data?.bilibiliVideoBvid ?? '',
             bilibiliVideoCoverUrl: data?.bilibiliVideoCoverUrl ?? '',
             teamMembers: data?.teamMembers ?? [],
+            conEdition: data?.conEdition ?? null,
         };
         cachedConfig = config;
         fetchPromise = null;

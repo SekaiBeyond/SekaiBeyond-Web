@@ -3,6 +3,7 @@ import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { type Auth, getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { type Firestore, getFirestore } from "firebase/firestore";
 import { type Functions, type FunctionsError, getFunctions as _getFunctions, httpsCallable } from "firebase/functions";
+import { type ConEdition } from "~/constants";
 
 const requiredEnvVars = [
     'VITE_FIREBASE_API_KEY',
@@ -255,7 +256,7 @@ export const callRemoveEventStaff = (data: {targetUid: string; eventId: string})
 export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'savePolicy')(data);
 
-export const callSaveSiteConfig = (data: {bilibiliVideoBvid: string}) =>
+export const callSaveSiteConfig = (data: {bilibiliVideoBvid?: string, conEdition?: ConEdition | null}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveSiteConfig')(data);
 
 export const callSaveTeamMembers = (data: {teamMembers: any[]}) =>

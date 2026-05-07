@@ -5,6 +5,7 @@ import { useSiteConfig } from '~/lib/siteConfig';
 import { usePolicy } from '~/lib/policy';
 import { BILIBILI_VIDEO } from '~/constants';
 import { TeamSection } from './TeamSection';
+import { ConEditionSection } from './ConEditionSection';
 
 interface SiteConfigTabProps {
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
@@ -155,6 +156,12 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                          readOnly={readOnly}/>
 
             <div className="admin-divider"/>
+
+            <ConEditionSection conEdition={config.conEdition} refreshConfig={refreshConfig} showToast={showToast}
+                               readOnly={readOnly}/>
+
+            <div className="admin-divider"/>
+
 
             <div className="admin-section">
                 <h3 className="admin-badges-title">
