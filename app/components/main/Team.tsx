@@ -5,11 +5,11 @@ export const Team = () => {
     const {isEnglish} = useLanguage();
     const {config, loading} = useSiteConfig();
 
-    if (loading || !config.teamMembers || config.teamMembers.length === 0) {
+    if (!loading && (!config.teamMembers || config.teamMembers.length === 0)) {
         return null;
     }
 
-    const teamData = config.teamMembers;
+    const teamData = config.teamMembers || [];
 
     return (
         <section id="team" className="section">
@@ -22,7 +22,7 @@ export const Team = () => {
                     <div key={member.id} className="team-card">
                         <img className="team-avatar" src={member.imageUrl || "/images/mika.png"} alt={member.name}/>
                         <h3 className="team-name">{!isEnglish && member.nameCn ? member.nameCn : member.name}</h3>
-                        <p className="team-role">{isEnglish ? member.role : member.roleCn}</p>
+                        <p className="team-role">{!isEnglish && member.roleCn ? member.roleCn : member.role}</p>
                     </div>
                 ))}
             </div>

@@ -191,8 +191,14 @@
     margin-bottom: 16px;
 }
 
-.admin-back-btn:hover {
+.admin-back-btn:hover:not(:disabled) {
     text-decoration: underline;
+}
+
+.admin-back-btn:disabled {
+    color: var(--color-text-light);
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 
 .admin-detail-header {

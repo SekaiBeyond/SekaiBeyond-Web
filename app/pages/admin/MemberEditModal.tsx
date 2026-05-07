@@ -53,8 +53,10 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         }
     };
 
-    const handleImageChange = async (file: File) => {
+    const handleImageChange = async (file: File, previewUrl: string) => {
         setUploading(true);
+        // Show local preview immediately
+        setFormData(prev => ({...prev, imageUrl: previewUrl}));
         try {
             showToast(isEnglish ? 'Uploading image...' : '正在上传图片...', 'warning');
             const url = await callUploadAdminImage(file, `team/${formData.id}.webp`);
@@ -126,7 +128,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                             className="admin-search-input"
                             value={formData.roleCn}
                             onChange={e => setFormData(prev => ({...prev, roleCn: e.target.value}))}
-                            placeholder={isEnglish ? '例如：社长' : '例如：社长'}
+                            placeholder={isEnglish ? 'e.g. President' : '例如：社长'}
                         />
                     </label>
 
@@ -135,7 +137,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                             label="Member Avatar"
                             labelCn="成员头像"
                             preview={formData.imageUrl || null}
-                            onFileChange={(file) => handleImageChange(file)}
+                            onFileChange={(file, url) => handleImageChange(file, url)}
                             convertToWebp
                             cropAspect={1}
                             showToast={showToast}

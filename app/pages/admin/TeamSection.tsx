@@ -22,36 +22,39 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
         setMembers(teamMembers);
     }, [teamMembers]);
 
-    const handleSave = async () => {
+    const saveChanges = async (newMembers: TeamMemberConfig[]) => {
+        setMembers(newMembers);
         setSaving(true);
         try {
-            await callSaveTeamMembers({teamMembers: members});
+            await callSaveTeamMembers({teamMembers: newMembers});
             await refreshConfig();
-            showToast(isEnglish ? 'Team saved.' : '团队已保存。', 'success');
+            showToast(isEnglish ? 'Team updated.' : '团队已更新。', 'success');
         } catch (e: any) {
-            showToast(isEnglish ? 'Failed to save team.' : '保存团队失败。', 'error');
+            showToast(isEnglish ? 'Failed to update team.' : '更新团队失败。', 'error');
+            // Revert state if saving failed
+            setMembers(members);
         } finally {
             setSaving(false);
         }
     };
 
     const addMember = (member: TeamMemberConfig) => {
-        setMembers([...members, member]);
         setIsAdding(false);
+        saveChanges([...members, member]);
     };
 
     const updateMember = (index: number, member: TeamMemberConfig) => {
+        setEditingIndex(null);
         const newMembers = [...members];
         newMembers[index] = member;
-        setMembers(newMembers);
-        setEditingIndex(null);
+        saveChanges(newMembers);
     };
 
     const removeMember = (index: number) => {
         if (!confirm(isEnglish ? 'Remove this member?' : '删除此成员？')) return;
         const newMembers = [...members];
         newMembers.splice(index, 1);
-        setMembers(newMembers);
+        saveChanges(newMembers);
     };
 
     const moveMember = (index: number, direction: 'up' | 'down') => {
@@ -62,24 +65,35 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
         const temp = newMembers[index];
         newMembers[index] = newMembers[targetIndex];
         newMembers[targetIndex] = temp;
-        setMembers(newMembers);
+        saveChanges(newMembers);
     };
 
     return (
         <div className="admin-section">
-            <h3 className="admin-badges-title">
-                {isEnglish ? 'Our Team' : '我们的团队'}
-            </h3>
-            <p className="admin-helper-text">
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                <h3 className="admin-badges-title" style={{marginBottom: 0}}>
+                    {isEnglish ? 'Our Team' : '我们的团队'}
+                    {saving && <span style={{marginLeft: '12px', fontSize: '12px', color: 'var(--color-primary)'}}>
+                        {isEnglish ? 'Saving...' : '保存中...'}
+                    </span>}
+                </h3>
+            </div>
+            <p className="admin-helper-text" style={{marginTop: '4px'}}>
                 {isEnglish
-                    ? 'Configure the team members displayed on the main page. Leaving this empty will hide the section.'
-                    : '配置在主页上显示的团队成员。留空将隐藏该板块。'}
+                    ? 'Configure the team members displayed on the main page. Changes are saved automatically. Leaving this empty will hide the section.'
+                    : '配置在主页上显示的团队成员。更改会自动保存。留空将隐藏该板块。'}
             </p>
 
             <div className="admin-event-grid admin-mt-12">
                 {members.map((member, index) => (
                     <div key={member.id} className="admin-event-card"
-                         style={{cursor: 'default', flexDirection: 'column', alignItems: 'stretch', padding: '12px'}}>
+                         style={{
+                             cursor: 'default',
+                             flexDirection: 'column',
+                             alignItems: 'stretch',
+                             padding: '12px',
+                             opacity: saving ? 0.7 : 1
+                         }}>
                         <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
                             <img src={member.imageUrl || '/images/mika.png'} alt="" className="admin-event-card-img"
                                  style={{borderRadius: '50%'}}/>
@@ -101,26 +115,27 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
                                 <div style={{display: 'flex', gap: '4px'}}>
                                     <button className="admin-back-btn"
                                             style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
-                                            onClick={() => moveMember(index, 'up')} disabled={index === 0}>↑
+                                            onClick={() => moveMember(index, 'up')} disabled={index === 0 || saving}>↑
                                     </button>
                                     <button className="admin-back-btn"
                                             style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
                                             onClick={() => moveMember(index, 'down')}
-                                            disabled={index === members.length - 1}>↓
+                                            disabled={index === members.length - 1 || saving}>↓
                                     </button>
                                 </div>
                                 <div style={{display: 'flex', gap: '8px'}}>
                                     <button className="admin-back-btn"
                                             style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
-                                            onClick={() => setEditingIndex(index)}>
+                                            onClick={() => setEditingIndex(index)}
+                                            disabled={saving}>
                                         {isEnglish ? 'Edit' : '编辑'}
                                     </button>
                                     <button className="admin-back-btn" style={{
                                         padding: '4px 8px',
                                         marginBottom: 0,
                                         minHeight: 0,
-                                        color: 'var(--color-danger)'
-                                    }} onClick={() => removeMember(index)}>
+                                        color: saving ? 'var(--color-text-light)' : 'var(--color-danger)'
+                                    }} onClick={() => removeMember(index)} disabled={saving}>
                                         {isEnglish ? 'Remove' : '删除'}
                                     </button>
                                 </div>
@@ -132,17 +147,8 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
 
             {!readOnly && (
                 <div className="admin-btn-row admin-mt-12">
-                    <button className="admin-toggle-btn" onClick={() => setIsAdding(true)}>
+                    <button className="admin-toggle-btn" onClick={() => setIsAdding(true)} disabled={saving}>
                         {isEnglish ? '+ Add Member' : '+ 添加成员'}
-                    </button>
-                    <button
-                        className="admin-toggle-btn admin-toggle-save"
-                        onClick={handleSave}
-                        disabled={saving}
-                    >
-                        {saving
-                            ? (isEnglish ? 'Saving...' : '保存中...')
-                            : (isEnglish ? 'Save Team' : '保存团队')}
                     </button>
                 </div>
             )}
