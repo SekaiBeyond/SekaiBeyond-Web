@@ -8,10 +8,10 @@ import { docToUserRecord } from './utils';
 interface CreatorPickerProps {
     selected: UserRecord | null;
     onSelect: (user: UserRecord | null) => void;
-    manualName: string;
-    onManualNameChange: (name: string) => void;
-    manualLink: string;
-    onManualLinkChange: (link: string) => void;
+    manualName?: string;
+    onManualNameChange?: (name: string) => void;
+    manualLink?: string;
+    onManualLinkChange?: (link: string) => void;
 }
 
 export const CreatorPicker = ({
@@ -75,8 +75,8 @@ export const CreatorPicker = ({
                     {searchResults.map(u => (
                         <div key={u.uid} className="admin-user-row" onClick={() => {
                             onSelect(u);
-                            onManualNameChange('');
-                            onManualLinkChange('');
+                            onManualNameChange?.('');
+                            onManualLinkChange?.('');
                             setSearchQuery('');
                             setSearchResults([]);
                         }}>
@@ -87,22 +87,22 @@ export const CreatorPicker = ({
                             </div>
                         </div>
                     ))}
-                    {searchResults.length === 0 && !searching && (
+                    {searchResults.length === 0 && !searching && onManualNameChange && (
                         <>
                             <label className="admin-mt-8">
                                 <span>{isEnglish ? 'Or enter name manually' : '或手动输入名称'}</span>
                                 <input
-                                    value={manualName}
+                                    value={manualName || ''}
                                     onChange={(e) => onManualNameChange(e.target.value)}
                                     className="admin-search-input"
                                     placeholder={isEnglish ? 'Creator name' : '创建者名称'}
                                 />
                             </label>
-                            {manualName && (
+                            {manualName && onManualLinkChange && (
                                 <label>
                                     <span>{isEnglish ? 'Creator Link (optional)' : '创建者链接（可选）'}</span>
                                     <input
-                                        value={manualLink}
+                                        value={manualLink || ''}
                                         onChange={(e) => onManualLinkChange(e.target.value)}
                                         className="admin-search-input"
                                         placeholder="https://..."

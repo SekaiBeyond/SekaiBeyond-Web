@@ -223,7 +223,7 @@ function sanitizeDisplayText(value: string): string {
     return value.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, " ").trim();
 }
 
-const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "upcoming-events/headers/", "badges/"];
+const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "upcoming-events/headers/", "badges/", "team/"];
 const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
 const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
@@ -2603,7 +2603,7 @@ function renderTicketQrBlock(tickets: any[], eventId: string): string {
 
         const qrUrl = `${origin}/api/ticket-qr?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
         return `<div style="margin:16px 0;text-align:center;">` +
-            `<div style="display:inline-block;background-color:${bgColor};color:${textColor};font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">${typeLabel}</div><br/>` +
+            `<div style="display:inline-block;background-color:${bgColor};color:${textColor};font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">${typeLabel}</div><br/>` +
             `<img src="${qrUrl}" alt="Ticket ${id}" style="width:200px;height:200px;display:inline-block;"/>` +
             `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
             `</div>`;
@@ -3851,7 +3851,7 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         nameCn: validateStr(m.nameCn, "nameCn", 200),
         role: validateStr(m.role, "role", 200, true),
         roleCn: validateStr(m.roleCn, "roleCn", 200),
-        imageUrl: validateStr(m.imageUrl, "imageUrl", 500, true),
+        imageUrl: validateStr(m.imageUrl, "imageUrl", 500),
     }));
 
     return adminTransaction(uid, async (txn, callerSnap) => {

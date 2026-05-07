@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSaveTeamMembers, callUploadAdminImage } from '~/lib/firebase';
+import { callSaveTeamMembers } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
-import { ImageUploadField } from './ImageUploadField';
-import { CreatorPicker } from './CreatorPicker';
-import type { UserRecord } from './types';
+import { MemberEditModal } from './MemberEditModal';
 
 interface TeamSectionProps {
     teamMembers: TeamMemberConfig[];
@@ -17,6 +15,8 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
     const {isEnglish} = useLanguage();
     const [members, setMembers] = useState<TeamMemberConfig[]>([]);
     const [saving, setSaving] = useState(false);
+    const [editingIndex, setEditingIndex] = useState<number | null>(null);
+    const [isAdding, setIsAdding] = useState(false);
 
     useEffect(() => {
         setMembers(teamMembers);
@@ -35,14 +35,20 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
         }
     };
 
-    const addMember = () => {
-        setMembers([
-            ...members,
-            {id: Math.random().toString(36).substring(2, 9), name: '', nameCn: '', role: '', roleCn: '', imageUrl: ''}
-        ]);
+    const addMember = (member: TeamMemberConfig) => {
+        setMembers([...members, member]);
+        setIsAdding(false);
+    };
+
+    const updateMember = (index: number, member: TeamMemberConfig) => {
+        const newMembers = [...members];
+        newMembers[index] = member;
+        setMembers(newMembers);
+        setEditingIndex(null);
     };
 
     const removeMember = (index: number) => {
+        if (!confirm(isEnglish ? 'Remove this member?' : '删除此成员？')) return;
         const newMembers = [...members];
         newMembers.splice(index, 1);
         setMembers(newMembers);
@@ -59,38 +65,6 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
         setMembers(newMembers);
     };
 
-    const updateMember = (index: number, field: keyof TeamMemberConfig, value: any) => {
-        const newMembers = [...members];
-        newMembers[index] = {...newMembers[index], [field]: value};
-        setMembers(newMembers);
-    };
-
-    const handleImageChange = async (index: number, file: File, previewUrl: string) => {
-        const memberId = members[index].id;
-        try {
-            showToast(isEnglish ? 'Uploading image...' : '正在上传图片...', 'warning'); // using warning as info
-            const url = await callUploadAdminImage(file, `config/team/${memberId}`);
-            updateMember(index, 'imageUrl', url);
-            showToast(isEnglish ? 'Image uploaded.' : '图片已上传。', 'success');
-        } catch (err) {
-            showToast(isEnglish ? 'Image upload failed.' : '图片上传失败。', 'error');
-        }
-    };
-
-    const handleUserSelect = (index: number, user: UserRecord | null) => {
-        const newMembers = [...members];
-        if (user) {
-            newMembers[index].uid = user.uid;
-            newMembers[index].name = user.displayName;
-            if (!newMembers[index].imageUrl) {
-                newMembers[index].imageUrl = user.photoURL;
-            }
-        } else {
-            newMembers[index].uid = '';
-        }
-        setMembers(newMembers);
-    };
-
     return (
         <div className="admin-section">
             <h3 className="admin-badges-title">
@@ -98,109 +72,67 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
             </h3>
             <p className="admin-helper-text">
                 {isEnglish
-                    ? 'Configure the team members displayed on the main page. Leaving this empty will use the default hardcoded officers.'
-                    : '配置在主页上显示的团队成员。留空将使用默认的硬编码社团干部。'}
+                    ? 'Configure the team members displayed on the main page. Leaving this empty will hide the section.'
+                    : '配置在主页上显示的团队成员。留空将隐藏该板块。'}
             </p>
 
-            <div className="admin-mt-12" style={{display: 'flex', flexDirection: 'column', gap: '24px'}}>
+            <div className="admin-event-grid admin-mt-12">
                 {members.map((member, index) => (
-                    <div key={member.id} className="admin-form-grid"
-                         style={{padding: '16px', border: '1px solid var(--color-border)', borderRadius: '8px'}}>
-                        <div style={{display: 'flex', justifyContent: 'space-between', gridColumn: '1 / -1'}}>
-                            <span
-                                style={{fontWeight: 600}}>{isEnglish ? `Member ${index + 1}` : `成员 ${index + 1}`}</span>
-                            {!readOnly && (
-                                <div style={{display: 'flex', gap: '8px'}}>
-                                    <button onClick={() => moveMember(index, 'up')} disabled={index === 0}>↑</button>
-                                    <button onClick={() => moveMember(index, 'down')}
+                    <div key={member.id} className="admin-event-card"
+                         style={{cursor: 'default', flexDirection: 'column', alignItems: 'stretch', padding: '12px'}}>
+                        <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
+                            <img src={member.imageUrl || '/images/officers/Officer_Avatar_Aaron.jpg'} alt=""
+                                 className="admin-event-card-img" style={{borderRadius: '50%'}}/>
+                            <div className="admin-event-card-info">
+                                <span
+                                    className="admin-event-card-title">{isEnglish ? member.name : (member.nameCn || member.name)}</span>
+                                <span
+                                    className="admin-event-card-date">{isEnglish ? member.role : (member.roleCn || member.role)}</span>
+                            </div>
+                        </div>
+                        {!readOnly && (
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginTop: '12px',
+                                borderTop: '1px solid var(--color-border)',
+                                paddingTop: '8px'
+                            }}>
+                                <div style={{display: 'flex', gap: '4px'}}>
+                                    <button className="admin-back-btn"
+                                            style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
+                                            onClick={() => moveMember(index, 'up')} disabled={index === 0}>↑
+                                    </button>
+                                    <button className="admin-back-btn"
+                                            style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
+                                            onClick={() => moveMember(index, 'down')}
                                             disabled={index === members.length - 1}>↓
                                     </button>
-                                    <button onClick={() => removeMember(index)} style={{color: 'var(--color-danger)'}}>
+                                </div>
+                                <div style={{display: 'flex', gap: '8px'}}>
+                                    <button className="admin-back-btn"
+                                            style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
+                                            onClick={() => setEditingIndex(index)}>
+                                        {isEnglish ? 'Edit' : '编辑'}
+                                    </button>
+                                    <button className="admin-back-btn" style={{
+                                        padding: '4px 8px',
+                                        marginBottom: 0,
+                                        minHeight: 0,
+                                        color: 'var(--color-danger)'
+                                    }} onClick={() => removeMember(index)}>
                                         {isEnglish ? 'Remove' : '删除'}
                                     </button>
                                 </div>
-                            )}
-                        </div>
-
-                        <div style={{gridColumn: '1 / -1'}}>
-                            <CreatorPicker
-                                selected={member.uid ? {
-                                    uid: member.uid,
-                                    displayName: member.name,
-                                    email: '',
-                                    photoURL: member.imageUrl
-                                } as any : null}
-                                onSelect={(u) => handleUserSelect(index, u)}
-                                manualName={member.name}
-                                onManualNameChange={(v) => updateMember(index, 'name', v)}
-                                manualLink=""
-                                onManualLinkChange={() => {
-                                }}
-                            />
-                        </div>
-
-                        {!member.uid && (
-                            <>
-                                <label>
-                                    <span>{isEnglish ? 'Name (English)' : '姓名（英文）'}</span>
-                                    <input
-                                        className="admin-search-input"
-                                        value={member.name}
-                                        onChange={(e) => updateMember(index, 'name', e.target.value)}
-                                        readOnly={readOnly}
-                                    />
-                                </label>
-                            </>
+                            </div>
                         )}
-
-                        <label>
-                            <span>{isEnglish ? 'Name (Chinese) (optional)' : '姓名（中文）（可选）'}</span>
-                            <input
-                                className="admin-search-input"
-                                value={member.nameCn || ''}
-                                onChange={(e) => updateMember(index, 'nameCn', e.target.value)}
-                                readOnly={readOnly}
-                            />
-                        </label>
-
-                        <label>
-                            <span>{isEnglish ? 'Role (English)' : '角色（英文）'}</span>
-                            <input
-                                className="admin-search-input"
-                                value={member.role}
-                                onChange={(e) => updateMember(index, 'role', e.target.value)}
-                                readOnly={readOnly}
-                            />
-                        </label>
-
-                        <label>
-                            <span>{isEnglish ? 'Role (Chinese)' : '角色（中文）'}</span>
-                            <input
-                                className="admin-search-input"
-                                value={member.roleCn}
-                                onChange={(e) => updateMember(index, 'roleCn', e.target.value)}
-                                readOnly={readOnly}
-                            />
-                        </label>
-
-                        <div style={{gridColumn: '1 / -1'}}>
-                            <ImageUploadField
-                                label="Member Avatar"
-                                labelCn="成员头像"
-                                preview={member.imageUrl || null}
-                                onFileChange={(file, url) => handleImageChange(index, file, url)}
-                                convertToWebp
-                                cropAspect={1}
-                                showToast={showToast}
-                            />
-                        </div>
                     </div>
                 ))}
             </div>
 
             {!readOnly && (
                 <div className="admin-btn-row admin-mt-12">
-                    <button className="admin-toggle-btn" onClick={addMember}>
+                    <button className="admin-toggle-btn" onClick={() => setIsAdding(true)}>
                         {isEnglish ? '+ Add Member' : '+ 添加成员'}
                     </button>
                     <button
@@ -213,6 +145,24 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
                             : (isEnglish ? 'Save Team' : '保存团队')}
                     </button>
                 </div>
+            )}
+
+            {isAdding && (
+                <MemberEditModal
+                    member={null}
+                    onClose={() => setIsAdding(false)}
+                    onSave={addMember}
+                    showToast={showToast}
+                />
+            )}
+
+            {editingIndex !== null && (
+                <MemberEditModal
+                    member={members[editingIndex]}
+                    onClose={() => setEditingIndex(null)}
+                    onSave={(m) => updateMember(editingIndex, m)}
+                    showToast={showToast}
+                />
             )}
         </div>
     );

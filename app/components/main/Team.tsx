@@ -1,4 +1,3 @@
-import { OFFICERS } from "~/constants"
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { useSiteConfig } from "~/lib/siteConfig";
 
@@ -6,16 +5,11 @@ export const Team = () => {
     const {isEnglish} = useLanguage();
     const {config, loading} = useSiteConfig();
 
-    const teamData = config.teamMembers?.length > 0
-        ? config.teamMembers
-        : OFFICERS.map(o => ({
-            id: o.name,
-            name: o.name,
-            nameCn: o.nameCn,
-            role: o.role,
-            roleCn: o.roleCn,
-            imageUrl: o.src
-        }));
+    if (loading || !config.teamMembers || config.teamMembers.length === 0) {
+        return null;
+    }
+
+    const teamData = config.teamMembers;
 
     return (
         <section id="team" className="section">
