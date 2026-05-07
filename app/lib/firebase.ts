@@ -258,6 +258,9 @@ export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
 export const callSaveSiteConfig = (data: {bilibiliVideoBvid: string}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveSiteConfig')(data);
 
+export const callSaveTeamMembers = (data: {teamMembers: any[]}) =>
+    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveTeamMembers')(data);
+
 export const callSaveBadge = (data: {
     badgeId?: string;
     name: string; nameCn: string; description: string; descriptionCn: string;

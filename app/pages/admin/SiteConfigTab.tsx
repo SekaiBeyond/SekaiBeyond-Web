@@ -4,6 +4,7 @@ import { callSavePolicy, callSaveSiteConfig } from '~/lib/firebase';
 import { useSiteConfig } from '~/lib/siteConfig';
 import { usePolicy } from '~/lib/policy';
 import { BILIBILI_VIDEO } from '~/constants';
+import { TeamSection } from './TeamSection';
 
 interface SiteConfigTabProps {
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
@@ -91,106 +92,115 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     const previewBvid = parseBvid(bvidInput) || BILIBILI_VIDEO.bvid;
 
     return (
-        <div className="admin-section">
-            <h3 className="admin-badges-title">
-                {isEnglish ? 'Featured Video' : '精选视频'}
-            </h3>
-            <p className="admin-helper-text">
-                {isEnglish
-                    ? 'Configure the featured video shown in the "See Us in Action" section.'
-                    : '设置「精彩时刻」板块展示的视频。'}
-            </p>
-            <div className="admin-form-grid admin-mt-12">
-                <label>
-                    <span>{isEnglish ? 'Bilibili Video (BV ID or URL)' : 'B 站视频（BV 号或链接）'}</span>
-                    <input
-                        className="admin-search-input"
-                        type="text"
-                        value={bvidInput}
-                        onChange={e => !readOnly && setBvidInput(e.target.value)}
-                        readOnly={readOnly}
-                        placeholder="BV1GsfjB7E6J or https://www.bilibili.com/video/BV..."
-                    />
-                    <span className="admin-helper-text" style={{marginTop: 4, display: 'block'}}>
-                        {isEnglish ? 'Will link to: ' : '将跳转至：'}
-                        <code>https://www.bilibili.com/video/{previewBvid}</code>
-                    </span>
-                </label>
-                <div>
-                    <span style={{fontSize: 13, fontWeight: 600, color: 'var(--color-text)'}}>
-                        {isEnglish ? 'Cover Preview' : '封面预览'}
-                    </span>
-                    {config.bilibiliVideoCoverUrl
-                        ? <img
-                            className="admin-video-cover-preview"
-                            src={config.bilibiliVideoCoverUrl}
-                            alt={isEnglish ? 'Video cover' : '视频封面'}
+        <>
+            <div className="admin-section">
+                <h3 className="admin-badges-title">
+                    {isEnglish ? 'Featured Video' : '精选视频'}
+                </h3>
+                <p className="admin-helper-text">
+                    {isEnglish
+                        ? 'Configure the featured video shown in the "See Us in Action" section.'
+                        : '设置「精彩时刻」板块展示的视频。'}
+                </p>
+                <div className="admin-form-grid admin-mt-12">
+                    <label>
+                        <span>{isEnglish ? 'Bilibili Video (BV ID or URL)' : 'B 站视频（BV 号或链接）'}</span>
+                        <input
+                            className="admin-search-input"
+                            type="text"
+                            value={bvidInput}
+                            onChange={e => !readOnly && setBvidInput(e.target.value)}
+                            readOnly={readOnly}
+                            placeholder="BV1GsfjB7E6J or https://www.bilibili.com/video/BV..."
                         />
-                        : <div className="admin-video-cover-placeholder">
-                            {isEnglish ? 'Cover will appear after saving' : '保存后将显示封面'}
-                        </div>
-                    }
+                        <span className="admin-helper-text" style={{marginTop: 4, display: 'block'}}>
+                            {isEnglish ? 'Will link to: ' : '将跳转至：'}
+                            <code>https://www.bilibili.com/video/{previewBvid}</code>
+                        </span>
+                    </label>
+                    <div>
+                        <span style={{fontSize: 13, fontWeight: 600, color: 'var(--color-text)'}}>
+                            {isEnglish ? 'Cover Preview' : '封面预览'}
+                        </span>
+                        {config.bilibiliVideoCoverUrl
+                            ? <img
+                                className="admin-video-cover-preview"
+                                src={config.bilibiliVideoCoverUrl}
+                                alt={isEnglish ? 'Video cover' : '视频封面'}
+                            />
+                            : <div className="admin-video-cover-placeholder">
+                                {isEnglish ? 'Cover will appear after saving' : '保存后将显示封面'}
+                            </div>
+                        }
+                    </div>
                 </div>
+                {!readOnly && (
+                    <div className="admin-btn-row admin-mt-12">
+                        <button
+                            className="admin-toggle-btn admin-toggle-save"
+                            onClick={saveVideo}
+                            disabled={savingVideo}
+                        >
+                            {savingVideo
+                                ? (isEnglish ? 'Saving...' : '保存中...')
+                                : (isEnglish ? 'Save Video' : '保存视频')}
+                        </button>
+                    </div>
+                )}
             </div>
-            {!readOnly && (
-                <div className="admin-btn-row admin-mt-12">
-                    <button
-                        className="admin-toggle-btn admin-toggle-save"
-                        onClick={saveVideo}
-                        disabled={savingVideo}
-                    >
-                        {savingVideo
-                            ? (isEnglish ? 'Saving...' : '保存中...')
-                            : (isEnglish ? 'Save Video' : '保存视频')}
-                    </button>
-                </div>
-            )}
 
             <div className="admin-divider"/>
 
-            <h3 className="admin-badges-title">
-                {isEnglish ? 'Policy Content' : '政策内容'}
-            </h3>
-            <p className="admin-helper-text">
-                {isEnglish
-                    ? 'This content is displayed on the public Policy page.'
-                    : '此内容显示在公开政策页面上。'}
-            </p>
-            <div className="admin-form-grid admin-mt-12">
-                <label>
-                    <span>{isEnglish ? 'Content (English)' : '内容（英文）'}</span>
-                    <textarea
-                        className="admin-search-input policy-textarea"
-                        value={contentEn}
-                        onChange={e => !readOnly && setContentEn(e.target.value)}
-                        readOnly={readOnly}
-                        placeholder={isEnglish ? 'Enter policy content in English...' : '请输入英文政策内容...'}
-                    />
-                </label>
-                <label>
-                    <span>{isEnglish ? 'Content (Chinese)' : '内容（中文）'}</span>
-                    <textarea
-                        className="admin-search-input policy-textarea"
-                        value={contentCn}
-                        onChange={e => !readOnly && setContentCn(e.target.value)}
-                        readOnly={readOnly}
-                        placeholder={isEnglish ? 'Enter policy content in Chinese...' : '请输入中文政策内容...'}
-                    />
-                </label>
-            </div>
-            {!readOnly && (
-                <div className="admin-btn-row admin-mt-12">
-                    <button
-                        className="admin-toggle-btn admin-toggle-save"
-                        onClick={savePolicy}
-                        disabled={savingPolicy}
-                    >
-                        {savingPolicy
-                            ? (isEnglish ? 'Saving...' : '保存中...')
-                            : (isEnglish ? 'Save Policy' : '保存政策')}
-                    </button>
+            <TeamSection teamMembers={config.teamMembers || []} refreshConfig={refreshConfig} showToast={showToast}
+                         readOnly={readOnly}/>
+
+            <div className="admin-divider"/>
+
+            <div className="admin-section">
+                <h3 className="admin-badges-title">
+                    {isEnglish ? 'Policy Content' : '政策内容'}
+                </h3>
+                <p className="admin-helper-text">
+                    {isEnglish
+                        ? 'This content is displayed on the public Policy page.'
+                        : '此内容显示在公开政策页面上。'}
+                </p>
+                <div className="admin-form-grid admin-mt-12">
+                    <label>
+                        <span>{isEnglish ? 'Content (English)' : '内容（英文）'}</span>
+                        <textarea
+                            className="admin-search-input policy-textarea"
+                            value={contentEn}
+                            onChange={e => !readOnly && setContentEn(e.target.value)}
+                            readOnly={readOnly}
+                            placeholder={isEnglish ? 'Enter policy content in English...' : '请输入英文政策内容...'}
+                        />
+                    </label>
+                    <label>
+                        <span>{isEnglish ? 'Content (Chinese)' : '内容（中文）'}</span>
+                        <textarea
+                            className="admin-search-input policy-textarea"
+                            value={contentCn}
+                            onChange={e => !readOnly && setContentCn(e.target.value)}
+                            readOnly={readOnly}
+                            placeholder={isEnglish ? 'Enter policy content in Chinese...' : '请输入中文政策内容...'}
+                        />
+                    </label>
                 </div>
-            )}
-        </div>
+                {!readOnly && (
+                    <div className="admin-btn-row admin-mt-12">
+                        <button
+                            className="admin-toggle-btn admin-toggle-save"
+                            onClick={savePolicy}
+                            disabled={savingPolicy}
+                        >
+                            {savingPolicy
+                                ? (isEnglish ? 'Saving...' : '保存中...')
+                                : (isEnglish ? 'Save Policy' : '保存政策')}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </>
     );
 };

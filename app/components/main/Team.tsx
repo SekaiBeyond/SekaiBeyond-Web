@@ -1,8 +1,21 @@
 import { OFFICERS } from "~/constants"
 import { useLanguage } from "~/components/LanguageContextProvider";
+import { useSiteConfig } from "~/lib/siteConfig";
 
 export const Team = () => {
     const {isEnglish} = useLanguage();
+    const {config, loading} = useSiteConfig();
+
+    const teamData = config.teamMembers?.length > 0
+        ? config.teamMembers
+        : OFFICERS.map(o => ({
+            id: o.name,
+            name: o.name,
+            nameCn: o.nameCn,
+            role: o.role,
+            roleCn: o.roleCn,
+            imageUrl: o.src
+        }));
 
     return (
         <section id="team" className="section">
@@ -11,11 +24,11 @@ export const Team = () => {
                 <p className="section-subtitle">{isEnglish ? "Meet the passionate people behind Sekai Beyond" : "认识彼世界背后的热情团队"}</p>
             </div>
             <div className="team-grid">
-                {OFFICERS.map((officer) => (
-                    <div key={officer.name} className="team-card">
-                        <img className="team-avatar" src={officer.src} alt={officer.name}/>
-                        <h3 className="team-name">{!isEnglish && officer.nameCn ? officer.nameCn : officer.name}</h3>
-                        <p className="team-role">{isEnglish ? officer.role : officer.roleCn}</p>
+                {teamData.map((member) => (
+                    <div key={member.id} className="team-card">
+                        <img className="team-avatar" src={member.imageUrl} alt={member.name}/>
+                        <h3 className="team-name">{!isEnglish && member.nameCn ? member.nameCn : member.name}</h3>
+                        <p className="team-role">{isEnglish ? member.role : member.roleCn}</p>
                     </div>
                 ))}
             </div>

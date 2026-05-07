@@ -3837,6 +3837,41 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     });
 });
 
+export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const input = request.data as {teamMembers?: any[]};
+    const members = Array.isArray(input.teamMembers) ? input.teamMembers : [];
+    const validMembers = members.map(m => ({
+        id: validateStr(m.id, "id", 128, true),
+        uid: m.uid ? validateStr(m.uid, "uid", 128) : "",
+        name: validateStr(m.name, "name", 200, true),
+        nameCn: validateStr(m.nameCn, "nameCn", 200),
+        role: validateStr(m.role, "role", 200, true),
+        roleCn: validateStr(m.roleCn, "roleCn", 200),
+        imageUrl: validateStr(m.imageUrl, "imageUrl", 500, true),
+    }));
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        txn.set(db.collection("config").doc("main"), {
+            teamMembers: validMembers,
+            updatedBy: uid,
+            updatedByName: callerSnap.data()?.displayName ?? "",
+            updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        txn.set(db.collection("records").doc(), {
+            type: "config-update",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {saved: true};
+    });
+});
+
 /**
  * Generate a staff claim code for an upcoming event (admin only).
  * Deactivates existing active staff codes for the same event.
