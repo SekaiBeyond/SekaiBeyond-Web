@@ -40,21 +40,21 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
 
     const addMember = (member: TeamMemberConfig) => {
         setIsAdding(false);
-        saveChanges([...members, member]);
+        saveChanges([...members, member]).then();
     };
 
     const updateMember = (index: number, member: TeamMemberConfig) => {
         setEditingIndex(null);
         const newMembers = [...members];
         newMembers[index] = member;
-        saveChanges(newMembers);
+        saveChanges(newMembers).then();
     };
 
     const removeMember = (index: number) => {
         if (!confirm(isEnglish ? 'Remove this member?' : '删除此成员？')) return;
         const newMembers = [...members];
         newMembers.splice(index, 1);
-        saveChanges(newMembers);
+        saveChanges(newMembers).then();
     };
 
     const moveMember = (index: number, direction: 'up' | 'down') => {
@@ -65,7 +65,7 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
         const temp = newMembers[index];
         newMembers[index] = newMembers[targetIndex];
         newMembers[targetIndex] = temp;
-        saveChanges(newMembers);
+        saveChanges(newMembers).then();
     };
 
     return (
@@ -95,7 +95,7 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
                              opacity: saving ? 0.7 : 1
                          }}>
                         <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
-                            <img src={member.imageUrl || '/images/mika.png'} alt="" className="admin-event-card-img"
+                            <img src={member.imageUrl || '/mika.webp'} alt="" className="admin-event-card-img"
                                  style={{borderRadius: '50%'}}/>
                             <div className="admin-event-card-info">
                                 <span

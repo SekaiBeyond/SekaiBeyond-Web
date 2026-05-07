@@ -71,7 +71,7 @@ export const About = () => {
                         aria-label={isEnglish ? "Learn about Mika" : "了解米卡"}
                     >
                         <img
-                            src="/images/mika.png"
+                            src="/mika.webp"
                             alt="Sekai Beyond Anime Club"
                             className="about-main-image"
                         />
@@ -97,7 +97,7 @@ export const About = () => {
                         </button>
                         <div className="modal-body">
                             <img
-                                src="/images/mika.png"
+                                src="/mika.webp"
                                 alt="Mika"
                                 className="modal-image"
                             />

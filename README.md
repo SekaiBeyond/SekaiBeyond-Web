@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./public/images/mika.png" alt="Sekai Beyond Logo" width="100"/>
+  <img src="./public/mika.webp" alt="Sekai Beyond Logo" width="100"/>
 </p>
 
 <h1 align="center">Sekai Beyond</h1>

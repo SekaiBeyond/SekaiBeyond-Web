@@ -365,8 +365,7 @@
     gap: 16px;
     padding: 24px;
     text-align: center;
-    background: linear-gradient(135deg, rgba(26, 26, 46, 0.72), rgba(22, 33, 62, 0.72)),
-    url('/images/sekai_beyond_con_2025.jpg') center/cover no-repeat;
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.72), rgba(22, 33, 62, 0.72)), center/cover no-repeat;
     color: #fff;
     border-radius: 20px;
 }

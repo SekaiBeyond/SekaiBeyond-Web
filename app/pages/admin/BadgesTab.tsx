@@ -179,7 +179,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
         }
         setCreatingBadgeDef(true);
         try {
-            let imageUrl = '/images/mika.png';
+            let imageUrl = '/mika.webp';
             if (createForm.image) {
                 const imageId = crypto.randomUUID();
                 imageUrl = await callUploadAdminImage(createForm.image, `badges/${imageId}.webp`);

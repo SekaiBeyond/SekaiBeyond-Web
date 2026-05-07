@@ -52,7 +52,7 @@ export const LoginButton = () => {
                 onMouseLeave={handleMouseLeave}
             >
                 <img
-                    src={profile?.photoURL ?? user.photoURL ?? '/images/mika.png'}
+                    src={profile?.photoURL ?? user.photoURL ?? '/mika.webp'}
                     alt={isEnglish ? 'Profile' : '个人主页'}
                     className="login-avatar"
                     referrerPolicy="no-referrer"
@@ -87,7 +87,7 @@ export const LoginButton = () => {
                     <div className="user-dropdown-divider"/>
                     <button className="user-dropdown-item user-dropdown-signout" onClick={() => {
                         closeDropdown();
-                        signOut();
+                        signOut().then();
                     }}>
                         {isEnglish ? 'Sign Out' : '退出登录'}
                     </button>

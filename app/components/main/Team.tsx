@@ -20,7 +20,7 @@ export const Team = () => {
             <div className="team-grid">
                 {teamData.map((member) => (
                     <div key={member.id} className="team-card">
-                        <img className="team-avatar" src={member.imageUrl || "/images/mika.png"} alt={member.name}/>
+                        <img className="team-avatar" src={member.imageUrl || "/mika.webp"} alt={member.name}/>
                         <h3 className="team-name">{!isEnglish && member.nameCn ? member.nameCn : member.name}</h3>
                         <p className="team-role">{!isEnglish && member.roleCn ? member.roleCn : member.role}</p>
                     </div>
