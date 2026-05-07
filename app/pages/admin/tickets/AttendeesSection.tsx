@@ -12,6 +12,8 @@ interface AttendeesSectionProps {
     onSearchChange: (v: string) => void;
     filterUnsent: boolean;
     onFilterUnsentChange: (v: boolean) => void;
+    ticketTypeFilter: TicketType | 'all';
+    onTicketTypeFilterChange: (v: TicketType | 'all') => void;
     readOnly: boolean;
     onEdit: (a: AttendeeData) => void;
     onAdd: () => void;
@@ -31,6 +33,8 @@ export function AttendeesSection({
                                      onSearchChange,
                                      filterUnsent,
                                      onFilterUnsentChange,
+                                     ticketTypeFilter,
+                                     onTicketTypeFilterChange,
                                      readOnly,
                                      onEdit,
                                      onAdd,
@@ -56,10 +60,10 @@ export function AttendeesSection({
         <div className="admin-tickets-attendees">
             <div className="admin-tickets-stats">
                 <span>
-                    <strong>{totals.attendees}</strong> {isEnglish ? 'attendees' : '参加者'}
+                    <strong>{attendees.length}</strong> {isEnglish ? (attendees.length === totals.attendees ? 'attendees' : `of ${totals.attendees} attendees`) : (attendees.length === totals.attendees ? '参加者' : `位参加者（共 ${totals.attendees} 位）`)}
                 </span>
                 <span>
-                    <strong>{totals.tickets}</strong> {isEnglish ? 'tickets' : '门票'}
+                    <strong>{totals.tickets}</strong> {isEnglish ? 'total tickets' : '总门票'}
                 </span>
                 <span>
                     <strong>{totals.used}</strong> {isEnglish ? 'redeemed' : '已使用'}
@@ -96,6 +100,19 @@ export function AttendeesSection({
                     value={search}
                     onChange={(e) => onSearchChange(e.target.value)}
                 />
+                <select
+                    className="admin-search-input"
+                    style={{width: 'auto', minWidth: '120px'}}
+                    value={ticketTypeFilter}
+                    onChange={(e) => onTicketTypeFilterChange(e.target.value as TicketType | 'all')}
+                >
+                    <option value="all">{isEnglish ? 'All Types' : '所有类型'}</option>
+                    {TICKET_TYPES.map(tt => (
+                        <option key={tt.value} value={tt.value}>
+                            {isEnglish ? tt.labelEn : tt.labelCn}
+                        </option>
+                    ))}
+                </select>
                 <label className="admin-checkbox-label admin-tickets-filter-checkbox">
                     <input
                         type="checkbox"

@@ -38,6 +38,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
     const [attendeesError, setAttendeesError] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [filterUnsent, setFilterUnsent] = useState(false);
+    const [ticketTypeFilter, setTicketTypeFilter] = useState<TicketType | 'all'>('all');
 
     const [editingAttendee, setEditingAttendee] = useState<AttendeeData | null>(null);
     const [addingAttendee, setAddingAttendee] = useState(false);
@@ -67,11 +68,15 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
         const needle = search.trim().toLowerCase();
         return attendees.filter(a => {
             if (filterUnsent && a.emailSent) return false;
+            if (ticketTypeFilter !== 'all') {
+                const hasType = a.tickets.some(t => t.type === ticketTypeFilter);
+                if (!hasType) return false;
+            }
             if (!needle) return true;
             return a.email.toLowerCase().includes(needle)
                 || a.name.toLowerCase().includes(needle);
         });
-    }, [attendees, search, filterUnsent]);
+    }, [attendees, search, filterUnsent, ticketTypeFilter]);
 
     const totals = useMemo(() => {
         let tickets = 0;
@@ -261,6 +266,8 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                     onSearchChange={setSearch}
                     filterUnsent={filterUnsent}
                     onFilterUnsentChange={setFilterUnsent}
+                    ticketTypeFilter={ticketTypeFilter}
+                    onTicketTypeFilterChange={setTicketTypeFilter}
                     readOnly={readOnly}
                     onEdit={setEditingAttendee}
                     onAdd={() => setAddingAttendee(true)}
