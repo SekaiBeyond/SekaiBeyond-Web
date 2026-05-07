@@ -81,8 +81,8 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
                     <div key={member.id} className="admin-event-card"
                          style={{cursor: 'default', flexDirection: 'column', alignItems: 'stretch', padding: '12px'}}>
                         <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
-                            <img src={member.imageUrl || '/images/officers/Officer_Avatar_Aaron.jpg'} alt=""
-                                 className="admin-event-card-img" style={{borderRadius: '50%'}}/>
+                            <img src={member.imageUrl || '/images/mika.png'} alt="" className="admin-event-card-img"
+                                 style={{borderRadius: '50%'}}/>
                             <div className="admin-event-card-info">
                                 <span
                                     className="admin-event-card-title">{isEnglish ? member.name : (member.nameCn || member.name)}</span>

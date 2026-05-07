@@ -1,43 +1,17 @@
 rules_version = '2';
 service firebase.storage {
-  match /b/{bucket}/o {
-    match /avatars/{userId} {
-      // Avatars are publicly readable (shown on public profile pages)
-      allow read: if true;
+    match /b/{bucket}/o {
+        // Allow public read for all our asset directories
+        match /avatars/{allPaths=**} { allow read: if true; }
+        match /events/{allPaths=**} { allow read: if true; }
+        match /upcoming-events/{allPaths=**} { allow read: if true; }
+        match /badges/{allPaths=**} { allow read: if true; }
+        match /config/{allPaths=**} { allow read: if true; }
+        match /team/{allPaths=**} { allow read: if true; }
 
-      // All writes and deletes via Cloud Functions (uploadAvatar, deleteAvatar)
-      // which enforce: group != visitor, magic bytes validation, size limit,
-      // content type, and atomic photoURL update on the user doc
+        // Deny everything else
+        match /{allPaths=**} {
+            allow read, write: if false;
+        }
     }
-
-    match /events/{imageId} {
-      // Event images are publicly readable (used on landing page)
-      allow read: if true;
-      // Writes only via Cloud Function (Admin SDK bypasses rules)
-    }
-
-    match /upcoming-events/{allPaths=**} {
-      // Upcoming event posters and header backgrounds are publicly readable
-      allow read: if true;
-      // Writes only via Cloud Function (Admin SDK bypasses rules)
-    }
-
-    match /badges/{imageId} {
-      // Badge images are publicly readable (shown on profile pages)
-      allow read: if true;
-      // Writes only via Cloud Function (Admin SDK bypasses rules)
-    }
-
-    match /config/{file} {
-      // Config assets (e.g. video cover) are publicly readable
-      allow read: if true;
-      // Writes only via Cloud Function (Admin SDK bypasses rules)
-    }
-
-    // Deny all access to unlisted paths (safety net — Firestore denies by default,
-    // but an explicit rule prevents accidental exposure if new paths are added)
-    match /{allPaths=**} {
-      allow read, write: if false;
-    }
-  }
 }

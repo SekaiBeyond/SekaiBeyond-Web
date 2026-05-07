@@ -1,128 +1,128 @@
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{database}/documents {
-    function callerGroup() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.group;
-    }
+    match /databases/{database}/documents {
+        function callerGroup() {
+            return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.group;
+        }
 
-    function callerEventStaffEvents() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('eventStaffEvents', []);
-    }
+        function callerEventStaffEvents() {
+            return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('eventStaffEvents', []);
+        }
 
-    function isCoreStaffOrAbove() {
-      return callerGroup() in ['core-staff', 'president'];
-    }
+        function isCoreStaffOrAbove() {
+            return callerGroup() in ['core-staff', 'president'];
+        }
 
-    function isStaffOrAbove() {
-      return callerGroup() in ['staff', 'core-staff', 'president'];
-    }
+        function isStaffOrAbove() {
+            return callerGroup() in ['staff', 'core-staff', 'president'];
+        }
 
-    function isEventStaffFor(eventId) {
-      return eventId in callerEventStaffEvents();
-    }
+        function isEventStaffFor(eventId) {
+            return eventId in callerEventStaffEvents();
+        }
 
-    match /users/{userId} {
-      // Users can read their own profile; staff+ can read any profile.
-      // Event-staff can read profiles of users who share at least one staff event with them
-      // (needed for the event staff list in the admin panel).
-      // Other users' public data is served via the getPublicProfile Cloud Function
-      // to avoid exposing email to all authenticated users.
-      allow read: if request.auth != null
-                  && (request.auth.uid == userId
-                      || isStaffOrAbove()
-                      || (callerEventStaffEvents().size() > 0
-                          && resource.data.get('eventStaffEvents', []).hasAny(callerEventStaffEvents())));
+        match /users/{userId} {
+            // Users can read their own profile; staff+ can read any profile.
+            // Event-staff can read profiles of users who share at least one staff event with them
+            // (needed for the event staff list in the admin panel).
+            // Other users' public data is served via the getPublicProfile Cloud Function
+            // to avoid exposing email to all authenticated users.
+            allow read: if request.auth != null
+                && (request.auth.uid == userId
+                    || isStaffOrAbove()
+                    || (callerEventStaffEvents().size() > 0
+                        && resource.data.get('eventStaffEvents', []).hasAny(callerEventStaffEvents())));
 
-      // All user mutations (displayName, photoURL, badges, attendedEvents, group) via Cloud Functions
-    }
+            // All user mutations (displayName, photoURL, badges, attendedEvents, group) via Cloud Functions
+        }
 
-    // Activity records — staff+ can read only; all writes via Cloud Functions
-    match /records/{recordId} {
-      allow read: if request.auth != null
-                  && isStaffOrAbove();
-    }
+        // Activity records — staff+ can read only; all writes via Cloud Functions
+        match /records/{recordId} {
+            allow read: if request.auth != null
+                && isStaffOrAbove();
+        }
 
-    // Event/badge claim codes — staff+ can read only; all mutations via Cloud Functions
-    match /claimCodes/{codeId} {
-      allow read: if request.auth != null
-                  && isStaffOrAbove();
-    }
+        // Event/badge claim codes — staff+ can read only; all mutations via Cloud Functions
+        match /claimCodes/{codeId} {
+            allow read: if request.auth != null
+                && isStaffOrAbove();
+        }
 
-    // Achievement badge definitions — readable by any logged-in user; all writes via Cloud Functions
-    match /badges/{badgeId} {
-      allow read: if request.auth != null;
-    }
+        // Achievement badge definitions — readable by any logged-in user; all writes via Cloud Functions
+        match /badges/{badgeId} {
+            allow read: if request.auth != null;
+        }
 
-    // Badge activation codes — core-staff+ can read only; all mutations via Cloud Functions
-    match /badgeActivationCodes/{codeId} {
-      allow read: if request.auth != null
-                  && isCoreStaffOrAbove();
-    }
+        // Badge activation codes — core-staff+ can read only; all mutations via Cloud Functions
+        match /badgeActivationCodes/{codeId} {
+            allow read: if request.auth != null
+                && isCoreStaffOrAbove();
+        }
 
-    // Staff claim codes — core-staff+ can read only; all mutations via Cloud Functions
-    match /staffClaimCodes/{codeId} {
-      allow read: if request.auth != null
-                  && isCoreStaffOrAbove();
-    }
+        // Staff claim codes — core-staff+ can read only; all mutations via Cloud Functions
+        match /staffClaimCodes/{codeId} {
+            allow read: if request.auth != null
+                && isCoreStaffOrAbove();
+        }
 
-    // Event labels — publicly readable; all writes via Cloud Functions
-    match /eventLabels/{labelId} {
-      allow read: if true;
-    }
+        // Event labels — publicly readable; all writes via Cloud Functions
+        match /eventLabels/{labelId} {
+            allow read: if true;
+        }
 
-    // Past events — publicly readable; all writes via Cloud Functions
-    match /pastEvents/{eventId} {
-      allow read: if true;
+        // Past events — publicly readable; all writes via Cloud Functions
+        match /pastEvents/{eventId} {
+            allow read: if true;
 
-      // Paid event subcollections (migrated from upcomingEvents on archive)
-      match /attendees/{attendeeId} {
-        allow read: if request.auth != null
+            // Paid event subcollections (migrated from upcomingEvents on archive)
+            match /attendees/{attendeeId} {
+                allow read: if request.auth != null
                     && (isCoreStaffOrAbove() || isEventStaffFor(eventId));
-      }
-      match /emailTemplate/{docId} {
-        allow read: if request.auth != null
+            }
+            match /emailTemplate/{docId} {
+                allow read: if request.auth != null
                     && isCoreStaffOrAbove();
-      }
-    }
+            }
+        }
 
-    // Rate-limit counters — server-only, no client access
-    match /rateLimits/{uid} {
-      allow read, write: if false;
-    }
+        // Rate-limit counters — server-only, no client access
+        match /rateLimits/{uid} {
+            allow read, write: if false;
+        }
 
-    // Upcoming events — public can read only published ones; staff+ can read all;
-    // event-staff can read events they are assigned to.
-    // All writes via Cloud Functions.
-    match /upcomingEvents/{eventId} {
-      allow read: if resource.data.published == true
-                  || (request.auth != null && isStaffOrAbove())
-                  || (request.auth != null && isEventStaffFor(eventId));
+        // Upcoming events — public can read only published ones; staff+ can read all;
+        // event-staff can read events they are assigned to.
+        // All writes via Cloud Functions.
+        match /upcomingEvents/{eventId} {
+            allow read: if resource.data.published == true
+                || (request.auth != null && isStaffOrAbove())
+                || (request.auth != null && isEventStaffFor(eventId));
 
-      // Paid event subcollections
-      match /attendees/{attendeeId} {
-        allow read: if request.auth != null
+            // Paid event subcollections
+            match /attendees/{attendeeId} {
+                allow read: if request.auth != null
                     && (isCoreStaffOrAbove() || isEventStaffFor(eventId));
-      }
-      match /emailTemplate/{docId} {
-        allow read: if request.auth != null
+            }
+            match /emailTemplate/{docId} {
+                allow read: if request.auth != null
                     && isCoreStaffOrAbove();
-      }
-    }
+            }
+        }
 
-    // Policy page content — publicly readable; writes via Cloud Functions
-    match /policy/{docId} {
-      allow read: if true;
-    }
+        // Policy page content — publicly readable; writes via Cloud Functions
+        match /policy/{docId} {
+            allow read: if true;
+        }
 
-    // Site config (featured video, etc.) — publicly readable; writes via Cloud Functions
-    match /config/{docId} {
-      allow read: if true;
-    }
+        // Site config (featured video, etc.) — publicly readable; writes via Cloud Functions
+        match /config/{docId} {
+            allow read: if true;
+        }
 
-    // Deny all access to unlisted paths (safety net — Firestore denies by default,
-    // but an explicit rule prevents accidental exposure if new paths are added)
-    match /{document=**} {
-      allow read, write: if false;
+        // Deny all access to unlisted paths (safety net — Firestore denies by default,
+        // but an explicit rule prevents accidental exposure if new paths are added)
+        match /{document=**} {
+            allow read, write: if false;
+        }
     }
-  }
 }
