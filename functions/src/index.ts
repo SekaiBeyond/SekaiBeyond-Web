@@ -3404,16 +3404,16 @@ export const sendTicketEmails = onCall(
             const data = target.data();
             const rawTickets: any[] = data.tickets ?? [];
             const activeTickets = rawTickets.filter(t => !t.voided);
-            
+
             if (activeTickets.length === 0) {
                 ticketlessTargets.push(target);
                 continue;
             }
-            
+
             sendableTargets.push({
-                target, 
-                data, 
-                ticketIds: activeTickets.map(t => t.ticketId), 
+                target,
+                data,
+                ticketIds: activeTickets.map(t => t.ticketId),
                 tickets: activeTickets
             });
             sentCount++;

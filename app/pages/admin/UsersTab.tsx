@@ -67,6 +67,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                                    }, ref) => {
     const {isEnglish} = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedGroup, setSelectedGroup] = useState<UserGroup | ''>('');
     const [searchResults, setSearchResults] = useState<UserRecord[]>([]);
     const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
     const [searching, setSearching] = useState(false);
@@ -143,7 +144,15 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             setLoadingRecent(true);
             try {
                 const db = getFirebaseDb();
-                const q = query(collection(db, 'users'), orderBy('joinedAt', 'desc'), limit(PAGE_SIZE));
+                let q = query(collection(db, 'users'), orderBy('joinedAt', 'desc'), limit(PAGE_SIZE));
+                if (selectedGroup) {
+                    q = query(
+                        collection(db, 'users'),
+                        where('group', '==', selectedGroup),
+                        orderBy('joinedAt', 'desc'),
+                        limit(PAGE_SIZE),
+                    );
+                }
                 const snapshot = await getDocs(q);
                 setRecentUsers(snapshot.docs.map(docToUserRecord));
                 setLastRecentSnap(snapshot.docs[snapshot.docs.length - 1] ?? null);
@@ -155,19 +164,28 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         loadRecentUsers().catch(err => {
             void err;
         });
-    }, []);
+    }, [selectedGroup]);
 
     const loadMoreRecentUsers = async () => {
         if (!hasMoreRecent || !lastRecentSnap) return;
         setLoadingRecent(true);
         try {
             const db = getFirebaseDb();
-            const q = query(
+            let q = query(
                 collection(db, 'users'),
                 orderBy('joinedAt', 'desc'),
                 startAfter(lastRecentSnap),
                 limit(PAGE_SIZE),
             );
+            if (selectedGroup) {
+                q = query(
+                    collection(db, 'users'),
+                    where('group', '==', selectedGroup),
+                    orderBy('joinedAt', 'desc'),
+                    startAfter(lastRecentSnap),
+                    limit(PAGE_SIZE),
+                );
+            }
             const snapshot = await getDocs(q);
             const newUsers = snapshot.docs.map(docToUserRecord);
             setRecentUsers(prev => [...prev, ...newUsers]);
@@ -188,7 +206,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const users = collection(db, 'users');
             let records: UserRecord[];
             if (q.includes('@')) {
-                const snap = await getDocs(query(users, where('email', '==', q.toLowerCase())));
+                const constraints = [where('email', '==', q.toLowerCase())];
+                if (selectedGroup) {
+                    constraints.push(where('group', '==', selectedGroup));
+                }
+                const snap = await getDocs(query(users, ...constraints));
                 records = snap.docs.map(docToUserRecord);
             } else {
                 const prefixes = new Set<string>([q]);
@@ -209,7 +231,9 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 const deduped = new Map<string, UserRecord>();
                 snaps.forEach(s => s.docs.forEach(d => {
                     const r = docToUserRecord(d);
-                    deduped.set(r.uid, r);
+                    if (!selectedGroup || r.group === selectedGroup) {
+                        deduped.set(r.uid, r);
+                    }
                 }));
                 records = Array.from(deduped.values());
             }
@@ -398,6 +422,22 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     return (
         <div className="admin-section">
             <div className="admin-search">
+                <select
+                    value={selectedGroup}
+                    onChange={(e) => {
+                        setSelectedGroup(e.target.value as UserGroup | '');
+                        setSearchResults([]);
+                        setHasSearched(false);
+                    }}
+                    className="admin-filter-select"
+                >
+                    <option value="">{isEnglish ? 'All Roles' : '所有角色'}</option>
+                    {USER_GROUPS.map((g) => (
+                        <option key={g} value={g}>
+                            {isEnglish ? GROUP_LABELS[g].en : GROUP_LABELS[g].zh}
+                        </option>
+                    ))}
+                </select>
                 <input
                     type="text"
                     placeholder={isEnglish ? 'Search by email or name...' : '输入邮箱或姓名搜索...'}
