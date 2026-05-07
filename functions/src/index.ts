@@ -3402,25 +3402,26 @@ export const sendTicketEmails = onCall(
             lastProcessedId = target.id;
             if (sentCount >= remainingToday) break;
             const data = target.data();
-            const ticketIds: string[] = data.ticketIds ?? [];
-            const tickets: any[] = data.tickets ?? [];
-            if (ticketIds.length === 0) {
+            const rawTickets: any[] = data.tickets ?? [];
+            const activeTickets = rawTickets.filter(t => !t.voided);
+            
+            if (activeTickets.length === 0) {
                 ticketlessTargets.push(target);
                 continue;
             }
-            sendableTargets.push({target, data, ticketIds, tickets});
+            
+            sendableTargets.push({
+                target, 
+                data, 
+                ticketIds: activeTickets.map(t => t.ticketId), 
+                tickets: activeTickets
+            });
             sentCount++;
         }
 
-        // Defective attendees: ticketCount validation prevents this at import
-        // time, but a bad merge / failed partial batch could leave an attendee
-        // with emailSent=false and no ticketIds. Mark sent so the mode='unsent'
+        // Defective attendees (no tickets or all voided): mark sent so the mode='unsent'
         // drain doesn't spin on the same doc forever.
         for (const target of ticketlessTargets) {
-            console.warn(
-                `[sendTicketEmails] attendee ${target.id} has no ticketIds;` +
-                " marking sent to avoid infinite drain"
-            );
             ops.push(b => b.update(target.ref, {
                 emailSent: true,
                 emailSentAt: FieldValue.serverTimestamp(),
@@ -3429,9 +3430,8 @@ export const sendTicketEmails = onCall(
         }
 
         for (let i = 0; i < sendableTargets.length; i++) {
-            const {target, data, ticketIds, tickets} = sendableTargets[i];
-            const qrItems = tickets.length >= ticketIds.length ? tickets : ticketIds;
-            const ticketBlock = renderTicketQrBlock(qrItems, eventId);
+            const {target, data, tickets} = sendableTargets[i];
+            const ticketBlock = renderTicketQrBlock(tickets, eventId);
 
             // Strip control chars (CR/LF in particular) from the rendered subject,
             // so a stray newline in eventTitle/attendeeName can't escape the
@@ -3443,7 +3443,7 @@ export const sendTicketEmails = onCall(
                 eventTitle, eventTitleCn,
                 eventDate: eventDateEn,
                 emailHeaderBg,
-                ticketCount: data.ticketCount ?? ticketIds.length,
+                ticketCount: tickets.length,
                 ticketBlock: "",
             }, false).replace(/[\x00-\x1F\x7F]+/g, " ").trim();
             const renderedBodyEn = renderTemplate(template.bodyHtml, {
@@ -3452,7 +3452,7 @@ export const sendTicketEmails = onCall(
                 eventTitle, eventTitleCn,
                 eventDate: eventDateEn,
                 emailHeaderBg,
-                ticketCount: data.ticketCount ?? ticketIds.length,
+                ticketCount: tickets.length,
                 ticketBlock,
             }, true);
             const renderedBodyCn = renderTemplate(template.bodyCnHtml, {
@@ -3461,7 +3461,7 @@ export const sendTicketEmails = onCall(
                 eventTitle, eventTitleCn,
                 eventDate: eventDateCn,
                 emailHeaderBg,
-                ticketCount: data.ticketCount ?? ticketIds.length,
+                ticketCount: tickets.length,
                 ticketBlock,
             }, true);
 

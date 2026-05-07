@@ -78,15 +78,31 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
         let used = 0;
         let voided = 0;
         let unsent = 0;
+        let sendable = 0;
+        let unsentSendable = 0;
+
         for (const a of attendees) {
             tickets += a.ticketCount;
+            let activeInThisAttendee = 0;
             for (const t of a.tickets) {
                 if (t.voided) voided++;
-                else if (t.redeemed) used++;
+                else {
+                    activeInThisAttendee++;
+                    if (t.redeemed) used++;
+                }
             }
             if (!a.emailSent) unsent++;
+
+            if (activeInThisAttendee > 0) {
+                sendable++;
+                if (!a.emailSent) unsentSendable++;
+            }
         }
-        return {attendees: attendees.length, tickets, used, voided, unsent};
+        return {
+            attendees: attendees.length,
+            tickets, used, voided, unsent,
+            sendable, unsentSendable
+        };
     }, [attendees]);
 
     const onAttendeeUpdated = (updated: AttendeeData) => {

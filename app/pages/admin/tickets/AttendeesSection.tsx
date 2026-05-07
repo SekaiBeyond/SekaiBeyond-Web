@@ -185,6 +185,7 @@ export function AttendeesSection({
                                         <button
                                             className="admin-toggle-btn admin-toggle-save"
                                             onClick={() => onResend(a)}
+                                            disabled={a.tickets.every(t => t.voided)}
                                         >
                                             {isEnglish ? 'Resend Email' : '重发邮件'}
                                         </button>

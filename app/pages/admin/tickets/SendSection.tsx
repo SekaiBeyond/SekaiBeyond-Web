@@ -65,9 +65,9 @@ export function SendSection({
 
     const send = async (mode: 'unsent' | 'all') => {
         if (readOnly || sending) return;
-        const target = mode === 'unsent' ? totals.unsent : totals.attendees;
+        const target = mode === 'unsent' ? totals.unsentSendable : totals.sendable;
         if (target === 0) {
-            showToast(isEnglish ? 'No recipients.' : '没有收件人。', 'warning');
+            showToast(isEnglish ? 'No sendable recipients.' : '没有可发送的收件人。', 'warning');
             return;
         }
         if (quotaAtCap) {
@@ -83,11 +83,11 @@ export function SendSection({
         const ok = window.confirm([
             mode === 'unsent'
                 ? (isEnglish
-                    ? `Send ticket emails to ${target} attendee(s) who haven't been sent yet?`
-                    : `向 ${target} 位尚未收到邮件的参加者发送门票邮件？`)
+                    ? `Send ticket emails to ${target} attendee(s) who have active tickets and haven't been sent yet?`
+                    : `向 ${target} 位持有有效门票且尚未收到邮件的参加者发送门票邮件？`)
                 : (isEnglish
-                    ? `Resend ticket emails to ALL ${target} attendee(s)? (Already-sent will receive a duplicate.)`
-                    : `向全部 ${target} 位参加者重新发送门票邮件？（已发送的会收到重复邮件。）`),
+                    ? `Resend ticket emails to ALL ${target} attendee(s) with active tickets? (Already-sent will receive a duplicate.)`
+                    : `向全部 ${target} 位持有有效门票的参加者重新发送门票邮件？（已发送的会收到重复邮件。）`),
             willExceed
                 ? (isEnglish
                     ? `\n\nWarning: ${target} > ${remainingToday} remaining in today's Resend free-tier quota. The send will stop when the cap is hit; unsent attendees can be resumed tomorrow.`
@@ -232,7 +232,8 @@ export function SendSection({
             <div className="admin-tickets-send-stats">
                 <p>
                     <strong>{totals.attendees}</strong> {isEnglish ? 'total attendees' : '位参加者'},{' '}
-                    <strong>{totals.unsent}</strong> {isEnglish ? 'not yet sent' : '尚未发送'}.
+                    <strong>{totals.sendable}</strong> {isEnglish ? 'with active tickets' : '持有有效门票'},{' '}
+                    <strong>{totals.unsentSendable}</strong> {isEnglish ? 'not yet sent' : '尚未发送'}.
                 </p>
             </div>
 
@@ -259,20 +260,20 @@ export function SendSection({
                 <button
                     className="admin-toggle-btn admin-toggle-save"
                     onClick={() => send('unsent')}
-                    disabled={readOnly || sending || totals.unsent === 0 || quotaAtCap}
+                    disabled={readOnly || sending || totals.unsentSendable === 0 || quotaAtCap}
                 >
                     {sending && progress?.mode === 'unsent'
                         ? (isEnglish ? 'Sending...' : '发送中...')
-                        : (isEnglish ? `Send Unsent (${totals.unsent})` : `发送未发送（${totals.unsent}）`)}
+                        : (isEnglish ? `Send Unsent (${totals.unsentSendable})` : `发送未发送（${totals.unsentSendable}）`)}
                 </button>
                 <button
                     className="admin-toggle-btn admin-toggle-revoke"
                     onClick={() => send('all')}
-                    disabled={readOnly || sending || totals.attendees === 0 || quotaAtCap}
+                    disabled={readOnly || sending || totals.sendable === 0 || quotaAtCap}
                 >
                     {sending && progress?.mode === 'all'
                         ? (isEnglish ? 'Sending...' : '发送中...')
-                        : (isEnglish ? `Resend All (${totals.attendees})` : `全部重发（${totals.attendees}）`)}
+                        : (isEnglish ? `Resend All (${totals.sendable})` : `全部重发（${totals.sendable}）`)}
                 </button>
                 {sending && (
                     <button

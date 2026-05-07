@@ -65,6 +65,8 @@ export interface AttendeeTotals {
     used: number;
     voided: number;
     unsent: number;
+    sendable: number;
+    unsentSendable: number;
 }
 
 export type TicketsSection = 'scan' | 'attendees' | 'import' | 'template' | 'send';
