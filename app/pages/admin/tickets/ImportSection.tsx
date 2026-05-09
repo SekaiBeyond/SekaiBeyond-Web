@@ -188,11 +188,18 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
 
         const deduped = new Map<string, ParsedRow>();
         for (const r of parsedRows) deduped.set(r.email, r);
-        const finalRows = Array.from(deduped.values()).sort((a, b) => {
-            if (a.action !== 'add' && b.action === 'add') return -1;
-            if (a.action === 'add' && b.action !== 'add') return 1;
-            return 0;
-        });
+
+        // Priority: existing rows with field differences first (need admin decision),
+        // then new adds, then existing rows that are identical (no-op).
+        const rank = (r: ParsedRow): number => {
+            if (r.action === 'add') return 1;
+            const hasDiff =
+                (r.existingName !== undefined && r.existingName !== r.name) ||
+                (r.existingTicketCount !== undefined && r.existingTicketCount !== r.ticketCount) ||
+                (r.existingType !== undefined && r.existingType !== r.type);
+            return hasDiff ? 0 : 2;
+        };
+        const finalRows = Array.from(deduped.values()).sort((a, b) => rank(a) - rank(b));
 
         if (finalRows.length > MAX_IMPORT_ROWS) {
             errs.push({
@@ -613,83 +620,93 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                 </tr>
                                 </thead>
                                 <tbody>
-                                {rows.slice(0, MAX_PREVIEW).map((r, i) => (
-                                    <tr key={`${r.email}-${i}`}>
-                                        <td>{i + 1}</td>
-                                        <td>{r.email}</td>
-                                        <td>
-                                            {r.existingName !== undefined && r.existingName !== r.name ? (
-                                                <>
-                                                <span style={{
-                                                    textDecoration: 'line-through',
-                                                    color: 'var(--text-color-light, #888)',
-                                                    marginRight: '6px'
-                                                }}>{r.existingName}</span>
-                                                    <span style={{
-                                                        color: 'var(--success-color, #28a745)',
-                                                        fontWeight: 'bold'
-                                                    }}>{r.name}</span>
-                                                </>
-                                            ) : r.name}
-                                        </td>
-                                        <td>
-                                            {r.existingTicketCount !== undefined && r.existingTicketCount !== r.ticketCount ? (
-                                                <>
-                                                <span style={{
-                                                    textDecoration: 'line-through',
-                                                    color: 'var(--text-color-light, #888)',
-                                                    marginRight: '6px'
-                                                }}>{r.existingTicketCount}</span>
-                                                    <span style={{
-                                                        color: 'var(--success-color, #28a745)',
-                                                        fontWeight: 'bold'
-                                                    }}>{r.ticketCount}</span>
-                                                </>
-                                            ) : r.ticketCount}
-                                        </td>
-                                        <td>
-                                            {r.existingType !== undefined && r.existingType !== r.type ? (
-                                                <>
-                                                <span style={{
-                                                    textDecoration: 'line-through',
-                                                    color: 'var(--text-color-light, #888)',
-                                                    marginRight: '6px'
-                                                }}>{r.existingType}</span>
-                                                    <span style={{
-                                                        color: 'var(--success-color, #28a745)',
-                                                        fontWeight: 'bold'
-                                                    }}>{r.type}</span>
-                                                </>
-                                            ) : r.type}
-                                        </td>
-                                        {timestampCol && (
-                                            <td>{r.timestamp ? new Date(r.timestamp).toLocaleString(isEnglish ? 'en-US' : 'zh-CN') : '-'}</td>
-                                        )}
-                                        <td>
-                                            {r.action === 'add' ? (
-                                                <span
-                                                    style={{color: 'var(--success-color, #28a745)'}}>{isEnglish ? 'Add New' : '新增'}</span>
-                                            ) : (
-                                                <select
-                                                    value={rowActions[r.email] || 'skip'}
-                                                    onChange={e => setRowActions(prev => ({
-                                                        ...prev,
-                                                        [r.email]: e.target.value as 'skip' | 'override'
-                                                    }))}
-                                                    disabled={readOnly || busy}
-                                                    style={{
-                                                        padding: '2px 4px',
-                                                        borderRadius: '4px',
-                                                        border: '1px solid var(--border-color, #ccc)'
-                                                    }}
-                                                >
-                                                    <option value="skip">{isEnglish ? 'Skip' : '跳过'}</option>
-                                                    <option value="override">{isEnglish ? 'Override' : '覆盖'}</option>
-                                                </select>
+                                {rows.slice(0, MAX_PREVIEW).map((r, i) => {
+                                    const nameChanged = r.existingName !== undefined && r.existingName !== r.name;
+                                    const countChanged = r.existingTicketCount !== undefined && r.existingTicketCount !== r.ticketCount;
+                                    const typeChanged = r.existingType !== undefined && r.existingType !== r.type;
+                                    const isNew = r.action === 'add';
+                                    const isChanged = !isNew && (nameChanged || countChanged || typeChanged);
+                                    const rowClass = isChanged
+                                        ? 'admin-tickets-import-row-changed'
+                                        : isNew
+                                            ? 'admin-tickets-import-row-new'
+                                            : 'admin-tickets-import-row-unchanged';
+                                    return (
+                                        <tr key={`${r.email}-${i}`} className={rowClass}>
+                                            <td>{i + 1}</td>
+                                            <td>{r.email}</td>
+                                            <td className={nameChanged ? 'admin-tickets-import-cell-changed' : undefined}>
+                                                {nameChanged ? (
+                                                    <>
+                                                        <span
+                                                            className="admin-tickets-import-diff-old">{r.existingName}</span>
+                                                        <span className="admin-tickets-import-diff-new">{r.name}</span>
+                                                    </>
+                                                ) : r.name}
+                                            </td>
+                                            <td className={countChanged ? 'admin-tickets-import-cell-changed' : undefined}>
+                                                {countChanged ? (
+                                                    <>
+                                                        <span
+                                                            className="admin-tickets-import-diff-old">{r.existingTicketCount}</span>
+                                                        <span
+                                                            className="admin-tickets-import-diff-new">{r.ticketCount}</span>
+                                                    </>
+                                                ) : r.ticketCount}
+                                            </td>
+                                            <td className={typeChanged ? 'admin-tickets-import-cell-changed' : undefined}>
+                                                {typeChanged ? (
+                                                    <>
+                                                        <span
+                                                            className="admin-tickets-import-diff-old">{r.existingType}</span>
+                                                        <span className="admin-tickets-import-diff-new">{r.type}</span>
+                                                    </>
+                                                ) : r.type}
+                                            </td>
+                                            {timestampCol && (
+                                                <td>{r.timestamp ? new Date(r.timestamp).toLocaleString(isEnglish ? 'en-US' : 'zh-CN') : '-'}</td>
                                             )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                            <td>
+                                                {isNew ? (
+                                                    <span className="admin-tickets-import-row-badge is-new">
+                                                        {isEnglish ? 'Add New' : '新增'}
+                                                    </span>
+                                                ) : (
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        flexWrap: 'wrap'
+                                                    }}>
+                                                        <span
+                                                            className={`admin-tickets-import-row-badge ${isChanged ? 'is-changed' : 'is-same'}`}>
+                                                            {isChanged
+                                                                ? (isEnglish ? 'Changed' : '有变更')
+                                                                : (isEnglish ? 'No Change' : '无变更')}
+                                                        </span>
+                                                        <select
+                                                            value={rowActions[r.email] || 'skip'}
+                                                            onChange={e => setRowActions(prev => ({
+                                                                ...prev,
+                                                                [r.email]: e.target.value as 'skip' | 'override'
+                                                            }))}
+                                                            disabled={readOnly || busy}
+                                                            style={{
+                                                                padding: '2px 4px',
+                                                                borderRadius: '4px',
+                                                                border: '1px solid var(--border-color, #ccc)'
+                                                            }}
+                                                        >
+                                                            <option value="skip">{isEnglish ? 'Skip' : '跳过'}</option>
+                                                            <option
+                                                                value="override">{isEnglish ? 'Override' : '覆盖'}</option>
+                                                        </select>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                                 </tbody>
                             </table>
                         </div>

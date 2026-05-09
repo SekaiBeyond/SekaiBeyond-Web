@@ -2131,6 +2131,68 @@ select.admin-tickets-tag:focus {
     font-size: 12px;
 }
 
+/* ----- Import preview diff styles ----- */
+.admin-tickets-import-row-changed > td {
+    background: rgba(255, 142, 83, 0.08);
+}
+
+.admin-tickets-import-row-changed > td:first-child {
+    box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.admin-tickets-import-row-new > td {
+    background: rgba(78, 203, 113, 0.06);
+}
+
+.admin-tickets-import-row-new > td:first-child {
+    box-shadow: inset 3px 0 0 var(--color-success);
+}
+
+.admin-tickets-import-row-unchanged > td {
+    color: var(--color-text-light);
+}
+
+.admin-tickets-import-cell-changed {
+    background: rgba(255, 142, 83, 0.14) !important;
+    border-radius: 4px;
+}
+
+.admin-tickets-import-diff-old {
+    text-decoration: line-through;
+    color: var(--color-text-light);
+    margin-right: 6px;
+}
+
+.admin-tickets-import-diff-new {
+    color: #c0561d;
+    font-weight: 700;
+}
+
+.admin-tickets-import-row-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+.admin-tickets-import-row-badge.is-changed {
+    background: rgba(255, 142, 83, 0.18);
+    color: #c0561d;
+}
+
+.admin-tickets-import-row-badge.is-new {
+    background: rgba(78, 203, 113, 0.18);
+    color: #1f8a47;
+}
+
+.admin-tickets-import-row-badge.is-same {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--color-text-light);
+}
+
 /* ----- Template section ----- */
 .admin-tickets-template {
     display: flex;
