@@ -276,36 +276,37 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         setErrors(errs);
     };
 
-    const parseExcel = async (file: File) => {
-        const ExcelJS = (await import('exceljs')).default;
+    const parseFile = async (file: File) => {
+        const XLSX = await import('xlsx/dist/xlsx.mini.min.js');
         const buffer = await file.arrayBuffer();
-        const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(buffer);
-        const sheet = workbook.worksheets[0];
-        if (!sheet) {
+        const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+        const sheetName = workbook.SheetNames[0];
+
+        if (!sheetName) {
             return {
                 fields: [] as string[],
                 records: [] as Record<string, string>[],
             };
         }
-        const headerRow = sheet.getRow(1);
-        const fields: string[] = [];
-        headerRow.eachCell({includeEmpty: false}, (cell) => {
-            fields.push(String(cell.value ?? '').trim());
-        });
-        const records: Record<string, string>[] = [];
-        sheet.eachRow({includeEmpty: false}, (row, rowIdx) => {
-            if (rowIdx === 1) return;
+
+        const sheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(sheet) as Record<string, unknown>[];
+
+        if (data.length === 0) {
+            return {
+                fields: [] as string[],
+                records: [] as Record<string, string>[],
+            };
+        }
+
+        const fields = Object.keys(data[0]);
+        const records = data.map((row: Record<string, unknown>) => {
             const rec: Record<string, string> = {};
-            fields.forEach((field, i) => {
-                const cell = row.getCell(i + 1);
-                const v = cell.value;
-                let str = '';
-                if (v == null) str = '';
-                else if (typeof v === 'object' && 'text' in v && typeof (v as {text: unknown}).text === 'string') {
-                    str = (v as {text: string}).text;
-                } else if (typeof v === 'object' && 'result' in v) {
-                    str = String((v as {result: unknown}).result ?? '');
+            fields.forEach(field => {
+                const v = row[field];
+                let str: string;
+                if (v == null) {
+                    str = '';
                 } else if (v instanceof Date) {
                     str = v.toISOString();
                 } else {
@@ -313,7 +314,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 }
                 rec[field] = str;
             });
-            records.push(rec);
+            return rec;
         });
         return {fields, records};
     };
@@ -327,39 +328,17 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         setErrors([]);
         try {
             const ext = file.name.toLowerCase().split('.').pop() ?? '';
-            const isExcel = ext === 'xlsx' || ext === 'xls' ||
-                file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-                file.type === 'application/vnd.ms-excel';
-
-            if (isExcel) {
-                try {
-                    const {fields, records} = await parseExcel(file);
-                    processFile(fields, records);
-                } catch (err) {
-                    console.error('[import] excel parse error', err);
-                    setErrors([{
-                        row: 0,
-                        message: isEnglish ? 'Failed to parse Excel file.' : '解析 Excel 文件失败。',
-                    }]);
-                }
-            } else {
-                const Papa = (await import('papaparse')).default;
-                await new Promise<void>((resolve) => {
-                    Papa.parse<Record<string, string>>(file, {
-                        header: true,
-                        skipEmptyLines: 'greedy',
-                        complete: (res) => {
-                            const fields = res.meta.fields ?? [];
-                            processFile(fields, res.data);
-                            resolve();
-                        },
-                        error: (err: Error) => {
-                            setErrors([{row: 0, message: err.message}]);
-                            resolve();
-                        },
-                    });
-                });
+            if (ext === 'xls') {
+                setErrors([{
+                    row: 0,
+                    message: isEnglish
+                        ? 'Legacy .xls files are not supported. Please re-save as .xlsx or export as .csv.'
+                        : '不支持旧版 .xls 文件。请另存为 .xlsx 或导出为 .csv。',
+                }]);
+                return;
             }
+            const {fields, records} = await parseFile(file);
+            processFile(fields, records);
         } catch (err) {
             console.error('[import] parse error', err);
             setErrors([{
@@ -398,7 +377,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
             // We pass onDuplicate: 'override' because we've already filtered out the ones we want to skip locally.
             // Any existing ones remaining in 'toSend' are explicitly meant to be overridden.
             const result = await callImportEventAttendees({eventId, attendees: toSend, onDuplicate: 'override'});
-            const {added, replaced, skipped, total} = result.data;
+            const {added, replaced, skipped} = result.data;
             const totalSkipped = skipped + manuallySkipped;
             showToast(
                 isEnglish
@@ -433,7 +412,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     onChange={handleFile}
                     disabled={readOnly || busy}
                 />

@@ -4,10 +4,5 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
     plugins: [tailwindcss(), reactRouter()],
-    resolve: {
-        tsconfigPaths: true,
-    },
-    build: {
-        chunkSizeWarningLimit: 1000,
-    }
+    resolve: {tsconfigPaths: true}
 });
