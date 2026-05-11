@@ -430,8 +430,9 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         if (ticket.redeemed) {
             const redeemedAtMs = ticket.redeemedAt?.toMillis?.() ?? 0;
             const isWithinGracePeriod = (now.toMillis() - redeemedAtMs) < REDEEM_GRACE_PERIOD_MS;
+            const isSameScanner = ticket.redeemedBy === uid;
 
-            if (!isWithinGracePeriod) {
+            if (!isWithinGracePeriod || !isSameScanner) {
                 return {
                     alreadyRedeemed: true,
                     attendeeName,
@@ -531,6 +532,54 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
         });
 
         return {voided: true};
+    });
+});
+export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
+
+        tickets[idx] = {...tickets[idx], voided: false};
+
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+
+        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-unvoid",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle,
+            targetEmail: data.email ?? "",
+            targetName: data.name ?? "",
+            code: ticketId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {unvoided: true};
     });
 });
 export const updateEventAttendee = onCall({maxInstances: 10}, async (request) => {

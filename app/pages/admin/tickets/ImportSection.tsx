@@ -32,7 +32,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
     const [countCol, setCountCol] = useState<string>('');
     const [typeCol, setTypeCol] = useState<string>('');
     const [timestampCol, setTimestampCol] = useState<string>('');
-    const [rowActions, setRowActions] = useState<Record<string, 'skip' | 'override'>>({});
+    const [rowActions, setRowActions] = useState<Record<string, 'skip' | 'override' | 'add'>>({});
 
     const clearForm = () => {
         setRows([]);
@@ -279,7 +279,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
     const parseFile = async (file: File) => {
         const XLSX = await import('xlsx/dist/xlsx.mini.min.js');
         const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+        const workbook = XLSX.read(buffer, {type: 'array', cellDates: true});
         const sheetName = workbook.SheetNames[0];
 
         if (!sheetName) {
@@ -356,7 +356,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
 
         const finalSubmitRows = rows.map(r => ({
             ...r,
-            action: r.action === 'add' ? 'add' : (rowActions[r.email] || 'skip')
+            action: r.action === 'add' ? (rowActions[r.email] || 'add') : (rowActions[r.email] || 'skip')
         }));
 
         const toSend = finalSubmitRows.filter(r => r.action !== 'skip');
@@ -647,9 +647,34 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                             )}
                                             <td>
                                                 {isNew ? (
-                                                    <span className="admin-tickets-import-row-badge is-new">
-                                                        {isEnglish ? 'Add New' : '新增'}
-                                                    </span>
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        flexWrap: 'wrap'
+                                                    }}>
+                                                        <span className="admin-tickets-import-row-badge is-new"
+                                                              style={{minWidth: '85px', textAlign: 'center'}}>
+                                                            {isEnglish ? 'Add New' : '新增'}
+                                                        </span>
+                                                        <select
+                                                            value={rowActions[r.email] || 'add'}
+                                                            onChange={e => setRowActions(prev => ({
+                                                                ...prev,
+                                                                [r.email]: e.target.value as 'skip' | 'add'
+                                                            }))}
+                                                            disabled={readOnly || busy}
+                                                            style={{
+                                                                padding: '2px 4px',
+                                                                borderRadius: '4px',
+                                                                border: '1px solid var(--border-color, #ccc)',
+                                                                width: '90px'
+                                                            }}
+                                                        >
+                                                            <option value="add">{isEnglish ? 'Add' : '添加'}</option>
+                                                            <option value="skip">{isEnglish ? 'Skip' : '跳过'}</option>
+                                                        </select>
+                                                    </div>
                                                 ) : (
                                                     <div style={{
                                                         display: 'flex',
@@ -658,7 +683,8 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                                         flexWrap: 'wrap'
                                                     }}>
                                                         <span
-                                                            className={`admin-tickets-import-row-badge ${isChanged ? 'is-changed' : 'is-same'}`}>
+                                                            className={`admin-tickets-import-row-badge ${isChanged ? 'is-changed' : 'is-same'}`}
+                                                            style={{minWidth: '85px', textAlign: 'center'}}>
                                                             {isChanged
                                                                 ? (isEnglish ? 'Changed' : '有变更')
                                                                 : (isEnglish ? 'No Change' : '无变更')}
@@ -673,7 +699,8 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                                             style={{
                                                                 padding: '2px 4px',
                                                                 borderRadius: '4px',
-                                                                border: '1px solid var(--border-color, #ccc)'
+                                                                border: '1px solid var(--border-color, #ccc)',
+                                                                width: '90px'
                                                             }}
                                                         >
                                                             <option value="skip">{isEnglish ? 'Skip' : '跳过'}</option>

@@ -18,10 +18,14 @@ interface AttendeesSectionProps {
     onEdit: (a: AttendeeData) => void;
     onAdd: () => void;
     onVoidTicket: (a: AttendeeData, ticketId: string) => void;
+    onUnvoidTicket: (a: AttendeeData, ticketId: string) => void;
     onUpdateTicketType: (a: AttendeeData, ticketId: string, newType: TicketType) => void;
     onResend: (a: AttendeeData) => void;
     onDelete: (a: AttendeeData) => void;
     onRefresh: () => void;
+    hasMore: boolean;
+    loadingMore: boolean;
+    onLoadMore: () => void;
 }
 
 export function AttendeesSection({
@@ -39,10 +43,14 @@ export function AttendeesSection({
                                      onEdit,
                                      onAdd,
                                      onVoidTicket,
+                                     onUnvoidTicket,
                                      onUpdateTicketType,
                                      onResend,
                                      onDelete,
                                      onRefresh,
+                                     hasMore,
+                                     loadingMore,
+                                     onLoadMore,
                                  }: AttendeesSectionProps) {
     const {isEnglish} = useLanguage();
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -59,9 +67,6 @@ export function AttendeesSection({
     return (
         <div className="admin-tickets-attendees">
             <div className="admin-tickets-stats">
-                <span>
-                    <strong>{attendees.length}</strong> {isEnglish ? (attendees.length === totals.attendees ? 'attendees' : `of ${totals.attendees} attendees`) : (attendees.length === totals.attendees ? '参加者' : `位参加者（共 ${totals.attendees} 位）`)}
-                </span>
                 <span>
                     <strong>{totals.tickets}</strong> {isEnglish ? 'total tickets' : '总门票'}
                 </span>
@@ -304,13 +309,22 @@ export function AttendeesSection({
                                                     ) : '—'}
                                                 </td>
                                                 <td>
-                                                    {!t.voided && (
+                                                    {!t.voided ? (
                                                         <button
                                                             className="admin-tickets-void-btn"
                                                             onClick={() => onVoidTicket(a, t.ticketId)}
                                                             disabled={readOnly}
                                                         >
                                                             {isEnglish ? 'Void' : '作废'}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            className="admin-toggle-btn admin-toggle-save"
+                                                            onClick={() => onUnvoidTicket(a, t.ticketId)}
+                                                            disabled={readOnly}
+                                                            style={{padding: '2px 8px', fontSize: '12px'}}
+                                                        >
+                                                            {isEnglish ? 'Unvoid' : '撤销作废'}
                                                         </button>
                                                     )}
                                                 </td>
@@ -324,6 +338,20 @@ export function AttendeesSection({
                     </div>
                 );
             })}
+
+            {hasMore && (
+                <div style={{textAlign: 'center', marginTop: '20px'}}>
+                    <button
+                        className="admin-toggle-btn admin-toggle-edit"
+                        onClick={onLoadMore}
+                        disabled={loadingMore}
+                    >
+                        {loadingMore
+                            ? (isEnglish ? 'Loading...' : '加载中...')
+                            : (isEnglish ? 'Load More' : '加载更多')}
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

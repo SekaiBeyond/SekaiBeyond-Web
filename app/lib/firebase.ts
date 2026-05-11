@@ -205,6 +205,9 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
 export const callVoidTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
     httpsCallable<typeof data, {voided: boolean}>(getFunctions(), 'voidTicket')(data);
 
+export const callUnvoidTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
+    httpsCallable<typeof data, {unvoided: boolean}>(getFunctions(), 'unvoidTicket')(data);
+
 export const callDeleteEventAttendee = (data: {eventId: string; attendeeId: string}) =>
     httpsCallable<typeof data, {deleted: boolean; ticketCount: number}>(
         getFunctions(), 'deleteEventAttendee')(data);
