@@ -1,7 +1,7 @@
 import { setGlobalOptions } from "firebase-functions/v2";
 
 // Enforce App Check on all functions globally
-setGlobalOptions({ enforceAppCheck: true });
+setGlobalOptions({enforceAppCheck: true});
 
 export * from "./functions/users";
 export * from "./functions/events";

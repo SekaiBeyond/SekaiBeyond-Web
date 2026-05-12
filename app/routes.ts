@@ -6,4 +6,5 @@ export default [
     route("admin", "routes/admin.tsx"),
     route("claim", "routes/claim.tsx"),
     route("policy", "routes/policy.tsx"),
+    route("qr", "routes/qr.tsx"),
 ] satisfies RouteConfig;

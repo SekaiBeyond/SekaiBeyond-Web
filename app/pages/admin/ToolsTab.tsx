@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { isValidHttpUrl } from '~/lib/urls';
+import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 
 type ToolId = 'qr-generator';
 
@@ -59,13 +60,39 @@ interface QrGeneratorToolProps {
 
 const QR_SIZE = 280;
 
+type ExpirationMode = 'none' | 'event' | 'date';
+
 const QrGeneratorTool = ({onBack}: QrGeneratorToolProps) => {
     const {isEnglish} = useLanguage();
     const [url, setUrl] = useState('');
+    const [expirationMode, setExpirationMode] = useState<ExpirationMode>('none');
+    const [selectedEventId, setSelectedEventId] = useState('');
+    const [expiresLocal, setExpiresLocal] = useState('');
+    const {upcomingEvents, loading: eventsLoading} = useAllUpcomingEvents();
     const qrWrapRef = useRef<HTMLDivElement>(null);
 
     const trimmed = url.trim();
     const valid = isValidHttpUrl(trimmed);
+
+    // Parse the datetime-local value (treated as the user's local time) into an ISO timestamp.
+    const expiresIso = (() => {
+        if (expirationMode !== 'date' || !expiresLocal) return '';
+        const d = new Date(expiresLocal);
+        return isNaN(d.getTime()) ? '' : d.toISOString();
+    })();
+
+    // If an event or expiration date is set, redirect via our app so we can intercept it after expiry.
+    const qrValue = (() => {
+        if (!valid || typeof window === 'undefined') return trimmed;
+        const origin = window.location.origin;
+        if (expirationMode === 'event' && selectedEventId) {
+            return `${origin}/qr?url=${encodeURIComponent(trimmed)}&event=${encodeURIComponent(selectedEventId)}`;
+        }
+        if (expirationMode === 'date' && expiresIso) {
+            return `${origin}/qr?url=${encodeURIComponent(trimmed)}&expires=${encodeURIComponent(expiresIso)}`;
+        }
+        return trimmed;
+    })();
 
     const downloadPng = () => {
         const canvas = qrWrapRef.current?.querySelector('canvas');
@@ -81,7 +108,7 @@ const QrGeneratorTool = ({onBack}: QrGeneratorToolProps) => {
 
     const copyUrl = () => {
         if (!valid) return;
-        navigator.clipboard.writeText(trimmed).catch(() => {
+        navigator.clipboard.writeText(qrValue).catch(() => {
             /* clipboard may be unavailable */
         });
     };
@@ -107,6 +134,47 @@ const QrGeneratorTool = ({onBack}: QrGeneratorToolProps) => {
                         autoFocus
                     />
                 </label>
+                <label className="admin-form-grid-full">
+                    <span>{isEnglish ? 'Expiration (Optional)' : '过期方式 (可选)'}</span>
+                    <select
+                        value={expirationMode}
+                        onChange={e => setExpirationMode(e.target.value as ExpirationMode)}
+                        className="admin-search-input"
+                    >
+                        <option value="none">{isEnglish ? 'No Expiration' : '永不过期'}</option>
+                        <option value="event">{isEnglish ? 'Link to Event' : '关联活动'}</option>
+                        <option value="date">{isEnglish ? 'Custom Date' : '自定义日期'}</option>
+                    </select>
+                </label>
+                {expirationMode === 'event' && (
+                    <label className="admin-form-grid-full">
+                        <span>{isEnglish ? 'Event' : '活动'}</span>
+                        <select
+                            value={selectedEventId}
+                            onChange={e => setSelectedEventId(e.target.value)}
+                            className="admin-search-input"
+                            disabled={eventsLoading}
+                        >
+                            <option value="">{isEnglish ? '-- Select Event --' : '-- 选择活动 --'}</option>
+                            {upcomingEvents.map(ev => (
+                                <option key={ev.id} value={ev.id}>
+                                    {isEnglish ? ev.title : ev.titleCn}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
+                {expirationMode === 'date' && (
+                    <label className="admin-form-grid-full">
+                        <span>{isEnglish ? 'Active Until' : '有效截止'}</span>
+                        <input
+                            type="datetime-local"
+                            value={expiresLocal}
+                            onChange={e => setExpiresLocal(e.target.value)}
+                            className="admin-search-input"
+                        />
+                    </label>
+                )}
             </div>
             {!valid ? (
                 <p className="admin-no-results">
@@ -118,7 +186,7 @@ const QrGeneratorTool = ({onBack}: QrGeneratorToolProps) => {
                 <div className="admin-single-code admin-single-code-narrow">
                     <div ref={qrWrapRef} className="admin-single-code-qr">
                         <QRCodeCanvas
-                            value={trimmed}
+                            value={qrValue}
                             size={QR_SIZE}
                             level="M"
                             marginSize={2}
@@ -127,7 +195,7 @@ const QrGeneratorTool = ({onBack}: QrGeneratorToolProps) => {
                     <div className="admin-code-url">
                         <input
                             readOnly
-                            value={trimmed}
+                            value={qrValue}
                             onClick={(e) => (e.target as HTMLInputElement).select()}
                             className="admin-code-input"
                         />
