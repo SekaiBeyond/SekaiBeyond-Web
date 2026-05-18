@@ -57,15 +57,115 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
         saveChanges(newMembers).then();
     };
 
+    // Swap with the previous/next member sharing the same honorary status
+    // so reordering within a group never crosses group boundaries.
     const moveMember = (index: number, direction: 'up' | 'down') => {
-        if (direction === 'up' && index === 0) return;
-        if (direction === 'down' && index === members.length - 1) return;
+        const isHonorary = !!members[index].isHonorary;
+        let targetIndex = -1;
+        if (direction === 'up') {
+            for (let i = index - 1; i >= 0; i--) {
+                if (!!members[i].isHonorary === isHonorary) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        } else {
+            for (let i = index + 1; i < members.length; i++) {
+                if (!!members[i].isHonorary === isHonorary) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+        if (targetIndex === -1) return;
         const newMembers = [...members];
-        const targetIndex = direction === 'up' ? index - 1 : index + 1;
         const temp = newMembers[index];
         newMembers[index] = newMembers[targetIndex];
         newMembers[targetIndex] = temp;
         saveChanges(newMembers).then();
+    };
+
+    const activeIndices: number[] = [];
+    const honoraryIndices: number[] = [];
+    members.forEach((m, i) => {
+        (m.isHonorary ? honoraryIndices : activeIndices).push(i);
+    });
+
+    const renderCard = (index: number, isFirstInGroup: boolean, isLastInGroup: boolean) => {
+        const member = members[index];
+        return (
+            <div key={member.id} className="admin-event-card"
+                 style={{
+                     cursor: 'default',
+                     flexDirection: 'column',
+                     alignItems: 'stretch',
+                     padding: '12px',
+                     opacity: saving ? 0.7 : 1
+                 }}>
+                <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
+                    <img src={member.imageUrl || '/mika.webp'} alt="" className="admin-event-card-img"
+                         style={{
+                             borderRadius: '50%',
+                             opacity: member.isHonorary ? 0.7 : 1,
+                             filter: member.isHonorary ? 'grayscale(40%)' : 'none'
+                         }}/>
+                    <div className="admin-event-card-info">
+                        <span className="admin-event-card-title">
+                            {isEnglish ? member.name : (member.nameCn || member.name)}
+                        </span>
+                        <span
+                            className="admin-event-card-date">{isEnglish ? member.role : (member.roleCn || member.role)}</span>
+                    </div>
+                </div>
+                {!readOnly && (
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        marginTop: '12px',
+                        borderTop: '1px solid var(--color-border)',
+                        paddingTop: '8px'
+                    }}>
+                        <div style={{display: 'flex', gap: '4px'}}>
+                            <button className="admin-back-btn"
+                                    style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
+                                    onClick={() => moveMember(index, 'up')} disabled={isFirstInGroup || saving}>↑
+                            </button>
+                            <button className="admin-back-btn"
+                                    style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
+                                    onClick={() => moveMember(index, 'down')}
+                                    disabled={isLastInGroup || saving}>↓
+                            </button>
+                        </div>
+                        <div style={{display: 'flex', gap: '8px'}}>
+                            <button className="admin-back-btn"
+                                    style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
+                                    onClick={() => setEditingIndex(index)}
+                                    disabled={saving}>
+                                {isEnglish ? 'Edit' : '编辑'}
+                            </button>
+                            <button className="admin-back-btn" style={{
+                                padding: '4px 8px',
+                                marginBottom: 0,
+                                minHeight: 0,
+                                color: saving ? 'var(--color-text-light)' : 'var(--color-danger)'
+                            }} onClick={() => removeMember(index)} disabled={saving}>
+                                {isEnglish ? 'Remove' : '删除'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const groupHeadingStyle: React.CSSProperties = {
+        marginTop: '24px',
+        marginBottom: '8px',
+        fontSize: '13px',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        color: 'var(--color-text-secondary)',
     };
 
     return (
@@ -80,70 +180,37 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
             </div>
             <p className="admin-helper-text" style={{marginTop: '4px'}}>
                 {isEnglish
-                    ? 'Configure the team members displayed on the main page. Changes are saved automatically. Leaving this empty will hide the section.'
-                    : '配置在主页上显示的团队成员。更改会自动保存。留空将隐藏该板块。'}
+                    ? 'Configure the team members displayed on the main page. Changes are saved automatically. Leaving this empty will hide the section. Mark a member as honorary in their edit form to move them to the Honorary group.'
+                    : '配置在主页上显示的团队成员。更改会自动保存。留空将隐藏该板块。在编辑表单中将成员标记为名誉成员可将其移至名誉组。'}
             </p>
 
-            <div className="admin-event-grid admin-mt-12">
-                {members.map((member, index) => (
-                    <div key={member.id} className="admin-event-card"
-                         style={{
-                             cursor: 'default',
-                             flexDirection: 'column',
-                             alignItems: 'stretch',
-                             padding: '12px',
-                             opacity: saving ? 0.7 : 1
-                         }}>
-                        <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
-                            <img src={member.imageUrl || '/mika.webp'} alt="" className="admin-event-card-img"
-                                 style={{borderRadius: '50%'}}/>
-                            <div className="admin-event-card-info">
-                                <span
-                                    className="admin-event-card-title">{isEnglish ? member.name : (member.nameCn || member.name)}</span>
-                                <span
-                                    className="admin-event-card-date">{isEnglish ? member.role : (member.roleCn || member.role)}</span>
-                            </div>
-                        </div>
-                        {!readOnly && (
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                marginTop: '12px',
-                                borderTop: '1px solid var(--color-border)',
-                                paddingTop: '8px'
-                            }}>
-                                <div style={{display: 'flex', gap: '4px'}}>
-                                    <button className="admin-back-btn"
-                                            style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
-                                            onClick={() => moveMember(index, 'up')} disabled={index === 0 || saving}>↑
-                                    </button>
-                                    <button className="admin-back-btn"
-                                            style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
-                                            onClick={() => moveMember(index, 'down')}
-                                            disabled={index === members.length - 1 || saving}>↓
-                                    </button>
-                                </div>
-                                <div style={{display: 'flex', gap: '8px'}}>
-                                    <button className="admin-back-btn"
-                                            style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
-                                            onClick={() => setEditingIndex(index)}
-                                            disabled={saving}>
-                                        {isEnglish ? 'Edit' : '编辑'}
-                                    </button>
-                                    <button className="admin-back-btn" style={{
-                                        padding: '4px 8px',
-                                        marginBottom: 0,
-                                        minHeight: 0,
-                                        color: saving ? 'var(--color-text-light)' : 'var(--color-danger)'
-                                    }} onClick={() => removeMember(index)} disabled={saving}>
-                                        {isEnglish ? 'Remove' : '删除'}
-                                    </button>
-                                </div>
-                            </div>
+            <div style={groupHeadingStyle}>
+                {isEnglish ? `Active (${activeIndices.length})` : `活跃 (${activeIndices.length})`}
+            </div>
+            {activeIndices.length === 0 ? (
+                <p className="admin-helper-text" style={{fontStyle: 'italic'}}>
+                    {isEnglish ? 'No active members yet.' : '尚无活跃成员。'}
+                </p>
+            ) : (
+                <div className="admin-event-grid">
+                    {activeIndices.map((memberIndex, posInGroup) =>
+                        renderCard(memberIndex, posInGroup === 0, posInGroup === activeIndices.length - 1)
+                    )}
+                </div>
+            )}
+
+            {honoraryIndices.length > 0 && (
+                <>
+                    <div style={groupHeadingStyle}>
+                        {isEnglish ? `Honorary (${honoraryIndices.length})` : `名誉 (${honoraryIndices.length})`}
+                    </div>
+                    <div className="admin-event-grid">
+                        {honoraryIndices.map((memberIndex, posInGroup) =>
+                            renderCard(memberIndex, posInGroup === 0, posInGroup === honoraryIndices.length - 1)
                         )}
                     </div>
-                ))}
-            </div>
+                </>
+            )}
 
             {!readOnly && (
                 <div className="admin-btn-row admin-mt-12">

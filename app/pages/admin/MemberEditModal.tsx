@@ -28,6 +28,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         role: member?.role || '',
         roleCn: member?.roleCn || '',
         imageUrl: member?.imageUrl || '',
+        isHonorary: member?.isHonorary || false,
     });
 
     const [uploading, setUploading] = useState(false);
@@ -130,6 +131,18 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                             onChange={e => setFormData(prev => ({...prev, roleCn: e.target.value}))}
                             placeholder={isEnglish ? 'e.g. President' : '例如：社长'}
                         />
+                    </label>
+
+                    <label className="admin-tickets-template-field"
+                           style={{flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
+                        <input
+                            type="checkbox"
+                            checked={!!formData.isHonorary}
+                            onChange={e => setFormData(prev => ({...prev, isHonorary: e.target.checked}))}
+                        />
+                        <span style={{margin: 0}}>
+                            {isEnglish ? 'Honorary member (less active)' : '名誉成员（不太活跃）'}
+                        </span>
                     </label>
 
                     <div style={{marginTop: '8px'}}>

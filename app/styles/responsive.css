@@ -199,6 +199,25 @@
         font-size: 12px;
     }
 
+    .team-grid--honorary {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+
+    .team-card--honorary {
+        padding: 14px 8px;
+    }
+
+    .team-card--honorary .team-avatar {
+        width: 50px;
+        height: 50px;
+    }
+
+    .team-subheading {
+        margin: 36px auto 20px;
+        font-size: 1rem;
+    }
+
     .events-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 16px;

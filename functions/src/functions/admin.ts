@@ -260,6 +260,7 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         role: validateStr(m.role, "role", 200, true),
         roleCn: validateStr(m.roleCn, "roleCn", 200),
         imageUrl: validateStr(m.imageUrl, "imageUrl", 500),
+        isHonorary: Boolean(m.isHonorary),
     }));
 
     return adminTransaction(uid, async (txn, callerSnap) => {

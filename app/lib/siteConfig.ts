@@ -11,6 +11,7 @@ export interface TeamMemberConfig {
     role: string;
     roleCn: string;
     imageUrl: string;
+    isHonorary?: boolean;
 }
 
 export interface SiteConfig {
