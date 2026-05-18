@@ -3,7 +3,14 @@ import sanitizeHtml from "sanitize-html";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { ADMIN_GROUPS, adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
-import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, recordExpiresAt, RESEND_DAILY_CAP, SEND_CHUNK_SIZE } from "../utils/config";
+import {
+    IMPORT_MAX_ROWS,
+    PUBLIC_ORIGIN,
+    recordExpiresAt,
+    RESEND_DAILY_CAP,
+    RESEND_SEND_INTERVAL_MS,
+    SEND_CHUNK_SIZE
+} from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
@@ -894,6 +901,9 @@ export const sendTicketEmails = onCall(
                 "Daily Resend cap reached.", {code: "quota-exceeded"});
         }
 
+        // Ops here are only for things that don't trigger Resend (ticketless
+        // attendee marks + the audit record). The actual mail-doc creates are
+        // paced below to stay under Resend's 5 req/sec POST /emails limit.
         const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
         let sentCount = 0;
         let lastProcessedId: string | null = null;
@@ -940,6 +950,11 @@ export const sendTicketEmails = onCall(
             }));
         }
 
+        // Pace mail-doc creates so the email extension's onCreate triggers
+        // don't blow past Resend's POST /emails limit (5 req/sec). Each mail
+        // doc + its attendee mark are committed together so a mid-loop crash
+        // can't leave an email queued without the attendee marked sent (which
+        // would cause duplicates on the next 'unsent' drain).
         for (let i = 0; i < sendableTargets.length; i++) {
             const {target, data, tickets} = sendableTargets[i];
             const ticketBlock = renderTicketQrBlock(tickets, eventId);
@@ -981,16 +996,22 @@ export const sendTicketEmails = onCall(
                 ? `${renderedBodyEn}\n<hr style="border:none;border-top:1px solid #ddd;margin:24px 0;"/>\n${renderedBodyCn}`
                 : renderedBodyEn;
 
+            if (i > 0 && RESEND_SEND_INTERVAL_MS > 0) {
+                await new Promise(r => setTimeout(r, RESEND_SEND_INTERVAL_MS));
+            }
+
             const mailRef = db.collection("mail").doc();
-            ops.push(b => b.set(mailRef, {
+            const batch = db.batch();
+            batch.set(mailRef, {
                 to: data.email,
                 message: {subject: renderedSubject, html},
-            }));
-            ops.push(b => b.update(target.ref, {
+            });
+            batch.update(target.ref, {
                 emailSent: true,
                 emailSentAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-            }));
+            });
+            await batch.commit();
         }
 
         // Only write an audit record when we actually sent something.
