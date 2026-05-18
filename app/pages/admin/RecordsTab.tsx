@@ -39,6 +39,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
     config: ['policy-update', 'config-update'],
+    email: ['custom-email-send'],
 };
 
 interface RecordsTabProps {
@@ -96,6 +97,9 @@ export const RecordsTab = ({
                 addedCount: data.addedCount,
                 replacedCount: data.replacedCount,
                 sentCount: data.sentCount,
+                recipientCount: data.recipientCount,
+                subject: data.subject,
+                replyTo: data.replyTo,
                 timestamp: data.timestamp?.toDate() ?? new Date(),
             };
         });
@@ -471,6 +475,18 @@ export const RecordsTab = ({
                     ? <>sent {sent} ticket email{sent === 1 ? '' : 's'} for {event}</>
                     : <>为 {event} 发送了 {sent} 封门票邮件</>;
             }
+            case 'custom-email-send': {
+                const subjectText = r.subject ? ` "${r.subject}"` : '';
+                const recipient = r.targetEmail ?? '';
+                const extra = r.recipientCount && r.recipientCount > 1
+                    ? (isEnglish
+                        ? ` (+${r.recipientCount - 1} more)`
+                        : `（另含 ${r.recipientCount - 1} 位）`)
+                    : '';
+                return isEnglish
+                    ? <>sent email{subjectText} to {recipient}{extra}</>
+                    : <>向 {recipient}{extra} 发送了邮件{subjectText}</>;
+            }
             case 'upcoming-event-email-template-update':
                 return isEnglish
                     ? <>updated the ticket email template
@@ -553,6 +569,8 @@ export const RecordsTab = ({
             case 'ticket-regenerate':
             case 'ticket-email-send':
                 return isEnglish ? 'Ticket' : '门票';
+            case 'custom-email-send':
+                return isEnglish ? 'Email' : '邮件';
             case 'tag-create':
             case 'tag-edit':
             case 'tag-delete':
@@ -592,6 +610,7 @@ export const RecordsTab = ({
                     <option value="tag">{isEnglish ? 'Tag' : '标签'}</option>
                     <option value="account">{isEnglish ? 'Account' : '账号'}</option>
                     <option value="config">{isEnglish ? 'Config' : '配置'}</option>
+                    <option value="email">{isEnglish ? 'Email' : '邮件'}</option>
                 </select>
                 <select
                     className="record-filter-select"

@@ -789,9 +789,12 @@ async function computeTicketEmailQuota(): Promise<{sentToday: number; dailyCap: 
         - now.getMilliseconds();
     const startOfTodayLA = Timestamp.fromMillis(laMidnightMs);
 
-    // Uses the existing (type, timestamp) composite index.
+    // Uses the existing (type, timestamp) composite index. `in` runs as two
+    // equality queries under the hood, each served by that index — adding the
+    // tool-driven custom-email-send type here keeps the daily cap a single
+    // shared budget across all outbound mail.
     const snap = await db.collection("records")
-        .where("type", "==", "ticket-email-send")
+        .where("type", "in", ["ticket-email-send", "custom-email-send"])
         .where("timestamp", ">=", startOfTodayLA)
         .get();
     let sentToday = 0;
@@ -1088,4 +1091,115 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
         });
         return {saved: true};
     });
+});
+
+// Caps the per-call recipient fan-out (to + cc + bcc combined). Each mail doc
+// becomes one Resend POST; one POST with many recipients still counts as one
+// quota slot in computeTicketEmailQuota, so without this an admin could blast
+// a hundred addresses on one slot. 25 covers the realistic "small group ping"
+// case without inviting newsletter-style use.
+const CUSTOM_EMAIL_MAX_RECIPIENTS = 25;
+
+function validateEmailList(value: unknown, name: string, required: boolean): string[] {
+    if (value === undefined || value === null) {
+        if (required) throw new HttpsError("invalid-argument", `${name} is required.`);
+        return [];
+    }
+    if (!Array.isArray(value)) {
+        throw new HttpsError("invalid-argument", `${name} must be an array of emails.`);
+    }
+    if (required && value.length === 0) {
+        throw new HttpsError("invalid-argument", `${name} is required.`);
+    }
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const v of value) {
+        const email = validateEmail(v, name);
+        if (!seen.has(email)) {
+            seen.add(email);
+            out.push(email);
+        }
+    }
+    return out;
+}
+
+export const sendCustomEmail = onCall({maxInstances: 5, memory: "256MiB"}, async (request) => {
+    const uid = await requireAuth(request);
+    await requireAdmin(uid);
+
+    const input = request.data as {
+        to?: unknown;
+        cc?: unknown;
+        bcc?: unknown;
+        replyTo?: unknown;
+        subject?: unknown;
+        bodyHtml?: unknown;
+    };
+
+    const to = validateEmailList(input.to, "to", true);
+    const cc = validateEmailList(input.cc, "cc", false);
+    const bcc = validateEmailList(input.bcc, "bcc", false);
+    const totalRecipients = to.length + cc.length + bcc.length;
+    if (totalRecipients > CUSTOM_EMAIL_MAX_RECIPIENTS) {
+        throw new HttpsError("invalid-argument",
+            `Too many recipients (max ${CUSTOM_EMAIL_MAX_RECIPIENTS} across to/cc/bcc).`);
+    }
+
+    // Reply-To: client may override; otherwise fall back to the admin's auth
+    // token email so replies don't dead-letter at the From mailbox.
+    const replyToInput = input.replyTo;
+    const replyTo = (replyToInput === undefined || replyToInput === null || replyToInput === "")
+        ? (request.auth?.token.email ?? "")
+        : validateEmail(replyToInput, "replyTo");
+
+    // Strip control chars from subject — defense-in-depth against header
+    // injection (nodemailer's encoder already guards, mirror tickets.ts).
+    const subject = validateStr(input.subject, "subject", 500, true)
+        .replace(/[\x00-\x1F\x7F]+/g, " ").trim();
+    if (!subject) throw new HttpsError("invalid-argument", "subject is required.");
+
+    const rawBodyHtml = validateStr(input.bodyHtml, "bodyHtml", 20000, true);
+    const bodyHtml = sanitizeHtml(rawBodyHtml, EMAIL_HTML_SANITIZE_OPTIONS);
+    if (!bodyHtml.trim()) {
+        throw new HttpsError("invalid-argument", "bodyHtml is empty after sanitization.");
+    }
+
+    const {sentToday, dailyCap} = await computeTicketEmailQuota();
+    if (sentToday >= dailyCap) {
+        throw new HttpsError("resource-exhausted",
+            "Daily Resend cap reached.", {code: "quota-exceeded"});
+    }
+
+    const callerSnap = await db.collection("users").doc(uid).get();
+    const callerName = callerSnap.data()?.displayName ?? "";
+
+    const mailDoc: Record<string, unknown> = {
+        to,
+        message: {subject, html: bodyHtml},
+    };
+    if (cc.length > 0) mailDoc.cc = cc;
+    if (bcc.length > 0) mailDoc.bcc = bcc;
+    if (replyTo) mailDoc.replyTo = replyTo;
+
+    // Mail doc + audit record committed together so the quota record can't
+    // drift from what actually got queued.
+    const batch = db.batch();
+    const mailRef = db.collection("mail").doc();
+    const recordRef = db.collection("records").doc();
+    batch.set(mailRef, mailDoc);
+    batch.set(recordRef, {
+        type: "custom-email-send",
+        performedBy: uid,
+        performedByName: callerName,
+        targetEmail: to[0],
+        sentCount: 1,
+        recipientCount: totalRecipients,
+        subject,
+        replyTo,
+        timestamp: FieldValue.serverTimestamp(),
+        expiresAt: recordExpiresAt(),
+    });
+    await batch.commit();
+
+    return {sent: true, recipientCount: totalRecipients};
 });

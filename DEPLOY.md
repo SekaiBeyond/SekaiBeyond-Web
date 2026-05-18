@@ -73,7 +73,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
     |-----------------------------|-------------------------------------------------------------|
     | Firestore Instance Location | Must match the region of the Firestore database created in Step 4. For a `nam5` database, pick **`United States (multi-region)`**. If this doesn't match the actual database region, the install fails partway through with `Database '(default)' does not exist in region '...'` and leaves stale Eventarc triggers behind that need to be cleaned up before retry. |
     | SMTP connection URI         | `smtps://resend:<your-api-key>@smtp.resend.com:465`         |
-    | Default FROM address        | `no-reply@sekaibeyond.com`                                  |
+    | Default FROM address        | `mika@sekaibeyond.com`                                  |
     | TTL expiration              | optional — set to 7d or similar to auto-clean delivered docs |
 
     > The username in the SMTP URI is the literal string `resend` — not your account email. The password is the `re_…` API key from Step A.3. URL-encode the key if it contains characters Firebase warns about (it normally doesn't).

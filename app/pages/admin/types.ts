@@ -101,6 +101,7 @@ export type RecordType =
     | 'ticket-attendee-edit'
     | 'ticket-regenerate'
     | 'ticket-email-send'
+    | 'custom-email-send'
     | 'event-staff-assign'
     | 'event-staff-remove'
     | 'upcoming-event-email-template-update'
@@ -130,5 +131,8 @@ export interface ActivityRecord {
     addedCount?: number;
     replacedCount?: number;
     sentCount?: number;
+    recipientCount?: number;
+    subject?: string;
+    replyTo?: string;
     timestamp: Date;
 }
