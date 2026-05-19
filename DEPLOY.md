@@ -55,50 +55,38 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
    Without these policies, rate-limit entries and audit logs accumulate indefinitely, and deletion cooldowns will never fire the cleanup triggers.
 
-10. Install the **Firebase Trigger Email extension** — paid event ticketing relies on this extension to deliver per-attendee ticket emails. The `sendTicketEmails` Cloud Function writes documents to the `mail/{autoId}` collection; the extension picks them up and sends via SMTP.
-
-    Outbound mail is sent through **[Resend](https://resend.com)** — its free tier (3,000/mo, 100/day) covers the project's expected ~1,000 emails/month with headroom for event-day bursts, and its DNS setup plays cleanly with Cloudflare.
+10. Configure **outbound email (Resend)** — paid event ticketing and admin custom emails are delivered through **[Resend](https://resend.com)**. The `sendTicketEmails`, `sendCustomEmail`, and `scheduledMailDrain` Cloud Functions call the Resend API directly (the batch endpoint). Resend's free tier (3,000/mo, 100/day) covers the project's expected ~1,000 emails/month with headroom for event-day bursts, and its DNS setup plays cleanly with Cloudflare.
 
     **Step A — Set up Resend and verify `sekaibeyond.com`**
 
     1. Sign up at [resend.com](https://resend.com) and confirm your account email.
     2. Go to **Domains** > **Add Domain**, enter `sekaibeyond.com`, and follow Resend's on-screen DNS setup instructions — it auto-detects Cloudflare and can provision the MX/SPF/DKIM/DMARC records for you via OAuth. Click **Verify DNS Records** once the dashboard shows everything green.
-    3. Go to **API Keys** > **Create API Key**, name it `sekaibeyond-firebase-extension`, scope it to **Sending access** only, and copy the key (starts with `re_`). You won't be able to view it again.
+    3. Go to **API Keys** > **Create API Key**, name it `sekaibeyond-functions`, scope it to **Sending access** only, and copy the key (starts with `re_`). You won't be able to view it again.
 
-    **Step B — Install the Trigger Email extension**
+    **Step B — Store the API key as a Functions secret**
 
-    Install from [firebase.google.com/products/extensions/firebase-firestore-send-email](https://firebase.google.com/products/extensions/firebase-firestore-send-email) (or via Firebase Console > Extensions > Browse). **Leave every configuration parameter at its default except the ones listed below** — don't change settings you don't understand, or the install will fail or the app will break at runtime.
+    The functions read the key through `defineSecret("RESEND_API_KEY")`, which resolves via **Google Secret Manager** — *not* a `.env` file. Set it once:
 
-    | Setting                     | Value                                                       |
-    |-----------------------------|-------------------------------------------------------------|
-    | Firestore Instance Location | Must match the region of the Firestore database created in Step 4. For a `nam5` database, pick **`United States (multi-region)`**. If this doesn't match the actual database region, the install fails partway through with `Database '(default)' does not exist in region '...'` and leaves stale Eventarc triggers behind that need to be cleaned up before retry. |
-    | SMTP connection URI         | `smtps://resend:<your-api-key>@smtp.resend.com:465`         |
-    | Default FROM address        | `mika@sekaibeyond.com`                                  |
-    | TTL expiration              | optional — set to 7d or similar to auto-clean delivered docs |
+    ```bash
+    firebase functions:secrets:set RESEND_API_KEY
+    ```
 
-    > The username in the SMTP URI is the literal string `resend` — not your account email. The password is the `re_…` API key from Step A.3. URL-encode the key if it contains characters Firebase warns about (it normally doesn't).
+    Paste the `re_…` key from Step A.3 when prompted. The secret must exist before the email functions are deployed:
+
+    - **Manual deploy:** if the secret is missing, `firebase deploy --only functions` prompts to create it interactively.
+    - **CI deploy:** the GitHub Actions workflow is non-interactive — run the command above *before* the first CI deploy of this code, or the deploy fails. CI reuses the stored secret automatically afterward; you only re-run the command to rotate the key. The deploy service account also needs the **Secret Manager Admin** role (`roles/secretmanager.admin`) — this is *not* included in **Firebase Admin** or **Cloud Functions Admin** and must be granted explicitly (see [Section 2](#2-github-repository-secrets)). Without it, the deploy fails with `403 Permission 'secretmanager.secrets.get' denied` when it reaches a secret-bound function. The deploy needs *Admin* (not just *Viewer*) because the CLI also sets an IAM binding granting the functions runtime service account access to the secret.
+
+    The **From address** defaults to `mika@sekaibeyond.com` (in `functions/src/utils/config.ts`). To use a different sender, set `RESEND_FROM_ADDRESS` via project-scoped dotenv (see Step 12) — it must be an address on the verified domain.
 
     **Step C — Send a test**
 
-    The easiest end-to-end test is to write a test document directly to the `mail` collection in Firebase Console > **Firestore** > **Start collection** (if it doesn't exist yet) and add a document with these fields:
-
-    ```json
-    {
-      "to": ["your-email@example.com"],
-      "message": {
-        "subject": "Resend + extension test",
-        "html": "<p>If you're reading this, the pipeline works.</p>"
-      }
-    }
-    ```
-
-    The extension should pick it up within a few seconds and append a `delivery` map to the doc — `delivery.state: "SUCCESS"` means it was handed to Resend; anything else (`ERROR`, `RETRY`) along with `delivery.error` tells you what broke. Cross-check against Resend's **Logs** tab in the dashboard, which surfaces bounces, suppressions, and DKIM failures that the extension itself can't see.
-
-    Once the manual test passes, trigger a real ticket email through the admin panel to confirm the production path works too.
+    After deploying Functions, trigger a real ticket email or a custom email from the **Admin Panel**. Cross-check Resend's **Logs** tab in the dashboard, which surfaces bounces, suppressions, and DKIM failures. As a second signal, the functions cache Resend's daily-quota counter in the `system/resendQuota` Firestore doc — a populated `dailyConsumed` value there after a send confirms the response-header path works.
 
     > If Cloudflare Email Routing is also handling inbound mail for `sekaibeyond.com`, leave its existing MX records on the apex (`sekaibeyond.com`) untouched — Resend's MX is on the `send.` subdomain and won't conflict.
 
-    Without this extension, ticket emails will be written to Firestore but never sent.
+    > **Overflow queue:** sends past Resend's 100/day cap are written to a `scheduledMail` collection and drained by the `scheduledMailDrain` scheduled function every 30 minutes as quota frees up. No setup needed — it deploys with the other functions.
+
+    > **Migrated from the Trigger Email extension:** earlier versions delivered mail via the Firebase "Trigger Email" extension, which read a `mail/{autoId}` collection. The functions no longer write to `/mail`. If that extension is still installed it is now idle and can be uninstalled.
 
 11. Configure **Firebase App Check** — the app initializes App Check with reCAPTCHA v3 to protect Firestore, Storage, and callable Functions from unauthorized clients. If App Check is enforced in Firebase Console without the steps below, all reads/writes will fail with `FirebaseError: Missing or insufficient permissions`.
 
@@ -149,23 +137,23 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
     firebase deploy --only functions
     ```
 
-    The same mechanism applies to the optional caps `RESEND_DAILY_CAP` (default 100), `SEND_CHUNK_SIZE` (default 100), and `IMPORT_MAX_ROWS` (default 1000). See `functions/.env.example` for the full list.
+    The same mechanism applies to the optional settings `RESEND_FROM_ADDRESS` (default `mika@sekaibeyond.com`), `RESEND_DAILY_CAP` (default 100), `SEND_CHUNK_SIZE` (default 100), and `IMPORT_MAX_ROWS` (default 1000). See `functions/.env.example` for the full list. Note that `RESEND_API_KEY` is *not* one of these — it is a Secret Manager secret, set via `firebase functions:secrets:set` (see Step 10).
 
 #### Firestore Indexes Explained
 
 Firestore requires composite indexes for queries that filter on multiple fields. Each index is a sorted table covering the fields in order, allowing O(1) lookups instead of O(n) collection scans.
 
-The app currently requires 6 composite indexes (defined in [`firestore.indexes.json`](firestore.indexes.json)):
+The app currently requires 7 composite indexes (defined in [`firestore.indexes.json`](firestore.indexes.json)):
 
 | Collection | Fields | Purpose |
 |---|---|---|
 | `attendees` | `[emailSent, createdAt]` | Admin tickets panel: query unsent attendees for bulk ticket-email send |
 | `badgeActivationCodes` | `[badgeId, createdAt desc]` | Admin panel: load codes for a badge |
-| `records` | `[type, timestamp]` | Admin tickets panel: query today's ticket-email send quota |
 | `records` | `[type, timestamp desc]` | Activity log by type |
 | `records` | `[performedBy, timestamp desc]` | Activity log by user |
 | `records` | `[type, performedBy, timestamp desc]` | Activity log filtered by type and user |
 | `upcomingEvents` | `[published, startAt]` | Public listing of published upcoming events, sorted by start time |
+| `users` | `[group, joinedAt desc]` | Admin panel: list users by group, newest first |
 
 ### 2. GitHub Repository Secrets
 
@@ -193,6 +181,8 @@ The `VITE_*` secrets are injected as build-time environment variables. `FIREBASE
 3. Name it something like `github-actions-deploy`
 4. Grant these roles:
    - **Firebase Admin** (broad, simplest), or more narrowly: **Firebase Hosting Admin**, **Cloud Functions Admin**, **Firebase Rules Admin**, **Storage Admin**
+   - **Secret Manager Admin** (`roles/secretmanager.admin`) — required to deploy the secret-bound email functions; not covered by Firebase Admin (see [Step 10](#1-firebase-project))
+   - **Cloud Scheduler Admin** (`roles/cloudscheduler.admin`) — required to create/update the Cloud Scheduler job behind the `scheduledMailDrain` scheduled function; not covered by Firebase Admin or Cloud Functions Admin. Without it, deploys that change the function's schedule fail with `403 ... lacks IAM permission "cloudscheduler.jobs.update"`.
    - **Service Account User**
 5. After creating, open the service account, go to the **Keys** tab, click **Add Key** > **Create new key** > **JSON**, and download the file
 6. Paste the entire file contents into the `FIREBASE_SERVICE_ACCOUNT` secret value in GitHub

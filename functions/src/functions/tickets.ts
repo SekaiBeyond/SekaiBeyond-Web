@@ -3,17 +3,16 @@ import sanitizeHtml from "sanitize-html";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { ADMIN_GROUPS, adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
-import {
-    IMPORT_MAX_ROWS,
-    PUBLIC_ORIGIN,
-    recordExpiresAt,
-    RESEND_QUEUE_CAP,
-    RESEND_SEND_INTERVAL_MS,
-    SEND_CHUNK_SIZE,
-} from "../utils/config";
+import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, recordExpiresAt, RESEND_QUEUE_CAP, SEND_CHUNK_SIZE, } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
-import { computeEmailQuota, computeEmailQuotaInTxn } from "../utils/quota";
+import {
+    computeEmailQuota,
+    computeEmailQuotaInTxn,
+    reserveQuotaInTxn,
+    rollbackQuotaReservation,
+} from "../utils/quota";
+import { RESEND_API_KEY, ResendEnvelope, ResendSendError, sendEmails } from "../utils/resendClient";
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
 
@@ -774,7 +773,7 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
 });
 
 export const sendTicketEmails = onCall(
-    {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB"},
+    {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB", secrets: [RESEND_API_KEY]},
     async (request) => {
         const uid = await requireAuth(request);
         await requireAdmin(uid);
@@ -864,7 +863,8 @@ export const sendTicketEmails = onCall(
 
         // Enforce the Resend daily cap server-side so a buggy/malicious client
         // (or parallel admins) can't blow past it. Anything past the daily cap
-        // goes into /scheduledMail and gets drained tomorrow at 00:05 LA.
+        // goes into /scheduledMail and is drained by scheduledMailDrain as
+        // quota frees up.
         // Bail out only when BOTH the daily cap and the queue are full —
         // otherwise the chunk falls through to the walk below. The
         // authoritative cap re-read happens inside the txn (see below); this
@@ -880,9 +880,8 @@ export const sendTicketEmails = onCall(
                 "Daily cap reached and overflow queue is full.", {code: "quota-exceeded"});
         }
 
-        // Ops here are only for things that don't trigger Resend (ticketless
-        // attendee marks). The actual mail-doc creates are paced below to
-        // stay under Resend's 5 req/sec POST /emails limit.
+        // Ops here are only for non-email side effects (ticketless attendee
+        // marks). The actual Resend send happens in one batch call below.
         const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
         let lastProcessedId: string | null = null;
 
@@ -923,20 +922,21 @@ export const sendTicketEmails = onCall(
             }));
         }
 
-        // Reserve daily-cap slots atomically. Re-reading sentToday inside
-        // the txn (via computeEmailQuotaInTxn) and writing the send audit
-        // record in the same txn closes the race where two concurrent admin
-        // sends both observed pre-reservation state and double-spent the
-        // cap: Firestore's optimistic concurrency on the records query
-        // means whichever txn lands second sees the first's audit write and
-        // retries against the new total. Queue audit shares the txn for
-        // symmetry — it doesn't consume the daily cap, but it's cheap to
-        // include and avoids a second commit.
+        // Reserve daily-cap slots atomically. Reading the quota cache inside
+        // the txn and writing the pre-charge (reserved counter + audit
+        // record) in the same txn closes the race where two concurrent
+        // admin sends both observe pre-reservation state and double-spend:
+        // Firestore's optimistic concurrency on system/resendQuota means
+        // whichever txn lands second retries against the new total. Once
+        // the send returns, applyResendHeaderQuota releases this send's own
+        // reservation and records Resend's authoritative count. Queue audit
+        // shares the txn for symmetry — doesn't consume the daily cap, cheap
+        // to include.
         const callerSnap = await db.collection("users").doc(uid).get();
         const performedByName = callerSnap.data()?.displayName ?? "";
         const {sendAuditRef, queueAuditRef, expectedSentCount, expectedQueuedCount} =
             await db.runTransaction(async (txn) => {
-                const {sentToday: freshSent, dailyCap: freshCap} =
+                const {sentToday: freshSent, dailyCap: freshCap, reserved: freshReserved} =
                     await computeEmailQuotaInTxn(txn);
                 const remainingToday = Math.max(0, freshCap - freshSent);
                 const sendCount = Math.min(candidates.length, remainingToday);
@@ -944,6 +944,7 @@ export const sendTicketEmails = onCall(
                 let sRef: FirebaseFirestore.DocumentReference | null = null;
                 let qRef: FirebaseFirestore.DocumentReference | null = null;
                 if (sendCount > 0) {
+                    reserveQuotaInTxn(txn, sendCount, freshReserved);
                     sRef = db.collection("records").doc();
                     txn.set(sRef, {
                         type: "ticket-email-send",
@@ -986,23 +987,21 @@ export const sendTicketEmails = onCall(
             queued: i >= expectedSentCount,
         }));
 
-        // Pace mail-doc creates so the email extension's onCreate triggers
-        // don't blow past Resend's POST /emails limit (5 req/sec). Queued
-        // entries don't fire the extension, so they don't need pacing — but
-        // we share the same loop for simplicity. Each mail/scheduledMail doc
-        // + its attendee mark are committed together so a mid-loop crash
-        // can't leave a mail queued without the attendee marked sent (which
-        // would cause duplicates on the next 'unsent' drain).
-        let sentCount = 0;
-        let queuedCount = 0;
-        for (let i = 0; i < sendableTargets.length; i++) {
-            const {target, data, tickets, queued} = sendableTargets[i];
+        // Build envelopes for the send slice and queue payloads for the
+        // queue slice. One pass — both share the same rendering.
+        const sendEnvelopes: ResendEnvelope[] = [];
+        const sendCommitTargets: typeof sendableTargets = [];
+        const queueItems: {
+            target: FirebaseFirestore.QueryDocumentSnapshot;
+            envelope: ResendEnvelope;
+        }[] = [];
+        for (const item of sendableTargets) {
+            const {target, data, tickets, queued} = item;
             const ticketBlock = renderTicketQrBlock(tickets, eventId);
 
-            // Strip control chars (CR/LF in particular) from the rendered subject,
-            // so a stray newline in eventTitle/attendeeName can't escape the
-            // Subject: header and inject extra fields. nodemailer's own header
-            // encoder already guards against this; this is defense-in-depth.
+            // Strip control chars (CR/LF in particular) from the rendered
+            // subject so a stray newline in eventTitle/attendeeName can't
+            // escape the Subject: header and inject extra fields.
             const renderedSubject = renderTemplate(template.subject, {
                 attendeeEmail: data.email ?? "",
                 attendeeName: data.name ?? "",
@@ -1030,74 +1029,102 @@ export const sendTicketEmails = onCall(
                 ticketCount: tickets.length,
                 ticketBlock,
             }, true);
-
-            // Bilingual: EN first, CN below, separated by a thin hr.
             const html = renderedBodyCn
                 ? `${renderedBodyEn}\n<hr style="border:none;border-top:1px solid #ddd;margin:24px 0;"/>\n${renderedBodyCn}`
                 : renderedBodyEn;
 
-            const mailPayload = {
+            const envelope: ResendEnvelope = {
                 to: data.email,
-                message: {subject: renderedSubject, html},
+                subject: renderedSubject,
+                html,
             };
 
             if (queued) {
-                // Don't pace queue writes — they don't trigger the email
-                // extension. The drain at 00:05 LA paces its own writes.
-                // attendeePath lets the drain clear emailScheduled on the
-                // attendee once the queued mail actually ships, so the admin
-                // UI flips from "Queued" to "Sent" then.
-                const scheduledRef = db.collection("scheduledMail").doc();
-                const batch = db.batch();
-                batch.set(scheduledRef, {
-                    type: "ticket",
-                    payload: mailPayload,
-                    eventId,
-                    queuedBy: uid,
-                    queuedAt: FieldValue.serverTimestamp(),
-                    recipientCount: 1,
-                    attendeePath: target.ref.path,
-                });
-                // emailSent=true keeps the mode='unsent' drain from
-                // re-picking this attendee on the next chunk call (the query
-                // at line ~843 uses where emailSent==false). emailScheduled
-                // is the disambiguator the admin UI keys on to show "Queued"
-                // instead of "Sent" until the 00:05 LA drain ships the mail.
-                batch.update(target.ref, {
-                    emailSent: true,
-                    emailScheduled: true,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
-                // Skip-on-failure matches the drain pattern: a single bad
-                // commit (e.g., attendee deleted mid-loop, making the
-                // batch.update fail) shouldn't abort the whole chunk and
-                // strand the eager audit reservation at its planned count.
-                // Reconciliation at the end of the function uses the actual
-                // queuedCount to correct the record.
-                try {
-                    await batch.commit();
-                    queuedCount++;
-                } catch (err) {
-                    console.error("sendTicketEmails: failed to queue", target.id, err);
-                }
+                queueItems.push({target, envelope});
             } else {
-                if (sentCount > 0 && RESEND_SEND_INTERVAL_MS > 0) {
-                    await new Promise(r => setTimeout(r, RESEND_SEND_INTERVAL_MS));
+                sendEnvelopes.push(envelope);
+                sendCommitTargets.push(item);
+            }
+        }
+
+        // One call to Resend for the whole send slice — sendEmails picks
+        // the single endpoint when there's exactly one envelope and the
+        // batch endpoint (up to 100) otherwise. SEND_CHUNK_SIZE is capped
+        // at 100 so a single call always covers the chunk.
+        // Failure mode: all-or-nothing — a 4xx/5xx fails every envelope. If
+        // Resend responded with the quota header, resendClient already
+        // wrote the authoritative count to the cache; if it didn't
+        // (network error), we roll back the pre-charge so a retry doesn't
+        // see a false ceiling.
+        let sentCount = 0;
+        let sendError: unknown = null;
+        if (sendEnvelopes.length > 0) {
+            try {
+                const result = await sendEmails(sendEnvelopes);
+                sentCount = result.sentCount;
+            } catch (err) {
+                console.error("sendTicketEmails: send failed", err);
+                sendError = err;
+                // Roll back the pre-charge only if Resend never answered;
+                // a header response already corrected the cache.
+                const headerArrived = err instanceof ResendSendError
+                    && err.dailyConsumed !== null;
+                if (!headerArrived) {
+                    await rollbackQuotaReservation(expectedSentCount);
                 }
-                const mailRef = db.collection("mail").doc();
-                const batch = db.batch();
-                batch.set(mailRef, mailPayload);
-                batch.update(target.ref, {
+            }
+        }
+
+        // Mark attendees as sent — one batch.commit() per attendee so a
+        // single bad write (e.g., attendee deleted mid-call) doesn't
+        // strand the whole group. The Resend send already happened, so
+        // a failed mark means the email will look "unsent" in the admin
+        // UI and would be re-sent on the next 'unsent' drain.
+        // Mitigation: log loudly so an admin can manually flag.
+        for (let i = 0; i < sentCount; i++) {
+            const {target} = sendCommitTargets[i];
+            try {
+                await target.ref.update({
                     emailSent: true,
                     emailSentAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
-                try {
-                    await batch.commit();
-                    sentCount++;
-                } catch (err) {
-                    console.error("sendTicketEmails: failed to send", target.id, err);
-                }
+            } catch (err) {
+                console.error("sendTicketEmails: SENT but failed to mark attendee",
+                    target.id, err);
+            }
+        }
+
+        // Queue the overflow. attendeePath lets the drain clear
+        // emailScheduled once the queued mail actually ships, flipping
+        // the admin UI from "Queued" to "Sent".
+        let queuedCount = 0;
+        for (const {target, envelope} of queueItems) {
+            const scheduledRef = db.collection("scheduledMail").doc();
+            const batch = db.batch();
+            batch.set(scheduledRef, {
+                type: "ticket",
+                envelope,
+                eventId,
+                queuedBy: uid,
+                queuedAt: FieldValue.serverTimestamp(),
+                recipientCount: 1,
+                attendeePath: target.ref.path,
+            });
+            // emailSent=true keeps the mode='unsent' drain from
+            // re-picking this attendee on the next chunk call.
+            // emailScheduled is the disambiguator the admin UI keys on to
+            // show "Queued" instead of "Sent" until the drain ships the mail.
+            batch.update(target.ref, {
+                emailSent: true,
+                emailScheduled: true,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+            try {
+                await batch.commit();
+                queuedCount++;
+            } catch (err) {
+                console.error("sendTicketEmails: failed to queue", target.id, err);
             }
         }
 
@@ -1115,6 +1142,19 @@ export const sendTicketEmails = onCall(
         if (queueAuditRef) {
             if (queuedCount === 0) await queueAuditRef.delete();
             else if (queuedCount !== expectedQueuedCount) await queueAuditRef.update({sentCount: queuedCount});
+        }
+
+        // Surface send failures to the caller after reconciliation so any
+        // audit/queue writes that did succeed are durable. Queued items
+        // get drained later; the admin should retry the failed send.
+        if (sendError && sentCount === 0 && expectedSentCount > 0) {
+            throw new HttpsError("internal",
+                "Email send failed; queued items (if any) will still drain.",
+                {
+                    code: "send-failed",
+                    queuedCount,
+                    cause: sendError instanceof Error ? sendError.message : String(sendError),
+                });
         }
 
         // hasMore: the query returned a full chunk (there may be more).
@@ -1214,101 +1254,130 @@ function validateEmailList(value: unknown, name: string, required: boolean): str
     return out;
 }
 
-export const sendCustomEmail = onCall({maxInstances: 5, memory: "256MiB"}, async (request) => {
-    const uid = await requireAuth(request);
-    await requireAdmin(uid);
+export const sendCustomEmail = onCall(
+    {maxInstances: 5, memory: "256MiB", secrets: [RESEND_API_KEY]},
+    async (request) => {
+        const uid = await requireAuth(request);
+        await requireAdmin(uid);
 
-    const input = request.data as {
-        to?: unknown;
-        cc?: unknown;
-        bcc?: unknown;
-        replyTo?: unknown;
-        subject?: unknown;
-        bodyHtml?: unknown;
-    };
+        const input = request.data as {
+            to?: unknown;
+            cc?: unknown;
+            bcc?: unknown;
+            replyTo?: unknown;
+            subject?: unknown;
+            bodyHtml?: unknown;
+        };
 
-    const to = validateEmailList(input.to, "to", true);
-    const cc = validateEmailList(input.cc, "cc", false);
-    const bcc = validateEmailList(input.bcc, "bcc", false);
-    const totalRecipients = to.length + cc.length + bcc.length;
-    if (totalRecipients > CUSTOM_EMAIL_MAX_RECIPIENTS) {
-        throw new HttpsError("invalid-argument",
-            `Too many recipients (max ${CUSTOM_EMAIL_MAX_RECIPIENTS} across to/cc/bcc).`);
-    }
-
-    // Reply-To: client may override; otherwise fall back to the admin's auth
-    // token email so replies don't dead-letter at the From mailbox.
-    const replyToInput = input.replyTo;
-    const replyTo = (replyToInput === undefined || replyToInput === null || replyToInput === "")
-        ? (request.auth?.token.email ?? "")
-        : validateEmail(replyToInput, "replyTo");
-
-    // Strip control chars from subject — defense-in-depth against header
-    // injection (nodemailer's encoder already guards, mirror tickets.ts).
-    const subject = validateStr(input.subject, "subject", 500, true)
-        .replace(/[\x00-\x1F\x7F]+/g, " ").trim();
-    if (!subject) throw new HttpsError("invalid-argument", "subject is required.");
-
-    const rawBodyHtml = validateStr(input.bodyHtml, "bodyHtml", 20000, true);
-    const bodyHtml = sanitizeHtml(rawBodyHtml, EMAIL_HTML_SANITIZE_OPTIONS);
-    if (!bodyHtml.trim()) {
-        throw new HttpsError("invalid-argument", "bodyHtml is empty after sanitization.");
-    }
-
-    // Read queue depth outside the txn — queue cap is loose by design (a
-    // few overflow items past RESEND_QUEUE_CAP are acceptable, and count()
-    // aggregations aren't worth fighting into the txn just for that).
-    const initialQueueDepth = await getScheduledMailQueueDepth();
-
-    const callerSnap = await db.collection("users").doc(uid).get();
-    const callerName = callerSnap.data()?.displayName ?? "";
-
-    const mailDoc: Record<string, unknown> = {
-        to,
-        message: {subject, html: bodyHtml},
-    };
-    if (cc.length > 0) mailDoc.cc = cc;
-    if (bcc.length > 0) mailDoc.bcc = bcc;
-    if (replyTo) mailDoc.replyTo = replyTo;
-
-    // Read cap + write audit in one transaction so two concurrent admin
-    // sends can't both observe pre-reservation state and double-spend the
-    // daily cap. The send-vs-queue decision is deferred into the txn so it
-    // keys off the fresh sentToday read, not the stale pre-check.
-    const {queued} = await db.runTransaction(async (txn) => {
-        const {sentToday, dailyCap} = await computeEmailQuotaInTxn(txn);
-        const overCap = sentToday >= dailyCap;
-        if (overCap && initialQueueDepth >= RESEND_QUEUE_CAP) {
-            throw new HttpsError("resource-exhausted",
-                "Daily cap reached and overflow queue is full.", {code: "quota-exceeded"});
+        const to = validateEmailList(input.to, "to", true);
+        const cc = validateEmailList(input.cc, "cc", false);
+        const bcc = validateEmailList(input.bcc, "bcc", false);
+        const totalRecipients = to.length + cc.length + bcc.length;
+        if (totalRecipients > CUSTOM_EMAIL_MAX_RECIPIENTS) {
+            throw new HttpsError("invalid-argument",
+                `Too many recipients (max ${CUSTOM_EMAIL_MAX_RECIPIENTS} across to/cc/bcc).`);
         }
-        if (overCap) {
-            const scheduledRef = db.collection("scheduledMail").doc();
-            txn.set(scheduledRef, {
-                type: "custom",
-                payload: mailDoc,
-                queuedBy: uid,
-                queuedAt: FieldValue.serverTimestamp(),
-                recipientCount: totalRecipients,
-            });
-        } else {
-            const mailRef = db.collection("mail").doc();
-            txn.set(mailRef, mailDoc);
+
+        // Reply-To: client may override; otherwise fall back to the admin's auth
+        // token email so replies don't dead-letter at the From mailbox.
+        const replyToInput = input.replyTo;
+        const replyTo = (replyToInput === undefined || replyToInput === null || replyToInput === "")
+            ? (request.auth?.token.email ?? "")
+            : validateEmail(replyToInput, "replyTo");
+
+        // Strip control chars from subject — defense-in-depth against header
+        // injection (nodemailer's encoder already guards, mirror tickets.ts).
+        const subject = validateStr(input.subject, "subject", 500, true)
+            .replace(/[\x00-\x1F\x7F]+/g, " ").trim();
+        if (!subject) throw new HttpsError("invalid-argument", "subject is required.");
+
+        const rawBodyHtml = validateStr(input.bodyHtml, "bodyHtml", 20000, true);
+        const bodyHtml = sanitizeHtml(rawBodyHtml, EMAIL_HTML_SANITIZE_OPTIONS);
+        if (!bodyHtml.trim()) {
+            throw new HttpsError("invalid-argument", "bodyHtml is empty after sanitization.");
         }
-        txn.set(db.collection("records").doc(), {
-            type: overCap ? "custom-email-queue" : "custom-email-send",
-            performedBy: uid,
-            performedByName: callerName,
-            targetEmail: to[0],
-            sentCount: 1,
-            recipientCount: totalRecipients,
+
+        // Read queue depth outside the txn — queue cap is loose by design (a
+        // few overflow items past RESEND_QUEUE_CAP are acceptable, and count()
+        // aggregations aren't worth fighting into the txn just for that).
+        const initialQueueDepth = await getScheduledMailQueueDepth();
+
+        const callerSnap = await db.collection("users").doc(uid).get();
+        const callerName = callerSnap.data()?.displayName ?? "";
+
+        const envelope: ResendEnvelope = {
+            to,
             subject,
-            replyTo,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
-        return {queued: overCap};
-    });
+            html: bodyHtml,
+        };
+        if (cc.length > 0) envelope.cc = cc;
+        if (bcc.length > 0) envelope.bcc = bcc;
+        if (replyTo) envelope.replyTo = replyTo;
 
-    return {sent: true, queued, recipientCount: totalRecipients};
-});
+        // Reservation txn — same pattern as sendTicketEmails:
+        //   - over cap: queue with envelope shape so the drain can pick it up
+        //   - under cap: pre-charge the quota cache + write audit, then send
+        //     outside the txn (Resend call can't run inside a Firestore txn)
+        const {queued, recordRef} = await db.runTransaction(async (txn) => {
+            const {sentToday, dailyCap, reserved} = await computeEmailQuotaInTxn(txn);
+            const overCap = sentToday >= dailyCap;
+            if (overCap && initialQueueDepth >= RESEND_QUEUE_CAP) {
+                throw new HttpsError("resource-exhausted",
+                    "Daily cap reached and overflow queue is full.", {code: "quota-exceeded"});
+            }
+            if (overCap) {
+                const scheduledRef = db.collection("scheduledMail").doc();
+                txn.set(scheduledRef, {
+                    type: "custom",
+                    envelope,
+                    queuedBy: uid,
+                    queuedAt: FieldValue.serverTimestamp(),
+                    recipientCount: totalRecipients,
+                });
+            } else {
+                reserveQuotaInTxn(txn, totalRecipients, reserved);
+            }
+            const recRef = db.collection("records").doc();
+            txn.set(recRef, {
+                type: overCap ? "custom-email-queue" : "custom-email-send",
+                performedBy: uid,
+                performedByName: callerName,
+                targetEmail: to[0],
+                sentCount: 1,
+                recipientCount: totalRecipients,
+                subject,
+                replyTo,
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+            return {queued: overCap, recordRef: recRef};
+        });
+
+        if (!queued) {
+            // One envelope — sendEmails routes this through POST /emails
+            // (single send), not the batch endpoint.
+            try {
+                await sendEmails([envelope]);
+            } catch (err) {
+                console.error("sendCustomEmail: send failed", err);
+                const headerArrived = err instanceof ResendSendError
+                    && err.dailyConsumed !== null;
+                if (!headerArrived) {
+                    await rollbackQuotaReservation(totalRecipients);
+                }
+                // Roll the audit record back so the activity log reflects the
+                // failure — better than leaving a phantom "sent" entry.
+                try {
+                    await recordRef.delete();
+                } catch (auditErr) {
+                    console.error("sendCustomEmail: failed to clear audit record", auditErr);
+                }
+                throw new HttpsError("internal", "Email send failed.", {
+                    code: "send-failed",
+                    cause: err instanceof Error ? err.message : String(err),
+                });
+            }
+        }
+
+        return {sent: true, queued, recipientCount: totalRecipients};
+    });

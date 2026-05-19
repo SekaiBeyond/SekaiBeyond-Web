@@ -1,74 +1,112 @@
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { RESEND_DAILY_CAP } from "./config";
 import { db } from "./firebase";
 
-// Counted record types share the same daily Resend budget: direct ticket
-// sends, custom admin sends, and the per-run audit record that
-// scheduledMailDrain writes after pushing queued items into /mail. Keeping
-// these in one budget means a big drain at 00:05 correctly throttles
-// daytime sends from `sendTicketEmails` / `sendCustomEmail` for the rest
-// of the day. Queue-only audit types (ticket-email-queue / custom-email-queue)
-// are intentionally excluded — they don't actually consume Resend slots
-// until the drain ships them, at which point scheduled-mail-drain counts.
-export const EMAIL_RECORD_TYPES = [
-    "ticket-email-send",
-    "custom-email-send",
-    "scheduled-mail-drain",
-] as const;
+// Quota cache doc (system/resendQuota). Two independent counters:
+//
+//   confirmed — Resend's authoritative "used daily quota": the value of the
+//               x-resend-daily-quota response header. Only applyResendHeaderQuota
+//               writes it. It can move *down* as Resend's sliding 24h window
+//               rolls off old sends — that is how the cache observes headroom
+//               reopening.
+//   reserved  — sum of in-flight pre-charges for sends that have been decided
+//               but whose Resend response hasn't landed yet. reserveQuotaInTxn
+//               adds to it; rollbackQuotaReservation and applyResendHeaderQuota
+//               subtract from it.
+//
+// sentToday = confirmed + reserved. Keeping the two separate is what stops a
+// completing send from clobbering a concurrent admin's reservation: a header
+// write only ever releases its *own* delta from `reserved`, never the whole
+// counter. Exported so resendClient shares the exact same doc reference.
+export const QUOTA_DOC = db.collection("system").doc("resendQuota");
 
-// Start of today in America/Los_Angeles, expressed as a UTC Timestamp.
-// UTC-now minus LA's elapsed-since-midnight equals LA midnight (UTC).
-// hourCycle:'h23' pins the range to 0–23 (en-US hour12:false can return "24").
-function startOfTodayLATimestamp(): Timestamp {
-    const now = new Date();
-    const laParts = new Intl.DateTimeFormat("en-GB", {
-        timeZone: "America/Los_Angeles",
-        hour: "2-digit", minute: "2-digit", second: "2-digit",
-        hourCycle: "h23",
-    }).formatToParts(now);
-    const part = (t: string) => Number(laParts.find(p => p.type === t)?.value ?? "0");
-    const laMidnightMs = now.getTime()
-        - part("hour") * 3600_000
-        - part("minute") * 60_000
-        - part("second") * 1000
-        - now.getMilliseconds();
-    return Timestamp.fromMillis(laMidnightMs);
+function num(v: unknown): number {
+    return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
-function sumSentCount(docs: FirebaseFirestore.QueryDocumentSnapshot[]): number {
-    let total = 0;
-    for (const d of docs) {
-        const c = d.data().sentCount;
-        if (typeof c === "number" && Number.isFinite(c)) total += c;
-    }
-    return total;
+// Read both counters off the doc. `confirmed` falls back to the pre-migration
+// `dailyConsumed` field so the counter survives the schema change without a
+// one-window reset; both counters are clamped non-negative.
+function parseQuotaDoc(
+    data: FirebaseFirestore.DocumentData | undefined,
+): {confirmed: number; reserved: number} {
+    return {
+        confirmed: Math.max(0, num(data?.confirmed ?? data?.dailyConsumed)),
+        reserved: Math.max(0, num(data?.reserved)),
+    };
 }
 
 export async function computeEmailQuota(): Promise<{sentToday: number; dailyCap: number}> {
-    // `in` runs as parallel equality queries; with the (type, timestamp)
-    // composite index each one is index-served.
-    const snap = await db.collection("records")
-        .where("type", "in", [...EMAIL_RECORD_TYPES])
-        .where("timestamp", ">=", startOfTodayLATimestamp())
-        .get();
-    return {sentToday: sumSentCount(snap.docs), dailyCap: RESEND_DAILY_CAP};
+    const {confirmed, reserved} = parseQuotaDoc((await QUOTA_DOC.get()).data());
+    return {sentToday: confirmed + reserved, dailyCap: RESEND_DAILY_CAP};
 }
 
-// Transactional variant: reads sentToday inside an open transaction so the
-// read and any audit-record writes made later in the same txn commit
-// atomically. Use this when reserving cap slots — the plain
-// `computeEmailQuota` plus a separate `auditRef.set(...)` leaves a race
-// window between read and write where two concurrent admin sends both
-// observe pre-reservation state and double-spend the daily cap. With this
-// variant, Firestore's optimistic concurrency on the records query
-// guarantees that if any concurrent reservation lands first, our txn
-// retries against the new total.
+// Transactional variant for atomic send-vs-queue reservation. Reading the
+// quota doc inside the txn means a competing reservation triggers a retry
+// rather than double-spending the cap. Returns `reserved` so the caller can
+// hand it straight to reserveQuotaInTxn on the same txn.
 export async function computeEmailQuotaInTxn(
     txn: FirebaseFirestore.Transaction,
-): Promise<{sentToday: number; dailyCap: number}> {
-    const snap = await txn.get(db.collection("records")
-        .where("type", "in", [...EMAIL_RECORD_TYPES])
-        .where("timestamp", ">=", startOfTodayLATimestamp())
-    );
-    return {sentToday: sumSentCount(snap.docs), dailyCap: RESEND_DAILY_CAP};
+): Promise<{sentToday: number; dailyCap: number; reserved: number}> {
+    const {confirmed, reserved} = parseQuotaDoc((await txn.get(QUOTA_DOC)).data());
+    return {sentToday: confirmed + reserved, dailyCap: RESEND_DAILY_CAP, reserved};
+}
+
+// Pre-charge `delta` slots onto `reserved` inside the caller's txn.
+// `currentReserved` must come from computeEmailQuotaInTxn on the *same* txn so
+// Firestore's optimistic concurrency forces a retry if a competing reservation
+// lands first. merge:true so the write leaves `confirmed` untouched.
+export function reserveQuotaInTxn(
+    txn: FirebaseFirestore.Transaction,
+    delta: number,
+    currentReserved: number,
+): void {
+    if (delta <= 0) return;
+    txn.set(QUOTA_DOC, {
+        reserved: Math.max(0, currentReserved) + delta,
+        observedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+}
+
+// Release a `reserveQuotaInTxn` pre-charge when the send never reached Resend
+// (network error, no response header). When Resend *did* respond,
+// applyResendHeaderQuota already released the reservation and this must NOT be
+// called. Uses increment so it composes with concurrent writes; the read-side
+// clamp keeps `reserved` from going negative. Logs and swallows errors — a
+// failed rollback self-heals on the next header write.
+export async function rollbackQuotaReservation(amount: number): Promise<void> {
+    if (amount <= 0) return;
+    try {
+        await QUOTA_DOC.set({
+            reserved: FieldValue.increment(-amount),
+            observedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+    } catch (err) {
+        console.error("rollbackQuotaReservation: failed", err);
+    }
+}
+
+// Fold a fresh x-resend-daily-quota reading into the cache: set `confirmed` to
+// Resend's authoritative count and release this send's own reservation
+// (`sentDelta`, the envelope count it pre-charged) from `reserved`. Runs in a
+// txn so a reservation racing the write isn't lost — only this send's delta is
+// removed, never a concurrent admin's. Called by resendClient.sendEmails on any
+// Resend response that carried the quota header, success or 4xx/429 alike.
+// Logs and swallows errors; the next header write self-heals.
+export async function applyResendHeaderQuota(
+    headerConsumed: number,
+    sentDelta: number,
+): Promise<void> {
+    try {
+        await db.runTransaction(async (txn) => {
+            const {reserved} = parseQuotaDoc((await txn.get(QUOTA_DOC)).data());
+            txn.set(QUOTA_DOC, {
+                confirmed: Math.max(0, headerConsumed),
+                reserved: Math.max(0, reserved - Math.max(0, sentDelta)),
+                observedAt: FieldValue.serverTimestamp(),
+            });
+        });
+    } catch (err) {
+        console.error("applyResendHeaderQuota: failed", err);
+    }
 }

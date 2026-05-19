@@ -1,16 +1,22 @@
 import { Timestamp } from "firebase-admin/firestore";
 
 export const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN ?? "https://sekaibeyond.com";
+// Resend free-plan daily cap. Tracked as a sliding 24h window on Resend's
+// side — we don't reset this on calendar boundaries; we read the consumed
+// count back from response headers and store it in system/resendQuota.
 export const RESEND_DAILY_CAP = Number(process.env.RESEND_DAILY_CAP) || 100;
-export const SEND_CHUNK_SIZE = Number(process.env.SEND_CHUNK_SIZE) || 100;
+// Resend's batch endpoint caps at 100 envelopes per call; SEND_CHUNK_SIZE
+// is also the per-call attendee ceiling for sendTicketEmails, so it is
+// clamped to 100 — a larger value would make sendEmails reject the batch.
+export const SEND_CHUNK_SIZE = Math.min(100, Number(process.env.SEND_CHUNK_SIZE) || 100);
 // Hard cap on /scheduledMail depth. Once full, sends past the daily cap are
 // rejected (callable throws resource-exhausted) rather than silently swallowed.
-// Drained by the scheduledMailDrain function at 00:05 America/Los_Angeles.
+// Drained every 30 min by the scheduledMailDrain function.
 export const RESEND_QUEUE_CAP = Number(process.env.RESEND_QUEUE_CAP) || 500;
-// Spacing between mail-doc writes so the email extension's onCreate triggers
-// don't fan out faster than Resend's POST /emails limit (5 req/sec). 300ms ≈
-// 3.3/sec — safe headroom even when two admins send at once.
-export const RESEND_SEND_INTERVAL_MS = Number(process.env.RESEND_SEND_INTERVAL_MS) || 300;
+// Verified sender address on the Resend account. All outbound mail uses this
+// as the From header — direct API calls don't accept anything that isn't a
+// verified domain.
+export const RESEND_FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? "mika@sekaibeyond.com";
 export const IMPORT_MAX_ROWS = Number(process.env.IMPORT_MAX_ROWS) || 1000;
 export const RECORD_RETENTION_DAYS = 30;
 
