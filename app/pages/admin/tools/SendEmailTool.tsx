@@ -33,7 +33,12 @@ export const SendEmailTool = ({onBack}: SendEmailToolProps) => {
     const [showPreview, setShowPreview] = useState(false);
     const [showOptional, setShowOptional] = useState(false);
     const [message, setMessage] = useState<{type: 'success' | 'error'; text: string} | null>(null);
-    const [quota, setQuota] = useState<{sentToday: number; dailyCap: number} | null>(null);
+    const [quota, setQuota] = useState<{
+        sentToday: number;
+        dailyCap: number;
+        queuedCount: number;
+        queueCap: number;
+    } | null>(null);
     const [quotaLoading, setQuotaLoading] = useState(true);
 
     const previewOverlayRef = useRef<HTMLDivElement>(null);
@@ -44,7 +49,12 @@ export const SendEmailTool = ({onBack}: SendEmailToolProps) => {
         const load = async () => {
             try {
                 const res = await callGetTicketEmailQuota();
-                if (!cancelled) setQuota({sentToday: res.data.sentToday, dailyCap: res.data.dailyCap});
+                if (!cancelled) setQuota({
+                    sentToday: res.data.sentToday,
+                    dailyCap: res.data.dailyCap,
+                    queuedCount: res.data.queuedCount,
+                    queueCap: res.data.queueCap,
+                });
             } catch {
                 /* leave quota null — the send still works, just no preflight hint */
             } finally {
@@ -101,9 +111,13 @@ export const SendEmailTool = ({onBack}: SendEmailToolProps) => {
             });
             setMessage({
                 type: 'success',
-                text: isEnglish
-                    ? `Email queued for ${res.data.recipientCount} recipient${res.data.recipientCount === 1 ? '' : 's'}.`
-                    : `邮件已排队发送给 ${res.data.recipientCount} 位收件人。`,
+                text: res.data.queued
+                    ? (isEnglish
+                        ? `Daily cap reached — email queued for ${res.data.recipientCount} recipient${res.data.recipientCount === 1 ? '' : 's'} and will send after midnight (America/Los_Angeles).`
+                        : `已达每日上限，邮件已排队（${res.data.recipientCount} 位收件人），将于太平洋时区午夜后发送。`)
+                    : (isEnglish
+                        ? `Email queued for ${res.data.recipientCount} recipient${res.data.recipientCount === 1 ? '' : 's'}.`
+                        : `邮件已排队发送给 ${res.data.recipientCount} 位收件人。`),
             });
             setToRaw('');
             setCcRaw('');
@@ -112,7 +126,12 @@ export const SendEmailTool = ({onBack}: SendEmailToolProps) => {
             setBodyHtml('');
             try {
                 const refreshed = await callGetTicketEmailQuota();
-                setQuota({sentToday: refreshed.data.sentToday, dailyCap: refreshed.data.dailyCap});
+                setQuota({
+                    sentToday: refreshed.data.sentToday,
+                    dailyCap: refreshed.data.dailyCap,
+                    queuedCount: refreshed.data.queuedCount,
+                    queueCap: refreshed.data.queueCap,
+                });
             } catch {
                 /* ignore */
             }
@@ -143,8 +162,8 @@ export const SendEmailTool = ({onBack}: SendEmailToolProps) => {
             ) : quota && (
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? `Today's outgoing emails: ${quota.sentToday} / ${quota.dailyCap} (shared with ticket emails)`
-                        : `今日已发邮件：${quota.sentToday} / ${quota.dailyCap}（与门票邮件共享）`}
+                        ? `Today's outgoing emails: ${quota.sentToday} / ${quota.dailyCap} (shared with ticket emails). Overflow queue: ${quota.queuedCount} / ${quota.queueCap} waiting for tomorrow.`
+                        : `今日已发邮件：${quota.sentToday} / ${quota.dailyCap}（与门票邮件共享）。明日待发队列：${quota.queuedCount} / ${quota.queueCap} 封。`}
                 </p>
             )}
 

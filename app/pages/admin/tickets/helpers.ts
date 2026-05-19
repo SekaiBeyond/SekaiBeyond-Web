@@ -93,6 +93,7 @@ export const mapAttendeeDoc = (
         name: (data.name as string) ?? '',
         ticketCount: (data.ticketCount as number) ?? 0,
         emailSent: (data.emailSent as boolean) ?? false,
+        emailScheduled: (data.emailScheduled as boolean) ?? false,
         emailSentAt: tsToDate(data.emailSentAt),
         createdAt: tsToDate(data.createdAt) ?? new Date(),
         updatedAt: tsToDate(data.updatedAt) ?? new Date(),

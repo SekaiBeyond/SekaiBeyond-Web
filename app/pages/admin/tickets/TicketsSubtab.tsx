@@ -202,14 +202,23 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                 eventId, mode: 'all', attendeeIds: [a.id],
             });
             const sent = result.data.sentCount;
+            const queued = result.data.queuedCount;
             if (sent > 0) {
-                onAttendeeUpdated({...a, emailSent: true, emailSentAt: new Date()});
+                onAttendeeUpdated({
+                    ...a, emailSent: true, emailScheduled: false, emailSentAt: new Date(),
+                });
+            } else if (queued > 0) {
+                onAttendeeUpdated({...a, emailSent: true, emailScheduled: true});
             }
             showToast(
                 sent > 0
                     ? (isEnglish ? 'Email queued.' : '邮件已排队发送。')
-                    : (isEnglish ? 'No email queued.' : '未发送邮件。'),
-                sent > 0 ? 'success' : 'warning',
+                    : queued > 0
+                        ? (isEnglish
+                            ? 'Daily cap reached — email queued for tomorrow.'
+                            : '已达每日上限，已排队明日发送。')
+                        : (isEnglish ? 'No email queued.' : '未发送邮件。'),
+                (sent > 0 || queued > 0) ? 'success' : 'warning',
             );
         } catch (err) {
             const code = functionsErrorCode(err);

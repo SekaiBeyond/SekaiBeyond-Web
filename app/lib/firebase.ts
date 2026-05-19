@@ -234,12 +234,21 @@ export const callSendTicketEmails = (data: {
     mode?: 'unsent' | 'all';
     attendeeIds?: string[];
     cursor?: string;
-}) => httpsCallable<typeof data, {sentCount: number; hasMore: boolean; nextCursor?: string}>(
-    getFunctions(), 'sendTicketEmails')(data);
+}) => httpsCallable<typeof data, {
+    sentCount: number;
+    queuedCount: number;
+    hasMore: boolean;
+    nextCursor?: string;
+}>(getFunctions(), 'sendTicketEmails')(data);
 
 export const callGetTicketEmailQuota = () =>
-    httpsCallable<Record<string, never>, {sentToday: number; dailyCap: number; chunkSize: number}>(
-        getFunctions(), 'getTicketEmailQuota')({});
+    httpsCallable<Record<string, never>, {
+        sentToday: number;
+        dailyCap: number;
+        chunkSize: number;
+        queuedCount: number;
+        queueCap: number;
+    }>(getFunctions(), 'getTicketEmailQuota')({});
 
 export const callUpdateEventEmailTemplate = (data: {
     eventId: string;
@@ -256,7 +265,7 @@ export const callSendCustomEmail = (data: {
     replyTo?: string;
     subject: string;
     bodyHtml: string;
-}) => httpsCallable<typeof data, {sent: boolean; recipientCount: number}>(
+}) => httpsCallable<typeof data, {sent: boolean; queued: boolean; recipientCount: number}>(
     getFunctions(), 'sendCustomEmail')(data);
 
 export const callAssignEventStaff = (data: {targetUid: string; eventId: string}) =>

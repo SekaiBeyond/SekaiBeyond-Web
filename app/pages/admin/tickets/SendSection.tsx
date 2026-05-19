@@ -21,6 +21,7 @@ interface SendSectionProps {
 interface SendProgress {
     mode: 'unsent' | 'all';
     sent: number;
+    queued: number;
     target: number;
 }
 
@@ -28,6 +29,8 @@ interface QuotaState {
     sentToday: number;
     dailyCap: number;
     chunkSize: number;
+    queuedCount: number;
+    queueCap: number;
 }
 
 export function SendSection({
@@ -59,8 +62,14 @@ export function SendSection({
     const remainingToday = quota
         ? Math.max(0, quota.dailyCap - quota.sentToday)
         : null;
+    const remainingQueue = quota
+        ? Math.max(0, quota.queueCap - quota.queuedCount)
+        : null;
     const quotaNearCap = remainingToday !== null && remainingToday <= 10;
     const quotaAtCap = remainingToday === 0;
+    // Sends are disabled only when BOTH today's cap and the overflow queue
+    // are full — otherwise overflow goes into /scheduledMail for tomorrow.
+    const fullyBlocked = quotaAtCap && remainingQueue === 0;
     const chunkSize = quota?.chunkSize ?? FALLBACK_CHUNK_SIZE;
 
     const send = async (mode: 'unsent' | 'all') => {
@@ -70,16 +79,16 @@ export function SendSection({
             showToast(isEnglish ? 'No sendable recipients.' : '没有可发送的收件人。', 'warning');
             return;
         }
-        if (quotaAtCap) {
+        if (fullyBlocked) {
             showToast(
                 isEnglish
-                    ? 'Daily Resend cap reached. Try again after midnight (America/Los_Angeles).'
-                    : '已达到每日 Resend 发送上限，请在太平洋时区午夜后重试。',
+                    ? 'Daily cap reached and the overflow queue is full. Wait for the queue to drain.'
+                    : '已达到每日发送上限，且排队已满，请等待队列清空。',
                 'warning',
             );
             return;
         }
-        const willExceed = remainingToday !== null && target > remainingToday;
+        const willQueueAny = remainingToday !== null && target > remainingToday;
         const ok = window.confirm([
             mode === 'unsent'
                 ? (isEnglish
@@ -88,10 +97,10 @@ export function SendSection({
                 : (isEnglish
                     ? `Resend ticket emails to ALL ${target} attendee(s) with active tickets? (Already-sent will receive a duplicate.)`
                     : `向全部 ${target} 位持有有效门票的参加者重新发送门票邮件？（已发送的会收到重复邮件。）`),
-            willExceed
+            willQueueAny
                 ? (isEnglish
-                    ? `\n\nWarning: ${target} > ${remainingToday} remaining in today's Resend free-tier quota. The send will stop when the cap is hit; unsent attendees can be resumed tomorrow.`
-                    : `\n\n警告：${target} 超过今日 Resend 免费额度剩余 ${remainingToday} 封。达到上限后发送将中止，剩余参加者可明日继续。`)
+                    ? `\n\nNote: ${target} > ${remainingToday} remaining in today's Resend cap. The overflow (up to ${remainingQueue} more) will be queued and sent starting after midnight (America/Los_Angeles).`
+                    : `\n\n注意：${target} 超过今日 Resend 剩余 ${remainingToday} 封。超出部分（至多 ${remainingQueue} 封）将排队，于太平洋时区午夜后开始发送。`)
                 : '',
             target > chunkSize
                 ? (isEnglish
@@ -104,20 +113,22 @@ export function SendSection({
         cancelRef.current = false;
         setSending(true);
         setNoTemplate(false);
-        setProgress({mode, sent: 0, target});
+        setProgress({mode, sent: 0, queued: 0, target});
 
         let totalSent = 0;
+        let totalQueued = 0;
         let cursor: string | undefined;
         try {
-            while (!cancelRef.current && totalSent < target) {
+            while (!cancelRef.current && totalSent + totalQueued < target) {
                 const result = await callSendTicketEmails({
                     eventId,
                     mode,
                     ...(cursor ? {cursor} : {}),
                 });
-                const {sentCount, hasMore, nextCursor} = result.data;
+                const {sentCount, queuedCount, hasMore, nextCursor} = result.data;
                 totalSent += sentCount;
-                setProgress({mode, sent: totalSent, target});
+                totalQueued += queuedCount;
+                setProgress({mode, sent: totalSent, queued: totalQueued, target});
                 if (!hasMore) break;
                 cursor = nextCursor;
                 if (!cursor && mode === 'all') {
@@ -128,16 +139,30 @@ export function SendSection({
             if (cancelRef.current) {
                 showToast(
                     isEnglish
-                        ? `Stopped — sent ${totalSent} of ${target}.`
-                        : `已停止 — 已发送 ${totalSent} / ${target}。`,
+                        ? `Stopped — sent ${totalSent}, queued ${totalQueued} of ${target}.`
+                        : `已停止 — 已发送 ${totalSent}，已排队 ${totalQueued} / ${target}。`,
                     'warning',
                 );
             } else {
+                let toastText: string;
+                if (totalSent > 0 && totalQueued > 0) {
+                    toastText = isEnglish
+                        ? `Queued ${totalSent} email${totalSent === 1 ? '' : 's'} for immediate send, plus ${totalQueued} for tomorrow.`
+                        : `已排队 ${totalSent} 封邮件立即发送，另有 ${totalQueued} 封将于明日发送。`;
+                } else if (totalSent > 0) {
+                    toastText = isEnglish
+                        ? `Queued ${totalSent} email${totalSent === 1 ? '' : 's'} for immediate send.`
+                        : `已排队 ${totalSent} 封邮件立即发送。`;
+                } else if (totalQueued > 0) {
+                    toastText = isEnglish
+                        ? `Daily cap reached — queued ${totalQueued} email${totalQueued === 1 ? '' : 's'} for tomorrow.`
+                        : `已达每日上限，已排队 ${totalQueued} 封邮件明日发送。`;
+                } else {
+                    toastText = isEnglish ? 'No emails queued.' : '未排队任何邮件。';
+                }
                 showToast(
-                    isEnglish
-                        ? `Queued ${totalSent} email${totalSent === 1 ? '' : 's'}.`
-                        : `已排队发送 ${totalSent} 封邮件。`,
-                    totalSent > 0 ? 'success' : 'warning',
+                    toastText,
+                    (totalSent + totalQueued) > 0 ? 'success' : 'warning',
                 );
             }
             onSent();
@@ -154,8 +179,8 @@ export function SendSection({
             } else if (code === 'quota-exceeded') {
                 showToast(
                     isEnglish
-                        ? 'Daily Resend cap reached during send.'
-                        : '发送过程中已达到每日 Resend 上限。',
+                        ? 'Daily cap reached and the overflow queue is full.'
+                        : '已达到每日上限，且排队已满。',
                     'warning',
                 );
             } else {
@@ -207,8 +232,8 @@ export function SendSection({
 
             <div className={`admin-tickets-send-banner ${
                 quotaError ? 'admin-tickets-send-banner-warning'
-                    : quotaAtCap ? 'admin-tickets-send-banner-error'
-                        : quotaNearCap ? 'admin-tickets-send-banner-warning'
+                    : fullyBlocked ? 'admin-tickets-send-banner-error'
+                        : (quotaAtCap || quotaNearCap) ? 'admin-tickets-send-banner-warning'
                             : 'admin-tickets-send-banner-info'}`}>
                 {quotaError ? (
                     <span>
@@ -219,8 +244,8 @@ export function SendSection({
                 ) : quota ? (
                     <span>
                         {isEnglish
-                            ? `Resend free tier: ${quota.sentToday} / ${quota.dailyCap} emails sent today (${remainingToday} remaining). Resets at midnight America/Los_Angeles.`
-                            : `Resend 免费额度：今日已发送 ${quota.sentToday} / ${quota.dailyCap} 封（剩余 ${remainingToday} 封）。太平洋时区午夜重置。`}
+                            ? `Resend free tier: ${quota.sentToday} / ${quota.dailyCap} emails sent today (${remainingToday} remaining). Overflow queue: ${quota.queuedCount} / ${quota.queueCap} waiting for tomorrow. Resets at midnight America/Los_Angeles.`
+                            : `Resend 免费额度：今日已发送 ${quota.sentToday} / ${quota.dailyCap} 封（剩余 ${remainingToday} 封）。明日待发队列：${quota.queuedCount} / ${quota.queueCap} 封。太平洋时区午夜重置。`}
                     </span>
                 ) : (
                     <span>
@@ -241,8 +266,8 @@ export function SendSection({
                 <div className="admin-tickets-send-progress">
                     <div className="admin-tickets-send-progress-label">
                         {isEnglish
-                            ? `Sending ${progress.sent} / ${progress.target}...`
-                            : `发送中 ${progress.sent} / ${progress.target}...`}
+                            ? `Sending ${progress.sent} / ${progress.target}${progress.queued > 0 ? ` (+${progress.queued} queued for tomorrow)` : ''}...`
+                            : `发送中 ${progress.sent} / ${progress.target}${progress.queued > 0 ? `（另有 ${progress.queued} 封排队至明日）` : ''}...`}
                         {cancelRef.current && (
                             <span> {isEnglish ? '(cancelling after current chunk)' : '（将在本批后停止）'}</span>
                         )}
@@ -250,7 +275,7 @@ export function SendSection({
                     <div className="admin-tickets-send-progress-track">
                         <div
                             className="admin-tickets-send-progress-fill"
-                            style={{width: `${Math.min(100, (progress.sent / Math.max(1, progress.target)) * 100)}%`}}
+                            style={{width: `${Math.min(100, ((progress.sent + progress.queued) / Math.max(1, progress.target)) * 100)}%`}}
                         />
                     </div>
                 </div>
@@ -260,7 +285,7 @@ export function SendSection({
                 <button
                     className="admin-toggle-btn admin-toggle-save"
                     onClick={() => send('unsent')}
-                    disabled={readOnly || sending || totals.unsentSendable === 0 || quotaAtCap}
+                    disabled={readOnly || sending || totals.unsentSendable === 0 || fullyBlocked}
                 >
                     {sending && progress?.mode === 'unsent'
                         ? (isEnglish ? 'Sending...' : '发送中...')
@@ -269,7 +294,7 @@ export function SendSection({
                 <button
                     className="admin-toggle-btn admin-toggle-revoke"
                     onClick={() => send('all')}
-                    disabled={readOnly || sending || totals.sendable === 0 || quotaAtCap}
+                    disabled={readOnly || sending || totals.sendable === 0 || fullyBlocked}
                 >
                     {sending && progress?.mode === 'all'
                         ? (isEnglish ? 'Sending...' : '发送中...')

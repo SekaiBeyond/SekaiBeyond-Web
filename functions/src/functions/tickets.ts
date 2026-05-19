@@ -7,12 +7,14 @@ import {
     IMPORT_MAX_ROWS,
     PUBLIC_ORIGIN,
     recordExpiresAt,
-    RESEND_DAILY_CAP,
+    RESEND_QUEUE_CAP,
     RESEND_SEND_INTERVAL_MS,
-    SEND_CHUNK_SIZE
+    SEND_CHUNK_SIZE,
 } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
+import { computeEmailQuota, computeEmailQuotaInTxn } from "../utils/quota";
+import { getScheduledMailQueueDepth } from "./scheduledMail";
 import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -771,40 +773,6 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
     });
 });
 
-async function computeTicketEmailQuota(): Promise<{sentToday: number; dailyCap: number}> {
-    // Start of today in America/Los_Angeles, expressed as a UTC Timestamp.
-    // UTC-now minus LA's elapsed-since-midnight equals LA midnight (UTC).
-    // hourCycle:'h23' pins the range to 0–23 (en-US hour12:false can return "24").
-    const now = new Date();
-    const laParts = new Intl.DateTimeFormat("en-GB", {
-        timeZone: "America/Los_Angeles",
-        hour: "2-digit", minute: "2-digit", second: "2-digit",
-        hourCycle: "h23",
-    }).formatToParts(now);
-    const part = (t: string) => Number(laParts.find(p => p.type === t)?.value ?? "0");
-    const laMidnightMs = now.getTime()
-        - part("hour") * 3600_000
-        - part("minute") * 60_000
-        - part("second") * 1000
-        - now.getMilliseconds();
-    const startOfTodayLA = Timestamp.fromMillis(laMidnightMs);
-
-    // Uses the existing (type, timestamp) composite index. `in` runs as two
-    // equality queries under the hood, each served by that index — adding the
-    // tool-driven custom-email-send type here keeps the daily cap a single
-    // shared budget across all outbound mail.
-    const snap = await db.collection("records")
-        .where("type", "in", ["ticket-email-send", "custom-email-send"])
-        .where("timestamp", ">=", startOfTodayLA)
-        .get();
-    let sentToday = 0;
-    for (const d of snap.docs) {
-        const c = d.data().sentCount;
-        if (typeof c === "number" && Number.isFinite(c)) sentToday += c;
-    }
-    return {sentToday, dailyCap: RESEND_DAILY_CAP};
-}
-
 export const sendTicketEmails = onCall(
     {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB"},
     async (request) => {
@@ -895,36 +863,44 @@ export const sendTicketEmails = onCall(
         const eventDateCn = formatEventDateForEmail(eventData.startAt, "zh-CN");
 
         // Enforce the Resend daily cap server-side so a buggy/malicious client
-        // (or parallel admins) can't blow past it. Caps the chunk at whatever
-        // is still available today.
-        const {sentToday, dailyCap} = await computeTicketEmailQuota();
-        const remainingToday = Math.max(0, dailyCap - sentToday);
-        if (remainingToday === 0) {
+        // (or parallel admins) can't blow past it. Anything past the daily cap
+        // goes into /scheduledMail and gets drained tomorrow at 00:05 LA.
+        // Bail out only when BOTH the daily cap and the queue are full —
+        // otherwise the chunk falls through to the walk below. The
+        // authoritative cap re-read happens inside the txn (see below); this
+        // pre-check is just to short-circuit a no-op chunk before doing real
+        // work. Queue capacity stays loose by design — a few overflow items
+        // past RESEND_QUEUE_CAP are acceptable.
+        const {sentToday, dailyCap} = await computeEmailQuota();
+        const prelimRemainingToday = Math.max(0, dailyCap - sentToday);
+        const initialQueueDepth = await getScheduledMailQueueDepth();
+        const queueCapacity = Math.max(0, RESEND_QUEUE_CAP - initialQueueDepth);
+        if (prelimRemainingToday === 0 && queueCapacity === 0) {
             throw new HttpsError("resource-exhausted",
-                "Daily Resend cap reached.", {code: "quota-exceeded"});
+                "Daily cap reached and overflow queue is full.", {code: "quota-exceeded"});
         }
 
         // Ops here are only for things that don't trigger Resend (ticketless
-        // attendee marks + the audit record). The actual mail-doc creates are
-        // paced below to stay under Resend's 5 req/sec POST /emails limit.
+        // attendee marks). The actual mail-doc creates are paced below to
+        // stay under Resend's 5 req/sec POST /emails limit.
         const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
-        let sentCount = 0;
         let lastProcessedId: string | null = null;
 
-        // Walk targets to preserve the cap and cursor semantics, but
-        // only collect work — actual QR generation runs in parallel below.
-        // Defective attendees (no ticketIds) are marked sent without consuming
-        // from remainingToday; matches the original sequential loop.
+        // Walk targets into a candidates list. The send-vs-queue split is
+        // deferred until inside the reservation transaction below, so the
+        // split keys off a fresh sentToday read rather than the stale one
+        // from the pre-check (which a concurrent admin send could have
+        // consumed in the meantime).
         const ticketlessTargets: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-        const sendableTargets: {
+        const candidates: {
             target: FirebaseFirestore.QueryDocumentSnapshot;
             data: FirebaseFirestore.DocumentData;
-            ticketIds: string[];
             tickets: any[];
         }[] = [];
+        const prelimBudget = prelimRemainingToday + queueCapacity;
         for (const target of targets) {
             lastProcessedId = target.id;
-            if (sentCount >= remainingToday) break;
+            if (candidates.length >= prelimBudget) break;
             const data = target.data();
             const rawTickets: any[] = data.tickets ?? [];
             const activeTickets = rawTickets.filter(t => !t.voided);
@@ -934,13 +910,7 @@ export const sendTicketEmails = onCall(
                 continue;
             }
 
-            sendableTargets.push({
-                target,
-                data,
-                ticketIds: activeTickets.map(t => t.ticketId),
-                tickets: activeTickets
-            });
-            sentCount++;
+            candidates.push({target, data, tickets: activeTickets});
         }
 
         // Defective attendees (no tickets or all voided): mark sent so the mode='unsent'
@@ -953,13 +923,80 @@ export const sendTicketEmails = onCall(
             }));
         }
 
+        // Reserve daily-cap slots atomically. Re-reading sentToday inside
+        // the txn (via computeEmailQuotaInTxn) and writing the send audit
+        // record in the same txn closes the race where two concurrent admin
+        // sends both observed pre-reservation state and double-spent the
+        // cap: Firestore's optimistic concurrency on the records query
+        // means whichever txn lands second sees the first's audit write and
+        // retries against the new total. Queue audit shares the txn for
+        // symmetry — it doesn't consume the daily cap, but it's cheap to
+        // include and avoids a second commit.
+        const callerSnap = await db.collection("users").doc(uid).get();
+        const performedByName = callerSnap.data()?.displayName ?? "";
+        const {sendAuditRef, queueAuditRef, expectedSentCount, expectedQueuedCount} =
+            await db.runTransaction(async (txn) => {
+                const {sentToday: freshSent, dailyCap: freshCap} =
+                    await computeEmailQuotaInTxn(txn);
+                const remainingToday = Math.max(0, freshCap - freshSent);
+                const sendCount = Math.min(candidates.length, remainingToday);
+                const queueCount = Math.min(candidates.length - sendCount, queueCapacity);
+                let sRef: FirebaseFirestore.DocumentReference | null = null;
+                let qRef: FirebaseFirestore.DocumentReference | null = null;
+                if (sendCount > 0) {
+                    sRef = db.collection("records").doc();
+                    txn.set(sRef, {
+                        type: "ticket-email-send",
+                        performedBy: uid,
+                        performedByName,
+                        eventId,
+                        eventTitle,
+                        sentCount: sendCount,
+                        timestamp: FieldValue.serverTimestamp(),
+                        expiresAt: recordExpiresAt(),
+                    });
+                }
+                if (queueCount > 0) {
+                    qRef = db.collection("records").doc();
+                    txn.set(qRef, {
+                        type: "ticket-email-queue",
+                        performedBy: uid,
+                        performedByName,
+                        eventId,
+                        eventTitle,
+                        sentCount: queueCount,
+                        timestamp: FieldValue.serverTimestamp(),
+                        expiresAt: recordExpiresAt(),
+                    });
+                }
+                return {
+                    sendAuditRef: sRef,
+                    queueAuditRef: qRef,
+                    expectedSentCount: sendCount,
+                    expectedQueuedCount: queueCount,
+                };
+            });
+
+        // Trim candidates to what the txn actually reserved (a concurrent
+        // admin send may have consumed slots between the pre-check and the
+        // txn read). First `expectedSentCount` ship now; the rest queue.
+        const reservedCount = expectedSentCount + expectedQueuedCount;
+        const sendableTargets = candidates.slice(0, reservedCount).map((c, i) => ({
+            ...c,
+            queued: i >= expectedSentCount,
+        }));
+
         // Pace mail-doc creates so the email extension's onCreate triggers
-        // don't blow past Resend's POST /emails limit (5 req/sec). Each mail
-        // doc + its attendee mark are committed together so a mid-loop crash
-        // can't leave an email queued without the attendee marked sent (which
+        // don't blow past Resend's POST /emails limit (5 req/sec). Queued
+        // entries don't fire the extension, so they don't need pacing — but
+        // we share the same loop for simplicity. Each mail/scheduledMail doc
+        // + its attendee mark are committed together so a mid-loop crash
+        // can't leave a mail queued without the attendee marked sent (which
         // would cause duplicates on the next 'unsent' drain).
+        let sentCount = 0;
+        let queuedCount = 0;
         for (let i = 0; i < sendableTargets.length; i++) {
-            const {target, data, tickets} = sendableTargets[i];
+            const {target, data, tickets, queued} = sendableTargets[i];
             const ticketBlock = renderTicketQrBlock(tickets, eventId);
 
             // Strip control chars (CR/LF in particular) from the rendered subject,
@@ -999,41 +1036,86 @@ export const sendTicketEmails = onCall(
                 ? `${renderedBodyEn}\n<hr style="border:none;border-top:1px solid #ddd;margin:24px 0;"/>\n${renderedBodyCn}`
                 : renderedBodyEn;
 
-            if (i > 0 && RESEND_SEND_INTERVAL_MS > 0) {
-                await new Promise(r => setTimeout(r, RESEND_SEND_INTERVAL_MS));
-            }
-
-            const mailRef = db.collection("mail").doc();
-            const batch = db.batch();
-            batch.set(mailRef, {
+            const mailPayload = {
                 to: data.email,
                 message: {subject: renderedSubject, html},
-            });
-            batch.update(target.ref, {
-                emailSent: true,
-                emailSentAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-            await batch.commit();
-        }
+            };
 
-        // Only write an audit record when we actually sent something.
-        // Otherwise, chunked loops would fill `records` with zero-count noise.
-        if (sentCount > 0) {
-            const callerSnap = await db.collection("users").doc(uid).get();
-            ops.push(b => b.set(db.collection("records").doc(), {
-                type: "ticket-email-send",
-                performedBy: uid,
-                performedByName: callerSnap.data()?.displayName ?? "",
-                eventId,
-                eventTitle,
-                sentCount,
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            }));
+            if (queued) {
+                // Don't pace queue writes — they don't trigger the email
+                // extension. The drain at 00:05 LA paces its own writes.
+                // attendeePath lets the drain clear emailScheduled on the
+                // attendee once the queued mail actually ships, so the admin
+                // UI flips from "Queued" to "Sent" then.
+                const scheduledRef = db.collection("scheduledMail").doc();
+                const batch = db.batch();
+                batch.set(scheduledRef, {
+                    type: "ticket",
+                    payload: mailPayload,
+                    eventId,
+                    queuedBy: uid,
+                    queuedAt: FieldValue.serverTimestamp(),
+                    recipientCount: 1,
+                    attendeePath: target.ref.path,
+                });
+                // emailSent=true keeps the mode='unsent' drain from
+                // re-picking this attendee on the next chunk call (the query
+                // at line ~843 uses where emailSent==false). emailScheduled
+                // is the disambiguator the admin UI keys on to show "Queued"
+                // instead of "Sent" until the 00:05 LA drain ships the mail.
+                batch.update(target.ref, {
+                    emailSent: true,
+                    emailScheduled: true,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                // Skip-on-failure matches the drain pattern: a single bad
+                // commit (e.g., attendee deleted mid-loop, making the
+                // batch.update fail) shouldn't abort the whole chunk and
+                // strand the eager audit reservation at its planned count.
+                // Reconciliation at the end of the function uses the actual
+                // queuedCount to correct the record.
+                try {
+                    await batch.commit();
+                    queuedCount++;
+                } catch (err) {
+                    console.error("sendTicketEmails: failed to queue", target.id, err);
+                }
+            } else {
+                if (sentCount > 0 && RESEND_SEND_INTERVAL_MS > 0) {
+                    await new Promise(r => setTimeout(r, RESEND_SEND_INTERVAL_MS));
+                }
+                const mailRef = db.collection("mail").doc();
+                const batch = db.batch();
+                batch.set(mailRef, mailPayload);
+                batch.update(target.ref, {
+                    emailSent: true,
+                    emailSentAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                try {
+                    await batch.commit();
+                    sentCount++;
+                } catch (err) {
+                    console.error("sendTicketEmails: failed to send", target.id, err);
+                }
+            }
         }
 
         if (ops.length > 0) await commitInChunks(ops);
+
+        // Reconcile the eager audit reservations: if a mid-loop error or
+        // skipped target meant we shipped fewer than reserved, lower the
+        // recorded count (or delete the audit entirely if nothing got
+        // through). Keeps computeEmailQuota accurate without leaving a
+        // counterfactual over-count blocking later sends.
+        if (sendAuditRef) {
+            if (sentCount === 0) await sendAuditRef.delete();
+            else if (sentCount !== expectedSentCount) await sendAuditRef.update({sentCount});
+        }
+        if (queueAuditRef) {
+            if (queuedCount === 0) await queueAuditRef.delete();
+            else if (queuedCount !== expectedQueuedCount) await queueAuditRef.update({sentCount: queuedCount});
+        }
 
         // hasMore: the query returned a full chunk (there may be more).
         // For attendeeIds, the client controls chunking — never set hasMore.
@@ -1042,14 +1124,23 @@ export const sendTicketEmails = onCall(
             ? lastProcessedId
             : undefined;
 
-        return {sentCount, hasMore, ...(nextCursor ? {nextCursor} : {})};
+        return {sentCount, queuedCount, hasMore, ...(nextCursor ? {nextCursor} : {})};
     });
 export const getTicketEmailQuota = onCall({maxInstances: 5}, async (request) => {
     const uid = await requireAuth(request);
     await requireAdmin(uid);
 
-    const {sentToday, dailyCap} = await computeTicketEmailQuota();
-    return {sentToday, dailyCap, chunkSize: SEND_CHUNK_SIZE};
+    const [{sentToday, dailyCap}, queuedCount] = await Promise.all([
+        computeEmailQuota(),
+        getScheduledMailQueueDepth(),
+    ]);
+    return {
+        sentToday,
+        dailyCap,
+        chunkSize: SEND_CHUNK_SIZE,
+        queuedCount,
+        queueCap: RESEND_QUEUE_CAP,
+    };
 });
 export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -1095,7 +1186,7 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
 
 // Caps the per-call recipient fan-out (to + cc + bcc combined). Each mail doc
 // becomes one Resend POST; one POST with many recipients still counts as one
-// quota slot in computeTicketEmailQuota, so without this an admin could blast
+// quota slot in computeEmailQuota, so without this an admin could blast
 // a hundred addresses on one slot. 25 covers the realistic "small group ping"
 // case without inviting newsletter-style use.
 const CUSTOM_EMAIL_MAX_RECIPIENTS = 25;
@@ -1164,11 +1255,10 @@ export const sendCustomEmail = onCall({maxInstances: 5, memory: "256MiB"}, async
         throw new HttpsError("invalid-argument", "bodyHtml is empty after sanitization.");
     }
 
-    const {sentToday, dailyCap} = await computeTicketEmailQuota();
-    if (sentToday >= dailyCap) {
-        throw new HttpsError("resource-exhausted",
-            "Daily Resend cap reached.", {code: "quota-exceeded"});
-    }
+    // Read queue depth outside the txn — queue cap is loose by design (a
+    // few overflow items past RESEND_QUEUE_CAP are acceptable, and count()
+    // aggregations aren't worth fighting into the txn just for that).
+    const initialQueueDepth = await getScheduledMailQueueDepth();
 
     const callerSnap = await db.collection("users").doc(uid).get();
     const callerName = callerSnap.data()?.displayName ?? "";
@@ -1181,25 +1271,44 @@ export const sendCustomEmail = onCall({maxInstances: 5, memory: "256MiB"}, async
     if (bcc.length > 0) mailDoc.bcc = bcc;
     if (replyTo) mailDoc.replyTo = replyTo;
 
-    // Mail doc + audit record committed together so the quota record can't
-    // drift from what actually got queued.
-    const batch = db.batch();
-    const mailRef = db.collection("mail").doc();
-    const recordRef = db.collection("records").doc();
-    batch.set(mailRef, mailDoc);
-    batch.set(recordRef, {
-        type: "custom-email-send",
-        performedBy: uid,
-        performedByName: callerName,
-        targetEmail: to[0],
-        sentCount: 1,
-        recipientCount: totalRecipients,
-        subject,
-        replyTo,
-        timestamp: FieldValue.serverTimestamp(),
-        expiresAt: recordExpiresAt(),
+    // Read cap + write audit in one transaction so two concurrent admin
+    // sends can't both observe pre-reservation state and double-spend the
+    // daily cap. The send-vs-queue decision is deferred into the txn so it
+    // keys off the fresh sentToday read, not the stale pre-check.
+    const {queued} = await db.runTransaction(async (txn) => {
+        const {sentToday, dailyCap} = await computeEmailQuotaInTxn(txn);
+        const overCap = sentToday >= dailyCap;
+        if (overCap && initialQueueDepth >= RESEND_QUEUE_CAP) {
+            throw new HttpsError("resource-exhausted",
+                "Daily cap reached and overflow queue is full.", {code: "quota-exceeded"});
+        }
+        if (overCap) {
+            const scheduledRef = db.collection("scheduledMail").doc();
+            txn.set(scheduledRef, {
+                type: "custom",
+                payload: mailDoc,
+                queuedBy: uid,
+                queuedAt: FieldValue.serverTimestamp(),
+                recipientCount: totalRecipients,
+            });
+        } else {
+            const mailRef = db.collection("mail").doc();
+            txn.set(mailRef, mailDoc);
+        }
+        txn.set(db.collection("records").doc(), {
+            type: overCap ? "custom-email-queue" : "custom-email-send",
+            performedBy: uid,
+            performedByName: callerName,
+            targetEmail: to[0],
+            sentCount: 1,
+            recipientCount: totalRecipients,
+            subject,
+            replyTo,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {queued: overCap};
     });
-    await batch.commit();
 
-    return {sent: true, recipientCount: totalRecipients};
+    return {sent: true, queued, recipientCount: totalRecipients};
 });

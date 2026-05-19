@@ -9,3 +9,4 @@ export * from "./functions/badges";
 export * from "./functions/codes";
 export * from "./functions/tickets";
 export * from "./functions/admin";
+export { scheduledMailDrain } from "./functions/scheduledMail";

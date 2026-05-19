@@ -27,6 +27,7 @@ export interface AttendeeData {
     name: string;
     ticketCount: number;
     emailSent: boolean;
+    emailScheduled: boolean;
     emailSentAt: Date | null;
     createdAt: Date;
     updatedAt: Date;

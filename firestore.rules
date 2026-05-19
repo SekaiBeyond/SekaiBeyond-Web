@@ -90,6 +90,14 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
+        // Scheduled-mail overflow queue — core-staff+ can read for visibility;
+        // writes via Cloud Functions only. Drained at 00:05 LA by the
+        // scheduledMailDrain function.
+        match /scheduledMail/{docId} {
+            allow read: if request.auth != null
+                && isCoreStaffOrAbove();
+        }
+
         // Upcoming events — public can read only published ones; staff+ can read all;
         // event-staff can read events they are assigned to.
         // All writes via Cloud Functions.

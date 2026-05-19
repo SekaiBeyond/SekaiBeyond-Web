@@ -1914,6 +1914,11 @@
     color: var(--color-purple);
 }
 
+.admin-tickets-tag-queued {
+    background: rgba(52, 152, 219, 0.16);
+    color: #1f6dad;
+}
+
 .admin-tickets-tag-unsent {
     background: rgba(254, 202, 87, 0.22);
     color: #a15c00;
