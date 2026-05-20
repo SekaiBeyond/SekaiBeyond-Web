@@ -107,5 +107,5 @@ export const PastEvents = () => {
             )}
         </section>
 
-    )
+    );
 }

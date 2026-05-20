@@ -278,5 +278,5 @@ export const UpcomingEvent = () => {
                 />
             )}
         </section>
-    )
+    );
 }
