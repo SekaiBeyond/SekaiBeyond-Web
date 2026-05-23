@@ -7,4 +7,5 @@ export default [
     route("claim", "routes/claim.tsx"),
     route("policy", "routes/policy.tsx"),
     route("qr", "routes/qr.tsx"),
+    route("parking/:eventId", "routes/parking.tsx"),
 ] satisfies RouteConfig;

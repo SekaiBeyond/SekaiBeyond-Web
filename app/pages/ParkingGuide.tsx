@@ -1,0 +1,386 @@
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
+import { doc, getDoc } from 'firebase/firestore';
+import { getFirebaseDb } from '~/lib/firebase';
+import { DEFAULT_ZOOM, type ParkingLot, resolveVenue, type Venue } from '~/lib/parkingData';
+import { useLanguage } from '~/components/LanguageContextProvider';
+import { AdvancedMarker, APIProvider, InfoWindow, Map } from '@vis.gl/react-google-maps';
+
+/**
+ * Minimal interface mirroring the fields we need from the upcomingEvents doc.
+ */
+interface EventSnapshot {
+    title: string;
+    titleCn: string;
+    location: string;
+    locationCn: string;
+}
+
+export const ParkingGuide = () => {
+    const {eventId} = useParams<{eventId: string}>();
+    const navigate = useNavigate();
+    const {isEnglish} = useLanguage();
+
+    const [event, setEvent] = useState<EventSnapshot | null>(null);
+    const [venue, setVenue] = useState<Venue | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Track which marker's popup is currently open
+    const [openInfoWindowId, setOpenInfoWindowId] = useState<string | null>(null);
+
+    // ---- Fetch event and resolve venue ----
+    useEffect(() => {
+        if (!eventId) {
+            setError('No event ID');
+            setLoading(false);
+            return;
+        }
+
+        (async () => {
+            try {
+                const db = getFirebaseDb();
+                const snap = await getDoc(doc(db, 'upcomingEvents', eventId));
+                if (!snap.exists()) {
+                    setError('Event not found');
+                    setLoading(false);
+                    return;
+                }
+                const data = snap.data() as Record<string, unknown>;
+                const ev: EventSnapshot = {
+                    title: (data.title as string) ?? '',
+                    titleCn: (data.titleCn as string) ?? '',
+                    location: (data.location as string) ?? '',
+                    locationCn: (data.locationCn as string) ?? '',
+                };
+                setEvent(ev);
+                const resolved = resolveVenue(ev.location);
+                setVenue(resolved);
+            } catch (err) {
+                console.error('[ParkingGuide] fetch error:', err);
+                setError('Failed to load event');
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, [eventId]);
+
+    if (loading) {
+        return (
+            <div className="parking-page">
+                <div className="parking-loading">
+                    <div className="loader"></div>
+                    <span className="parking-loading-text">
+                        {isEnglish ? 'Loading parking guide…' : '加载停车指南…'}
+                    </span>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !event) {
+        return (
+            <div className="parking-page">
+                <a href="/#upcoming" className="parking-back-btn">
+                    <span className="parking-back-arrow">←</span>
+                    {isEnglish ? 'Back to Events' : '返回活动'}
+                </a>
+                <div className="parking-error">
+                    <div className="parking-error-icon">🅿️</div>
+                    <h2 className="parking-error-title">
+                        {isEnglish ? 'Event Not Found' : '未找到活动'}
+                    </h2>
+                    <p className="parking-error-desc">
+                        {isEnglish
+                            ? 'The event you\'re looking for doesn\'t exist or has been removed.'
+                            : '您查找的活动不存在或已被移除。'}
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!venue) {
+        return (
+            <div className="parking-page">
+                <a href="/#upcoming" className="parking-back-btn">
+                    <span className="parking-back-arrow">←</span>
+                    {isEnglish ? 'Back to Events' : '返回活动'}
+                </a>
+                <div className="parking-error">
+                    <div className="parking-error-icon">📍</div>
+                    <h2 className="parking-error-title">
+                        {isEnglish ? 'Parking Guide Unavailable' : '停车指南暂不可用'}
+                    </h2>
+                    <p className="parking-error-desc">
+                        {isEnglish
+                            ? `No parking guide is available for "${event.location}". Check back later or contact the organizers.`
+                            : `暂无"${event.locationCn || event.location}"的停车指南。请稍后查看或联系主办方。`}
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    const recommendedLot = venue.parkingLots.find(l => l.recommended);
+    const otherLots = venue.parkingLots.filter(l => !l.recommended);
+
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+    const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
+
+    return (
+        <div className="parking-page">
+            {/* Decorative blobs */}
+            <div className="parking-deco-blob parking-deco-blob--1"/>
+            <div className="parking-deco-blob parking-deco-blob--2"/>
+
+            {/* Back button */}
+            <a href="/#upcoming" className="parking-back-btn">
+                <span className="parking-back-arrow">←</span>
+                {isEnglish ? 'Back to Events' : '返回活动'}
+            </a>
+
+            {/* Header */}
+            <header className="parking-header">
+                <span className="parking-header-sparkle">✦</span>
+                <span className="parking-header-sparkle">✦</span>
+                <h1 className="parking-title">
+                    {isEnglish ? 'Parking Guide' : '停车指南'}
+                </h1>
+                <div className="parking-venue-row">
+                    <span className="parking-venue-name">
+                        {isEnglish ? venue.nameEn : venue.nameCn}
+                    </span>
+                    <span className="parking-venue-badge">{venue.shortName}</span>
+                </div>
+            </header>
+
+            {/* Main content */}
+            <div className="parking-content">
+                {/* Map */}
+                <div className="parking-map-container">
+                    <div className="parking-map">
+                        <APIProvider apiKey={apiKey}>
+                            <Map
+                                defaultCenter={{lat: venue.lat, lng: venue.lng}}
+                                defaultZoom={DEFAULT_ZOOM}
+                                mapId={mapId}
+                                gestureHandling="greedy"
+                                disableDefaultUI={true}
+                                zoomControl={true}
+                            >
+                                {/* Venue Marker */}
+                                <AdvancedMarker
+                                    position={{lat: venue.lat, lng: venue.lng}}
+                                    onClick={() => setOpenInfoWindowId('venue')}
+                                >
+                                    <div className="parking-marker-venue-inner">⭐</div>
+                                </AdvancedMarker>
+
+                                {openInfoWindowId === 'venue' && (
+                                    <InfoWindow
+                                        position={{lat: venue.lat, lng: venue.lng}}
+                                        onCloseClick={() => setOpenInfoWindowId(null)}
+                                        pixelOffset={[0, -48]}
+                                    >
+                                        <div className="parking-popup-content">
+                                            <div
+                                                className="parking-popup-title">{isEnglish ? venue.nameEn : venue.nameCn}</div>
+                                            <div
+                                                className="parking-popup-type">{isEnglish ? 'Event Venue' : '活动场地'}</div>
+                                        </div>
+                                    </InfoWindow>
+                                )}
+
+                                {/* Parking Lot Markers */}
+                                {venue.parkingLots.map((lot: ParkingLot) => {
+                                    const colorClass = lot.type === 'disabled' ? 'parking-marker-p--disabled'
+                                        : lot.type === 'garage' ? 'parking-marker-p--garage'
+                                            : '';
+
+                                    const typeLabel = isEnglish
+                                        ? (lot.type === 'disabled' ? 'Disabled Parking'
+                                            : lot.type === 'garage' ? 'Parking Garage'
+                                                : 'General Parking')
+                                        : (lot.type === 'disabled' ? '无障碍停车'
+                                            : lot.type === 'garage' ? '停车库'
+                                                : '普通停车');
+
+                                    return (
+                                        <div key={lot.id}>
+                                            <AdvancedMarker
+                                                position={{lat: lot.lat, lng: lot.lng}}
+                                                onClick={() => setOpenInfoWindowId(lot.id)}
+                                            >
+                                                <div className="parking-marker-lot-inner">
+                                                    <div
+                                                        className={`parking-marker-p ${colorClass}`}>{lot.type === 'disabled' ? '♿' : 'P'}</div>
+                                                    <div
+                                                        className="parking-marker-label">{lot.name.split(' ').slice(0, 1).join(' ')}<span>{typeLabel}</span>
+                                                    </div>
+                                                </div>
+                                            </AdvancedMarker>
+
+                                            {openInfoWindowId === lot.id && (
+                                                <InfoWindow
+                                                    position={{lat: lot.lat, lng: lot.lng}}
+                                                    onCloseClick={() => setOpenInfoWindowId(null)}
+                                                    pixelOffset={[0, -52]}
+                                                >
+                                                    <div className="parking-popup-content">
+                                                        <div
+                                                            className="parking-popup-title">{isEnglish ? lot.name : lot.nameCn}</div>
+                                                        <div className="parking-popup-type">{typeLabel}</div>
+                                                        <div className="parking-popup-walk">
+                                                            🚶 {isEnglish
+                                                            ? `${lot.walkingMinutes} min walk to venue`
+                                                            : `步行约 ${lot.walkingMinutes} 分钟`}
+                                                        </div>
+                                                    </div>
+                                                </InfoWindow>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </Map>
+                        </APIProvider>
+                    </div>
+                </div>
+
+                {/* Info panel */}
+                <div className="parking-info-panel">
+                    {/* Time / Free parking info */}
+                    <div className="parking-info-card">
+                        <div className="parking-info-icon parking-info-icon--time">🕐</div>
+                        <div className="parking-info-text">
+                            {isEnglish ? (
+                                <>
+                                    Parking permits are complimentary during <strong>Saturdays after
+                                    noon</strong> until{' '}
+                                    <strong>Monday 6 a.m.</strong>, except when{' '}
+                                    <a
+                                        href="https://transportation.uw.edu/park/events"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="parking-highlight-link"
+                                    >
+                                        event rates
+                                    </a>{' '}
+                                    are in effect.
+                                </>
+                            ) : (
+                                <>
+                                    <strong>周六中午</strong>至<strong>周一早上6点</strong>期间停车免费，
+                                    <a
+                                        href="https://transportation.uw.edu/park/events"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="parking-highlight-link"
+                                    >
+                                        活动费率
+                                    </a>
+                                    生效时除外。
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Recommended parking */}
+                    <div className="parking-info-card">
+                        <div className="parking-info-icon parking-info-icon--recommend">🅿️</div>
+                        <div className="parking-info-text">
+                            {isEnglish ? (
+                                <>
+                                    {recommendedLot?.descriptionEn}{' '}
+                                    {otherLots.map((lot, i) => (
+                                        <span key={lot.id}>
+                                            {i > 0 && ' '}
+                                            {lot.type === 'garage' ? (
+                                                <>
+                                                    <a
+                                                        href="https://transportation.uw.edu/park/visitor"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="parking-highlight-link"
+                                                    >
+                                                        {lot.name}
+                                                    </a>{' '}
+                                                    {lot.descriptionEn}
+                                                </>
+                                            ) : (
+                                                lot.descriptionEn
+                                            )}
+                                        </span>
+                                    ))}
+                                </>
+                            ) : (
+                                <>
+                                    {recommendedLot?.descriptionCn}{' '}
+                                    {otherLots.map((lot, i) => (
+                                        <span key={lot.id}>
+                                            {i > 0 && ' '}
+                                            {lot.type === 'garage' ? (
+                                                <>
+                                                    <a
+                                                        href="https://transportation.uw.edu/park/visitor"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="parking-highlight-link"
+                                                    >
+                                                        {lot.nameCn}
+                                                    </a>{' '}
+                                                    {lot.descriptionCn}
+                                                </>
+                                            ) : (
+                                                lot.descriptionCn
+                                            )}
+                                        </span>
+                                    ))}
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* More info link */}
+                    <div className="parking-info-card">
+                        <div className="parking-info-icon parking-info-icon--info">🅿️</div>
+                        <div className="parking-info-text">
+                            {isEnglish ? (
+                                <>
+                                    For more information, visit{' '}
+                                    <a
+                                        href="https://transportation.uw.edu/park/visitor"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        transportation.uw.edu/park/visitor
+                                    </a>
+                                </>
+                            ) : (
+                                <>
+                                    更多信息请访问{' '}
+                                    <a
+                                        href="https://transportation.uw.edu/park/visitor"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        transportation.uw.edu/park/visitor
+                                    </a>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Footer branding */}
+            <div className="parking-footer">
+                <span className="parking-footer-text">
+                    <span className="parking-footer-sparkle">✦</span>
+                    Sekai Beyond 2026
+                    <span className="parking-footer-sparkle">✦</span>
+                </span>
+            </div>
+        </div>
+    );
+};

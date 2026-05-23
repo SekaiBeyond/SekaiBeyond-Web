@@ -17,6 +17,7 @@
     "@react-router/serve": "^7.15.0",
     "@tiptap/react": "^3.23.4",
     "@tiptap/starter-kit": "^3.23.4",
+    "@vis.gl/react-google-maps": "^1.8.3",
     "firebase": "^12.13.0",
     "isbot": "^5.1.40",
     "jsqr": "^1.4.0",
