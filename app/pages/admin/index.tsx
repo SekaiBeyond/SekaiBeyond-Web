@@ -9,12 +9,16 @@ import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents, useUpcomingEventsByIds } from '~/lib/upcomingEvents';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTags } from '~/lib/tags';
+import { useVenues } from '~/lib/venues';
+import { useParkingLots } from '~/lib/parkingLots';
 import type { BadgeDef, Tab } from './types';
 import { UsersTab, type UsersTabHandle } from './UsersTab';
 import { EventsTab, type EventsTabHandle } from './EventsTab';
 import { UpcomingEventsTab, type UpcomingEventsTabHandle } from './UpcomingEventsTab';
 import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { TagsTab } from './TagsTab';
+import { VenuesTab } from './VenuesTab';
+import { ParkingLotsTab } from './ParkingLotsTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
@@ -61,6 +65,8 @@ export const AdminPage = () => {
     const [upcomingOpen, setUpcomingOpen] = useState(true);
     const [pastOpen, setPastOpen] = useState(true);
     const [tagsOpen, setTagsOpen] = useState(true);
+    const [venuesOpen, setVenuesOpen] = useState(false);
+    const [parkingLotsOpen, setParkingLotsOpen] = useState(false);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [badgeDefsError, setBadgeDefsError] = useState(false);
     const [toasts, setToasts] = useState<Toast[]>([]);
@@ -71,6 +77,8 @@ export const AdminPage = () => {
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
     }, []);
     const {tags, refresh: refreshTags} = useTags();
+    const {venues, refresh: refreshVenues} = useVenues();
+    const {parkingLots, refresh: refreshParkingLots} = useParkingLots();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const urlParamsHandled = useRef(false);
@@ -391,6 +399,48 @@ export const AdminPage = () => {
                                 </button>
                                 {tagsOpen && <TagsTab tags={tags} refreshTags={refreshTags} showToast={showToast}
                                                       readOnly={isStaffGroup}/>}
+                            </div>
+                        )}
+                        {(isCoreStaffOrAbove || isStaffGroup) && !upcomingInDetail && !eventsInDetail && (
+                            <div>
+                                <button
+                                    className="admin-section-header admin-section-mt"
+                                    onClick={() => setVenuesOpen(v => !v)}
+                                >
+                                    <span className="admin-section-header-title">
+                                        {isEnglish ? 'Venues' : '场地'}
+                                    </span>
+                                    <span
+                                        className={`admin-section-chevron${venuesOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
+                                </button>
+                                {venuesOpen && <VenuesTab
+                                    venues={venues}
+                                    parkingLots={parkingLots}
+                                    refreshVenues={refreshVenues}
+                                    showToast={showToast}
+                                    readOnly={isStaffGroup}
+                                />}
+                            </div>
+                        )}
+                        {(isCoreStaffOrAbove || isStaffGroup) && !upcomingInDetail && !eventsInDetail && (
+                            <div>
+                                <button
+                                    className="admin-section-header admin-section-mt"
+                                    onClick={() => setParkingLotsOpen(v => !v)}
+                                >
+                                    <span className="admin-section-header-title">
+                                        {isEnglish ? 'Parking Lots' : '停车场'}
+                                    </span>
+                                    <span
+                                        className={`admin-section-chevron${parkingLotsOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
+                                </button>
+                                {parkingLotsOpen && <ParkingLotsTab
+                                    parkingLots={parkingLots}
+                                    refreshParkingLots={refreshParkingLots}
+                                    refreshVenues={refreshVenues}
+                                    showToast={showToast}
+                                    readOnly={isStaffGroup}
+                                />}
                             </div>
                         )}
                     </>

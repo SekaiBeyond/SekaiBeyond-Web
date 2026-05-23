@@ -13,6 +13,7 @@ import type { Tag } from '~/lib/tags';
 import type { UserRecord } from './types';
 import { fetchEventAttendees, fetchEventStaffCount } from './utils';
 import { BilingualFormField } from './BilingualFormField';
+import { LocationFormField } from './LocationFormField';
 import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
 import { PastEventAttendeesSection } from './PastEventAttendeesSection';
@@ -273,8 +274,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                         className="admin-search-input"
                                     />
                                 </label>
-                                <BilingualFormField
-                                    label="Location" labelCn="地点"
+                                <LocationFormField
                                     value={eventForm.location} valueCn={eventForm.locationCn}
                                     onChange={v => setEventForm(f => ({...f, location: v}))}
                                     onChangeCn={v => setEventForm(f => ({...f, locationCn: v}))}

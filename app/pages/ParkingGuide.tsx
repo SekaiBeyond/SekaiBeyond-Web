@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
-import { DEFAULT_ZOOM, type ParkingLot, resolveVenue, type Venue } from '~/lib/parkingData';
+import { DEFAULT_ZOOM, resolveVenue, useVenues, type Venue } from '~/lib/venues';
+import { type ParkingLot, useParkingLots } from '~/lib/parkingLots';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { AdvancedMarker, APIProvider, InfoWindow, Map } from '@vis.gl/react-google-maps';
+
+type HydratedLot = ParkingLot & {walkingMinutes: number; recommended: boolean};
 
 /**
  * Minimal interface mirroring the fields we need from the upcomingEvents doc.
@@ -20,20 +23,21 @@ export const ParkingGuide = () => {
     const {eventId} = useParams<{eventId: string}>();
     const navigate = useNavigate();
     const {isEnglish} = useLanguage();
+    const {venues, loading: venuesLoading} = useVenues();
+    const {parkingLots, loading: lotsLoading} = useParkingLots();
 
     const [event, setEvent] = useState<EventSnapshot | null>(null);
-    const [venue, setVenue] = useState<Venue | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [eventLoading, setEventLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     // Track which marker's popup is currently open
     const [openInfoWindowId, setOpenInfoWindowId] = useState<string | null>(null);
 
-    // ---- Fetch event and resolve venue ----
+    // ---- Fetch event ----
     useEffect(() => {
         if (!eventId) {
             setError('No event ID');
-            setLoading(false);
+            setEventLoading(false);
             return;
         }
 
@@ -43,7 +47,7 @@ export const ParkingGuide = () => {
                 const snap = await getDoc(doc(db, 'upcomingEvents', eventId));
                 if (!snap.exists()) {
                     setError('Event not found');
-                    setLoading(false);
+                    setEventLoading(false);
                     return;
                 }
                 const data = snap.data() as Record<string, unknown>;
@@ -54,16 +58,25 @@ export const ParkingGuide = () => {
                     locationCn: (data.locationCn as string) ?? '',
                 };
                 setEvent(ev);
-                const resolved = resolveVenue(ev.location);
-                setVenue(resolved);
             } catch (err) {
                 console.error('[ParkingGuide] fetch error:', err);
                 setError('Failed to load event');
             } finally {
-                setLoading(false);
+                setEventLoading(false);
             }
         })();
     }, [eventId]);
+
+    const venue: Venue | null = event ? resolveVenue(event.location, venues) : null;
+    const hydratedLots: HydratedLot[] = venue
+        ? venue.parkingLots
+            .map(link => {
+                const lot = parkingLots.find(l => l.id === link.lotId);
+                return lot ? {...lot, walkingMinutes: link.walkingMinutes, recommended: link.recommended} : null;
+            })
+            .filter((l): l is HydratedLot => l !== null)
+        : [];
+    const loading = eventLoading || venuesLoading || lotsLoading;
 
     if (loading) {
         return (
@@ -122,8 +135,8 @@ export const ParkingGuide = () => {
         );
     }
 
-    const recommendedLot = venue.parkingLots.find(l => l.recommended);
-    const otherLots = venue.parkingLots.filter(l => !l.recommended);
+    const recommendedLot = hydratedLots.find(l => l.recommended);
+    const otherLots = hydratedLots.filter(l => !l.recommended);
 
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
     const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
@@ -151,7 +164,6 @@ export const ParkingGuide = () => {
                     <span className="parking-venue-name">
                         {isEnglish ? venue.nameEn : venue.nameCn}
                     </span>
-                    <span className="parking-venue-badge">{venue.shortName}</span>
                 </div>
             </header>
 
@@ -193,7 +205,7 @@ export const ParkingGuide = () => {
                                 )}
 
                                 {/* Parking Lot Markers */}
-                                {venue.parkingLots.map((lot: ParkingLot) => {
+                                {hydratedLots.map((lot) => {
                                     const colorClass = lot.type === 'disabled' ? 'parking-marker-p--disabled'
                                         : lot.type === 'garage' ? 'parking-marker-p--garage'
                                             : '';

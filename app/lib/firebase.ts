@@ -347,6 +347,32 @@ export const callSaveTag = (data: {tagId?: string; name: string; nameCn: string}
 export const callDeleteTag = (data: {tagId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteTag')(data);
 
+export const callSaveVenue = (data: {
+    venueId?: string;
+    nameEn: string;
+    nameCn: string;
+    lat: number;
+    lng: number;
+    parkingLots: Array<{lotId: string; walkingMinutes: number; recommended: boolean}>;
+}) => httpsCallable<typeof data, {venueId: string}>(getFunctions(), 'saveVenue')(data);
+
+export const callDeleteVenue = (data: {venueId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteVenue')(data);
+
+export const callSaveParkingLot = (data: {
+    lotId?: string;
+    name: string;
+    nameCn: string;
+    type: 'general' | 'disabled' | 'garage';
+    lat: number;
+    lng: number;
+    descriptionEn: string;
+    descriptionCn: string;
+}) => httpsCallable<typeof data, {lotId: string}>(getFunctions(), 'saveParkingLot')(data);
+
+export const callDeleteParkingLot = (data: {lotId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean; unlinkedFrom: number}>(getFunctions(), 'deleteParkingLot')(data);
+
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {
         displayName: string; photoURL: string; joinedAt: string;

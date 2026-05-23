@@ -23,6 +23,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import type { BadgeCode, UserRecord } from './types';
 import { fetchEventAttendees, fetchEventStaffCount, getClaimUrl } from './utils';
 import { BilingualFormField } from './BilingualFormField';
+import { LocationFormField } from './LocationFormField';
 import { EventAttendeesList } from './EventAttendeesList';
 import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
@@ -559,8 +560,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         className="admin-search-input"
                                     />
                                 </label>
-                                <BilingualFormField
-                                    label="Location" labelCn="地点"
+                                <LocationFormField
                                     value={form.location} valueCn={form.locationCn}
                                     onChange={v => setForm(f => ({...f, location: v}))}
                                     onChangeCn={v => setForm(f => ({...f, locationCn: v}))}

@@ -3,7 +3,7 @@ import { type UpcomingEvent as UpcomingEventType, useUpcomingEvents } from "~/li
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 import { isValidHttpUrl } from "~/lib/urls";
-import { resolveVenue } from "~/lib/parkingData";
+import { resolveVenue, useVenues } from "~/lib/venues";
 
 interface EventCardProps {
     event: UpcomingEventType;
@@ -12,6 +12,7 @@ interface EventCardProps {
 }
 
 const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
+    const {venues} = useVenues();
     const [timeLeft, setTimeLeft] = useState({
         days: 0,
         hours: 0,
@@ -134,7 +135,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     <a href={event.customButtonLink} target="_blank" rel="noopener noreferrer"
                        className="btn btn-secondary con-btn">{isEnglish ? event.customButtonText : event.customButtonTextCn}</a>
                 ) : null}
-                {resolveVenue(event.location) && (
+                {resolveVenue(event.location, venues) && (
                     <a href={`/parking/${event.id}`} className="parking-guide-link">
                         <span className="parking-guide-link-icon">🅿️</span>
                         {isEnglish ? 'Parking Guide' : '停车指南'}

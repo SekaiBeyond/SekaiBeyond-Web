@@ -127,6 +127,16 @@ service cloud.firestore {
             allow read: if true;
         }
 
+        // Event venues (parking guide data) — publicly readable; writes via Cloud Functions
+        match /venues/{venueId} {
+            allow read: if true;
+        }
+
+        // Parking lots (shared across venues) — publicly readable; writes via Cloud Functions
+        match /parkingLots/{lotId} {
+            allow read: if true;
+        }
+
         // Deny all access to unlisted paths (safety net — Firestore denies by default,
         // but an explicit rule prevents accidental exposure if new paths are added)
         match /{document=**} {
