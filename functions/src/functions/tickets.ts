@@ -1224,11 +1224,10 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
     });
 });
 
-// Caps the per-call recipient fan-out (to + cc + bcc combined). Each mail doc
-// becomes one Resend POST; one POST with many recipients still counts as one
-// quota slot in computeEmailQuota, so without this an admin could blast
-// a hundred addresses on one slot. 25 covers the realistic "small group ping"
-// case without inviting newsletter-style use.
+// Caps the per-call recipient fan-out (to + cc + bcc combined). Resend bills
+// every to/cc/bcc address as one email against the daily cap, so a 100-address
+// fan-out would burn the whole free-plan daily quota in one click. 25 covers
+// the realistic "small group ping" case without inviting newsletter-style use.
 const CUSTOM_EMAIL_MAX_RECIPIENTS = 25;
 
 function validateEmailList(value: unknown, name: string, required: boolean): string[] {
@@ -1279,11 +1278,23 @@ export const sendCustomEmail = onCall(
         }
 
         // Reply-To: client may override; otherwise fall back to the admin's auth
-        // token email so replies don't dead-letter at the From mailbox.
+        // token email so replies don't dead-letter at the From mailbox. The
+        // fallback is normally a valid email (Firebase issues it from the
+        // signed-in provider), but we run it through validateEmail anyway so a
+        // weird principal can't ship a malformed Reply-To header — drop to "" in
+        // that case rather than failing the whole send.
         const replyToInput = input.replyTo;
-        const replyTo = (replyToInput === undefined || replyToInput === null || replyToInput === "")
-            ? (request.auth?.token.email ?? "")
-            : validateEmail(replyToInput, "replyTo");
+        let replyTo: string;
+        if (replyToInput === undefined || replyToInput === null || replyToInput === "") {
+            const fallback = request.auth?.token.email ?? "";
+            try {
+                replyTo = fallback ? validateEmail(fallback, "replyTo") : "";
+            } catch {
+                replyTo = "";
+            }
+        } else {
+            replyTo = validateEmail(replyToInput, "replyTo");
+        }
 
         // Strip control chars from subject — defense-in-depth against header
         // injection (nodemailer's encoder already guards, mirror tickets.ts).
@@ -1320,7 +1331,11 @@ export const sendCustomEmail = onCall(
         //     outside the txn (Resend call can't run inside a Firestore txn)
         const {queued, recordRef} = await db.runTransaction(async (txn) => {
             const {sentToday, dailyCap, reserved} = await computeEmailQuotaInTxn(txn);
-            const overCap = sentToday >= dailyCap;
+            // Resend bills every to/cc/bcc address as one email, so the cap
+            // check has to consider this call's full fan-out — not just whether
+            // there's any headroom at all. Otherwise a 25-recipient send with
+            // 1 slot remaining would breach the cap by 24.
+            const overCap = sentToday + totalRecipients > dailyCap;
             if (overCap && initialQueueDepth >= RESEND_QUEUE_CAP) {
                 throw new HttpsError("resource-exhausted",
                     "Daily cap reached and overflow queue is full.", {code: "quota-exceeded"});
@@ -1345,6 +1360,9 @@ export const sendCustomEmail = onCall(
                 targetEmail: to[0],
                 sentCount: 1,
                 recipientCount: totalRecipients,
+                toCount: to.length,
+                ccCount: cc.length,
+                bccCount: bcc.length,
                 subject,
                 replyTo,
                 timestamp: FieldValue.serverTimestamp(),
