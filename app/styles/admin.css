@@ -1760,10 +1760,100 @@
     margin-right: 4px;
 }
 
-.admin-tickets-refresh {
-    margin-left: auto;
+.admin-tickets-stats .admin-toggle-btn {
     font-size: 13px;
     padding: 6px 16px;
+}
+
+.admin-tickets-refresh {
+    margin-left: auto;
+}
+
+.admin-tickets-stats-page {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.admin-tickets-stats-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-tickets-stats-page-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-stats-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+}
+
+.admin-stats-tile {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.admin-stats-tile-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+}
+
+.admin-stats-tile-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.1;
+}
+
+.admin-stats-tile-sub {
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+.admin-stats-charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+}
+
+.admin-stats-card {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-stats-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-stats-card-body {
+    min-height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .admin-tickets-filters {
@@ -2729,9 +2819,12 @@ select.admin-tickets-tag:focus {
         font-size: 14px;
     }
 
+    .admin-tickets-stats .admin-toggle-btn {
+        width: 100%;
+    }
+
     .admin-tickets-refresh {
         margin-left: 0;
-        width: 100%;
     }
 
     .admin-tickets-filters {

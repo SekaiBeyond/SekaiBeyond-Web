@@ -70,4 +70,4 @@ export interface AttendeeTotals {
     unsentSendable: number;
 }
 
-export type TicketsSection = 'scan' | 'attendees' | 'import' | 'template' | 'send';
+export type TicketsSection = 'scan' | 'attendees' | 'stats' | 'import' | 'template' | 'send';

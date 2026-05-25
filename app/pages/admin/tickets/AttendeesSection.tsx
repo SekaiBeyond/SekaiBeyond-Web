@@ -87,7 +87,7 @@ export function AttendeesSection({
                     {isEnglish ? 'Add Attendee' : '添加参加者'}
                 </button>
                 <button
-                    className="admin-toggle-btn admin-toggle-edit admin-tickets-refresh"
+                    className="admin-toggle-btn admin-toggle-edit"
                     onClick={onRefresh}
                     disabled={loading}
                 >

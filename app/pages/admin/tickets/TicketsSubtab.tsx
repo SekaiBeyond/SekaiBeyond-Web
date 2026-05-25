@@ -18,6 +18,7 @@ import type { ShowToast } from '../utils';
 import { AttendeesSection } from './AttendeesSection';
 import { ImportSection } from './ImportSection';
 import { SendSection } from './SendSection';
+import { StatsSection } from './StatsSection';
 import { TemplateSection } from './TemplateSection';
 import { mapAttendeeDoc } from './helpers';
 import { type AttendeeData, type TicketsSection, type TicketType } from './types';
@@ -258,6 +259,12 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                 >
                     {isEnglish ? 'Attendees' : '参加者'}
                 </button>
+                <button
+                    className={`admin-sub-tab ${section === 'stats' ? 'admin-sub-tab-active' : ''}`}
+                    onClick={() => setSection('stats')}
+                >
+                    {isEnglish ? 'Stats' : '统计'}
+                </button>
                 {tabVisible('import') && (
                     <button
                         className={`admin-sub-tab ${section === 'import' ? 'admin-sub-tab-active' : ''}`}
@@ -316,6 +323,15 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                     hasMore={displayCount < filteredAttendees.length}
                     loadingMore={false}
                     onLoadMore={() => setDisplayCount(c => c + 10)}
+                />
+            )}
+
+            {section === 'stats' && (
+                <StatsSection
+                    loading={loadingAttendees}
+                    error={attendeesError}
+                    attendees={attendees}
+                    onRefresh={() => void loadAttendees()}
                 />
             )}
 
