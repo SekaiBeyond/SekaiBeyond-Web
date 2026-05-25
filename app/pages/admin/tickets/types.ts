@@ -1,4 +1,4 @@
-export type TicketType = 'normal' | 'early-bird' | 'vip' | 'Comp Ticket' | 'guest';
+export type TicketType = 'normal' | 'early-bird' | 'vip' | 'Comp Ticket' | 'guest' | 'vendor';
 
 export const TICKET_TYPES: {value: TicketType; labelEn: string; labelCn: string}[] = [
     {value: 'normal', labelEn: 'Normal', labelCn: '普通'},
@@ -6,6 +6,7 @@ export const TICKET_TYPES: {value: TicketType; labelEn: string; labelCn: string}
     {value: 'vip', labelEn: 'VIP', labelCn: 'VIP'},
     {value: 'Comp Ticket', labelEn: 'Comp Ticket', labelCn: '赠票'},
     {value: 'guest', labelEn: 'Guest', labelCn: '嘉宾'},
+    {value: 'vendor', labelEn: 'Vendor', labelCn: '商摊'},
 ];
 
 export interface TicketData {

@@ -2040,6 +2040,11 @@
     color: #117a8b;
 }
 
+.admin-tickets-tag-type-vendor {
+    background: rgba(253, 126, 20, 0.15);
+    color: #c25700;
+}
+
 select.admin-tickets-tag {
     cursor: pointer;
     border: 1px solid transparent;

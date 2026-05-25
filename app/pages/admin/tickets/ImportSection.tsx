@@ -153,6 +153,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
             else if (typeRaw === 'vip') type = 'vip';
             else if (typeRaw === 'comp ticket' || typeRaw === 'comp' || typeRaw === '赠票') type = 'Comp Ticket';
             else if (typeRaw === 'guest' || typeRaw === '嘉宾') type = 'guest';
+            else if (typeRaw === 'vendor' || typeRaw === '商摊') type = 'vendor';
 
             const timestamp = timestampRaw ? parseImportDate(timestampRaw) : undefined;
             if (timestampRaw && !timestamp) {

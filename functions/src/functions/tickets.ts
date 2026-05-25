@@ -36,7 +36,7 @@ function validateTicketCount(value: unknown): number {
     return value;
 }
 
-const VALID_TICKET_TYPES = ["normal", "early-bird", "vip", "Comp Ticket", "guest"];
+const VALID_TICKET_TYPES = ["normal", "early-bird", "vip", "Comp Ticket", "guest", "vendor"];
 
 function validateTicketType(value: unknown): string {
     if (typeof value !== "string" || !VALID_TICKET_TYPES.includes(value)) {

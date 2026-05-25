@@ -16,6 +16,7 @@ const TYPE_COLORS: Record<TicketType, string> = {
     vip: '#e91e63',
     'Comp Ticket': '#28a745',
     guest: '#17a2b8',
+    vendor: '#fd7e14',
 };
 
 const STATUS_COLORS = {
