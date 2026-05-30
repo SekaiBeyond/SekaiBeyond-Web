@@ -9,6 +9,12 @@ export const TICKET_TYPES: {value: TicketType; labelEn: string; labelCn: string}
     {value: 'vendor', labelEn: 'Vendor', labelCn: '商摊'},
 ];
 
+export const ticketTypeLabel = (type: TicketType | string, isEnglish: boolean): string => {
+    const tt = TICKET_TYPES.find(t => t.value === type);
+    if (!tt) return String(type);
+    return isEnglish ? tt.labelEn : tt.labelCn;
+};
+
 export interface TicketData {
     ticketId: string;
     type: TicketType;

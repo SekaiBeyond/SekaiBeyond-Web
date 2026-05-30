@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { ticketStatusCounts } from './helpers';
-import { type AttendeeData, type AttendeeTotals, TICKET_TYPES, type TicketType } from './types';
+import { type AttendeeData, type AttendeeTotals, TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
 
 interface AttendeesSectionProps {
     loading: boolean;
@@ -157,9 +157,7 @@ export function AttendeesSection({
                             <div className="admin-tickets-attendee-stats">
                                 <span
                                     className={`admin-tickets-tag admin-tickets-tag-type-${ticketType.toLowerCase().replace(/\s+/g, '-')}`}>
-                                    {ticketType === 'Comp Ticket' ? (isEnglish ? 'Comp' : '赠票') :
-                                        ticketType === 'early-bird' ? (isEnglish ? 'Early Bird' : '早鸟') :
-                                            ticketType.toUpperCase()}
+                                    {ticketTypeLabel(ticketType, isEnglish)}
                                 </span>
                                 <span className="admin-tickets-attendee-count">
                                     {a.ticketCount} {isEnglish ? 'tickets' : '张'}
@@ -247,7 +245,7 @@ export function AttendeesSection({
                                                     {readOnly ? (
                                                         <span
                                                             className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}>
-                                                            {t.type || 'normal'}
+                                                            {ticketTypeLabel(t.type || 'normal', isEnglish)}
                                                         </span>
                                                     ) : (
                                                         <select
