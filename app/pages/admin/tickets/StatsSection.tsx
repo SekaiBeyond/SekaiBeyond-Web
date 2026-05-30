@@ -1,7 +1,20 @@
-import { type ReactNode, useMemo } from 'react';
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { type ReactNode, useMemo, useState } from 'react';
+import {
+    Bar,
+    CartesianGrid,
+    Cell,
+    ComposedChart,
+    Legend,
+    Line,
+    Pie,
+    PieChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from 'recharts';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { type AttendeeData, TICKET_TYPES, type TicketType } from './types';
+import { type AttendeeData, TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
 
 interface StatsSectionProps {
     loading: boolean;
@@ -31,6 +44,81 @@ interface ChartDatum {
     color: string;
 }
 
+interface TimelineEntry {
+    date: Date;
+    type: TicketType;
+}
+
+// Per-bucket row: a label, the running cumulative total, and one numeric field
+// per ticket type (used as the dataKey for each stacked bar segment).
+type TimelineDatum = {
+    label: string;
+    cumulative: number;
+} & Partial<Record<TicketType, number>>;
+
+interface Timeline {
+    data: TimelineDatum[];
+    types: TicketType[];
+}
+
+const startOfDay = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+const startOfWeek = (d: Date): Date => {
+    const s = startOfDay(d);
+    s.setDate(s.getDate() - s.getDay());
+    return s;
+};
+
+const formatBucketLabel = (d: Date, isEnglish: boolean): string =>
+    isEnglish
+        ? `${d.toLocaleDateString('en-US', {month: 'short'})} ${d.getDate()}`
+        : `${d.getMonth() + 1}月${d.getDate()}日`;
+
+// Bucket ticket creations by day (or by week when the range spans more than
+// ~3 months), splitting each bucket by ticket type and accumulating a running
+// total for the cumulative line. `types` lists the types that actually appear,
+// in canonical order, so the chart only draws bars that carry data.
+const buildTimeline = (entries: TimelineEntry[], isEnglish: boolean): Timeline => {
+    if (entries.length === 0) return {data: [], types: []};
+    const sorted = [...entries].sort((a, b) => a.date.getTime() - b.date.getTime());
+    const first = startOfDay(sorted[0].date);
+    const last = startOfDay(sorted[sorted.length - 1].date);
+    const spanDays = Math.round((last.getTime() - first.getTime()) / 86_400_000);
+    const weekly = spanDays > 92;
+    const bucketOf = weekly ? startOfWeek : startOfDay;
+
+    const buckets = new Map<number, Partial<Record<TicketType, number>>>();
+    const seen = new Set<TicketType>();
+    for (const {date, type} of entries) {
+        const key = bucketOf(date).getTime();
+        const rec = buckets.get(key) ?? {};
+        rec[type] = (rec[type] ?? 0) + 1;
+        buckets.set(key, rec);
+        seen.add(type);
+    }
+
+    const types = TICKET_TYPES.map(t => t.value).filter(v => seen.has(v));
+
+    const data: TimelineDatum[] = [];
+    let cumulative = 0;
+    const step = weekly ? 7 : 1;
+    const cur = bucketOf(first);
+    const end = bucketOf(last);
+    while (cur <= end) {
+        const rec = buckets.get(cur.getTime()) ?? {};
+        const datum: TimelineDatum = {label: formatBucketLabel(cur, isEnglish), cumulative: 0};
+        for (const type of types) {
+            const count = rec[type] ?? 0;
+            datum[type] = count;
+            cumulative += count;
+        }
+        datum.cumulative = cumulative;
+        data.push(datum);
+        cur.setDate(cur.getDate() + step);
+    }
+    return {data, types};
+};
+
 export function StatsSection({loading, error, attendees, onRefresh}: StatsSectionProps) {
     const {isEnglish} = useLanguage();
 
@@ -41,6 +129,7 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
         let activeTickets = 0;
 
         const typeCounts: Record<string, number> = {};
+        const createdEntries: TimelineEntry[] = [];
 
         for (const a of attendees) {
             for (const t of a.tickets) {
@@ -51,8 +140,11 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
                     activeTickets++;
                     if (t.redeemed) redeemedTickets++;
                 }
-                const key = t.type || 'normal';
-                typeCounts[key] = (typeCounts[key] || 0) + 1;
+                const type = t.type || 'normal';
+                typeCounts[type] = (typeCounts[type] || 0) + 1;
+                // Fall back to the attendee timestamp for legacy tickets that
+                // predate per-ticket createdAt.
+                createdEntries.push({date: t.createdAt ?? a.createdAt, type});
             }
         }
 
@@ -86,6 +178,8 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
             ? Math.round((redeemedTickets / activeTickets) * 100)
             : 0;
 
+        const timeline = buildTimeline(createdEntries, isEnglish);
+
         return {
             attendees: attendees.length,
             totalTickets,
@@ -95,6 +189,7 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
             redemptionRate,
             typeData,
             statusData,
+            timeline,
         };
     }, [attendees, isEnglish]);
 
@@ -185,6 +280,22 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
                     )}
                 </ChartCard>
             </div>
+
+            <div className="admin-stats-charts">
+                <ChartCard title={isEnglish ? 'Tickets Created Over Time' : '出票时间趋势'}>
+                    {stats.timeline.data.length > 0 ? (
+                        <ChartTimeline
+                            data={stats.timeline.data}
+                            types={stats.timeline.types}
+                            isEnglish={isEnglish}
+                        />
+                    ) : (
+                        <p className="admin-no-results">
+                            {isEnglish ? 'No data.' : '暂无数据。'}
+                        </p>
+                    )}
+                </ChartCard>
+            </div>
         </div>
     );
 }
@@ -238,6 +349,92 @@ function ChartPie({data, donut}: {data: ChartDatum[]; donut?: boolean}) {
                     wrapperStyle={{fontSize: '12px'}}
                 />
             </PieChart>
+        </ResponsiveContainer>
+    );
+}
+
+const CUMULATIVE_KEY = 'cumulative';
+
+function ChartTimeline(
+    {data, types, isEnglish}: {data: TimelineDatum[]; types: TicketType[]; isEnglish: boolean},
+) {
+    // dataKeys the user has toggled off via the legend (ticket types and/or
+    // the cumulative line).
+    const [hidden, setHidden] = useState<Set<string>>(new Set());
+
+    const toggle = (key?: string) => {
+        if (!key) return;
+        setHidden(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
+    };
+
+    // Round only the top segment of each bar — i.e. the last visible type.
+    const topVisibleType = [...types].reverse().find(t => !hidden.has(t));
+
+    return (
+        <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={data} margin={{top: 8, right: 8, left: -12, bottom: 0}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.06)"/>
+                <XAxis
+                    dataKey="label"
+                    tick={{fontSize: 11}}
+                    interval="preserveStartEnd"
+                    minTickGap={24}
+                />
+                <YAxis yAxisId="left" allowDecimals={false} tick={{fontSize: 11}} width={32}/>
+                <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    allowDecimals={false}
+                    tick={{fontSize: 11}}
+                    width={32}
+                />
+                <Tooltip/>
+                <Legend
+                    verticalAlign="top"
+                    iconType="circle"
+                    wrapperStyle={{fontSize: '12px', cursor: 'pointer'}}
+                    onClick={(e) => toggle((e as {dataKey?: string}).dataKey)}
+                    formatter={(value, entry) => {
+                        const key = (entry as {dataKey?: string} | undefined)?.dataKey;
+                        return (
+                            <span style={{color: key && hidden.has(key) ? '#bbb' : 'inherit'}}>
+                                {value}
+                            </span>
+                        );
+                    }}
+                />
+                {types.map((type) => (
+                    <Bar
+                        key={type}
+                        yAxisId="left"
+                        stackId="created"
+                        dataKey={type}
+                        name={ticketTypeLabel(type, isEnglish)}
+                        fill={TYPE_COLORS[type]}
+                        maxBarSize={48}
+                        hide={hidden.has(type)}
+                        radius={type === topVisibleType ? [3, 3, 0, 0] : undefined}
+                    />
+                ))}
+                <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey={CUMULATIVE_KEY}
+                    name={isEnglish ? 'Cumulative' : '累计'}
+                    stroke="#6c5ce7"
+                    strokeWidth={2}
+                    dot={false}
+                    hide={hidden.has(CUMULATIVE_KEY)}
+                />
+            </ComposedChart>
         </ResponsiveContainer>
     );
 }
