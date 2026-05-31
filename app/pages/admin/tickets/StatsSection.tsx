@@ -1,6 +1,7 @@
 import { type ReactNode, useMemo, useState } from 'react';
 import {
     Bar,
+    BarChart,
     CartesianGrid,
     Cell,
     ComposedChart,
@@ -44,6 +45,12 @@ interface ChartDatum {
     color: string;
 }
 
+interface TypeStatusDatum {
+    name: string;
+    redeemed: number;
+    unredeemed: number;
+}
+
 interface TimelineEntry {
     date: Date;
     type: TicketType;
@@ -61,6 +68,11 @@ interface Timeline {
     types: TicketType[];
 }
 
+type Granularity = 'hour' | 'day' | 'week';
+
+const startOfHour = (d: Date): Date =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours());
+
 const startOfDay = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
 const startOfWeek = (d: Date): Date => {
@@ -69,23 +81,43 @@ const startOfWeek = (d: Date): Date => {
     return s;
 };
 
-const formatBucketLabel = (d: Date, isEnglish: boolean): string =>
-    isEnglish
+const bucketStart: Record<Granularity, (d: Date) => Date> = {
+    hour: startOfHour,
+    day: startOfDay,
+    week: startOfWeek,
+};
+
+// Advance `d` in place by one bucket so the timeline includes empty buckets.
+const advance: Record<Granularity, (d: Date) => void> = {
+    hour: d => d.setHours(d.getHours() + 1),
+    day: d => d.setDate(d.getDate() + 1),
+    week: d => d.setDate(d.getDate() + 7),
+};
+
+const formatBucketLabel = (d: Date, granularity: Granularity, isEnglish: boolean): string => {
+    if (granularity === 'hour') {
+        return isEnglish
+            ? d.toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric'})
+            : `${d.getMonth() + 1}月${d.getDate()}日 ${d.getHours()}时`;
+    }
+    return isEnglish
         ? `${d.toLocaleDateString('en-US', {month: 'short'})} ${d.getDate()}`
         : `${d.getMonth() + 1}月${d.getDate()}日`;
+};
 
-// Bucket ticket creations by day (or by week when the range spans more than
-// ~3 months), splitting each bucket by ticket type and accumulating a running
-// total for the cumulative line. `types` lists the types that actually appear,
-// in canonical order, so the chart only draws bars that carry data.
+// Bucket entries by hour, day, or week depending on the span they cover —
+// hourly when everything falls within ~2 days (e.g. redemptions during an
+// event), weekly when the range exceeds ~3 months, daily otherwise. Each
+// bucket is split by ticket type and accumulates a running total for the
+// cumulative line. `types` lists the types that actually appear, in canonical
+// order, so the chart only draws bars that carry data.
 const buildTimeline = (entries: TimelineEntry[], isEnglish: boolean): Timeline => {
     if (entries.length === 0) return {data: [], types: []};
     const sorted = [...entries].sort((a, b) => a.date.getTime() - b.date.getTime());
-    const first = startOfDay(sorted[0].date);
-    const last = startOfDay(sorted[sorted.length - 1].date);
-    const spanDays = Math.round((last.getTime() - first.getTime()) / 86_400_000);
-    const weekly = spanDays > 92;
-    const bucketOf = weekly ? startOfWeek : startOfDay;
+    const spanDays = (sorted[sorted.length - 1].date.getTime() - sorted[0].date.getTime())
+        / 86_400_000;
+    const granularity: Granularity = spanDays <= 2 ? 'hour' : spanDays > 92 ? 'week' : 'day';
+    const bucketOf = bucketStart[granularity];
 
     const buckets = new Map<number, Partial<Record<TicketType, number>>>();
     const seen = new Set<TicketType>();
@@ -101,12 +133,11 @@ const buildTimeline = (entries: TimelineEntry[], isEnglish: boolean): Timeline =
 
     const data: TimelineDatum[] = [];
     let cumulative = 0;
-    const step = weekly ? 7 : 1;
-    const cur = bucketOf(first);
-    const end = bucketOf(last);
+    const cur = bucketOf(sorted[0].date);
+    const end = bucketOf(sorted[sorted.length - 1].date);
     while (cur <= end) {
         const rec = buckets.get(cur.getTime()) ?? {};
-        const datum: TimelineDatum = {label: formatBucketLabel(cur, isEnglish), cumulative: 0};
+        const datum: TimelineDatum = {label: formatBucketLabel(cur, granularity, isEnglish), cumulative: 0};
         for (const type of types) {
             const count = rec[type] ?? 0;
             datum[type] = count;
@@ -114,7 +145,7 @@ const buildTimeline = (entries: TimelineEntry[], isEnglish: boolean): Timeline =
         }
         datum.cumulative = cumulative;
         data.push(datum);
-        cur.setDate(cur.getDate() + step);
+        advance[granularity](cur);
     }
     return {data, types};
 };
@@ -129,7 +160,10 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
         let activeTickets = 0;
 
         const typeCounts: Record<string, number> = {};
+        const redeemedByType: Record<string, number> = {};
+        const unredeemedByType: Record<string, number> = {};
         const createdEntries: TimelineEntry[] = [];
+        const redeemedEntries: TimelineEntry[] = [];
 
         for (const a of attendees) {
             for (const t of a.tickets) {
@@ -142,9 +176,21 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
                 }
                 const type = t.type || 'normal';
                 typeCounts[type] = (typeCounts[type] || 0) + 1;
+                // Split active (non-voided) tickets per type into redeemed and
+                // not-yet-redeemed for the per-type status breakdown.
+                if (!t.voided) {
+                    if (t.redeemed) {
+                        redeemedByType[type] = (redeemedByType[type] || 0) + 1;
+                    } else {
+                        unredeemedByType[type] = (unredeemedByType[type] || 0) + 1;
+                    }
+                }
                 // Fall back to the attendee timestamp for legacy tickets that
                 // predate per-ticket createdAt.
                 createdEntries.push({date: t.createdAt ?? a.createdAt, type});
+                // Only tickets with a recorded redemption time feed the
+                // redemption timeline (legacy redemptions may lack redeemedAt).
+                if (t.redeemed && t.redeemedAt) redeemedEntries.push({date: t.redeemedAt, type});
             }
         }
 
@@ -174,11 +220,20 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
             },
         ].filter(d => d.value > 0);
 
+        const typeStatusData: TypeStatusDatum[] = TICKET_TYPES
+            .map(tt => ({
+                name: isEnglish ? tt.labelEn : tt.labelCn,
+                redeemed: redeemedByType[tt.value] || 0,
+                unredeemed: unredeemedByType[tt.value] || 0,
+            }))
+            .filter(d => d.redeemed > 0 || d.unredeemed > 0);
+
         const redemptionRate = activeTickets > 0
             ? Math.round((redeemedTickets / activeTickets) * 100)
             : 0;
 
         const timeline = buildTimeline(createdEntries, isEnglish);
+        const redemptionTimeline = buildTimeline(redeemedEntries, isEnglish);
 
         return {
             attendees: attendees.length,
@@ -189,7 +244,9 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
             redemptionRate,
             typeData,
             statusData,
+            typeStatusData,
             timeline,
+            redemptionTimeline,
         };
     }, [attendees, isEnglish]);
 
@@ -282,6 +339,20 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
             </div>
 
             <div className="admin-stats-charts">
+                <ChartCard
+                    title={isEnglish ? 'Redeemed vs Not Redeemed by Type' : '各类型验证情况'}
+                >
+                    {stats.typeStatusData.length > 0 ? (
+                        <ChartTypeStatus data={stats.typeStatusData} isEnglish={isEnglish}/>
+                    ) : (
+                        <p className="admin-no-results">
+                            {isEnglish ? 'No data.' : '暂无数据。'}
+                        </p>
+                    )}
+                </ChartCard>
+            </div>
+
+            <div className="admin-stats-charts">
                 <ChartCard title={isEnglish ? 'Tickets Created Over Time' : '出票时间趋势'}>
                     {stats.timeline.data.length > 0 ? (
                         <ChartTimeline
@@ -292,6 +363,22 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
                     ) : (
                         <p className="admin-no-results">
                             {isEnglish ? 'No data.' : '暂无数据。'}
+                        </p>
+                    )}
+                </ChartCard>
+            </div>
+
+            <div className="admin-stats-charts">
+                <ChartCard title={isEnglish ? 'Redemptions Over Time' : '验证时间趋势'}>
+                    {stats.redemptionTimeline.data.length > 0 ? (
+                        <ChartTimeline
+                            data={stats.redemptionTimeline.data}
+                            types={stats.redemptionTimeline.types}
+                            isEnglish={isEnglish}
+                        />
+                    ) : (
+                        <p className="admin-no-results">
+                            {isEnglish ? 'No tickets redeemed yet.' : '暂无验证记录。'}
                         </p>
                     )}
                 </ChartCard>
@@ -349,6 +436,41 @@ function ChartPie({data, donut}: {data: ChartDatum[]; donut?: boolean}) {
                     wrapperStyle={{fontSize: '12px'}}
                 />
             </PieChart>
+        </ResponsiveContainer>
+    );
+}
+
+function ChartTypeStatus(
+    {data, isEnglish}: {data: TypeStatusDatum[]; isEnglish: boolean},
+) {
+    return (
+        <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data} margin={{top: 8, right: 8, left: -12, bottom: 0}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.06)"/>
+                <XAxis dataKey="name" tick={{fontSize: 11}} interval={0}/>
+                <YAxis allowDecimals={false} tick={{fontSize: 11}} width={32}/>
+                <Tooltip/>
+                <Legend
+                    verticalAlign="bottom"
+                    iconType="circle"
+                    wrapperStyle={{fontSize: '12px'}}
+                />
+                <Bar
+                    stackId="status"
+                    dataKey="redeemed"
+                    name={isEnglish ? 'Redeemed' : '已验证'}
+                    fill={STATUS_COLORS.redeemed}
+                    maxBarSize={56}
+                />
+                <Bar
+                    stackId="status"
+                    dataKey="unredeemed"
+                    name={isEnglish ? 'Not Redeemed' : '未验证'}
+                    fill={STATUS_COLORS.unredeemed}
+                    maxBarSize={56}
+                    radius={[3, 3, 0, 0]}
+                />
+            </BarChart>
         </ResponsiveContainer>
     );
 }

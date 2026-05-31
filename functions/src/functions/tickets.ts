@@ -590,6 +590,130 @@ export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
         return {unvoided: true};
     });
 });
+export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
+        if (tickets[idx].voided) {
+            throw new HttpsError("failed-precondition", "This ticket has been voided.", {code: "voided"});
+        }
+        // Idempotent: a ticket already redeemed stays as-is so a double-click
+        // can't overwrite the original redeemer/time.
+        if (tickets[idx].redeemed) {
+            return {redeemed: false, alreadyRedeemed: true};
+        }
+
+        const now = Timestamp.now();
+        const callerName: string = callerSnap.data()?.displayName ?? "";
+        tickets[idx] = {
+            ...tickets[idx],
+            redeemed: true,
+            redeemedAt: now,
+            redeemedBy: uid,
+            redeemedByName: callerName,
+        };
+
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+
+        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-redeem",
+            performedBy: uid,
+            performedByName: callerName,
+            eventId,
+            eventTitle,
+            targetEmail: data.email ?? "",
+            targetName: data.name ?? "",
+            code: ticketId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {redeemed: true};
+    });
+});
+export const resetTicket = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
+
+        // Clear only the redemption state. The attendee's user-level
+        // attendedEvents (set by the scanner) is intentionally left untouched —
+        // a user may have attended via another ticket, so we don't un-check-in
+        // the person just because one ticket was reset.
+        tickets[idx] = {
+            ...tickets[idx],
+            redeemed: false,
+            redeemedAt: null,
+            redeemedBy: "",
+            redeemedByName: "",
+            checkedIn: false,
+            checkedInAt: null,
+        };
+
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+
+        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-reset",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle,
+            targetEmail: data.email ?? "",
+            targetName: data.name ?? "",
+            code: ticketId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {reset: true};
+    });
+});
 export const updateEventAttendee = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
 
