@@ -437,6 +437,12 @@ export const functionsErrorDetails = <T = unknown>(err: unknown): T | null => {
 };
 
 const googleProvider = new GoogleAuthProvider();
+// Always show the Google account chooser. Firebase signOut() only clears the
+// app's session, not the browser's Google SSO session, so without this the
+// OAuth flow silently re-authenticates the existing account (most visible in
+// Chrome, where users are signed into Google at the browser level and the
+// FedCM popup auto-selects the returning account) — preventing account switching.
+googleProvider.setCustomParameters({prompt: 'select_account'});
 
 export const signInWithGoogle = () => signInWithPopup(getFirebaseAuth(), googleProvider);
 
