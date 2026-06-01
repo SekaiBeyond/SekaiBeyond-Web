@@ -81,7 +81,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [eventForm, setEventForm] = useState({
         title: '', titleCn: '', tagId: '', date: '',
         location: '', locationCn: '',
-        description: '', descriptionCn: '', icon: '',
+        description: '', descriptionCn: '', icon: '', recapLink: '', recapLinkCn: '',
     });
     const [savingEvent, setSavingEvent] = useState(false);
     const [eventImage, setEventImage] = useState<File | null>(null);
@@ -144,7 +144,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         setEventForm({
             title: '', titleCn: '', tagId: '', date: '',
             location: '', locationCn: '',
-            description: '', descriptionCn: '', icon: '',
+            description: '', descriptionCn: '', icon: '', recapLink: '', recapLinkCn: '',
         });
         setEventImage(null);
         if (eventImagePreview?.startsWith('blob:')) URL.revokeObjectURL(eventImagePreview);
@@ -167,6 +167,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             date: normalizedDate,
             location: event.location, locationCn: event.locationCn,
             description: event.description, descriptionCn: event.descriptionCn, icon: event.icon,
+            recapLink: event.recapLink, recapLinkCn: event.recapLinkCn,
         });
         setEditingEvent(event);
         setEventImage(null);
@@ -210,6 +211,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 description: eventForm.description,
                 descriptionCn: eventForm.descriptionCn,
                 icon: iconUrl,
+                recapLink: eventForm.recapLink.trim(),
+                recapLinkCn: eventForm.recapLinkCn.trim(),
             });
 
             await refreshEvents();
@@ -355,6 +358,14 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     placeholder={isEnglish ? 'Event description' : '活动描述'}
                                     placeholderCn={isEnglish ? 'Event description in Chinese' : '活动中文描述'}
                                     multiline fullWidth
+                                />
+                                <BilingualFormField
+                                    label="Recap Link" labelCn="活动回顾链接"
+                                    value={eventForm.recapLink} valueCn={eventForm.recapLinkCn}
+                                    onChange={v => setEventForm(f => ({...f, recapLink: v}))}
+                                    onChangeCn={v => setEventForm(f => ({...f, recapLinkCn: v}))}
+                                    placeholder={isEnglish ? 'https://… (optional)' : 'https://…（可选）'}
+                                    placeholderCn={isEnglish ? 'https://… (optional)' : 'https://…（可选）'}
                                 />
                             </div>
                             <div className="admin-btn-row">

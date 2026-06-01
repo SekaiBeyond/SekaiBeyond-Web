@@ -13,6 +13,8 @@ export interface PastEvent {
     description: string;
     descriptionCn: string;
     icon: string;
+    recapLink: string;
+    recapLinkCn: string;
     published: boolean;
     paid: boolean;
     deleteAt: Date | null;
@@ -44,6 +46,8 @@ async function fetchPastEvents(force = false): Promise<PastEvent[]> {
                 description: data.description ?? '',
                 descriptionCn: data.descriptionCn ?? '',
                 icon: data.icon ?? '',
+                recapLink: data.recapLink ?? '',
+                recapLinkCn: data.recapLinkCn ?? '',
                 published: data.published ?? true,
                 paid: data.paid ?? false,
                 deleteAt: data.deleteAt?.toDate?.() ?? null,

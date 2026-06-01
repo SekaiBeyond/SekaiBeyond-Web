@@ -131,8 +131,15 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const icon = validateStr(input.icon, "icon", 500);
     validateStorageImageUrl(icon, "icon");
+    const recapLink = validateStr(input.recapLink, "recapLink", 500);
+    validateUrl(recapLink, "recapLink");
+    const recapLinkCn = validateStr(input.recapLinkCn, "recapLinkCn", 500);
+    validateUrl(recapLinkCn, "recapLinkCn");
 
-    const data = {title, titleCn, tagId, date, location, locationCn, description, descriptionCn, icon};
+    const data = {
+        title, titleCn, tagId, date, location, locationCn,
+        description, descriptionCn, icon, recapLink, recapLinkCn,
+    };
     const docId = eventId ?? db.collection("pastEvents").doc().id;
 
     const {result, oldIcon} = await adminTransaction(uid, async (txn, callerSnap) => {
