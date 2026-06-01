@@ -77,13 +77,15 @@ export const onPastEventDeleted = onDocumentDeleted(
         if (!data?.deleteAt) return;
 
         try {
-            const [codesSnap, attendeesSnap, staffSnap] = await Promise.all([
+            const [codesSnap, staffCodesSnap, attendeesSnap, staffSnap] = await Promise.all([
                 db.collection("claimCodes").where("eventId", "==", eventId).get(),
+                db.collection("staffClaimCodes").where("eventId", "==", eventId).get(),
                 db.collection("users").where("attendedEvents", "array-contains", eventId).get(),
                 db.collection("users").where("eventStaffEvents", "array-contains", eventId).get(),
             ]);
             const cascadeOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [
                 ...codesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
+                ...staffCodesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
                 ...attendeesSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) =>
                     b.update(d.ref, {attendedEvents: FieldValue.arrayRemove(eventId)})
                 ),
@@ -409,11 +411,19 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         if (!data) return;
 
         try {
-            const codesSnap = await db.collection("claimCodes")
-                .where("eventId", "==", eventId).get();
-            const cascadeOps = codesSnap.docs.map(d =>
-                (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)
-            );
+            // Wipe both event check-in codes and staff claim codes — they're scoped
+            // to the live event and must not survive archive/deletion. A fresh staff
+            // code can be generated for the past event afterward if needed.
+            const [codesSnap, staffCodesSnap] = await Promise.all([
+                db.collection("claimCodes").where("eventId", "==", eventId).get(),
+                db.collection("staffClaimCodes").where("eventId", "==", eventId).get(),
+            ]);
+            const cascadeOps = [
+                ...codesSnap.docs.map(d =>
+                    (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
+                ...staffCodesSnap.docs.map(d =>
+                    (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
+            ];
             if (cascadeOps.length > 0) await commitInChunks(cascadeOps);
         } catch (err) {
             console.error(`onUpcomingEventDeleted: cascade failed for ${eventId}`, err);
@@ -541,6 +551,9 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             icon: "",
             tagId,
             published: false,
+            // Preserve paid status so the past-events panel can show the
+            // read-only Tickets/Stats view instead of the free attendee list.
+            paid: eventData.paid === true,
         });
         txn.delete(db.collection("upcomingEvents").doc(eventId));
         txn.set(db.collection("records").doc(), {
@@ -574,21 +587,14 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     }
     if (deleteOps.length > 0) await commitInChunks(deleteOps);
 
-    // ---- Phase D: remove event from assigned users' eventStaffEvents ----
-    // Once archived, event staff no longer need admin panel access for this event.
-    try {
-        const staffUsersSnap = await db.collection("users")
-            .where("eventStaffEvents", "array-contains", eventId)
-            .get();
-        if (!staffUsersSnap.empty) {
-            const cleanupOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = staffUsersSnap.docs
-                .map(d => (b: FirebaseFirestore.WriteBatch) =>
-                    b.update(d.ref, {eventStaffEvents: FieldValue.arrayRemove(eventId)}));
-            await commitInChunks(cleanupOps);
-        }
-    } catch (err) {
-        console.error(`archiveUpcomingEvent: eventStaffEvents cleanup failed for ${eventId}`, err);
-    }
+    // Event staff are intentionally retained on archive. Past-event staff are
+    // tracked via eventStaffEvents (the past-event id stays in the array) — that
+    // same array drives the profile Staff badge (users.ts) and the admin roster,
+    // and lets admins keep/assign staff on past events. Lingering admin/scanner
+    // access is avoided by gating event-staff access on *upcoming* assigned events
+    // rather than raw eventStaffEvents membership (see admin/index.tsx
+    // isEventStaffOnly). eventStaffEvents is purged only when the past event is
+    // hard-deleted (onPastEventDeleted).
 
     return {pastEventId};
 });

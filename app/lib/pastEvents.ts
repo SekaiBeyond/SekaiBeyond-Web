@@ -14,6 +14,7 @@ export interface PastEvent {
     descriptionCn: string;
     icon: string;
     published: boolean;
+    paid: boolean;
     deleteAt: Date | null;
 }
 
@@ -44,6 +45,7 @@ async function fetchPastEvents(force = false): Promise<PastEvent[]> {
                 descriptionCn: data.descriptionCn ?? '',
                 icon: data.icon ?? '',
                 published: data.published ?? true,
+                paid: data.paid ?? false,
                 deleteAt: data.deleteAt?.toDate?.() ?? null,
             });
         });

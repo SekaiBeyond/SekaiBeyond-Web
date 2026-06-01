@@ -468,7 +468,13 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
                     throw new HttpsError("permission-denied", "Insufficient permissions.");
                 }
 
-                const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+                // Staff codes can be generated for past events too (to credit
+                // staff retroactively), so resolve the event from either collection.
+                const [upcomingSnap, pastSnap] = await Promise.all([
+                    txn.get(db.collection("upcomingEvents").doc(eventId)),
+                    txn.get(db.collection("pastEvents").doc(eventId)),
+                ]);
+                const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
                 if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
 
                 const [existing, existingCodes] = await Promise.all([
@@ -546,17 +552,20 @@ export const claimStaffCode = onCall({maxInstances: 20}, async (request) => {
         const eventId: string = data.eventId;
         if (!eventId) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
 
-        const [eventSnap, userSnap] = await Promise.all([
+        const [upcomingSnap, pastSnap, userSnap] = await Promise.all([
             txn.get(db.collection("upcomingEvents").doc(eventId)),
+            txn.get(db.collection("pastEvents").doc(eventId)),
             txn.get(userRef),
         ]);
+        const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
         if (!eventSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
         if (!userSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        const isPastEvent = !upcomingSnap.exists;
 
         const eventData = eventSnap.data()!;
         const eventTitle: string = eventData.title ?? eventData.name ?? "";
         const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
-        const eventPoster: string = eventData.poster ?? "";
+        const eventPoster: string = eventData.poster ?? eventData.icon ?? "";
 
         const staffEvents: string[] = userSnap.data()!.eventStaffEvents ?? [];
         if (staffEvents.includes(eventId)) {
@@ -572,7 +581,11 @@ export const claimStaffCode = onCall({maxInstances: 20}, async (request) => {
         txn.update(codeRef, {usedCount: FieldValue.increment(1)});
         txn.update(userRef, {
             eventStaffEvents: FieldValue.arrayUnion(eventId),
-            attendedEvents: FieldValue.arrayUnion(eventId),
+            // Upcoming: auto-attend. Past: keep them out of the free attendee list
+            // (matches assignEventStaff — staff are credited via the Staff badge).
+            attendedEvents: isPastEvent
+                ? FieldValue.arrayRemove(eventId)
+                : FieldValue.arrayUnion(eventId),
         });
         txn.set(db.collection("records").doc(), {
             type: "event-staff-assign",

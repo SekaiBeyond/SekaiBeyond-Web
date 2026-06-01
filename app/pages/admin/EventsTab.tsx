@@ -10,12 +10,15 @@ import {
 } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
+import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { UserRecord } from './types';
-import { fetchEventAttendees, fetchEventStaffCount } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount, pastEventHasTickets } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
 import { PastEventAttendeesSection } from './PastEventAttendeesSection';
+import { StaffClaimCodeSection } from './StaffClaimCodeSection';
+import { TicketsSubtab } from './tickets/TicketsSubtab';
 
 interface EventsTabProps {
     pastEvents: PastEvent[];
@@ -25,6 +28,33 @@ interface EventsTabProps {
     onDetailChange?: (inDetail: boolean) => void;
     readOnly?: boolean;
 }
+
+// Adapt an archived event to the UpcomingEvent shape TicketsSubtab expects.
+// Only the fields the read-only Attendees/Stats view reads are meaningful; the
+// rest are placeholders (the Import/Template/Send sections that consume them are
+// hidden in readOnly mode).
+const toTicketEvent = (e: PastEvent): UpcomingEvent => ({
+    id: e.id,
+    title: e.title,
+    titleCn: e.titleCn,
+    description: e.description,
+    descriptionCn: e.descriptionCn,
+    location: e.location,
+    locationCn: e.locationCn,
+    startAt: e.date ? new Date(e.date) : new Date(),
+    endAt: e.date ? new Date(e.date) : new Date(),
+    poster: '',
+    emailHeaderBg: '',
+    posterCredit: '',
+    buyTicket: '',
+    learnMore: '',
+    customButtonText: '',
+    customButtonTextCn: '',
+    customButtonLink: '',
+    published: e.published,
+    paid: true,
+    deleteAt: e.deleteAt,
+});
 
 export interface EventsTabHandle {
     selectManagedEvent: (eventId: string) => Promise<void>;
@@ -57,22 +87,47 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [eventImage, setEventImage] = useState<File | null>(null);
     const [eventImagePreview, setEventImagePreview] = useState<string | null>(null);
     const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
-    const [eventSubTab, setEventSubTab] = useState<'attendees' | 'staff'>('attendees');
+    const [eventSubTab, setEventSubTab] = useState<'attendees' | 'staff' | 'tickets'>('attendees');
     const [staffCount, setStaffCount] = useState<number | null>(null);
+    const [isPaidEvent, setIsPaidEvent] = useState(false);
     const selectGenRef = useRef(0);
 
     const selectManagedEvent = async (eventId: string) => {
         const gen = ++selectGenRef.current;
+        const evt = pastEvents.find(e => e.id === eventId) ?? null;
+        const flaggedPaid = evt?.paid === true;
         setManagedEvent(eventId);
         setEventAttendees([]);
         setStaffCount(null);
-        setEventSubTab('attendees');
-        try {
-            await loadEventAttendees(eventId);
-        } catch (err) {
-            if (selectGenRef.current !== gen) return;
-            console.error('Failed to load attendees:', err);
-            showToast(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。', 'error');
+        // Paid events show the read-only Tickets/Stats view; free events the
+        // user-record attendee list.
+        setIsPaidEvent(flaggedPaid);
+        setEventSubTab(flaggedPaid ? 'tickets' : 'attendees');
+
+        let paid = flaggedPaid;
+        if (!paid) {
+            // Fall back to probing the ticket attendees subcollection for events
+            // archived before the `paid` flag was stored on the past-event doc.
+            try {
+                paid = await pastEventHasTickets(eventId);
+                if (selectGenRef.current !== gen) return;
+                if (paid) {
+                    setIsPaidEvent(true);
+                    setEventSubTab('tickets');
+                }
+            } catch {
+                // Non-fatal — fall back to the free attendee view.
+            }
+        }
+
+        if (!paid) {
+            try {
+                await loadEventAttendees(eventId);
+            } catch (err) {
+                if (selectGenRef.current !== gen) return;
+                console.error('Failed to load attendees:', err);
+                showToast(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。', 'error');
+            }
         }
         try {
             const count = await fetchEventStaffCount(eventId);
@@ -433,15 +488,24 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 </p>
                             )}
                             <div className="admin-sub-tabs">
-                                <button
-                                    className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
-                                    onClick={() => setEventSubTab('attendees')}
-                                >
-                                    {isEnglish ? 'Attendees' : '参加者'}
-                                    {eventAttendees.length > 0 && (
-                                        <span className="admin-sub-tab-count">{eventAttendees.length}</span>
-                                    )}
-                                </button>
+                                {isPaidEvent ? (
+                                    <button
+                                        className={`admin-sub-tab ${eventSubTab === 'tickets' ? 'admin-sub-tab-active' : ''}`}
+                                        onClick={() => setEventSubTab('tickets')}
+                                    >
+                                        {isEnglish ? 'Tickets' : '门票'}
+                                    </button>
+                                ) : (
+                                    <button
+                                        className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
+                                        onClick={() => setEventSubTab('attendees')}
+                                    >
+                                        {isEnglish ? 'Attendees' : '参加者'}
+                                        {eventAttendees.length > 0 && (
+                                            <span className="admin-sub-tab-count">{eventAttendees.length}</span>
+                                        )}
+                                    </button>
+                                )}
                                 <button
                                     className={`admin-sub-tab ${eventSubTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
                                     onClick={() => setEventSubTab('staff')}
@@ -453,7 +517,20 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 </button>
                             </div>
 
-                            {eventSubTab === 'attendees' && (
+                            {isPaidEvent && eventSubTab === 'tickets' && (
+                                // Archived paid event — tickets are read-only and live
+                                // under pastEvents (migrated on archive). canScan is off
+                                // because the event is over.
+                                <TicketsSubtab
+                                    event={toTicketEvent(managedEvt)}
+                                    readOnly
+                                    canScan={false}
+                                    collectionRoot="pastEvents"
+                                    showToast={showToast}
+                                />
+                            )}
+
+                            {!isPaidEvent && eventSubTab === 'attendees' && (
                                 <PastEventAttendeesSection
                                     eventId={managedEvt.id}
                                     attendees={eventAttendees}
@@ -461,6 +538,13 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     onReload={() => loadEventAttendees(managedEvt.id)}
                                     showToast={showToast}
                                     readOnly={readOnly}
+                                />
+                            )}
+
+                            {eventSubTab === 'staff' && !readOnly && (
+                                <StaffClaimCodeSection
+                                    eventId={managedEvt.id}
+                                    showToast={showToast}
                                 />
                             )}
 

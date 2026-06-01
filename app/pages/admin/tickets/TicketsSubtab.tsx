@@ -31,9 +31,18 @@ interface TicketsSubtabProps {
     readOnly: boolean;
     canScan: boolean;
     showToast: ShowToast;
+    // Where ticket attendees live. Archived events keep them under `pastEvents`
+    // (migrated on archive); live events under `upcomingEvents`.
+    collectionRoot?: 'upcomingEvents' | 'pastEvents';
 }
 
-export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubtabProps) {
+export function TicketsSubtab({
+                                  event,
+                                  readOnly,
+                                  canScan,
+                                  showToast,
+                                  collectionRoot = 'upcomingEvents'
+                              }: TicketsSubtabProps) {
     const {isEnglish} = useLanguage();
     const {profile} = useAuth();
     const eventId = event.id;
@@ -57,7 +66,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
         setAttendeesError(null);
         try {
             const db = getFirebaseDb();
-            const col = collection(db, 'upcomingEvents', eventId, 'attendees');
+            const col = collection(db, collectionRoot, eventId, 'attendees');
             const snap = await getDocs(query(col, orderBy('createdAt', 'desc')));
             const list = snap.docs.map(d => mapAttendeeDoc(d.id, d.data()));
             setAttendees(list);
@@ -68,7 +77,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
         } finally {
             setLoadingAttendees(false);
         }
-    }, [eventId, isEnglish]);
+    }, [eventId, isEnglish, collectionRoot]);
 
     useEffect(() => {
         void loadAttendees();
