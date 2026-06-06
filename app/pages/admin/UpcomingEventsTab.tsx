@@ -55,6 +55,7 @@ interface EventForm {
     descriptionCn: string;
     location: string;
     locationCn: string;
+    venueId: string;
     startAt: string;
     endAt: string;
     posterCredit: string;
@@ -68,7 +69,7 @@ interface EventForm {
 
 const emptyForm: EventForm = {
     title: '', titleCn: '', description: '', descriptionCn: '',
-    location: '', locationCn: '', startAt: '', endAt: '',
+    location: '', locationCn: '', venueId: '', startAt: '', endAt: '',
     posterCredit: '', buyTicket: '', learnMore: '',
     customButtonText: '', customButtonTextCn: '', customButtonLink: '',
     paid: false,
@@ -248,6 +249,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             descriptionCn: event.descriptionCn,
             location: event.location,
             locationCn: event.locationCn,
+            venueId: event.venueId,
             startAt: toDatetimeLocal(event.startAt),
             endAt: toDatetimeLocal(event.endAt),
             posterCredit: event.posterCredit,
@@ -307,6 +309,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 descriptionCn: form.descriptionCn,
                 location: form.location,
                 locationCn: form.locationCn,
+                venueId: form.venueId,
                 startAt: startAt.toISOString(),
                 endAt: endAt.toISOString(),
                 poster: posterUrl,
@@ -455,8 +458,10 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 </label>
                                 <LocationFormField
                                     value={form.location} valueCn={form.locationCn}
+                                    venueId={form.venueId}
                                     onChange={v => setForm(f => ({...f, location: v}))}
                                     onChangeCn={v => setForm(f => ({...f, locationCn: v}))}
+                                    onChangeVenueId={v => setForm(f => ({...f, venueId: v}))}
                                     placeholder={isEnglish ? 'Event location' : '活动地点'}
                                     placeholderCn={isEnglish ? 'Location in Chinese' : '中文地点'}
                                 />

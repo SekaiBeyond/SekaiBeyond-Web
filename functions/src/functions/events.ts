@@ -127,6 +127,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const date = validateStr(input.date, "date", 50, true);
     const location = validateStr(input.location, "location", 200);
     const locationCn = validateStr(input.locationCn, "locationCn", 200);
+    const venueId = validateStr(input.venueId, "venueId", 128);
     const description = validateStr(input.description, "description", 2000);
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const icon = validateStr(input.icon, "icon", 500);
@@ -137,7 +138,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     validateUrl(recapLinkCn, "recapLinkCn");
 
     const data = {
-        title, titleCn, tagId, date, location, locationCn,
+        title, titleCn, tagId, date, location, locationCn, venueId,
         description, descriptionCn, icon, recapLink, recapLinkCn,
     };
     const docId = eventId ?? db.collection("pastEvents").doc().id;
@@ -215,6 +216,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const location = validateStr(input.location, "location", 200);
     const locationCn = validateStr(input.locationCn, "locationCn", 200);
+    const venueId = validateStr(input.venueId, "venueId", 128);
     const poster = validateStr(input.poster, "poster", 500);
     const emailHeaderBg = validateStr(input.emailHeaderBg, "emailHeaderBg", 500);
     const posterCredit = validateStr(input.posterCredit, "posterCredit", 200);
@@ -242,7 +244,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     }
 
     const data = {
-        title, titleCn, description, descriptionCn, location, locationCn,
+        title, titleCn, description, descriptionCn, location, locationCn, venueId,
         startAt, endAt, poster, emailHeaderBg, posterCredit, buyTicket, learnMore,
         customButtonText, customButtonTextCn, customButtonLink, paid,
     };
@@ -553,6 +555,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             date: dateStr,
             location: eventData.location ?? "",
             locationCn: eventData.locationCn ?? "",
+            venueId: eventData.venueId ?? "",
             description: eventData.description ?? "",
             descriptionCn: eventData.descriptionCn ?? "",
             icon: "",

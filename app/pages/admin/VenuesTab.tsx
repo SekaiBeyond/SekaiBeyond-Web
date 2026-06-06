@@ -188,7 +188,10 @@ export const VenuesTab = ({venues, parkingLots, refreshVenues, showToast, readOn
 
             <div className="admin-event-grid">
                 {venues.map(venue => (
-                    <div key={venue.id} className="admin-event-card">
+                    <div
+                        key={venue.id}
+                        className={`admin-event-card${editingId === venue.id ? ' admin-event-card-editing' : ''}`}
+                    >
                         <div className="admin-event-card-info">
                             {editingId === venue.id ? (
                                 <>

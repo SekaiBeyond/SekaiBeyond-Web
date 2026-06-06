@@ -193,7 +193,10 @@ export const ParkingLotsTab = ({
                         ? (lot.type === 'disabled' ? 'Disabled' : lot.type === 'garage' ? 'Garage' : 'General')
                         : (lot.type === 'disabled' ? '无障碍' : lot.type === 'garage' ? '停车库' : '普通');
                     return (
-                        <div key={lot.id} className="admin-event-card">
+                        <div
+                            key={lot.id}
+                            className={`admin-event-card${editingId === lot.id ? ' admin-event-card-editing' : ''}`}
+                        >
                             <div className="admin-event-card-info">
                                 {editingId === lot.id ? (
                                     <>

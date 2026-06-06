@@ -42,6 +42,7 @@ const toTicketEvent = (e: PastEvent): UpcomingEvent => ({
     descriptionCn: e.descriptionCn,
     location: e.location,
     locationCn: e.locationCn,
+    venueId: e.venueId,
     startAt: e.date ? new Date(e.date) : new Date(),
     endAt: e.date ? new Date(e.date) : new Date(),
     poster: '',
@@ -81,7 +82,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [editingEvent, setEditingEvent] = useState<PastEvent | null>(null);
     const [eventForm, setEventForm] = useState({
         title: '', titleCn: '', tagId: '', date: '',
-        location: '', locationCn: '',
+        location: '', locationCn: '', venueId: '',
         description: '', descriptionCn: '', icon: '', recapLink: '', recapLinkCn: '',
     });
     const [savingEvent, setSavingEvent] = useState(false);
@@ -144,7 +145,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const resetEventForm = () => {
         setEventForm({
             title: '', titleCn: '', tagId: '', date: '',
-            location: '', locationCn: '',
+            location: '', locationCn: '', venueId: '',
             description: '', descriptionCn: '', icon: '', recapLink: '', recapLinkCn: '',
         });
         setEventImage(null);
@@ -166,7 +167,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         setEventForm({
             title: event.title, titleCn: event.titleCn, tagId: event.tagId,
             date: normalizedDate,
-            location: event.location, locationCn: event.locationCn,
+            location: event.location, locationCn: event.locationCn, venueId: event.venueId,
             description: event.description, descriptionCn: event.descriptionCn, icon: event.icon,
             recapLink: event.recapLink, recapLinkCn: event.recapLinkCn,
         });
@@ -209,6 +210,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 date: eventForm.date,
                 location: eventForm.location,
                 locationCn: eventForm.locationCn,
+                venueId: eventForm.venueId,
                 description: eventForm.description,
                 descriptionCn: eventForm.descriptionCn,
                 icon: iconUrl,
@@ -334,8 +336,10 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 </label>
                                 <LocationFormField
                                     value={eventForm.location} valueCn={eventForm.locationCn}
+                                    venueId={eventForm.venueId}
                                     onChange={v => setEventForm(f => ({...f, location: v}))}
                                     onChangeCn={v => setEventForm(f => ({...f, locationCn: v}))}
+                                    onChangeVenueId={v => setEventForm(f => ({...f, venueId: v}))}
                                     placeholder={isEnglish ? 'Event location' : '活动地点'}
                                     placeholderCn={isEnglish ? 'Location in Chinese' : '中文地点'}
                                 />

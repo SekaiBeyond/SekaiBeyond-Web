@@ -425,6 +425,20 @@
     box-shadow: 0 4px 16px rgba(255, 107, 157, 0.12);
 }
 
+/* Inline edit form: break out of the grid columns so the form/map use the full row width. */
+.admin-event-card-editing {
+    grid-column: 1 / -1;
+    display: block;
+    cursor: default;
+    overflow: visible;
+}
+
+.admin-event-card-editing:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: rgba(255, 107, 157, 0.12);
+}
+
 .admin-event-card-img {
     width: 48px;
     height: 48px;

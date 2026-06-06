@@ -104,11 +104,11 @@ export function useVenues(): {venues: Venue[]; loading: boolean; refresh: () => 
 }
 
 /**
- * Resolve an event's `location` string to a known venue by exact match on nameEn.
- * Returns null if no match. The Location picker in the admin event editor writes
- * `venue.nameEn` into `event.location`, so this is an exact lookup.
+ * Resolve an event's explicit `venueId` to its building {@link Venue}. Events carry a direct
+ * reference to the building (chosen in the admin event editor) rather than matching on the
+ * free-text location string. Returns null if unset or unknown.
  */
-export function resolveVenue(location: string, venues: Venue[]): Venue | null {
-    if (!location) return null;
-    return venues.find(v => v.nameEn === location) ?? null;
+export function resolveVenueById(venueId: string | undefined, venues: Venue[]): Venue | null {
+    if (!venueId) return null;
+    return venues.find(v => v.id === venueId) ?? null;
 }

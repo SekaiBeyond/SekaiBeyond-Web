@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
-import { DEFAULT_ZOOM, resolveVenue, useVenues, type Venue } from '~/lib/venues';
+import { DEFAULT_ZOOM, resolveVenueById, useVenues, type Venue } from '~/lib/venues';
 import { type ParkingLot, useParkingLots } from '~/lib/parkingLots';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { AdvancedMarker, APIProvider, InfoWindow, Map } from '@vis.gl/react-google-maps';
@@ -17,6 +17,7 @@ interface EventSnapshot {
     titleCn: string;
     location: string;
     locationCn: string;
+    venueId: string;
 }
 
 export const ParkingGuide = () => {
@@ -56,6 +57,7 @@ export const ParkingGuide = () => {
                     titleCn: (data.titleCn as string) ?? '',
                     location: (data.location as string) ?? '',
                     locationCn: (data.locationCn as string) ?? '',
+                    venueId: (data.venueId as string) ?? '',
                 };
                 setEvent(ev);
             } catch (err) {
@@ -67,7 +69,7 @@ export const ParkingGuide = () => {
         })();
     }, [eventId]);
 
-    const venue: Venue | null = event ? resolveVenue(event.location, venues) : null;
+    const venue: Venue | null = event ? resolveVenueById(event.venueId, venues) : null;
     const hydratedLots: HydratedLot[] = venue
         ? venue.parkingLots
             .map(link => {

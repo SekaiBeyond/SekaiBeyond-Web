@@ -147,7 +147,7 @@ export const callSetUserTitle = (data: {targetUid: string; title?: string}) =>
 export const callSavePastEvent = (data: {
     eventId?: string;
     title: string; titleCn: string; tagId: string; date: string;
-    location: string; locationCn: string;
+    location: string; locationCn: string; venueId: string;
     description: string; descriptionCn: string; icon: string;
     recapLink: string; recapLinkCn: string;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'savePastEvent')(data);
@@ -158,7 +158,7 @@ export const callSetPastEventPublished = (data: {eventId: string; published: boo
 export const callSaveUpcomingEvent = (data: {
     eventId?: string;
     title: string; titleCn: string; description: string; descriptionCn: string;
-    location: string; locationCn: string; startAt: string; endAt: string;
+    location: string; locationCn: string; venueId: string; startAt: string; endAt: string;
     poster: string; emailHeaderBg: string; posterCredit: string;
     buyTicket: string; learnMore: string;
     customButtonText: string; customButtonTextCn: string; customButtonLink: string;

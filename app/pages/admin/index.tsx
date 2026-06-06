@@ -70,8 +70,8 @@ export const AdminPage = () => {
     const [upcomingOpen, setUpcomingOpen] = useState(true);
     const [pastOpen, setPastOpen] = useState(true);
     const [tagsOpen, setTagsOpen] = useState(true);
-    const [venuesOpen, setVenuesOpen] = useState(false);
-    const [parkingLotsOpen, setParkingLotsOpen] = useState(false);
+    const [venuesOpen, setVenuesOpen] = useState(true);
+    const [parkingLotsOpen, setParkingLotsOpen] = useState(true);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [badgeDefsError, setBadgeDefsError] = useState(false);
     const [toasts, setToasts] = useState<Toast[]>([]);
@@ -120,8 +120,10 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(firstEventId);
             }
         } else if (isStaffGroup) {
-            if (tab === 'events' || tab === 'tools' || tab === 'users' || tab === 'badges' || tab === 'records' || tab === 'config') {
+            if (tab === 'events' || tab === 'locations' || tab === 'tools' || tab === 'users' || tab === 'badges' || tab === 'records' || tab === 'config') {
                 setActiveTab(tab);
+            } else if (tab === 'venues' || tab === 'parking') {
+                setActiveTab('locations');
             } else if (tab === 'tags') {
                 setActiveTab('events');
             } else if (tab === 'upcoming') {
@@ -138,8 +140,10 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(event);
             }
         } else {
-            if (tab === 'events' || tab === 'badges' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config') {
+            if (tab === 'events' || tab === 'locations' || tab === 'badges' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config') {
                 setActiveTab(tab);
+            } else if (tab === 'venues' || tab === 'parking') {
+                setActiveTab('locations');
             } else if (tab === 'tags') {
                 setActiveTab('events');
             } else if (tab === 'upcoming') {
@@ -294,6 +298,14 @@ export const AdminPage = () => {
                     </button>
                     {(isCoreStaffOrAbove || isStaffGroup) && (
                         <button
+                            className={`admin-tab ${activeTab === 'locations' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('locations')}
+                        >
+                            {isEnglish ? 'Locations' : '场地管理'}
+                        </button>
+                    )}
+                    {(isCoreStaffOrAbove || isStaffGroup) && (
+                        <button
                             className={`admin-tab ${activeTab === 'badges' ? 'admin-tab-active' : ''}`}
                             onClick={() => setActiveTab('badges')}
                         >
@@ -411,48 +423,49 @@ export const AdminPage = () => {
                                                       readOnly={isStaffGroup}/>}
                             </div>
                         )}
-                        {(isCoreStaffOrAbove || isStaffGroup) && !upcomingInDetail && !eventsInDetail && (
-                            <div>
-                                <button
-                                    className="admin-section-header admin-section-mt"
-                                    onClick={() => setVenuesOpen(v => !v)}
-                                >
-                                    <span className="admin-section-header-title">
-                                        {isEnglish ? 'Venues' : '场地'}
-                                    </span>
-                                    <span
-                                        className={`admin-section-chevron${venuesOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
-                                </button>
-                                {venuesOpen && <VenuesTab
-                                    venues={venues}
-                                    parkingLots={parkingLots}
-                                    refreshVenues={refreshVenues}
-                                    showToast={showToast}
-                                    readOnly={isStaffGroup}
-                                />}
-                            </div>
-                        )}
-                        {(isCoreStaffOrAbove || isStaffGroup) && !upcomingInDetail && !eventsInDetail && (
-                            <div>
-                                <button
-                                    className="admin-section-header admin-section-mt"
-                                    onClick={() => setParkingLotsOpen(v => !v)}
-                                >
-                                    <span className="admin-section-header-title">
-                                        {isEnglish ? 'Parking Lots' : '停车场'}
-                                    </span>
-                                    <span
-                                        className={`admin-section-chevron${parkingLotsOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
-                                </button>
-                                {parkingLotsOpen && <ParkingLotsTab
-                                    parkingLots={parkingLots}
-                                    refreshParkingLots={refreshParkingLots}
-                                    refreshVenues={refreshVenues}
-                                    showToast={showToast}
-                                    readOnly={isStaffGroup}
-                                />}
-                            </div>
-                        )}
+                    </>
+                )}
+
+                {activeTab === 'locations' && (isCoreStaffOrAbove || isStaffGroup) && (
+                    <>
+                        <div>
+                            <button
+                                className="admin-section-header"
+                                onClick={() => setVenuesOpen(v => !v)}
+                            >
+                                <span className="admin-section-header-title">
+                                    {isEnglish ? 'Venues' : '场地'}
+                                </span>
+                                <span
+                                    className={`admin-section-chevron${venuesOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
+                            </button>
+                            {venuesOpen && <VenuesTab
+                                venues={venues}
+                                parkingLots={parkingLots}
+                                refreshVenues={refreshVenues}
+                                showToast={showToast}
+                                readOnly={isStaffGroup}
+                            />}
+                        </div>
+                        <div>
+                            <button
+                                className="admin-section-header admin-section-mt"
+                                onClick={() => setParkingLotsOpen(v => !v)}
+                            >
+                                <span className="admin-section-header-title">
+                                    {isEnglish ? 'Parking Lots' : '停车场'}
+                                </span>
+                                <span
+                                    className={`admin-section-chevron${parkingLotsOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
+                            </button>
+                            {parkingLotsOpen && <ParkingLotsTab
+                                parkingLots={parkingLots}
+                                refreshParkingLots={refreshParkingLots}
+                                refreshVenues={refreshVenues}
+                                showToast={showToast}
+                                readOnly={isStaffGroup}
+                            />}
+                        </div>
                     </>
                 )}
 

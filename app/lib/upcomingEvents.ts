@@ -10,6 +10,7 @@ export interface UpcomingEvent {
     descriptionCn: string;
     location: string;
     locationCn: string;
+    venueId: string;
     startAt: Date;
     endAt: Date;
     poster: string;
@@ -44,6 +45,7 @@ const mapDoc = (docSnap: FirestoreDocLike): UpcomingEvent => {
         descriptionCn: (data.descriptionCn as string) ?? '',
         location: (data.location as string) ?? '',
         locationCn: (data.locationCn as string) ?? '',
+        venueId: (data.venueId as string) ?? '',
         startAt: startAtRaw?.toDate?.() ?? new Date(),
         endAt: endAtRaw?.toDate?.() ?? new Date(),
         poster: (data.poster as string) ?? '',

@@ -5,56 +5,29 @@ import { BilingualFormField } from './BilingualFormField';
 interface LocationFormFieldProps {
     value: string;
     valueCn: string;
+    venueId: string;
     onChange: (value: string) => void;
     onChangeCn: (value: string) => void;
+    onChangeVenueId: (venueId: string) => void;
     placeholder?: string;
     placeholderCn?: string;
 }
 
-const CUSTOM = '__custom__';
-
+/**
+ * Event-editor location controls. The free-text Location fields are the per-event display
+ * string (unique to each event). The separate Venue (building) selector drives the parking
+ * guide via `event.venueId` — it's independent of the location text.
+ */
 export const LocationFormField = ({
-                                      value, valueCn,
-                                      onChange, onChangeCn,
+                                      value, valueCn, venueId,
+                                      onChange, onChangeCn, onChangeVenueId,
                                       placeholder, placeholderCn,
                                   }: LocationFormFieldProps) => {
     const {isEnglish} = useLanguage();
     const {venues} = useVenues();
 
-    const matchedVenue = venues.find(v => v.nameEn === value);
-    const selectValue = matchedVenue ? matchedVenue.id : CUSTOM;
-
-    const handleSelect = (next: string) => {
-        if (next === CUSTOM) {
-            onChange('');
-            onChangeCn('');
-            return;
-        }
-        const venue = venues.find(v => v.id === next);
-        if (!venue) return;
-        onChange(venue.nameEn);
-        onChangeCn(venue.nameCn);
-    };
-
     return (
         <>
-            <label className="admin-form-grid-full">
-                <span>{isEnglish ? 'Venue' : '场地'}</span>
-                <select
-                    value={selectValue}
-                    onChange={e => handleSelect(e.target.value)}
-                    className="admin-search-input"
-                >
-                    {venues.map(v => (
-                        <option key={v.id} value={v.id}>
-                            {isEnglish ? v.nameEn : (v.nameCn || v.nameEn)}
-                        </option>
-                    ))}
-                    <option value={CUSTOM}>
-                        {isEnglish ? 'Custom location…' : '自定义地点…'}
-                    </option>
-                </select>
-            </label>
             <BilingualFormField
                 label="Location" labelCn="地点"
                 value={value} valueCn={valueCn}
@@ -62,6 +35,23 @@ export const LocationFormField = ({
                 placeholder={placeholder}
                 placeholderCn={placeholderCn}
             />
+            <label className="admin-form-grid-full">
+                <span>{isEnglish ? 'Venue' : '场地'}</span>
+                <select
+                    value={venueId}
+                    onChange={e => onChangeVenueId(e.target.value)}
+                    className="admin-search-input"
+                >
+                    <option value="">
+                        {isEnglish ? '— None / off-campus (no parking guide) —' : '— 无 / 校外（无停车指南）—'}
+                    </option>
+                    {venues.map(v => (
+                        <option key={v.id} value={v.id}>
+                            {isEnglish ? v.nameEn : (v.nameCn || v.nameEn)}
+                        </option>
+                    ))}
+                </select>
+            </label>
         </>
     );
 };
