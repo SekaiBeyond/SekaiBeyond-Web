@@ -186,6 +186,27 @@
     margin-top: auto;
 }
 
+.event-recap-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    margin-top: 16px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: rgba(255, 182, 193, 0.3);
+    color: var(--color-primary);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.event-recap-link:hover {
+    background: rgba(255, 182, 193, 0.5);
+    transform: translateX(2px);
+}
+
 /* Convention Section */
 .convention-banner {
     background: white;

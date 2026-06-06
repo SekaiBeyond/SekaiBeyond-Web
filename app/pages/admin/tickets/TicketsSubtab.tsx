@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
+    callAdminRedeemTicket,
     callDeleteEventAttendee,
+    callResetTicket,
     callSendTicketEmails,
     callUnvoidTicket,
     callUpdateTicketType,
@@ -18,6 +21,7 @@ import type { ShowToast } from '../utils';
 import { AttendeesSection } from './AttendeesSection';
 import { ImportSection } from './ImportSection';
 import { SendSection } from './SendSection';
+import { StatsSection } from './StatsSection';
 import { TemplateSection } from './TemplateSection';
 import { mapAttendeeDoc } from './helpers';
 import { type AttendeeData, type TicketsSection, type TicketType } from './types';
@@ -27,10 +31,20 @@ interface TicketsSubtabProps {
     readOnly: boolean;
     canScan: boolean;
     showToast: ShowToast;
+    // Where ticket attendees live. Archived events keep them under `pastEvents`
+    // (migrated on archive); live events under `upcomingEvents`.
+    collectionRoot?: 'upcomingEvents' | 'pastEvents';
 }
 
-export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubtabProps) {
+export function TicketsSubtab({
+                                  event,
+                                  readOnly,
+                                  canScan,
+                                  showToast,
+                                  collectionRoot = 'upcomingEvents'
+                              }: TicketsSubtabProps) {
     const {isEnglish} = useLanguage();
+    const {profile} = useAuth();
     const eventId = event.id;
 
     const [section, setSection] = useState<TicketsSection>(canScan && readOnly ? 'scan' : 'attendees');
@@ -40,6 +54,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
     const [search, setSearch] = useState('');
     const [filterUnsent, setFilterUnsent] = useState(false);
     const [ticketTypeFilter, setTicketTypeFilter] = useState<TicketType | 'all'>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'redeemed' | 'unredeemed' | 'voided'>('all');
 
     const [editingAttendee, setEditingAttendee] = useState<AttendeeData | null>(null);
     const [addingAttendee, setAddingAttendee] = useState(false);
@@ -51,7 +66,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
         setAttendeesError(null);
         try {
             const db = getFirebaseDb();
-            const col = collection(db, 'upcomingEvents', eventId, 'attendees');
+            const col = collection(db, collectionRoot, eventId, 'attendees');
             const snap = await getDocs(query(col, orderBy('createdAt', 'desc')));
             const list = snap.docs.map(d => mapAttendeeDoc(d.id, d.data()));
             setAttendees(list);
@@ -62,7 +77,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
         } finally {
             setLoadingAttendees(false);
         }
-    }, [eventId, isEnglish]);
+    }, [eventId, isEnglish, collectionRoot]);
 
     useEffect(() => {
         void loadAttendees();
@@ -70,7 +85,7 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
 
     useEffect(() => {
         setDisplayCount(10);
-    }, [search, filterUnsent, ticketTypeFilter]);
+    }, [search, filterUnsent, ticketTypeFilter, statusFilter]);
 
     const filteredAttendees = useMemo(() => {
         const needle = search.trim().toLowerCase();
@@ -80,11 +95,21 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                 const hasType = a.tickets.some(t => t.type === ticketTypeFilter);
                 if (!hasType) return false;
             }
+            if (statusFilter !== 'all') {
+                const hasStatus = a.tickets.some(t =>
+                    statusFilter === 'redeemed'
+                        ? t.redeemed
+                        : statusFilter === 'unredeemed'
+                            ? !t.redeemed && !t.voided
+                            : t.voided,
+                );
+                if (!hasStatus) return false;
+            }
             if (!needle) return true;
             return a.email.toLowerCase().includes(needle)
                 || a.name.toLowerCase().includes(needle);
         });
-    }, [attendees, search, filterUnsent, ticketTypeFilter]);
+    }, [attendees, search, filterUnsent, ticketTypeFilter, statusFilter]);
 
     const totals = useMemo(() => {
         let tickets = 0;
@@ -163,6 +188,58 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
             showToast(isEnglish ? 'Ticket unvoided.' : '门票已撤销作废。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to unvoid ticket.' : '撤销作废门票失败。', 'error');
+        }
+    };
+
+    const redeemTicketAction = async (a: AttendeeData, ticketId: string) => {
+        if (readOnly) return;
+        const ok = window.confirm(isEnglish
+            ? 'Redeem this ticket now? It will be marked as used.'
+            : '立即验证此门票？将标记为已使用。');
+        if (!ok) return;
+        try {
+            const res = await callAdminRedeemTicket({eventId, attendeeId: a.id, ticketId});
+            if (res.data.alreadyRedeemed) {
+                showToast(isEnglish ? 'Ticket was already redeemed.' : '此门票此前已验证。', 'warning');
+                return;
+            }
+            const updatedTickets = a.tickets.map(t =>
+                t.ticketId === ticketId
+                    ? {...t, redeemed: true, redeemedAt: new Date(), redeemedByName: profile?.displayName ?? ''}
+                    : t,
+            );
+            onAttendeeUpdated({...a, tickets: updatedTickets});
+            showToast(isEnglish ? 'Ticket redeemed.' : '门票已验证。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to redeem ticket.' : '验证门票失败。', 'error');
+        }
+    };
+
+    const resetTicketAction = async (a: AttendeeData, ticketId: string) => {
+        if (readOnly) return;
+        const ok = window.confirm(isEnglish
+            ? 'Reset this ticket? Its redeemed status will be cleared.'
+            : '重置此门票？将清除已验证状态。');
+        if (!ok) return;
+        try {
+            await callResetTicket({eventId, attendeeId: a.id, ticketId});
+            const updatedTickets = a.tickets.map(t =>
+                t.ticketId === ticketId
+                    ? {
+                        ...t,
+                        redeemed: false,
+                        redeemedAt: null,
+                        redeemedBy: '',
+                        redeemedByName: '',
+                        checkedIn: false,
+                        checkedInAt: null,
+                    }
+                    : t,
+            );
+            onAttendeeUpdated({...a, tickets: updatedTickets});
+            showToast(isEnglish ? 'Ticket reset.' : '门票已重置。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to reset ticket.' : '重置门票失败。', 'error');
         }
     };
 
@@ -258,6 +335,12 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                 >
                     {isEnglish ? 'Attendees' : '参加者'}
                 </button>
+                <button
+                    className={`admin-sub-tab ${section === 'stats' ? 'admin-sub-tab-active' : ''}`}
+                    onClick={() => setSection('stats')}
+                >
+                    {isEnglish ? 'Stats' : '统计'}
+                </button>
                 {tabVisible('import') && (
                     <button
                         className={`admin-sub-tab ${section === 'import' ? 'admin-sub-tab-active' : ''}`}
@@ -304,11 +387,15 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                     onFilterUnsentChange={setFilterUnsent}
                     ticketTypeFilter={ticketTypeFilter}
                     onTicketTypeFilterChange={setTicketTypeFilter}
+                    statusFilter={statusFilter}
+                    onStatusFilterChange={setStatusFilter}
                     readOnly={readOnly}
                     onEdit={setEditingAttendee}
                     onAdd={() => setAddingAttendee(true)}
                     onVoidTicket={voidTicketAction}
                     onUnvoidTicket={unvoidTicketAction}
+                    onRedeemTicket={redeemTicketAction}
+                    onResetTicket={resetTicketAction}
                     onUpdateTicketType={updateTicketTypeAction}
                     onResend={resendToAttendee}
                     onDelete={deleteAttendeeAction}
@@ -316,6 +403,15 @@ export function TicketsSubtab({event, readOnly, canScan, showToast}: TicketsSubt
                     hasMore={displayCount < filteredAttendees.length}
                     loadingMore={false}
                     onLoadMore={() => setDisplayCount(c => c + 10)}
+                />
+            )}
+
+            {section === 'stats' && (
+                <StatsSection
+                    loading={loadingAttendees}
+                    error={attendeesError}
+                    attendees={attendees}
+                    onRefresh={() => void loadAttendees()}
                 />
             )}
 

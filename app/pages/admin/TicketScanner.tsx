@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callRedeemTicket, functionsErrorCode } from '~/lib/firebase';
+import { ticketTypeLabel } from './tickets/types';
 
 type ScanStatus =
     | {kind: 'idle'}
@@ -327,7 +328,7 @@ function ResultBanner({status, isEnglish}: {status: ScanStatus; isEnglish: boole
             <div className="admin-tickets-scan-banner admin-tickets-scan-success">
                 <strong>{isEnglish ? '✓ Redeemed' : '✓ 验证成功'}</strong>
                 <div>{status.attendeeName} <span
-                    className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{status.ticketType}</span>
+                    className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{ticketTypeLabel(status.ticketType, isEnglish)}</span>
                 </div>
                 <div className="admin-user-email">{status.attendeeEmail}</div>
                 <div className="admin-helper-text">
@@ -343,7 +344,7 @@ function ResultBanner({status, isEnglish}: {status: ScanStatus; isEnglish: boole
             <div className="admin-tickets-scan-banner admin-tickets-scan-already">
                 <strong>{isEnglish ? '! Already redeemed' : '! 此门票已验证'}</strong>
                 <div>{status.attendeeName} <span
-                    className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{status.ticketType}</span>
+                    className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{ticketTypeLabel(status.ticketType, isEnglish)}</span>
                 </div>
                 <div className="admin-user-email">{status.attendeeEmail}</div>
                 <div className="admin-helper-text">

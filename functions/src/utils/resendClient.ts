@@ -25,6 +25,10 @@ export interface SendResult {
     dailyConsumed: number | null;
 }
 
+// Resend's free-plan daily limit counts every to/cc/bcc address as a separate
+// email — a single POST with 1 to + 24 cc consumes 25 quota slots, not 1. The
+// x-resend-daily-quota header reflects this. Use this helper to compute quota
+// deltas on both reserve and release so the cache matches Resend's bookkeeping.
 export function countRecipients(envelopes: ResendEnvelope[]): number {
     let total = 0;
     for (const e of envelopes) {

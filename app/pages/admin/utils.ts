@@ -1,4 +1,4 @@
-import { collection, type DocumentData, getDocs, query, where } from 'firebase/firestore';
+import { collection, type DocumentData, getDocs, limit, query, where } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
 import type { UserRecord } from './types';
 import { MAX_IMAGE_SIZE_MB } from '~/constants';
@@ -37,6 +37,17 @@ export const fetchEventStaffCount = async (eventId: string): Promise<number> => 
     const q = query(collection(db, 'users'), where('eventStaffEvents', 'array-contains', eventId));
     const snapshot = await getDocs(q);
     return snapshot.size;
+};
+
+// True if an archived event has ticket attendees. Only paid events ever populate
+// the attendees subcollection, so this detects paid events that were archived
+// before the `paid` flag was stored on the past-event doc.
+export const pastEventHasTickets = async (eventId: string): Promise<boolean> => {
+    const db = getFirebaseDb();
+    const snapshot = await getDocs(
+        query(collection(db, 'pastEvents', eventId, 'attendees'), limit(1)),
+    );
+    return !snapshot.empty;
 };
 
 export const getClaimUrl = (code: string): string => {

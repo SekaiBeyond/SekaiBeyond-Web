@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { ticketStatusCounts } from './helpers';
-import { type AttendeeData, type AttendeeTotals, TICKET_TYPES, type TicketType } from './types';
+import { type AttendeeData, type AttendeeTotals, TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
 
 interface AttendeesSectionProps {
     loading: boolean;
@@ -14,11 +14,15 @@ interface AttendeesSectionProps {
     onFilterUnsentChange: (v: boolean) => void;
     ticketTypeFilter: TicketType | 'all';
     onTicketTypeFilterChange: (v: TicketType | 'all') => void;
+    statusFilter: 'all' | 'redeemed' | 'unredeemed' | 'voided';
+    onStatusFilterChange: (v: 'all' | 'redeemed' | 'unredeemed' | 'voided') => void;
     readOnly: boolean;
     onEdit: (a: AttendeeData) => void;
     onAdd: () => void;
     onVoidTicket: (a: AttendeeData, ticketId: string) => void;
     onUnvoidTicket: (a: AttendeeData, ticketId: string) => void;
+    onRedeemTicket: (a: AttendeeData, ticketId: string) => void;
+    onResetTicket: (a: AttendeeData, ticketId: string) => void;
     onUpdateTicketType: (a: AttendeeData, ticketId: string, newType: TicketType) => void;
     onResend: (a: AttendeeData) => void;
     onDelete: (a: AttendeeData) => void;
@@ -39,11 +43,15 @@ export function AttendeesSection({
                                      onFilterUnsentChange,
                                      ticketTypeFilter,
                                      onTicketTypeFilterChange,
+                                     statusFilter,
+                                     onStatusFilterChange,
                                      readOnly,
                                      onEdit,
                                      onAdd,
                                      onVoidTicket,
                                      onUnvoidTicket,
+                                     onRedeemTicket,
+                                     onResetTicket,
                                      onUpdateTicketType,
                                      onResend,
                                      onDelete,
@@ -87,7 +95,7 @@ export function AttendeesSection({
                     {isEnglish ? 'Add Attendee' : '添加参加者'}
                 </button>
                 <button
-                    className="admin-toggle-btn admin-toggle-edit admin-tickets-refresh"
+                    className="admin-toggle-btn admin-toggle-edit"
                     onClick={onRefresh}
                     disabled={loading}
                 >
@@ -117,6 +125,17 @@ export function AttendeesSection({
                             {isEnglish ? tt.labelEn : tt.labelCn}
                         </option>
                     ))}
+                </select>
+                <select
+                    className="admin-search-input"
+                    style={{width: 'auto', minWidth: '120px'}}
+                    value={statusFilter}
+                    onChange={(e) => onStatusFilterChange(e.target.value as 'all' | 'redeemed' | 'unredeemed' | 'voided')}
+                >
+                    <option value="all">{isEnglish ? 'All Statuses' : '所有状态'}</option>
+                    <option value="redeemed">{isEnglish ? 'Redeemed' : '已验证'}</option>
+                    <option value="unredeemed">{isEnglish ? 'Not Redeemed' : '未验证'}</option>
+                    <option value="voided">{isEnglish ? 'Voided' : '已作废'}</option>
                 </select>
                 <label className="admin-checkbox-label admin-tickets-filter-checkbox">
                     <input
@@ -157,9 +176,7 @@ export function AttendeesSection({
                             <div className="admin-tickets-attendee-stats">
                                 <span
                                     className={`admin-tickets-tag admin-tickets-tag-type-${ticketType.toLowerCase().replace(/\s+/g, '-')}`}>
-                                    {ticketType === 'Comp Ticket' ? (isEnglish ? 'Comp' : '赠票') :
-                                        ticketType === 'early-bird' ? (isEnglish ? 'Early Bird' : '早鸟') :
-                                            ticketType.toUpperCase()}
+                                    {ticketTypeLabel(ticketType, isEnglish)}
                                 </span>
                                 <span className="admin-tickets-attendee-count">
                                     {a.ticketCount} {isEnglish ? 'tickets' : '张'}
@@ -247,7 +264,7 @@ export function AttendeesSection({
                                                     {readOnly ? (
                                                         <span
                                                             className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}>
-                                                            {t.type || 'normal'}
+                                                            {ticketTypeLabel(t.type || 'normal', isEnglish)}
                                                         </span>
                                                     ) : (
                                                         <select
@@ -313,15 +330,7 @@ export function AttendeesSection({
                                                     ) : '—'}
                                                 </td>
                                                 <td>
-                                                    {!t.voided ? (
-                                                        <button
-                                                            className="admin-tickets-void-btn"
-                                                            onClick={() => onVoidTicket(a, t.ticketId)}
-                                                            disabled={readOnly}
-                                                        >
-                                                            {isEnglish ? 'Void' : '作废'}
-                                                        </button>
-                                                    ) : (
+                                                    {t.voided ? (
                                                         <button
                                                             className="admin-toggle-btn admin-toggle-save"
                                                             onClick={() => onUnvoidTicket(a, t.ticketId)}
@@ -330,6 +339,41 @@ export function AttendeesSection({
                                                         >
                                                             {isEnglish ? 'Unvoid' : '撤销作废'}
                                                         </button>
+                                                    ) : (
+                                                        <div className="admin-tickets-ticket-actions"
+                                                             style={{
+                                                                 display: 'flex',
+                                                                 gap: '6px',
+                                                                 justifyContent: 'flex-end',
+                                                                 flexWrap: 'wrap',
+                                                             }}>
+                                                            {t.redeemed ? (
+                                                                <button
+                                                                    className="admin-toggle-btn admin-toggle-edit"
+                                                                    onClick={() => onResetTicket(a, t.ticketId)}
+                                                                    disabled={readOnly}
+                                                                    style={{padding: '2px 8px', fontSize: '12px'}}
+                                                                >
+                                                                    {isEnglish ? 'Reset' : '重置'}
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    className="admin-toggle-btn admin-toggle-save"
+                                                                    onClick={() => onRedeemTicket(a, t.ticketId)}
+                                                                    disabled={readOnly}
+                                                                    style={{padding: '2px 8px', fontSize: '12px'}}
+                                                                >
+                                                                    {isEnglish ? 'Redeem' : '验证'}
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                className="admin-tickets-void-btn"
+                                                                onClick={() => onVoidTicket(a, t.ticketId)}
+                                                                disabled={readOnly}
+                                                            >
+                                                                {isEnglish ? 'Void' : '作废'}
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </td>
                                             </tr>

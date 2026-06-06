@@ -149,6 +149,7 @@ export const callSavePastEvent = (data: {
     title: string; titleCn: string; tagId: string; date: string;
     location: string; locationCn: string;
     description: string; descriptionCn: string; icon: string;
+    recapLink: string; recapLinkCn: string;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'savePastEvent')(data);
 
 export const callSetPastEventPublished = (data: {eventId: string; published: boolean}) =>
@@ -207,6 +208,13 @@ export const callVoidTicket = (data: {eventId: string; attendeeId: string; ticke
 
 export const callUnvoidTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
     httpsCallable<typeof data, {unvoided: boolean}>(getFunctions(), 'unvoidTicket')(data);
+
+export const callAdminRedeemTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
+    httpsCallable<typeof data, {redeemed: boolean; alreadyRedeemed?: boolean}>(
+        getFunctions(), 'adminRedeemTicket')(data);
+
+export const callResetTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
+    httpsCallable<typeof data, {reset: boolean}>(getFunctions(), 'resetTicket')(data);
 
 export const callDeleteEventAttendee = (data: {eventId: string; attendeeId: string}) =>
     httpsCallable<typeof data, {deleted: boolean; ticketCount: number}>(
@@ -456,6 +464,12 @@ export const functionsErrorDetails = <T = unknown>(err: unknown): T | null => {
 };
 
 const googleProvider = new GoogleAuthProvider();
+// Always show the Google account chooser. Firebase signOut() only clears the
+// app's session, not the browser's Google SSO session, so without this the
+// OAuth flow silently re-authenticates the existing account (most visible in
+// Chrome, where users are signed into Google at the browser level and the
+// FedCM popup auto-selects the returning account) — preventing account switching.
+googleProvider.setCustomParameters({prompt: 'select_account'});
 
 export const signInWithGoogle = () => signInWithPopup(getFirebaseAuth(), googleProvider);
 

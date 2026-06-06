@@ -37,6 +37,9 @@ export function EventStaffSection({
             setLoading(true);
             try {
                 const db = getFirebaseDb();
+                // Staff roster — for both upcoming and past events — is derived from
+                // users' eventStaffEvents arrays (the past-event id is retained on
+                // archive). assignEventStaff/removeEventStaff handle past events too.
                 const q = query(
                     collection(db, 'users'),
                     where('eventStaffEvents', 'array-contains', eventId),

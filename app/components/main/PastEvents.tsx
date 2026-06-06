@@ -75,6 +75,22 @@ export const PastEvents = () => {
                                     <p className="event-description">
                                         {isEnglish ? event.description : event.descriptionCn}
                                     </p>
+                                    {(() => {
+                                        const recapHref = isEnglish
+                                            ? (event.recapLink || event.recapLinkCn)
+                                            : (event.recapLinkCn || event.recapLink);
+                                        return recapHref ? (
+                                            <a
+                                                className="event-recap-link"
+                                                href={recapHref}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                <span>{isEnglish ? 'View Recap' : '查看回顾'}</span>
+                                                <span aria-hidden="true">→</span>
+                                            </a>
+                                        ) : null;
+                                    })()}
                                 </div>
                             </div>
                         ))}

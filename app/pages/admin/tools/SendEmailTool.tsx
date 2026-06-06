@@ -12,11 +12,27 @@ interface SendEmailToolProps {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Mirrors the server's bodyHtml length cap (functions validateStr in
+// sendCustomEmail). Block at the client so a long paste fails locally with
+// a clear message instead of bouncing off a generic backend error.
+const BODY_MAX_LEN = 20000;
+
 // Splits comma/semicolon/whitespace-separated email lists pasted into a single
-// input. Empty entries are dropped; validation happens at submit so the field
-// can hold a mid-typing value.
-const parseEmailList = (raw: string): string[] =>
-    raw.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+// input. Lowercases and de-duplicates to match the server's validateEmailList,
+// so the displayed recipient count matches what actually gets sent. Empty
+// entries are dropped; full validation happens at submit so the field can hold
+// a mid-typing value.
+const parseEmailList = (raw: string): string[] => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const part of raw.split(/[,;\s]+/)) {
+        const normalized = part.trim().toLowerCase();
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        out.push(normalized);
+    }
+    return out;
+};
 
 export const SendEmailTool = ({onBack}: SendEmailToolProps) => {
     const {isEnglish} = useLanguage();
@@ -85,6 +101,7 @@ export const SendEmailTool = ({onBack}: SendEmailToolProps) => {
     const totalRecipients = toList.length + ccList.length + bccList.length;
 
     const hasBodyContent = bodyHtml.trim().length > 0;
+    const bodyTooLong = bodyHtml.length > BODY_MAX_LEN;
 
     const canSend = !sending
         && toList.length > 0
@@ -92,6 +109,7 @@ export const SendEmailTool = ({onBack}: SendEmailToolProps) => {
         && !replyToInvalid
         && subject.trim().length > 0
         && hasBodyContent
+        && !bodyTooLong
         && totalRecipients <= 25;
 
     const sanitizedPreview = sanitizeEmailHtml(bodyHtml);
@@ -270,6 +288,13 @@ export const SendEmailTool = ({onBack}: SendEmailToolProps) => {
                     {isEnglish
                         ? `Too many recipients (${totalRecipients}/25). Reduce to/cc/bcc.`
                         : `收件人过多（${totalRecipients}/25），请减少 收件/抄送/密送 数量。`}
+                </p>
+            )}
+            {bodyTooLong && (
+                <p className="admin-no-results">
+                    {isEnglish
+                        ? `Body is too long (${bodyHtml.length.toLocaleString()} / ${BODY_MAX_LEN.toLocaleString()} chars). Trim before sending.`
+                        : `正文过长（${bodyHtml.length.toLocaleString()} / ${BODY_MAX_LEN.toLocaleString()} 字符），请精简后发送。`}
                 </p>
             )}
 

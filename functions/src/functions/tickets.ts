@@ -36,7 +36,7 @@ function validateTicketCount(value: unknown): number {
     return value;
 }
 
-const VALID_TICKET_TYPES = ["normal", "early-bird", "vip", "Comp Ticket", "guest"];
+const VALID_TICKET_TYPES = ["normal", "early-bird", "vip", "Comp Ticket", "guest", "vendor"];
 
 function validateTicketType(value: unknown): string {
     if (typeof value !== "string" || !VALID_TICKET_TYPES.includes(value)) {
@@ -588,6 +588,130 @@ export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
         });
 
         return {unvoided: true};
+    });
+});
+export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
+        if (tickets[idx].voided) {
+            throw new HttpsError("failed-precondition", "This ticket has been voided.", {code: "voided"});
+        }
+        // Idempotent: a ticket already redeemed stays as-is so a double-click
+        // can't overwrite the original redeemer/time.
+        if (tickets[idx].redeemed) {
+            return {redeemed: false, alreadyRedeemed: true};
+        }
+
+        const now = Timestamp.now();
+        const callerName: string = callerSnap.data()?.displayName ?? "";
+        tickets[idx] = {
+            ...tickets[idx],
+            redeemed: true,
+            redeemedAt: now,
+            redeemedBy: uid,
+            redeemedByName: callerName,
+        };
+
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+
+        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-redeem",
+            performedBy: uid,
+            performedByName: callerName,
+            eventId,
+            eventTitle,
+            targetEmail: data.email ?? "",
+            targetName: data.name ?? "",
+            code: ticketId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {redeemed: true};
+    });
+});
+export const resetTicket = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
+
+        // Clear only the redemption state. The attendee's user-level
+        // attendedEvents (set by the scanner) is intentionally left untouched —
+        // a user may have attended via another ticket, so we don't un-check-in
+        // the person just because one ticket was reset.
+        tickets[idx] = {
+            ...tickets[idx],
+            redeemed: false,
+            redeemedAt: null,
+            redeemedBy: "",
+            redeemedByName: "",
+            checkedIn: false,
+            checkedInAt: null,
+        };
+
+        const eventTitle: string = eventSnap.exists
+            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            : eventId;
+
+        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
+        txn.set(db.collection("records").doc(), {
+            type: "ticket-reset",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle,
+            targetEmail: data.email ?? "",
+            targetName: data.name ?? "",
+            code: ticketId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {reset: true};
     });
 });
 export const updateEventAttendee = onCall({maxInstances: 10}, async (request) => {
@@ -1224,11 +1348,10 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
     });
 });
 
-// Caps the per-call recipient fan-out (to + cc + bcc combined). Each mail doc
-// becomes one Resend POST; one POST with many recipients still counts as one
-// quota slot in computeEmailQuota, so without this an admin could blast
-// a hundred addresses on one slot. 25 covers the realistic "small group ping"
-// case without inviting newsletter-style use.
+// Caps the per-call recipient fan-out (to + cc + bcc combined). Resend bills
+// every to/cc/bcc address as one email against the daily cap, so a 100-address
+// fan-out would burn the whole free-plan daily quota in one click. 25 covers
+// the realistic "small group ping" case without inviting newsletter-style use.
 const CUSTOM_EMAIL_MAX_RECIPIENTS = 25;
 
 function validateEmailList(value: unknown, name: string, required: boolean): string[] {
@@ -1279,11 +1402,23 @@ export const sendCustomEmail = onCall(
         }
 
         // Reply-To: client may override; otherwise fall back to the admin's auth
-        // token email so replies don't dead-letter at the From mailbox.
+        // token email so replies don't dead-letter at the From mailbox. The
+        // fallback is normally a valid email (Firebase issues it from the
+        // signed-in provider), but we run it through validateEmail anyway so a
+        // weird principal can't ship a malformed Reply-To header — drop to "" in
+        // that case rather than failing the whole send.
         const replyToInput = input.replyTo;
-        const replyTo = (replyToInput === undefined || replyToInput === null || replyToInput === "")
-            ? (request.auth?.token.email ?? "")
-            : validateEmail(replyToInput, "replyTo");
+        let replyTo: string;
+        if (replyToInput === undefined || replyToInput === null || replyToInput === "") {
+            const fallback = request.auth?.token.email ?? "";
+            try {
+                replyTo = fallback ? validateEmail(fallback, "replyTo") : "";
+            } catch {
+                replyTo = "";
+            }
+        } else {
+            replyTo = validateEmail(replyToInput, "replyTo");
+        }
 
         // Strip control chars from subject — defense-in-depth against header
         // injection (nodemailer's encoder already guards, mirror tickets.ts).
@@ -1320,7 +1455,11 @@ export const sendCustomEmail = onCall(
         //     outside the txn (Resend call can't run inside a Firestore txn)
         const {queued, recordRef} = await db.runTransaction(async (txn) => {
             const {sentToday, dailyCap, reserved} = await computeEmailQuotaInTxn(txn);
-            const overCap = sentToday >= dailyCap;
+            // Resend bills every to/cc/bcc address as one email, so the cap
+            // check has to consider this call's full fan-out — not just whether
+            // there's any headroom at all. Otherwise a 25-recipient send with
+            // 1 slot remaining would breach the cap by 24.
+            const overCap = sentToday + totalRecipients > dailyCap;
             if (overCap && initialQueueDepth >= RESEND_QUEUE_CAP) {
                 throw new HttpsError("resource-exhausted",
                     "Daily cap reached and overflow queue is full.", {code: "quota-exceeded"});
@@ -1345,6 +1484,9 @@ export const sendCustomEmail = onCall(
                 targetEmail: to[0],
                 sentCount: 1,
                 recipientCount: totalRecipients,
+                toCount: to.length,
+                ccCount: cc.length,
+                bccCount: bcc.length,
                 subject,
                 replyTo,
                 timestamp: FieldValue.serverTimestamp(),

@@ -40,20 +40,25 @@ export const AdminPage = () => {
     const {upcomingEvents: allUpcomingEvents, refresh: refreshAllUpcoming} = useAllUpcomingEvents();
     // Per-ID fetch for event-staff: avoids collection-level permission errors.
     const staffEventIds = profile?.eventStaffEvents ?? [];
-    const {upcomingEvents: staffUpcomingEvents, refresh: refreshStaffUpcoming} = useUpcomingEventsByIds(staffEventIds);
+    const {
+        upcomingEvents: staffUpcomingEvents,
+        loading: staffEventsLoading,
+        refresh: refreshStaffUpcoming
+    } = useUpcomingEventsByIds(staffEventIds);
     const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => b.date.localeCompare(a.date)), [rawPastEvents]);
 
     const isCoreStaffOrAbove = !!profile && hasPermission(profile.group, 'core-staff');
     // Staff group (level 2): view-only admin access + Tools. Superset of event-staff access.
     const isStaffGroup = !!profile && hasPermission(profile.group, 'staff') && !isCoreStaffOrAbove;
-    // Event-staff is a per-event tag, independent of the global user group —
-    // any user below staff group with eventStaffEvents can access the scanner UI for those events.
-    // Access expires naturally: archiveUpcomingEvent removes the event from each
-    // assigned user's eventStaffEvents, so the array empties once all events are done.
+    // Event-staff is a per-event tag, independent of the global user group — a user
+    // below staff group who is staff for an UPCOMING event gets scanner/admin access
+    // for those events. Access is gated on upcoming (not raw eventStaffEvents)
+    // membership: past-event staff entries are retained for the profile badge +
+    // roster, so access falls away naturally once a staffer's events are archived.
     const isEventStaffOnly = !!profile
         && !isCoreStaffOrAbove
         && !isStaffGroup
-        && profile.eventStaffEvents.length > 0;
+        && staffUpcomingEvents.length > 0;
 
     // Core-staff and staff group see all events; event-staff only sees their assigned ones.
     const upcomingEvents = (isCoreStaffOrAbove || isStaffGroup) ? allUpcomingEvents : staffUpcomingEvents;
@@ -108,9 +113,9 @@ export const AdminPage = () => {
         const event = searchParams.get('event');
         if (isEventStaffOnly) {
             setActiveTab('events');
-            const firstEventId = event && profile.eventStaffEvents.includes(event)
+            const firstEventId = event && staffUpcomingEvents.some(e => e.id === event)
                 ? event
-                : profile.eventStaffEvents[0];
+                : staffUpcomingEvents[0]?.id;
             if (firstEventId) {
                 upcomingTabRef.current?.selectEvent(firstEventId);
             }
@@ -150,7 +155,7 @@ export const AdminPage = () => {
             }
         }
         urlParamsHandled.current = true;
-    }, [loading, user, profile, searchParams, isCoreStaffOrAbove, isStaffGroup, isEventStaffOnly]);
+    }, [loading, user, profile, searchParams, isCoreStaffOrAbove, isStaffGroup, isEventStaffOnly, staffUpcomingEvents]);
 
     useEffect(() => {
         if (loading || !user || !profile || (!isCoreStaffOrAbove && !isStaffGroup)) return;
@@ -225,7 +230,12 @@ export const AdminPage = () => {
         }
     }, [activeTab]);
 
-    if (loading) {
+    // A potential event-staff user (below staff group, has eventStaffEvents) can't be
+    // classified until we know which of their assigned events are still upcoming.
+    // Hold the spinner until that resolves so we don't flash "Access Denied".
+    const resolvingEventStaff = !!profile && !isCoreStaffOrAbove && !isStaffGroup
+        && staffEventIds.length > 0 && staffEventsLoading;
+    if (loading || resolvingEventStaff) {
         return (
             <div className="profile-loading">
                 <div className="profile-spinner"/>

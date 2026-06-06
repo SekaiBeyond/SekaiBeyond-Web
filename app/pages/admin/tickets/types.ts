@@ -1,4 +1,4 @@
-export type TicketType = 'normal' | 'early-bird' | 'vip' | 'Comp Ticket' | 'guest';
+export type TicketType = 'normal' | 'early-bird' | 'vip' | 'Comp Ticket' | 'guest' | 'vendor';
 
 export const TICKET_TYPES: {value: TicketType; labelEn: string; labelCn: string}[] = [
     {value: 'normal', labelEn: 'Normal', labelCn: '普通'},
@@ -6,7 +6,14 @@ export const TICKET_TYPES: {value: TicketType; labelEn: string; labelCn: string}
     {value: 'vip', labelEn: 'VIP', labelCn: 'VIP'},
     {value: 'Comp Ticket', labelEn: 'Comp Ticket', labelCn: '赠票'},
     {value: 'guest', labelEn: 'Guest', labelCn: '嘉宾'},
+    {value: 'vendor', labelEn: 'Vendor', labelCn: '商摊'},
 ];
+
+export const ticketTypeLabel = (type: TicketType | string, isEnglish: boolean): string => {
+    const tt = TICKET_TYPES.find(t => t.value === type);
+    if (!tt) return String(type);
+    return isEnglish ? tt.labelEn : tt.labelCn;
+};
 
 export interface TicketData {
     ticketId: string;
@@ -70,4 +77,4 @@ export interface AttendeeTotals {
     unsentSendable: number;
 }
 
-export type TicketsSection = 'scan' | 'attendees' | 'import' | 'template' | 'send';
+export type TicketsSection = 'scan' | 'attendees' | 'stats' | 'import' | 'template' | 'send';
