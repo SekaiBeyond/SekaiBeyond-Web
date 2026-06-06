@@ -7,7 +7,7 @@ import { type ParkingLot, useParkingLots } from '~/lib/parkingLots';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { AdvancedMarker, APIProvider, InfoWindow, Map } from '@vis.gl/react-google-maps';
 
-type HydratedLot = ParkingLot & {walkingMinutes: number; recommended: boolean};
+type HydratedLot = ParkingLot & {recommended: boolean};
 
 /**
  * Minimal interface mirroring the fields we need from the upcomingEvents doc.
@@ -74,7 +74,7 @@ export const ParkingGuide = () => {
         ? venue.parkingLots
             .map(link => {
                 const lot = parkingLots.find(l => l.id === link.lotId);
-                return lot ? {...lot, walkingMinutes: link.walkingMinutes, recommended: link.recommended} : null;
+                return lot ? {...lot, recommended: link.recommended} : null;
             })
             .filter((l): l is HydratedLot => l !== null)
         : [];
@@ -245,11 +245,6 @@ export const ParkingGuide = () => {
                                                         <div
                                                             className="parking-popup-title">{isEnglish ? lot.name : lot.nameCn}</div>
                                                         <div className="parking-popup-type">{typeLabel}</div>
-                                                        <div className="parking-popup-walk">
-                                                            🚶 {isEnglish
-                                                            ? `${lot.walkingMinutes} min walk to venue`
-                                                            : `步行约 ${lot.walkingMinutes} 分钟`}
-                                                        </div>
                                                     </div>
                                                 </InfoWindow>
                                             )}

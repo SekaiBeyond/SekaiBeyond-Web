@@ -356,13 +356,8 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     }
     const parkingLots = rawLots.map((link: any, i: number) => {
         const linkLotId = validateDocId(link?.lotId, `parkingLots[${i}].lotId`);
-        const walkingMinutes = link?.walkingMinutes;
-        if (typeof walkingMinutes !== "number" || !Number.isInteger(walkingMinutes) || walkingMinutes < 0 || walkingMinutes > 999) {
-            throw new HttpsError("invalid-argument", `parkingLots[${i}].walkingMinutes must be a non-negative integer.`);
-        }
         return {
             lotId: linkLotId,
-            walkingMinutes,
             recommended: Boolean(link?.recommended),
         };
     });

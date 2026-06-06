@@ -4,7 +4,6 @@ import { getFirebaseDb } from './firebase';
 
 export interface VenueLotLink {
     lotId: string;
-    walkingMinutes: number;
     /** Whether this lot is the primary recommendation for the venue. */
     recommended: boolean;
 }
@@ -41,7 +40,6 @@ async function fetchVenues(force = false): Promise<Venue[]> {
             const parkingLots: VenueLotLink[] = rawLots
                 .map((link: any) => ({
                     lotId: typeof link?.lotId === 'string' ? link.lotId : '',
-                    walkingMinutes: typeof link?.walkingMinutes === 'number' ? link.walkingMinutes : 0,
                     recommended: Boolean(link?.recommended),
                 }))
                 .filter((link: VenueLotLink) => link.lotId.length > 0);

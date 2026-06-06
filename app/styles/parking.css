@@ -366,13 +366,6 @@
     font-weight: 600;
 }
 
-.parking-popup-walk {
-    font-size: 12px;
-    color: var(--color-primary);
-    font-weight: 600;
-    margin-top: 4px;
-}
-
 /* --- Parking Guide Link (on home page event card) --- */
 .parking-guide-link {
     display: inline-flex;

@@ -142,8 +142,8 @@ export const VenuesTab = ({venues, parkingLots, refreshVenues, showToast, readOn
         <div className="admin-section">
             <p className="admin-helper-text" style={{marginTop: '4px', marginBottom: '12px'}}>
                 {isEnglish
-                    ? 'Venues power the parking guide. Each venue links to one or more parking lots (managed in the Parking Lots section) with a per-venue walking time. Events match a venue when their location field equals the venue\'s English name.'
-                    : '场地数据用于停车指南。每个场地关联一个或多个停车场（在停车场区块管理），并指定步行时间。活动的地点字段需与场地英文名称完全匹配。'}
+                    ? 'Venues power the parking guide. Each venue links to one or more parking lots (managed in the Parking Lots section). Events match a venue when their location field equals the venue\'s English name.'
+                    : '场地数据用于停车指南。每个场地关联一个或多个停车场（在停车场区块管理）。活动的地点字段需与场地英文名称完全匹配。'}
             </p>
 
             {!readOnly && (showCreate ? (
@@ -276,11 +276,18 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
     };
     const addLink = () => setDraft(prev => ({
         ...prev,
-        parkingLots: [...prev.parkingLots, {lotId: '', walkingMinutes: 5, recommended: false}],
+        parkingLots: [...prev.parkingLots, {lotId: '', recommended: false}],
     }));
     const removeLink = (index: number) => setDraft(prev => ({
         ...prev,
         parkingLots: prev.parkingLots.filter((_, i) => i !== index),
+    }));
+    // Only one lot can be the primary recommendation, so selecting one clears the rest.
+    const toggleRecommended = (index: number) => setDraft(prev => ({
+        ...prev,
+        parkingLots: prev.parkingLots.map((l, i) =>
+            i === index ? {...l, recommended: !l.recommended} : {...l, recommended: false}
+        ),
     }));
 
     return (
@@ -316,104 +323,97 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
                 />
             </div>
 
-            <div style={{marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 16}}>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
-                    <span style={{fontSize: 14, fontWeight: 600}}>
+            <div className="admin-venue-lots">
+                <div className="admin-venue-lots-header">
+                    <span className="admin-venue-lots-title">
                         {isEnglish ? 'Linked Parking Lots' : '关联停车场'}
+                        {draft.parkingLots.length > 0 && (
+                            <span className="admin-venue-lots-count">{draft.parkingLots.length}</span>
+                        )}
                     </span>
                     <button
-                        className="admin-back-btn"
-                        style={{marginBottom: 0, padding: '4px 8px'}}
+                        type="button"
+                        className="admin-venue-lot-add"
                         onClick={addLink}
                         disabled={availableLots.length === 0}
                     >
-                        {isEnglish ? '+ Link Lot' : '+ 关联停车场'}
+                        {isEnglish ? '+ Link a lot' : '+ 关联停车场'}
                     </button>
                 </div>
 
-                {availableLots.length === 0 && (
-                    <p className="admin-helper-text" style={{fontStyle: 'italic'}}>
+                {availableLots.length === 0 ? (
+                    <div className="admin-venue-lot-empty">
                         {isEnglish
                             ? 'No parking lots exist yet. Create one in the Parking Lots section first.'
                             : '尚无停车场。请先在"停车场"区块创建。'}
-                    </p>
-                )}
-
-                {availableLots.length > 0 && draft.parkingLots.length === 0 && (
-                    <p className="admin-helper-text" style={{fontStyle: 'italic'}}>
-                        {isEnglish ? 'No lots linked yet.' : '尚未关联停车场。'}
-                    </p>
-                )}
-
-                {draft.parkingLots.map((link, i) => (
-                    <div
-                        key={i}
-                        style={{
-                            border: '1px solid var(--color-border)',
-                            borderRadius: 8,
-                            padding: 12,
-                            marginBottom: 12,
-                        }}
-                    >
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: 8
-                        }}>
-                            <strong style={{fontSize: 13}}>
-                                {isEnglish ? `Linked Lot ${i + 1}` : `关联停车场 ${i + 1}`}
-                            </strong>
-                            <button
-                                className="admin-back-btn"
-                                style={{
-                                    color: 'var(--color-danger)',
-                                    border: 'none',
-                                    padding: '4px 8px',
-                                    marginBottom: 0
-                                }}
-                                onClick={() => removeLink(i)}
-                            >
-                                {isEnglish ? 'Remove' : '删除'}
-                            </button>
-                        </div>
-                        <div className="admin-form-grid">
-                            <label>
-                                <span>{isEnglish ? 'Parking Lot' : '停车场'}</span>
-                                <select
-                                    value={link.lotId}
-                                    onChange={e => updateLink(i, {lotId: e.target.value})}
-                                    className="admin-search-input"
-                                >
-                                    <option value="">{isEnglish ? '— Select a lot —' : '— 请选择 —'}</option>
-                                    {availableLots.map(lot => (
-                                        <option key={lot.id} value={lot.id}>
-                                            {isEnglish ? lot.name : (lot.nameCn || lot.name)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label>
-                                <span>{isEnglish ? 'Walking Minutes' : '步行分钟数'}</span>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    value={link.walkingMinutes}
-                                    onChange={e => updateLink(i, {walkingMinutes: parseInt(e.target.value) || 0})}
-                                    className="admin-search-input"
-                                />
-                            </label>
-                            <label style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                                <input
-                                    type="checkbox"
-                                    checked={link.recommended}
-                                    onChange={e => updateLink(i, {recommended: e.target.checked})}
-                                />
-                                <span>{isEnglish ? 'Recommended (primary lot)' : '推荐（首选停车场）'}</span>
-                            </label>
-                        </div>
                     </div>
-                ))}
+                ) : draft.parkingLots.length === 0 ? (
+                    <div className="admin-venue-lot-empty">
+                        {isEnglish
+                            ? 'No lots linked yet. Click "Link a lot" to add one.'
+                            : '尚未关联停车场。点击"关联停车场"添加。'}
+                    </div>
+                ) : (
+                    <div className="admin-venue-lot-list">
+                        {draft.parkingLots.map((link, i) => {
+                            const lot = availableLots.find(l => l.id === link.lotId);
+                            const badge = !lot ? '·'
+                                : lot.type === 'disabled' ? '♿'
+                                    : lot.type === 'garage' ? 'G' : 'P';
+                            const typeLabel = !lot ? '' : isEnglish
+                                ? (lot.type === 'disabled' ? 'Disabled parking'
+                                    : lot.type === 'garage' ? 'Parking garage' : 'General parking')
+                                : (lot.type === 'disabled' ? '无障碍停车'
+                                    : lot.type === 'garage' ? '停车库' : '普通停车');
+                            return (
+                                <div
+                                    key={i}
+                                    className={`admin-venue-lot-card${link.recommended ? ' is-recommended' : ''}`}
+                                >
+                                    <div
+                                        className="admin-venue-lot-badge"
+                                        data-type={lot?.type ?? 'empty'}
+                                        title={typeLabel}
+                                    >
+                                        {badge}
+                                    </div>
+                                    <div className="admin-venue-lot-body">
+                                        <select
+                                            value={link.lotId}
+                                            onChange={e => updateLink(i, {lotId: e.target.value})}
+                                            className="admin-search-input admin-venue-lot-select"
+                                        >
+                                            <option value="">{isEnglish ? '— Select a lot —' : '— 请选择 —'}</option>
+                                            {availableLots.map(opt => (
+                                                <option key={opt.id} value={opt.id}>
+                                                    {isEnglish ? opt.name : (opt.nameCn || opt.name)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            className={`admin-venue-lot-star${link.recommended ? ' is-on' : ''}`}
+                                            onClick={() => toggleRecommended(i)}
+                                            title={isEnglish ? 'Mark as the primary (recommended) lot' : '设为首选（推荐）停车场'}
+                                        >
+                                            <span aria-hidden="true">{link.recommended ? '★' : '☆'}</span>
+                                            <span>{isEnglish ? 'Primary' : '首选'}</span>
+                                        </button>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="admin-venue-lot-remove"
+                                        onClick={() => removeLink(i)}
+                                        title={isEnglish ? 'Remove lot' : '删除停车场'}
+                                        aria-label={isEnglish ? 'Remove lot' : '删除停车场'}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </>
     );

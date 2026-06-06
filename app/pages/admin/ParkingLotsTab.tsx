@@ -303,8 +303,8 @@ const LotForm = ({draft, setDraft, isEnglish}: LotFormProps) => (
             </label>
         </div>
 
-        <div style={{marginTop: 12}}>
-            <span style={{fontSize: 14, fontWeight: 600, display: 'block', marginBottom: 6}}>
+        <div className="admin-field-section">
+            <span className="admin-field-label">
                 {isEnglish ? 'Lot Location' : '停车场位置'}
             </span>
             <MapPicker
@@ -313,23 +313,41 @@ const LotForm = ({draft, setDraft, isEnglish}: LotFormProps) => (
             />
         </div>
 
-        <label style={{display: 'block', marginTop: 12}}>
-            <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
-            <textarea
-                value={draft.descriptionEn}
-                onChange={e => setDraft(prev => ({...prev, descriptionEn: e.target.value}))}
-                className="admin-search-input"
-                style={{minHeight: 60}}
-            />
-        </label>
-        <label style={{display: 'block', marginTop: 8}}>
-            <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
-            <textarea
-                value={draft.descriptionCn}
-                onChange={e => setDraft(prev => ({...prev, descriptionCn: e.target.value}))}
-                className="admin-search-input"
-                style={{minHeight: 60}}
-            />
-        </label>
+        <div className="admin-field-section">
+            <span className="admin-field-label">{isEnglish ? 'Description' : '描述'}</span>
+            <p className="admin-helper-text admin-field-hint">
+                {isEnglish
+                    ? 'Shown to visitors on the parking guide — add directions, the nearest entrance, or a helpful tip.'
+                    : '将显示在停车指南中 — 可填写方向、最近的入口或实用提示。'}
+            </p>
+            <div className="admin-form-grid">
+                <label>
+                    <span>{isEnglish ? 'English' : '英文'}</span>
+                    <textarea
+                        value={draft.descriptionEn}
+                        onChange={e => setDraft(prev => ({...prev, descriptionEn: e.target.value}))}
+                        className="admin-search-input admin-textarea"
+                        maxLength={1000}
+                        placeholder="e.g. Enter from Stevens Way; a short, well-lit walk to the main entrance."
+                    />
+                    <small className={`admin-char-count${draft.descriptionEn.length > 900 ? ' is-near-limit' : ''}`}>
+                        {draft.descriptionEn.length}/1000
+                    </small>
+                </label>
+                <label>
+                    <span>{isEnglish ? 'Chinese' : '中文'}</span>
+                    <textarea
+                        value={draft.descriptionCn}
+                        onChange={e => setDraft(prev => ({...prev, descriptionCn: e.target.value}))}
+                        className="admin-search-input admin-textarea"
+                        maxLength={1000}
+                        placeholder="例如：从 Stevens Way 进入，步行很短即到正门，沿途照明良好。"
+                    />
+                    <small className={`admin-char-count${draft.descriptionCn.length > 900 ? ' is-near-limit' : ''}`}>
+                        {draft.descriptionCn.length}/1000
+                    </small>
+                </label>
+            </div>
+        </div>
     </>
 );

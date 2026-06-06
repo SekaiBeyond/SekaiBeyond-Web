@@ -993,7 +993,8 @@
 }
 
 .admin-textarea {
-    min-height: 80px;
+    min-height: 84px;
+    line-height: 1.5;
     resize: vertical;
 }
 
@@ -2909,4 +2910,245 @@ select.admin-tickets-tag:focus {
         max-height: 95vh;
         border-radius: 14px;
     }
+}
+
+/* --- Venue: Linked Parking Lots --- */
+.admin-venue-lots {
+    margin-top: 24px;
+    border-top: 1px solid rgba(255, 107, 157, 0.18);
+    padding-top: 18px;
+}
+
+.admin-venue-lots-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.admin-venue-lots-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-venue-lots-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgba(255, 107, 157, 0.14);
+    color: var(--color-primary);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.admin-venue-lot-add {
+    border: 1.5px solid var(--color-primary);
+    background: rgba(255, 107, 157, 0.06);
+    color: var(--color-primary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.admin-venue-lot-add:hover:not(:disabled) {
+    background: rgba(255, 107, 157, 0.15);
+    transform: translateY(-1px);
+}
+
+.admin-venue-lot-add:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    border-color: var(--color-text-light);
+    color: var(--color-text-light);
+    background: transparent;
+}
+
+.admin-venue-lot-empty {
+    padding: 18px;
+    border: 1px dashed rgba(255, 107, 157, 0.3);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.45);
+    color: var(--color-text-muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+.admin-venue-lot-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-venue-lot-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 107, 157, 0.16);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.6);
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-venue-lot-card:hover {
+    border-color: rgba(255, 107, 157, 0.4);
+    box-shadow: var(--shadow-soft);
+}
+
+.admin-venue-lot-card.is-recommended {
+    border-color: var(--color-primary);
+    background: rgba(255, 107, 157, 0.07);
+    box-shadow: 0 4px 16px rgba(255, 107, 157, 0.12);
+}
+
+.admin-venue-lot-badge {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--gradient-primary);
+}
+
+.admin-venue-lot-badge[data-type="garage"] {
+    background: linear-gradient(135deg, #6c63ff, #9b59b6);
+}
+
+.admin-venue-lot-badge[data-type="disabled"] {
+    background: linear-gradient(135deg, #4ecb71, #2ea7a0);
+}
+
+.admin-venue-lot-badge[data-type="empty"] {
+    background: rgba(0, 0, 0, 0.07);
+    color: var(--color-text-light);
+}
+
+.admin-venue-lot-body {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.admin-venue-lot-select {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+}
+
+.admin-venue-lot-star {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1.5px solid rgba(255, 107, 157, 0.3);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 7px 13px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-venue-lot-star:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.admin-venue-lot-star.is-on {
+    border-color: transparent;
+    background: linear-gradient(135deg, #feca57, #ff8e53);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(255, 142, 83, 0.3);
+}
+
+.admin-venue-lot-remove {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--color-text-light);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.admin-venue-lot-remove:hover {
+    background: rgba(224, 85, 85, 0.12);
+    color: var(--color-error);
+}
+
+@media (max-width: 600px) {
+    .admin-venue-lot-body {
+        flex-wrap: wrap;
+    }
+
+    .admin-venue-lot-select {
+        flex-basis: 100%;
+    }
+
+    .admin-venue-lot-star {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* --- Admin form field section heading (reused across lot/venue forms) --- */
+.admin-field-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 4px;
+}
+
+.admin-field-section {
+    margin-top: 16px;
+}
+
+.admin-field-hint {
+    margin: 0 0 10px;
+}
+
+/* --- Parking lot description fields --- */
+.admin-char-count {
+    align-self: flex-end;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-light);
+    font-feature-settings: "tnum";
+}
+
+.admin-char-count.is-near-limit {
+    color: var(--color-accent);
 }
