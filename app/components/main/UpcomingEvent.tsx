@@ -3,7 +3,7 @@ import { type UpcomingEvent as UpcomingEventType, useUpcomingEvents } from "~/li
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 import { isValidHttpUrl } from "~/lib/urls";
-import { resolveVenueById, useVenues } from "~/lib/venues";
+import { eventLocationDisplay, resolveVenueById, useVenues } from "~/lib/venues";
 
 interface EventCardProps {
     event: UpcomingEventType;
@@ -79,7 +79,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     minute: 'numeric',
                 })}</p>
                 <div className="convention-location">
-                    {isEnglish ? event.location : event.locationCn}
+                    {eventLocationDisplay(event.location, event.locationCn, event.venueId, venues, isEnglish)}
                 </div>
                 <p className="event-description-text">
                     {isEnglish ? event.description : event.descriptionCn}

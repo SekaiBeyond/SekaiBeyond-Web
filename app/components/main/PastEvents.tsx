@@ -3,6 +3,7 @@ import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 import { usePastEvents } from "~/lib/pastEvents";
 import { useTags } from "~/lib/tags";
+import { eventLocationDisplay, useVenues } from "~/lib/venues";
 
 export const PastEvents = () => {
     const {isEnglish} = useLanguage();
@@ -10,6 +11,7 @@ export const PastEvents = () => {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const {pastEvents, loading} = usePastEvents();
     const {tags} = useTags();
+    const {venues} = useVenues();
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -68,10 +70,15 @@ export const PastEvents = () => {
                                             timeZone: 'UTC'
                                         })}</span>
                                     </div>
-                                    <div className="event-date">
-                                        <span>📍</span>
-                                        <span>{(isEnglish ? event.location : (event.locationCn || event.location))}</span>
-                                    </div>
+                                    {(() => {
+                                        const locationText = eventLocationDisplay(event.location, event.locationCn, event.venueId, venues, isEnglish);
+                                        return locationText ? (
+                                            <div className="event-date">
+                                                <span>📍</span>
+                                                <span>{locationText}</span>
+                                            </div>
+                                        ) : null;
+                                    })()}
                                     <p className="event-description">
                                         {isEnglish ? event.description : event.descriptionCn}
                                     </p>

@@ -12,6 +12,7 @@ import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { UserRecord } from './types';
+import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import { fetchEventAttendees, fetchEventStaffCount, pastEventHasTickets } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { LocationFormField } from './LocationFormField';
@@ -71,6 +72,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                                                           readOnly = false,
                                                                       }, forwardedRef) => {
     const {isEnglish} = useLanguage();
+    const {venues} = useVenues();
     const [managedEvent, setManagedEvent] = useState<string | null>(null);
 
     useEffect(() => {
@@ -445,7 +447,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                             return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
                                         })()}</span>
                                         <span>{managedEvt.date}</span>
-                                        <span>{isEnglish ? managedEvt.location : (managedEvt.locationCn || managedEvt.location)}</span>
+                                        <span>{eventLocationDisplay(managedEvt.location, managedEvt.locationCn, managedEvt.venueId, venues, isEnglish)}</span>
                                     </p>
                                 </div>
                             </div>

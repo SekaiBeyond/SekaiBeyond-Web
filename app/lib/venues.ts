@@ -110,3 +110,22 @@ export function resolveVenueById(venueId: string | undefined, venues: Venue[]): 
     if (!venueId) return null;
     return venues.find(v => v.id === venueId) ?? null;
 }
+
+/**
+ * Display string for an event's location. The free-text location is optional; when it's empty
+ * we fall back to the linked venue's (building) name so the event still shows where it is.
+ * Returns an empty string only when neither a location nor a resolvable venue is set.
+ */
+export function eventLocationDisplay(
+    location: string | undefined,
+    locationCn: string | undefined,
+    venueId: string | undefined,
+    venues: Venue[],
+    isEnglish: boolean,
+): string {
+    const text = isEnglish ? (location ?? '') : (locationCn || location || '');
+    if (text.trim()) return text;
+    const venue = resolveVenueById(venueId, venues);
+    if (!venue) return '';
+    return isEnglish ? venue.nameEn : (venue.nameCn || venue.nameEn);
+}
