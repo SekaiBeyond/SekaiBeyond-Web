@@ -31,6 +31,38 @@ export function hasCoordinates(lat: number, lng: number): boolean {
     return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
 }
 
+/** Great-circle (straight-line) distance between two lat/lng points, in miles. */
+export function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const R = 3958.8; // Earth radius in miles
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/**
+ * Format a straight-line distance for display. The leading "~" / "约" signals this is an
+ * as-the-crow-flies estimate, not a measured walking route. Very short distances switch to
+ * feet (English) / metres (Chinese) so close lots don't all read the same.
+ */
+export function formatDistanceEstimate(miles: number, isEnglish: boolean): string {
+    if (isEnglish) {
+        if (miles < 0.1) {
+            const ft = Math.max(50, Math.round((miles * 5280) / 50) * 50);
+            return `~${ft} ft away`;
+        }
+        return `~${miles.toFixed(1)} mi away`;
+    }
+    const metres = miles * 1609.34;
+    if (metres < 1000) {
+        const m = Math.max(10, Math.round(metres / 10) * 10);
+        return `约 ${m} 米`;
+    }
+    return `约 ${(metres / 1000).toFixed(1)} 公里`;
+}
+
 let cachedVenues: Venue[] | null = null;
 let fetchPromise: Promise<Venue[]> | null = null;
 const subscribers = new Set<(venues: Venue[]) => void>();
