@@ -37,6 +37,8 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     ticket: ['ticket-import', 'ticket-redeem', 'ticket-void', 'ticket-attendee-delete',
         'ticket-attendee-edit', 'ticket-regenerate', 'ticket-email-send'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
+    location: ['venue-create', 'venue-edit', 'venue-delete',
+        'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
     config: ['policy-update', 'config-update'],
     email: ['custom-email-send'],
@@ -87,6 +89,9 @@ export const RecordsTab = ({
                 badgeId: data.badgeId,
                 badgeName: data.badgeName,
                 tagName: data.tagName,
+                venueName: data.venueName,
+                lotName: data.lotName,
+                unlinkedFrom: data.unlinkedFrom,
                 code: data.code,
                 oldGroup: data.oldGroup,
                 newGroup: data.newGroup,
@@ -399,6 +404,38 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>deleted tag {r.tagName ?? ''}</>
                     : <>删除了标签 {r.tagName ?? ''}</>;
+            case 'venue-create':
+                return isEnglish
+                    ? <>created venue {r.venueName ?? ''}</>
+                    : <>创建了场地 {r.venueName ?? ''}</>;
+            case 'venue-edit':
+                return isEnglish
+                    ? <>edited venue {r.venueName ?? ''}</>
+                    : <>编辑了场地 {r.venueName ?? ''}</>;
+            case 'venue-delete':
+                return isEnglish
+                    ? <>deleted venue {r.venueName ?? ''}</>
+                    : <>删除了场地 {r.venueName ?? ''}</>;
+            case 'parkinglot-create':
+                return isEnglish
+                    ? <>created parking lot {r.lotName ?? ''}</>
+                    : <>创建了停车场 {r.lotName ?? ''}</>;
+            case 'parkinglot-edit':
+                return isEnglish
+                    ? <>edited parking lot {r.lotName ?? ''}</>
+                    : <>编辑了停车场 {r.lotName ?? ''}</>;
+            case 'parkinglot-delete': {
+                const unlinked = r.unlinkedFrom ?? 0;
+                if (unlinked > 0) {
+                    return isEnglish
+                        ? <>deleted parking lot {r.lotName ?? ''} (unlinked
+                            from {unlinked} venue{unlinked === 1 ? '' : 's'})</>
+                        : <>删除了停车场 {r.lotName ?? ''}（已从 {unlinked} 个场地解除关联）</>;
+                }
+                return isEnglish
+                    ? <>deleted parking lot {r.lotName ?? ''}</>
+                    : <>删除了停车场 {r.lotName ?? ''}</>;
+            }
             case 'account-deletion-requested': {
                 const selfRequest = r.performedBy && r.targetUid && r.performedBy === r.targetUid;
                 if (selfRequest) {
@@ -575,6 +612,13 @@ export const RecordsTab = ({
             case 'tag-edit':
             case 'tag-delete':
                 return isEnglish ? 'Tag' : '标签';
+            case 'venue-create':
+            case 'venue-edit':
+            case 'venue-delete':
+            case 'parkinglot-create':
+            case 'parkinglot-edit':
+            case 'parkinglot-delete':
+                return isEnglish ? 'Location' : '场地';
             case 'account-deletion-requested':
             case 'account-deletion-cancelled':
             case 'account-deleted':
@@ -608,6 +652,7 @@ export const RecordsTab = ({
                     <option value="event">{isEnglish ? 'Event' : '活动'}</option>
                     <option value="ticket">{isEnglish ? 'Ticket' : '门票'}</option>
                     <option value="tag">{isEnglish ? 'Tag' : '标签'}</option>
+                    <option value="location">{isEnglish ? 'Location' : '场地'}</option>
                     <option value="account">{isEnglish ? 'Account' : '账号'}</option>
                     <option value="config">{isEnglish ? 'Config' : '配置'}</option>
                     <option value="email">{isEnglish ? 'Email' : '邮件'}</option>
