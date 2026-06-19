@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
 import { resolveVenueById, useVenues, type Venue } from '~/lib/venues';
@@ -23,7 +23,6 @@ interface EventSnapshot {
 
 export const ParkingGuide = () => {
     const {eventId} = useParams<{eventId: string}>();
-    const navigate = useNavigate();
     const {isEnglish} = useLanguage();
     const {venues, loading: venuesLoading} = useVenues();
     const {parkingLots, loading: lotsLoading} = useParkingLots();

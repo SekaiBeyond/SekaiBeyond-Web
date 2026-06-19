@@ -70,6 +70,7 @@
 .parking-header-sparkle {
     position: absolute;
     font-size: 22px;
+    color: #feca57;
     opacity: 0.6;
     animation: parking-sparkle-float 3s ease-in-out infinite;
 }
@@ -113,17 +114,30 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    flex-wrap: wrap;
+    gap: 16px;
+    flex-wrap: nowrap;
+    margin-top: 6px;
+}
+
+/* Long divider lines flanking the venue location, uniform thickness. */
+.parking-venue-row::before,
+.parking-venue-row::after {
+    content: '';
+    flex: 1 1 auto;
+    max-width: 200px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--color-primary);
 }
 
 .parking-venue-name {
     font-family: var(--font-display);
     font-size: clamp(1rem, 2.5vw, 1.4rem);
-    color: var(--color-text);
+    color: var(--color-primary);
     font-weight: 700;
     letter-spacing: 1px;
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .parking-venue-badge {
@@ -318,11 +332,12 @@ a.parking-lot-name:hover {
 
 .parking-footer-sparkle {
     font-size: 16px;
-    -webkit-text-fill-color: initial;
+    color: #feca57;
+    -webkit-text-fill-color: #feca57;
     background: none;
     -webkit-background-clip: initial;
     background-clip: initial;
-    opacity: 0.7;
+    opacity: 0.9;
 }
 
 /* --- Leaflet Custom Markers --- */
@@ -616,6 +631,19 @@ a.parking-lot-name:hover {
 
     .parking-header-sparkle {
         display: none;
+    }
+
+    .parking-venue-row {
+        gap: 10px;
+    }
+
+    .parking-venue-row::before,
+    .parking-venue-row::after {
+        max-width: 60px;
+    }
+
+    .parking-venue-name {
+        white-space: normal;
     }
 
     .parking-topbar {
