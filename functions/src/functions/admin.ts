@@ -354,13 +354,9 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     if (rawLots.length > 50) {
         throw new HttpsError("invalid-argument", "Too many parking lots (max 50).");
     }
-    const parkingLots = rawLots.map((link: any, i: number) => {
-        const linkLotId = validateDocId(link?.lotId, `parkingLots[${i}].lotId`);
-        return {
-            lotId: linkLotId,
-            recommended: Boolean(link?.recommended),
-        };
-    });
+    const parkingLots = rawLots.map((link: any, i: number) => ({
+        lotId: validateDocId(link?.lotId, `parkingLots[${i}].lotId`),
+    }));
     const seenLotIds = new Set<string>();
     for (const l of parkingLots) {
         if (seenLotIds.has(l.lotId)) {

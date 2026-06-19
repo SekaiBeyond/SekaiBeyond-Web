@@ -148,8 +148,8 @@ export const ParkingLotsTab = ({
         <div className="admin-section">
             <p className="admin-helper-text" style={{marginTop: '4px', marginBottom: '12px'}}>
                 {isEnglish
-                    ? 'Parking lots are shared across venues. Walking time and the "recommended" flag are set per venue when you link the lot from the Venues section.'
-                    : '停车场为多个场地共享。步行时间和"推荐"标记在"场地"区块关联时按场地分别设置。'}
+                    ? 'Parking lots are shared across venues. Link them to a venue from the Venues section.'
+                    : '停车场为多个场地共享。请在"场地"区块将其关联到场地。'}
             </p>
 
             {!readOnly && (showCreate ? (

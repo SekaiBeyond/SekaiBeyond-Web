@@ -4,8 +4,6 @@ import { getFirebaseDb } from './firebase';
 
 export interface VenueLotLink {
     lotId: string;
-    /** Whether this lot is the primary recommendation for the venue. */
-    recommended: boolean;
 }
 
 export interface Venue {
@@ -40,7 +38,6 @@ async function fetchVenues(force = false): Promise<Venue[]> {
             const parkingLots: VenueLotLink[] = rawLots
                 .map((link: any) => ({
                     lotId: typeof link?.lotId === 'string' ? link.lotId : '',
-                    recommended: Boolean(link?.recommended),
                 }))
                 .filter((link: VenueLotLink) => link.lotId.length > 0);
             venues.push({

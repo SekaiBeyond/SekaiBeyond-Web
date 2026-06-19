@@ -9,6 +9,21 @@
     padding-bottom: 40px;
 }
 
+/* --- Top bar (back button + language toggle) --- */
+.parking-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 24px 40px 0;
+    position: relative;
+    z-index: 2;
+}
+
+.parking-topbar .parking-back-btn {
+    margin: 0;
+}
+
 /* --- Back Button --- */
 .parking-back-btn {
     display: inline-flex;
@@ -228,6 +243,60 @@
     text-decoration: underline;
 }
 
+/* --- Per-lot info cards --- */
+.parking-info-icon--general {
+    background: var(--color-accent);
+    color: white;
+    font-weight: 800;
+}
+
+.parking-info-icon--garage {
+    background: #6c63ff;
+    color: white;
+    font-weight: 800;
+}
+
+.parking-info-icon--disabled {
+    background: #4ecb71;
+    color: white;
+}
+
+.parking-lot-name-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.parking-lot-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+a.parking-lot-name {
+    color: var(--color-primary);
+    text-decoration: underline;
+}
+
+a.parking-lot-name:hover {
+    color: var(--color-accent);
+}
+
+.parking-lot-type {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-top: 2px;
+}
+
+.parking-lot-desc {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--color-text);
+    margin-top: 6px;
+}
+
 /* --- Footer Branding --- */
 .parking-footer {
     text-align: center;
@@ -321,6 +390,42 @@
 
 .parking-marker-p--garage {
     background: #6c63ff;
+}
+
+/* Lots linked to this venue are strongly highlighted — bigger pin, white + brand
+   ring, and a soft pulse — so they stand out among all the lots without dimming the
+   others. */
+.parking-marker-lot-inner.is-linked {
+    /* The scaled-up pin + ring overflow their layout box, so add room before the label. */
+    gap: 14px;
+}
+
+.parking-marker-lot-inner.is-linked .parking-marker-p {
+    transform: scale(1.28);
+    border-color: #fff;
+    box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--color-primary), 0 5px 16px rgba(255, 107, 157, 0.5);
+    animation: parking-lot-highlight 2s ease-in-out infinite;
+}
+
+@keyframes parking-lot-highlight {
+    0%, 100% {
+        box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--color-primary), 0 5px 16px rgba(255, 107, 157, 0.45);
+    }
+    50% {
+        box-shadow: 0 0 0 3px #fff, 0 0 0 8px rgba(255, 107, 157, 0.55), 0 7px 22px rgba(255, 107, 157, 0.75);
+    }
+}
+
+/* Linked lots get a colored label instead of the plain white one. */
+.parking-marker-lot-inner.is-linked .parking-marker-label {
+    background: var(--gradient-primary);
+    color: #fff;
+    font-weight: 800;
+    box-shadow: 0 3px 12px rgba(255, 107, 157, 0.45);
+}
+
+.parking-marker-lot-inner.is-linked .parking-marker-label span {
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .parking-marker-label {
@@ -480,6 +585,10 @@
         padding: 24px 20px 8px;
     }
 
+    .parking-topbar {
+        margin: 16px 20px 0;
+    }
+
     .parking-back-btn {
         margin: 16px 20px 0;
     }
@@ -507,6 +616,10 @@
 
     .parking-header-sparkle {
         display: none;
+    }
+
+    .parking-topbar {
+        margin: 12px 16px 0;
     }
 
     .parking-back-btn {

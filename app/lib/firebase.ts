@@ -361,7 +361,7 @@ export const callSaveVenue = (data: {
     nameCn: string;
     lat: number;
     lng: number;
-    parkingLots: Array<{lotId: string; recommended: boolean}>;
+    parkingLots: Array<{lotId: string}>;
 }) => httpsCallable<typeof data, {venueId: string}>(getFunctions(), 'saveVenue')(data);
 
 export const callDeleteVenue = (data: {venueId: string}) =>

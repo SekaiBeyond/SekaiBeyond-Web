@@ -276,18 +276,11 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
     };
     const addLink = () => setDraft(prev => ({
         ...prev,
-        parkingLots: [...prev.parkingLots, {lotId: '', recommended: false}],
+        parkingLots: [...prev.parkingLots, {lotId: ''}],
     }));
     const removeLink = (index: number) => setDraft(prev => ({
         ...prev,
         parkingLots: prev.parkingLots.filter((_, i) => i !== index),
-    }));
-    // Only one lot can be the primary recommendation, so selecting one clears the rest.
-    const toggleRecommended = (index: number) => setDraft(prev => ({
-        ...prev,
-        parkingLots: prev.parkingLots.map((l, i) =>
-            i === index ? {...l, recommended: !l.recommended} : {...l, recommended: false}
-        ),
     }));
 
     return (
@@ -366,10 +359,7 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
                                 : (lot.type === 'disabled' ? '无障碍停车'
                                     : lot.type === 'garage' ? '停车库' : '普通停车');
                             return (
-                                <div
-                                    key={i}
-                                    className={`admin-venue-lot-card${link.recommended ? ' is-recommended' : ''}`}
-                                >
+                                <div key={i} className="admin-venue-lot-card">
                                     <div
                                         className="admin-venue-lot-badge"
                                         data-type={lot?.type ?? 'empty'}
@@ -390,15 +380,6 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
                                                 </option>
                                             ))}
                                         </select>
-                                        <button
-                                            type="button"
-                                            className={`admin-venue-lot-star${link.recommended ? ' is-on' : ''}`}
-                                            onClick={() => toggleRecommended(i)}
-                                            title={isEnglish ? 'Mark as the primary (recommended) lot' : '设为首选（推荐）停车场'}
-                                        >
-                                            <span aria-hidden="true">{link.recommended ? '★' : '☆'}</span>
-                                            <span>{isEnglish ? 'Primary' : '首选'}</span>
-                                        </button>
                                     </div>
                                     <button
                                         type="button"

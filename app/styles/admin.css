@@ -3009,12 +3009,6 @@ select.admin-tickets-tag:focus {
     box-shadow: var(--shadow-soft);
 }
 
-.admin-venue-lot-card.is-recommended {
-    border-color: var(--color-primary);
-    background: rgba(255, 107, 157, 0.07);
-    box-shadow: 0 4px 16px rgba(255, 107, 157, 0.12);
-}
-
 .admin-venue-lot-badge {
     flex: 0 0 auto;
     width: 38px;
@@ -3056,36 +3050,6 @@ select.admin-tickets-tag:focus {
     margin: 0;
 }
 
-.admin-venue-lot-star {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    border: 1.5px solid rgba(255, 107, 157, 0.3);
-    background: transparent;
-    color: var(--color-text-muted);
-    font-family: inherit;
-    font-size: 12px;
-    font-weight: 700;
-    padding: 7px 13px;
-    border-radius: 999px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-}
-
-.admin-venue-lot-star:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-}
-
-.admin-venue-lot-star.is-on {
-    border-color: transparent;
-    background: linear-gradient(135deg, #feca57, #ff8e53);
-    color: #fff;
-    box-shadow: 0 3px 10px rgba(255, 142, 83, 0.3);
-}
-
 .admin-venue-lot-remove {
     flex: 0 0 auto;
     width: 30px;
@@ -3115,11 +3079,6 @@ select.admin-tickets-tag:focus {
 
     .admin-venue-lot-select {
         flex-basis: 100%;
-    }
-
-    .admin-venue-lot-star {
-        width: 100%;
-        justify-content: center;
     }
 }
 

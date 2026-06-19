@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
-import { DEFAULT_ZOOM, resolveVenueById, useVenues, type Venue } from '~/lib/venues';
+import { resolveVenueById, useVenues, type Venue } from '~/lib/venues';
 import { type ParkingLot, useParkingLots } from '~/lib/parkingLots';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { AdvancedMarker, APIProvider, InfoWindow, Map } from '@vis.gl/react-google-maps';
 
-type HydratedLot = ParkingLot & {recommended: boolean};
+type HydratedLot = ParkingLot;
 
 /**
  * Minimal interface mirroring the fields we need from the upcomingEvents doc.
@@ -72,10 +73,7 @@ export const ParkingGuide = () => {
     const venue: Venue | null = event ? resolveVenueById(event.venueId, venues) : null;
     const hydratedLots: HydratedLot[] = venue
         ? venue.parkingLots
-            .map(link => {
-                const lot = parkingLots.find(l => l.id === link.lotId);
-                return lot ? {...lot, recommended: link.recommended} : null;
-            })
+            .map(link => parkingLots.find(l => l.id === link.lotId) ?? null)
             .filter((l): l is HydratedLot => l !== null)
         : [];
     const loading = eventLoading || venuesLoading || lotsLoading;
@@ -96,10 +94,13 @@ export const ParkingGuide = () => {
     if (error || !event) {
         return (
             <div className="parking-page">
-                <a href="/#upcoming" className="parking-back-btn">
-                    <span className="parking-back-arrow">←</span>
-                    {isEnglish ? 'Back to Events' : '返回活动'}
-                </a>
+                <div className="parking-topbar">
+                    <a href="/#upcoming" className="parking-back-btn">
+                        <span className="parking-back-arrow">←</span>
+                        {isEnglish ? 'Back to Events' : '返回活动'}
+                    </a>
+                    <LanguageSwitcher/>
+                </div>
                 <div className="parking-error">
                     <div className="parking-error-icon">🅿️</div>
                     <h2 className="parking-error-title">
@@ -118,10 +119,13 @@ export const ParkingGuide = () => {
     if (!venue) {
         return (
             <div className="parking-page">
-                <a href="/#upcoming" className="parking-back-btn">
-                    <span className="parking-back-arrow">←</span>
-                    {isEnglish ? 'Back to Events' : '返回活动'}
-                </a>
+                <div className="parking-topbar">
+                    <a href="/#upcoming" className="parking-back-btn">
+                        <span className="parking-back-arrow">←</span>
+                        {isEnglish ? 'Back to Events' : '返回活动'}
+                    </a>
+                    <LanguageSwitcher/>
+                </div>
                 <div className="parking-error">
                     <div className="parking-error-icon">📍</div>
                     <h2 className="parking-error-title">
@@ -137,8 +141,24 @@ export const ParkingGuide = () => {
         );
     }
 
-    const recommendedLot = hydratedLots.find(l => l.recommended);
-    const otherLots = hydratedLots.filter(l => !l.recommended);
+    // The map shows every lot; this tells us which to highlight as linked to this venue.
+    const linkedLotIds = new Set(venue.parkingLots.map(l => l.lotId));
+    // Only plot lots with real coordinates (skip 0,0 placeholders).
+    const mappableLots = parkingLots.filter(l => l.lat !== 0 && l.lng !== 0);
+
+    // Frame the map on the venue and its linked (primary) lots so they're the prominent
+    // focus. Every other lot is still rendered (dimmed), so users see them too and can
+    // pan/zoom out to explore; the padding keeps nearby lots in view on load.
+    const focusPoints = [
+        {lat: venue.lat, lng: venue.lng},
+        ...mappableLots.filter(l => linkedLotIds.has(l.id)),
+    ];
+    const mapBounds = {
+        north: Math.max(...focusPoints.map(p => p.lat)),
+        south: Math.min(...focusPoints.map(p => p.lat)),
+        east: Math.max(...focusPoints.map(p => p.lng)),
+        west: Math.min(...focusPoints.map(p => p.lng)),
+    };
 
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
     const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
@@ -149,11 +169,14 @@ export const ParkingGuide = () => {
             <div className="parking-deco-blob parking-deco-blob--1"/>
             <div className="parking-deco-blob parking-deco-blob--2"/>
 
-            {/* Back button */}
-            <a href="/#upcoming" className="parking-back-btn">
-                <span className="parking-back-arrow">←</span>
-                {isEnglish ? 'Back to Events' : '返回活动'}
-            </a>
+            {/* Top bar: back button + language toggle */}
+            <div className="parking-topbar">
+                <a href="/#upcoming" className="parking-back-btn">
+                    <span className="parking-back-arrow">←</span>
+                    {isEnglish ? 'Back to Events' : '返回活动'}
+                </a>
+                <LanguageSwitcher/>
+            </div>
 
             {/* Header */}
             <header className="parking-header">
@@ -176,8 +199,7 @@ export const ParkingGuide = () => {
                     <div className="parking-map">
                         <APIProvider apiKey={apiKey}>
                             <Map
-                                defaultCenter={{lat: venue.lat, lng: venue.lng}}
-                                defaultZoom={DEFAULT_ZOOM}
+                                defaultBounds={{...mapBounds, padding: 90}}
                                 mapId={mapId}
                                 gestureHandling="greedy"
                                 disableDefaultUI={true}
@@ -206,8 +228,9 @@ export const ParkingGuide = () => {
                                     </InfoWindow>
                                 )}
 
-                                {/* Parking Lot Markers */}
-                                {hydratedLots.map((lot) => {
+                                {/* Parking Lot Markers — every lot is shown; lots linked to this venue are highlighted. */}
+                                {mappableLots.map((lot) => {
+                                    const linked = linkedLotIds.has(lot.id);
                                     const colorClass = lot.type === 'disabled' ? 'parking-marker-p--disabled'
                                         : lot.type === 'garage' ? 'parking-marker-p--garage'
                                             : '';
@@ -219,19 +242,22 @@ export const ParkingGuide = () => {
                                         : (lot.type === 'disabled' ? '无障碍停车'
                                             : lot.type === 'garage' ? '停车库'
                                                 : '普通停车');
-
                                     return (
                                         <div key={lot.id}>
                                             <AdvancedMarker
                                                 position={{lat: lot.lat, lng: lot.lng}}
                                                 onClick={() => setOpenInfoWindowId(lot.id)}
+                                                zIndex={linked ? 2 : 1}
                                             >
-                                                <div className="parking-marker-lot-inner">
+                                                <div
+                                                    className={`parking-marker-lot-inner${linked ? ' is-linked' : ''}`}>
                                                     <div
                                                         className={`parking-marker-p ${colorClass}`}>{lot.type === 'disabled' ? '♿' : 'P'}</div>
-                                                    <div
-                                                        className="parking-marker-label">{lot.name.split(' ').slice(0, 1).join(' ')}<span>{typeLabel}</span>
-                                                    </div>
+                                                    {linked && (
+                                                        <div
+                                                            className="parking-marker-label">{lot.name.split(' ').slice(0, 1).join(' ')}<span>{typeLabel}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </AdvancedMarker>
 
@@ -267,88 +293,45 @@ export const ParkingGuide = () => {
                                     Parking permits are complimentary during <strong>Saturdays after
                                     noon</strong> until{' '}
                                     <strong>Monday 6 a.m.</strong>, except when{' '}
-                                    <a
-                                        href="https://transportation.uw.edu/park/events"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="parking-highlight-link"
-                                    >
-                                        event rates
-                                    </a>{' '}
+                                    <strong>event rates</strong>{' '}
                                     are in effect.
                                 </>
                             ) : (
                                 <>
                                     <strong>周六中午</strong>至<strong>周一早上6点</strong>期间停车免费，
-                                    <a
-                                        href="https://transportation.uw.edu/park/events"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="parking-highlight-link"
-                                    >
-                                        活动费率
-                                    </a>
+                                    <strong>活动费率</strong>
                                     生效时除外。
                                 </>
                             )}
                         </div>
                     </div>
 
-                    {/* Recommended parking */}
-                    <div className="parking-info-card">
-                        <div className="parking-info-icon parking-info-icon--recommend">🅿️</div>
-                        <div className="parking-info-text">
-                            {isEnglish ? (
-                                <>
-                                    {recommendedLot?.descriptionEn}{' '}
-                                    {otherLots.map((lot, i) => (
-                                        <span key={lot.id}>
-                                            {i > 0 && ' '}
-                                            {lot.type === 'garage' ? (
-                                                <>
-                                                    <a
-                                                        href="https://transportation.uw.edu/park/visitor"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="parking-highlight-link"
-                                                    >
-                                                        {lot.name}
-                                                    </a>{' '}
-                                                    {lot.descriptionEn}
-                                                </>
-                                            ) : (
-                                                lot.descriptionEn
-                                            )}
-                                        </span>
-                                    ))}
-                                </>
-                            ) : (
-                                <>
-                                    {recommendedLot?.descriptionCn}{' '}
-                                    {otherLots.map((lot, i) => (
-                                        <span key={lot.id}>
-                                            {i > 0 && ' '}
-                                            {lot.type === 'garage' ? (
-                                                <>
-                                                    <a
-                                                        href="https://transportation.uw.edu/park/visitor"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="parking-highlight-link"
-                                                    >
-                                                        {lot.nameCn}
-                                                    </a>{' '}
-                                                    {lot.descriptionCn}
-                                                </>
-                                            ) : (
-                                                lot.descriptionCn
-                                            )}
-                                        </span>
-                                    ))}
-                                </>
-                            )}
-                        </div>
-                    </div>
+                    {/* One card per parking lot */}
+                    {hydratedLots.map(lot => {
+                        const badge = lot.type === 'disabled' ? '♿'
+                            : lot.type === 'garage' ? 'G' : 'P';
+                        const iconClass = lot.type === 'disabled' ? 'parking-info-icon--disabled'
+                            : lot.type === 'garage' ? 'parking-info-icon--garage' : 'parking-info-icon--general';
+                        const typeLabel = isEnglish
+                            ? (lot.type === 'disabled' ? 'Disabled Parking'
+                                : lot.type === 'garage' ? 'Parking Garage' : 'General Parking')
+                            : (lot.type === 'disabled' ? '无障碍停车'
+                                : lot.type === 'garage' ? '停车库' : '普通停车');
+                        const name = isEnglish ? lot.name : (lot.nameCn || lot.name);
+                        const desc = isEnglish ? lot.descriptionEn : lot.descriptionCn;
+                        return (
+                            <div key={lot.id} className="parking-info-card">
+                                <div className={`parking-info-icon ${iconClass}`}>{badge}</div>
+                                <div className="parking-info-text">
+                                    <div className="parking-lot-name-row">
+                                        <span className="parking-lot-name">{name}</span>
+                                    </div>
+                                    <div className="parking-lot-type">{typeLabel}</div>
+                                    {desc && <div className="parking-lot-desc">{desc}</div>}
+                                </div>
+                            </div>
+                        );
+                    })}
 
                     {/* More info link */}
                     <div className="parking-info-card">
