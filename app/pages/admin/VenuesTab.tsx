@@ -142,8 +142,8 @@ export const VenuesTab = ({venues, parkingLots, refreshVenues, showToast, readOn
         <div className="admin-section">
             <p className="admin-helper-text" style={{marginTop: '4px', marginBottom: '12px'}}>
                 {isEnglish
-                    ? 'Venues power the parking guide. Each venue links to one or more parking lots (managed in the Parking Lots section). Events match a venue when their location field equals the venue\'s English name.'
-                    : '场地数据用于停车指南。每个场地关联一个或多个停车场（在停车场区块管理）。活动的地点字段需与场地英文名称完全匹配。'}
+                    ? 'Venues power the parking guide. Each venue links to one or more parking lots (managed in the Parking Lots section). Pick a venue for an event from the Venue selector in the event editor to give it a parking guide.'
+                    : '场地数据用于停车指南。每个场地关联一个或多个停车场（在停车场区块管理）。在活动编辑器的“场地”选择器中为活动选择场地，即可为其生成停车指南。'}
             </p>
 
             {!readOnly && (showCreate ? (

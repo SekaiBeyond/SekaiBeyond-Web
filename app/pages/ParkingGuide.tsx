@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
-import { resolveVenueById, useVenues, type Venue } from '~/lib/venues';
+import { hasCoordinates, PARKING_INFO_URL, resolveVenueById, useVenues, type Venue, } from '~/lib/venues';
 import { type ParkingLot, useParkingLots } from '~/lib/parkingLots';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
@@ -143,7 +143,7 @@ export const ParkingGuide = () => {
     // The map shows every lot; this tells us which to highlight as linked to this venue.
     const linkedLotIds = new Set(venue.parkingLots.map(l => l.lotId));
     // Only plot lots with real coordinates (skip 0,0 placeholders).
-    const mappableLots = parkingLots.filter(l => l.lat !== 0 && l.lng !== 0);
+    const mappableLots = parkingLots.filter(l => hasCoordinates(l.lat, l.lng));
 
     // Frame the map on the venue and its linked (primary) lots so they're the prominent
     // focus. Every other lot is still rendered (dimmed), so users see them too and can
@@ -340,22 +340,22 @@ export const ParkingGuide = () => {
                                 <>
                                     For more information, visit{' '}
                                     <a
-                                        href="https://transportation.uw.edu/park/visitor"
+                                        href={PARKING_INFO_URL}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                     >
-                                        transportation.uw.edu/park/visitor
+                                        {PARKING_INFO_URL}
                                     </a>
                                 </>
                             ) : (
                                 <>
                                     更多信息请访问{' '}
                                     <a
-                                        href="https://transportation.uw.edu/park/visitor"
+                                        href={PARKING_INFO_URL}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                     >
-                                        transportation.uw.edu/park/visitor
+                                        {PARKING_INFO_URL}
                                     </a>
                                 </>
                             )}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdvancedMarker, APIProvider, Map, useMap, useMapsLibrary, } from '@vis.gl/react-google-maps';
-import { DEFAULT_ZOOM, UW_CAMPUS_CENTER } from '~/lib/venues';
+import { DEFAULT_ZOOM, hasCoordinates, UW_CAMPUS_CENTER } from '~/lib/venues';
 import { useLanguage } from '~/components/LanguageContextProvider';
 
 interface MapPickerProps {
@@ -32,8 +32,7 @@ interface MapPickerInnerProps extends MapPickerProps {
 
 const MapPickerInner = ({value, onChange, height = 320, mapId}: MapPickerInnerProps) => {
     const {isEnglish} = useLanguage();
-    const hasValue = Number.isFinite(value.lat) && Number.isFinite(value.lng)
-        && !(value.lat === 0 && value.lng === 0);
+    const hasValue = hasCoordinates(value.lat, value.lng);
     const initialCenter = hasValue ? value : UW_CAMPUS_CENTER;
 
     return (

@@ -15,9 +15,21 @@ export interface Venue {
     parkingLots: VenueLotLink[];
 }
 
+// --- UW-specific deployment constants ---
+// These are the values to change if the parking guide is ever used off the UW campus.
 /** Default map center (UW campus center) when no venue-specific center is available. */
 export const UW_CAMPUS_CENTER = {lat: 47.6553, lng: -122.3035};
 export const DEFAULT_ZOOM = 17;
+/** External "more info" link shown on the parking guide. */
+export const PARKING_INFO_URL = 'https://transportation.uw.edu/park/visitor';
+
+/**
+ * A lat/lng pair counts as "set" only when both are finite and not the (0, 0) origin,
+ * which we use as the unset sentinel (the admin map picker never leaves a real lot there).
+ */
+export function hasCoordinates(lat: number, lng: number): boolean {
+    return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+}
 
 let cachedVenues: Venue[] | null = null;
 let fetchPromise: Promise<Venue[]> | null = null;
