@@ -139,6 +139,35 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     The same mechanism applies to the optional settings `RESEND_FROM_ADDRESS` (default `mika@sekaibeyond.com`), `RESEND_DAILY_CAP` (default 100), `SEND_CHUNK_SIZE` (default 100), and `IMPORT_MAX_ROWS` (default 1000). See `functions/.env.example` for the full list. Note that `RESEND_API_KEY` is *not* one of these — it is a Secret Manager secret, set via `firebase functions:secrets:set` (see Step 10).
 
+13. Configure **Google Maps Platform** — the **Parking Guide** page and the admin **Map Picker** render an interactive map via `@vis.gl/react-google-maps`, keyed by `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID`. Without these, the map silently fails to load (the script request goes out with an empty `key=`, and the Maps JS API logs `The Google Maps JavaScript API could not load`).
+
+    **Step A — Enable the API and create a browser key**
+
+    1. In [Google Cloud Console](https://console.cloud.google.com) (same project as Firebase), go to **APIs & Services** > **Library** and enable **Maps JavaScript API**.
+    2. Go to **APIs & Services** > **Credentials** > **Create credentials** > **API key**.
+    3. **Restrict the key** (critical — an unrestricted key is a billing risk and will be flagged by Google):
+       - **Application restrictions** > **Websites (HTTP referrers)** — add **every** host the site is served from, with a wildcard path: `https://sekaibeyond.com/*`, `https://www.sekaibeyond.com/*`, `https://<project-id>.web.app/*`, `https://<project-id>.firebaseapp.com/*`, and `http://localhost:*/*` for local dev. A referrer list that omits production is the #1 cause of a blank map plus a `RefererNotAllowedMapError` in the console.
+       - **API restrictions** > **Restrict key** > select **Maps JavaScript API**.
+
+    **Step B — Create a Map ID (required for Advanced Markers)**
+
+    The app uses `AdvancedMarker`, which only renders on a map tied to a **Map ID**. In Cloud Console go to **Google Maps Platform** > **Map management** > **Create Map ID**, choose **JavaScript** > **Vector**, and copy the ID. (Falling back to the built-in `DEMO_MAP_ID` works for local tinkering but watermarks the map and is not for production.)
+
+    **Step C — Wire both values into the build**
+
+    Add to **both** targets — `VITE_*` vars are inlined by Vite at build time, so the bundle must be rebuilt after they change:
+    - GitHub repo secrets (see [GitHub Repository Secrets](#2-github-repository-secrets)) — required for production builds. The deploy workflow passes them to the `Build` step.
+    - Local `.env` — required for the map to appear under `npm run dev`.
+
+    ```
+    VITE_GOOGLE_MAPS_API_KEY=<browser-key-from-Step-A>
+    VITE_GOOGLE_MAPS_MAP_ID=<map-id-from-Step-B>
+    ```
+
+    **Step D — Content-Security-Policy (already wired)**
+
+    The CSP header in `firebase.json` already allowlists the Maps domains (`https://maps.googleapis.com` in `script-src`; `https://*.gstatic.com` / `https://*.ggpht.com` in `img-src`; `worker-src 'self' blob:` for vector-map workers), so forks need no CSP changes for the map. If you add other third-party scripts, extend that header accordingly — and note that the deploy-time `npm run update-csp-hashes` only rewrites the inline-script `sha256-` hashes inside `script-src`, preserving every other source token.
+
 #### Firestore Indexes Explained
 
 Firestore requires composite indexes for queries that filter on multiple fields. Each index is a sorted table covering the fields in order, allowing O(1) lookups instead of O(n) collection scans.
@@ -168,6 +197,8 @@ Go to your repo > **Settings** > **Secrets and variables** > **Actions**, and ad
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Your sender ID                      |
 | `VITE_FIREBASE_APP_ID`              | Your app ID                         |
 | `VITE_RECAPTCHA_SITE_KEY`           | reCAPTCHA v3 site key (App Check)   |
+| `VITE_GOOGLE_MAPS_API_KEY`          | Maps JS API browser key (see Step 13) |
+| `VITE_GOOGLE_MAPS_MAP_ID`           | Vector Map ID for Advanced Markers  |
 | `FIREBASE_SERVICE_ACCOUNT`          | Service account JSON (see below)    |
 
 The `VITE_*` secrets are injected as build-time environment variables. `FIREBASE_SERVICE_ACCOUNT` authenticates the deploy step.
