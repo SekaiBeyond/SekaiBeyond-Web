@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
-import { collection, getDocs, query } from 'firebase/firestore';
-import { getFirebaseDb } from './firebase';
+import { createCollectionCache } from './collectionCache';
 
 export interface VenueLotLink {
     lotId: string;
@@ -63,83 +61,27 @@ export function formatDistanceEstimate(miles: number, isEnglish: boolean): strin
     return `约 ${(metres / 1000).toFixed(1)} 公里`;
 }
 
-let cachedVenues: Venue[] | null = null;
-let fetchPromise: Promise<Venue[]> | null = null;
-const subscribers = new Set<(venues: Venue[]) => void>();
-
-async function fetchVenues(force = false): Promise<Venue[]> {
-    if (!force && cachedVenues) return cachedVenues;
-    if (fetchPromise) return fetchPromise;
-
-    fetchPromise = (async () => {
-        const db = getFirebaseDb();
-        const q = query(collection(db, 'venues'));
-        const snapshot = await getDocs(q);
-        const venues: Venue[] = [];
-        snapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            const rawLots = Array.isArray(data.parkingLots) ? data.parkingLots : [];
-            const parkingLots: VenueLotLink[] = rawLots
-                .map((link: any) => ({
-                    lotId: typeof link?.lotId === 'string' ? link.lotId : '',
-                }))
-                .filter((link: VenueLotLink) => link.lotId.length > 0);
-            venues.push({
-                id: docSnap.id,
-                nameEn: data.nameEn ?? '',
-                nameCn: data.nameCn ?? '',
-                lat: typeof data.lat === 'number' ? data.lat : 0,
-                lng: typeof data.lng === 'number' ? data.lng : 0,
-                parkingLots,
-            });
-        });
-        cachedVenues = venues;
-        fetchPromise = null;
-        return venues;
-    })();
-
-    return fetchPromise;
-}
-
-async function refreshVenues(): Promise<Venue[]> {
-    const venues = await fetchVenues(true);
-    for (const fn of subscribers) fn(venues);
-    return venues;
-}
+const cache = createCollectionCache<Venue>('venues', docSnap => {
+    const data = docSnap.data();
+    const rawLots = Array.isArray(data.parkingLots) ? data.parkingLots : [];
+    const parkingLots: VenueLotLink[] = rawLots
+        .map((link: any) => ({
+            lotId: typeof link?.lotId === 'string' ? link.lotId : '',
+        }))
+        .filter((link: VenueLotLink) => link.lotId.length > 0);
+    return {
+        id: docSnap.id,
+        nameEn: data.nameEn ?? '',
+        nameCn: data.nameCn ?? '',
+        lat: typeof data.lat === 'number' ? data.lat : 0,
+        lng: typeof data.lng === 'number' ? data.lng : 0,
+        parkingLots,
+    };
+});
 
 export function useVenues(): {venues: Venue[]; loading: boolean; refresh: () => Promise<void>} {
-    const [venues, setVenues] = useState<Venue[]>(cachedVenues ?? []);
-    const [loading, setLoading] = useState(cachedVenues === null);
-
-    useEffect(() => {
-        subscribers.add(setVenues);
-        return () => {
-            subscribers.delete(setVenues);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (cachedVenues) {
-            setVenues(cachedVenues);
-            setLoading(false);
-            return;
-        }
-        fetchVenues()
-            .then(result => {
-                setVenues(result);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error('Failed to load venues:', err);
-                setLoading(false);
-            });
-    }, []);
-
-    const refresh = useCallback(async () => {
-        await refreshVenues();
-    }, []);
-
-    return {venues, loading, refresh};
+    const {items, loading, refresh} = cache.useItems();
+    return {venues: items, loading, refresh};
 }
 
 /**
