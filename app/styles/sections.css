@@ -146,6 +146,13 @@
     flex-direction: column;
 }
 
+.event-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
 .event-label {
     display: inline-block;
     padding: 5px 15px;
@@ -155,7 +162,6 @@
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
-    margin-bottom: 12px;
     align-self: flex-start;
 }
 

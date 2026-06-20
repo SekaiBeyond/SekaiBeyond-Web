@@ -608,6 +608,13 @@
     overflow: hidden;
 }
 
+.profile-event-categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
 .profile-event-category {
     display: inline-block;
     padding: 2px 10px;
@@ -618,6 +625,10 @@
     font-weight: 700;
     text-transform: uppercase;
     margin-bottom: 4px;
+}
+
+.profile-event-categories .profile-event-category {
+    margin-bottom: 0;
 }
 
 .profile-event-category-hidden {

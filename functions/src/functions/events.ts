@@ -6,7 +6,14 @@ import { deletionExpiresAt, recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError } from "../utils/storage";
-import { validateDocId, validateISODate, validateStorageImageUrl, validateStr, validateUrl } from "../utils/validation";
+import {
+    validateDocId,
+    validateISODate,
+    validateStorageImageUrl,
+    validateStr,
+    validateStringArray,
+    validateUrl
+} from "../utils/validation";
 
 export const requestEventDeletion = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -123,7 +130,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : null;
     const title = validateStr(input.title, "title", 200, true);
     const titleCn = validateStr(input.titleCn, "titleCn", 200);
-    const tagId = validateStr(input.tagId, "tagId", 128);
+    const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128);
     const date = validateStr(input.date, "date", 50, true);
     const location = validateStr(input.location, "location", 200);
     const locationCn = validateStr(input.locationCn, "locationCn", 200);
@@ -138,7 +145,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     validateUrl(recapLinkCn, "recapLinkCn");
 
     const data = {
-        title, titleCn, tagId, date, location, locationCn, venueId,
+        title, titleCn, tagIds, date, location, locationCn, venueId,
         description, descriptionCn, icon, recapLink, recapLinkCn,
     };
     const docId = eventId ?? db.collection("pastEvents").doc().id;
@@ -152,7 +159,8 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
         }
         const ref = db.collection("pastEvents").doc(docId);
         if (eventId) {
-            txn.update(ref, data);
+            // Clear the legacy single-tag field now that tags live in `tagIds`.
+            txn.update(ref, {...data, tagId: FieldValue.delete()});
         } else {
             txn.set(ref, {...data, published: false});
         }
@@ -503,9 +511,9 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     const uid = request.auth.uid;
     await checkRateLimit(uid);
 
-    const input = request.data as {eventId?: string; tagId?: string};
+    const input = request.data as {eventId?: string; tagIds?: unknown};
     const eventId = validateDocId(input.eventId, "eventId");
-    const tagId = validateStr(input.tagId, "tagId", 128);
+    const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128);
     const newDocRef = db.collection("pastEvents").doc(eventId);
 
     // ---- Phase A: stream-copy subcollections to pastEvents ----
@@ -559,7 +567,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             description: eventData.description ?? "",
             descriptionCn: eventData.descriptionCn ?? "",
             icon: "",
-            tagId,
+            tagIds,
             published: false,
             // Preserve paid status so the past-events panel can show the
             // read-only Tickets/Stats view instead of the free attendee list.

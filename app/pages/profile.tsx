@@ -95,11 +95,11 @@ const BadgeCard = ({badge, earnedDate, isEnglish, active, onToggle}: {
     </div>
 );
 
-const EventCard = ({event, isEnglish, showAdminLink, tagLabel, wasStaff}: {
+const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
     event: PastEvent;
     isEnglish: boolean;
     showAdminLink?: boolean;
-    tagLabel?: string;
+    tagLabels?: string[];
     wasStaff?: boolean;
 }) => (
     <div className="profile-event-card">
@@ -112,8 +112,15 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabel, wasStaff}: {
             )}
         </div>
         <div className="profile-event-info">
-            <span
-                className={`profile-event-category${tagLabel ? '' : ' profile-event-category-hidden'}`}>{tagLabel || '\u00A0'}</span>
+            {tagLabels && tagLabels.length > 0 ? (
+                <span className="profile-event-categories">
+                    {tagLabels.map((label, i) => (
+                        <span key={i} className="profile-event-category">{label}</span>
+                    ))}
+                </span>
+            ) : (
+                <span className="profile-event-category profile-event-category-hidden">{'\u00A0'}</span>
+            )}
             <h3 className="profile-event-title">
                 {showAdminLink ? (
                     <a href={`/admin?tab=events&event=${encodeURIComponent(event.id)}`}
@@ -709,10 +716,10 @@ export const ProfilePage = () => {
                                     isEnglish={isEnglish}
                                     showAdminLink={isStaff}
                                     wasStaff={staffedSet.has(event.id)}
-                                    tagLabel={(() => {
-                                        const tag = tagMap.get(event.tagId);
-                                        return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
-                                    })()}
+                                    tagLabels={event.tagIds
+                                        .map(id => tagMap.get(id))
+                                        .filter((t): t is NonNullable<typeof t> => !!t)
+                                        .map(t => isEnglish ? t.name : t.nameCn)}
                                 />
                             ))}
                         </div>

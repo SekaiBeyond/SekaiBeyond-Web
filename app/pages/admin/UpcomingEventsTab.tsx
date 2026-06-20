@@ -27,6 +27,7 @@ import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
 import { ImageCropModal } from './ImageCropModal';
 import { StaffClaimCodeSection } from './StaffClaimCodeSection';
+import { TagMultiSelect } from './TagMultiSelect';
 import { TicketsSubtab } from './tickets/TicketsSubtab';
 
 interface UpcomingEventsTabProps {
@@ -103,7 +104,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [showPosterCropModal, setShowPosterCropModal] = useState(false);
     const [saving, setSaving] = useState(false);
     const [showArchive, setShowArchive] = useState(false);
-    const [archiveTagId, setArchiveTagId] = useState('');
+    const [archiveTagIds, setArchiveTagIds] = useState<string[]>([]);
     const [archiving, setArchiving] = useState(false);
     const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
     const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees' | 'staff' | 'tickets'>('codes');
@@ -202,7 +203,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         const gen = ++selectGenRef.current;
         setSelectedEvent(eventId);
         setShowArchive(false);
-        setArchiveTagId('');
+        setArchiveTagIds([]);
         const evt = upcomingEvents.find(e => e.id === eventId);
         setEventSubTab(evt?.paid ? 'tickets' : 'codes');
         setEventCode(null);
@@ -388,11 +389,11 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const archiveEvent = async (event: UpcomingEvent) => {
         setArchiving(true);
         try {
-            await callArchiveUpcomingEvent({eventId: event.id, tagId: archiveTagId});
+            await callArchiveUpcomingEvent({eventId: event.id, tagIds: archiveTagIds});
             await Promise.all([refreshEvents(), refreshPastEvents()]);
             setSelectedEvent(null);
             setShowArchive(false);
-            setArchiveTagId('');
+            setArchiveTagIds([]);
             showToast(isEnglish ? 'Event archived.' : '活动已归档。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to archive event.' : '归档活动失败。', 'error');
@@ -677,7 +678,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                         onClick={() => {
                             setSelectedEvent(null);
                             setShowArchive(false);
-                            setArchiveTagId('');
+                            setArchiveTagIds([]);
                         }}
                     >
                         &larr; {isEnglish ? 'All Upcoming Events' : '所有活动预告'}
@@ -773,25 +774,16 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     </h4>
                                     <p className="admin-helper-text">
                                         {isEnglish
-                                            ? 'This will move the event from Upcoming to Past Events. You can optionally add a label (e.g. "Workshop", "Convention").'
-                                            : '此操作会将活动从预告移到往期活动。你可以选填标签（如"工作坊"、"展会"）。'}
+                                            ? 'This will move the event from Upcoming to Past Events. You can optionally add one or more labels (e.g. "Workshop", "Convention").'
+                                            : '此操作会将活动从预告移到往期活动。你可以选填一个或多个标签（如"工作坊"、"展会"）。'}
                                     </p>
                                     <div className="admin-form-grid">
-                                        <label>
-                                            <span>{isEnglish ? 'Tag' : '标签'}</span>
-                                            <select
-                                                value={archiveTagId}
-                                                onChange={e => setArchiveTagId(e.target.value)}
-                                                className="admin-search-input"
-                                            >
-                                                <option value="">{isEnglish ? 'None' : '无'}</option>
-                                                {tags.map(t => (
-                                                    <option key={t.id} value={t.id}>
-                                                        {isEnglish ? t.name : t.nameCn} {t.nameCn && isEnglish ? `(${t.nameCn})` : t.name && !isEnglish ? `(${t.name})` : ''}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </label>
+                                        <TagMultiSelect
+                                            tags={tags}
+                                            selected={archiveTagIds}
+                                            onChange={setArchiveTagIds}
+                                            isEnglish={isEnglish}
+                                        />
                                     </div>
                                     <div className="admin-btn-row admin-mt-12">
                                         <button

@@ -4,7 +4,7 @@ import { getFirebaseDb } from './firebase';
 
 export interface PastEvent {
     id: string;
-    tagId: string;
+    tagIds: string[];
     title: string;
     titleCn: string;
     date: string;
@@ -38,7 +38,11 @@ async function fetchPastEvents(force = false): Promise<PastEvent[]> {
             const data = docSnap.data();
             events.push({
                 id: docSnap.id,
-                tagId: data.tagId ?? '',
+                // Prefer the multi-tag `tagIds` array; fall back to the legacy
+                // single `tagId` field for events archived before the migration.
+                tagIds: Array.isArray(data.tagIds)
+                    ? data.tagIds
+                    : (data.tagId ? [data.tagId] : []),
                 title: data.title ?? '',
                 titleCn: data.titleCn ?? '',
                 date: data.date ?? '',

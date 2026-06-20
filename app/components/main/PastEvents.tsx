@@ -56,10 +56,20 @@ export const PastEvents = () => {
                                     />
                                 </button>
                                 <div className="event-content">
-                                    <span className="event-label">{(() => {
-                                        const tag = tags.find(t => t.id === event.tagId);
-                                        return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
-                                    })()}</span>
+                                    {(() => {
+                                        const eventTags = event.tagIds
+                                            .map(id => tags.find(t => t.id === id))
+                                            .filter((t): t is NonNullable<typeof t> => !!t);
+                                        return eventTags.length > 0 ? (
+                                            <div className="event-labels">
+                                                {eventTags.map(tag => (
+                                                    <span key={tag.id} className="event-label">
+                                                        {isEnglish ? tag.name : tag.nameCn}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : null;
+                                    })()}
                                     <h3 className="event-title">{isEnglish ? event.title : event.titleCn}</h3>
                                     <div className="event-date">
                                         <span>📅</span>

@@ -74,6 +74,36 @@ export function validateStr(value: unknown, name: string, maxLen: number, requir
     return value;
 }
 
+export function validateStringArray(
+    value: unknown,
+    name: string,
+    maxItems: number,
+    maxLen: number,
+): string[] {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value)) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must be an array.`);
+    }
+    if (value.length > maxItems) {
+        throw new HttpsError("invalid-argument", `${name} has too many items.`);
+    }
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const item of value) {
+        if (typeof item !== "string") {
+            throw new HttpsError("invalid-argument", `Invalid ${name}: items must be strings.`);
+        }
+        if (item.length > maxLen) {
+            throw new HttpsError("invalid-argument", `${name} item exceeds maximum length.`);
+        }
+        if (item && !seen.has(item)) {
+            seen.add(item);
+            out.push(item);
+        }
+    }
+    return out;
+}
+
 export function sanitizeDisplayText(value: string): string {
     return value.replace(/<[^>]*>/g, "").replace(/[\x00-\x1F\x7F]/g, " ").trim();
 }

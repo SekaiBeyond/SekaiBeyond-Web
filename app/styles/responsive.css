@@ -248,10 +248,13 @@
         overflow: hidden;
     }
 
+    .event-labels {
+        margin-bottom: 8px;
+    }
+
     .event-label {
         font-size: 10px;
         padding: 4px 10px;
-        margin-bottom: 8px;
     }
 
     .event-date {

@@ -20,6 +20,7 @@ import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
 import { PastEventAttendeesSection } from './PastEventAttendeesSection';
 import { StaffClaimCodeSection } from './StaffClaimCodeSection';
+import { TagMultiSelect } from './TagMultiSelect';
 import { TicketsSubtab } from './tickets/TicketsSubtab';
 
 interface EventsTabProps {
@@ -83,7 +84,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [showCreateEvent, setShowCreateEvent] = useState(false);
     const [editingEvent, setEditingEvent] = useState<PastEvent | null>(null);
     const [eventForm, setEventForm] = useState({
-        title: '', titleCn: '', tagId: '', date: '',
+        title: '', titleCn: '', tagIds: [] as string[], date: '',
         location: '', locationCn: '', venueId: '',
         description: '', descriptionCn: '', icon: '', recapLink: '', recapLinkCn: '',
     });
@@ -146,7 +147,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
 
     const resetEventForm = () => {
         setEventForm({
-            title: '', titleCn: '', tagId: '', date: '',
+            title: '', titleCn: '', tagIds: [], date: '',
             location: '', locationCn: '', venueId: '',
             description: '', descriptionCn: '', icon: '', recapLink: '', recapLinkCn: '',
         });
@@ -167,7 +168,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             ? `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
             : event.date;
         setEventForm({
-            title: event.title, titleCn: event.titleCn, tagId: event.tagId,
+            title: event.title, titleCn: event.titleCn, tagIds: event.tagIds,
             date: normalizedDate,
             location: event.location, locationCn: event.locationCn, venueId: event.venueId,
             description: event.description, descriptionCn: event.descriptionCn, icon: event.icon,
@@ -208,7 +209,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 ...(editingEvent ? {eventId: editingEvent.id} : {}),
                 title: eventForm.title,
                 titleCn: eventForm.titleCn,
-                tagId: eventForm.tagId,
+                tagIds: eventForm.tagIds,
                 date: eventForm.date,
                 location: eventForm.location,
                 locationCn: eventForm.locationCn,
@@ -312,21 +313,12 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     placeholder={isEnglish ? 'Event title' : '活动标题'}
                                     placeholderCn={isEnglish ? 'Event title in Chinese' : '活动中文标题'}
                                 />
-                                <label>
-                                    <span>{isEnglish ? 'Tag' : '标签'}</span>
-                                    <select
-                                        value={eventForm.tagId}
-                                        onChange={e => setEventForm(f => ({...f, tagId: e.target.value}))}
-                                        className="admin-search-input"
-                                    >
-                                        <option value="">{isEnglish ? 'None' : '无'}</option>
-                                        {tags.map(t => (
-                                            <option key={t.id} value={t.id}>
-                                                {isEnglish ? t.name : t.nameCn} {t.nameCn && isEnglish ? `(${t.nameCn})` : t.name && !isEnglish ? `(${t.name})` : ''}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
+                                <TagMultiSelect
+                                    tags={tags}
+                                    selected={eventForm.tagIds}
+                                    onChange={ids => setEventForm(f => ({...f, tagIds: ids}))}
+                                    isEnglish={isEnglish}
+                                />
                                 <label>
                                     <span>{isEnglish ? 'Date' : '日期'}</span>
                                     <input
@@ -442,10 +434,11 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 <div>
                                     <h3>{isEnglish ? managedEvt.title : managedEvt.titleCn}</h3>
                                     <p className="admin-event-detail-meta">
-                                        <span>{(() => {
-                                            const tag = tags.find(t => t.id === managedEvt.tagId);
-                                            return tag ? (isEnglish ? tag.name : tag.nameCn) : '';
-                                        })()}</span>
+                                        <span>{managedEvt.tagIds
+                                            .map(id => tags.find(t => t.id === id))
+                                            .filter((t): t is Tag => !!t)
+                                            .map(t => isEnglish ? t.name : t.nameCn)
+                                            .join(', ')}</span>
                                         <span>{managedEvt.date}</span>
                                         <span>{eventLocationDisplay(managedEvt.location, managedEvt.locationCn, managedEvt.venueId, venues, isEnglish)}</span>
                                     </p>

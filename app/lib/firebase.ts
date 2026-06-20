@@ -146,7 +146,7 @@ export const callSetUserTitle = (data: {targetUid: string; title?: string}) =>
 
 export const callSavePastEvent = (data: {
     eventId?: string;
-    title: string; titleCn: string; tagId: string; date: string;
+    title: string; titleCn: string; tagIds: string[]; date: string;
     location: string; locationCn: string; venueId: string;
     description: string; descriptionCn: string; icon: string;
     recapLink: string; recapLinkCn: string;
@@ -174,7 +174,7 @@ export const callCancelUpcomingEventDeletion = (data: {eventId: string}) =>
 export const callSetUpcomingEventPublished = (data: {eventId: string; published: boolean}) =>
     httpsCallable<typeof data, {published: boolean}>(getFunctions(), 'setUpcomingEventPublished')(data);
 
-export const callArchiveUpcomingEvent = (data: {eventId: string; tagId: string}) =>
+export const callArchiveUpcomingEvent = (data: {eventId: string; tagIds: string[]}) =>
     httpsCallable<typeof data, {pastEventId: string}>(getFunctions(), 'archiveUpcomingEvent')(data);
 
 // ---- Paid event ticketing ----
