@@ -832,6 +832,11 @@ a.parking-lot-name:hover {
     padding: 40px;
 }
 
+/* Shown inline below the header (e.g. "Choose a venue") rather than as a full-page state. */
+.parking-error--inline {
+    min-height: 40vh;
+}
+
 .parking-error-icon {
     font-size: 64px;
     opacity: 0.5;

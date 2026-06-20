@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteParkingLot, callSaveParkingLot } from '~/lib/firebase';
-import type { ParkingLot } from '~/lib/parkingLots';
+import { lotTypeShortLabel, type ParkingLot } from '~/lib/parkingLots';
 import { UW_CAMPUS_CENTER } from '~/lib/venues';
 import { MapPicker } from './MapPicker';
 
@@ -146,7 +146,7 @@ export const ParkingLotsTab = ({
 
     return (
         <div className="admin-section">
-            <p className="admin-helper-text" style={{marginTop: '4px', marginBottom: '12px'}}>
+            <p className="admin-helper-text admin-section-intro">
                 {isEnglish
                     ? 'Parking lots are shared across venues. Link them to a venue from the Venues section.'
                     : '停车场为多个场地共享。请在"场地"区块将其关联到场地。'}
@@ -189,9 +189,7 @@ export const ParkingLotsTab = ({
 
             <div className="admin-event-grid">
                 {parkingLots.map(lot => {
-                    const typeLabel = isEnglish
-                        ? (lot.type === 'disabled' ? 'Disabled' : lot.type === 'garage' ? 'Garage' : 'General')
-                        : (lot.type === 'disabled' ? '无障碍' : lot.type === 'garage' ? '停车库' : '普通');
+                    const typeLabel = lotTypeShortLabel(lot.type, isEnglish);
                     return (
                         <div
                             key={lot.id}
@@ -225,7 +223,7 @@ export const ParkingLotsTab = ({
                                         {lot.nameCn && (
                                             <span className="admin-event-card-date">{lot.nameCn}</span>
                                         )}
-                                        <span className="admin-helper-text" style={{display: 'block', marginTop: 4}}>
+                                        <span className="admin-helper-text admin-card-meta">
                                             {typeLabel}
                                         </span>
                                         {!readOnly && (
@@ -294,9 +292,7 @@ const LotForm = ({draft, setDraft, isEnglish}: LotFormProps) => (
                 >
                     {LOT_TYPES.map(t => (
                         <option key={t} value={t}>
-                            {isEnglish
-                                ? (t === 'disabled' ? 'Disabled' : t === 'garage' ? 'Garage' : 'General')
-                                : (t === 'disabled' ? '无障碍' : t === 'garage' ? '停车库' : '普通')}
+                            {lotTypeShortLabel(t, isEnglish)}
                         </option>
                     ))}
                 </select>

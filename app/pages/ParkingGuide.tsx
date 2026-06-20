@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
@@ -11,22 +11,14 @@ import {
     useVenues,
     type Venue,
 } from '~/lib/venues';
-import { type ParkingLot, useParkingLots } from '~/lib/parkingLots';
+import { lotBadgeChar, lotTypeLabel, type ParkingLot, useParkingLots } from '~/lib/parkingLots';
+import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { AdvancedMarker, APIProvider, InfoWindow, Map, useMap } from '@vis.gl/react-google-maps';
 
-type HydratedLot = ParkingLot;
-
-/** Localized "<type> Parking" label for a lot. */
-function lotTypeLabel(type: ParkingLot['type'], isEnglish: boolean): string {
-    if (isEnglish) {
-        return type === 'disabled' ? 'Disabled Parking'
-            : type === 'garage' ? 'Parking Garage' : 'General Parking';
-    }
-    return type === 'disabled' ? '无障碍停车'
-        : type === 'garage' ? '停车库' : '普通停车';
-}
+/** Sentinel id for the venue marker's popup, kept distinct from any lot document id. */
+const VENUE_MARKER_ID = '__venue__';
 
 /**
  * Searchable venue picker shown in the parking-guide header. Defaults to the event's own
@@ -219,8 +211,7 @@ const LotSearch = ({lots, selectedLotId, distanceFor, onSelect, isEnglish}: LotS
                         </div>
                     ) : (
                         results.map(lot => {
-                            const badge = lot.type === 'disabled' ? '♿'
-                                : lot.type === 'garage' ? 'G' : 'P';
+                            const badge = lotBadgeChar(lot.type);
                             const name = isEnglish ? lot.name : (lot.nameCn || lot.name);
                             const dist = distanceFor(lot);
                             const active = lot.id === selectedLotId;
@@ -263,16 +254,8 @@ const MapPanner = ({lat, lng}: {lat: number | null; lng: number | null}) => {
     return null;
 };
 
-/**
- * Minimal interface mirroring the fields we need from the upcomingEvents doc.
- */
-interface EventSnapshot {
-    title: string;
-    titleCn: string;
-    location: string;
-    locationCn: string;
-    venueId: string;
-}
+/** The subset of an upcomingEvents doc the parking guide reads. */
+type EventSnapshot = Pick<UpcomingEvent, 'title' | 'titleCn' | 'location' | 'locationCn' | 'venueId'>;
 
 export const ParkingGuide = () => {
     const {eventId} = useParams<{eventId: string}>();
@@ -347,19 +330,29 @@ export const ParkingGuide = () => {
 
     const venue: Venue | null = resolveVenueById(selectedVenueId, venues);
 
-    /** Straight-line distance from the selected venue to a lot, or null if either lacks coords. */
-    const distanceFor = (lot: ParkingLot): string | null => {
-        if (!venue || !hasCoordinates(venue.lat, venue.lng) || !hasCoordinates(lot.lat, lot.lng)) {
-            return null;
+    // Straight-line distance from the selected venue to each lot, computed once per
+    // venue/lots/language change rather than on every render and every call site.
+    const distanceByLotId = useMemo(() => {
+        const distances: Record<string, string> = {};
+        if (!venue || !hasCoordinates(venue.lat, venue.lng)) return distances;
+        for (const lot of parkingLots) {
+            if (hasCoordinates(lot.lat, lot.lng)) {
+                distances[lot.id] = formatDistanceEstimate(
+                    haversineMiles(venue.lat, venue.lng, lot.lat, lot.lng), isEnglish);
+            }
         }
-        return formatDistanceEstimate(haversineMiles(venue.lat, venue.lng, lot.lat, lot.lng), isEnglish);
-    };
+        return distances;
+    }, [venue, parkingLots, isEnglish]);
+    const distanceFor = useCallback(
+        (lot: ParkingLot): string | null => distanceByLotId[lot.id] ?? null,
+        [distanceByLotId],
+    );
     // The map shows every lot; this tells us which to highlight as linked to this venue.
     const linkedLotIds = venue ? new Set(venue.parkingLots.map(l => l.lotId)) : new Set<string>();
-    const hydratedLots: HydratedLot[] = venue
+    const hydratedLots: ParkingLot[] = venue
         ? venue.parkingLots
             .map(link => parkingLots.find(l => l.id === link.lotId) ?? null)
-            .filter((l): l is HydratedLot => l !== null)
+            .filter((l): l is ParkingLot => l !== null)
         : [];
     // Only plot lots with real coordinates (skip 0,0 placeholders).
     const mappableLots = parkingLots.filter(l => hasCoordinates(l.lat, l.lng));
@@ -504,12 +497,12 @@ export const ParkingGuide = () => {
                                     {/* Venue Marker */}
                                     <AdvancedMarker
                                         position={{lat: venue.lat, lng: venue.lng}}
-                                        onClick={() => setOpenInfoWindowId('venue')}
+                                        onClick={() => setOpenInfoWindowId(VENUE_MARKER_ID)}
                                     >
                                         <div className="parking-marker-venue-inner">⭐</div>
                                     </AdvancedMarker>
 
-                                    {openInfoWindowId === 'venue' && (
+                                    {openInfoWindowId === VENUE_MARKER_ID && (
                                         <InfoWindow
                                             position={{lat: venue.lat, lng: venue.lng}}
                                             onCloseClick={() => setOpenInfoWindowId(null)}
@@ -546,7 +539,7 @@ export const ParkingGuide = () => {
                                                             className={`parking-marker-p ${colorClass}`}>{lot.type === 'disabled' ? '♿' : 'P'}</div>
                                                         {linked && (
                                                             <div
-                                                                className="parking-marker-label">{lot.name.split(' ').slice(0, 1).join(' ')}<span>{typeLabel}</span>
+                                                                className="parking-marker-label">{lot.name.split(' ')[0] ?? ''}<span>{typeLabel}</span>
                                                             </div>
                                                         )}
                                                     </div>
@@ -611,8 +604,7 @@ export const ParkingGuide = () => {
 
                         {/* One card per parking lot */}
                         {hydratedLots.map(lot => {
-                            const badge = lot.type === 'disabled' ? '♿'
-                                : lot.type === 'garage' ? 'G' : 'P';
+                            const badge = lotBadgeChar(lot.type);
                             const iconClass = lot.type === 'disabled' ? 'parking-info-icon--disabled'
                                 : lot.type === 'garage' ? 'parking-info-icon--garage' : 'parking-info-icon--general';
                             const typeLabel = lotTypeLabel(lot.type, isEnglish);
@@ -667,7 +659,7 @@ export const ParkingGuide = () => {
                 </div>
             ) : (
                 /* No venue selected (e.g. event has no linked venue) — prompt to pick one. */
-                <div className="parking-error" style={{minHeight: '40vh'}}>
+                <div className="parking-error parking-error--inline">
                     <div className="parking-error-icon">🅿️</div>
                     <h2 className="parking-error-title">
                         {isEnglish ? 'Choose a Venue' : '选择场地'}

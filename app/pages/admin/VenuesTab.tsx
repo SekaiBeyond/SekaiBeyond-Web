@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteVenue, callSaveVenue } from '~/lib/firebase';
-import type { ParkingLot } from '~/lib/parkingLots';
+import { lotBadgeChar, lotTypeLabel, type ParkingLot } from '~/lib/parkingLots';
 import type { Venue, VenueLotLink } from '~/lib/venues';
 import { UW_CAMPUS_CENTER } from '~/lib/venues';
 import { MapPicker } from './MapPicker';
@@ -140,7 +140,7 @@ export const VenuesTab = ({venues, parkingLots, refreshVenues, showToast, readOn
 
     return (
         <div className="admin-section">
-            <p className="admin-helper-text" style={{marginTop: '4px', marginBottom: '12px'}}>
+            <p className="admin-helper-text admin-section-intro">
                 {isEnglish
                     ? 'Venues power the parking guide. Each venue links to one or more parking lots (managed in the Parking Lots section). Pick a venue for an event from the Venue selector in the event editor to give it a parking guide.'
                     : '场地数据用于停车指南。每个场地关联一个或多个停车场（在停车场区块管理）。在活动编辑器的“场地”选择器中为活动选择场地，即可为其生成停车指南。'}
@@ -225,7 +225,7 @@ export const VenuesTab = ({venues, parkingLots, refreshVenues, showToast, readOn
                                     {venue.nameCn && (
                                         <span className="admin-event-card-date">{venue.nameCn}</span>
                                     )}
-                                    <span className="admin-helper-text" style={{display: 'block', marginTop: 4}}>
+                                    <span className="admin-helper-text admin-card-meta">
                                         {isEnglish
                                             ? `${venue.parkingLots.length} parking lot${venue.parkingLots.length === 1 ? '' : 's'}`
                                             : `${venue.parkingLots.length} 个停车场`}
@@ -306,8 +306,8 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
                 </label>
             </div>
 
-            <div style={{marginTop: 12}}>
-                <span style={{fontSize: 14, fontWeight: 600, display: 'block', marginBottom: 6}}>
+            <div className="admin-field-section">
+                <span className="admin-field-label">
                     {isEnglish ? 'Venue Location' : '场地位置'}
                 </span>
                 <MapPicker
@@ -350,14 +350,8 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
                     <div className="admin-venue-lot-list">
                         {draft.parkingLots.map((link, i) => {
                             const lot = availableLots.find(l => l.id === link.lotId);
-                            const badge = !lot ? '·'
-                                : lot.type === 'disabled' ? '♿'
-                                    : lot.type === 'garage' ? 'G' : 'P';
-                            const typeLabel = !lot ? '' : isEnglish
-                                ? (lot.type === 'disabled' ? 'Disabled parking'
-                                    : lot.type === 'garage' ? 'Parking garage' : 'General parking')
-                                : (lot.type === 'disabled' ? '无障碍停车'
-                                    : lot.type === 'garage' ? '停车库' : '普通停车');
+                            const badge = lot ? lotBadgeChar(lot.type) : '·';
+                            const typeLabel = lot ? lotTypeLabel(lot.type, isEnglish) : '';
                             return (
                                 <div key={i} className="admin-venue-lot-card">
                                     <div

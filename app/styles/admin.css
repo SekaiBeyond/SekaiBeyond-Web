@@ -3111,3 +3111,36 @@ select.admin-tickets-tag:focus {
 .admin-char-count.is-near-limit {
     color: var(--color-accent);
 }
+
+/* Intro blurb at the top of a tab/section. */
+.admin-section-intro {
+    margin-top: 4px;
+    margin-bottom: 12px;
+}
+
+/* Secondary line of text inside an event/lot/venue card. */
+.admin-card-meta {
+    display: block;
+    margin-top: 4px;
+}
+
+/* --- Map-based coordinate picker --- */
+.admin-map-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-map-picker-canvas {
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+}
+
+.admin-map-picker-hint {
+    margin: 0;
+}
+
+.admin-map-picker-coords {
+    opacity: 0.7;
+}

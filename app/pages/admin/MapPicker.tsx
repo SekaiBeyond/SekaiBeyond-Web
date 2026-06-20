@@ -36,9 +36,9 @@ const MapPickerInner = ({value, onChange, height = 320, mapId}: MapPickerInnerPr
     const initialCenter = hasValue ? value : UW_CAMPUS_CENTER;
 
     return (
-        <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+        <div className="admin-map-picker">
             <SearchBox onPick={onChange}/>
-            <div style={{height, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)'}}>
+            <div className="admin-map-picker-canvas" style={{height}}>
                 <Map
                     defaultCenter={initialCenter}
                     defaultZoom={DEFAULT_ZOOM}
@@ -64,12 +64,12 @@ const MapPickerInner = ({value, onChange, height = 320, mapId}: MapPickerInnerPr
                     )}
                 </Map>
             </div>
-            <p className="admin-helper-text" style={{margin: 0}}>
+            <p className="admin-helper-text admin-map-picker-hint">
                 {isEnglish
                     ? 'Search, click the map, or drag the marker to set the location.'
                     : '搜索、点击地图，或拖动标记来设置位置。'}
                 {' '}
-                <span style={{opacity: 0.7}}>
+                <span className="admin-map-picker-coords">
                     {value.lat.toFixed(5)}, {value.lng.toFixed(5)}
                 </span>
             </p>

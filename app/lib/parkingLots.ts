@@ -13,6 +13,31 @@ export interface ParkingLot {
     descriptionCn: string;
 }
 
+/** Localized full "<type> Parking" label (e.g. "Disabled Parking" / "无障碍停车"). */
+export function lotTypeLabel(type: ParkingLot['type'], isEnglish: boolean): string {
+    if (isEnglish) {
+        return type === 'disabled' ? 'Disabled Parking'
+            : type === 'garage' ? 'Parking Garage' : 'General Parking';
+    }
+    return type === 'disabled' ? '无障碍停车'
+        : type === 'garage' ? '停车库' : '普通停车';
+}
+
+/** Short type label for compact admin lists (e.g. "Disabled" / "无障碍"). */
+export function lotTypeShortLabel(type: ParkingLot['type'], isEnglish: boolean): string {
+    if (isEnglish) {
+        return type === 'disabled' ? 'Disabled'
+            : type === 'garage' ? 'Garage' : 'General';
+    }
+    return type === 'disabled' ? '无障碍'
+        : type === 'garage' ? '停车库' : '普通';
+}
+
+/** Single-character badge glyph for a lot type (♿ / G / P). */
+export function lotBadgeChar(type: ParkingLot['type']): string {
+    return type === 'disabled' ? '♿' : type === 'garage' ? 'G' : 'P';
+}
+
 let cachedLots: ParkingLot[] | null = null;
 let fetchPromise: Promise<ParkingLot[]> | null = null;
 const subscribers = new Set<(lots: ParkingLot[]) => void>();
@@ -54,25 +79,25 @@ async function refreshParkingLots(): Promise<ParkingLot[]> {
 }
 
 export function useParkingLots(): {parkingLots: ParkingLot[]; loading: boolean; refresh: () => Promise<void>} {
-    const [parkingLots, setLots] = useState<ParkingLot[]>(cachedLots ?? []);
+    const [parkingLots, setParkingLots] = useState<ParkingLot[]>(cachedLots ?? []);
     const [loading, setLoading] = useState(cachedLots === null);
 
     useEffect(() => {
-        subscribers.add(setLots);
+        subscribers.add(setParkingLots);
         return () => {
-            subscribers.delete(setLots);
+            subscribers.delete(setParkingLots);
         };
     }, []);
 
     useEffect(() => {
         if (cachedLots) {
-            setLots(cachedLots);
+            setParkingLots(cachedLots);
             setLoading(false);
             return;
         }
         fetchParkingLots()
             .then(result => {
-                setLots(result);
+                setParkingLots(result);
                 setLoading(false);
             })
             .catch(err => {

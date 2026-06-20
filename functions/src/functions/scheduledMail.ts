@@ -8,7 +8,13 @@ import {
     reserveQuotaInTxn,
     rollbackQuotaReservation,
 } from "../utils/quota";
-import { countRecipients, RESEND_API_KEY, ResendEnvelope, ResendSendError, sendEmails } from "../utils/resendClient";
+import {
+    countRecipients,
+    RESEND_API_KEY,
+    type ResendEnvelope,
+    ResendSendError,
+    sendEmails
+} from "../utils/resendClient";
 
 // Drains /scheduledMail into Resend's batch endpoint every 30 minutes.
 //
