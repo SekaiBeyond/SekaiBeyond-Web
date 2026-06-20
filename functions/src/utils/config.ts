@@ -24,6 +24,14 @@ export function recordExpiresAt(): Timestamp {
     return Timestamp.fromMillis(Date.now() + RECORD_RETENTION_DAYS * 24 * 60 * 60 * 1000);
 }
 
+// Individual QR-scan events are kept for a year so trend charts stay useful
+// across a full event season, then auto-expire via the `scans` TTL policy.
+export const QR_SCAN_RETENTION_DAYS = 365;
+
+export function qrScanExpiresAt(): Timestamp {
+    return Timestamp.fromMillis(Date.now() + QR_SCAN_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+}
+
 export const DELETION_COOLDOWN_HOURS = 48;
 
 export function deletionExpiresAt(): Timestamp {

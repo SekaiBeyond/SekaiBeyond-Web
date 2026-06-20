@@ -3077,3 +3077,285 @@ select.admin-tickets-tag:focus {
 .admin-map-picker-coords {
     opacity: 0.7;
 }
+
+/* --- QR codes tool --- */
+.admin-tools-back-row {
+    margin-bottom: 12px;
+}
+
+.admin-qr-mode-toggle {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 12px;
+    background: rgba(255, 107, 157, 0.08);
+    margin-bottom: 12px;
+}
+
+.admin-qr-mode-btn {
+    border: none;
+    background: transparent;
+    padding: 8px 16px;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+}
+
+.admin-qr-mode-active {
+    background: white;
+    color: var(--color-primary);
+    box-shadow: 0 1px 4px rgba(255, 150, 200, 0.18);
+}
+
+.admin-qr-map {
+    width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+}
+
+.admin-qr-map-pin {
+    min-width: 26px;
+    height: 26px;
+    padding: 0 7px;
+    border-radius: 13px;
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    transform: translateY(-50%);
+}
+
+.admin-qr-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.admin-qr-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    text-align: left;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #e8e8e8;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.admin-qr-row:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 2px 10px rgba(255, 150, 200, 0.12);
+}
+
+.admin-qr-count {
+    flex: 0 0 auto;
+    min-width: 44px;
+    height: 44px;
+    padding: 0 8px;
+    border-radius: 10px;
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.admin-qr-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.admin-qr-row-title {
+    font-weight: 600;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-qr-row-sub {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-qr-row-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.admin-qr-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(108, 99, 255, 0.1);
+    color: var(--color-link);
+}
+
+.admin-qr-chip-spot {
+    background: rgba(78, 203, 113, 0.14);
+    color: #2f9e57;
+}
+
+.admin-qr-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.admin-qr-badge-active {
+    background: rgba(78, 203, 113, 0.16);
+    color: #2f9e57;
+}
+
+.admin-qr-badge-expired {
+    background: rgba(224, 85, 85, 0.14);
+    color: var(--color-error);
+}
+
+.admin-qr-detail-top {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+.admin-qr-detail-meta {
+    flex: 1;
+    min-width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.admin-qr-detail-list {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-qr-detail-list > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.admin-qr-detail-list dt {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.admin-qr-detail-list dd {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-text);
+    word-break: break-all;
+}
+
+.admin-qr-detail-list dd a {
+    color: var(--color-link);
+}
+
+.admin-qr-spot-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.admin-qr-scan-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    text-align: left;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px dashed var(--color-primary);
+    background: rgba(255, 107, 157, 0.06);
+    cursor: pointer;
+}
+
+.admin-qr-scan-banner:hover {
+    background: rgba(255, 107, 157, 0.1);
+}
+
+.admin-qr-scan-banner-icon {
+    font-size: 22px;
+    line-height: 1;
+}
+
+.admin-qr-scan-banner-title {
+    display: block;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.admin-qr-scan-banner-sub {
+    display: block;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+.admin-qr-scan-result {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    max-width: 420px;
+    margin-top: 16px;
+}
+
+.admin-qr-scan-matched {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px;
+    border-radius: 14px;
+    border: 1px solid #e8e8e8;
+    background: white;
+}
+
+.admin-qr-scan-matched-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.admin-qr-scan-matched-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-qr-scan-cta {
+    justify-content: center;
+    padding: 14px;
+    font-size: 15px;
+}

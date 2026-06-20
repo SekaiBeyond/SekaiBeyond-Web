@@ -137,6 +137,19 @@ service cloud.firestore {
             allow read: if true;
         }
 
+        // Managed QR codes — staff+ can read for the admin dashboard / link flow.
+        // Public scanners never read these directly; they hit the recordQrScan
+        // Cloud Function, which returns the redirect target. All writes (and the
+        // scan counters) go through Cloud Functions.
+        match /qrCodes/{qrId} {
+            allow read: if request.auth != null && isStaffOrAbove();
+
+            // Per-scan events backing the trend charts.
+            match /scans/{scanId} {
+                allow read: if request.auth != null && isStaffOrAbove();
+            }
+        }
+
         // Deny all access to unlisted paths (safety net — Firestore denies by default,
         // but an explicit rule prevents accidental exposure if new paths are added)
         match /{document=**} {

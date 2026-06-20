@@ -9,4 +9,5 @@ export * from "./functions/badges";
 export * from "./functions/codes";
 export * from "./functions/tickets";
 export * from "./functions/admin";
+export * from "./functions/qrCodes";
 export { scheduledMailDrain } from "./functions/scheduledMail";

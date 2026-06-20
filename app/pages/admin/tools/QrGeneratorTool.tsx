@@ -1,173 +1,169 @@
-import { useRef, useState } from 'react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { isValidHttpUrl } from '~/lib/urls';
+import { callSaveQrCode } from '~/lib/firebase';
+import { useQrCodes } from '~/lib/qrCodes';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
+import { QrDashboard } from './qr/QrDashboard';
+import { QrCodeDetail } from './qr/QrCodeDetail';
+import { QrLinkScanner } from './qr/QrLinkScanner';
+import { QuickQrGenerator } from './qr/QuickQrGenerator';
+import { buildQrPayload, emptyDraft, QrCodeForm, type QrDraft, } from './qr/QrCodeForm';
 
 interface QrGeneratorToolProps {
     onBack: () => void;
+    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    readOnly?: boolean;
 }
 
-const QR_SIZE = 280;
+type View = 'dashboard' | 'create' | 'detail' | 'scan';
 
-type ExpirationMode = 'none' | 'event' | 'date';
-
-export const QrGeneratorTool = ({onBack}: QrGeneratorToolProps) => {
+export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGeneratorToolProps) => {
     const {isEnglish} = useLanguage();
-    const [url, setUrl] = useState('');
-    const [expirationMode, setExpirationMode] = useState<ExpirationMode>('none');
-    const [selectedEventId, setSelectedEventId] = useState('');
-    const [expiresLocal, setExpiresLocal] = useState('');
-    const {upcomingEvents, loading: eventsLoading} = useAllUpcomingEvents();
-    const qrWrapRef = useRef<HTMLDivElement>(null);
+    const {qrCodes, loading, refresh} = useQrCodes();
+    const {upcomingEvents} = useAllUpcomingEvents();
 
-    const trimmed = url.trim();
-    const valid = isValidHttpUrl(trimmed);
+    const [view, setView] = useState<View>('dashboard');
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [tracked, setTracked] = useState(true);
+    const [draft, setDraft] = useState<QrDraft>(emptyDraft());
+    const [saving, setSaving] = useState(false);
 
-    // Parse the datetime-local value (treated as the user's local time) into an ISO timestamp.
-    const expiresIso = (() => {
-        if (expirationMode !== 'date' || !expiresLocal) return '';
-        const d = new Date(expiresLocal);
-        return isNaN(d.getTime()) ? '' : d.toISOString();
-    })();
+    const selected = qrCodes.find(c => c.id === selectedId) ?? null;
 
-    // If an event or expiration date is set, redirect via our app so we can intercept it after expiry.
-    const qrValue = (() => {
-        if (!valid || typeof window === 'undefined') return trimmed;
-        const origin = window.location.origin;
-        if (expirationMode === 'event' && selectedEventId) {
-            return `${origin}/qr?url=${encodeURIComponent(trimmed)}&event=${encodeURIComponent(selectedEventId)}`;
-        }
-        if (expirationMode === 'date' && expiresIso) {
-            return `${origin}/qr?url=${encodeURIComponent(trimmed)}&expires=${encodeURIComponent(expiresIso)}`;
-        }
-        return trimmed;
-    })();
-
-    const downloadPng = () => {
-        const canvas = qrWrapRef.current?.querySelector('canvas');
-        if (!canvas) return;
-        const now = new Date();
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-        const link = document.createElement('a');
-        link.download = `qr-code-${stamp}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+    const openCreate = () => {
+        setDraft(emptyDraft());
+        setTracked(true);
+        setView('create');
     };
 
-    const copyUrl = () => {
-        if (!valid) return;
-        navigator.clipboard.writeText(qrValue).catch(() => {
-            /* clipboard may be unavailable */
-        });
+    const createTracked = async () => {
+        const built = buildQrPayload(draft, isEnglish);
+        if ('error' in built) {
+            showToast(built.error, 'error');
+            return;
+        }
+        setSaving(true);
+        try {
+            const res = await callSaveQrCode(built.payload);
+            await refresh();
+            setSelectedId(res.data.qrId);
+            setView('detail');
+            showToast(isEnglish ? 'QR code created.' : '二维码已创建。', 'success');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to create QR code.' : '创建二维码失败。'), 'error');
+        } finally {
+            setSaving(false);
+        }
     };
+
+    if (view === 'detail' && selected) {
+        return (
+            <QrCodeDetail
+                code={selected}
+                events={upcomingEvents}
+                onBack={() => setView('dashboard')}
+                onChanged={refresh}
+                showToast={showToast}
+                readOnly={readOnly}
+            />
+        );
+    }
+
+    if (view === 'scan') {
+        return (
+            <QrLinkScanner
+                codes={qrCodes}
+                onBack={() => setView('dashboard')}
+                onLinked={refresh}
+                showToast={showToast}
+            />
+        );
+    }
+
+    if (view === 'create') {
+        return (
+            <div className="admin-section">
+                <div className="admin-tools-header">
+                    <button className="admin-back-btn" onClick={() => setView('dashboard')} type="button">
+                        {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
+                    </button>
+                    <h3 className="admin-tools-title">{isEnglish ? 'New QR Code' : '新建二维码'}</h3>
+                </div>
+
+                <div className="admin-qr-mode-toggle">
+                    <button
+                        className={`admin-qr-mode-btn${tracked ? ' admin-qr-mode-active' : ''}`}
+                        onClick={() => setTracked(true)}
+                        type="button"
+                    >
+                        {isEnglish ? 'Tracked' : '可追踪'}
+                    </button>
+                    <button
+                        className={`admin-qr-mode-btn${!tracked ? ' admin-qr-mode-active' : ''}`}
+                        onClick={() => setTracked(false)}
+                        type="button"
+                    >
+                        {isEnglish ? 'Quick (untracked)' : '快速（不追踪）'}
+                    </button>
+                </div>
+                <p className="admin-helper-text admin-section-mb">
+                    {tracked
+                        ? (isEnglish
+                            ? 'Tracked codes count scans, can pin to a map spot, link to an event, and let you change the target later.'
+                            : '可追踪二维码会统计扫描次数，可关联地图位置与活动，并支持之后修改跳转目标。')
+                        : (isEnglish
+                            ? 'A throwaway QR with the URL baked in — no scan tracking or map spot.'
+                            : '一次性二维码，链接直接写入图片 — 不统计扫描，也无法关联地图。')}
+                </p>
+
+                {tracked ? (
+                    <>
+                        <QrCodeForm draft={draft} setDraft={setDraft} events={upcomingEvents} isEnglish={isEnglish}/>
+                        <div className="admin-btn-row admin-mt-12">
+                            <button
+                                className="admin-toggle-btn admin-toggle-save"
+                                onClick={createTracked}
+                                disabled={saving}
+                            >
+                                {saving
+                                    ? (isEnglish ? 'Creating...' : '创建中...')
+                                    : (isEnglish ? 'Create QR Code' : '创建二维码')}
+                            </button>
+                            <button
+                                className="admin-toggle-btn admin-toggle-cancel"
+                                onClick={() => setView('dashboard')}
+                            >
+                                {isEnglish ? 'Cancel' : '取消'}
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <QuickQrGenerator events={upcomingEvents}/>
+                )}
+            </div>
+        );
+    }
 
     return (
-        <div className="admin-section">
-            <div className="admin-tools-header">
+        <>
+            <div className="admin-tools-back-row">
                 <button className="admin-back-btn" onClick={onBack} type="button">
                     {isEnglish ? '← Back to Tools' : '← 返回工具'}
                 </button>
-                <h3 className="admin-tools-title">
-                    {isEnglish ? 'QR Generator' : '二维码生成器'}
-                </h3>
             </div>
-            <div className="admin-form-grid">
-                <label className="admin-form-grid-full">
-                    <span>{isEnglish ? 'URL' : '链接'}</span>
-                    <input
-                        value={url}
-                        onChange={e => setUrl(e.target.value)}
-                        className="admin-search-input"
-                        placeholder="https://example.com"
-                        autoFocus
-                    />
-                </label>
-                <label className="admin-form-grid-full">
-                    <span>{isEnglish ? 'Expiration (Optional)' : '过期方式 (可选)'}</span>
-                    <select
-                        value={expirationMode}
-                        onChange={e => setExpirationMode(e.target.value as ExpirationMode)}
-                        className="admin-search-input"
-                    >
-                        <option value="none">{isEnglish ? 'No Expiration' : '永不过期'}</option>
-                        <option value="event">{isEnglish ? 'Link to Event' : '关联活动'}</option>
-                        <option value="date">{isEnglish ? 'Custom Date' : '自定义日期'}</option>
-                    </select>
-                </label>
-                {expirationMode === 'event' && (
-                    <label className="admin-form-grid-full">
-                        <span>{isEnglish ? 'Event' : '活动'}</span>
-                        <select
-                            value={selectedEventId}
-                            onChange={e => setSelectedEventId(e.target.value)}
-                            className="admin-search-input"
-                            disabled={eventsLoading}
-                        >
-                            <option value="">{isEnglish ? '-- Select Event --' : '-- 选择活动 --'}</option>
-                            {upcomingEvents.map(ev => (
-                                <option key={ev.id} value={ev.id}>
-                                    {isEnglish ? ev.title : ev.titleCn}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                )}
-                {expirationMode === 'date' && (
-                    <label className="admin-form-grid-full">
-                        <span>{isEnglish ? 'Active Until' : '有效截止'}</span>
-                        <input
-                            type="datetime-local"
-                            value={expiresLocal}
-                            onChange={e => setExpiresLocal(e.target.value)}
-                            className="admin-search-input"
-                        />
-                    </label>
-                )}
-            </div>
-            {!valid ? (
-                <p className="admin-no-results">
-                    {isEnglish
-                        ? 'Enter a valid http(s) URL above to generate a QR code.'
-                        : '请输入有效的 http(s) 链接以生成二维码。'}
-                </p>
-            ) : (
-                <div className="admin-single-code admin-single-code-narrow">
-                    <div ref={qrWrapRef} className="admin-single-code-qr">
-                        <QRCodeCanvas
-                            value={qrValue}
-                            size={QR_SIZE}
-                            level="M"
-                            marginSize={2}
-                        />
-                    </div>
-                    <div className="admin-code-url">
-                        <input
-                            readOnly
-                            value={qrValue}
-                            onClick={(e) => (e.target as HTMLInputElement).select()}
-                            className="admin-code-input"
-                        />
-                        <button
-                            className="admin-copy-btn"
-                            onClick={copyUrl}
-                            type="button"
-                        >
-                            {isEnglish ? 'Copy' : '复制'}
-                        </button>
-                    </div>
-                    <div className="admin-single-code-actions">
-                        <button
-                            className="admin-toggle-btn admin-toggle-save"
-                            onClick={downloadPng}
-                            type="button"
-                        >
-                            {isEnglish ? 'Download PNG' : '下载 PNG'}
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
+            <QrDashboard
+                codes={qrCodes}
+                events={upcomingEvents}
+                loading={loading}
+                onSelect={id => {
+                    setSelectedId(id);
+                    setView('detail');
+                }}
+                onCreate={openCreate}
+                onScanLink={() => setView('scan')}
+                onRefresh={refresh}
+                readOnly={readOnly}
+            />
+        </>
     );
 };

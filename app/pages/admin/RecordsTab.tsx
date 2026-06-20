@@ -39,6 +39,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
     location: ['venue-create', 'venue-edit', 'venue-delete',
         'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete'],
+    qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
     config: ['policy-update', 'config-update'],
     email: ['custom-email-send'],
@@ -91,6 +92,7 @@ export const RecordsTab = ({
                 tagName: data.tagName,
                 venueName: data.venueName,
                 lotName: data.lotName,
+                qrLabel: data.qrLabel,
                 unlinkedFrom: data.unlinkedFrom,
                 code: data.code,
                 oldGroup: data.oldGroup,
@@ -541,6 +543,22 @@ export const RecordsTab = ({
                     ? <>revoked {target}'s event-staff access to {event}</>
                     : <>撤销了 {target} 对 {event} 的活动工作人员权限</>;
             }
+            case 'qrcode-create':
+                return isEnglish
+                    ? <>created QR code {r.qrLabel ?? ''}</>
+                    : <>创建了二维码 {r.qrLabel ?? ''}</>;
+            case 'qrcode-edit':
+                return isEnglish
+                    ? <>edited QR code {r.qrLabel ?? ''}</>
+                    : <>编辑了二维码 {r.qrLabel ?? ''}</>;
+            case 'qrcode-delete':
+                return isEnglish
+                    ? <>deleted QR code {r.qrLabel ?? ''}</>
+                    : <>删除了二维码 {r.qrLabel ?? ''}</>;
+            case 'qrcode-spot-set':
+                return isEnglish
+                    ? <>linked QR code {r.qrLabel ?? ''} to a map spot</>
+                    : <>将二维码 {r.qrLabel ?? ''} 关联到地图位置</>;
             case 'policy-update':
                 return isEnglish ? <>updated policy content</> : <>更新了政策内容</>;
             case 'config-update':
@@ -619,6 +637,11 @@ export const RecordsTab = ({
             case 'parkinglot-edit':
             case 'parkinglot-delete':
                 return isEnglish ? 'Location' : '场地';
+            case 'qrcode-create':
+            case 'qrcode-edit':
+            case 'qrcode-delete':
+            case 'qrcode-spot-set':
+                return isEnglish ? 'QR' : '二维码';
             case 'account-deletion-requested':
             case 'account-deletion-cancelled':
             case 'account-deleted':
@@ -653,6 +676,7 @@ export const RecordsTab = ({
                     <option value="ticket">{isEnglish ? 'Ticket' : '门票'}</option>
                     <option value="tag">{isEnglish ? 'Tag' : '标签'}</option>
                     <option value="location">{isEnglish ? 'Location' : '场地'}</option>
+                    <option value="qr">{isEnglish ? 'QR' : '二维码'}</option>
                     <option value="account">{isEnglish ? 'Account' : '账号'}</option>
                     <option value="config">{isEnglish ? 'Config' : '配置'}</option>
                     <option value="email">{isEnglish ? 'Email' : '邮件'}</option>

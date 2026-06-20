@@ -501,7 +501,7 @@ export const AdminPage = () => {
                 )}
 
                 {activeTab === 'tools' && (isCoreStaffOrAbove || isStaffGroup) && (
-                    <ToolsTab/>
+                    <ToolsTab showToast={showToast} readOnly={isStaffGroup}/>
                 )}
 
                 {activeTab === 'config' && (isCoreStaffOrAbove || isStaffGroup) && (

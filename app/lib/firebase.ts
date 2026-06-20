@@ -371,6 +371,31 @@ export const callSaveParkingLot = (data: {
 export const callDeleteParkingLot = (data: {lotId: string}) =>
     httpsCallable<typeof data, {deleted: boolean; unlinkedFrom: number}>(getFunctions(), 'deleteParkingLot')(data);
 
+// ---- Managed QR codes ----
+
+export const callSaveQrCode = (data: {
+    qrId?: string;
+    label: string;
+    labelCn: string;
+    targetUrl: string;
+    eventId: string;
+    expirationMode: 'none' | 'event' | 'date';
+    expiresAt?: string;
+    lat?: number;
+    lng?: number;
+    spotLabel: string;
+    spotLabelCn: string;
+}) => httpsCallable<typeof data, {qrId: string}>(getFunctions(), 'saveQrCode')(data);
+
+export const callSetQrSpot = (data: {qrId: string; lat: number; lng: number}) =>
+    httpsCallable<typeof data, {lat: number; lng: number}>(getFunctions(), 'setQrSpot')(data);
+
+export const callDeleteQrCode = (data: {qrId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteQrCode')(data);
+
+export const callRecordQrScan = (data: {id: string}) =>
+    httpsCallable<typeof data, {active: boolean; targetUrl: string}>(getFunctions(), 'recordQrScan')(data);
+
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {
         displayName: string; photoURL: string; joinedAt: string;

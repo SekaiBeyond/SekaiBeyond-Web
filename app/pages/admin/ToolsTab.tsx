@@ -15,19 +15,24 @@ interface ToolDef {
 const TOOLS: ToolDef[] = [
     {
         id: 'qr-generator',
-        title: 'QR Generator',
-        titleCn: '二维码生成器',
-        description: 'Generate a QR code from any URL and download it as a PNG.',
-        descriptionCn: '为任意链接生成二维码，并下载为 PNG 图片。',
+        title: 'QR Codes',
+        titleCn: '二维码',
+        description: 'Generate trackable QR codes, pin them to a map spot, and see how often each one is scanned.',
+        descriptionCn: '生成可追踪二维码，关联地图位置，并查看每个二维码的扫描次数。',
     },
 ];
 
-export const ToolsTab = () => {
+interface ToolsTabProps {
+    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    readOnly?: boolean;
+}
+
+export const ToolsTab = ({showToast, readOnly = false}: ToolsTabProps) => {
     const {isEnglish} = useLanguage();
     const [activeTool, setActiveTool] = useState<ToolId | null>(null);
 
     if (activeTool === 'qr-generator') {
-        return <QrGeneratorTool onBack={() => setActiveTool(null)}/>;
+        return <QrGeneratorTool onBack={() => setActiveTool(null)} showToast={showToast} readOnly={readOnly}/>;
     }
 
     return (
