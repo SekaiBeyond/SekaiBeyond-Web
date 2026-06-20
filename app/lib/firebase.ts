@@ -147,7 +147,7 @@ export const callSetUserTitle = (data: {targetUid: string; title?: string}) =>
 export const callSavePastEvent = (data: {
     eventId?: string;
     title: string; titleCn: string; tagId: string; date: string;
-    location: string; locationCn: string;
+    location: string; locationCn: string; venueId: string;
     description: string; descriptionCn: string; icon: string;
     recapLink: string; recapLinkCn: string;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'savePastEvent')(data);
@@ -158,7 +158,7 @@ export const callSetPastEventPublished = (data: {eventId: string; published: boo
 export const callSaveUpcomingEvent = (data: {
     eventId?: string;
     title: string; titleCn: string; description: string; descriptionCn: string;
-    location: string; locationCn: string; startAt: string; endAt: string;
+    location: string; locationCn: string; venueId: string; startAt: string; endAt: string;
     poster: string; emailHeaderBg: string; posterCredit: string;
     buyTicket: string; learnMore: string;
     customButtonText: string; customButtonTextCn: string; customButtonLink: string;
@@ -354,6 +354,32 @@ export const callSaveTag = (data: {tagId?: string; name: string; nameCn: string}
 
 export const callDeleteTag = (data: {tagId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteTag')(data);
+
+export const callSaveVenue = (data: {
+    venueId?: string;
+    nameEn: string;
+    nameCn: string;
+    lat: number;
+    lng: number;
+    parkingLots: Array<{lotId: string}>;
+}) => httpsCallable<typeof data, {venueId: string}>(getFunctions(), 'saveVenue')(data);
+
+export const callDeleteVenue = (data: {venueId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteVenue')(data);
+
+export const callSaveParkingLot = (data: {
+    lotId?: string;
+    name: string;
+    nameCn: string;
+    type: 'general' | 'disabled' | 'garage';
+    lat: number;
+    lng: number;
+    descriptionEn: string;
+    descriptionCn: string;
+}) => httpsCallable<typeof data, {lotId: string}>(getFunctions(), 'saveParkingLot')(data);
+
+export const callDeleteParkingLot = (data: {lotId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean; unlinkedFrom: number}>(getFunctions(), 'deleteParkingLot')(data);
 
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {

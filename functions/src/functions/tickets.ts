@@ -12,7 +12,7 @@ import {
     reserveQuotaInTxn,
     rollbackQuotaReservation,
 } from "../utils/quota";
-import { RESEND_API_KEY, ResendEnvelope, ResendSendError, sendEmails } from "../utils/resendClient";
+import { RESEND_API_KEY, type ResendEnvelope, ResendSendError, sendEmails } from "../utils/resendClient";
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
 

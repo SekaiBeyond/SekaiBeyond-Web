@@ -45,7 +45,7 @@ export interface UserRecord {
     eventStaffEvents: string[];
 }
 
-export type Tab = 'users' | 'events' | 'badges' | 'records' | 'tools' | 'config';
+export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'records' | 'tools' | 'config';
 
 export type RecordType =
     'group-assign'
@@ -105,6 +105,12 @@ export type RecordType =
     | 'event-staff-assign'
     | 'event-staff-remove'
     | 'upcoming-event-email-template-update'
+    | 'venue-create'
+    | 'venue-edit'
+    | 'venue-delete'
+    | 'parkinglot-create'
+    | 'parkinglot-edit'
+    | 'parkinglot-delete'
     | 'policy-update'
     | 'config-update';
 
@@ -121,6 +127,9 @@ export interface ActivityRecord {
     badgeId?: string;
     badgeName?: string;
     tagName?: string;
+    venueName?: string;
+    lotName?: string;
+    unlinkedFrom?: number;
     code?: string;
     oldGroup?: UserGroup;
     newGroup?: UserGroup;

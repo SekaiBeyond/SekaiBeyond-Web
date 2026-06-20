@@ -189,12 +189,9 @@
 
 /* Profile Header */
 .profile-page {
-    padding-top: 80px;
-    max-width: 900px;
+    max-width: 920px;
     margin: 0 auto;
-    padding-left: 20px;
-    padding-right: 20px;
-    padding-bottom: 60px;
+    padding: 80px 20px 60px;
 }
 
 .profile-header {

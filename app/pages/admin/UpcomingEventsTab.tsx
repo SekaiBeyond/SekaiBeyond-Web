@@ -16,10 +16,12 @@ import {
 } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
+import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import { QRCodeSVG } from 'qrcode.react';
 import type { BadgeCode, UserRecord } from './types';
 import { fetchEventAttendees, fetchEventStaffCount, getClaimUrl } from './utils';
 import { BilingualFormField } from './BilingualFormField';
+import { LocationFormField } from './LocationFormField';
 import { EventAttendeesList } from './EventAttendeesList';
 import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
@@ -54,6 +56,7 @@ interface EventForm {
     descriptionCn: string;
     location: string;
     locationCn: string;
+    venueId: string;
     startAt: string;
     endAt: string;
     posterCredit: string;
@@ -67,7 +70,7 @@ interface EventForm {
 
 const emptyForm: EventForm = {
     title: '', titleCn: '', description: '', descriptionCn: '',
-    location: '', locationCn: '', startAt: '', endAt: '',
+    location: '', locationCn: '', venueId: '', startAt: '', endAt: '',
     posterCredit: '', buyTicket: '', learnMore: '',
     customButtonText: '', customButtonTextCn: '', customButtonLink: '',
     paid: false,
@@ -84,6 +87,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                                                                   onDetailChange,
                                                                                               }, forwardedRef) => {
     const {isEnglish} = useLanguage();
+    const {venues} = useVenues();
     const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
 
     useEffect(() => {
@@ -247,6 +251,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             descriptionCn: event.descriptionCn,
             location: event.location,
             locationCn: event.locationCn,
+            venueId: event.venueId,
             startAt: toDatetimeLocal(event.startAt),
             endAt: toDatetimeLocal(event.endAt),
             posterCredit: event.posterCredit,
@@ -306,6 +311,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 descriptionCn: form.descriptionCn,
                 location: form.location,
                 locationCn: form.locationCn,
+                venueId: form.venueId,
                 startAt: startAt.toISOString(),
                 endAt: endAt.toISOString(),
                 poster: posterUrl,
@@ -452,11 +458,12 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         className="admin-search-input"
                                     />
                                 </label>
-                                <BilingualFormField
-                                    label="Location" labelCn="地点"
+                                <LocationFormField
                                     value={form.location} valueCn={form.locationCn}
+                                    venueId={form.venueId}
                                     onChange={v => setForm(f => ({...f, location: v}))}
                                     onChangeCn={v => setForm(f => ({...f, locationCn: v}))}
+                                    onChangeVenueId={v => setForm(f => ({...f, venueId: v}))}
                                     placeholder={isEnglish ? 'Event location' : '活动地点'}
                                     placeholderCn={isEnglish ? 'Location in Chinese' : '中文地点'}
                                 />
@@ -691,7 +698,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                 hour: 'numeric', minute: 'numeric',
                                             })}
                                         </span>
-                                        <span>{isEnglish ? selectedEvt.location : selectedEvt.locationCn}</span>
+                                        <span>{eventLocationDisplay(selectedEvt.location, selectedEvt.locationCn, selectedEvt.venueId, venues, isEnglish)}</span>
                                     </p>
                                     <p className="admin-description-text">
                                         {isEnglish ? selectedEvt.description : selectedEvt.descriptionCn}

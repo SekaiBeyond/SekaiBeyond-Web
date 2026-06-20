@@ -245,6 +245,183 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         return {saved: true};
     });
 });
+
+function validateCoordinate(value: unknown, name: string, min: number, max: number): number {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must be a number.`);
+    }
+    if (value < min || value > max) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: out of range.`);
+    }
+    return value;
+}
+
+const PARKING_LOT_TYPES = ["general", "disabled", "garage"] as const;
+
+export const saveParkingLot = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const input = request.data as Record<string, unknown>;
+    const lotId = input.lotId ? validateDocId(input.lotId, "lotId") : null;
+    const name = sanitizeDisplayText(validateStr(input.name, "name", 200, true));
+    const nameCn = sanitizeDisplayText(validateStr(input.nameCn, "nameCn", 200));
+    const type = typeof input.type === "string" && (PARKING_LOT_TYPES as readonly string[]).includes(input.type)
+        ? input.type as typeof PARKING_LOT_TYPES[number]
+        : null;
+    if (!type) throw new HttpsError("invalid-argument", `type must be one of ${PARKING_LOT_TYPES.join(", ")}.`);
+    const lat = validateCoordinate(input.lat, "lat", -90, 90);
+    const lng = validateCoordinate(input.lng, "lng", -180, 180);
+    const descriptionEn = sanitizeDisplayText(validateStr(input.descriptionEn, "descriptionEn", 1000));
+    const descriptionCn = sanitizeDisplayText(validateStr(input.descriptionCn, "descriptionCn", 1000));
+
+    const docId = lotId ?? db.collection("parkingLots").doc().id;
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        if (lotId) {
+            const existing = await txn.get(db.collection("parkingLots").doc(lotId));
+            if (!existing.exists) throw new HttpsError("not-found", "Parking lot not found.");
+        }
+
+        const ref = db.collection("parkingLots").doc(docId);
+        const data = {name, nameCn, type, lat, lng, descriptionEn, descriptionCn};
+        if (lotId) {
+            txn.update(ref, data);
+        } else {
+            txn.set(ref, data);
+        }
+        txn.set(db.collection("records").doc(), {
+            type: lotId ? "parkinglot-edit" : "parkinglot-create",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            lotName: name,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {lotId: docId};
+    });
+});
+export const deleteParkingLot = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const lotId = validateDocId((request.data as {lotId?: string})?.lotId, "lotId");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const lotSnap = await txn.get(db.collection("parkingLots").doc(lotId));
+        if (!lotSnap.exists) throw new HttpsError("not-found", "Parking lot not found.");
+
+        // Cascade unlink: remove this lotId from every venue that references it.
+        const venuesSnap = await txn.get(db.collection("venues"));
+        let unlinkedFrom = 0;
+        for (const doc of venuesSnap.docs) {
+            const lots = Array.isArray(doc.data().parkingLots) ? doc.data().parkingLots : [];
+            const filtered = lots.filter((l: any) => l?.lotId !== lotId);
+            if (filtered.length !== lots.length) {
+                txn.update(doc.ref, {parkingLots: filtered});
+                unlinkedFrom++;
+            }
+        }
+
+        txn.delete(db.collection("parkingLots").doc(lotId));
+        txn.set(db.collection("records").doc(), {
+            type: "parkinglot-delete",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            lotName: lotSnap.data()?.name ?? lotId,
+            unlinkedFrom,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {deleted: true, unlinkedFrom};
+    });
+});
+export const saveVenue = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const input = request.data as Record<string, unknown>;
+    const venueId = input.venueId ? validateDocId(input.venueId, "venueId") : null;
+    const nameEn = sanitizeDisplayText(validateStr(input.nameEn, "nameEn", 200, true));
+    const nameCn = sanitizeDisplayText(validateStr(input.nameCn, "nameCn", 200));
+    const lat = validateCoordinate(input.lat, "lat", -90, 90);
+    const lng = validateCoordinate(input.lng, "lng", -180, 180);
+
+    const rawLots = Array.isArray(input.parkingLots) ? input.parkingLots : [];
+    if (rawLots.length > 50) {
+        throw new HttpsError("invalid-argument", "Too many parking lots (max 50).");
+    }
+    const parkingLots = rawLots.map((link: any, i: number) => ({
+        lotId: validateDocId(link?.lotId, `parkingLots[${i}].lotId`),
+    }));
+    const seenLotIds = new Set<string>();
+    for (const l of parkingLots) {
+        if (seenLotIds.has(l.lotId)) {
+            throw new HttpsError("invalid-argument", `Duplicate lotId in parkingLots: ${l.lotId}.`);
+        }
+        seenLotIds.add(l.lotId);
+    }
+
+    const docId = venueId ?? db.collection("venues").doc().id;
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        if (venueId) {
+            const existing = await txn.get(db.collection("venues").doc(venueId));
+            if (!existing.exists) throw new HttpsError("not-found", "Venue not found.");
+        }
+
+        // Verify referenced lots exist.
+        for (const link of parkingLots) {
+            const lotSnap = await txn.get(db.collection("parkingLots").doc(link.lotId));
+            if (!lotSnap.exists) {
+                throw new HttpsError("not-found", `Referenced parking lot not found: ${link.lotId}.`);
+            }
+        }
+
+        const ref = db.collection("venues").doc(docId);
+        const data = {nameEn, nameCn, lat, lng, parkingLots};
+        if (venueId) {
+            txn.update(ref, data);
+        } else {
+            txn.set(ref, data);
+        }
+        txn.set(db.collection("records").doc(), {
+            type: venueId ? "venue-edit" : "venue-create",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            venueName: nameEn,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {venueId: docId};
+    });
+});
+export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const venueId = validateDocId((request.data as {venueId?: string})?.venueId, "venueId");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const venueSnap = await txn.get(db.collection("venues").doc(venueId));
+        if (!venueSnap.exists) throw new HttpsError("not-found", "Venue not found.");
+
+        txn.delete(db.collection("venues").doc(venueId));
+        txn.set(db.collection("records").doc(), {
+            type: "venue-delete",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            venueName: venueSnap.data()?.nameEn ?? venueId,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {deleted: true};
+    });
+});
 export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
