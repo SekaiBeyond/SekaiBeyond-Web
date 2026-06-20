@@ -266,16 +266,6 @@ export const callUpdateEventEmailTemplate = (data: {
 }) => httpsCallable<typeof data, {saved: boolean}>(
     getFunctions(), 'updateEventEmailTemplate')(data);
 
-export const callSendCustomEmail = (data: {
-    to: string[];
-    cc?: string[];
-    bcc?: string[];
-    replyTo?: string;
-    subject: string;
-    bodyHtml: string;
-}) => httpsCallable<typeof data, {sent: boolean; queued: boolean; recipientCount: number}>(
-    getFunctions(), 'sendCustomEmail')(data);
-
 export const callAssignEventStaff = (data: {targetUid: string; eventId: string}) =>
     httpsCallable<typeof data, {added: boolean; attendeeRemoved: boolean}>(
         getFunctions(), 'assignEventStaff')(data);
