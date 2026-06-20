@@ -166,7 +166,13 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     **Step D — Content-Security-Policy (already wired)**
 
-    The CSP header in `firebase.json` already allowlists the Maps domains (`https://maps.googleapis.com` in `script-src`; `https://*.gstatic.com` / `https://*.ggpht.com` in `img-src`; `worker-src 'self' blob:` for vector-map workers), so forks need no CSP changes for the map. If you add other third-party scripts, extend that header accordingly — and note that the deploy-time `npm run update-csp-hashes` only rewrites the inline-script `sha256-` hashes inside `script-src`, preserving every other source token.
+    The CSP header in `firebase.json` already allowlists everything the **vector** map needs, so forks need no CSP changes for the map:
+    - `script-src`: `https://maps.googleapis.com` (the API script) and `'wasm-unsafe-eval'` (vector maps compile WebAssembly for label rendering — without it the map throws `CompileError: ... blocked by CSP` and never paints tiles).
+    - `img-src`: `https://*.gstatic.com` / `https://*.ggpht.com` (map tiles, Street View thumbnails).
+    - `connect-src`: `https://*.gstatic.com` (legend/style fetches from `www.gstatic.com/maps/...`) and `data:` (the renderer fetches inline `data:` images).
+    - `worker-src 'self' blob:` for the vector-map label worker.
+
+    If you add other third-party scripts, extend that header accordingly — and note that the deploy-time `npm run update-csp-hashes` only rewrites the inline-script `sha256-` hashes inside `script-src`, preserving every other source token (including `'wasm-unsafe-eval'`).
 
 #### Firestore Indexes Explained
 
