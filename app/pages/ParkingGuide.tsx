@@ -85,7 +85,9 @@ const VenueSwitcher = ({venues, selectedId, onSelect, isEnglish}: VenueSwitcherP
                 aria-expanded={open}
             >
                 <span className="parking-venue-switcher-name">{triggerLabel}</span>
-                <span className={`parking-venue-switcher-chevron${open ? ' is-open' : ''}`}>▾</span>
+                <span className="parking-venue-switcher-chevron-badge">
+                    <span className={`parking-venue-switcher-chevron${open ? ' is-open' : ''}`}>▾</span>
+                </span>
             </button>
 
             {open && (
@@ -106,7 +108,6 @@ const VenueSwitcher = ({venues, selectedId, onSelect, isEnglish}: VenueSwitcherP
                         ) : (
                             filtered.map(v => {
                                 const name = isEnglish ? v.nameEn : (v.nameCn || v.nameEn);
-                                const sub = isEnglish ? v.nameCn : v.nameEn;
                                 const active = v.id === selectedId;
                                 return (
                                     <button
@@ -118,9 +119,6 @@ const VenueSwitcher = ({venues, selectedId, onSelect, isEnglish}: VenueSwitcherP
                                         onClick={() => choose(v.id)}
                                     >
                                         <span className="parking-venue-switcher-option-name">{name}</span>
-                                        {sub && sub !== name && (
-                                            <span className="parking-venue-switcher-option-sub">{sub}</span>
-                                        )}
                                         {active && <span className="parking-venue-switcher-check">✓</span>}
                                     </button>
                                 );
@@ -465,6 +463,9 @@ export const ParkingGuide = () => {
                     {isEnglish ? 'Parking Guide' : '停车指南'}
                 </h1>
                 <div className="parking-venue-row">
+                    <span className="parking-venue-label">
+                        {isEnglish ? 'Viewing parking for' : '查看停车场地'}
+                    </span>
                     <VenueSwitcher
                         venues={venues}
                         selectedId={selectedVenueId}
