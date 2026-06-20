@@ -396,6 +396,25 @@ export const callDeleteQrCode = (data: {qrId: string}) =>
 export const callRecordQrScan = (data: {id: string}) =>
     httpsCallable<typeof data, {active: boolean; targetUrl: string}>(getFunctions(), 'recordQrScan')(data);
 
+// ---- Editable social platforms (QR "Social profile" mode) ----
+
+export const callSaveSocialPlatform = (data: {
+    id?: string;
+    label: string;
+    labelCn: string;
+    buildPrefix: string;
+    hosts: string[];
+    pathPrefix: string;
+    placeholder: string;
+    order: number;
+}) => httpsCallable<typeof data, {id: string}>(getFunctions(), 'saveSocialPlatform')(data);
+
+export const callDeleteSocialPlatform = (data: {id: string}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteSocialPlatform')(data);
+
+export const callSeedSocialPlatforms = () =>
+    httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
+
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {
         displayName: string; photoURL: string; joinedAt: string;

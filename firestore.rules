@@ -150,6 +150,13 @@ service cloud.firestore {
             }
         }
 
+        // Editable social-platform templates for the QR "Social profile" mode.
+        // Only consumed in the admin UI (staff+), never by public scanners; all
+        // writes go through Cloud Functions.
+        match /socialPlatforms/{platformId} {
+            allow read: if request.auth != null && isStaffOrAbove();
+        }
+
         // Deny all access to unlisted paths (safety net — Firestore denies by default,
         // but an explicit rule prevents accidental exposure if new paths are added)
         match /{document=**} {

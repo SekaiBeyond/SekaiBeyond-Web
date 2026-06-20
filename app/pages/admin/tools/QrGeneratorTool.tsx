@@ -7,6 +7,7 @@ import { QrDashboard } from './qr/QrDashboard';
 import { QrCodeDetail } from './qr/QrCodeDetail';
 import { QrLinkScanner } from './qr/QrLinkScanner';
 import { QuickQrGenerator } from './qr/QuickQrGenerator';
+import { SocialPlatformsManager } from './qr/SocialPlatformsManager';
 import { buildQrPayload, emptyDraft, QrCodeForm, type QrDraft, } from './qr/QrCodeForm';
 
 interface QrGeneratorToolProps {
@@ -15,7 +16,7 @@ interface QrGeneratorToolProps {
     readOnly?: boolean;
 }
 
-type View = 'dashboard' | 'create' | 'detail' | 'scan';
+type View = 'dashboard' | 'create' | 'detail' | 'scan' | 'platforms';
 
 export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGeneratorToolProps) => {
     const {isEnglish} = useLanguage();
@@ -24,16 +25,23 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
 
     const [view, setView] = useState<View>('dashboard');
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [tracked, setTracked] = useState(true);
+    const [tracked, setTracked] = useState(false);
     const [draft, setDraft] = useState<QrDraft>(emptyDraft());
     const [saving, setSaving] = useState(false);
+    // Where to return after the platforms manager, so a create draft isn't lost.
+    const [platformsReturn, setPlatformsReturn] = useState<View>('dashboard');
 
     const selected = qrCodes.find(c => c.id === selectedId) ?? null;
 
     const openCreate = () => {
         setDraft(emptyDraft());
-        setTracked(true);
+        setTracked(false);
         setView('create');
+    };
+
+    const openPlatforms = () => {
+        setPlatformsReturn(view);
+        setView('platforms');
     };
 
     const createTracked = async () => {
@@ -63,6 +71,7 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
                 events={upcomingEvents}
                 onBack={() => setView('dashboard')}
                 onChanged={refresh}
+                onManagePlatforms={openPlatforms}
                 showToast={showToast}
                 readOnly={readOnly}
             />
@@ -80,6 +89,16 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
         );
     }
 
+    if (view === 'platforms') {
+        return (
+            <SocialPlatformsManager
+                onBack={() => setView(platformsReturn)}
+                showToast={showToast}
+                readOnly={readOnly}
+            />
+        );
+    }
+
     if (view === 'create') {
         return (
             <div className="admin-section">
@@ -92,18 +111,18 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
 
                 <div className="admin-qr-mode-toggle">
                     <button
-                        className={`admin-qr-mode-btn${tracked ? ' admin-qr-mode-active' : ''}`}
-                        onClick={() => setTracked(true)}
-                        type="button"
-                    >
-                        {isEnglish ? 'Tracked' : '可追踪'}
-                    </button>
-                    <button
                         className={`admin-qr-mode-btn${!tracked ? ' admin-qr-mode-active' : ''}`}
                         onClick={() => setTracked(false)}
                         type="button"
                     >
                         {isEnglish ? 'Quick (untracked)' : '快速（不追踪）'}
+                    </button>
+                    <button
+                        className={`admin-qr-mode-btn${tracked ? ' admin-qr-mode-active' : ''}`}
+                        onClick={() => setTracked(true)}
+                        type="button"
+                    >
+                        {isEnglish ? 'Tracked' : '可追踪'}
                     </button>
                 </div>
                 <p className="admin-helper-text admin-section-mb">
@@ -118,7 +137,8 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
 
                 {tracked ? (
                     <>
-                        <QrCodeForm draft={draft} setDraft={setDraft} events={upcomingEvents} isEnglish={isEnglish}/>
+                        <QrCodeForm draft={draft} setDraft={setDraft} events={upcomingEvents} isEnglish={isEnglish}
+                                    onManagePlatforms={openPlatforms}/>
                         <div className="admin-btn-row admin-mt-12">
                             <button
                                 className="admin-toggle-btn admin-toggle-save"

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSetQrSpot } from '~/lib/firebase';
 import { type QrCode, qrHasSpot } from '~/lib/qrCodes';
+import { useQrScanner } from '~/lib/useQrScanner';
+import { QrScannerViewport } from '~/pages/admin/QrScannerViewport';
 
-type JsQRFn = (data: Uint8ClampedArray, w: number, h: number) => {data: string} | null;
 type LinkState = 'idle' | 'locating' | 'saving' | 'done' | 'error';
 
 interface QrLinkScannerProps {
@@ -32,39 +33,20 @@ function parseQrId(raw: string): string | null {
  */
 export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScannerProps) => {
     const {isEnglish} = useLanguage();
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const rafRef = useRef<number | null>(null);
-    const cancelledRef = useRef(false);
-    const jsQRRef = useRef<JsQRFn | null>(null);
 
-    const [cameraActive, setCameraActive] = useState(false);
-    const [cameraError, setCameraError] = useState<string | null>(null);
     const [matched, setMatched] = useState<QrCode | null>(null);
     const [unknownId, setUnknownId] = useState<string | null>(null);
     const [manual, setManual] = useState('');
     const [linkState, setLinkState] = useState<LinkState>('idle');
     const [linkError, setLinkError] = useState('');
 
-    const stopCamera = useCallback(() => {
-        if (rafRef.current !== null) {
-            cancelAnimationFrame(rafRef.current);
-            rafRef.current = null;
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(t => t.stop());
-            streamRef.current = null;
-        }
-        setCameraActive(false);
-    }, []);
-
-    // Resolve a scanned/typed value to one of the admin's codes and pause the camera.
+    // Resolve a scanned/typed value to one of the admin's codes. Returns true on a
+    // valid id (matched or unknown); the scanner hook stops the camera on a true
+    // return, and the manual-entry handlers do the same explicitly.
     const resolve = useCallback((raw: string): boolean => {
         const id = parseQrId(raw);
         if (!id) return false;
         const code = codes.find(c => c.id === id);
-        stopCamera();
         setLinkState('idle');
         setLinkError('');
         if (code) {
@@ -75,66 +57,28 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
             setUnknownId(id);
         }
         return true;
-    }, [codes, stopCamera]);
+    }, [codes]);
 
-    const tick = useCallback(() => {
-        if (cancelledRef.current) return;
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const jsQR = jsQRRef.current;
-        if (video && canvas && jsQR && video.readyState === video.HAVE_ENOUGH_DATA) {
-            const w = video.videoWidth;
-            const h = video.videoHeight;
-            if (w && h) {
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext('2d', {willReadFrequently: true});
-                if (ctx) {
-                    ctx.drawImage(video, 0, 0, w, h);
-                    const code = jsQR(ctx.getImageData(0, 0, w, h).data, w, h);
-                    if (code?.data && resolve(code.data)) return; // stops camera on match
-                }
-            }
+    const scanner = useQrScanner({
+        onDecode: resolve,
+        onStart: () => {
+            setMatched(null);
+            setUnknownId(null);
+        },
+        cameraErrorMessage: isEnglish
+            ? 'Camera unavailable. Paste the code link below instead.'
+            : '无法访问摄像头，请在下方粘贴二维码链接。',
+        logLabel: '[QrLinkScanner]',
+    });
+
+    const submitManual = () => {
+        if (resolve(manual)) {
+            scanner.stopCamera();
+        } else {
+            showToast(isEnglish ? 'Not a valid QR code link.' : '不是有效的二维码链接。', 'error');
         }
-        rafRef.current = requestAnimationFrame(tick);
-    }, [resolve]);
-
-    const startCamera = useCallback(async () => {
-        setCameraError(null);
-        setMatched(null);
-        setUnknownId(null);
-        cancelledRef.current = false;
-        try {
-            if (!jsQRRef.current) {
-                const mod = await import('jsqr');
-                jsQRRef.current = mod.default as JsQRFn;
-            }
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {facingMode: 'environment'},
-                audio: false
-            });
-            streamRef.current = stream;
-            const video = videoRef.current;
-            if (!video) {
-                stream.getTracks().forEach(t => t.stop());
-                return;
-            }
-            video.srcObject = stream;
-            await video.play();
-            setCameraActive(true);
-            rafRef.current = requestAnimationFrame(tick);
-        } catch (err) {
-            console.error('[QrLinkScanner] camera error', err);
-            setCameraError(isEnglish
-                ? 'Camera unavailable. Paste the code link below instead.'
-                : '无法访问摄像头，请在下方粘贴二维码链接。');
-        }
-    }, [isEnglish, tick]);
-
-    useEffect(() => () => {
-        cancelledRef.current = true;
-        stopCamera();
-    }, [stopCamera]);
+        setManual('');
+    };
 
     const setToMyLocation = () => {
         if (!matched) return;
@@ -176,7 +120,7 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
         setUnknownId(null);
         setLinkState('idle');
         setLinkError('');
-        void startCamera();
+        void scanner.startCamera();
     };
 
     const busy = linkState === 'locating' || linkState === 'saving';
@@ -198,27 +142,7 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
 
             {!matched && !unknownId && (
                 <>
-                    <div className="admin-tickets-scanner-viewport">
-                        <video ref={videoRef} playsInline muted className="admin-tickets-scanner-video"/>
-                        <canvas ref={canvasRef} hidden/>
-                        {!cameraActive && (
-                            <div className="admin-tickets-scanner-placeholder">
-                                {isEnglish ? 'Camera off' : '摄像头已关闭'}
-                            </div>
-                        )}
-                    </div>
-                    <div className="admin-btn-row">
-                        {!cameraActive ? (
-                            <button className="admin-toggle-btn admin-toggle-save" onClick={() => void startCamera()}>
-                                {isEnglish ? 'Start Camera' : '启动摄像头'}
-                            </button>
-                        ) : (
-                            <button className="admin-toggle-btn admin-toggle-cancel" onClick={stopCamera}>
-                                {isEnglish ? 'Stop Camera' : '停止摄像头'}
-                            </button>
-                        )}
-                    </div>
-                    {cameraError && <p className="admin-no-results">{cameraError}</p>}
+                    <QrScannerViewport scanner={scanner} isEnglish={isEnglish}/>
 
                     <div className="admin-tickets-scanner-manual">
                         <label className="admin-tickets-template-field">
@@ -231,22 +155,12 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
                                     value={manual}
                                     onChange={e => setManual(e.target.value)}
                                     onKeyDown={e => {
-                                        if (e.key === 'Enter' && manual.trim()) {
-                                            if (!resolve(manual)) {
-                                                showToast(isEnglish ? 'Not a valid QR code link.' : '不是有效的二维码链接。', 'error');
-                                            }
-                                            setManual('');
-                                        }
+                                        if (e.key === 'Enter' && manual.trim()) submitManual();
                                     }}
                                 />
                                 <button
                                     className="admin-toggle-btn admin-toggle-save"
-                                    onClick={() => {
-                                        if (!resolve(manual)) {
-                                            showToast(isEnglish ? 'Not a valid QR code link.' : '不是有效的二维码链接。', 'error');
-                                        }
-                                        setManual('');
-                                    }}
+                                    onClick={submitManual}
                                     disabled={!manual.trim()}
                                 >
                                     {isEnglish ? 'Find' : '查找'}

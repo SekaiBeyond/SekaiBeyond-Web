@@ -1,6 +1,16 @@
 import { type QrCode, type QrExpirationMode, qrHasSpot } from '~/lib/qrCodes';
+import {
+    buildSocialUrl,
+    cleanHandle,
+    detectSocialUrl,
+    getSocialPlatform,
+    useSocialPlatforms,
+} from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { MapPicker } from '../../MapPicker';
+
+/** How the editor is building {@link QrDraft.targetUrl}: a raw URL or a social profile. */
+export type QrLinkMode = 'url' | 'social';
 
 export interface QrDraft {
     label: string;
@@ -10,6 +20,12 @@ export interface QrDraft {
     expirationMode: QrExpirationMode;
     /** datetime-local string (local time) used while editing the custom date. */
     expiresLocal: string;
+    /** Editing-only: which builder produces `targetUrl`. Not persisted. */
+    linkMode: QrLinkMode;
+    /** Editing-only: selected platform id while in social mode. Not persisted. */
+    socialPlatform: string;
+    /** Editing-only: handle/profile id while in social mode. Not persisted. */
+    socialHandle: string;
     lat: number;
     lng: number;
     spotLabel: string;
@@ -28,11 +44,14 @@ export function emptyDraft(): QrDraft {
     return {
         label: '', labelCn: '', targetUrl: '', eventId: '',
         expirationMode: 'none', expiresLocal: '',
+        linkMode: 'url', socialPlatform: '', socialHandle: '',
         lat: 0, lng: 0, spotLabel: '', spotLabelCn: '',
     };
 }
 
 export function qrToDraft(code: QrCode): QrDraft {
+    // Reopen recognised profile links in social mode so they round-trip.
+    const social = detectSocialUrl(code.targetUrl);
     return {
         label: code.label,
         labelCn: code.labelCn,
@@ -40,6 +59,9 @@ export function qrToDraft(code: QrCode): QrDraft {
         eventId: code.eventId,
         expirationMode: code.expirationMode,
         expiresLocal: toLocalInput(code.expiresAt),
+        linkMode: social ? 'social' : 'url',
+        socialPlatform: social?.platformId ?? '',
+        socialHandle: social?.handle ?? '',
         lat: code.lat,
         lng: code.lng,
         spotLabel: code.spotLabel,
@@ -71,6 +93,14 @@ export function buildQrPayload(
     const label = draft.label.trim();
     const targetUrl = draft.targetUrl.trim();
     if (!label) return {error: isEnglish ? 'A label is required.' : '请填写名称。'};
+    if (draft.linkMode === 'social') {
+        if (!draft.socialPlatform) {
+            return {error: isEnglish ? 'Choose a social platform.' : '请选择社交平台。'};
+        }
+        if (!cleanHandle(draft.socialHandle)) {
+            return {error: isEnglish ? 'Enter a handle or profile ID.' : '请填写账号或主页 ID。'};
+        }
+    }
     if (!/^https:\/\//i.test(targetUrl)) {
         return {error: isEnglish ? 'Target must be an https:// URL.' : '目标链接必须为 https:// 链接。'};
     }
@@ -110,10 +140,45 @@ interface QrCodeFormProps {
     setDraft: (updater: (prev: QrDraft) => QrDraft) => void;
     events: UpcomingEvent[];
     isEnglish: boolean;
+    /** Opens the social-platform manager; the link only shows in social mode. */
+    onManagePlatforms?: () => void;
 }
 
-export const QrCodeForm = ({draft, setDraft, events, isEnglish}: QrCodeFormProps) => {
+export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatforms}: QrCodeFormProps) => {
+    const {platforms} = useSocialPlatforms();
     const hasSpot = qrHasSpot(draft);
+    const selectedPlatform = getSocialPlatform(draft.socialPlatform, platforms);
+    const builtSocialUrl = buildSocialUrl(draft.socialPlatform, draft.socialHandle, platforms);
+
+    const setLinkMode = (mode: QrLinkMode) => setDraft(prev => {
+        if (mode === prev.linkMode) return prev;
+        if (mode === 'social') {
+            // Seed the picker from an already-pasted profile URL when possible.
+            const detected = detectSocialUrl(prev.targetUrl, platforms);
+            const socialPlatform = detected?.platformId ?? prev.socialPlatform;
+            const socialHandle = detected?.handle ?? prev.socialHandle;
+            return {
+                ...prev,
+                linkMode: 'social',
+                socialPlatform,
+                socialHandle,
+                targetUrl: buildSocialUrl(socialPlatform, socialHandle, platforms) || prev.targetUrl,
+            };
+        }
+        return {...prev, linkMode: 'url'};
+    });
+
+    const setPlatform = (socialPlatform: string) => setDraft(prev => ({
+        ...prev,
+        socialPlatform,
+        targetUrl: buildSocialUrl(socialPlatform, prev.socialHandle, platforms),
+    }));
+
+    const setHandle = (socialHandle: string) => setDraft(prev => ({
+        ...prev,
+        socialHandle,
+        targetUrl: buildSocialUrl(prev.socialPlatform, socialHandle, platforms),
+    }));
 
     return (
         <>
@@ -136,20 +201,91 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish}: QrCodeFormProps
                         placeholder={isEnglish ? 'optional' : '可选'}
                     />
                 </label>
-                <label className="admin-form-grid-full">
-                    <span>{isEnglish ? 'Target URL' : '目标链接'}</span>
-                    <input
-                        value={draft.targetUrl}
-                        onChange={e => setDraft(prev => ({...prev, targetUrl: e.target.value}))}
-                        className="admin-search-input"
-                        placeholder="https://example.com"
-                    />
-                    <small className="admin-helper-text">
-                        {isEnglish
-                            ? 'Where the QR redirects. You can change this later without reprinting the code.'
-                            : '二维码跳转目标。之后可随时修改，无需重新打印。'}
-                    </small>
-                </label>
+                <div className="admin-form-grid-full">
+                    <span className="admin-field-label">{isEnglish ? 'Where it links' : '跳转目标'}</span>
+                    <div className="admin-qr-mode-toggle" role="tablist">
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={draft.linkMode === 'url'}
+                            className={`admin-qr-mode-btn${draft.linkMode === 'url' ? ' admin-qr-mode-active' : ''}`}
+                            onClick={() => setLinkMode('url')}
+                        >
+                            {isEnglish ? 'Custom URL' : '自定义链接'}
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={draft.linkMode === 'social'}
+                            className={`admin-qr-mode-btn${draft.linkMode === 'social' ? ' admin-qr-mode-active' : ''}`}
+                            onClick={() => setLinkMode('social')}
+                        >
+                            {isEnglish ? 'Social profile' : '社交主页'}
+                        </button>
+                    </div>
+
+                    {draft.linkMode === 'url' ? (
+                        <label>
+                            <input
+                                value={draft.targetUrl}
+                                onChange={e => setDraft(prev => ({...prev, targetUrl: e.target.value}))}
+                                className="admin-search-input"
+                                placeholder="https://example.com"
+                            />
+                            <small className="admin-helper-text">
+                                {isEnglish
+                                    ? 'Where the QR redirects. You can change this later without reprinting the code.'
+                                    : '二维码跳转目标。之后可随时修改，无需重新打印。'}
+                            </small>
+                        </label>
+                    ) : (
+                        <div className="admin-form-grid">
+                            <label>
+                                <span>{isEnglish ? 'Platform' : '平台'}</span>
+                                <select
+                                    value={draft.socialPlatform}
+                                    onChange={e => setPlatform(e.target.value)}
+                                    className="admin-search-input"
+                                >
+                                    <option value="">{isEnglish ? '— Select —' : '— 选择 —'}</option>
+                                    {platforms.map(p => (
+                                        <option key={p.id} value={p.id}>
+                                            {isEnglish ? p.label : (p.labelCn ?? p.label)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label>
+                                <span>{isEnglish ? 'Handle / profile' : '账号 / 主页'}</span>
+                                <input
+                                    value={draft.socialHandle}
+                                    onChange={e => setHandle(e.target.value)}
+                                    className="admin-search-input"
+                                    placeholder={selectedPlatform?.placeholder ?? ''}
+                                    disabled={!draft.socialPlatform}
+                                />
+                            </label>
+                            <small className="admin-helper-text admin-form-grid-full">
+                                {builtSocialUrl
+                                    ? `${isEnglish ? 'Links to: ' : '将跳转到：'}${builtSocialUrl}`
+                                    : (isEnglish
+                                        ? 'Pick a platform and enter the handle — we build the profile link for you.'
+                                        : '选择平台并填写账号，我们会自动生成主页链接。')}
+                            </small>
+                            {onManagePlatforms && (
+                                <div className="admin-form-grid-full">
+                                    <button
+                                        type="button"
+                                        className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                                        onClick={onManagePlatforms}
+                                    >
+                                        {isEnglish ? 'Edit social platforms' : '编辑社交平台'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
                 <label>
                     <span>{isEnglish ? 'Link to Event (optional)' : '关联活动（可选）'}</span>
                     <select

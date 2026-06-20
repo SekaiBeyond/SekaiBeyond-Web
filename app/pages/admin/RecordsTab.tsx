@@ -39,7 +39,8 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
     location: ['venue-create', 'venue-edit', 'venue-delete',
         'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete'],
-    qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set'],
+    qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
+        'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
     config: ['policy-update', 'config-update'],
     email: ['custom-email-send'],
@@ -93,6 +94,7 @@ export const RecordsTab = ({
                 venueName: data.venueName,
                 lotName: data.lotName,
                 qrLabel: data.qrLabel,
+                platformLabel: data.platformLabel,
                 unlinkedFrom: data.unlinkedFrom,
                 code: data.code,
                 oldGroup: data.oldGroup,
@@ -559,6 +561,18 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>linked QR code {r.qrLabel ?? ''} to a map spot</>
                     : <>将二维码 {r.qrLabel ?? ''} 关联到地图位置</>;
+            case 'social-platform-create':
+                return isEnglish
+                    ? <>added social platform {r.platformLabel ?? ''}</>
+                    : <>添加了社交平台 {r.platformLabel ?? ''}</>;
+            case 'social-platform-edit':
+                return isEnglish
+                    ? <>edited social platform {r.platformLabel ?? ''}</>
+                    : <>编辑了社交平台 {r.platformLabel ?? ''}</>;
+            case 'social-platform-delete':
+                return isEnglish
+                    ? <>deleted social platform {r.platformLabel ?? ''}</>
+                    : <>删除了社交平台 {r.platformLabel ?? ''}</>;
             case 'policy-update':
                 return isEnglish ? <>updated policy content</> : <>更新了政策内容</>;
             case 'config-update':
@@ -641,6 +655,9 @@ export const RecordsTab = ({
             case 'qrcode-edit':
             case 'qrcode-delete':
             case 'qrcode-spot-set':
+            case 'social-platform-create':
+            case 'social-platform-edit':
+            case 'social-platform-delete':
                 return isEnglish ? 'QR' : '二维码';
             case 'account-deletion-requested':
             case 'account-deletion-cancelled':

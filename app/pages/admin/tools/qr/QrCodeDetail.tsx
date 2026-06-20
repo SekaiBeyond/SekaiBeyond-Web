@@ -15,11 +15,20 @@ interface QrCodeDetailProps {
     events: UpcomingEvent[];
     onBack: () => void;
     onChanged: () => Promise<void>;
+    onManagePlatforms: () => void;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     readOnly: boolean;
 }
 
-export const QrCodeDetail = ({code, events, onBack, onChanged, showToast, readOnly}: QrCodeDetailProps) => {
+export const QrCodeDetail = ({
+                                 code,
+                                 events,
+                                 onBack,
+                                 onChanged,
+                                 onManagePlatforms,
+                                 showToast,
+                                 readOnly
+                             }: QrCodeDetailProps) => {
     const {isEnglish} = useLanguage();
     const qrWrapRef = useRef<HTMLDivElement>(null);
 
@@ -110,7 +119,8 @@ export const QrCodeDetail = ({code, events, onBack, onChanged, showToast, readOn
 
             {editing ? (
                 <>
-                    <QrCodeForm draft={draft} setDraft={setDraft} events={events} isEnglish={isEnglish}/>
+                    <QrCodeForm draft={draft} setDraft={setDraft} events={events} isEnglish={isEnglish}
+                                onManagePlatforms={onManagePlatforms}/>
                     <div className="admin-btn-row admin-mt-12">
                         <button className="admin-toggle-btn admin-toggle-save" onClick={saveEdit} disabled={saving}>
                             {saving ? (isEnglish ? 'Saving...' : '保存中...') : (isEnglish ? 'Save' : '保存')}

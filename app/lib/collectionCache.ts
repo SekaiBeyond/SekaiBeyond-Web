@@ -17,6 +17,8 @@ export interface CollectionCache<T> {
     useItems: () => {items: T[]; loading: boolean; refresh: () => Promise<void>};
     /** Re-fetch from Firestore and notify all subscribers. Returns the fresh list. */
     refresh: () => Promise<T[]>;
+    /** Synchronous snapshot of the cached list, or null if it hasn't loaded yet. */
+    peek: () => T[] | null;
 }
 
 export function createCollectionCache<T>(
@@ -88,5 +90,5 @@ export function createCollectionCache<T>(
         return {items, loading, refresh: doRefresh};
     }
 
-    return {useItems, refresh};
+    return {useItems, refresh, peek: () => cached};
 }

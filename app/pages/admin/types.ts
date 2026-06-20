@@ -115,6 +115,9 @@ export type RecordType =
     | 'qrcode-edit'
     | 'qrcode-delete'
     | 'qrcode-spot-set'
+    | 'social-platform-create'
+    | 'social-platform-edit'
+    | 'social-platform-delete'
     | 'policy-update'
     | 'config-update';
 
@@ -134,6 +137,7 @@ export interface ActivityRecord {
     venueName?: string;
     lotName?: string;
     qrLabel?: string;
+    platformLabel?: string;
     unlinkedFrom?: number;
     code?: string;
     oldGroup?: UserGroup;

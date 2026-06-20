@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callRedeemTicket, functionsErrorCode } from '~/lib/firebase';
+import { useQrScanner } from '~/lib/useQrScanner';
+import { QrScannerViewport } from './QrScannerViewport';
 import { ticketTypeLabel } from './tickets/types';
 
 type ScanStatus =
@@ -17,8 +19,6 @@ type ScanStatus =
     redeemedAt: string | null
 }
     | {kind: 'error'; reason: string};
-
-type JsQRFn = (data: Uint8ClampedArray, w: number, h: number) => {data: string} | null;
 
 interface CachedRedemption {
     ticketId: string;
@@ -39,32 +39,12 @@ interface TicketScannerProps {
 
 export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerProps) {
     const {isEnglish} = useLanguage();
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const rafRef = useRef<number | null>(null);
-    const cancelledRef = useRef(false);
-    const jsQRRef = useRef<JsQRFn | null>(null);
     const lastScanRef = useRef<{ticketId: string; at: number} | null>(null);
     const redeemedCacheRef = useRef<CachedRedemption[]>([]);
 
-    const [cameraActive, setCameraActive] = useState(false);
-    const [cameraError, setCameraError] = useState<string | null>(null);
     const [status, setStatus] = useState<ScanStatus>({kind: 'idle'});
     const [manualTicketId, setManualTicketId] = useState('');
     const [busy, setBusy] = useState(false);
-
-    const stopCamera = useCallback(() => {
-        if (rafRef.current !== null) {
-            cancelAnimationFrame(rafRef.current);
-            rafRef.current = null;
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(t => t.stop());
-            streamRef.current = null;
-        }
-        setCameraActive(false);
-    }, []);
 
     const handleTicket = useCallback(async (ticketId: string) => {
         const last = lastScanRef.current;
@@ -136,81 +116,32 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         }
     }, [eventId, isEnglish, onRedeemed]);
 
-    const tick = useCallback(() => {
-        if (cancelledRef.current) return;
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const jsQR = jsQRRef.current;
-        if (video && canvas && jsQR && video.readyState === video.HAVE_ENOUGH_DATA) {
-            const w = video.videoWidth;
-            const h = video.videoHeight;
-            if (w && h) {
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext('2d', {willReadFrequently: true});
-                if (ctx) {
-                    ctx.drawImage(video, 0, 0, w, h);
-                    const imageData = ctx.getImageData(0, 0, w, h);
-                    const code = jsQR(imageData.data, w, h);
-                    if (code?.data) {
-                        const parsed = parseTicketUrl(code.data);
-                        if (parsed && parsed.eventId === eventId) {
-                            void handleTicket(parsed.ticketId);
-                        } else if (parsed && parsed.eventId !== eventId) {
-                            setStatus({
-                                kind: 'error',
-                                reason: isEnglish
-                                    ? 'QR code is for a different event.'
-                                    : '二维码属于其他活动。',
-                            });
-                        }
-                    }
-                }
-            }
+    // Each decoded code: redeem if it's for this event, warn if it's for another,
+    // ignore anything unparseable. Always returns false so scanning continues.
+    const onDecode = useCallback((raw: string): boolean => {
+        const parsed = parseTicketUrl(raw);
+        if (parsed && parsed.eventId === eventId) {
+            void handleTicket(parsed.ticketId);
+        } else if (parsed && parsed.eventId !== eventId) {
+            setStatus({
+                kind: 'error',
+                reason: isEnglish
+                    ? 'QR code is for a different event.'
+                    : '二维码属于其他活动。',
+            });
         }
-        rafRef.current = requestAnimationFrame(tick);
+        return false;
     }, [eventId, handleTicket, isEnglish]);
 
-    const startCamera = useCallback(async () => {
-        setCameraError(null);
-        setStatus({kind: 'scanning'});
-        cancelledRef.current = false;
-        try {
-            if (!jsQRRef.current) {
-                const mod = await import('jsqr');
-                jsQRRef.current = mod.default as JsQRFn;
-            }
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {facingMode: 'environment'},
-                audio: false,
-            });
-            streamRef.current = stream;
-            const video = videoRef.current;
-            if (!video) {
-                stream.getTracks().forEach(t => t.stop());
-                return;
-            }
-            video.srcObject = stream;
-            await video.play();
-            setCameraActive(true);
-            rafRef.current = requestAnimationFrame(tick);
-        } catch (err) {
-            console.error('[TicketScanner] camera error', err);
-            setCameraError(
-                isEnglish
-                    ? 'Camera permission denied or not available. Use manual entry below.'
-                    : '无法访问摄像头，请使用下方手动输入。',
-            );
-            setStatus({kind: 'idle'});
-        }
-    }, [isEnglish, tick]);
-
-    useEffect(() => {
-        return () => {
-            cancelledRef.current = true;
-            stopCamera();
-        };
-    }, [stopCamera]);
+    const scanner = useQrScanner({
+        onDecode,
+        onStart: () => setStatus({kind: 'scanning'}),
+        onStartError: () => setStatus({kind: 'idle'}),
+        cameraErrorMessage: isEnglish
+            ? 'Camera permission denied or not available. Use manual entry below.'
+            : '无法访问摄像头，请使用下方手动输入。',
+        logLabel: '[TicketScanner]',
+    });
 
     const submitManual = async () => {
         const raw = manualTicketId.trim();
@@ -222,7 +153,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
     };
 
     const clearStatus = () => {
-        setStatus(cameraActive ? {kind: 'scanning'} : {kind: 'idle'});
+        setStatus(scanner.cameraActive ? {kind: 'scanning'} : {kind: 'idle'});
         lastScanRef.current = null;
     };
 
@@ -234,41 +165,13 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                     : `正在扫描"${eventTitle}"的门票。将摄像头对准二维码进行验证。`}
             </p>
 
-            <div className="admin-tickets-scanner-viewport">
-                <video ref={videoRef} playsInline muted className="admin-tickets-scanner-video"/>
-                <canvas ref={canvasRef} hidden/>
-                {!cameraActive && (
-                    <div className="admin-tickets-scanner-placeholder">
-                        {isEnglish ? 'Camera off' : '摄像头已关闭'}
-                    </div>
-                )}
-            </div>
-
-            <div className="admin-btn-row">
-                {!cameraActive ? (
-                    <button
-                        className="admin-toggle-btn admin-toggle-save"
-                        onClick={startCamera}
-                        disabled={busy}
-                    >
-                        {isEnglish ? 'Start Camera' : '启动摄像头'}
-                    </button>
-                ) : (
-                    <button
-                        className="admin-toggle-btn admin-toggle-cancel"
-                        onClick={stopCamera}
-                    >
-                        {isEnglish ? 'Stop Camera' : '停止摄像头'}
-                    </button>
-                )}
+            <QrScannerViewport scanner={scanner} isEnglish={isEnglish} startDisabled={busy}>
                 {status.kind !== 'idle' && status.kind !== 'scanning' && (
                     <button className="admin-toggle-btn admin-toggle-edit" onClick={clearStatus}>
                         {isEnglish ? 'Next Scan' : '继续扫描'}
                     </button>
                 )}
-            </div>
-
-            {cameraError && <p className="admin-no-results">{cameraError}</p>}
+            </QrScannerViewport>
 
             <ResultBanner status={status} isEnglish={isEnglish}/>
 
