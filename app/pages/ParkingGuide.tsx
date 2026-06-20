@@ -399,9 +399,9 @@ export const ParkingGuide = () => {
         return (
             <div className="parking-page">
                 <div className="parking-topbar">
-                    <a href="/#upcoming" className="parking-back-btn">
+                    <a href="/" className="parking-back-btn">
                         <span className="parking-back-arrow">←</span>
-                        {isEnglish ? 'Back to Events' : '返回活动'}
+                        {isEnglish ? 'Back to Home' : '返回首页'}
                     </a>
                     <LanguageSwitcher/>
                 </div>
@@ -425,9 +425,9 @@ export const ParkingGuide = () => {
         return (
             <div className="parking-page">
                 <div className="parking-topbar">
-                    <a href="/#upcoming" className="parking-back-btn">
+                    <a href="/" className="parking-back-btn">
                         <span className="parking-back-arrow">←</span>
-                        {isEnglish ? 'Back to Events' : '返回活动'}
+                        {isEnglish ? 'Back to Home' : '返回首页'}
                     </a>
                     <LanguageSwitcher/>
                 </div>
@@ -457,9 +457,9 @@ export const ParkingGuide = () => {
 
             {/* Top bar: back button + language toggle */}
             <div className="parking-topbar">
-                <a href="/#upcoming" className="parking-back-btn">
+                <a href="/" className="parking-back-btn">
                     <span className="parking-back-arrow">←</span>
-                    {isEnglish ? 'Back to Events' : '返回活动'}
+                    {isEnglish ? 'Back to Home' : '返回首页'}
                 </a>
                 <LanguageSwitcher/>
             </div>
