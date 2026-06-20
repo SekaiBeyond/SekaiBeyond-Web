@@ -66,14 +66,6 @@ export interface UserProfile {
     eventStaffEvents: string[];
 }
 
-export function isEventStaff(profile: UserProfile, eventId: string): boolean {
-    return profile.eventStaffEvents.includes(eventId);
-}
-
-export function canAccessEventTickets(profile: UserProfile, eventId: string): boolean {
-    return hasPermission(profile.group, 'core-staff') || isEventStaff(profile, eventId);
-}
-
 function parseBadgeEarnedAt(raw: unknown): Record<string, Date> {
     if (!raw || typeof raw !== 'object') return {};
     const out: Record<string, Date> = {};

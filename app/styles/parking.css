@@ -341,11 +341,6 @@
     color: var(--color-accent);
 }
 
-.parking-info-icon--recommend {
-    background: rgba(76, 203, 113, 0.12);
-    color: var(--color-success);
-}
-
 .parking-info-icon--info {
     background: rgba(255, 107, 157, 0.12);
     color: var(--color-primary);
@@ -373,12 +368,6 @@
 
 .parking-info-text a:hover {
     color: var(--color-accent);
-    text-decoration: underline;
-}
-
-.parking-highlight-link {
-    color: var(--color-primary) !important;
-    font-weight: 700 !important;
     text-decoration: underline;
 }
 
@@ -609,14 +598,9 @@ a.parking-lot-name:hover {
     opacity: 0.9;
 }
 
-/* --- Leaflet Custom Markers --- */
+/* --- Custom map markers (Google Maps AdvancedMarker) --- */
 
 /* Venue marker (star / event location) */
-.parking-marker-venue {
-    background: none;
-    border: none;
-}
-
 .parking-marker-venue-inner {
     width: 40px;
     height: 40px;
@@ -641,11 +625,6 @@ a.parking-lot-name:hover {
 }
 
 /* Parking lot markers */
-.parking-marker-lot {
-    background: none;
-    border: none;
-}
-
 .parking-marker-lot-inner {
     display: flex;
     flex-direction: column;
