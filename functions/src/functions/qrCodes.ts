@@ -175,23 +175,54 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
     const ref = db.collection("qrCodes").doc(qrId);
 
     const snap = await ref.get();
-    if (!snap.exists) throw new HttpsError("not-found", "QR code not found.", {code: "not-found"});
+    if (!snap.exists) {
+        console.log(`recordQrScan: inactive qrId=${qrId} reason=not-found`);
+        throw new HttpsError("not-found", "QR code not found.", {code: "not-found"});
+    }
     const data = snap.data()!;
 
     const now = Date.now();
     let active = true;
+    // Why a scan resolved as inactive — logged below so "expired/invalid" reports
+    // can be diagnosed from Cloud Logging without on-page debug output.
+    let reason = "ok";
+    let eventEndAt: number | null = null;
     if (data.expirationMode === "date") {
-        active = (data.expiresAt?.toMillis?.() ?? 0) > now;
+        const exp = data.expiresAt?.toMillis?.() ?? null;
+        active = (exp ?? 0) > now;
+        if (!active) reason = exp === null ? "date-missing" : "date-passed";
     } else if (data.expirationMode === "event") {
         active = false;
+        reason = data.eventId ? "event-ended" : "event-unlinked";
         if (data.eventId) {
             try {
                 const ev = await db.collection("upcomingEvents").doc(data.eventId).get();
-                active = ev.exists && (ev.data()?.endAt?.toMillis?.() ?? 0) > now;
-            } catch {
+                if (!ev.exists) {
+                    reason = "event-missing";
+                } else {
+                    eventEndAt = ev.data()?.endAt?.toMillis?.() ?? null;
+                    active = (eventEndAt ?? 0) > now;
+                    reason = active ? "ok" : "event-ended";
+                }
+            } catch (err) {
                 active = false;
+                reason = "event-read-failed";
+                console.error(`recordQrScan: failed to read event ${data.eventId} for ${qrId}`, err);
             }
         }
+    }
+    if (active && !data.targetUrl) reason = "no-target";
+
+    // Log only failed resolutions so successful redirects stay silent. Filter the
+    // function's logs by `recordQrScan: inactive` to see why codes are failing.
+    if (!active) {
+        console.log(
+            `recordQrScan: inactive qrId=${qrId} reason=${reason} ` +
+            `mode=${data.expirationMode ?? "none"} eventId=${data.eventId || "-"} ` +
+            `expiresAt=${data.expiresAt?.toDate?.()?.toISOString?.() ?? "-"} ` +
+            `eventEndAt=${eventEndAt !== null ? new Date(eventEndAt).toISOString() : "-"} ` +
+            `serverNow=${new Date(now).toISOString()}`,
+        );
     }
 
     if (active) {
