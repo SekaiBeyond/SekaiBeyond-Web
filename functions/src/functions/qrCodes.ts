@@ -1,4 +1,4 @@
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { qrScanExpiresAt, recordExpiresAt } from "../utils/config";
@@ -241,4 +241,134 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
     }
 
     return {active, targetUrl: data.targetUrl ?? ""};
+});
+
+// ---------------- Fast public redirect ----------------
+
+// Linked-event end times, cached in-process. With a warm instance (minInstances)
+// repeated scans of the same event-linked code during an event skip the
+// upcomingEvents read entirely. The TTL is short so reschedules and archival
+// (which delete the live event doc) self-correct within seconds — far simpler
+// than denormalizing endAt onto every QR doc and syncing it on event edits.
+const EVENT_END_TTL_MS = 60_000;
+const eventEndCache = new Map<string, {endAtMs: number | null; fetchedAt: number}>();
+
+async function getEventEndAtMs(eventId: string): Promise<number | null> {
+    const cached = eventEndCache.get(eventId);
+    if (cached && Date.now() - cached.fetchedAt < EVENT_END_TTL_MS) {
+        return cached.endAtMs;
+    }
+    const ev = await db.collection("upcomingEvents").doc(eventId).get();
+    const endAtMs = ev.exists ? (ev.data()?.endAt?.toMillis?.() ?? null) : null;
+    eventEndCache.set(eventId, {endAtMs, fetchedAt: Date.now()});
+    return endAtMs;
+}
+
+/**
+ * Public HTTP endpoint the `/qr` hosting rewrite points at. Resolves a managed
+ * code server-side and answers with a 302 straight to the target — no SPA boot,
+ * no App Check round-trip (HTTP functions aren't gated by the global
+ * enforceAppCheck the way callables are; see serveTicketQr), no client JS hop.
+ *
+ * Legacy printed codes (url/event/expires inline, no `id`) and the
+ * expired/invalid state are handed off to the SPA, which still renders the
+ * styled card. The `recordQrScan` callable + SPA `/qr` page remain as a fallback
+ * (e.g. local dev, where no hosting rewrite is in front of the app).
+ */
+export const redirectQr = onRequest({minInstances: 1, maxInstances: 20, memory: "256MiB"}, async (req, res) => {
+    // Target URLs are editable and expiry is time-based — this must never cache.
+    res.set("Cache-Control", "no-store");
+
+    const id = typeof req.query.id === "string" ? req.query.id : "";
+
+    // Internal hand-offs use same-origin relative paths so scanners stay on
+    // whatever host served the request (custom domain, preview channel, etc.).
+
+    // No managed id → legacy code; forward the original query to the SPA handler.
+    if (!id) {
+        const params = new URLSearchParams();
+        for (const [k, v] of Object.entries(req.query)) {
+            if (typeof v === "string") params.set(k, v);
+        }
+        const qs = params.toString();
+        res.redirect(302, `/qr/legacy${qs ? `?${qs}` : ""}`);
+        return;
+    }
+
+    // Same id rules as validateDocId; a malformed id just resolves to expired.
+    if (id.length > 128 || /[/\0]/.test(id)) {
+        res.redirect(302, "/qr/expired");
+        return;
+    }
+
+    const ref = db.collection("qrCodes").doc(id);
+    let snap: FirebaseFirestore.DocumentSnapshot;
+    try {
+        snap = await ref.get();
+    } catch (err) {
+        console.error(`redirectQr: read failed for ${id}`, err);
+        res.redirect(302, "/qr/expired?error=1");
+        return;
+    }
+    if (!snap.exists) {
+        console.log(`redirectQr: inactive qrId=${id} reason=not-found`);
+        res.redirect(302, "/qr/expired");
+        return;
+    }
+
+    const data = snap.data()!;
+    const now = Date.now();
+    let active = true;
+    let reason = "ok";
+    if (data.expirationMode === "date") {
+        const exp = data.expiresAt?.toMillis?.() ?? null;
+        active = (exp ?? 0) > now;
+        if (!active) reason = exp === null ? "date-missing" : "date-passed";
+    } else if (data.expirationMode === "event") {
+        if (!data.eventId) {
+            active = false;
+            reason = "event-unlinked";
+        } else {
+            try {
+                const endAtMs = await getEventEndAtMs(data.eventId);
+                active = (endAtMs ?? 0) > now;
+                reason = active ? "ok" : (endAtMs === null ? "event-missing" : "event-ended");
+            } catch (err) {
+                active = false;
+                reason = "event-read-failed";
+                console.error(`redirectQr: failed to read event ${data.eventId} for ${id}`, err);
+            }
+        }
+    }
+    if (active && !data.targetUrl) {
+        active = false;
+        reason = "no-target";
+    }
+
+    if (!active) {
+        console.log(
+            `redirectQr: inactive qrId=${id} reason=${reason} ` +
+            `mode=${data.expirationMode ?? "none"} eventId=${data.eventId || "-"}`,
+        );
+        res.redirect(302, "/qr/expired");
+        return;
+    }
+
+    // Send the scanner on their way FIRST, then record the scan. Cloud Run keeps
+    // the instance running until this handler resolves, so the awaited write
+    // still completes — it just overlaps the browser's navigation instead of
+    // sitting on the redirect's critical path.
+    res.redirect(302, data.targetUrl);
+    try {
+        const batch = db.batch();
+        batch.update(ref, {scanCount: FieldValue.increment(1), lastScanAt: FieldValue.serverTimestamp()});
+        batch.set(ref.collection("scans").doc(), {
+            scannedAt: FieldValue.serverTimestamp(),
+            expiresAt: qrScanExpiresAt(),
+        });
+        await batch.commit();
+    } catch (err) {
+        // The response is already sent; a failed counter write only loses a tally.
+        console.error(`redirectQr: failed to record scan for ${id}`, err);
+    }
 });

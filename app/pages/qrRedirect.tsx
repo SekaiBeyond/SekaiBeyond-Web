@@ -67,7 +67,7 @@ const ManagedQrRedirect = ({id}: {id: string}) => {
 
 // ---------------- Legacy (inline url/event/expires) codes ----------------
 
-const LegacyQrRedirect = () => {
+export const LegacyQrRedirect = () => {
     const [searchParams] = useSearchParams();
 
     const targetUrl = searchParams.get('url');
@@ -108,7 +108,7 @@ const LegacyQrRedirect = () => {
 
 // ---------------- Shared expired / invalid card ----------------
 
-const ExpiredCard = ({isError}: {isError: boolean}) => {
+export const ExpiredCard = ({isError}: {isError: boolean}) => {
     const {isEnglish} = useLanguage();
     return (
         <div className="qr-redirect-page">

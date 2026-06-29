@@ -53,6 +53,10 @@
         "function": "serveTicketQr"
       },
       {
+        "source": "/qr",
+        "function": "redirectQr"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
