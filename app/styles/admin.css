@@ -984,6 +984,14 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    /* Let the 1fr track shrink instead of growing to a <select>'s longest option. */
+    min-width: 0;
+}
+
+/* A <select> sizes to its widest option by default, which would blow out the grid
+   column (e.g. long parking-rate labels). Allow it to shrink and clip to the cell. */
+.admin-form-grid label select {
+    min-width: 0;
 }
 
 .admin-form-grid label span {

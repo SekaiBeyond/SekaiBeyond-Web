@@ -366,10 +366,17 @@ export const callSaveParkingLot = (data: {
     lng: number;
     descriptionEn: string;
     descriptionCn: string;
+    rateId: string;
 }) => httpsCallable<typeof data, {lotId: string}>(getFunctions(), 'saveParkingLot')(data);
 
 export const callDeleteParkingLot = (data: {lotId: string}) =>
     httpsCallable<typeof data, {deleted: boolean; unlinkedFrom: number}>(getFunctions(), 'deleteParkingLot')(data);
+
+export const callSaveParkingRate = (data: {rateId?: string; labelEn: string; labelCn: string}) =>
+    httpsCallable<typeof data, {rateId: string}>(getFunctions(), 'saveParkingRate')(data);
+
+export const callDeleteParkingRate = (data: {rateId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean; unlinkedFrom: number}>(getFunctions(), 'deleteParkingRate')(data);
 
 // ---- Managed QR codes ----
 

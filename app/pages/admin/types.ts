@@ -111,6 +111,9 @@ export type RecordType =
     | 'parkinglot-create'
     | 'parkinglot-edit'
     | 'parkinglot-delete'
+    | 'parkingrate-create'
+    | 'parkingrate-edit'
+    | 'parkingrate-delete'
     | 'qrcode-create'
     | 'qrcode-edit'
     | 'qrcode-delete'
@@ -136,6 +139,7 @@ export interface ActivityRecord {
     tagName?: string;
     venueName?: string;
     lotName?: string;
+    rateLabel?: string;
     qrLabel?: string;
     platformLabel?: string;
     unlinkedFrom?: number;

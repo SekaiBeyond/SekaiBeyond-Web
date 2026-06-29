@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteParkingLot, callSaveParkingLot } from '~/lib/firebase';
 import { lotTypeShortLabel, type ParkingLot } from '~/lib/parkingLots';
+import { type ParkingRate, rateLabel } from '~/lib/parkingRates';
 import { UW_CAMPUS_CENTER } from '~/lib/venues';
 import { MapPicker } from './MapPicker';
 
@@ -15,6 +16,7 @@ interface LotDraft {
     lng: number;
     descriptionEn: string;
     descriptionCn: string;
+    rateId: string;
 }
 
 function lotToDraft(lot: ParkingLot): LotDraft {
@@ -26,6 +28,7 @@ function lotToDraft(lot: ParkingLot): LotDraft {
         lng: lot.lng,
         descriptionEn: lot.descriptionEn,
         descriptionCn: lot.descriptionCn,
+        rateId: lot.rateId,
     };
 }
 
@@ -38,11 +41,13 @@ function emptyDraft(): LotDraft {
         lng: UW_CAMPUS_CENTER.lng,
         descriptionEn: '',
         descriptionCn: '',
+        rateId: '',
     };
 }
 
 interface ParkingLotsTabProps {
     parkingLots: ParkingLot[];
+    parkingRates: ParkingRate[];
     refreshParkingLots: () => Promise<void>;
     refreshVenues: () => Promise<void>;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
@@ -50,7 +55,12 @@ interface ParkingLotsTabProps {
 }
 
 export const ParkingLotsTab = ({
-                                   parkingLots, refreshParkingLots, refreshVenues, showToast, readOnly = false,
+                                   parkingLots,
+                                   parkingRates,
+                                   refreshParkingLots,
+                                   refreshVenues,
+                                   showToast,
+                                   readOnly = false,
                                }: ParkingLotsTabProps) => {
     const {isEnglish} = useLanguage();
     const [showCreate, setShowCreate] = useState(false);
@@ -73,6 +83,7 @@ export const ParkingLotsTab = ({
         lng: draft.lng,
         descriptionEn: draft.descriptionEn.trim(),
         descriptionCn: draft.descriptionCn.trim(),
+        rateId: draft.rateId,
     });
 
     const createLot = async () => {
@@ -156,7 +167,8 @@ export const ParkingLotsTab = ({
             {!readOnly && (showCreate ? (
                 <div className="admin-create-badge-form">
                     <h4 className="admin-badges-title">{isEnglish ? 'Create New Parking Lot' : '创建新停车场'}</h4>
-                    <LotForm draft={createDraft} setDraft={setCreateDraft} isEnglish={isEnglish}/>
+                    <LotForm draft={createDraft} setDraft={setCreateDraft} parkingRates={parkingRates}
+                             isEnglish={isEnglish}/>
                     <div className="admin-btn-row admin-mt-12">
                         <button
                             className="admin-toggle-btn admin-toggle-save"
@@ -191,6 +203,7 @@ export const ParkingLotsTab = ({
             <div className="admin-event-grid">
                 {parkingLots.map(lot => {
                     const typeLabel = lotTypeShortLabel(lot.type, isEnglish);
+                    const rate = lot.rateId ? parkingRates.find(r => r.id === lot.rateId) : undefined;
                     return (
                         <div
                             key={lot.id}
@@ -199,7 +212,8 @@ export const ParkingLotsTab = ({
                             <div className="admin-event-card-info">
                                 {editingId === lot.id ? (
                                     <>
-                                        <LotForm draft={editDraft} setDraft={setEditDraft} isEnglish={isEnglish}/>
+                                        <LotForm draft={editDraft} setDraft={setEditDraft} parkingRates={parkingRates}
+                                                 isEnglish={isEnglish}/>
                                         <div className="admin-tag-actions admin-mt-12">
                                             <button
                                                 className="admin-toggle-btn admin-toggle-save admin-btn-sm"
@@ -225,7 +239,7 @@ export const ParkingLotsTab = ({
                                             <span className="admin-event-card-date">{lot.nameCn}</span>
                                         )}
                                         <span className="admin-helper-text admin-card-meta">
-                                            {typeLabel}
+                                            {typeLabel}{rate ? ` · ${rateLabel(rate, isEnglish)}` : ''}
                                         </span>
                                         {!readOnly && (
                                             <div className="admin-tag-actions">
@@ -260,10 +274,11 @@ export const ParkingLotsTab = ({
 interface LotFormProps {
     draft: LotDraft;
     setDraft: (updater: (prev: LotDraft) => LotDraft) => void;
+    parkingRates: ParkingRate[];
     isEnglish: boolean;
 }
 
-const LotForm = ({draft, setDraft, isEnglish}: LotFormProps) => (
+const LotForm = ({draft, setDraft, parkingRates, isEnglish}: LotFormProps) => (
     <>
         <div className="admin-form-grid">
             <label>
@@ -294,6 +309,21 @@ const LotForm = ({draft, setDraft, isEnglish}: LotFormProps) => (
                     {LOT_TYPES.map(t => (
                         <option key={t} value={t}>
                             {lotTypeShortLabel(t, isEnglish)}
+                        </option>
+                    ))}
+                </select>
+            </label>
+            <label>
+                <span>{isEnglish ? 'Rate' : '费率'}</span>
+                <select
+                    value={draft.rateId}
+                    onChange={e => setDraft(prev => ({...prev, rateId: e.target.value}))}
+                    className="admin-search-input"
+                >
+                    <option value="">{isEnglish ? '— No rate —' : '— 无费率 —'}</option>
+                    {parkingRates.map(rate => (
+                        <option key={rate.id} value={rate.id}>
+                            {rateLabel(rate, isEnglish)}
                         </option>
                     ))}
                 </select>

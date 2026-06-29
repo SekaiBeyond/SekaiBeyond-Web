@@ -12,6 +12,7 @@ import {
     type Venue,
 } from '~/lib/venues';
 import { lotBadgeChar, lotTypeLabel, type ParkingLot, useParkingLots } from '~/lib/parkingLots';
+import { type ParkingRate, rateLabel, useParkingRates } from '~/lib/parkingRates';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
@@ -260,6 +261,7 @@ export const ParkingGuide = () => {
     const {isEnglish} = useLanguage();
     const {venues, loading: venuesLoading} = useVenues();
     const {parkingLots, loading: lotsLoading} = useParkingLots();
+    const {parkingRates, loading: ratesLoading} = useParkingRates();
 
     const [event, setEvent] = useState<EventSnapshot | null>(null);
     const [eventLoading, setEventLoading] = useState(true);
@@ -328,6 +330,21 @@ export const ParkingGuide = () => {
 
     const venue: Venue | null = resolveVenueById(selectedVenueId, venues);
 
+    // Resolve a lot's rate tier to its localized label, or null when none is assigned.
+    // (A plain object, not a Map — `Map` here is the Google Maps component, not the global.)
+    const rateById = useMemo(() => {
+        const lookup: Record<string, ParkingRate> = {};
+        for (const r of parkingRates) lookup[r.id] = r;
+        return lookup;
+    }, [parkingRates]);
+    const rateLabelFor = useCallback(
+        (lot: ParkingLot): string | null => {
+            const rate = lot.rateId ? rateById[lot.rateId] : undefined;
+            return rate ? rateLabel(rate, isEnglish) : null;
+        },
+        [rateById, isEnglish],
+    );
+
     // Straight-line distance from the selected venue to each lot, computed once per
     // venue/lots/language change rather than on every render and every call site.
     const distanceByLotId = useMemo(() => {
@@ -371,7 +388,7 @@ export const ParkingGuide = () => {
         }
         : null;
 
-    const loading = eventLoading || venuesLoading || lotsLoading;
+    const loading = eventLoading || venuesLoading || lotsLoading || ratesLoading;
 
     if (loading) {
         return (
@@ -612,6 +629,7 @@ export const ParkingGuide = () => {
                             const name = isEnglish ? lot.name : (lot.nameCn || lot.name);
                             const desc = isEnglish ? lot.descriptionEn : lot.descriptionCn;
                             const dist = distanceFor(lot);
+                            const rate = rateLabelFor(lot);
                             return (
                                 <div key={lot.id} className="parking-info-card">
                                     <div className={`parking-info-icon ${iconClass}`}>{badge}</div>
@@ -621,6 +639,7 @@ export const ParkingGuide = () => {
                                         </div>
                                         <div className="parking-lot-type">{typeLabel}</div>
                                         {dist && <div className="parking-lot-dist">📍 {dist}</div>}
+                                        {rate && <div className="parking-lot-rate">💲 {rate}</div>}
                                         {desc && <div className="parking-lot-desc">{desc}</div>}
                                     </div>
                                 </div>

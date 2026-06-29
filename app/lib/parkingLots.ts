@@ -9,6 +9,8 @@ export interface ParkingLot {
     lng: number;
     descriptionEn: string;
     descriptionCn: string;
+    /** Id of the linked parking-rate tier, or '' when no rate is assigned. */
+    rateId: string;
 }
 
 /** Localized full "<type> Parking" label (e.g. "Disabled Parking" / "无障碍停车"). */
@@ -47,6 +49,7 @@ const cache = createCollectionCache<ParkingLot>('parkingLots', docSnap => {
         lng: typeof data.lng === 'number' ? data.lng : 0,
         descriptionEn: data.descriptionEn ?? '',
         descriptionCn: data.descriptionCn ?? '',
+        rateId: data.rateId ?? '',
     };
 });
 

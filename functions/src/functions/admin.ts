@@ -275,6 +275,10 @@ export const saveParkingLot = onCall({maxInstances: 10}, async (request) => {
     const lng = validateCoordinate(input.lng, "lng", -180, 180);
     const descriptionEn = sanitizeDisplayText(validateStr(input.descriptionEn, "descriptionEn", 1000));
     const descriptionCn = sanitizeDisplayText(validateStr(input.descriptionCn, "descriptionCn", 1000));
+    // rateId links to a parkingRates tier; "" means no rate assigned.
+    const rateId = typeof input.rateId === "string" && input.rateId.trim()
+        ? validateDocId(input.rateId, "rateId")
+        : "";
 
     const docId = lotId ?? db.collection("parkingLots").doc().id;
 
@@ -283,9 +287,13 @@ export const saveParkingLot = onCall({maxInstances: 10}, async (request) => {
             const existing = await txn.get(db.collection("parkingLots").doc(lotId));
             if (!existing.exists) throw new HttpsError("not-found", "Parking lot not found.");
         }
+        if (rateId) {
+            const rateSnap = await txn.get(db.collection("parkingRates").doc(rateId));
+            if (!rateSnap.exists) throw new HttpsError("not-found", "Parking rate not found.");
+        }
 
         const ref = db.collection("parkingLots").doc(docId);
-        const data = {name, nameCn, type, lat, lng, descriptionEn, descriptionCn};
+        const data = {name, nameCn, type, lat, lng, descriptionEn, descriptionCn, rateId};
         if (lotId) {
             txn.update(ref, data);
         } else {
@@ -338,6 +346,78 @@ export const deleteParkingLot = onCall({maxInstances: 10}, async (request) => {
         return {deleted: true, unlinkedFrom};
     });
 });
+
+export const saveParkingRate = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const input = request.data as Record<string, unknown>;
+    const rateId = input.rateId ? validateDocId(input.rateId, "rateId") : null;
+    const labelEn = sanitizeDisplayText(validateStr(input.labelEn, "labelEn", 200, true));
+    const labelCn = sanitizeDisplayText(validateStr(input.labelCn, "labelCn", 200));
+    if (!labelEn) throw new HttpsError("invalid-argument", "labelEn is required.");
+
+    const docId = rateId ?? db.collection("parkingRates").doc().id;
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        if (rateId) {
+            const existing = await txn.get(db.collection("parkingRates").doc(rateId));
+            if (!existing.exists) throw new HttpsError("not-found", "Parking rate not found.");
+        }
+
+        const ref = db.collection("parkingRates").doc(docId);
+        if (rateId) {
+            // Preserve the existing display order on edit; only the labels change.
+            txn.update(ref, {labelEn, labelCn});
+        } else {
+            txn.set(ref, {labelEn, labelCn, order: Date.now()});
+        }
+        txn.set(db.collection("records").doc(), {
+            type: rateId ? "parkingrate-edit" : "parkingrate-create",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            rateLabel: labelEn,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {rateId: docId};
+    });
+});
+
+export const deleteParkingRate = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const rateId = validateDocId((request.data as {rateId?: string})?.rateId, "rateId");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const rateSnap = await txn.get(db.collection("parkingRates").doc(rateId));
+        if (!rateSnap.exists) throw new HttpsError("not-found", "Parking rate not found.");
+
+        // Cascade unlink: clear this rateId from every lot that references it.
+        const lotsSnap = await txn.get(db.collection("parkingLots").where("rateId", "==", rateId));
+        let unlinkedFrom = 0;
+        for (const doc of lotsSnap.docs) {
+            txn.update(doc.ref, {rateId: ""});
+            unlinkedFrom++;
+        }
+
+        txn.delete(db.collection("parkingRates").doc(rateId));
+        txn.set(db.collection("records").doc(), {
+            type: "parkingrate-delete",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            rateLabel: rateSnap.data()?.labelEn ?? rateId,
+            unlinkedFrom,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {deleted: true, unlinkedFrom};
+    });
+});
+
 export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;

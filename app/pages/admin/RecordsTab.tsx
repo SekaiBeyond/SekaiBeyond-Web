@@ -38,7 +38,8 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
         'ticket-attendee-edit', 'ticket-regenerate', 'ticket-email-send'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
     location: ['venue-create', 'venue-edit', 'venue-delete',
-        'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete'],
+        'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
+        'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
     qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
         'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
@@ -93,6 +94,7 @@ export const RecordsTab = ({
                 tagName: data.tagName,
                 venueName: data.venueName,
                 lotName: data.lotName,
+                rateLabel: data.rateLabel,
                 qrLabel: data.qrLabel,
                 platformLabel: data.platformLabel,
                 unlinkedFrom: data.unlinkedFrom,
@@ -440,6 +442,26 @@ export const RecordsTab = ({
                     ? <>deleted parking lot {r.lotName ?? ''}</>
                     : <>删除了停车场 {r.lotName ?? ''}</>;
             }
+            case 'parkingrate-create':
+                return isEnglish
+                    ? <>created parking rate {r.rateLabel ?? ''}</>
+                    : <>创建了停车费率 {r.rateLabel ?? ''}</>;
+            case 'parkingrate-edit':
+                return isEnglish
+                    ? <>edited parking rate {r.rateLabel ?? ''}</>
+                    : <>编辑了停车费率 {r.rateLabel ?? ''}</>;
+            case 'parkingrate-delete': {
+                const unlinked = r.unlinkedFrom ?? 0;
+                if (unlinked > 0) {
+                    return isEnglish
+                        ? <>deleted parking rate {r.rateLabel ?? ''} (unlinked
+                            from {unlinked} lot{unlinked === 1 ? '' : 's'})</>
+                        : <>删除了停车费率 {r.rateLabel ?? ''}（已从 {unlinked} 个停车场解除关联）</>;
+                }
+                return isEnglish
+                    ? <>deleted parking rate {r.rateLabel ?? ''}</>
+                    : <>删除了停车费率 {r.rateLabel ?? ''}</>;
+            }
             case 'account-deletion-requested': {
                 const selfRequest = r.performedBy && r.targetUid && r.performedBy === r.targetUid;
                 if (selfRequest) {
@@ -650,6 +672,9 @@ export const RecordsTab = ({
             case 'parkinglot-create':
             case 'parkinglot-edit':
             case 'parkinglot-delete':
+            case 'parkingrate-create':
+            case 'parkingrate-edit':
+            case 'parkingrate-delete':
                 return isEnglish ? 'Location' : '场地';
             case 'qrcode-create':
             case 'qrcode-edit':

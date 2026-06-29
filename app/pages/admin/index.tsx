@@ -11,6 +11,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { useTags } from '~/lib/tags';
 import { useVenues } from '~/lib/venues';
 import { useParkingLots } from '~/lib/parkingLots';
+import { useParkingRates } from '~/lib/parkingRates';
 import type { BadgeDef, Tab } from './types';
 import { UsersTab, type UsersTabHandle } from './UsersTab';
 import { EventsTab, type EventsTabHandle } from './EventsTab';
@@ -19,6 +20,7 @@ import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { TagsTab } from './TagsTab';
 import { VenuesTab } from './VenuesTab';
 import { ParkingLotsTab } from './ParkingLotsTab';
+import { ParkingRatesTab } from './ParkingRatesTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
@@ -72,6 +74,7 @@ export const AdminPage = () => {
     const [tagsOpen, setTagsOpen] = useState(true);
     const [venuesOpen, setVenuesOpen] = useState(true);
     const [parkingLotsOpen, setParkingLotsOpen] = useState(true);
+    const [parkingRatesOpen, setParkingRatesOpen] = useState(true);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [badgeDefsError, setBadgeDefsError] = useState(false);
     const [toasts, setToasts] = useState<Toast[]>([]);
@@ -84,6 +87,7 @@ export const AdminPage = () => {
     const {tags, refresh: refreshTags} = useTags();
     const {venues, refresh: refreshVenues} = useVenues();
     const {parkingLots, refresh: refreshParkingLots} = useParkingLots();
+    const {parkingRates, refresh: refreshParkingRates} = useParkingRates();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const urlParamsHandled = useRef(false);
@@ -450,6 +454,25 @@ export const AdminPage = () => {
                         <div>
                             <button
                                 className="admin-section-header admin-section-mt"
+                                onClick={() => setParkingRatesOpen(v => !v)}
+                            >
+                                <span className="admin-section-header-title">
+                                    {isEnglish ? 'Parking Rates' : '停车费率'}
+                                </span>
+                                <span
+                                    className={`admin-section-chevron${parkingRatesOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
+                            </button>
+                            {parkingRatesOpen && <ParkingRatesTab
+                                parkingRates={parkingRates}
+                                refreshParkingRates={refreshParkingRates}
+                                refreshParkingLots={refreshParkingLots}
+                                showToast={showToast}
+                                readOnly={isStaffGroup}
+                            />}
+                        </div>
+                        <div>
+                            <button
+                                className="admin-section-header admin-section-mt"
                                 onClick={() => setParkingLotsOpen(v => !v)}
                             >
                                 <span className="admin-section-header-title">
@@ -460,6 +483,7 @@ export const AdminPage = () => {
                             </button>
                             {parkingLotsOpen && <ParkingLotsTab
                                 parkingLots={parkingLots}
+                                parkingRates={parkingRates}
                                 refreshParkingLots={refreshParkingLots}
                                 refreshVenues={refreshVenues}
                                 showToast={showToast}

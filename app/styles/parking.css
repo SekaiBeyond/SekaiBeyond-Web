@@ -436,6 +436,17 @@ a.parking-lot-name:hover {
     color: var(--color-primary);
 }
 
+/* Rate tier readout (lot cards) */
+.parking-lot-rate {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-top: 6px;
+}
+
 /* --- Parking Lot Search (info panel) --- */
 .parking-lot-search {
     position: relative;

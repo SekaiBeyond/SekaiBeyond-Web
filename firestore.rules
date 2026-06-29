@@ -137,6 +137,11 @@ service cloud.firestore {
             allow read: if true;
         }
 
+        // Parking rate tiers (shared across lots) — publicly readable; writes via Cloud Functions
+        match /parkingRates/{rateId} {
+            allow read: if true;
+        }
+
         // Managed QR codes — staff+ can read for the admin dashboard / link flow.
         // Public scanners never read these directly; they hit the recordQrScan
         // Cloud Function, which returns the redirect target. All writes (and the
