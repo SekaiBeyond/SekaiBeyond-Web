@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { forwardRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteVenue, callSaveVenue } from '~/lib/firebase';
 import { lotBadgeChar, lotTypeLabel, type ParkingLot } from '~/lib/parkingLots';
 import type { Venue, VenueLotLink } from '~/lib/venues';
 import { UW_CAMPUS_CENTER } from '~/lib/venues';
 import { MapPicker } from './MapPicker';
+import { type CardHighlightHandle, useCardHighlight } from './useCardHighlight';
 
 interface VenueDraft {
     nameEn: string;
@@ -42,8 +43,10 @@ interface VenuesTabProps {
     readOnly?: boolean;
 }
 
-export const VenuesTab = ({venues, parkingLots, refreshVenues, showToast, readOnly = false}: VenuesTabProps) => {
+export const VenuesTab = forwardRef<CardHighlightHandle, VenuesTabProps>((
+    {venues, parkingLots, refreshVenues, showToast, readOnly = false}, ref) => {
     const {isEnglish} = useLanguage();
+    const {highlightedId, registerCard} = useCardHighlight(ref);
     const [showCreate, setShowCreate] = useState(false);
     const [createDraft, setCreateDraft] = useState<VenueDraft>(emptyDraft());
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -190,7 +193,8 @@ export const VenuesTab = ({venues, parkingLots, refreshVenues, showToast, readOn
                 {venues.map(venue => (
                     <div
                         key={venue.id}
-                        className={`admin-event-card${editingId === venue.id ? ' admin-event-card-editing' : ''}`}
+                        ref={registerCard(venue.id)}
+                        className={`admin-event-card${editingId === venue.id ? ' admin-event-card-editing' : ''}${highlightedId === venue.id ? ' admin-card-highlight' : ''}`}
                     >
                         <div className="admin-event-card-info">
                             {editingId === venue.id ? (
@@ -257,7 +261,8 @@ export const VenuesTab = ({venues, parkingLots, refreshVenues, showToast, readOn
             </div>
         </div>
     );
-};
+});
+VenuesTab.displayName = 'VenuesTab';
 
 interface VenueFormProps {
     draft: VenueDraft;

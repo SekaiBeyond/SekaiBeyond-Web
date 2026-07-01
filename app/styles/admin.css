@@ -541,6 +541,22 @@
     box-shadow: 0 4px 16px rgba(255, 107, 157, 0.12);
 }
 
+/* Brief pulse when a record links the reader to a specific venue/lot/rate card. */
+.admin-card-highlight {
+    animation: admin-card-highlight 2s ease;
+}
+
+@keyframes admin-card-highlight {
+    0%, 60% {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.28);
+    }
+    100% {
+        border-color: rgba(255, 107, 157, 0.12);
+        box-shadow: none;
+    }
+}
+
 /* Inline edit form: break out of the grid columns so the form/map use the full row width. */
 .admin-event-card-editing {
     grid-column: 1 / -1;

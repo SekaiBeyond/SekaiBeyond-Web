@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { forwardRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteParkingRate, callSaveParkingRate } from '~/lib/firebase';
 import type { ParkingRate } from '~/lib/parkingRates';
+import { type CardHighlightHandle, useCardHighlight } from './useCardHighlight';
 
 interface ParkingRatesTabProps {
     parkingRates: ParkingRate[];
@@ -12,10 +13,10 @@ interface ParkingRatesTabProps {
     readOnly?: boolean;
 }
 
-export const ParkingRatesTab = ({
-                                    parkingRates, refreshParkingRates, refreshParkingLots, showToast, readOnly = false,
-                                }: ParkingRatesTabProps) => {
+export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabProps>((
+    {parkingRates, refreshParkingRates, refreshParkingLots, showToast, readOnly = false}, ref) => {
     const {isEnglish} = useLanguage();
+    const {highlightedId, registerCard} = useCardHighlight(ref);
     const [showCreate, setShowCreate] = useState(false);
     const [labelEn, setLabelEn] = useState('');
     const [labelCn, setLabelCn] = useState('');
@@ -153,7 +154,11 @@ export const ParkingRatesTab = ({
 
             <div className="admin-event-grid">
                 {parkingRates.map(rate => (
-                    <div key={rate.id} className="admin-event-card admin-tag-card">
+                    <div
+                        key={rate.id}
+                        ref={registerCard(rate.id)}
+                        className={`admin-event-card admin-tag-card${highlightedId === rate.id ? ' admin-card-highlight' : ''}`}
+                    >
                         <div className="admin-event-card-info admin-tag-card-info">
                             {editingRate?.id === rate.id ? (
                                 <>
@@ -220,4 +225,5 @@ export const ParkingRatesTab = ({
             </div>
         </div>
     );
-};
+});
+ParkingRatesTab.displayName = 'ParkingRatesTab';

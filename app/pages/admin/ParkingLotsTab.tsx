@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { forwardRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteParkingLot, callSaveParkingLot } from '~/lib/firebase';
 import { lotTypeShortLabel, type ParkingLot } from '~/lib/parkingLots';
 import { type ParkingRate, rateLabel } from '~/lib/parkingRates';
 import { UW_CAMPUS_CENTER } from '~/lib/venues';
 import { MapPicker } from './MapPicker';
+import { type CardHighlightHandle, useCardHighlight } from './useCardHighlight';
 
 const LOT_TYPES: ParkingLot['type'][] = ['general', 'disabled', 'garage'];
 
@@ -54,15 +55,17 @@ interface ParkingLotsTabProps {
     readOnly?: boolean;
 }
 
-export const ParkingLotsTab = ({
-                                   parkingLots,
-                                   parkingRates,
-                                   refreshParkingLots,
-                                   refreshVenues,
-                                   showToast,
-                                   readOnly = false,
-                               }: ParkingLotsTabProps) => {
+export const ParkingLotsTab = forwardRef<CardHighlightHandle, ParkingLotsTabProps>((
+    {
+        parkingLots,
+        parkingRates,
+        refreshParkingLots,
+        refreshVenues,
+        showToast,
+        readOnly = false,
+    }, ref) => {
     const {isEnglish} = useLanguage();
+    const {highlightedId, registerCard} = useCardHighlight(ref);
     const [showCreate, setShowCreate] = useState(false);
     const [createDraft, setCreateDraft] = useState<LotDraft>(emptyDraft());
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -207,7 +210,8 @@ export const ParkingLotsTab = ({
                     return (
                         <div
                             key={lot.id}
-                            className={`admin-event-card${editingId === lot.id ? ' admin-event-card-editing' : ''}`}
+                            ref={registerCard(lot.id)}
+                            className={`admin-event-card${editingId === lot.id ? ' admin-event-card-editing' : ''}${highlightedId === lot.id ? ' admin-card-highlight' : ''}`}
                         >
                             <div className="admin-event-card-info">
                                 {editingId === lot.id ? (
@@ -269,7 +273,8 @@ export const ParkingLotsTab = ({
             </div>
         </div>
     );
-};
+});
+ParkingLotsTab.displayName = 'ParkingLotsTab';
 
 interface LotFormProps {
     draft: LotDraft;

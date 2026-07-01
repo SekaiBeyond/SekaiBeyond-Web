@@ -24,6 +24,7 @@ import { ParkingRatesTab } from './ParkingRatesTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
+import type { CardHighlightHandle } from './useCardHighlight';
 
 type ToastType = 'success' | 'warning' | 'error';
 
@@ -96,6 +97,9 @@ export const AdminPage = () => {
     const eventsTabRef = useRef<EventsTabHandle>(null);
     const upcomingTabRef = useRef<UpcomingEventsTabHandle>(null);
     const badgesTabRef = useRef<BadgesTabHandle>(null);
+    const venuesTabRef = useRef<CardHighlightHandle>(null);
+    const parkingLotsTabRef = useRef<CardHighlightHandle>(null);
+    const parkingRatesTabRef = useRef<CardHighlightHandle>(null);
     const pendingAction = useRef<{type: string; id: string} | null>(null);
 
     useEffect(() => {
@@ -216,6 +220,24 @@ export const AdminPage = () => {
         pendingAction.current = {type: 'selectUpcomingEvent', id: eventId};
     }, []);
 
+    const handleSelectVenue = useCallback((venueId: string) => {
+        setActiveTab('locations');
+        setVenuesOpen(true);
+        pendingAction.current = {type: 'selectVenue', id: venueId};
+    }, []);
+
+    const handleSelectParkingLot = useCallback((lotId: string) => {
+        setActiveTab('locations');
+        setParkingLotsOpen(true);
+        pendingAction.current = {type: 'selectParkingLot', id: lotId};
+    }, []);
+
+    const handleSelectParkingRate = useCallback((rateId: string) => {
+        setActiveTab('locations');
+        setParkingRatesOpen(true);
+        pendingAction.current = {type: 'selectParkingRate', id: rateId};
+    }, []);
+
     // Execute pending cross-tab actions after the target tab mounts
     useEffect(() => {
         const action = pendingAction.current;
@@ -234,6 +256,15 @@ export const AdminPage = () => {
                 break;
             case 'selectUpcomingEvent':
                 upcomingTabRef.current?.selectEvent(action.id);
+                break;
+            case 'selectVenue':
+                venuesTabRef.current?.highlight(action.id);
+                break;
+            case 'selectParkingLot':
+                parkingLotsTabRef.current?.highlight(action.id);
+                break;
+            case 'selectParkingRate':
+                parkingRatesTabRef.current?.highlight(action.id);
                 break;
         }
     }, [activeTab]);
@@ -444,6 +475,7 @@ export const AdminPage = () => {
                                     className={`admin-section-chevron${venuesOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
                             </button>
                             {venuesOpen && <VenuesTab
+                                ref={venuesTabRef}
                                 venues={venues}
                                 parkingLots={parkingLots}
                                 refreshVenues={refreshVenues}
@@ -463,6 +495,7 @@ export const AdminPage = () => {
                                     className={`admin-section-chevron${parkingRatesOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
                             </button>
                             {parkingRatesOpen && <ParkingRatesTab
+                                ref={parkingRatesTabRef}
                                 parkingRates={parkingRates}
                                 refreshParkingRates={refreshParkingRates}
                                 refreshParkingLots={refreshParkingLots}
@@ -482,6 +515,7 @@ export const AdminPage = () => {
                                     className={`admin-section-chevron${parkingLotsOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
                             </button>
                             {parkingLotsOpen && <ParkingLotsTab
+                                ref={parkingLotsTabRef}
                                 parkingLots={parkingLots}
                                 parkingRates={parkingRates}
                                 refreshParkingLots={refreshParkingLots}
@@ -517,10 +551,16 @@ export const AdminPage = () => {
                         pastEvents={pastEvents}
                         upcomingEvents={upcomingEvents}
                         badgeDefs={badgeDefs}
+                        venues={venues}
+                        parkingLots={parkingLots}
+                        parkingRates={parkingRates}
                         onLookupUser={handleLookupUser}
                         onSelectBadge={handleSelectBadge}
                         onSelectEvent={handleSelectEvent}
                         onSelectUpcomingEvent={handleSelectUpcomingEvent}
+                        onSelectVenue={handleSelectVenue}
+                        onSelectParkingLot={handleSelectParkingLot}
+                        onSelectParkingRate={handleSelectParkingRate}
                     />
                 )}
 

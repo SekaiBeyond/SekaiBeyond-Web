@@ -15,6 +15,9 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
+import type { Venue } from '~/lib/venues';
+import type { ParkingLot } from '~/lib/parkingLots';
+import type { ParkingRate } from '~/lib/parkingRates';
 import type { ActivityRecord, BadgeDef, RecordType } from './types';
 
 const PAGE_SIZE = 20;
@@ -51,20 +54,32 @@ interface RecordsTabProps {
     pastEvents: PastEvent[];
     upcomingEvents: UpcomingEvent[];
     badgeDefs: BadgeDef[];
+    venues: Venue[];
+    parkingLots: ParkingLot[];
+    parkingRates: ParkingRate[];
     onLookupUser: (uid: string) => void;
     onSelectBadge: (badgeId: string) => void;
     onSelectEvent: (eventId: string) => void;
     onSelectUpcomingEvent: (eventId: string) => void;
+    onSelectVenue: (venueId: string) => void;
+    onSelectParkingLot: (lotId: string) => void;
+    onSelectParkingRate: (rateId: string) => void;
 }
 
 export const RecordsTab = ({
                                pastEvents,
                                upcomingEvents,
                                badgeDefs,
+                               venues,
+                               parkingLots,
+                               parkingRates,
                                onLookupUser,
                                onSelectBadge,
                                onSelectEvent,
                                onSelectUpcomingEvent,
+                               onSelectVenue,
+                               onSelectParkingLot,
+                               onSelectParkingRate,
                            }: RecordsTabProps) => {
     const {isEnglish} = useLanguage();
     const [records, setRecords] = useState<ActivityRecord[]>([]);
@@ -204,6 +219,30 @@ export const RecordsTab = ({
             return <span className="record-clickable-name" onClick={() => onSelectEvent(eventId)}>{title}</span>;
         }
         return <span>{title}</span>;
+    };
+
+    // Location records store only the display name, so match it back to a live
+    // venue/lot/rate to make the name jump to it. Deleted items no longer match
+    // and fall back to plain text.
+    const clickableVenue = (name?: string): ReactNode => {
+        const label = name ?? '';
+        const venue = venues.find(v => v.nameEn === name || v.nameCn === name);
+        if (!venue) return <span>{label}</span>;
+        return <span className="record-clickable-name" onClick={() => onSelectVenue(venue.id)}>{label}</span>;
+    };
+
+    const clickableLot = (name?: string): ReactNode => {
+        const label = name ?? '';
+        const lot = parkingLots.find(l => l.name === name || l.nameCn === name);
+        if (!lot) return <span>{label}</span>;
+        return <span className="record-clickable-name" onClick={() => onSelectParkingLot(lot.id)}>{label}</span>;
+    };
+
+    const clickableRate = (label?: string): ReactNode => {
+        const text = label ?? '';
+        const rate = parkingRates.find(r => r.labelEn === label || r.labelCn === label);
+        if (!rate) return <span>{text}</span>;
+        return <span className="record-clickable-name" onClick={() => onSelectParkingRate(rate.id)}>{text}</span>;
     };
 
     const getRecordLabel = (r: ActivityRecord): ReactNode => {
@@ -412,24 +451,24 @@ export const RecordsTab = ({
                     : <>删除了标签 {r.tagName ?? ''}</>;
             case 'venue-create':
                 return isEnglish
-                    ? <>created venue {r.venueName ?? ''}</>
-                    : <>创建了场地 {r.venueName ?? ''}</>;
+                    ? <>created venue {clickableVenue(r.venueName)}</>
+                    : <>创建了场地 {clickableVenue(r.venueName)}</>;
             case 'venue-edit':
                 return isEnglish
-                    ? <>edited venue {r.venueName ?? ''}</>
-                    : <>编辑了场地 {r.venueName ?? ''}</>;
+                    ? <>edited venue {clickableVenue(r.venueName)}</>
+                    : <>编辑了场地 {clickableVenue(r.venueName)}</>;
             case 'venue-delete':
                 return isEnglish
                     ? <>deleted venue {r.venueName ?? ''}</>
                     : <>删除了场地 {r.venueName ?? ''}</>;
             case 'parkinglot-create':
                 return isEnglish
-                    ? <>created parking lot {r.lotName ?? ''}</>
-                    : <>创建了停车场 {r.lotName ?? ''}</>;
+                    ? <>created parking lot {clickableLot(r.lotName)}</>
+                    : <>创建了停车场 {clickableLot(r.lotName)}</>;
             case 'parkinglot-edit':
                 return isEnglish
-                    ? <>edited parking lot {r.lotName ?? ''}</>
-                    : <>编辑了停车场 {r.lotName ?? ''}</>;
+                    ? <>edited parking lot {clickableLot(r.lotName)}</>
+                    : <>编辑了停车场 {clickableLot(r.lotName)}</>;
             case 'parkinglot-delete': {
                 const unlinked = r.unlinkedFrom ?? 0;
                 if (unlinked > 0) {
@@ -444,12 +483,12 @@ export const RecordsTab = ({
             }
             case 'parkingrate-create':
                 return isEnglish
-                    ? <>created parking rate {r.rateLabel ?? ''}</>
-                    : <>创建了停车费率 {r.rateLabel ?? ''}</>;
+                    ? <>created parking rate {clickableRate(r.rateLabel)}</>
+                    : <>创建了停车费率 {clickableRate(r.rateLabel)}</>;
             case 'parkingrate-edit':
                 return isEnglish
-                    ? <>edited parking rate {r.rateLabel ?? ''}</>
-                    : <>编辑了停车费率 {r.rateLabel ?? ''}</>;
+                    ? <>edited parking rate {clickableRate(r.rateLabel)}</>
+                    : <>编辑了停车费率 {clickableRate(r.rateLabel)}</>;
             case 'parkingrate-delete': {
                 const unlinked = r.unlinkedFrom ?? 0;
                 if (unlinked > 0) {
