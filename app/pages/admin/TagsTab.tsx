@@ -101,7 +101,7 @@ export const TagsTab = ({tags, refreshTags, showToast, readOnly = false}: TagsTa
                             <input
                                 value={name}
                                 onChange={e => setName(e.target.value)}
-                                className="admin-search-input"
+                                className="admin-input"
                                 placeholder='e.g. Workshop'
                             />
                         </label>
@@ -110,7 +110,7 @@ export const TagsTab = ({tags, refreshTags, showToast, readOnly = false}: TagsTa
                             <input
                                 value={nameCn}
                                 onChange={e => setNameCn(e.target.value)}
-                                className="admin-search-input"
+                                className="admin-input"
                                 placeholder='e.g. 工坊'
                             />
                         </label>
@@ -131,7 +131,7 @@ export const TagsTab = ({tags, refreshTags, showToast, readOnly = false}: TagsTa
                     </div>
                 </div>
             ) : (
-                <button className="admin-generate-btn admin-section-mb" onClick={() => setShowCreate(true)}>
+                <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={() => setShowCreate(true)}>
                     {isEnglish ? '+ New Tag' : '+ 新建标签'}
                 </button>
             ))}
@@ -149,13 +149,13 @@ export const TagsTab = ({tags, refreshTags, showToast, readOnly = false}: TagsTa
                                     <input
                                         value={editName}
                                         onChange={e => setEditName(e.target.value)}
-                                        className="admin-search-input admin-tag-input"
+                                        className="admin-input admin-tag-input"
                                         placeholder={isEnglish ? 'English name' : '英文名称'}
                                     />
                                     <input
                                         value={editNameCn}
                                         onChange={e => setEditNameCn(e.target.value)}
-                                        className="admin-search-input admin-tag-input"
+                                        className="admin-input admin-tag-input"
                                         placeholder={isEnglish ? 'Chinese name' : '中文名称'}
                                     />
                                     <div className="admin-tag-actions">

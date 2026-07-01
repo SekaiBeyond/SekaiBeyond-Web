@@ -188,7 +188,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                     <input
                         value={draft.label}
                         onChange={e => setDraft(prev => ({...prev, label: e.target.value}))}
-                        className="admin-search-input"
+                        className="admin-input"
                         placeholder={isEnglish ? 'e.g. Booth A entrance' : '例如：A 区入口'}
                     />
                 </label>
@@ -197,7 +197,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                     <input
                         value={draft.labelCn}
                         onChange={e => setDraft(prev => ({...prev, labelCn: e.target.value}))}
-                        className="admin-search-input"
+                        className="admin-input"
                         placeholder={isEnglish ? 'optional' : '可选'}
                     />
                 </label>
@@ -208,7 +208,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                             type="button"
                             role="tab"
                             aria-selected={draft.linkMode === 'url'}
-                            className={`admin-qr-mode-btn${draft.linkMode === 'url' ? ' admin-qr-mode-active' : ''}`}
+                            className={`admin-btn admin-btn--ghost${draft.linkMode === 'url' ? ' admin-btn--ghost-active' : ''}`}
                             onClick={() => setLinkMode('url')}
                         >
                             {isEnglish ? 'Custom URL' : '自定义链接'}
@@ -217,7 +217,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                             type="button"
                             role="tab"
                             aria-selected={draft.linkMode === 'social'}
-                            className={`admin-qr-mode-btn${draft.linkMode === 'social' ? ' admin-qr-mode-active' : ''}`}
+                            className={`admin-btn admin-btn--ghost${draft.linkMode === 'social' ? ' admin-btn--ghost-active' : ''}`}
                             onClick={() => setLinkMode('social')}
                         >
                             {isEnglish ? 'Social profile' : '社交主页'}
@@ -229,7 +229,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                             <input
                                 value={draft.targetUrl}
                                 onChange={e => setDraft(prev => ({...prev, targetUrl: e.target.value}))}
-                                className="admin-search-input"
+                                className="admin-input"
                                 placeholder="https://example.com"
                             />
                             <small className="admin-helper-text">
@@ -245,7 +245,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                                 <select
                                     value={draft.socialPlatform}
                                     onChange={e => setPlatform(e.target.value)}
-                                    className="admin-search-input"
+                                    className="admin-input"
                                 >
                                     <option value="">{isEnglish ? '— Select —' : '— 选择 —'}</option>
                                     {platforms.map(p => (
@@ -260,7 +260,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                                 <input
                                     value={draft.socialHandle}
                                     onChange={e => setHandle(e.target.value)}
-                                    className="admin-search-input"
+                                    className="admin-input"
                                     placeholder={selectedPlatform?.placeholder ?? ''}
                                     disabled={!draft.socialPlatform}
                                 />
@@ -298,7 +298,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                                 : prev.expirationMode;
                             return {...prev, eventId, expirationMode};
                         })}
-                        className="admin-search-input"
+                        className="admin-input"
                     >
                         <option value="">{isEnglish ? '— None —' : '— 无 —'}</option>
                         {events.map(ev => (
@@ -316,7 +316,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                             ...prev,
                             expirationMode: e.target.value as QrExpirationMode
                         }))}
-                        className="admin-search-input"
+                        className="admin-input"
                     >
                         <option value="none">{isEnglish ? 'Never expires' : '永不过期'}</option>
                         {draft.eventId && (
@@ -332,7 +332,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                             type="datetime-local"
                             value={draft.expiresLocal}
                             onChange={e => setDraft(prev => ({...prev, expiresLocal: e.target.value}))}
-                            className="admin-search-input"
+                            className="admin-input"
                         />
                     </label>
                 )}
@@ -367,7 +367,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                             <input
                                 value={draft.spotLabel}
                                 onChange={e => setDraft(prev => ({...prev, spotLabel: e.target.value}))}
-                                className="admin-search-input"
+                                className="admin-input"
                                 placeholder={isEnglish ? 'optional' : '可选'}
                             />
                         </label>
@@ -376,7 +376,7 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                             <input
                                 value={draft.spotLabelCn}
                                 onChange={e => setDraft(prev => ({...prev, spotLabelCn: e.target.value}))}
-                                className="admin-search-input"
+                                className="admin-input"
                                 placeholder={isEnglish ? 'optional' : '可选'}
                             />
                         </label>

@@ -128,7 +128,7 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
     return (
         <div className="admin-section">
             <div className="admin-tools-header">
-                <button className="admin-back-btn" onClick={onBack} type="button">
+                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
                     {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
                 </button>
                 <h3 className="admin-tools-title">{isEnglish ? 'Link a Code by Scanning' : '扫码关联位置'}</h3>
@@ -150,7 +150,7 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
                             <div className="admin-tickets-scanner-manual-row">
                                 <input
                                     type="text"
-                                    className="admin-search-input"
+                                    className="admin-input"
                                     placeholder={isEnglish ? 'https://…/qr?id=…' : 'https://…/qr?id=…'}
                                     value={manual}
                                     onChange={e => setManual(e.target.value)}

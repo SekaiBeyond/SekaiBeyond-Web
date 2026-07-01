@@ -127,7 +127,7 @@ const SearchBox = ({onPick}: {onPick: (pt: {lat: number; lng: number}) => void})
     return (
         <input
             ref={inputRef}
-            className="admin-search-input"
+            className="admin-input"
             placeholder={unavailable
                 ? (isEnglish ? 'Search unavailable — use map or drag the marker.' : '搜索不可用 — 请使用地图或拖动标记。')
                 : (isEnglish ? 'Search a place…' : '搜索地点…')}

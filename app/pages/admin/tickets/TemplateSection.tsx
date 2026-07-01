@@ -151,7 +151,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                 <span>{isEnglish ? 'Subject' : '邮件主题'}</span>
                 <input
                     type="text"
-                    className="admin-search-input"
+                    className="admin-input"
                     value={template.subject}
                     onChange={(e) => setTemplate(t => ({...t, subject: e.target.value}))}
                     maxLength={500}

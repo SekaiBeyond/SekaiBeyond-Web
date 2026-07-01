@@ -108,13 +108,13 @@ export function AttendeesSection({
             <div className="admin-tickets-filters">
                 <input
                     type="text"
-                    className="admin-search-input"
+                    className="admin-input"
                     placeholder={isEnglish ? 'Search name or email...' : '搜索姓名或邮箱...'}
                     value={search}
                     onChange={(e) => onSearchChange(e.target.value)}
                 />
                 <select
-                    className="admin-search-input"
+                    className="admin-input"
                     style={{width: 'auto', minWidth: '120px'}}
                     value={ticketTypeFilter}
                     onChange={(e) => onTicketTypeFilterChange(e.target.value as TicketType | 'all')}
@@ -127,7 +127,7 @@ export function AttendeesSection({
                     ))}
                 </select>
                 <select
-                    className="admin-search-input"
+                    className="admin-input"
                     style={{width: 'auto', minWidth: '120px'}}
                     value={statusFilter}
                     onChange={(e) => onStatusFilterChange(e.target.value as 'all' | 'redeemed' | 'unredeemed' | 'voided')}

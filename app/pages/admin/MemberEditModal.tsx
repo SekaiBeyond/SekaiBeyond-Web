@@ -96,7 +96,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                     <label className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Name (English)' : '姓名（英文）'}</span>
                         <input
-                            className="admin-search-input"
+                            className="admin-input"
                             value={formData.name}
                             onChange={e => setFormData(prev => ({...prev, name: e.target.value}))}
                             placeholder={isEnglish ? 'Full name in English' : '英文全名'}
@@ -106,7 +106,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                     <label className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Name (Chinese) (optional)' : '姓名（中文）（可选）'}</span>
                         <input
-                            className="admin-search-input"
+                            className="admin-input"
                             value={formData.nameCn}
                             onChange={e => setFormData(prev => ({...prev, nameCn: e.target.value}))}
                             placeholder={isEnglish ? 'Full name in Chinese' : '中文全名'}
@@ -116,7 +116,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                     <label className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Role (English)' : '角色（英文）'}</span>
                         <input
-                            className="admin-search-input"
+                            className="admin-input"
                             value={formData.role}
                             onChange={e => setFormData(prev => ({...prev, role: e.target.value}))}
                             placeholder={isEnglish ? 'e.g. President' : '例如：社长'}
@@ -126,7 +126,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                     <label className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Role (Chinese)' : '角色（中文）'}</span>
                         <input
-                            className="admin-search-input"
+                            className="admin-input"
                             value={formData.roleCn}
                             onChange={e => setFormData(prev => ({...prev, roleCn: e.target.value}))}
                             placeholder={isEnglish ? 'e.g. President' : '例如：社长'}

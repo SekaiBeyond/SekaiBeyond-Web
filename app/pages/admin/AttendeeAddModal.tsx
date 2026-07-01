@@ -102,7 +102,7 @@ export function AttendeeAddModal({
                         <span>{isEnglish ? 'Email' : '邮箱'}</span>
                         <input
                             type="email"
-                            className="admin-search-input"
+                            className="admin-input"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="person@example.com"
@@ -115,7 +115,7 @@ export function AttendeeAddModal({
                         <span>{isEnglish ? 'Name' : '姓名'}</span>
                         <input
                             type="text"
-                            className="admin-search-input"
+                            className="admin-input"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             maxLength={100}
@@ -127,7 +127,7 @@ export function AttendeeAddModal({
                         <span>{isEnglish ? 'Ticket count (1–50)' : '门票数量（1–50）'}</span>
                         <input
                             type="number"
-                            className="admin-search-input"
+                            className="admin-input"
                             value={ticketCount}
                             onChange={(e) => setTicketCount(e.target.value)}
                             min={1}
@@ -139,7 +139,7 @@ export function AttendeeAddModal({
                     <label className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Ticket Type' : '门票类型'}</span>
                         <select
-                            className="admin-search-input"
+                            className="admin-input"
                             value={type}
                             onChange={(e) => setType(e.target.value as TicketType)}
                             disabled={saving}

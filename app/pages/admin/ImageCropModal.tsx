@@ -167,13 +167,13 @@ export const ImageCropModal = ({imageSource, aspect, onConfirm, onCancel, showTo
                     </>
                 )}
                 <div className="admin-form-actions">
-                    <button className="admin-generate-btn" onClick={handleApply}
+                    <button className="admin-btn admin-btn--dashed" onClick={handleApply}
                             disabled={saving || !image || loadError}>
                         {saving
                             ? (isEnglish ? 'Processing...' : '处理中...')
                             : (isEnglish ? 'Apply' : '应用')}
                     </button>
-                    <button className="admin-back-btn" onClick={onCancel} disabled={saving}>
+                    <button className="admin-btn admin-btn--link" onClick={onCancel} disabled={saving}>
                         {isEnglish ? 'Cancel' : '取消'}
                     </button>
                 </div>

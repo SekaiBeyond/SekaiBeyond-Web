@@ -325,7 +325,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                         type="date"
                                         value={eventForm.date}
                                         onChange={e => setEventForm(f => ({...f, date: e.target.value}))}
-                                        className="admin-search-input"
+                                        className="admin-input"
                                     />
                                 </label>
                                 <LocationFormField
@@ -390,7 +390,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             </div>
                         </div>
                     ) : !readOnly ? (
-                        <button className="admin-generate-btn admin-section-mb" onClick={openCreateEvent}>
+                        <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={openCreateEvent}>
                             {isEnglish ? '+ New Event' : '+ 新建活动'}
                         </button>
                     ) : null}
@@ -423,7 +423,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 </>
             ) : (
                 <div className="admin-event-detail">
-                    <button className="admin-back-btn" onClick={() => setManagedEvent(null)}>
+                    <button className="admin-btn admin-btn--link" onClick={() => setManagedEvent(null)}>
                         &larr; {isEnglish ? 'All Events' : '所有活动'}
                     </button>
 

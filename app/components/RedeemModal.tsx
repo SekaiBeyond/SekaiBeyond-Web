@@ -177,14 +177,14 @@ export const RedeemModal = () => {
                                     setError('');
                                 }}
                                 placeholder={isEnglish ? 'Enter code' : '输入兑换码'}
-                                className="admin-search-input redeem-input"
+                                className="admin-input redeem-input"
                             />
                             {error && (
                                 <p className="redeem-error-text">
                                     {error}
                                 </p>
                             )}
-                            <button type="submit" className="admin-generate-btn redeem-submit-btn">
+                            <button type="submit" className="admin-btn admin-btn--dashed redeem-submit-btn">
                                 {isEnglish ? 'Redeem' : '兑换'}
                             </button>
                         </form>
@@ -218,7 +218,7 @@ export const RedeemModal = () => {
                                 </p>
                             </>
                         )}
-                        <button className="admin-generate-btn redeem-done-btn" onClick={close}>
+                        <button className="admin-btn admin-btn--dashed redeem-done-btn" onClick={close}>
                             {isEnglish ? 'Done' : '完成'}
                         </button>
                     </>
@@ -242,7 +242,7 @@ export const RedeemModal = () => {
                                     : (eventInfo.eventTitleCn || eventInfo.eventTitle)}
                             </p>
                         )}
-                        <button className="admin-generate-btn redeem-done-btn" onClick={close}>
+                        <button className="admin-btn admin-btn--dashed redeem-done-btn" onClick={close}>
                             {isEnglish ? 'Done' : '完成'}
                         </button>
                     </>
@@ -255,7 +255,7 @@ export const RedeemModal = () => {
                         </h2>
                         <p className="redeem-subtitle">{error}</p>
                         <button
-                            className="admin-generate-btn redeem-submit-btn"
+                            className="admin-btn admin-btn--dashed redeem-submit-btn"
                             onClick={() => {
                                 setState('idle');
                                 setInput('');

@@ -181,7 +181,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                     <div className="admin-tickets-scanner-manual-row">
                         <input
                             type="text"
-                            className="admin-search-input"
+                            className="admin-input"
                             placeholder={isEnglish ? 'Paste ticket ID or QR URL' : '粘贴门票 ID 或二维码链接'}
                             value={manualTicketId}
                             onChange={(e) => setManualTicketId(e.target.value)}

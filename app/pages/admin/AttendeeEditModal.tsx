@@ -112,7 +112,7 @@ export function AttendeeEditModal({
                         <span>{isEnglish ? 'Email (read-only)' : '邮箱（不可修改）'}</span>
                         <input
                             type="email"
-                            className="admin-search-input"
+                            className="admin-input"
                             value={attendee.email}
                             readOnly
                         />
@@ -122,7 +122,7 @@ export function AttendeeEditModal({
                         <span>{isEnglish ? 'Name' : '姓名'}</span>
                         <input
                             type="text"
-                            className="admin-search-input"
+                            className="admin-input"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             maxLength={100}
@@ -134,7 +134,7 @@ export function AttendeeEditModal({
                         <span>{isEnglish ? 'Ticket count (1–50)' : '门票数量（1–50）'}</span>
                         <input
                             type="number"
-                            className="admin-search-input"
+                            className="admin-input"
                             value={ticketCount}
                             onChange={(e) => setTicketCount(e.target.value)}
                             min={1}
@@ -146,7 +146,7 @@ export function AttendeeEditModal({
                     <label className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Ticket Type' : '门票类型'}</span>
                         <select
-                            className="admin-search-input"
+                            className="admin-input"
                             value={type}
                             onChange={(e) => setType(e.target.value as TicketType)}
                             disabled={saving}

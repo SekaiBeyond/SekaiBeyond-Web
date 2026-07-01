@@ -120,7 +120,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                     <label className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Year' : '年份'}</span>
                         <input
-                            className="admin-search-input"
+                            className="admin-input"
                             type="number"
                             value={formData.year}
                             onChange={e => !readOnly && setFormData(prev => ({
@@ -133,7 +133,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                     <label className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Date' : '日期'}</span>
                         <input
-                            className="admin-search-input"
+                            className="admin-input"
                             type="date"
                             value={formData.date}
                             onChange={e => !readOnly && setFormData(prev => ({...prev, date: e.target.value}))}
@@ -145,7 +145,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                 <label className="admin-tickets-template-field">
                     <span>{isEnglish ? 'Location (English)' : '地点（英文）'}</span>
                     <input
-                        className="admin-search-input"
+                        className="admin-input"
                         value={formData.location}
                         onChange={e => !readOnly && setFormData(prev => ({...prev, location: e.target.value}))}
                         placeholder="e.g. Husky Union Building"
@@ -156,7 +156,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                 <label className="admin-tickets-template-field">
                     <span>{isEnglish ? 'Location (Chinese) (optional)' : '地点（中文）（可选）'}</span>
                     <input
-                        className="admin-search-input"
+                        className="admin-input"
                         value={formData.locationCn}
                         onChange={e => !readOnly && setFormData(prev => ({...prev, locationCn: e.target.value}))}
                         placeholder="例如：哈士奇联盟大楼"
@@ -167,7 +167,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                 <label className="admin-tickets-template-field">
                     <span>{isEnglish ? 'Description (English)' : '描述（英文）'}</span>
                     <textarea
-                        className="admin-search-input"
+                        className="admin-input"
                         style={{minHeight: '100px'}}
                         value={formData.description}
                         onChange={e => !readOnly && setFormData(prev => ({...prev, description: e.target.value}))}
@@ -178,7 +178,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                 <label className="admin-tickets-template-field">
                     <span>{isEnglish ? 'Description (Chinese)' : '描述（中文）'}</span>
                     <textarea
-                        className="admin-search-input"
+                        className="admin-input"
                         style={{minHeight: '100px'}}
                         value={formData.descriptionCn}
                         onChange={e => !readOnly && setFormData(prev => ({...prev, descriptionCn: e.target.value}))}
@@ -206,7 +206,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                     }}>
                         <span style={{fontSize: '14px', fontWeight: 600}}>{isEnglish ? 'Highlights' : '亮点'}</span>
                         {!readOnly && (
-                            <button className="admin-back-btn" style={{marginBottom: 0, padding: '4px 8px'}}
+                            <button className="admin-btn admin-btn--link" style={{marginBottom: 0, padding: '4px 8px'}}
                                     onClick={addHighlight}>
                                 {isEnglish ? '+ Add' : '+ 添加'}
                             </button>
@@ -216,7 +216,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                         <div key={i}
                              style={{display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center'}}>
                             <input
-                                className="admin-search-input"
+                                className="admin-input"
                                 style={{flex: 0.22, minWidth: 0, textAlign: 'center'}}
                                 value={h.icon}
                                 onChange={e => !readOnly && updateHighlight(i, 'icon', e.target.value)}
@@ -224,7 +224,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                                 readOnly={readOnly}
                             />
                             <input
-                                className="admin-search-input"
+                                className="admin-input"
                                 style={{flex: 1}}
                                 value={h.labelEn}
                                 onChange={e => !readOnly && updateHighlight(i, 'labelEn', e.target.value)}
@@ -232,7 +232,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                                 readOnly={readOnly}
                             />
                             <input
-                                className="admin-search-input"
+                                className="admin-input"
                                 style={{flex: 1}}
                                 value={h.labelCn}
                                 onChange={e => !readOnly && updateHighlight(i, 'labelCn', e.target.value)}
@@ -241,7 +241,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                             />
                             {!readOnly && (
                                 <button
-                                    className="admin-back-btn"
+                                    className="admin-btn admin-btn--link"
                                     style={{
                                         color: 'var(--color-danger)',
                                         border: 'none',

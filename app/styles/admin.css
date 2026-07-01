@@ -16,7 +16,7 @@
 
 .admin-tab {
     padding: 10px 24px;
-    border: 2px solid rgba(255, 107, 157, 0.2);
+    border: var(--admin-field-border);
     border-radius: 20px;
     background: rgba(255, 255, 255, 0.7);
     color: var(--color-text-muted);
@@ -45,46 +45,22 @@
     margin-top: 10px;
 }
 
-/* Admin Search */
-.admin-search {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-
-.admin-search-input {
-    flex: 1;
-    padding: 12px 20px;
-    border: 2px solid rgba(255, 107, 157, 0.2);
-    border-radius: 16px;
-    font-size: 15px;
-    outline: none;
-    transition: border-color 0.3s ease;
-    background: rgba(255, 255, 255, 0.85);
-}
-
-.admin-search-input:focus {
-    border-color: var(--color-primary);
-}
-
-.admin-filter-select {
-    padding: 12px 16px;
-    border: 2px solid rgba(255, 107, 157, 0.2);
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.85);
-    color: var(--color-text);
-    font-size: 15px;
-    font-weight: 600;
+/* ===== Shared admin controls ===== */
+/* One button base + look/size modifiers. Every admin button is
+   `.admin-btn` plus a `--variant`; utilities (e.g. .admin-section-mb) still
+   win because they are declared later in the cascade. The .admin-toggle-btn
+   pill family is a separate, self-contained system further down. */
+.admin-btn {
     cursor: pointer;
-    outline: none;
-    transition: border-color 0.3s ease;
 }
 
-.admin-filter-select:focus {
-    border-color: var(--color-primary);
+.admin-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
-.admin-search-btn {
+/* Primary gradient CTA (search / save actions). */
+.admin-btn--cta {
     padding: 12px 24px;
     border: none;
     border-radius: 16px;
@@ -92,19 +68,183 @@
     color: white;
     font-size: 15px;
     font-weight: 700;
-    cursor: pointer;
     transition: all 0.3s ease;
     white-space: nowrap;
 }
 
-.admin-search-btn:hover:not(:disabled) {
+.admin-btn--cta:hover:not(:disabled) {
     transform: translateY(-1px);
     box-shadow: var(--shadow-primary);
 }
 
-.admin-search-btn:disabled {
+/* Small solid purple (copy-to-clipboard style). */
+.admin-btn--purple {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    background: var(--color-purple);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.admin-btn--purple:hover:not(:disabled) {
+    background: #8e44ad;
+}
+
+/* Full-width dashed "add / create" affordance. */
+.admin-btn--dashed {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    border: 2px dashed #d4a6ff;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--color-purple);
+    font-size: 14px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    margin-bottom: 16px;
+}
+
+.admin-btn--dashed:hover:not(:disabled) {
+    background: #f3e8ff;
+    border-color: var(--color-purple);
+}
+
+/* Full-width solid-outline (load more). */
+.admin-btn--outline {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d4a6ff;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--color-purple);
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    margin-top: 12px;
+}
+
+.admin-btn--outline:hover:not(:disabled) {
+    background: #f3e8ff;
+    border-color: var(--color-purple);
+}
+
+/* Outline chip toggle (group picker). */
+.admin-btn--chip {
+    padding: 8px 16px;
+    border: var(--admin-field-border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--color-text);
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.admin-btn--chip:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    background: rgba(255, 107, 157, 0.08);
+    color: var(--color-primary);
+}
+
+.admin-btn--chip-active {
+    border-color: var(--color-primary);
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--color-primary);
+}
+
+/* Borderless text/link button (back, inline actions). */
+.admin-btn--link {
+    border: none;
+    background: none;
+    color: var(--color-primary);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 4px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.admin-btn--link:hover:not(:disabled) {
+    text-decoration: underline;
+}
+
+.admin-btn--link:disabled {
+    color: var(--color-text-light);
+}
+
+/* Segmented ghost toggle (QR mode switch). */
+.admin-btn--ghost {
+    border: none;
+    background: transparent;
+    padding: 8px 16px;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.admin-btn--ghost-active {
+    background: white;
+    color: var(--color-primary);
+    box-shadow: 0 1px 4px rgba(255, 150, 200, 0.18);
+}
+
+/* One text-field base + modifiers, shared by inputs, selects and textareas. */
+.admin-input {
+    flex: 1;
+    padding: 12px 20px;
+    border: var(--admin-field-border);
+    border-radius: 16px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.3s ease;
+    background: rgba(255, 255, 255, 0.85);
+}
+
+.admin-input:focus {
+    border-color: var(--color-primary);
+}
+
+.admin-input:disabled {
     opacity: 0.6;
-    cursor: not-allowed;
+}
+
+/* <select> flavour: bold label, pointer, and no flex-grow so it keeps its
+   intrinsic width next to a growing input in the same row. */
+.admin-select {
+    flex: 0 1 auto;
+    color: var(--color-text);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* Compact field size. */
+.admin-input--sm {
+    padding: 8px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+}
+
+/* Multiline. */
+.admin-textarea {
+    min-height: 84px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+/* Admin Search */
+.admin-search {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
 /* Admin User Row */
@@ -131,7 +271,7 @@
     height: 40px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid rgba(255, 107, 157, 0.2);
+    border: var(--admin-field-border);
 }
 
 .admin-user-info {
@@ -177,30 +317,6 @@
 }
 
 /* Admin User Detail */
-.admin-back-btn {
-    border: none;
-    background: none;
-    color: var(--color-primary);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 8px 4px;
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-    margin-bottom: 16px;
-}
-
-.admin-back-btn:hover:not(:disabled) {
-    text-decoration: underline;
-}
-
-.admin-back-btn:disabled {
-    color: var(--color-text-light);
-    cursor: not-allowed;
-    opacity: 0.5;
-}
-
 .admin-detail-header {
     display: flex;
     align-items: center;
@@ -679,83 +795,11 @@
     gap: 8px;
 }
 
-.admin-group-btn {
-    padding: 8px 16px;
-    border: 2px solid rgba(255, 107, 157, 0.2);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.8);
-    color: var(--color-text);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.admin-group-btn:hover:not(:disabled) {
-    border-color: var(--color-primary);
-    background: rgba(255, 107, 157, 0.08);
-    color: var(--color-primary);
-}
-
-.admin-group-btn-active {
-    border-color: var(--color-primary);
-    background: rgba(255, 107, 157, 0.12);
-    color: var(--color-primary);
-}
-
-.admin-group-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
 /* Title Management */
 .admin-title-input-row {
     display: flex;
     gap: 10px;
     align-items: center;
-}
-
-.admin-title-input {
-    flex: 1;
-    padding: 10px 14px;
-    border: 2px solid rgba(255, 107, 157, 0.2);
-    border-radius: 12px;
-    font-size: 14px;
-    background: rgba(255, 255, 255, 0.85);
-    color: var(--color-text);
-    outline: none;
-    transition: border-color 0.2s ease;
-}
-
-.admin-title-input:focus {
-    border-color: var(--color-primary);
-}
-
-.admin-title-input:disabled {
-    opacity: 0.6;
-}
-
-.admin-title-save-btn {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 12px;
-    background: var(--gradient-cta);
-    color: white;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-}
-
-.admin-title-save-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-primary);
-}
-
-.admin-title-save-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 .admin-title-hint {
@@ -774,56 +818,6 @@
 }
 
 /* Admin Badge Codes */
-.admin-generate-btn {
-    display: block;
-    width: 100%;
-    padding: 10px;
-    border: 2px dashed #d4a6ff;
-    border-radius: 12px;
-    background: transparent;
-    color: var(--color-purple);
-    font-weight: 700;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    margin-bottom: 16px;
-}
-
-.admin-generate-btn:hover:not(:disabled) {
-    background: #f3e8ff;
-    border-color: var(--color-purple);
-}
-
-.admin-generate-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.admin-load-more-btn {
-    display: block;
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #d4a6ff;
-    border-radius: 10px;
-    background: transparent;
-    color: var(--color-purple);
-    font-weight: 600;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    margin-top: 12px;
-}
-
-.admin-load-more-btn:hover:not(:disabled) {
-    background: #f3e8ff;
-    border-color: var(--color-purple);
-}
-
-.admin-load-more-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
 .admin-single-code {
     display: flex;
     flex-direction: column;
@@ -869,28 +863,6 @@
     font-size: 12px;
     color: var(--color-text);
     background: #fafafa;
-}
-
-.admin-copy-btn {
-    padding: 8px 14px;
-    border: none;
-    border-radius: 8px;
-    background: var(--color-purple);
-    color: white;
-    font-weight: 700;
-    font-size: 12px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.2s ease;
-}
-
-.admin-copy-btn:hover:not(:disabled) {
-    background: #8e44ad;
-}
-
-.admin-copy-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 .admin-code-active-tag {
@@ -1047,12 +1019,6 @@
     color: #fff;
 }
 
-.admin-textarea {
-    min-height: 84px;
-    line-height: 1.5;
-    resize: vertical;
-}
-
 .admin-form-actions {
     display: flex;
     gap: 8px;
@@ -1110,7 +1076,7 @@
     gap: 8px;
 }
 
-.admin-creator-search-row .admin-search-input {
+.admin-creator-search-row .admin-input {
     flex: 1;
 }
 
@@ -1124,7 +1090,7 @@
     border-radius: 10px;
 }
 
-.admin-creator-selected .admin-back-btn {
+.admin-creator-selected .admin-btn--link {
     margin-left: auto;
 }
 
@@ -1218,7 +1184,7 @@
     flex-wrap: wrap;
 }
 
-.admin-tools-header .admin-back-btn {
+.admin-tools-header .admin-btn--link {
     margin-bottom: 0;
 }
 
@@ -1454,7 +1420,7 @@
 
 .record-filter-select {
     padding: 7px 14px;
-    border: 2px solid rgba(255, 107, 157, 0.2);
+    border: var(--admin-field-border);
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.85);
     color: var(--color-text);
@@ -1933,7 +1899,7 @@
     flex-wrap: wrap;
 }
 
-.admin-tickets-filters .admin-search-input {
+.admin-tickets-filters .admin-input {
     flex: 1;
     min-width: 220px;
 }
@@ -2389,7 +2355,7 @@ select.admin-tickets-tag:focus {
 .admin-tickets-template-textarea {
     width: 100%;
     padding: 12px 14px;
-    border: 2px solid rgba(255, 107, 157, 0.2);
+    border: var(--admin-field-border);
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.95);
     color: var(--color-text);
@@ -2679,7 +2645,7 @@ select.admin-tickets-tag:focus {
     flex-wrap: wrap;
 }
 
-.admin-tickets-scanner-manual-row .admin-search-input {
+.admin-tickets-scanner-manual-row .admin-input {
     flex: 1;
     min-width: 200px;
 }
@@ -3099,23 +3065,6 @@ select.admin-tickets-tag:focus {
     border-radius: 12px;
     background: rgba(255, 107, 157, 0.08);
     margin-bottom: 12px;
-}
-
-.admin-qr-mode-btn {
-    border: none;
-    background: transparent;
-    padding: 8px 16px;
-    border-radius: 9px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--color-text-muted);
-    cursor: pointer;
-}
-
-.admin-qr-mode-active {
-    background: white;
-    color: var(--color-primary);
-    box-shadow: 0 1px 4px rgba(255, 150, 200, 0.18);
 }
 
 .admin-qr-map {

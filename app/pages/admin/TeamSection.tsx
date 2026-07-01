@@ -126,24 +126,24 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
                         paddingTop: '8px'
                     }}>
                         <div style={{display: 'flex', gap: '4px'}}>
-                            <button className="admin-back-btn"
+                            <button className="admin-btn admin-btn--link"
                                     style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
                                     onClick={() => moveMember(index, 'up')} disabled={isFirstInGroup || saving}>↑
                             </button>
-                            <button className="admin-back-btn"
+                            <button className="admin-btn admin-btn--link"
                                     style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
                                     onClick={() => moveMember(index, 'down')}
                                     disabled={isLastInGroup || saving}>↓
                             </button>
                         </div>
                         <div style={{display: 'flex', gap: '8px'}}>
-                            <button className="admin-back-btn"
+                            <button className="admin-btn admin-btn--link"
                                     style={{padding: '4px 8px', marginBottom: 0, minHeight: 0}}
                                     onClick={() => setEditingIndex(index)}
                                     disabled={saving}>
                                 {isEnglish ? 'Edit' : '编辑'}
                             </button>
-                            <button className="admin-back-btn" style={{
+                            <button className="admin-btn admin-btn--link" style={{
                                 padding: '4px 8px',
                                 marginBottom: 0,
                                 minHeight: 0,

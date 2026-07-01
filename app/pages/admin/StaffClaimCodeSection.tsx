@@ -151,7 +151,7 @@ export function StaffClaimCodeSection({eventId, showToast}: StaffClaimCodeSectio
                         {isEnglish ? 'No staff code yet.' : '暂无工作人员码。'}
                     </p>
                     <button
-                        className="admin-generate-btn"
+                        className="admin-btn admin-btn--dashed"
                         onClick={generateStaffCodeFn}
                         disabled={generatingStaffCode}
                     >
@@ -170,7 +170,7 @@ export function StaffClaimCodeSection({eventId, showToast}: StaffClaimCodeSectio
                             className="admin-code-input"
                         />
                         <button
-                            className="admin-copy-btn"
+                            className="admin-btn admin-btn--purple"
                             onClick={() => navigator.clipboard.writeText(staffCode.code)}
                         >
                             {isEnglish ? 'Copy' : '复制'}

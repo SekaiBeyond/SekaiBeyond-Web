@@ -239,7 +239,7 @@ export function EventStaffSection({
                 <div className="admin-search">
                     <input
                         type="text"
-                        className="admin-search-input"
+                        className="admin-input"
                         placeholder={isEnglish ? 'Search user by email or name...' : '输入邮箱或姓名搜索用户...'}
                         value={searchQuery}
                         onChange={(e) => {
@@ -249,7 +249,7 @@ export function EventStaffSection({
                         onKeyDown={(e) => e.key === 'Enter' && runSearch()}
                     />
                     <button
-                        className="admin-search-btn"
+                        className="admin-btn admin-btn--cta"
                         onClick={runSearch}
                         disabled={searching || !searchQuery.trim()}
                     >

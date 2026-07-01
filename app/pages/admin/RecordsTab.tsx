@@ -784,7 +784,7 @@ export const RecordsTab = ({
 
             {hasMore && records.length > 0 && (
                 <button
-                    className="admin-load-more-btn"
+                    className="admin-btn admin-btn--outline"
                     onClick={loadMore}
                     disabled={loadingRecords}
                 >

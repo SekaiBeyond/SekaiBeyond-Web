@@ -429,7 +429,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                         setSearchResults([]);
                         setHasSearched(false);
                     }}
-                    className="admin-filter-select"
+                    className="admin-input admin-select"
                 >
                     <option value="">{isEnglish ? 'All Roles' : '所有角色'}</option>
                     {USER_GROUPS.map((g) => (
@@ -447,9 +447,9 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                         setHasSearched(false);
                     }}
                     onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
-                    className="admin-search-input"
+                    className="admin-input"
                 />
-                <button onClick={searchUsers} disabled={searching} className="admin-search-btn">
+                <button onClick={searchUsers} disabled={searching} className="admin-btn admin-btn--cta">
                     {searching
                         ? (isEnglish ? 'Searching...' : '搜索中...')
                         : (isEnglish ? 'Search' : '搜索')}
@@ -514,7 +514,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     ))}
                     {loadingRecent && <div className="profile-spinner admin-spinner-center"/>}
                     {!loadingRecent && hasMoreRecent && recentUsers.length > 0 && (
-                        <button className="admin-load-more-btn" onClick={loadMoreRecentUsers}>
+                        <button className="admin-btn admin-btn--outline" onClick={loadMoreRecentUsers}>
                             {isEnglish ? 'Load More' : '加载更多'}
                         </button>
                     )}
@@ -528,7 +528,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     : undefined;
                 return (
                     <div className="admin-user-detail">
-                        <button className="admin-back-btn" onClick={() => setSelectedUser(null)}>
+                        <button className="admin-btn admin-btn--link" onClick={() => setSelectedUser(null)}>
                             &larr; {isEnglish ? 'Back to results' : '返回结果'}
                         </button>
 
@@ -580,7 +580,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                         return (
                                             <button
                                                 key={g}
-                                                className={`admin-group-btn ${isCurrent ? 'admin-group-btn-active' : ''}`}
+                                                className={`admin-btn admin-btn--chip ${isCurrent ? 'admin-btn--chip-active' : ''}`}
                                                 onClick={() => changeUserGroup(selectedUser, g)}
                                                 disabled={isDisabled}
                                                 title={reason ?? undefined}
@@ -601,7 +601,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 <div className="admin-title-input-row">
                                     <input
                                         type="text"
-                                        className="admin-title-input"
+                                        className="admin-input admin-input--sm"
                                         placeholder={isEnglish ? 'e.g. Tech Lead, Event Coordinator...' : '例如：技术负责人、活动策划...'}
                                         value={titleInput}
                                         onChange={(e) => setTitleInput(e.target.value)}
@@ -609,7 +609,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                         disabled={titleBusy}
                                     />
                                     <button
-                                        className="admin-title-save-btn"
+                                        className="admin-btn admin-btn--cta"
                                         onClick={() => setTitle(selectedUser)}
                                         disabled={titleBusy || titleInput === (selectedUser.title ?? '')}
                                     >

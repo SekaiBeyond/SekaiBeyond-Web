@@ -20,6 +20,9 @@
     --gradient-cta: linear-gradient(135deg, #ff6b9d, #feca57);
     --gradient-logo: linear-gradient(135deg, #ff6b9d, #feca57, #ff6b9d);
 
+    /* Borders */
+    --admin-field-border: 2px solid rgba(255, 107, 157, 0.2);
+
     /* Shadows */
     --shadow-card: 0 8px 25px rgba(255, 150, 200, 0.15);
     --shadow-primary: 0 8px 25px rgba(255, 107, 157, 0.3);

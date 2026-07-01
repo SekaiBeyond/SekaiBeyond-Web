@@ -71,7 +71,7 @@ export const LocationFormField = ({
                 <select
                     value={venueId}
                     onChange={e => onChangeVenueId(e.target.value)}
-                    className="admin-search-input"
+                    className="admin-input"
                 >
                     <option value="">
                         {isEnglish ? '— None / off-campus (no parking guide) —' : '— 无 / 校外（无停车指南）—'}

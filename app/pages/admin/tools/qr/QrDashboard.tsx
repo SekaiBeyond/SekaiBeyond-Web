@@ -120,7 +120,7 @@ export const QrDashboard = ({
                     <select
                         value={eventFilter}
                         onChange={e => setEventFilter(e.target.value)}
-                        className="admin-search-input"
+                        className="admin-input"
                     >
                         <option value="all">{isEnglish ? 'All codes' : '全部'}</option>
                         <option value="none">{isEnglish ? 'No event linked' : '未关联活动'}</option>

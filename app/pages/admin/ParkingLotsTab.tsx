@@ -191,7 +191,7 @@ export const ParkingLotsTab = ({
                     </div>
                 </div>
             ) : (
-                <button className="admin-generate-btn admin-section-mb" onClick={() => setShowCreate(true)}>
+                <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={() => setShowCreate(true)}>
                     {isEnglish ? '+ New Parking Lot' : '+ 新建停车场'}
                 </button>
             ))}
@@ -286,7 +286,7 @@ const LotForm = ({draft, setDraft, parkingRates, isEnglish}: LotFormProps) => (
                 <input
                     value={draft.name}
                     onChange={e => setDraft(prev => ({...prev, name: e.target.value}))}
-                    className="admin-search-input"
+                    className="admin-input"
                     placeholder="e.g. N24 General Parking"
                 />
             </label>
@@ -295,7 +295,7 @@ const LotForm = ({draft, setDraft, parkingRates, isEnglish}: LotFormProps) => (
                 <input
                     value={draft.nameCn}
                     onChange={e => setDraft(prev => ({...prev, nameCn: e.target.value}))}
-                    className="admin-search-input"
+                    className="admin-input"
                     placeholder="例如：N24 普通停车场"
                 />
             </label>
@@ -304,7 +304,7 @@ const LotForm = ({draft, setDraft, parkingRates, isEnglish}: LotFormProps) => (
                 <select
                     value={draft.type}
                     onChange={e => setDraft(prev => ({...prev, type: e.target.value as ParkingLot['type']}))}
-                    className="admin-search-input"
+                    className="admin-input"
                 >
                     {LOT_TYPES.map(t => (
                         <option key={t} value={t}>
@@ -318,7 +318,7 @@ const LotForm = ({draft, setDraft, parkingRates, isEnglish}: LotFormProps) => (
                 <select
                     value={draft.rateId}
                     onChange={e => setDraft(prev => ({...prev, rateId: e.target.value}))}
-                    className="admin-search-input"
+                    className="admin-input"
                 >
                     <option value="">{isEnglish ? '— No rate —' : '— 无费率 —'}</option>
                     {parkingRates.map(rate => (
@@ -353,7 +353,7 @@ const LotForm = ({draft, setDraft, parkingRates, isEnglish}: LotFormProps) => (
                     <textarea
                         value={draft.descriptionEn}
                         onChange={e => setDraft(prev => ({...prev, descriptionEn: e.target.value}))}
-                        className="admin-search-input admin-textarea"
+                        className="admin-input admin-textarea"
                         maxLength={1000}
                         placeholder="e.g. Enter from Stevens Way; a short, well-lit walk to the main entrance."
                     />
@@ -366,7 +366,7 @@ const LotForm = ({draft, setDraft, parkingRates, isEnglish}: LotFormProps) => (
                     <textarea
                         value={draft.descriptionCn}
                         onChange={e => setDraft(prev => ({...prev, descriptionCn: e.target.value}))}
-                        className="admin-search-input admin-textarea"
+                        className="admin-input admin-textarea"
                         maxLength={1000}
                         placeholder="例如：从 Stevens Way 进入，步行很短即到正门，沿途照明良好。"
                     />

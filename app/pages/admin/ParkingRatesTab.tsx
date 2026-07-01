@@ -112,7 +112,7 @@ export const ParkingRatesTab = ({
                             <input
                                 value={labelEn}
                                 onChange={e => setLabelEn(e.target.value)}
-                                className="admin-search-input"
+                                className="admin-input"
                                 placeholder="e.g. $5.00 hourly, $21.00 daily"
                             />
                         </label>
@@ -121,7 +121,7 @@ export const ParkingRatesTab = ({
                             <input
                                 value={labelCn}
                                 onChange={e => setLabelCn(e.target.value)}
-                                className="admin-search-input"
+                                className="admin-input"
                                 placeholder="例如：每小时 $5.00，每日 $21.00"
                             />
                         </label>
@@ -142,7 +142,7 @@ export const ParkingRatesTab = ({
                     </div>
                 </div>
             ) : (
-                <button className="admin-generate-btn admin-section-mb" onClick={() => setShowCreate(true)}>
+                <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={() => setShowCreate(true)}>
                     {isEnglish ? '+ New Rate' : '+ 新建费率'}
                 </button>
             ))}
@@ -160,13 +160,13 @@ export const ParkingRatesTab = ({
                                     <input
                                         value={editLabelEn}
                                         onChange={e => setEditLabelEn(e.target.value)}
-                                        className="admin-search-input admin-tag-input"
+                                        className="admin-input admin-tag-input"
                                         placeholder={isEnglish ? 'English rate' : '英文费率'}
                                     />
                                     <input
                                         value={editLabelCn}
                                         onChange={e => setEditLabelCn(e.target.value)}
-                                        className="admin-search-input admin-tag-input"
+                                        className="admin-input admin-tag-input"
                                         placeholder={isEnglish ? 'Chinese rate' : '中文费率'}
                                     />
                                     <div className="admin-tag-actions">

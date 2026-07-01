@@ -178,7 +178,7 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
     return (
         <div className="admin-section">
             <div className="admin-tools-header">
-                <button className="admin-back-btn" onClick={onBack} type="button">
+                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
                     {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
                 </button>
                 <h3 className="admin-tools-title">{isEnglish ? 'Social Platforms' : '社交平台'}</h3>
@@ -197,7 +197,7 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
                             ? 'Showing built-in defaults. Load them to edit, remove, or add your own platforms.'
                             : '当前显示内置默认平台。加载后即可编辑、删除或添加自定义平台。'}
                     </p>
-                    <button className="admin-generate-btn" onClick={seedDefaults} disabled={seeding}>
+                    <button className="admin-btn admin-btn--dashed" onClick={seedDefaults} disabled={seeding}>
                         {seeding
                             ? (isEnglish ? 'Loading...' : '加载中...')
                             : (isEnglish ? 'Customize defaults' : '自定义默认平台')}
@@ -226,7 +226,7 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
                     </div>
                 </div>
             ) : (
-                <button className="admin-generate-btn admin-section-mb" onClick={() => setShowCreate(true)}>
+                <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={() => setShowCreate(true)}>
                     {isEnglish ? '+ New Platform' : '+ 新建平台'}
                 </button>
             ))}
@@ -312,7 +312,7 @@ const PlatformForm = ({draft, setDraft, isEnglish}: PlatformFormProps) => (
                 <input
                     value={draft.label}
                     onChange={e => setDraft(prev => ({...prev, label: e.target.value}))}
-                    className="admin-search-input"
+                    className="admin-input"
                     placeholder="e.g. Threads"
                 />
             </label>
@@ -321,7 +321,7 @@ const PlatformForm = ({draft, setDraft, isEnglish}: PlatformFormProps) => (
                 <input
                     value={draft.labelCn}
                     onChange={e => setDraft(prev => ({...prev, labelCn: e.target.value}))}
-                    className="admin-search-input"
+                    className="admin-input"
                     placeholder={isEnglish ? 'optional' : '可选'}
                 />
             </label>
@@ -330,7 +330,7 @@ const PlatformForm = ({draft, setDraft, isEnglish}: PlatformFormProps) => (
                 <input
                     value={draft.buildPrefix}
                     onChange={e => setDraft(prev => ({...prev, buildPrefix: e.target.value}))}
-                    className="admin-search-input"
+                    className="admin-input"
                     placeholder="https://www.threads.net/@"
                 />
                 <small className="admin-helper-text">
@@ -344,7 +344,7 @@ const PlatformForm = ({draft, setDraft, isEnglish}: PlatformFormProps) => (
                 <input
                     value={draft.placeholder}
                     onChange={e => setDraft(prev => ({...prev, placeholder: e.target.value}))}
-                    className="admin-search-input"
+                    className="admin-input"
                     placeholder="@handle"
                 />
             </label>
@@ -353,7 +353,7 @@ const PlatformForm = ({draft, setDraft, isEnglish}: PlatformFormProps) => (
                 <input
                     value={draft.pathPrefix}
                     onChange={e => setDraft(prev => ({...prev, pathPrefix: e.target.value}))}
-                    className="admin-search-input"
+                    className="admin-input"
                     placeholder={isEnglish ? 'e.g. user/  (usually blank)' : '例如 user/（通常留空）'}
                 />
             </label>
@@ -362,7 +362,7 @@ const PlatformForm = ({draft, setDraft, isEnglish}: PlatformFormProps) => (
                 <input
                     value={draft.hosts}
                     onChange={e => setDraft(prev => ({...prev, hosts: e.target.value}))}
-                    className="admin-search-input"
+                    className="admin-input"
                     placeholder="threads.net, www.threads.net"
                 />
                 <small className="admin-helper-text">

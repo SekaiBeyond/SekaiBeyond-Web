@@ -111,7 +111,7 @@ export const QrCodeDetail = ({
     return (
         <div className="admin-section">
             <div className="admin-tools-header">
-                <button className="admin-back-btn" onClick={onBack} type="button">
+                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
                     {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
                 </button>
                 <h3 className="admin-tools-title">{code.label}</h3>
@@ -150,7 +150,7 @@ export const QrCodeDetail = ({
                                     onClick={e => (e.target as HTMLInputElement).select()}
                                     className="admin-code-input"
                                 />
-                                <button className="admin-copy-btn" onClick={copyLink} type="button">
+                                <button className="admin-btn admin-btn--purple" onClick={copyLink} type="button">
                                     {isEnglish ? 'Copy' : '复制'}
                                 </button>
                             </div>

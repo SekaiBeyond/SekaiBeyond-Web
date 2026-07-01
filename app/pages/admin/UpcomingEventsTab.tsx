@@ -447,7 +447,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         type="datetime-local"
                                         value={form.startAt}
                                         onChange={e => setForm(f => ({...f, startAt: e.target.value}))}
-                                        className="admin-search-input"
+                                        className="admin-input"
                                     />
                                 </label>
                                 <label>
@@ -456,7 +456,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         type="datetime-local"
                                         value={form.endAt}
                                         onChange={e => setForm(f => ({...f, endAt: e.target.value}))}
-                                        className="admin-search-input"
+                                        className="admin-input"
                                     />
                                 </label>
                                 <LocationFormField
@@ -507,7 +507,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <input
                                         value={form.posterCredit}
                                         onChange={e => setForm(f => ({...f, posterCredit: e.target.value}))}
-                                        className="admin-search-input"
+                                        className="admin-input"
                                         placeholder={isEnglish ? 'Optional' : '可选'}
                                     />
                                 </label>
@@ -525,7 +525,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <input
                                         value={form.buyTicket}
                                         onChange={e => setForm(f => ({...f, buyTicket: e.target.value}))}
-                                        className="admin-search-input"
+                                        className="admin-input"
                                         placeholder={isEnglish
                                             ? (form.paid ? 'Optional' : 'Enable Paid event to edit')
                                             : (form.paid ? '可选' : '启用付费活动后可编辑')}
@@ -537,7 +537,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <input
                                         value={form.learnMore}
                                         onChange={e => setForm(f => ({...f, learnMore: e.target.value}))}
-                                        className="admin-search-input"
+                                        className="admin-input"
                                         placeholder={isEnglish ? 'Optional' : '可选'}
                                     />
                                 </label>
@@ -546,7 +546,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <input
                                         value={form.customButtonText}
                                         onChange={e => setForm(f => ({...f, customButtonText: e.target.value}))}
-                                        className="admin-search-input"
+                                        className="admin-input"
                                         placeholder={isEnglish ? 'Optional' : '可选'}
                                     />
                                 </label>
@@ -555,7 +555,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <input
                                         value={form.customButtonTextCn}
                                         onChange={e => setForm(f => ({...f, customButtonTextCn: e.target.value}))}
-                                        className="admin-search-input"
+                                        className="admin-input"
                                         placeholder={isEnglish ? 'Optional' : '可选'}
                                     />
                                 </label>
@@ -564,7 +564,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <input
                                         value={form.customButtonLink}
                                         onChange={e => setForm(f => ({...f, customButtonLink: e.target.value}))}
-                                        className="admin-search-input"
+                                        className="admin-input"
                                         placeholder={isEnglish ? 'Optional' : '可选'}
                                     />
                                 </label>
@@ -625,7 +625,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             )}
                         </div>
                     ) : !readOnly ? (
-                        <button className="admin-generate-btn admin-section-mb" onClick={openCreate}>
+                        <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={openCreate}>
                             {isEnglish ? '+ New Upcoming Event' : '+ 新建活动预告'}
                         </button>
                     ) : null}
@@ -674,7 +674,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             ) : (
                 <div className="admin-event-detail">
                     <button
-                        className="admin-back-btn"
+                        className="admin-btn admin-btn--link"
                         onClick={() => {
                             setSelectedEvent(null);
                             setShowArchive(false);
@@ -856,7 +856,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                             </p>
                                             {!readOnly && (
                                                 <button
-                                                    className="admin-generate-btn"
+                                                    className="admin-btn admin-btn--dashed"
                                                     onClick={() => generateEventCodeFn(selectedEvent!)}
                                                     disabled={generatingCode}
                                                 >
@@ -879,7 +879,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                     className="admin-code-input"
                                                 />
                                                 <button
-                                                    className="admin-copy-btn"
+                                                    className="admin-btn admin-btn--purple"
                                                     onClick={() => navigator.clipboard.writeText(getClaimUrl(eventCode.code))}
                                                 >
                                                     {isEnglish ? 'Copy' : '复制'}

@@ -483,7 +483,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                         </div>
                     </div>
                 ) : !readOnly ? (
-                    <button className="admin-generate-btn" onClick={() => setShowCreateBadge(true)}>
+                    <button className="admin-btn admin-btn--dashed" onClick={() => setShowCreateBadge(true)}>
                         {isEnglish ? '+ Create Badge' : '+ 创建徽章'}
                     </button>
                 ) : null}
@@ -520,7 +520,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     return (
         <div className="admin-section">
             <div className="admin-event-detail">
-                <button className="admin-back-btn" onClick={() => {
+                <button className="admin-btn admin-btn--link" onClick={() => {
                     setSelectedBadgeDef(null);
                     setBadgeHolders([]);
                     setEditingBadgeDef(false);
@@ -671,7 +671,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 ))}
                 {!loadingBadgeHolders && hasMoreBadgeHolders && badgeHolders.length > 0 && (
                     <button
-                        className="admin-load-more-btn"
+                        className="admin-btn admin-btn--outline"
                         onClick={() => loadBadgeHolders(selectedBadgeDef.id, badgeHolderLastDoc ?? undefined)}
                     >
                         {isEnglish ? 'Load More' : '加载更多'}
@@ -701,7 +701,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                                 const val = parseInt(e.target.value);
                                                 setNewCodeMaxUses(isNaN(val) ? 1 : Math.max(1, val));
                                             }}
-                                            className="admin-search-input"
+                                            className="admin-input"
                                             placeholder={newCodeUnlimited ? '∞' : undefined}
                                         />
                                         <label className="admin-unlimited-label">
@@ -721,17 +721,17 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                     <span>{isEnglish ? 'Active From' : '生效时间'}</span>
                                     <input type="datetime-local" value={newCodeFrom}
                                            onChange={e => setNewCodeFrom(e.target.value)}
-                                           className="admin-search-input"/>
+                                           className="admin-input"/>
                                 </label>
                                 <label>
                                     <span>{isEnglish ? 'Active Until' : '失效时间'}</span>
                                     <input type="datetime-local" value={newCodeUntil}
                                            onChange={e => setNewCodeUntil(e.target.value)}
-                                           className="admin-search-input"/>
+                                           className="admin-input"/>
                                 </label>
                             </div>
                             <button
-                                className="admin-generate-btn admin-mt-12"
+                                className="admin-btn admin-btn--dashed admin-mt-12"
                                 onClick={() => createBadgeActivationCode(selectedBadgeDef.id)}
                                 disabled={generatingActivationCode}>
                                 {generatingActivationCode
@@ -769,7 +769,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                 </div>
                                 <div className="admin-code-url">
                                     <input readOnly value={ac.code} className="admin-code-input"/>
-                                    <button className="admin-copy-btn"
+                                    <button className="admin-btn admin-btn--purple"
                                             onClick={() => navigator.clipboard.writeText(ac.code)}>
                                         {isEnglish ? 'Copy' : '复制'}
                                     </button>

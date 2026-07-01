@@ -177,7 +177,7 @@ export const VenuesTab = ({venues, parkingLots, refreshVenues, showToast, readOn
                     </div>
                 </div>
             ) : (
-                <button className="admin-generate-btn admin-section-mb" onClick={() => setShowCreate(true)}>
+                <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={() => setShowCreate(true)}>
                     {isEnglish ? '+ New Venue' : '+ 新建场地'}
                 </button>
             ))}
@@ -291,7 +291,7 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
                     <input
                         value={draft.nameEn}
                         onChange={e => setDraft(prev => ({...prev, nameEn: e.target.value}))}
-                        className="admin-search-input"
+                        className="admin-input"
                         placeholder="e.g. Husky Union Building"
                     />
                 </label>
@@ -300,7 +300,7 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
                     <input
                         value={draft.nameCn}
                         onChange={e => setDraft(prev => ({...prev, nameCn: e.target.value}))}
-                        className="admin-search-input"
+                        className="admin-input"
                         placeholder="例如：学生活动中心"
                     />
                 </label>
@@ -365,7 +365,7 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
                                         <select
                                             value={link.lotId}
                                             onChange={e => updateLink(i, {lotId: e.target.value})}
-                                            className="admin-search-input admin-venue-lot-select"
+                                            className="admin-input admin-venue-lot-select"
                                         >
                                             <option value="">{isEnglish ? '— Select a lot —' : '— 请选择 —'}</option>
                                             {availableLots.map(opt => (

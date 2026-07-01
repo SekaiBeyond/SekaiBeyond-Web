@@ -21,7 +21,7 @@ export const BilingualFormField = ({
                                    }: BilingualFormFieldProps) => {
     const {isEnglish} = useLanguage();
     const Tag = multiline ? 'textarea' : 'input';
-    const cls = `admin-search-input${multiline ? ' admin-textarea' : ''}`;
+    const cls = `admin-input${multiline ? ' admin-textarea' : ''}`;
     const fullCls = fullWidth ? 'admin-form-grid-full' : undefined;
 
     return (

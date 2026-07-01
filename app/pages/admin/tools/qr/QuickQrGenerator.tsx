@@ -68,7 +68,7 @@ export const QuickQrGenerator = ({events}: {events: UpcomingEvent[]}) => {
                     <input
                         value={url}
                         onChange={e => setUrl(e.target.value)}
-                        className="admin-search-input"
+                        className="admin-input"
                         placeholder="https://example.com"
                         autoFocus
                     />
@@ -78,7 +78,7 @@ export const QuickQrGenerator = ({events}: {events: UpcomingEvent[]}) => {
                     <select
                         value={expirationMode}
                         onChange={e => setExpirationMode(e.target.value as ExpirationMode)}
-                        className="admin-search-input"
+                        className="admin-input"
                     >
                         <option value="none">{isEnglish ? 'No Expiration' : '永不过期'}</option>
                         <option value="event">{isEnglish ? 'Link to Event' : '关联活动'}</option>
@@ -91,7 +91,7 @@ export const QuickQrGenerator = ({events}: {events: UpcomingEvent[]}) => {
                         <select
                             value={selectedEventId}
                             onChange={e => setSelectedEventId(e.target.value)}
-                            className="admin-search-input"
+                            className="admin-input"
                         >
                             <option value="">{isEnglish ? '-- Select Event --' : '-- 选择活动 --'}</option>
                             {events.map(ev => (
@@ -109,7 +109,7 @@ export const QuickQrGenerator = ({events}: {events: UpcomingEvent[]}) => {
                             type="datetime-local"
                             value={expiresLocal}
                             onChange={e => setExpiresLocal(e.target.value)}
-                            className="admin-search-input"
+                            className="admin-input"
                         />
                     </label>
                 )}
@@ -132,7 +132,7 @@ export const QuickQrGenerator = ({events}: {events: UpcomingEvent[]}) => {
                             onClick={e => (e.target as HTMLInputElement).select()}
                             className="admin-code-input"
                         />
-                        <button className="admin-copy-btn" onClick={copyUrl} type="button">
+                        <button className="admin-btn admin-btn--purple" onClick={copyUrl} type="button">
                             {isEnglish ? 'Copy' : '复制'}
                         </button>
                     </div>

@@ -52,7 +52,7 @@ export const CreatorPicker = ({
                         <div className="admin-user-name">{selected.displayName}</div>
                         <div className="admin-user-email">{selected.email}</div>
                     </div>
-                    <button className="admin-back-btn" onClick={() => onSelect(null)}>
+                    <button className="admin-btn admin-btn--link" onClick={() => onSelect(null)}>
                         {isEnglish ? 'Clear' : '清除'}
                     </button>
                 </div>
@@ -63,10 +63,10 @@ export const CreatorPicker = ({
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && search()}
-                            className="admin-search-input"
+                            className="admin-input"
                             placeholder={isEnglish ? 'Search user by email' : '通过邮箱搜索用户'}
                         />
-                        <button onClick={search} disabled={searching} className="admin-search-btn">
+                        <button onClick={search} disabled={searching} className="admin-btn admin-btn--cta">
                             {searching
                                 ? (isEnglish ? 'Searching...' : '搜索中...')
                                 : (isEnglish ? 'Search' : '搜索')}
@@ -94,7 +94,7 @@ export const CreatorPicker = ({
                                 <input
                                     value={manualName || ''}
                                     onChange={(e) => onManualNameChange(e.target.value)}
-                                    className="admin-search-input"
+                                    className="admin-input"
                                     placeholder={isEnglish ? 'Creator name' : '创建者名称'}
                                 />
                             </label>
@@ -104,7 +104,7 @@ export const CreatorPicker = ({
                                     <input
                                         value={manualLink || ''}
                                         onChange={(e) => onManualLinkChange(e.target.value)}
-                                        className="admin-search-input"
+                                        className="admin-input"
                                         placeholder="https://..."
                                     />
                                 </label>

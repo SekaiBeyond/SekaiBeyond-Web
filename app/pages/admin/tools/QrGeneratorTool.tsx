@@ -103,7 +103,7 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
         return (
             <div className="admin-section">
                 <div className="admin-tools-header">
-                    <button className="admin-back-btn" onClick={() => setView('dashboard')} type="button">
+                    <button className="admin-btn admin-btn--link" onClick={() => setView('dashboard')} type="button">
                         {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
                     </button>
                     <h3 className="admin-tools-title">{isEnglish ? 'New QR Code' : '新建二维码'}</h3>
@@ -111,14 +111,14 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
 
                 <div className="admin-qr-mode-toggle">
                     <button
-                        className={`admin-qr-mode-btn${!tracked ? ' admin-qr-mode-active' : ''}`}
+                        className={`admin-btn admin-btn--ghost${!tracked ? ' admin-btn--ghost-active' : ''}`}
                         onClick={() => setTracked(false)}
                         type="button"
                     >
                         {isEnglish ? 'Quick (untracked)' : '快速（不追踪）'}
                     </button>
                     <button
-                        className={`admin-qr-mode-btn${tracked ? ' admin-qr-mode-active' : ''}`}
+                        className={`admin-btn admin-btn--ghost${tracked ? ' admin-btn--ghost-active' : ''}`}
                         onClick={() => setTracked(true)}
                         type="button"
                     >
@@ -167,7 +167,7 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
     return (
         <>
             <div className="admin-tools-back-row">
-                <button className="admin-back-btn" onClick={onBack} type="button">
+                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
                     {isEnglish ? '← Back to Tools' : '← 返回工具'}
                 </button>
             </div>

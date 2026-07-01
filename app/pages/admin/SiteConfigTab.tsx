@@ -107,7 +107,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                     <label>
                         <span>{isEnglish ? 'Bilibili Video (BV ID or URL)' : 'B 站视频（BV 号或链接）'}</span>
                         <input
-                            className="admin-search-input"
+                            className="admin-input"
                             type="text"
                             value={bvidInput}
                             onChange={e => !readOnly && setBvidInput(e.target.value)}
@@ -176,7 +176,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                     <label>
                         <span>{isEnglish ? 'Content (English)' : '内容（英文）'}</span>
                         <textarea
-                            className="admin-search-input policy-textarea"
+                            className="admin-input policy-textarea"
                             value={contentEn}
                             onChange={e => !readOnly && setContentEn(e.target.value)}
                             readOnly={readOnly}
@@ -186,7 +186,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                     <label>
                         <span>{isEnglish ? 'Content (Chinese)' : '内容（中文）'}</span>
                         <textarea
-                            className="admin-search-input policy-textarea"
+                            className="admin-input policy-textarea"
                             value={contentCn}
                             onChange={e => !readOnly && setContentCn(e.target.value)}
                             readOnly={readOnly}
