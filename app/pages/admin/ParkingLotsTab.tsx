@@ -1,11 +1,11 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteParkingLot, callSaveParkingLot } from '~/lib/firebase';
 import { lotTypeShortLabel, type ParkingLot } from '~/lib/parkingLots';
 import { type ParkingRate, rateLabel } from '~/lib/parkingRates';
 import { UW_CAMPUS_CENTER } from '~/lib/venues';
 import { MapPicker } from './MapPicker';
-import { type CardHighlightHandle, useCardHighlight } from './useCardHighlight';
+import { type LocationListHandle, useCardHighlight } from './useCardHighlight';
 
 const LOT_TYPES: ParkingLot['type'][] = ['general', 'disabled', 'garage'];
 
@@ -49,7 +49,7 @@ interface ParkingLotsTabProps {
     readOnly?: boolean;
 }
 
-export const ParkingLotsTab = forwardRef<CardHighlightHandle, ParkingLotsTabProps>((
+export const ParkingLotsTab = forwardRef<LocationListHandle, ParkingLotsTabProps>((
     {
         parkingLots,
         parkingRates,
@@ -59,7 +59,7 @@ export const ParkingLotsTab = forwardRef<CardHighlightHandle, ParkingLotsTabProp
         readOnly = false,
     }, ref) => {
     const {isEnglish} = useLanguage();
-    const {highlightedId, registerCard} = useCardHighlight(ref);
+    const {highlightedId, registerCard, highlight} = useCardHighlight();
     const [showCreate, setShowCreate] = useState(false);
     const [createDraft, setCreateDraft] = useState<LotDraft>(emptyDraft());
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -105,6 +105,16 @@ export const ParkingLotsTab = forwardRef<CardHighlightHandle, ParkingLotsTabProp
         setEditingId(lot.id);
         setEditDraft(lotToDraft(lot));
     };
+
+    useImperativeHandle(ref, () => ({
+        highlight,
+        openEdit: (id: string) => {
+            const lot = parkingLots.find(l => l.id === id);
+            if (!lot) return;
+            if (!readOnly) openEdit(lot);
+            highlight(id);
+        },
+    }));
 
     const saveEdit = async () => {
         if (!editingId) return;

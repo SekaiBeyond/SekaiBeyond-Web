@@ -19,12 +19,13 @@ import { UpcomingEventsTab, type UpcomingEventsTabHandle } from './UpcomingEvent
 import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { TagsTab } from './TagsTab';
 import { VenuesTab } from './VenuesTab';
+import { LocationsMap } from './LocationsMap';
 import { ParkingLotsTab } from './ParkingLotsTab';
 import { ParkingRatesTab } from './ParkingRatesTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
-import type { CardHighlightHandle } from './useCardHighlight';
+import type { CardHighlightHandle, LocationListHandle } from './useCardHighlight';
 
 type ToastType = 'success' | 'warning' | 'error';
 
@@ -73,6 +74,7 @@ export const AdminPage = () => {
     const [upcomingOpen, setUpcomingOpen] = useState(true);
     const [pastOpen, setPastOpen] = useState(true);
     const [tagsOpen, setTagsOpen] = useState(true);
+    const [locationsMapOpen, setLocationsMapOpen] = useState(true);
     const [venuesOpen, setVenuesOpen] = useState(true);
     const [parkingLotsOpen, setParkingLotsOpen] = useState(true);
     const [parkingRatesOpen, setParkingRatesOpen] = useState(true);
@@ -97,10 +99,17 @@ export const AdminPage = () => {
     const eventsTabRef = useRef<EventsTabHandle>(null);
     const upcomingTabRef = useRef<UpcomingEventsTabHandle>(null);
     const badgesTabRef = useRef<BadgesTabHandle>(null);
-    const venuesTabRef = useRef<CardHighlightHandle>(null);
-    const parkingLotsTabRef = useRef<CardHighlightHandle>(null);
+    const venuesTabRef = useRef<LocationListHandle>(null);
+    const parkingLotsTabRef = useRef<LocationListHandle>(null);
     const parkingRatesTabRef = useRef<CardHighlightHandle>(null);
-    const pendingAction = useRef<{type: string; id: string} | null>(null);
+    // Cross-tab/section "jump to this card" requests. Held in state (not a ref) with a
+    // nonce so the effect below fires after the target tab/section has mounted — and
+    // re-fires even when the target tab is already active (e.g. map → list jumps).
+    const actionNonce = useRef(0);
+    const [pendingAction, setPendingAction] = useState<{type: string; id: string; nonce: number} | null>(null);
+    const queueAction = useCallback((type: string, id: string) => {
+        setPendingAction({type, id, nonce: ++actionNonce.current});
+    }, []);
 
     useEffect(() => {
         if (loading) return;
@@ -200,49 +209,61 @@ export const AdminPage = () => {
 
     const handleLookupUser = useCallback((uid: string) => {
         setActiveTab('users');
-        pendingAction.current = {type: 'lookupUser', id: uid};
-    }, []);
+        queueAction('lookupUser', uid);
+    }, [queueAction]);
 
     const handleSelectBadge = useCallback((badgeId: string) => {
         setActiveTab('badges');
-        pendingAction.current = {type: 'selectBadge', id: badgeId};
-    }, []);
+        queueAction('selectBadge', badgeId);
+    }, [queueAction]);
 
     const handleSelectEvent = useCallback((eventId: string) => {
         setActiveTab('events');
         setPastOpen(true);
-        pendingAction.current = {type: 'selectEvent', id: eventId};
-    }, []);
+        queueAction('selectEvent', eventId);
+    }, [queueAction]);
 
     const handleSelectUpcomingEvent = useCallback((eventId: string) => {
         setActiveTab('events');
         setUpcomingOpen(true);
-        pendingAction.current = {type: 'selectUpcomingEvent', id: eventId};
-    }, []);
+        queueAction('selectUpcomingEvent', eventId);
+    }, [queueAction]);
 
     const handleSelectVenue = useCallback((venueId: string) => {
         setActiveTab('locations');
         setVenuesOpen(true);
-        pendingAction.current = {type: 'selectVenue', id: venueId};
-    }, []);
+        queueAction('selectVenue', venueId);
+    }, [queueAction]);
 
     const handleSelectParkingLot = useCallback((lotId: string) => {
         setActiveTab('locations');
         setParkingLotsOpen(true);
-        pendingAction.current = {type: 'selectParkingLot', id: lotId};
-    }, []);
+        queueAction('selectParkingLot', lotId);
+    }, [queueAction]);
 
     const handleSelectParkingRate = useCallback((rateId: string) => {
         setActiveTab('locations');
         setParkingRatesOpen(true);
-        pendingAction.current = {type: 'selectParkingRate', id: rateId};
-    }, []);
+        queueAction('selectParkingRate', rateId);
+    }, [queueAction]);
 
-    // Execute pending cross-tab actions after the target tab mounts
+    const handleEditVenue = useCallback((venueId: string) => {
+        setActiveTab('locations');
+        setVenuesOpen(true);
+        queueAction('editVenue', venueId);
+    }, [queueAction]);
+
+    const handleEditParkingLot = useCallback((lotId: string) => {
+        setActiveTab('locations');
+        setParkingLotsOpen(true);
+        queueAction('editParkingLot', lotId);
+    }, [queueAction]);
+
+    // Execute pending jump actions after the target tab/section mounts (same commit:
+    // card refs register during mount, then this effect runs and can scroll to them).
     useEffect(() => {
-        const action = pendingAction.current;
+        const action = pendingAction;
         if (!action) return;
-        pendingAction.current = null;
 
         switch (action.type) {
             case 'lookupUser':
@@ -266,8 +287,14 @@ export const AdminPage = () => {
             case 'selectParkingRate':
                 parkingRatesTabRef.current?.highlight(action.id);
                 break;
+            case 'editVenue':
+                venuesTabRef.current?.openEdit(action.id);
+                break;
+            case 'editParkingLot':
+                parkingLotsTabRef.current?.openEdit(action.id);
+                break;
         }
-    }, [activeTab]);
+    }, [pendingAction]);
 
     // A potential event-staff user (below staff group, has eventStaffEvents) can't be
     // classified until we know which of their assigned events are still upcoming.
@@ -466,6 +493,28 @@ export const AdminPage = () => {
                         <div>
                             <button
                                 className="admin-section-header"
+                                onClick={() => setLocationsMapOpen(v => !v)}
+                            >
+                                <span className="admin-section-header-title">
+                                    {isEnglish ? 'Overview Map' : '总览地图'}
+                                </span>
+                                <span
+                                    className={`admin-section-chevron${locationsMapOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
+                            </button>
+                            {locationsMapOpen && <LocationsMap
+                                venues={venues}
+                                parkingLots={parkingLots}
+                                parkingRates={parkingRates}
+                                onShowVenue={handleSelectVenue}
+                                onShowLot={handleSelectParkingLot}
+                                onEditVenue={handleEditVenue}
+                                onEditLot={handleEditParkingLot}
+                                readOnly={isStaffGroup}
+                            />}
+                        </div>
+                        <div>
+                            <button
+                                className="admin-section-header admin-section-mt"
                                 onClick={() => setVenuesOpen(v => !v)}
                             >
                                 <span className="admin-section-header-title">

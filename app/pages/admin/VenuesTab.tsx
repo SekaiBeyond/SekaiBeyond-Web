@@ -1,11 +1,11 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteVenue, callSaveVenue } from '~/lib/firebase';
 import { lotBadgeChar, lotTypeLabel, type ParkingLot } from '~/lib/parkingLots';
 import type { Venue, VenueLotLink } from '~/lib/venues';
 import { UW_CAMPUS_CENTER } from '~/lib/venues';
 import { MapPicker } from './MapPicker';
-import { type CardHighlightHandle, useCardHighlight } from './useCardHighlight';
+import { type LocationListHandle, useCardHighlight } from './useCardHighlight';
 
 interface VenueDraft {
     nameEn: string;
@@ -43,10 +43,10 @@ interface VenuesTabProps {
     readOnly?: boolean;
 }
 
-export const VenuesTab = forwardRef<CardHighlightHandle, VenuesTabProps>((
+export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
     {venues, parkingLots, refreshVenues, showToast, readOnly = false}, ref) => {
     const {isEnglish} = useLanguage();
-    const {highlightedId, registerCard} = useCardHighlight(ref);
+    const {highlightedId, registerCard, highlight} = useCardHighlight();
     const [showCreate, setShowCreate] = useState(false);
     const [createDraft, setCreateDraft] = useState<VenueDraft>(emptyDraft());
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -95,6 +95,16 @@ export const VenuesTab = forwardRef<CardHighlightHandle, VenuesTabProps>((
         setEditingId(venue.id);
         setEditDraft(venueToDraft(venue));
     };
+
+    useImperativeHandle(ref, () => ({
+        highlight,
+        openEdit: (id: string) => {
+            const venue = venues.find(v => v.id === id);
+            if (!venue) return;
+            if (!readOnly) openEdit(venue);
+            highlight(id);
+        },
+    }));
 
     const saveEdit = async () => {
         if (!editingId) return;

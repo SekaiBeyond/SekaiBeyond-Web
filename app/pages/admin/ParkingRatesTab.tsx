@@ -1,4 +1,4 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteParkingRate, callSaveParkingRate } from '~/lib/firebase';
 import type { ParkingRate } from '~/lib/parkingRates';
@@ -16,7 +16,8 @@ interface ParkingRatesTabProps {
 export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabProps>((
     {parkingRates, refreshParkingRates, refreshParkingLots, showToast, readOnly = false}, ref) => {
     const {isEnglish} = useLanguage();
-    const {highlightedId, registerCard} = useCardHighlight(ref);
+    const {highlightedId, registerCard, highlight} = useCardHighlight();
+    useImperativeHandle(ref, () => ({highlight}));
     const [showCreate, setShowCreate] = useState(false);
     const [labelEn, setLabelEn] = useState('');
     const [labelCn, setLabelCn] = useState('');
