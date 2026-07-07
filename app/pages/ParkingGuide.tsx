@@ -627,7 +627,6 @@ export const ParkingGuide = () => {
                                 : lot.type === 'garage' ? 'parking-info-icon--garage' : 'parking-info-icon--general';
                             const typeLabel = lotTypeLabel(lot.type, isEnglish);
                             const name = isEnglish ? lot.name : (lot.nameCn || lot.name);
-                            const desc = isEnglish ? lot.descriptionEn : lot.descriptionCn;
                             const dist = distanceFor(lot);
                             const rate = rateLabelFor(lot);
                             return (
@@ -640,7 +639,6 @@ export const ParkingGuide = () => {
                                         <div className="parking-lot-type">{typeLabel}</div>
                                         {dist && <div className="parking-lot-dist">📍 {dist}</div>}
                                         {rate && <div className="parking-lot-rate">💲 {rate}</div>}
-                                        {desc && <div className="parking-lot-desc">{desc}</div>}
                                     </div>
                                 </div>
                             );

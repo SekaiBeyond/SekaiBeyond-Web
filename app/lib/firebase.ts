@@ -364,8 +364,6 @@ export const callSaveParkingLot = (data: {
     type: 'general' | 'disabled' | 'garage';
     lat: number;
     lng: number;
-    descriptionEn: string;
-    descriptionCn: string;
     rateId: string;
 }) => httpsCallable<typeof data, {lotId: string}>(getFunctions(), 'saveParkingLot')(data);
 

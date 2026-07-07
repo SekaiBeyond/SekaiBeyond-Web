@@ -15,8 +15,6 @@ interface LotDraft {
     type: ParkingLot['type'];
     lat: number;
     lng: number;
-    descriptionEn: string;
-    descriptionCn: string;
     rateId: string;
 }
 
@@ -27,8 +25,6 @@ function lotToDraft(lot: ParkingLot): LotDraft {
         type: lot.type,
         lat: lot.lat,
         lng: lot.lng,
-        descriptionEn: lot.descriptionEn,
-        descriptionCn: lot.descriptionCn,
         rateId: lot.rateId,
     };
 }
@@ -40,8 +36,6 @@ function emptyDraft(): LotDraft {
         type: 'general',
         lat: UW_CAMPUS_CENTER.lat,
         lng: UW_CAMPUS_CENTER.lng,
-        descriptionEn: '',
-        descriptionCn: '',
         rateId: '',
     };
 }
@@ -84,8 +78,6 @@ export const ParkingLotsTab = forwardRef<CardHighlightHandle, ParkingLotsTabProp
         type: draft.type,
         lat: draft.lat,
         lng: draft.lng,
-        descriptionEn: draft.descriptionEn.trim(),
-        descriptionCn: draft.descriptionCn.trim(),
         rateId: draft.rateId,
     });
 
@@ -343,43 +335,6 @@ const LotForm = ({draft, setDraft, parkingRates, isEnglish}: LotFormProps) => (
                 value={{lat: draft.lat, lng: draft.lng}}
                 onChange={({lat, lng}) => setDraft(prev => ({...prev, lat, lng}))}
             />
-        </div>
-
-        <div className="admin-field-section">
-            <span className="admin-field-label">{isEnglish ? 'Description' : '描述'}</span>
-            <p className="admin-helper-text admin-field-hint">
-                {isEnglish
-                    ? 'Shown to visitors on the parking guide — add directions, the nearest entrance, or a helpful tip.'
-                    : '将显示在停车指南中 — 可填写方向、最近的入口或实用提示。'}
-            </p>
-            <div className="admin-form-grid">
-                <label>
-                    <span>{isEnglish ? 'English' : '英文'}</span>
-                    <textarea
-                        value={draft.descriptionEn}
-                        onChange={e => setDraft(prev => ({...prev, descriptionEn: e.target.value}))}
-                        className="admin-input admin-textarea"
-                        maxLength={1000}
-                        placeholder="e.g. Enter from Stevens Way; a short, well-lit walk to the main entrance."
-                    />
-                    <small className={`admin-char-count${draft.descriptionEn.length > 900 ? ' is-near-limit' : ''}`}>
-                        {draft.descriptionEn.length}/1000
-                    </small>
-                </label>
-                <label>
-                    <span>{isEnglish ? 'Chinese' : '中文'}</span>
-                    <textarea
-                        value={draft.descriptionCn}
-                        onChange={e => setDraft(prev => ({...prev, descriptionCn: e.target.value}))}
-                        className="admin-input admin-textarea"
-                        maxLength={1000}
-                        placeholder="例如：从 Stevens Way 进入，步行很短即到正门，沿途照明良好。"
-                    />
-                    <small className={`admin-char-count${draft.descriptionCn.length > 900 ? ' is-near-limit' : ''}`}>
-                        {draft.descriptionCn.length}/1000
-                    </small>
-                </label>
-            </div>
         </div>
     </>
 );

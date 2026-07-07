@@ -7,8 +7,6 @@ export interface ParkingLot {
     type: 'general' | 'disabled' | 'garage';
     lat: number;
     lng: number;
-    descriptionEn: string;
-    descriptionCn: string;
     /** Id of the linked parking-rate tier, or '' when no rate is assigned. */
     rateId: string;
 }
@@ -47,8 +45,6 @@ const cache = createCollectionCache<ParkingLot>('parkingLots', docSnap => {
         type: (data.type === 'disabled' || data.type === 'garage') ? data.type : 'general',
         lat: typeof data.lat === 'number' ? data.lat : 0,
         lng: typeof data.lng === 'number' ? data.lng : 0,
-        descriptionEn: data.descriptionEn ?? '',
-        descriptionCn: data.descriptionCn ?? '',
         rateId: data.rateId ?? '',
     };
 });

@@ -273,8 +273,6 @@ export const saveParkingLot = onCall({maxInstances: 10}, async (request) => {
     if (!type) throw new HttpsError("invalid-argument", `type must be one of ${PARKING_LOT_TYPES.join(", ")}.`);
     const lat = validateCoordinate(input.lat, "lat", -90, 90);
     const lng = validateCoordinate(input.lng, "lng", -180, 180);
-    const descriptionEn = sanitizeDisplayText(validateStr(input.descriptionEn, "descriptionEn", 1000));
-    const descriptionCn = sanitizeDisplayText(validateStr(input.descriptionCn, "descriptionCn", 1000));
     // rateId links to a parkingRates tier; "" means no rate assigned.
     const rateId = typeof input.rateId === "string" && input.rateId.trim()
         ? validateDocId(input.rateId, "rateId")
@@ -293,7 +291,7 @@ export const saveParkingLot = onCall({maxInstances: 10}, async (request) => {
         }
 
         const ref = db.collection("parkingLots").doc(docId);
-        const data = {name, nameCn, type, lat, lng, descriptionEn, descriptionCn, rateId};
+        const data = {name, nameCn, type, lat, lng, rateId};
         if (lotId) {
             txn.update(ref, data);
         } else {
