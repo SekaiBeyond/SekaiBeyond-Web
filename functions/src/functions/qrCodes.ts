@@ -245,7 +245,7 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
 
 // ---------------- Fast public redirect ----------------
 
-// Linked-event end times, cached in-process. With a warm instance (minInstances)
+// Linked-event end times, cached in-process. While an instance stays warm,
 // repeated scans of the same event-linked code during an event skip the
 // upcomingEvents read entirely. The TTL is short so reschedules and archival
 // (which delete the live event doc) self-correct within seconds — far simpler
@@ -275,7 +275,7 @@ async function getEventEndAtMs(eventId: string): Promise<number | null> {
  * styled card. The `recordQrScan` callable + SPA `/qr` page remain as a fallback
  * (e.g. local dev, where no hosting rewrite is in front of the app).
  */
-export const redirectQr = onRequest({minInstances: 1, maxInstances: 20, memory: "256MiB"}, async (req, res) => {
+export const redirectQr = onRequest({maxInstances: 20, memory: "256MiB"}, async (req, res) => {
     // Target URLs are editable and expiry is time-based — this must never cache.
     res.set("Cache-Control", "no-store");
 
