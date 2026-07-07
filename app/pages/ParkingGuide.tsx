@@ -12,7 +12,7 @@ import {
     type Venue,
 } from '~/lib/venues';
 import { lotBadgeChar, lotTypeLabel, type ParkingLot, useParkingLots } from '~/lib/parkingLots';
-import { type ParkingRate, rateLabel, useParkingRates } from '~/lib/parkingRates';
+import { NO_RATE_COLOR, type ParkingRate, rateColorById, rateLabel, useParkingRates } from '~/lib/parkingRates';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
@@ -344,6 +344,12 @@ export const ParkingGuide = () => {
         },
         [rateById, isEnglish],
     );
+    // Marker colors encode the price tier (UW parking-map style); grey = no rate assigned.
+    const colorById = useMemo(() => rateColorById(parkingRates), [parkingRates]);
+    const lotColor = useCallback(
+        (lot: ParkingLot): string => (lot.rateId && colorById[lot.rateId]) || NO_RATE_COLOR,
+        [colorById],
+    );
 
     // Straight-line distance from the selected venue to each lot, computed once per
     // venue/lots/language change rather than on every render and every call site.
@@ -371,6 +377,10 @@ export const ParkingGuide = () => {
         : [];
     // Only plot lots with real coordinates (skip 0,0 placeholders).
     const mappableLots = parkingLots.filter(l => hasCoordinates(l.lat, l.lng));
+    // Legend rows: only the rate tiers some plotted lot actually uses, in display order.
+    const usedRateIds = new Set(mappableLots.map(l => l.rateId).filter(Boolean));
+    const legendRates = parkingRates.filter(r => usedRateIds.has(r.id));
+    const hasUnratedLot = mappableLots.some(l => !l.rateId || !rateById[l.rateId]);
     const focusedLot = focusedLotId ? (mappableLots.find(l => l.id === focusedLotId) ?? null) : null;
 
     // Frame the map on the venue and its linked (primary) lots so they're the prominent
@@ -538,12 +548,9 @@ export const ParkingGuide = () => {
                                     {/* Parking Lot Markers — every lot is shown; lots linked to this venue are highlighted. */}
                                     {mappableLots.map((lot) => {
                                         const linked = linkedLotIds.has(lot.id);
-                                        const colorClass = lot.type === 'disabled' ? 'parking-marker-p--disabled'
-                                            : lot.type === 'garage' ? 'parking-marker-p--garage'
-                                                : '';
-
                                         const typeLabel = lotTypeLabel(lot.type, isEnglish);
                                         const dist = distanceFor(lot);
+                                        const rateText = rateLabelFor(lot);
                                         return (
                                             <div key={lot.id}>
                                                 <AdvancedMarker
@@ -554,7 +561,9 @@ export const ParkingGuide = () => {
                                                     <div
                                                         className={`parking-marker-lot-inner${linked ? ' is-linked' : ''}`}>
                                                         <div
-                                                            className={`parking-marker-p ${colorClass}`}>{lot.type === 'disabled' ? '♿' : 'P'}</div>
+                                                            className="parking-marker-p"
+                                                            style={{background: lotColor(lot)}}
+                                                        >{lotBadgeChar(lot.type)}</div>
                                                         {linked && (
                                                             <div
                                                                 className="parking-marker-label">{lot.name.split(' ')[0] ?? ''}<span>{typeLabel}</span>
@@ -573,6 +582,9 @@ export const ParkingGuide = () => {
                                                             <div
                                                                 className="parking-popup-title">{isEnglish ? lot.name : lot.nameCn}</div>
                                                             <div className="parking-popup-type">{typeLabel}</div>
+                                                            {rateText && (
+                                                                <div className="parking-popup-type">💲 {rateText}</div>
+                                                            )}
                                                             {dist && (
                                                                 <div className="parking-popup-dist">📍 {dist}</div>
                                                             )}
@@ -584,6 +596,35 @@ export const ParkingGuide = () => {
                                     })}
                                 </Map>
                             </APIProvider>
+                        </div>
+
+                        {/* Price legend (UW parking-map style): marker color = rate tier. */}
+                        <div className="parking-map-legend">
+                            <div className="parking-map-legend-title">
+                                {isEnglish ? 'Legend' : '图例'}
+                            </div>
+                            <div className="parking-map-legend-item">
+                                <span className="parking-map-legend-star">⭐</span>
+                                {isEnglish ? 'Event venue' : '活动场地'}
+                            </div>
+                            {legendRates.map(rate => (
+                                <div key={rate.id} className="parking-map-legend-item">
+                                    <span
+                                        className="parking-map-legend-dot"
+                                        style={{background: colorById[rate.id]}}
+                                    >P</span>
+                                    {rateLabel(rate, isEnglish)}
+                                </div>
+                            ))}
+                            {hasUnratedLot && (
+                                <div className="parking-map-legend-item">
+                                    <span
+                                        className="parking-map-legend-dot"
+                                        style={{background: NO_RATE_COLOR}}
+                                    >P</span>
+                                    {isEnglish ? 'Rate not posted' : '未公布费率'}
+                                </div>
+                            )}
                         </div>
                     </div>
 

@@ -370,7 +370,7 @@ export const callSaveParkingLot = (data: {
 export const callDeleteParkingLot = (data: {lotId: string}) =>
     httpsCallable<typeof data, {deleted: boolean; unlinkedFrom: number}>(getFunctions(), 'deleteParkingLot')(data);
 
-export const callSaveParkingRate = (data: {rateId?: string; labelEn: string; labelCn: string}) =>
+export const callSaveParkingRate = (data: {rateId?: string; labelEn: string; labelCn: string; color: string}) =>
     httpsCallable<typeof data, {rateId: string}>(getFunctions(), 'saveParkingRate')(data);
 
 export const callDeleteParkingRate = (data: {rateId: string}) =>

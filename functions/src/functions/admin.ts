@@ -355,6 +355,11 @@ export const saveParkingRate = onCall({maxInstances: 10}, async (request) => {
     const labelEn = sanitizeDisplayText(validateStr(input.labelEn, "labelEn", 200, true));
     const labelCn = sanitizeDisplayText(validateStr(input.labelCn, "labelCn", 200));
     if (!labelEn) throw new HttpsError("invalid-argument", "labelEn is required.");
+    // Marker color for lots on this tier; "" defers to the client-side preset fallback.
+    const color = typeof input.color === "string" ? input.color.trim().toLowerCase() : "";
+    if (color && !/^#[0-9a-f]{6}$/.test(color)) {
+        throw new HttpsError("invalid-argument", "color must be a hex color like #4b2e83.");
+    }
 
     const docId = rateId ?? db.collection("parkingRates").doc().id;
 
@@ -366,10 +371,10 @@ export const saveParkingRate = onCall({maxInstances: 10}, async (request) => {
 
         const ref = db.collection("parkingRates").doc(docId);
         if (rateId) {
-            // Preserve the existing display order on edit; only the labels change.
-            txn.update(ref, {labelEn, labelCn});
+            // Preserve the existing display order on edit; only labels and color change.
+            txn.update(ref, {labelEn, labelCn, color});
         } else {
-            txn.set(ref, {labelEn, labelCn, order: Date.now()});
+            txn.set(ref, {labelEn, labelCn, color, order: Date.now()});
         }
         txn.set(db.collection("records").doc(), {
             type: rateId ? "parkingrate-edit" : "parkingrate-create",

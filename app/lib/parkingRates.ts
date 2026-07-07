@@ -11,7 +11,36 @@ export interface ParkingRate {
     id: string;
     labelEn: string;
     labelCn: string;
+    /** Marker color for lots on this tier (hex like '#4b2e83'), or '' for the preset fallback. */
+    color: string;
     order: number;
+}
+
+/**
+ * Swatch presets for rate-tier colors, modeled on UW's parking-map legend (one color per
+ * price tier). Rates saved before colors existed fall back to these deterministically by
+ * display position, so the map is color-coded even before an admin pins anything.
+ */
+export const RATE_COLOR_PRESETS = [
+    '#f2a33c', // orange
+    '#4b2e83', // dark purple
+    '#8e44ad', // violet
+    '#d34fb2', // magenta
+    '#41b8f5', // light blue
+    '#2f6fed', // blue
+    '#1f8a4c', // green
+];
+
+/** Marker color for lots with no rate tier assigned (or a dangling rateId). */
+export const NO_RATE_COLOR = '#8b93a1';
+
+/** Effective marker color per rate id: the admin-picked color, or a preset by position. */
+export function rateColorById(sortedRates: ParkingRate[]): Record<string, string> {
+    const lookup: Record<string, string> = {};
+    sortedRates.forEach((rate, i) => {
+        lookup[rate.id] = rate.color || RATE_COLOR_PRESETS[i % RATE_COLOR_PRESETS.length];
+    });
+    return lookup;
 }
 
 const cache = createCollectionCache<ParkingRate>('parkingRates', docSnap => {
@@ -20,6 +49,7 @@ const cache = createCollectionCache<ParkingRate>('parkingRates', docSnap => {
         id: docSnap.id,
         labelEn: data.labelEn ?? '',
         labelCn: data.labelCn ?? '',
+        color: typeof data.color === 'string' ? data.color : '',
         order: typeof data.order === 'number' ? data.order : 0,
     };
 });

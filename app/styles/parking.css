@@ -302,6 +302,70 @@
     height: 820px;
 }
 
+/* Price legend overlaid on the map, like the UW parking map's LEGEND box. */
+.parking-map-legend {
+    position: absolute;
+    left: 14px;
+    bottom: 14px;
+    max-width: min(320px, calc(100% - 28px));
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 2;
+}
+
+.parking-map-legend-title {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+.parking-map-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.3;
+}
+
+.parking-map-legend-dot {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: #fff;
+    border: 1.5px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.parking-map-legend-star {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    border: 1.5px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
 /* --- Info Panel --- */
 .parking-info-panel {
     display: flex;
@@ -636,6 +700,8 @@ a.parking-lot-name:hover {
     gap: 2px;
 }
 
+/* The background color is set inline per lot: it encodes the lot's rate tier
+   (UW parking-map style), with a grey fallback when no rate is assigned. */
 .parking-marker-p {
     width: 32px;
     height: 32px;
@@ -647,16 +713,8 @@ a.parking-lot-name:hover {
     color: white;
     font-size: 18px;
     font-weight: 800;
-    box-shadow: 0 3px 10px rgba(255, 142, 83, 0.4);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
     border: 2px solid white;
-}
-
-.parking-marker-p--disabled {
-    background: #4ecb71;
-}
-
-.parking-marker-p--garage {
-    background: #6c63ff;
 }
 
 /* Lots linked to this venue are strongly highlighted — bigger pin, white + brand

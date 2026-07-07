@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AdvancedMarker, APIProvider, InfoWindow, Map, useMap } from '@vis.gl/react-google-maps';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { lotBadgeChar, lotTypeLabel, lotTypeShortLabel, type ParkingLot } from '~/lib/parkingLots';
-import { type ParkingRate, rateLabel } from '~/lib/parkingRates';
+import { NO_RATE_COLOR, type ParkingRate, rateColorById, rateLabel } from '~/lib/parkingRates';
 import { DEFAULT_ZOOM, hasCoordinates, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
 
 /** Which marker's popup is currently open on the overview map. */
@@ -187,13 +187,14 @@ export const LocationsMap = ({
         for (const r of parkingRates) lookup[r.id] = r;
         return lookup;
     }, [parkingRates]);
+    // Marker colors encode the price tier (UW parking-map style); grey = no rate assigned.
+    const colorById = useMemo(() => rateColorById(parkingRates), [parkingRates]);
+    const lotColor = (lot: ParkingLot) =>
+        (lot.rateId && colorById[lot.rateId]) || NO_RATE_COLOR;
+    const hasUnratedLot = mappableLots.some(l => !l.rateId || !colorById[l.rateId]);
 
     const venueName = (v: Venue) => isEnglish ? v.nameEn : (v.nameCn || v.nameEn);
     const lotName = (l: ParkingLot) => isEnglish ? l.name : (l.nameCn || l.name);
-
-    /** Names of the venues that link a given lot — surfaces orphan lots to admins. */
-    const linkedVenueNames = (lotId: string) =>
-        venues.filter(v => v.parkingLots.some(l => l.lotId === lotId)).map(venueName);
 
     const searchItems: SearchItem[] = [
         ...venues.map(v => {
@@ -315,18 +316,31 @@ export const LocationsMap = ({
                         <span className="admin-locmap-legend-dot" data-type="venue">⭐</span>
                         {isEnglish ? 'Venue' : '场地'}
                     </span>
+                    {/* Glyph = lot type; color = rate tier (below), like the UW parking map. */}
                     <span className="admin-locmap-legend-item">
-                        <span className="admin-locmap-legend-dot" data-type="general">P</span>
+                        <span className="admin-locmap-legend-dot" data-kind="glyph">P</span>
                         {lotTypeShortLabel('general', isEnglish)}
                     </span>
                     <span className="admin-locmap-legend-item">
-                        <span className="admin-locmap-legend-dot" data-type="garage">G</span>
+                        <span className="admin-locmap-legend-dot" data-kind="glyph">G</span>
                         {lotTypeShortLabel('garage', isEnglish)}
                     </span>
                     <span className="admin-locmap-legend-item">
-                        <span className="admin-locmap-legend-dot" data-type="disabled">♿</span>
+                        <span className="admin-locmap-legend-dot" data-kind="glyph">♿</span>
                         {lotTypeShortLabel('disabled', isEnglish)}
                     </span>
+                    {parkingRates.map(rate => (
+                        <span key={rate.id} className="admin-locmap-legend-item">
+                            <span className="admin-locmap-legend-dot" style={{background: colorById[rate.id]}}/>
+                            {rateLabel(rate, isEnglish)}
+                        </span>
+                    ))}
+                    {hasUnratedLot && (
+                        <span className="admin-locmap-legend-item">
+                            <span className="admin-locmap-legend-dot" style={{background: NO_RATE_COLOR}}/>
+                            {isEnglish ? 'No rate' : '无费率'}
+                        </span>
+                    )}
                 </div>
             </div>
 
@@ -385,12 +399,8 @@ export const LocationsMap = ({
                         {/* Parking lot markers — lots linked to the selected venue are highlighted. */}
                         {mappableLots.map(lot => {
                             const linked = linkedLotIds.has(lot.id);
-                            const colorClass = lot.type === 'disabled' ? 'parking-marker-p--disabled'
-                                : lot.type === 'garage' ? 'parking-marker-p--garage'
-                                    : '';
                             const typeLabel = lotTypeLabel(lot.type, isEnglish);
                             const rate = lot.rateId ? rateById[lot.rateId] : undefined;
-                            const owners = linkedVenueNames(lot.id);
                             return (
                                 <div key={lot.id}>
                                     <AdvancedMarker
@@ -399,8 +409,8 @@ export const LocationsMap = ({
                                         zIndex={selected?.kind === 'lot' && selected.id === lot.id ? 4 : linked ? 2 : 1}
                                     >
                                         <div className={`parking-marker-lot-inner${linked ? ' is-linked' : ''}`}>
-                                            <div className={`parking-marker-p ${colorClass}`}>
-                                                {lot.type === 'disabled' ? '♿' : 'P'}
+                                            <div className="parking-marker-p" style={{background: lotColor(lot)}}>
+                                                {lotBadgeChar(lot.type)}
                                             </div>
                                             {linked && (
                                                 <div className="parking-marker-label">
@@ -423,11 +433,6 @@ export const LocationsMap = ({
                                                 )}
                                                 <div className="parking-popup-type">
                                                     {typeLabel}{rate ? ` · ${rateLabel(rate, isEnglish)}` : ''}
-                                                </div>
-                                                <div className="parking-popup-type">
-                                                    {owners.length > 0
-                                                        ? (isEnglish ? `Linked to: ${owners.join(', ')}` : `关联场地：${owners.join('、')}`)
-                                                        : (isEnglish ? 'Not linked to any venue' : '未关联任何场地')}
                                                 </div>
                                                 {popupActions({kind: 'lot', id: lot.id})}
                                             </div>

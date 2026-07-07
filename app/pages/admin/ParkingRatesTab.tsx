@@ -1,8 +1,43 @@
-import { forwardRef, useImperativeHandle, useState } from 'react';
+import { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteParkingRate, callSaveParkingRate } from '~/lib/firebase';
-import type { ParkingRate } from '~/lib/parkingRates';
+import { type ParkingRate, RATE_COLOR_PRESETS, rateColorById } from '~/lib/parkingRates';
 import { type CardHighlightHandle, useCardHighlight } from './useCardHighlight';
+
+/** Preset swatches + a native picker for custom colors. `value` is always a hex color. */
+const RateColorField = ({value, onChange, isEnglish}: {
+    value: string;
+    onChange: (color: string) => void;
+    isEnglish: boolean;
+}) => (
+    <div className="admin-field-section">
+        <span className="admin-field-label">{isEnglish ? 'Map Color' : '地图颜色'}</span>
+        <div className="admin-rate-color-row">
+            {RATE_COLOR_PRESETS.map(c => (
+                <button
+                    key={c}
+                    type="button"
+                    className={`admin-rate-swatch${value.toLowerCase() === c ? ' is-active' : ''}`}
+                    style={{background: c}}
+                    onClick={() => onChange(c)}
+                    aria-label={c}
+                />
+            ))}
+            <input
+                type="color"
+                className="admin-rate-color-input"
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                title={isEnglish ? 'Custom color' : '自定义颜色'}
+            />
+        </div>
+        <p className="admin-helper-text">
+            {isEnglish
+                ? 'Lots on this rate tier use this color on the parking maps.'
+                : '使用此费率档位的停车场将在停车地图上显示此颜色。'}
+        </p>
+    </div>
+);
 
 interface ParkingRatesTabProps {
     parkingRates: ParkingRate[];
@@ -21,22 +56,34 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
     const [showCreate, setShowCreate] = useState(false);
     const [labelEn, setLabelEn] = useState('');
     const [labelCn, setLabelCn] = useState('');
+    const [color, setColor] = useState('');
     const [saving, setSaving] = useState(false);
 
     const [editingRate, setEditingRate] = useState<ParkingRate | null>(null);
     const [editLabelEn, setEditLabelEn] = useState('');
     const [editLabelCn, setEditLabelCn] = useState('');
+    const [editColor, setEditColor] = useState('');
     const [savingEdit, setSavingEdit] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+
+    // What the maps actually render per rate: the pinned color or its preset fallback.
+    const colorById = useMemo(() => rateColorById(parkingRates), [parkingRates]);
+    // Default for a new rate: the next unused-looking preset, so tiers differ out of the box.
+    const nextPreset = RATE_COLOR_PRESETS[parkingRates.length % RATE_COLOR_PRESETS.length];
 
     const createRate = async () => {
         if (!labelEn.trim()) return;
         setSaving(true);
         try {
-            await callSaveParkingRate({labelEn: labelEn.trim(), labelCn: labelCn.trim()});
+            await callSaveParkingRate({
+                labelEn: labelEn.trim(),
+                labelCn: labelCn.trim(),
+                color: color || nextPreset,
+            });
             await refreshParkingRates();
             setLabelEn('');
             setLabelCn('');
+            setColor('');
             setShowCreate(false);
             showToast(isEnglish ? 'Rate created.' : '费率已创建。', 'success');
         } catch {
@@ -50,6 +97,8 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
         setEditingRate(rate);
         setEditLabelEn(rate.labelEn);
         setEditLabelCn(rate.labelCn);
+        // Surface the effective color so saving pins what the map already shows.
+        setEditColor(rate.color || colorById[rate.id]);
     };
 
     const saveEdit = async () => {
@@ -60,6 +109,7 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
                 rateId: editingRate.id,
                 labelEn: editLabelEn.trim(),
                 labelCn: editLabelCn.trim(),
+                color: editColor,
             });
             await refreshParkingRates();
             setEditingRate(null);
@@ -128,6 +178,7 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
                             />
                         </label>
                     </div>
+                    <RateColorField value={color || nextPreset} onChange={setColor} isEnglish={isEnglish}/>
                     <div className="admin-btn-row admin-mt-12">
                         <button
                             className="admin-toggle-btn admin-toggle-save"
@@ -175,6 +226,7 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
                                         className="admin-input admin-tag-input"
                                         placeholder={isEnglish ? 'Chinese rate' : '中文费率'}
                                     />
+                                    <RateColorField value={editColor} onChange={setEditColor} isEnglish={isEnglish}/>
                                     <div className="admin-tag-actions">
                                         <button
                                             className="admin-toggle-btn admin-toggle-save admin-btn-sm"
@@ -195,7 +247,14 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
                                 </>
                             ) : (
                                 <>
-                                    <span className="admin-event-card-title">{rate.labelEn}</span>
+                                    <span className="admin-event-card-title">
+                                        <span
+                                            className="admin-rate-dot"
+                                            style={{background: colorById[rate.id]}}
+                                            title={isEnglish ? 'Marker color on the parking maps' : '停车地图上的标记颜色'}
+                                        />
+                                        {rate.labelEn}
+                                    </span>
                                     {rate.labelCn && (
                                         <span className="admin-event-card-date">{rate.labelCn}</span>
                                     )}

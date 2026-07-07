@@ -3165,7 +3165,8 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-muted);
 }
 
-/* Type badge shared by the search dropdown; colors mirror the map markers. */
+/* Type badge shared by the search dropdown; colors encode the lot type (list-only —
+   on the map, marker color encodes the rate tier instead). */
 .admin-locmap-badge {
     flex: 0 0 auto;
     width: 30px;
@@ -3229,12 +3230,9 @@ select.admin-tickets-tag:focus {
     font-size: 9px;
 }
 
-.admin-locmap-legend-dot[data-type="garage"] {
-    background: #6c63ff;
-}
-
-.admin-locmap-legend-dot[data-type="disabled"] {
-    background: #4ecb71;
+/* Type glyphs are neutral — on the map, marker color encodes the rate tier instead. */
+.admin-locmap-legend-dot[data-kind="glyph"] {
+    background: #5a6472;
 }
 
 .admin-locmap-canvas {
@@ -3556,4 +3554,56 @@ select.admin-tickets-tag:focus {
     justify-content: center;
     padding: 14px;
     font-size: 15px;
+}
+
+/* --- Parking-rate color picker (Rates tab) --- */
+
+.admin-rate-color-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-rate-swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.admin-rate-swatch:hover {
+    transform: scale(1.12);
+}
+
+.admin-rate-swatch.is-active {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-primary);
+    transform: scale(1.12);
+}
+
+/* Native color input restyled to sit alongside the preset swatches. */
+.admin-rate-color-input {
+    width: 34px;
+    height: 30px;
+    padding: 0;
+    border: 2px dashed rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* Marker-color dot shown beside a rate's label on its card. */
+.admin-rate-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    margin-right: 7px;
+    vertical-align: baseline;
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
