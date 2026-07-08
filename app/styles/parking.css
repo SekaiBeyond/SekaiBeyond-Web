@@ -302,14 +302,18 @@
     height: 820px;
 }
 
-/* Price legend overlaid on the map, like the UW parking map's LEGEND box. */
+/* Price legend overlaid on the map, like the UW parking map's LEGEND box.
+   Frosted "glass": translucent + blurred so markers behind it stay visible, and
+   click-through (pointer-events: none) so those markers remain clickable. */
 .parking-map-legend {
     position: absolute;
     left: 14px;
     bottom: 14px;
     max-width: min(320px, calc(100% - 28px));
-    background: rgba(255, 255, 255, 0.94);
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(8px) saturate(1.1);
+    -webkit-backdrop-filter: blur(8px) saturate(1.1);
+    border: 1px solid rgba(255, 255, 255, 0.55);
     border-radius: 12px;
     padding: 10px 14px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
@@ -317,6 +321,7 @@
     flex-direction: column;
     gap: 6px;
     z-index: 2;
+    pointer-events: none;
 }
 
 .parking-map-legend-title {

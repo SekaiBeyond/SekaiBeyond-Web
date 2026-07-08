@@ -397,6 +397,20 @@ export const ParkingGuide = () => {
             west: Math.min(...focusPoints.map(p => p.lng)),
         }
         : null;
+    // Reserve initial-framing room for the frosted legend, which is anchored to the map's
+    // bottom-left. Biasing the padding to that corner keeps the venue and its linked lots
+    // from loading underneath it. (Panning can still slide a marker behind the legend, but
+    // it's translucent and click-through, so it stays visible and tappable.) On narrow
+    // screens the legend spans most of the width, so we reserve height, not left-side width.
+    const narrowMap = typeof window !== 'undefined'
+        && window.matchMedia('(max-width: 640px)').matches;
+    const legendRowCount = 1 /* venue row */ + legendRates.length + (hasUnratedLot ? 1 : 0);
+    const mapPadding = {
+        top: 90,
+        right: 90,
+        bottom: 90 + 44 + legendRowCount * (narrowMap ? 20 : 22),
+        left: narrowMap ? 90 : 90 + 210,
+    };
 
     const loading = eventLoading || venuesLoading || lotsLoading || ratesLoading;
 
@@ -511,7 +525,7 @@ export const ParkingGuide = () => {
                             <APIProvider apiKey={apiKey}>
                                 <Map
                                     key={venue.id}
-                                    defaultBounds={{...mapBounds!, padding: 90}}
+                                    defaultBounds={{...mapBounds!, padding: mapPadding}}
                                     mapId={mapId}
                                     gestureHandling="greedy"
                                     disableDefaultUI={true}
@@ -598,7 +612,9 @@ export const ParkingGuide = () => {
                             </APIProvider>
                         </div>
 
-                        {/* Price legend (UW parking-map style): marker color = rate tier. */}
+                        {/* Price legend (UW parking-map style): marker color = rate tier.
+                            Translucent "glass" and click-through, so any marker behind it
+                            stays visible and usable rather than being hidden. */}
                         <div className="parking-map-legend">
                             <div className="parking-map-legend-title">
                                 {isEnglish ? 'Legend' : '图例'}
