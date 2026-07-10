@@ -2,14 +2,27 @@ import { useEffect, useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteQrCode, callSaveQrCode } from '~/lib/firebase';
-import { fetchQrScans, type QrCode, qrHasSpot, qrIsActive, qrIsSocial, qrScanUrl } from '~/lib/qrCodes';
+import { fetchQrScans, type QrCode, qrHasSpot, qrIsActive, qrIsSocial, type QrScan, qrScanUrl } from '~/lib/qrCodes';
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
-import { buildQrPayload, QrCodeForm, type QrDraft, qrToDraft } from './QrCodeForm';
+import {
+    buildQrPayload,
+    type QrDraft,
+    QrEventSelect,
+    QrExpirationFields,
+    QrLabelFields,
+    QrPlatformPicker,
+    QrSpotPicker,
+    QrTargetField,
+    qrToDraft,
+} from './QrCodeForm';
 import { QrScanTrends } from './QrScanTrends';
 import { QrSpotsMap } from './QrSpotsMap';
 
 const QR_SIZE = 240;
+
+/** The independently editable facets of a code. Only one edits at a time. */
+type EditSection = 'label' | 'target' | 'event' | 'expiration' | 'platforms' | 'spot';
 
 interface QrCodeDetailProps {
     code: QrCode;
@@ -21,6 +34,12 @@ interface QrCodeDetailProps {
     readOnly: boolean;
 }
 
+/**
+ * One code's page: stats, QR image(s), settings, and scan trends together.
+ * Every setting displays as a read-only value with its own Edit affordance
+ * that swaps in just that field's controls — so the scan count and chart
+ * never leave the screen, and only the facet being changed becomes a form.
+ */
 export const QrCodeDetail = ({
                                  code,
                                  events,
@@ -34,11 +53,13 @@ export const QrCodeDetail = ({
     const {platforms} = useSocialPlatforms();
     const qrWrapRef = useRef<HTMLDivElement>(null);
 
-    const [editing, setEditing] = useState(false);
+    const [editing, setEditing] = useState<EditSection | null>(null);
+    // Holds the whole draft while a section edits (saves send the full payload);
+    // stale and unused when nothing is being edited.
     const [draft, setDraft] = useState<QrDraft>(() => qrToDraft(code));
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
-    const [scans, setScans] = useState<Date[] | null>(null);
+    const [scans, setScans] = useState<QrScan[] | null>(null);
     const [scansError, setScansError] = useState(false);
 
     const linkedEvent = events.find(e => e.id === code.eventId) ?? null;
@@ -46,6 +67,31 @@ export const QrCodeDetail = ({
     const social = qrIsSocial(code);
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const scanValue = qrScanUrl(code.id, origin);
+
+    // "Unsaved changes" is judged on the payload that would be saved, not raw
+    // draft state — cosmetic leftovers (an expiry date remembered after
+    // switching modes off, a cleared spot's note) don't count, and a draft
+    // that can't build a payload always does.
+    const payloadJson = (d: QrDraft): string | null => {
+        const built = buildQrPayload(d, isEnglish);
+        return 'error' in built ? null : JSON.stringify(built.payload);
+    };
+    const dirty = editing !== null && payloadJson(draft) !== payloadJson(qrToDraft(code));
+
+    const confirmDiscard = () =>
+        !dirty || confirm(isEnglish ? 'Discard unsaved changes?' : '放弃未保存的更改？');
+
+    const openEdit = (section: EditSection) => {
+        if (!confirmDiscard()) return;
+        setDraft(qrToDraft(code));
+        setEditing(section);
+    };
+    const closeEdit = () => setEditing(null);
+
+    const back = () => {
+        if (!confirmDiscard()) return;
+        onBack();
+    };
 
     const loadScans = () => {
         setScansError(false);
@@ -81,7 +127,7 @@ export const QrCodeDetail = ({
         try {
             await callSaveQrCode({qrId: code.id, ...built.payload});
             await onChanged();
-            setEditing(false);
+            setEditing(null);
             showToast(isEnglish ? 'QR code updated.' : '二维码已更新。', 'success');
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to save.' : '保存失败。'), 'error');
@@ -111,181 +157,274 @@ export const QrCodeDetail = ({
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
         }) : (isEnglish ? 'Never' : '从未');
 
+    // Small inline "Edit" affordance shown beside a facet's name.
+    const editButton = (section: EditSection) =>
+        !readOnly && editing !== section ? (
+            <button type="button" className="admin-qr-row-edit" onClick={() => openEdit(section)}>
+                {isEnglish ? 'Edit' : '编辑'}
+            </button>
+        ) : null;
+
+    // Save/Cancel for whichever section is open (all sections share one draft).
+    const editorActions = (
+        <div className="admin-btn-row">
+            <button
+                className="admin-toggle-btn admin-toggle-save admin-btn-sm"
+                onClick={saveEdit}
+                disabled={saving || !dirty}
+            >
+                {saving ? (isEnglish ? 'Saving...' : '保存中...') : (isEnglish ? 'Save' : '保存')}
+            </button>
+            <button
+                className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
+                onClick={closeEdit}
+                disabled={saving}
+            >
+                {isEnglish ? 'Cancel' : '取消'}
+            </button>
+        </div>
+    );
+
+    const expirationText = code.expirationMode === 'date'
+        ? (code.expiresAt
+            ? (isEnglish ? `Until ${fmtDate(code.expiresAt)}` : `至 ${fmtDate(code.expiresAt)}`)
+            : (isEnglish ? 'Custom date (unset)' : '自定义日期（未设置）'))
+        : code.expirationMode === 'event'
+            ? (isEnglish ? 'When the linked event ends' : '关联活动结束时')
+            : (isEnglish ? 'Never expires' : '永不过期');
+
     return (
         <div className="admin-section">
             <div className="admin-tools-header">
-                <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
+                <button className="admin-btn admin-btn--link" onClick={back} type="button">
                     {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
                 </button>
                 <h3 className="admin-tools-title">{code.label}</h3>
             </div>
 
-            {editing ? (
-                <>
-                    <QrCodeForm draft={draft} setDraft={setDraft} events={events} isEnglish={isEnglish}
-                                onManagePlatforms={onManagePlatforms} kindLocked/>
-                    <div className="admin-btn-row admin-mt-12">
-                        <button className="admin-toggle-btn admin-toggle-save" onClick={saveEdit} disabled={saving}>
-                            {saving ? (isEnglish ? 'Saving...' : '保存中...') : (isEnglish ? 'Save' : '保存')}
-                        </button>
-                        <button
-                            className="admin-toggle-btn admin-toggle-cancel"
-                            onClick={() => {
-                                setDraft(qrToDraft(code));
-                                setEditing(false);
-                            }}
-                        >
-                            {isEnglish ? 'Cancel' : '取消'}
-                        </button>
-                    </div>
-                </>
-            ) : (
-                <>
-                    <div className="admin-qr-detail-top">
-                        {!social && (
-                            <div className="admin-single-code admin-single-code-narrow">
-                                <div ref={qrWrapRef} className="admin-single-code-qr">
-                                    <QRCodeCanvas value={scanValue} size={QR_SIZE} level="M" marginSize={2}/>
-                                </div>
-                                <div className="admin-code-url">
-                                    <input
-                                        readOnly
-                                        value={scanValue}
-                                        onClick={e => (e.target as HTMLInputElement).select()}
-                                        className="admin-code-input"
-                                    />
-                                    <button className="admin-btn admin-btn--purple" onClick={copyLink} type="button">
-                                        {isEnglish ? 'Copy' : '复制'}
-                                    </button>
-                                </div>
-                                <div className="admin-single-code-actions">
-                                    <button className="admin-toggle-btn admin-toggle-save" onClick={downloadPng}
-                                            type="button">
-                                        {isEnglish ? 'Download PNG' : '下载 PNG'}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="admin-qr-detail-meta">
-                            <div className="admin-stats-tiles">
-                                <div className="admin-stats-tile">
-                                    <div
-                                        className="admin-stats-tile-label">{isEnglish ? 'Total Scans' : '总扫描数'}</div>
-                                    <div className="admin-stats-tile-value">{code.scanCount}</div>
-                                    <div className="admin-stats-tile-sub">
-                                        {isEnglish ? 'Last: ' : '最近：'}{fmtDate(code.lastScanAt)}
-                                    </div>
-                                </div>
-                                <div className="admin-stats-tile">
-                                    <div className="admin-stats-tile-label">{isEnglish ? 'Status' : '状态'}</div>
-                                    <div className="admin-stats-tile-value">
-                                        <span
-                                            className={`admin-qr-badge ${active ? 'admin-qr-badge-active' : 'admin-qr-badge-expired'}`}>
-                                            {active ? (isEnglish ? 'Active' : '有效') : (isEnglish ? 'Expired' : '已过期')}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <dl className="admin-qr-detail-list">
-                                <div>
-                                    <dt>{isEnglish ? 'Target' : '目标'}</dt>
-                                    <dd><a href={code.targetUrl} target="_blank" rel="noreferrer">{code.targetUrl}</a>
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt>{isEnglish ? 'Event' : '活动'}</dt>
-                                    <dd>
-                                        {code.eventId
-                                            ? (linkedEvent
-                                                ? (isEnglish ? linkedEvent.title : (linkedEvent.titleCn || linkedEvent.title))
-                                                : (isEnglish ? 'Linked event (archived)' : '关联活动（已归档）'))
-                                            : (isEnglish ? 'None' : '无')}
-                                    </dd>
-                                </div>
-                                {!social && (
-                                    <div>
-                                        <dt>{isEnglish ? 'Map spot' : '地图位置'}</dt>
-                                        <dd>
-                                            {qrHasSpot(code)
-                                                ? `${code.lat.toFixed(5)}, ${code.lng.toFixed(5)}`
-                                                : (isEnglish ? 'Not linked' : '未关联')}
-                                        </dd>
-                                    </div>
-                                )}
-                            </dl>
-
-                            {!readOnly && (
-                                <div className="admin-btn-row">
-                                    <button className="admin-toggle-btn admin-toggle-edit"
-                                            onClick={() => setEditing(true)}>
-                                        {isEnglish ? 'Edit' : '编辑'}
-                                    </button>
-                                    <button
-                                        className="admin-toggle-btn admin-toggle-revoke"
-                                        onClick={remove}
-                                        disabled={deleting}
-                                    >
-                                        {deleting ? (isEnglish ? 'Deleting...' : '删除中...') : (isEnglish ? 'Delete' : '删除')}
-                                    </button>
-                                </div>
-                            )}
+            <div className="admin-qr-detail-top">
+                {!social && (
+                    <div className="admin-single-code admin-single-code-narrow">
+                        <div ref={qrWrapRef} className="admin-single-code-qr">
+                            <QRCodeCanvas value={scanValue} size={QR_SIZE} level="M" marginSize={2}/>
                         </div>
-                    </div>
-
-                    {social && (
-                        <div className="admin-field-section">
-                            <span className="admin-field-label">
-                                {isEnglish ? 'Platform QR Codes' : '各平台二维码'}
-                            </span>
-                            <p className="admin-helper-text admin-field-hint">
-                                {isEnglish
-                                    ? 'Each platform has its own link and QR for the same URL — share the matching '
-                                    + 'one on each platform and scans are counted separately. Use Edit to add or '
-                                    + 'remove platforms.'
-                                    : '每个平台都有指向同一网址的专属链接和二维码 — 在对应平台使用对应链接，扫描数'
-                                    + '将分别统计。可通过"编辑"添加或移除平台。'}
-                            </p>
-                            <div className="admin-qr-platform-cards">
-                                {code.platforms.map(pid => (
-                                    <PlatformQrCard
-                                        key={pid}
-                                        code={code}
-                                        platformId={pid}
-                                        isEnglish={isEnglish}
-                                        platforms={platforms}
-                                        showToast={showToast}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {qrHasSpot(code) && (
-                        <div className="admin-field-section">
-                            <span className="admin-field-label">{isEnglish ? 'Location' : '位置'}</span>
-                            <QrSpotsMap codes={[code]} height={260}/>
-                        </div>
-                    )}
-
-                    <div className="admin-field-section">
-                        <div className="admin-qr-spot-header">
-                            <span className="admin-field-label">{isEnglish ? 'Scans Over Time' : '扫描时间趋势'}</span>
-                            <button className="admin-toggle-btn admin-toggle-edit admin-btn-sm" onClick={loadScans}>
-                                {isEnglish ? 'Refresh' : '刷新'}
+                        <div className="admin-code-url">
+                            <input
+                                readOnly
+                                value={scanValue}
+                                onClick={e => (e.target as HTMLInputElement).select()}
+                                className="admin-code-input"
+                            />
+                            <button className="admin-btn admin-btn--purple" onClick={copyLink} type="button">
+                                {isEnglish ? 'Copy' : '复制'}
                             </button>
                         </div>
-                        {scansError ? (
-                            <p className="admin-no-results">{isEnglish ? 'Failed to load scans.' : '加载扫描记录失败。'}</p>
-                        ) : scans === null ? (
-                            <div className="profile-spinner admin-spinner-center"/>
-                        ) : (
-                            <QrScanTrends scans={scans}/>
+                        <div className="admin-single-code-actions">
+                            <button className="admin-toggle-btn admin-toggle-save" onClick={downloadPng}
+                                    type="button">
+                                {isEnglish ? 'Download PNG' : '下载 PNG'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="admin-qr-detail-meta">
+                    <div className="admin-stats-tiles">
+                        <div className="admin-stats-tile">
+                            <div
+                                className="admin-stats-tile-label">{isEnglish ? 'Total Scans' : '总扫描数'}</div>
+                            <div className="admin-stats-tile-value">{code.scanCount}</div>
+                            <div className="admin-stats-tile-sub">
+                                {isEnglish ? 'Last: ' : '最近：'}{fmtDate(code.lastScanAt)}
+                            </div>
+                        </div>
+                        <div className="admin-stats-tile">
+                            <div className="admin-stats-tile-label">{isEnglish ? 'Status' : '状态'}</div>
+                            <div className="admin-stats-tile-value">
+                                <span
+                                    className={`admin-qr-badge ${active ? 'admin-qr-badge-active' : 'admin-qr-badge-expired'}`}>
+                                    {active ? (isEnglish ? 'Active' : '有效') : (isEnglish ? 'Expired' : '已过期')}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <dl className="admin-qr-detail-list">
+                        <div>
+                            <dt>{isEnglish ? 'Label' : '名称'}{editButton('label')}</dt>
+                            <dd>
+                                {editing === 'label' ? (
+                                    <div className="admin-qr-inline-edit">
+                                        <QrLabelFields draft={draft} setDraft={setDraft} isEnglish={isEnglish}/>
+                                        {editorActions}
+                                    </div>
+                                ) : (
+                                    <>
+                                        {code.label}
+                                        {code.labelCn && ` / ${code.labelCn}`}
+                                    </>
+                                )}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>{isEnglish ? 'Target' : '目标'}{editButton('target')}</dt>
+                            <dd>
+                                {editing === 'target' ? (
+                                    <div className="admin-qr-inline-edit">
+                                        <QrTargetField draft={draft} setDraft={setDraft} isEnglish={isEnglish}/>
+                                        {editorActions}
+                                    </div>
+                                ) : (
+                                    <a href={code.targetUrl} target="_blank" rel="noreferrer">{code.targetUrl}</a>
+                                )}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>{isEnglish ? 'Event' : '活动'}{editButton('event')}</dt>
+                            <dd>
+                                {editing === 'event' ? (
+                                    <div className="admin-qr-inline-edit">
+                                        <QrEventSelect draft={draft} setDraft={setDraft} isEnglish={isEnglish}
+                                                       events={events}/>
+                                        {editorActions}
+                                    </div>
+                                ) : (
+                                    code.eventId
+                                        ? (linkedEvent
+                                            ? (isEnglish ? linkedEvent.title : (linkedEvent.titleCn || linkedEvent.title))
+                                            : (isEnglish ? 'Linked event (archived)' : '关联活动（已归档）'))
+                                        : (isEnglish ? 'None' : '无')
+                                )}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>{isEnglish ? 'Expiration' : '过期方式'}{editButton('expiration')}</dt>
+                            <dd>
+                                {editing === 'expiration' ? (
+                                    <div className="admin-qr-inline-edit">
+                                        <QrExpirationFields draft={draft} setDraft={setDraft} isEnglish={isEnglish}/>
+                                        {editorActions}
+                                    </div>
+                                ) : (
+                                    expirationText
+                                )}
+                            </dd>
+                        </div>
+                    </dl>
+
+                    {!readOnly && (
+                        <div className="admin-btn-row">
+                            <button
+                                className="admin-toggle-btn admin-toggle-revoke"
+                                onClick={remove}
+                                disabled={deleting}
+                            >
+                                {deleting ? (isEnglish ? 'Deleting...' : '删除中...') : (isEnglish ? 'Delete' : '删除')}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {social && (
+                <div className="admin-field-section">
+                    <div className="admin-qr-spot-header">
+                        <span className="admin-field-label">
+                            {isEnglish ? 'Platform QR Codes' : '各平台二维码'}
+                        </span>
+                        {!readOnly && editing !== 'platforms' && (
+                            <button className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                                    onClick={() => openEdit('platforms')} type="button">
+                                {isEnglish ? 'Edit platforms' : '编辑平台'}
+                            </button>
                         )}
                     </div>
-                </>
+                    {editing === 'platforms' ? (
+                        <div className="admin-qr-inline-edit">
+                            <QrPlatformPicker draft={draft} setDraft={setDraft} isEnglish={isEnglish}
+                                              onManagePlatforms={onManagePlatforms}/>
+                            {editorActions}
+                        </div>
+                    ) : (
+                        <p className="admin-helper-text admin-field-hint">
+                            {isEnglish
+                                ? 'Each platform has its own link and QR for the same URL — share the matching '
+                                + 'one on each platform and scans are counted separately.'
+                                : '每个平台都有指向同一网址的专属链接和二维码 — 在对应平台使用对应链接，扫描数'
+                                + '将分别统计。'}
+                        </p>
+                    )}
+                    <div className="admin-qr-platform-cards">
+                        {/* While the picker is open the cards preview the checkbox
+                            state, so toggling a platform shows/hides its QR live
+                            (a just-checked one shows 0 scans until saved). */}
+                        {(editing === 'platforms' ? draft.platforms : code.platforms).map(pid => (
+                            <PlatformQrCard
+                                key={pid}
+                                code={code}
+                                platformId={pid}
+                                isEnglish={isEnglish}
+                                platforms={platforms}
+                                showToast={showToast}
+                            />
+                        ))}
+                    </div>
+                </div>
             )}
+
+            {!social && (readOnly ? qrHasSpot(code) : true) && (
+                <div className="admin-field-section">
+                    <div className="admin-qr-spot-header">
+                        <span className="admin-field-label">{isEnglish ? 'Location' : '位置'}</span>
+                        {!readOnly && editing !== 'spot' && (
+                            <button className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                                    onClick={() => openEdit('spot')} type="button">
+                                {qrHasSpot(code)
+                                    ? (isEnglish ? 'Edit' : '编辑')
+                                    : (isEnglish ? 'Set location' : '设置位置')}
+                            </button>
+                        )}
+                    </div>
+                    {editing === 'spot' ? (
+                        <div className="admin-qr-inline-edit">
+                            <QrSpotPicker draft={draft} setDraft={setDraft} isEnglish={isEnglish}/>
+                            {editorActions}
+                        </div>
+                    ) : qrHasSpot(code) ? (
+                        <>
+                            <QrSpotsMap codes={[code]} height={260}/>
+                            {code.spotLabel && (
+                                <p className="admin-helper-text admin-field-hint">
+                                    {isEnglish ? code.spotLabel : (code.spotLabelCn || code.spotLabel)}
+                                </p>
+                            )}
+                        </>
+                    ) : (
+                        <p className="admin-helper-text admin-field-hint">
+                            {isEnglish
+                                ? 'Not linked to a map spot yet — use "Set location", or scan the printed code on '
+                                + 'your phone to link it from where it hangs.'
+                                : '尚未关联地图位置 — 可点击"设置位置"，或用手机扫描已打印的二维码，在现场直接关联。'}
+                        </p>
+                    )}
+                </div>
+            )}
+
+            <div className="admin-field-section">
+                <div className="admin-qr-spot-header">
+                    <span className="admin-field-label">{isEnglish ? 'Scans Over Time' : '扫描时间趋势'}</span>
+                    <button className="admin-toggle-btn admin-toggle-edit admin-btn-sm" onClick={loadScans}>
+                        {isEnglish ? 'Refresh' : '刷新'}
+                    </button>
+                </div>
+                {scansError ? (
+                    <p className="admin-no-results">{isEnglish ? 'Failed to load scans.' : '加载扫描记录失败。'}</p>
+                ) : scans === null ? (
+                    <div className="profile-spinner admin-spinner-center"/>
+                ) : (
+                    <QrScanTrends key={code.id} scans={scans} platforms={code.platforms}/>
+                )}
+            </div>
         </div>
     );
 };

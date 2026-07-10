@@ -3522,6 +3522,69 @@ select.admin-tickets-tag:focus {
     margin-bottom: 4px;
 }
 
+/* Tiny inline "Edit" affordance beside a detail row's name. */
+.admin-qr-row-edit {
+    border: none;
+    background: none;
+    color: var(--color-purple);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0;
+    margin-left: 8px;
+    cursor: pointer;
+}
+
+.admin-qr-row-edit:hover {
+    text-decoration: underline;
+}
+
+/* In-place editor that swaps in for a row/section's display value. */
+.admin-qr-inline-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+/* The shared field components assume the form grid's stacked-label layout;
+   mirror it when they render inside an inline editor instead. */
+.admin-qr-inline-edit > label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.admin-qr-inline-edit > label > span {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+/* Right-aligned "Clear spot" row inside the map-spot picker. */
+.admin-qr-clear-row {
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Platform filter pills above the scan-trend chart. */
+.admin-qr-trend-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 4px 0 10px;
+}
+
+/* Series-color swatch inside a pill, tying it to its bars in the chart. */
+.admin-qr-trend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: -1px;
+}
+
 .admin-qr-scan-banner {
     display: flex;
     align-items: center;
