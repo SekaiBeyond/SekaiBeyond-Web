@@ -73,21 +73,26 @@ export const LegacyQrRedirect = () => {
     const targetUrl = searchParams.get('url');
     const eventId = searchParams.get('event');
     const expiresParam = searchParams.get('expires');
+    const startsParam = searchParams.get('starts');
 
     const {upcomingEvents: requestedEvents, loading: loadingEvent} = useUpcomingEventsByIds(eventId ? [eventId] : []);
 
-    const expiresAt = (() => {
-        if (!expiresParam) return null;
-        const d = new Date(expiresParam);
+    const parseDate = (value: string | null) => {
+        if (!value) return null;
+        const d = new Date(value);
         return isNaN(d.getTime()) ? null : d;
-    })();
+    };
+    const expiresAt = parseDate(expiresParam);
+    const startsAt = parseDate(startsParam);
 
     const now = new Date();
     const eventActive = !loadingEvent && requestedEvents[0] ? requestedEvents[0].endAt > now : false;
     const dateActive = expiresAt ? expiresAt > now : false;
-    // If neither an event nor an expires param is present, there's nothing to gate on — pass through.
-    const noGating = !eventId && !expiresParam;
-    const isActive = noGating || eventActive || dateActive;
+    // A start time gates independently of how the end is gated.
+    const started = !startsAt || startsAt <= now;
+    // If neither an event nor an expires param is present, there's no end to gate on — pass through.
+    const endOk = (!eventId && !expiresParam) || eventActive || dateActive;
+    const isActive = started && endOk;
 
     useEffect(() => {
         if (eventId && loadingEvent) return;
@@ -103,13 +108,31 @@ export const LegacyQrRedirect = () => {
         return null;
     }
 
-    return <ExpiredCard isError={false}/>;
+    // Only "not yet" when the start gate is the sole blocker — a code that is
+    // also past its end (or has no target) is expired/invalid, not early.
+    return <ExpiredCard isError={false} notYetActive={Boolean(targetUrl) && !started && endOk}/>;
 };
 
 // ---------------- Shared expired / invalid card ----------------
 
-export const ExpiredCard = ({isError}: {isError: boolean}) => {
+export const ExpiredCard = ({isError, notYetActive = false}: {isError: boolean; notYetActive?: boolean}) => {
     const {isEnglish} = useLanguage();
+    const title = isError
+        ? (isEnglish ? 'Something Went Wrong' : '出错了')
+        : notYetActive
+            ? (isEnglish ? 'QR Code Not Active Yet' : '二维码尚未生效')
+            : (isEnglish ? 'QR Code Expired or Invalid' : '二维码已过期或无效');
+    const message = isError
+        ? (isEnglish
+            ? 'We couldn’t open this QR code. Please try again.'
+            : '无法打开此二维码，请重试。')
+        : notYetActive
+            ? (isEnglish
+                ? 'This QR code isn’t active yet. Please try again later.'
+                : '此二维码尚未生效，请稍后再试。')
+            : (isEnglish
+                ? 'The QR code you scanned has expired or the link is invalid.'
+                : '您扫描的二维码已过期或链接无效。');
     return (
         <div className="qr-redirect-page">
             <Navigation/>
@@ -119,20 +142,8 @@ export const ExpiredCard = ({isError}: {isError: boolean}) => {
                     <div className="qr-redirect-icon">
                         <MdEventBusy className="qr-redirect-icon-svg"/>
                     </div>
-                    <h1 className="qr-redirect-title">
-                        {isError
-                            ? (isEnglish ? 'Something Went Wrong' : '出错了')
-                            : (isEnglish ? 'QR Code Expired or Invalid' : '二维码已过期或无效')}
-                    </h1>
-                    <p className="qr-redirect-message">
-                        {isError
-                            ? (isEnglish
-                                ? 'We couldn’t open this QR code. Please try again.'
-                                : '无法打开此二维码，请重试。')
-                            : (isEnglish
-                                ? 'The QR code you scanned has expired or the link is invalid.'
-                                : '您扫描的二维码已过期或链接无效。')}
-                    </p>
+                    <h1 className="qr-redirect-title">{title}</h1>
+                    <p className="qr-redirect-message">{message}</p>
                     <Link to="/#events" className="btn btn-primary qr-redirect-cta">
                         <span>{isEnglish ? 'Explore Events' : '探索活动'}</span>
                         <span>✨</span>

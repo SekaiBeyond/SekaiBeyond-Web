@@ -2,45 +2,22 @@ import { useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { isValidHttpUrl } from '~/lib/urls';
-import type { UpcomingEvent } from '~/lib/upcomingEvents';
 
 const QR_SIZE = 280;
 
-type ExpirationMode = 'none' | 'event' | 'date';
-
 /**
- * The original throwaway generator: bakes a URL straight into a QR (optionally
- * routed through `/qr` for event/date gating) with no saved record and no scan
- * tracking. Kept for quick one-off codes that don't need a dashboard entry.
+ * The original throwaway generator: bakes a URL straight into a QR with no
+ * saved record and no scan tracking. Anything needing a date window or scan
+ * counts should be a tracked code instead.
  */
-export const QuickQrGenerator = ({events}: {events: UpcomingEvent[]}) => {
+export const QuickQrGenerator = () => {
     const {isEnglish} = useLanguage();
     const [url, setUrl] = useState('');
-    const [expirationMode, setExpirationMode] = useState<ExpirationMode>('none');
-    const [selectedEventId, setSelectedEventId] = useState('');
-    const [expiresLocal, setExpiresLocal] = useState('');
     const qrWrapRef = useRef<HTMLDivElement>(null);
 
     const trimmed = url.trim();
     const valid = isValidHttpUrl(trimmed);
-
-    const expiresIso = (() => {
-        if (expirationMode !== 'date' || !expiresLocal) return '';
-        const d = new Date(expiresLocal);
-        return isNaN(d.getTime()) ? '' : d.toISOString();
-    })();
-
-    const qrValue = (() => {
-        if (!valid || typeof window === 'undefined') return trimmed;
-        const origin = window.location.origin;
-        if (expirationMode === 'event' && selectedEventId) {
-            return `${origin}/qr?url=${encodeURIComponent(trimmed)}&event=${encodeURIComponent(selectedEventId)}`;
-        }
-        if (expirationMode === 'date' && expiresIso) {
-            return `${origin}/qr?url=${encodeURIComponent(trimmed)}&expires=${encodeURIComponent(expiresIso)}`;
-        }
-        return trimmed;
-    })();
+    const qrValue = trimmed;
 
     const downloadPng = () => {
         const canvas = qrWrapRef.current?.querySelector('canvas');
@@ -73,46 +50,6 @@ export const QuickQrGenerator = ({events}: {events: UpcomingEvent[]}) => {
                         autoFocus
                     />
                 </label>
-                <label className="admin-form-grid-full">
-                    <span>{isEnglish ? 'Expiration (Optional)' : '过期方式 (可选)'}</span>
-                    <select
-                        value={expirationMode}
-                        onChange={e => setExpirationMode(e.target.value as ExpirationMode)}
-                        className="admin-input"
-                    >
-                        <option value="none">{isEnglish ? 'No Expiration' : '永不过期'}</option>
-                        <option value="event">{isEnglish ? 'Link to Event' : '关联活动'}</option>
-                        <option value="date">{isEnglish ? 'Custom Date' : '自定义日期'}</option>
-                    </select>
-                </label>
-                {expirationMode === 'event' && (
-                    <label className="admin-form-grid-full">
-                        <span>{isEnglish ? 'Event' : '活动'}</span>
-                        <select
-                            value={selectedEventId}
-                            onChange={e => setSelectedEventId(e.target.value)}
-                            className="admin-input"
-                        >
-                            <option value="">{isEnglish ? '-- Select Event --' : '-- 选择活动 --'}</option>
-                            {events.map(ev => (
-                                <option key={ev.id} value={ev.id}>
-                                    {isEnglish ? ev.title : ev.titleCn}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                )}
-                {expirationMode === 'date' && (
-                    <label className="admin-form-grid-full">
-                        <span>{isEnglish ? 'Active Until' : '有效截止'}</span>
-                        <input
-                            type="datetime-local"
-                            value={expiresLocal}
-                            onChange={e => setExpiresLocal(e.target.value)}
-                            className="admin-input"
-                        />
-                    </label>
-                )}
             </div>
             {!valid ? (
                 <p className="admin-no-results">

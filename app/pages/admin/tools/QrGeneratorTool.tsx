@@ -158,7 +158,7 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
                         </div>
                     </>
                 ) : (
-                    <QuickQrGenerator events={upcomingEvents}/>
+                    <QuickQrGenerator/>
                 )}
             </div>
         );
