@@ -4,7 +4,14 @@ import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { qrScanExpiresAt, recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
-import { sanitizeDisplayText, validateDocId, validateISODate, validateStr, validateUrl } from "../utils/validation";
+import {
+    sanitizeDisplayText,
+    validateDocId,
+    validateISODate,
+    validateStr,
+    validateStringArray,
+    validateUrl,
+} from "../utils/validation";
 
 const QR_EXPIRATION_MODES = ["none", "event", "date"] as const;
 type QrExpirationMode = typeof QR_EXPIRATION_MODES[number];
@@ -17,6 +24,16 @@ function validateCoordinate(value: unknown, name: string, min: number, max: numb
         throw new HttpsError("invalid-argument", `Invalid ${name}: out of range.`);
     }
     return value;
+}
+
+// Platform ids become Firestore field-path segments (`platformScans.<id>`), so
+// only doc-id-safe characters are allowed. Ids come from the socialPlatforms
+// collection (seeded slugs or auto-generated ids), which always match.
+const PLATFORM_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** The `p` scan param, or "" when absent/unsafe (never blocks the redirect). */
+function readScanPlatform(value: unknown): string {
+    return typeof value === "string" && PLATFORM_ID_RE.test(value) ? value : "";
 }
 
 // A spot is only "set" when both coordinates are present and not the (0, 0)
@@ -48,6 +65,17 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
     const targetUrl = validateStr(input.targetUrl, "targetUrl", 2000, true);
     validateUrl(targetUrl, "targetUrl");
     const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : "";
+    // Source platforms ([] = a location code). A social code is one record for
+    // one URL carrying a QR link per platform (`/qr?id=…&p=<platform>`); scans
+    // are tallied per platform so click-through can be compared, and the list
+    // can be changed after creation. A code is either social (platforms, no
+    // map spot) or location (map spot, no platforms) — never both.
+    const platforms = validateStringArray(input.platforms, "platforms", 50, 64);
+    for (const p of platforms) {
+        if (!PLATFORM_ID_RE.test(p)) {
+            throw new HttpsError("invalid-argument", "Invalid platforms: illegal characters.");
+        }
+    }
 
     const modeRaw = input.expirationMode;
     const expirationMode: QrExpirationMode =
@@ -64,25 +92,29 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
         expiresAt = Timestamp.fromDate(new Date(iso));
     }
 
-    const {lat, lng} = readSpot(input);
-    const spotLabel = sanitizeDisplayText(validateStr(input.spotLabel, "spotLabel", 200));
-    const spotLabelCn = sanitizeDisplayText(validateStr(input.spotLabelCn, "spotLabelCn", 200));
+    const social = platforms.length > 0;
+    const {lat, lng} = social ? {lat: 0, lng: 0} : readSpot(input);
+    const spotLabel = social ? "" : sanitizeDisplayText(validateStr(input.spotLabel, "spotLabel", 200));
+    const spotLabelCn = social ? "" : sanitizeDisplayText(validateStr(input.spotLabelCn, "spotLabelCn", 200));
 
     const docId = qrId ?? db.collection("qrCodes").doc().id;
-    const data = {label, labelCn, targetUrl, eventId, expirationMode, lat, lng, spotLabel, spotLabelCn};
+    const data = {label, labelCn, targetUrl, eventId, platforms, expirationMode, lat, lng, spotLabel, spotLabelCn};
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         const ref = db.collection("qrCodes").doc(docId);
         if (qrId) {
             const existing = await txn.get(ref);
             if (!existing.exists) throw new HttpsError("not-found", "QR code not found.");
-            // Drop the stored date when the mode no longer needs one.
+            // Drop the stored date when the mode no longer needs one. Existing
+            // platformScans tallies are kept so removing/re-adding a platform
+            // never loses its history.
             txn.update(ref, {...data, expiresAt: expiresAt ?? FieldValue.delete()});
         } else {
             txn.set(ref, {
                 ...data,
                 expiresAt,
                 scanCount: 0,
+                platformScans: {},
                 lastScanAt: null,
                 createdAt: FieldValue.serverTimestamp(),
                 createdBy: uid,
@@ -119,6 +151,10 @@ export const setQrSpot = onCall({maxInstances: 10}, async (request) => {
         const ref = db.collection("qrCodes").doc(qrId);
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "QR code not found.");
+        const platforms = snap.data()?.platforms;
+        if (Array.isArray(platforms) && platforms.length > 0) {
+            throw new HttpsError("failed-precondition", "Social media codes can't be pinned to a map spot.");
+        }
         txn.update(ref, {lat, lng});
         txn.set(db.collection("records").doc(), {
             type: "qrcode-spot-set",
@@ -172,6 +208,7 @@ export const deleteQrCode = onCall({maxInstances: 10}, async (request) => {
  */
 export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
     const qrId = validateDocId((request.data as {id?: string})?.id, "id");
+    const platform = readScanPlatform((request.data as {p?: string})?.p);
     const ref = db.collection("qrCodes").doc(qrId);
 
     const snap = await ref.get();
@@ -227,13 +264,7 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
 
     if (active) {
         try {
-            const batch = db.batch();
-            batch.update(ref, {scanCount: FieldValue.increment(1), lastScanAt: FieldValue.serverTimestamp()});
-            batch.set(ref.collection("scans").doc(), {
-                scannedAt: FieldValue.serverTimestamp(),
-                expiresAt: qrScanExpiresAt(),
-            });
-            await batch.commit();
+            await commitScanTally(ref, platform);
         } catch (err) {
             // A failed counter write must not block the redirect.
             console.error(`recordQrScan: failed to record scan for ${qrId}`, err);
@@ -242,6 +273,27 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
 
     return {active, targetUrl: data.targetUrl ?? ""};
 });
+
+/**
+ * Bump the scan counters and log a scan event. Scans carrying a platform tag
+ * (social codes' per-platform links) additionally tally under
+ * `platformScans.<platform>` so click-through can be compared by platform.
+ */
+async function commitScanTally(ref: FirebaseFirestore.DocumentReference, platform: string): Promise<void> {
+    const update: Record<string, unknown> = {
+        scanCount: FieldValue.increment(1),
+        lastScanAt: FieldValue.serverTimestamp(),
+    };
+    if (platform) update[`platformScans.${platform}`] = FieldValue.increment(1);
+    const batch = db.batch();
+    batch.update(ref, update);
+    batch.set(ref.collection("scans").doc(), {
+        scannedAt: FieldValue.serverTimestamp(),
+        platform,
+        expiresAt: qrScanExpiresAt(),
+    });
+    await batch.commit();
+}
 
 // ---------------- Fast public redirect ----------------
 
@@ -280,6 +332,7 @@ export const redirectQr = onRequest({maxInstances: 20, memory: "256MiB"}, async 
     res.set("Cache-Control", "no-store");
 
     const id = typeof req.query.id === "string" ? req.query.id : "";
+    const platform = readScanPlatform(req.query.p);
 
     // Internal hand-offs use same-origin relative paths so scanners stay on
     // whatever host served the request (custom domain, preview channel, etc.).
@@ -360,13 +413,7 @@ export const redirectQr = onRequest({maxInstances: 20, memory: "256MiB"}, async 
     // sitting on the redirect's critical path.
     res.redirect(302, data.targetUrl);
     try {
-        const batch = db.batch();
-        batch.update(ref, {scanCount: FieldValue.increment(1), lastScanAt: FieldValue.serverTimestamp()});
-        batch.set(ref.collection("scans").doc(), {
-            scannedAt: FieldValue.serverTimestamp(),
-            expiresAt: qrScanExpiresAt(),
-        });
-        await batch.commit();
+        await commitScanTally(ref, platform);
     } catch (err) {
         // The response is already sent; a failed counter write only loses a tally.
         console.error(`redirectQr: failed to record scan for ${id}`, err);

@@ -6,42 +6,15 @@ import { type SocialPlatform, useSocialPlatforms } from '~/lib/socialPlatforms';
 interface PlatformDraft {
     label: string;
     labelCn: string;
-    buildPrefix: string;
-    pathPrefix: string;
-    /** Hosts as a comma/space separated string while editing. */
-    hosts: string;
-    placeholder: string;
     order: number;
 }
 
 function platformToDraft(p: SocialPlatform): PlatformDraft {
-    return {
-        label: p.label,
-        labelCn: p.labelCn ?? '',
-        buildPrefix: p.buildPrefix,
-        pathPrefix: p.pathPrefix,
-        hosts: p.hosts.join(', '),
-        placeholder: p.placeholder,
-        order: p.order,
-    };
+    return {label: p.label, labelCn: p.labelCn ?? '', order: p.order};
 }
 
 function emptyDraft(order: number): PlatformDraft {
-    return {label: '', labelCn: '', buildPrefix: 'https://', pathPrefix: '', hosts: '', placeholder: '', order};
-}
-
-/** Split the comma/space separated hosts field into a clean, deduped list. */
-function parseHosts(raw: string): string[] {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const h of raw.split(/[\s,]+/)) {
-        const host = h.trim().toLowerCase();
-        if (host && !seen.has(host)) {
-            seen.add(host);
-            out.push(host);
-        }
-    }
-    return out;
+    return {label: '', labelCn: '', order};
 }
 
 interface SocialPlatformsManagerProps {
@@ -51,11 +24,13 @@ interface SocialPlatformsManagerProps {
 }
 
 /**
- * Admin manager for the editable social-platform list behind the QR form's
- * "Social profile" mode. Until the defaults are seeded the list is read-only
- * (built-in defaults stand in); "Customize defaults" seeds all of them so they
- * can be edited, removed, or extended — seeding all at once avoids a single new
- * platform replacing the defaults in the picker.
+ * Admin manager for the editable platform list behind per-platform QR tracking.
+ * Platforms are traffic-source tags: picking some while creating a tracked code
+ * makes one code per platform for the same URL, so scan counts compare
+ * click-through by platform. Until the defaults are seeded the list is
+ * read-only (built-in defaults stand in); "Customize defaults" seeds all of
+ * them so they can be edited, removed, or extended — seeding all at once avoids
+ * a single new platform replacing the defaults in the picker.
  */
 export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: SocialPlatformsManagerProps) => {
     const {isEnglish} = useLanguage();
@@ -71,31 +46,10 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
 
     const editable = customized && !readOnly;
 
-    const validate = (draft: PlatformDraft): string | null => {
-        if (!draft.label.trim()) return isEnglish ? 'A label is required.' : '请填写名称。';
-        const prefix = draft.buildPrefix.trim();
-        if (!/^https:\/\//i.test(prefix)) {
-            return isEnglish ? 'Build prefix must be an https:// URL.' : '链接前缀必须为 https:// 链接。';
-        }
-        try {
-            new URL(prefix);
-        } catch {
-            return isEnglish ? 'Build prefix is not a valid URL.' : '链接前缀不是有效的链接。';
-        }
-        if (parseHosts(draft.hosts).length === 0) {
-            return isEnglish ? 'Add at least one host (e.g. example.com).' : '请至少填写一个域名（如 example.com）。';
-        }
-        return null;
-    };
-
     const payloadFrom = (draft: PlatformDraft, id?: string) => ({
         ...(id ? {id} : {}),
         label: draft.label.trim(),
         labelCn: draft.labelCn.trim(),
-        buildPrefix: draft.buildPrefix.trim(),
-        hosts: parseHosts(draft.hosts),
-        pathPrefix: draft.pathPrefix.trim(),
-        placeholder: draft.placeholder.trim(),
         order: draft.order,
     });
 
@@ -113,9 +67,8 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
     };
 
     const createPlatform = async () => {
-        const err = validate(createDraft);
-        if (err) {
-            showToast(err, 'error');
+        if (!createDraft.label.trim()) {
+            showToast(isEnglish ? 'A name is required.' : '请填写名称。', 'error');
             return;
         }
         setSaving(true);
@@ -139,9 +92,8 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
 
     const saveEdit = async () => {
         if (!editingId) return;
-        const err = validate(editDraft);
-        if (err) {
-            showToast(err, 'error');
+        if (!editDraft.label.trim()) {
+            showToast(isEnglish ? 'A name is required.' : '请填写名称。', 'error');
             return;
         }
         setSaving(true);
@@ -159,8 +111,8 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
 
     const deletePlatform = async (p: SocialPlatform) => {
         if (!confirm(isEnglish
-            ? `Delete platform "${p.label}"? Existing QR codes keep their saved link.`
-            : `删除平台"${p.label}"？已创建的二维码仍保留其链接。`
+            ? `Delete platform "${p.label}"? Existing QR codes keep their platform tag.`
+            : `删除平台"${p.label}"？已创建的二维码仍保留其平台标签。`
         )) return;
         setDeletingId(p.id);
         try {
@@ -186,8 +138,11 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
 
             <p className="admin-helper-text admin-section-intro">
                 {isEnglish
-                    ? 'These platforms power the "Social profile" link mode in the QR editor. Each one builds a profile URL from a handle and recognises that platform when editing a saved code.'
-                    : '这些平台用于二维码编辑器中的"社交主页"链接模式。每个平台可根据账号生成主页链接，并在编辑已保存的二维码时识别该平台。'}
+                    ? 'These platforms power per-platform tracking in the QR editor. Selecting platforms when '
+                    + 'creating a tracked code makes one code per platform for the same URL, so scan counts show '
+                    + 'which platform drives the most clicks.'
+                    : '这些平台用于二维码编辑器中的按平台追踪。创建可追踪二维码时选择平台，即可为同一链接按平台'
+                    + '各生成一个二维码，通过扫描数对比各平台的点击表现。'}
             </p>
 
             {!customized && !readOnly && (
@@ -263,12 +218,6 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
                                         {p.label}
                                         {p.labelCn && p.labelCn !== p.label ? ` · ${p.labelCn}` : ''}
                                     </span>
-                                    <span className="admin-helper-text admin-card-meta">
-                                        {p.buildPrefix}{p.placeholder || '…'}
-                                    </span>
-                                    <span className="admin-helper-text admin-card-meta">
-                                        {isEnglish ? 'Recognises: ' : '识别域名：'}{p.hosts.join(', ')}
-                                    </span>
                                     {editable && (
                                         <div className="admin-tag-actions">
                                             <button
@@ -305,72 +254,24 @@ interface PlatformFormProps {
 }
 
 const PlatformForm = ({draft, setDraft, isEnglish}: PlatformFormProps) => (
-    <>
-        <div className="admin-form-grid">
-            <label>
-                <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
-                <input
-                    value={draft.label}
-                    onChange={e => setDraft(prev => ({...prev, label: e.target.value}))}
-                    className="admin-input"
-                    placeholder="e.g. Threads"
-                />
-            </label>
-            <label>
-                <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
-                <input
-                    value={draft.labelCn}
-                    onChange={e => setDraft(prev => ({...prev, labelCn: e.target.value}))}
-                    className="admin-input"
-                    placeholder={isEnglish ? 'optional' : '可选'}
-                />
-            </label>
-            <label className="admin-form-grid-full">
-                <span>{isEnglish ? 'Build prefix' : '链接前缀'}</span>
-                <input
-                    value={draft.buildPrefix}
-                    onChange={e => setDraft(prev => ({...prev, buildPrefix: e.target.value}))}
-                    className="admin-input"
-                    placeholder="https://www.threads.net/@"
-                />
-                <small className="admin-helper-text">
-                    {isEnglish
-                        ? 'The handle is appended to this. End it with / or @ as the profile URL needs.'
-                        : '账号会拼接在其后。请按主页链接的格式以 / 或 @ 结尾。'}
-                </small>
-            </label>
-            <label>
-                <span>{isEnglish ? 'Handle placeholder' : '账号占位符'}</span>
-                <input
-                    value={draft.placeholder}
-                    onChange={e => setDraft(prev => ({...prev, placeholder: e.target.value}))}
-                    className="admin-input"
-                    placeholder="@handle"
-                />
-            </label>
-            <label>
-                <span>{isEnglish ? 'Path prefix (advanced)' : '路径前缀（高级）'}</span>
-                <input
-                    value={draft.pathPrefix}
-                    onChange={e => setDraft(prev => ({...prev, pathPrefix: e.target.value}))}
-                    className="admin-input"
-                    placeholder={isEnglish ? 'e.g. user/  (usually blank)' : '例如 user/（通常留空）'}
-                />
-            </label>
-            <label className="admin-form-grid-full">
-                <span>{isEnglish ? 'Recognised hosts' : '识别域名'}</span>
-                <input
-                    value={draft.hosts}
-                    onChange={e => setDraft(prev => ({...prev, hosts: e.target.value}))}
-                    className="admin-input"
-                    placeholder="threads.net, www.threads.net"
-                />
-                <small className="admin-helper-text">
-                    {isEnglish
-                        ? 'Comma-separated domains used to detect this platform when editing a saved code (omit www).'
-                        : '用逗号分隔的域名，用于在编辑已保存的二维码时识别此平台（无需 www）。'}
-                </small>
-            </label>
-        </div>
-    </>
+    <div className="admin-form-grid">
+        <label>
+            <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
+            <input
+                value={draft.label}
+                onChange={e => setDraft(prev => ({...prev, label: e.target.value}))}
+                className="admin-input"
+                placeholder="e.g. WeChat"
+            />
+        </label>
+        <label>
+            <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
+            <input
+                value={draft.labelCn}
+                onChange={e => setDraft(prev => ({...prev, labelCn: e.target.value}))}
+                className="admin-input"
+                placeholder={isEnglish ? 'optional' : '可选'}
+            />
+        </label>
+    </div>
 );

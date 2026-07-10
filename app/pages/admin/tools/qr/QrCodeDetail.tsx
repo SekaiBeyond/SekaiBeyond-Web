@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteQrCode, callSaveQrCode } from '~/lib/firebase';
-import { fetchQrScans, type QrCode, qrHasSpot, qrIsActive, qrScanUrl } from '~/lib/qrCodes';
+import { fetchQrScans, type QrCode, qrHasSpot, qrIsActive, qrIsSocial, qrScanUrl } from '~/lib/qrCodes';
+import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { buildQrPayload, QrCodeForm, type QrDraft, qrToDraft } from './QrCodeForm';
 import { QrScanTrends } from './QrScanTrends';
@@ -30,6 +31,7 @@ export const QrCodeDetail = ({
                                  readOnly
                              }: QrCodeDetailProps) => {
     const {isEnglish} = useLanguage();
+    const {platforms} = useSocialPlatforms();
     const qrWrapRef = useRef<HTMLDivElement>(null);
 
     const [editing, setEditing] = useState(false);
@@ -41,6 +43,7 @@ export const QrCodeDetail = ({
 
     const linkedEvent = events.find(e => e.id === code.eventId) ?? null;
     const active = qrIsActive(code, linkedEvent?.endAt ?? null);
+    const social = qrIsSocial(code);
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const scanValue = qrScanUrl(code.id, origin);
 
@@ -139,28 +142,30 @@ export const QrCodeDetail = ({
             ) : (
                 <>
                     <div className="admin-qr-detail-top">
-                        <div className="admin-single-code admin-single-code-narrow">
-                            <div ref={qrWrapRef} className="admin-single-code-qr">
-                                <QRCodeCanvas value={scanValue} size={QR_SIZE} level="M" marginSize={2}/>
+                        {!social && (
+                            <div className="admin-single-code admin-single-code-narrow">
+                                <div ref={qrWrapRef} className="admin-single-code-qr">
+                                    <QRCodeCanvas value={scanValue} size={QR_SIZE} level="M" marginSize={2}/>
+                                </div>
+                                <div className="admin-code-url">
+                                    <input
+                                        readOnly
+                                        value={scanValue}
+                                        onClick={e => (e.target as HTMLInputElement).select()}
+                                        className="admin-code-input"
+                                    />
+                                    <button className="admin-btn admin-btn--purple" onClick={copyLink} type="button">
+                                        {isEnglish ? 'Copy' : '复制'}
+                                    </button>
+                                </div>
+                                <div className="admin-single-code-actions">
+                                    <button className="admin-toggle-btn admin-toggle-save" onClick={downloadPng}
+                                            type="button">
+                                        {isEnglish ? 'Download PNG' : '下载 PNG'}
+                                    </button>
+                                </div>
                             </div>
-                            <div className="admin-code-url">
-                                <input
-                                    readOnly
-                                    value={scanValue}
-                                    onClick={e => (e.target as HTMLInputElement).select()}
-                                    className="admin-code-input"
-                                />
-                                <button className="admin-btn admin-btn--purple" onClick={copyLink} type="button">
-                                    {isEnglish ? 'Copy' : '复制'}
-                                </button>
-                            </div>
-                            <div className="admin-single-code-actions">
-                                <button className="admin-toggle-btn admin-toggle-save" onClick={downloadPng}
-                                        type="button">
-                                    {isEnglish ? 'Download PNG' : '下载 PNG'}
-                                </button>
-                            </div>
-                        </div>
+                        )}
 
                         <div className="admin-qr-detail-meta">
                             <div className="admin-stats-tiles">
@@ -199,14 +204,16 @@ export const QrCodeDetail = ({
                                             : (isEnglish ? 'None' : '无')}
                                     </dd>
                                 </div>
-                                <div>
-                                    <dt>{isEnglish ? 'Map spot' : '地图位置'}</dt>
-                                    <dd>
-                                        {qrHasSpot(code)
-                                            ? `${code.lat.toFixed(5)}, ${code.lng.toFixed(5)}`
-                                            : (isEnglish ? 'Not linked' : '未关联')}
-                                    </dd>
-                                </div>
+                                {!social && (
+                                    <div>
+                                        <dt>{isEnglish ? 'Map spot' : '地图位置'}</dt>
+                                        <dd>
+                                            {qrHasSpot(code)
+                                                ? `${code.lat.toFixed(5)}, ${code.lng.toFixed(5)}`
+                                                : (isEnglish ? 'Not linked' : '未关联')}
+                                        </dd>
+                                    </div>
+                                )}
                             </dl>
 
                             {!readOnly && (
@@ -226,6 +233,34 @@ export const QrCodeDetail = ({
                             )}
                         </div>
                     </div>
+
+                    {social && (
+                        <div className="admin-field-section">
+                            <span className="admin-field-label">
+                                {isEnglish ? 'Platform QR Codes' : '各平台二维码'}
+                            </span>
+                            <p className="admin-helper-text admin-field-hint">
+                                {isEnglish
+                                    ? 'Each platform has its own link and QR for the same URL — share the matching '
+                                    + 'one on each platform and scans are counted separately. Use Edit to add or '
+                                    + 'remove platforms.'
+                                    : '每个平台都有指向同一网址的专属链接和二维码 — 在对应平台使用对应链接，扫描数'
+                                    + '将分别统计。可通过"编辑"添加或移除平台。'}
+                            </p>
+                            <div className="admin-qr-platform-cards">
+                                {code.platforms.map(pid => (
+                                    <PlatformQrCard
+                                        key={pid}
+                                        code={code}
+                                        platformId={pid}
+                                        isEnglish={isEnglish}
+                                        platforms={platforms}
+                                        showToast={showToast}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {qrHasSpot(code) && (
                         <div className="admin-field-section">
@@ -251,6 +286,65 @@ export const QrCodeDetail = ({
                     </div>
                 </>
             )}
+        </div>
+    );
+};
+
+const PLATFORM_QR_SIZE = 160;
+
+interface PlatformQrCardProps {
+    code: QrCode;
+    platformId: string;
+    isEnglish: boolean;
+    platforms: SocialPlatform[];
+    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+}
+
+/** One platform's QR + link for a social code, with its own scan tally. */
+const PlatformQrCard = ({code, platformId, isEnglish, platforms, showToast}: PlatformQrCardProps) => {
+    const wrapRef = useRef<HTMLDivElement>(null);
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const scanValue = qrScanUrl(code.id, origin, platformId);
+    const name = socialPlatformName(platformId, isEnglish, platforms);
+    const count = code.platformScans[platformId] ?? 0;
+
+    const downloadPng = () => {
+        const canvas = wrapRef.current?.querySelector('canvas');
+        if (!canvas) return;
+        const safe = `${code.label || 'qr-code'}-${platformId}`.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+        const link = document.createElement('a');
+        link.download = `qr-${safe}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    };
+
+    const copyLink = () => {
+        navigator.clipboard.writeText(scanValue).catch(() => { /* clipboard may be unavailable */
+        });
+        showToast(
+            isEnglish ? `${name} link copied.` : `已复制 ${name} 链接。`,
+            'success',
+        );
+    };
+
+    return (
+        <div className="admin-qr-platform-card">
+            <span className="admin-qr-platform-card-title">{name}</span>
+            <span className="admin-qr-platform-card-count">
+                {isEnglish ? `${count} scans` : `${count} 次扫描`}
+            </span>
+            <div ref={wrapRef}>
+                <QRCodeCanvas value={scanValue} size={PLATFORM_QR_SIZE} level="M" marginSize={2}/>
+            </div>
+            <div className="admin-tag-actions">
+                <button className="admin-toggle-btn admin-toggle-edit admin-btn-sm" onClick={copyLink} type="button">
+                    {isEnglish ? 'Copy link' : '复制链接'}
+                </button>
+                <button className="admin-toggle-btn admin-toggle-save admin-btn-sm" onClick={downloadPng}
+                        type="button">
+                    PNG
+                </button>
+            </div>
         </div>
     );
 };

@@ -384,6 +384,7 @@ export const callSaveQrCode = (data: {
     labelCn: string;
     targetUrl: string;
     eventId: string;
+    platforms: string[];
     expirationMode: 'none' | 'event' | 'date';
     expiresAt?: string;
     lat?: number;
@@ -398,19 +399,15 @@ export const callSetQrSpot = (data: {qrId: string; lat: number; lng: number}) =>
 export const callDeleteQrCode = (data: {qrId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteQrCode')(data);
 
-export const callRecordQrScan = (data: {id: string}) =>
+export const callRecordQrScan = (data: {id: string; p?: string}) =>
     httpsCallable<typeof data, {active: boolean; targetUrl: string}>(getFunctions(), 'recordQrScan')(data);
 
-// ---- Editable social platforms (QR "Social profile" mode) ----
+// ---- Editable social platforms (per-platform QR tracking) ----
 
 export const callSaveSocialPlatform = (data: {
     id?: string;
     label: string;
     labelCn: string;
-    buildPrefix: string;
-    hosts: string[];
-    pathPrefix: string;
-    placeholder: string;
     order: number;
 }) => httpsCallable<typeof data, {id: string}>(getFunctions(), 'saveSocialPlatform')(data);
 

@@ -3413,6 +3413,45 @@ select.admin-tickets-tag:focus {
     color: #2f9e57;
 }
 
+.admin-qr-chip-platform {
+    background: rgba(255, 107, 157, 0.12);
+    color: #d4457f;
+}
+
+.admin-qr-platform-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px 14px;
+    margin-top: 8px;
+}
+
+.admin-qr-platform-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+}
+
+.admin-qr-platform-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 12px;
+    border-radius: 12px;
+    border: 1px solid #e8e8e8;
+    background: white;
+}
+
+.admin-qr-platform-card-title {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.admin-qr-platform-card-count {
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
 .admin-qr-badge {
     font-size: 11px;
     font-weight: 700;

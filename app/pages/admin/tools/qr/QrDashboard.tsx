@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { type QrCode, qrHasSpot, qrIsActive } from '~/lib/qrCodes';
+import { socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { heatColor } from './heat';
 import { QrSpotsMap } from './QrSpotsMap';
@@ -29,6 +30,7 @@ export const QrDashboard = ({
                                 readOnly
                             }: QrDashboardProps) => {
     const {isEnglish} = useLanguage();
+    const {platforms} = useSocialPlatforms();
     const [eventFilter, setEventFilter] = useState<EventFilter>('all');
     const [refreshing, setRefreshing] = useState(false);
 
@@ -171,6 +173,11 @@ export const QrDashboard = ({
                                         </span>
                                         <span className="admin-qr-row-sub">{code.targetUrl}</span>
                                         <span className="admin-qr-row-tags">
+                                            {code.platforms.map(pid => (
+                                                <span key={pid} className="admin-qr-chip admin-qr-chip-platform">
+                                                    {socialPlatformName(pid, isEnglish, platforms)}
+                                                </span>
+                                            ))}
                                             {code.eventId && (
                                                 <span className="admin-qr-chip">{eventTitle(code.eventId)}</span>
                                             )}

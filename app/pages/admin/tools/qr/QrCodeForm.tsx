@@ -1,16 +1,17 @@
 import { type QrCode, type QrExpirationMode, qrHasSpot } from '~/lib/qrCodes';
-import {
-    buildSocialUrl,
-    cleanHandle,
-    detectSocialUrl,
-    getSocialPlatform,
-    useSocialPlatforms,
-} from '~/lib/socialPlatforms';
+import { useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { MapPicker } from '../../MapPicker';
 
-/** How the editor is building {@link QrDraft.targetUrl}: a raw URL or a social profile. */
-export type QrLinkMode = 'url' | 'social';
+/**
+ * The two kinds of tracked code — mutually exclusive:
+ * - 'location': a printed code placed somewhere physical; can pin a map spot,
+ *   never carries a platform tag.
+ * - 'social': a link shared on social platforms; tagged with a platform so
+ *   scan counts compare click-through per platform, never has a map spot.
+ * Not persisted — derived from whether a saved code has a platform tag.
+ */
+export type QrKind = 'location' | 'social';
 
 export interface QrDraft {
     label: string;
@@ -20,12 +21,14 @@ export interface QrDraft {
     expirationMode: QrExpirationMode;
     /** datetime-local string (local time) used while editing the custom date. */
     expiresLocal: string;
-    /** Editing-only: which builder produces `targetUrl`. Not persisted. */
-    linkMode: QrLinkMode;
-    /** Editing-only: selected platform id while in social mode. Not persisted. */
-    socialPlatform: string;
-    /** Editing-only: handle/profile id while in social mode. Not persisted. */
-    socialHandle: string;
+    /** Editing-only: which kind of code this is (see {@link QrKind}). */
+    kind: QrKind;
+    /**
+     * Source platforms (social kind only). The code gets one QR link per
+     * selected platform — all opening {@link targetUrl} — with scans tallied
+     * per platform. Freely editable after creation to add/remove platforms.
+     */
+    platforms: string[];
     lat: number;
     lng: number;
     spotLabel: string;
@@ -44,14 +47,12 @@ export function emptyDraft(): QrDraft {
     return {
         label: '', labelCn: '', targetUrl: '', eventId: '',
         expirationMode: 'none', expiresLocal: '',
-        linkMode: 'url', socialPlatform: '', socialHandle: '',
+        kind: 'location', platforms: [],
         lat: 0, lng: 0, spotLabel: '', spotLabelCn: '',
     };
 }
 
 export function qrToDraft(code: QrCode): QrDraft {
-    // Reopen recognised profile links in social mode so they round-trip.
-    const social = detectSocialUrl(code.targetUrl);
     return {
         label: code.label,
         labelCn: code.labelCn,
@@ -59,9 +60,8 @@ export function qrToDraft(code: QrCode): QrDraft {
         eventId: code.eventId,
         expirationMode: code.expirationMode,
         expiresLocal: toLocalInput(code.expiresAt),
-        linkMode: social ? 'social' : 'url',
-        socialPlatform: social?.platformId ?? '',
-        socialHandle: social?.handle ?? '',
+        kind: code.platforms.length > 0 ? 'social' : 'location',
+        platforms: code.platforms,
         lat: code.lat,
         lng: code.lng,
         spotLabel: code.spotLabel,
@@ -74,6 +74,7 @@ export interface QrSavePayload {
     labelCn: string;
     targetUrl: string;
     eventId: string;
+    platforms: string[];
     expirationMode: QrExpirationMode;
     expiresAt?: string;
     lat: number;
@@ -85,6 +86,9 @@ export interface QrSavePayload {
 /**
  * Translate a draft into the Cloud Function payload. Returns a validation error
  * string (localized) instead of a payload when the draft is incomplete.
+ *
+ * The kind decides which extras survive: location codes keep the map spot and
+ * never platform tags; social codes keep the platform list and never a spot.
  */
 export function buildQrPayload(
     draft: QrDraft,
@@ -93,16 +97,11 @@ export function buildQrPayload(
     const label = draft.label.trim();
     const targetUrl = draft.targetUrl.trim();
     if (!label) return {error: isEnglish ? 'A label is required.' : '请填写名称。'};
-    if (draft.linkMode === 'social') {
-        if (!draft.socialPlatform) {
-            return {error: isEnglish ? 'Choose a social platform.' : '请选择社交平台。'};
-        }
-        if (!cleanHandle(draft.socialHandle)) {
-            return {error: isEnglish ? 'Enter a handle or profile ID.' : '请填写账号或主页 ID。'};
-        }
-    }
     if (!/^https:\/\//i.test(targetUrl)) {
         return {error: isEnglish ? 'Target must be an https:// URL.' : '目标链接必须为 https:// 链接。'};
+    }
+    if (draft.kind === 'social' && draft.platforms.length === 0) {
+        return {error: isEnglish ? 'Select at least one platform.' : '请至少选择一个平台。'};
     }
     if (draft.expirationMode === 'event' && !draft.eventId) {
         return {error: isEnglish ? 'Select an event for event-based expiration.' : '请选择关联活动以按活动过期。'};
@@ -118,19 +117,21 @@ export function buildQrPayload(
         }
         expiresAt = d.toISOString();
     }
-    const hasSpot = qrHasSpot(draft);
+    const social = draft.kind === 'social';
+    const hasSpot = !social && qrHasSpot(draft);
     return {
         payload: {
             label,
             labelCn: draft.labelCn.trim(),
             targetUrl,
             eventId: draft.eventId,
+            platforms: social ? draft.platforms : [],
             expirationMode: draft.expirationMode,
             expiresAt,
             lat: hasSpot ? draft.lat : 0,
             lng: hasSpot ? draft.lng : 0,
-            spotLabel: draft.spotLabel.trim(),
-            spotLabelCn: draft.spotLabelCn.trim(),
+            spotLabel: hasSpot ? draft.spotLabel.trim() : '',
+            spotLabelCn: hasSpot ? draft.spotLabelCn.trim() : '',
         },
     };
 }
@@ -140,48 +141,61 @@ interface QrCodeFormProps {
     setDraft: (updater: (prev: QrDraft) => QrDraft) => void;
     events: UpcomingEvent[];
     isEnglish: boolean;
-    /** Opens the social-platform manager; the link only shows in social mode. */
+    /** Opens the social-platform manager. */
     onManagePlatforms?: () => void;
 }
 
 export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatforms}: QrCodeFormProps) => {
     const {platforms} = useSocialPlatforms();
     const hasSpot = qrHasSpot(draft);
-    const selectedPlatform = getSocialPlatform(draft.socialPlatform, platforms);
-    const builtSocialUrl = buildSocialUrl(draft.socialPlatform, draft.socialHandle, platforms);
+    // Tags from since-deleted platforms still get a checkbox (labelled with the
+    // raw id) so they can be seen and unchecked rather than silently dropped.
+    const knownIds = new Set(platforms.map(p => p.id));
+    const orphanTags = draft.platforms.filter(id => !knownIds.has(id));
 
-    const setLinkMode = (mode: QrLinkMode) => setDraft(prev => {
-        if (mode === prev.linkMode) return prev;
-        if (mode === 'social') {
-            // Seed the picker from an already-pasted profile URL when possible.
-            const detected = detectSocialUrl(prev.targetUrl, platforms);
-            const socialPlatform = detected?.platformId ?? prev.socialPlatform;
-            const socialHandle = detected?.handle ?? prev.socialHandle;
-            return {
-                ...prev,
-                linkMode: 'social',
-                socialPlatform,
-                socialHandle,
-                targetUrl: buildSocialUrl(socialPlatform, socialHandle, platforms) || prev.targetUrl,
-            };
-        }
-        return {...prev, linkMode: 'url'};
-    });
-
-    const setPlatform = (socialPlatform: string) => setDraft(prev => ({
+    const togglePlatform = (id: string) => setDraft(prev => ({
         ...prev,
-        socialPlatform,
-        targetUrl: buildSocialUrl(socialPlatform, prev.socialHandle, platforms),
-    }));
-
-    const setHandle = (socialHandle: string) => setDraft(prev => ({
-        ...prev,
-        socialHandle,
-        targetUrl: buildSocialUrl(prev.socialPlatform, socialHandle, platforms),
+        platforms: prev.platforms.includes(id)
+            ? prev.platforms.filter(p => p !== id)
+            : [...prev.platforms, id],
     }));
 
     return (
         <>
+            <div className="admin-section-mb">
+                <span className="admin-field-label">{isEnglish ? 'Code type' : '二维码类型'}</span>
+                <div className="admin-qr-mode-toggle" role="tablist">
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={draft.kind === 'location'}
+                        className={`admin-btn admin-btn--ghost${draft.kind === 'location' ? ' admin-btn--ghost-active' : ''}`}
+                        onClick={() => setDraft(prev => ({...prev, kind: 'location'}))}
+                    >
+                        {isEnglish ? '📍 Location' : '📍 地点'}
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={draft.kind === 'social'}
+                        className={`admin-btn admin-btn--ghost${draft.kind === 'social' ? ' admin-btn--ghost-active' : ''}`}
+                        onClick={() => setDraft(prev => ({...prev, kind: 'social'}))}
+                    >
+                        {isEnglish ? '📣 Social media' : '📣 社交媒体'}
+                    </button>
+                </div>
+                <small className="admin-helper-text">
+                    {draft.kind === 'location'
+                        ? (isEnglish
+                            ? 'A printed code placed somewhere physical — pin it on the map and track scans by spot.'
+                            : '张贴在实体位置的二维码 — 可标记在地图上，按位置追踪扫描。')
+                        : (isEnglish
+                            ? 'A link shared on social platforms — one code per platform for the same URL, so scan '
+                            + 'counts compare click-through by platform.'
+                            : '在社交平台分享的链接 — 同一链接按平台各生成一个二维码，扫描数即可对比各平台的点击表现。')}
+                </small>
+            </div>
+
             <div className="admin-form-grid">
                 <label>
                     <span>{isEnglish ? 'Label (English)' : '名称（英文）'}</span>
@@ -201,91 +215,65 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                         placeholder={isEnglish ? 'optional' : '可选'}
                     />
                 </label>
-                <div className="admin-form-grid-full">
-                    <span className="admin-field-label">{isEnglish ? 'Where it links' : '跳转目标'}</span>
-                    <div className="admin-qr-mode-toggle" role="tablist">
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={draft.linkMode === 'url'}
-                            className={`admin-btn admin-btn--ghost${draft.linkMode === 'url' ? ' admin-btn--ghost-active' : ''}`}
-                            onClick={() => setLinkMode('url')}
-                        >
-                            {isEnglish ? 'Custom URL' : '自定义链接'}
-                        </button>
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={draft.linkMode === 'social'}
-                            className={`admin-btn admin-btn--ghost${draft.linkMode === 'social' ? ' admin-btn--ghost-active' : ''}`}
-                            onClick={() => setLinkMode('social')}
-                        >
-                            {isEnglish ? 'Social profile' : '社交主页'}
-                        </button>
-                    </div>
+                <label className="admin-form-grid-full">
+                    <span>{isEnglish ? 'Where it links' : '跳转目标'}</span>
+                    <input
+                        value={draft.targetUrl}
+                        onChange={e => setDraft(prev => ({...prev, targetUrl: e.target.value}))}
+                        className="admin-input"
+                        placeholder="https://example.com"
+                    />
+                    <small className="admin-helper-text">
+                        {isEnglish
+                            ? 'Where the QR redirects. You can change this later without reprinting the code.'
+                            : '二维码跳转目标。之后可随时修改，无需重新打印。'}
+                    </small>
+                </label>
 
-                    {draft.linkMode === 'url' ? (
-                        <label>
-                            <input
-                                value={draft.targetUrl}
-                                onChange={e => setDraft(prev => ({...prev, targetUrl: e.target.value}))}
-                                className="admin-input"
-                                placeholder="https://example.com"
-                            />
-                            <small className="admin-helper-text">
-                                {isEnglish
-                                    ? 'Where the QR redirects. You can change this later without reprinting the code.'
-                                    : '二维码跳转目标。之后可随时修改，无需重新打印。'}
-                            </small>
-                        </label>
-                    ) : (
-                        <div className="admin-form-grid">
-                            <label>
-                                <span>{isEnglish ? 'Platform' : '平台'}</span>
-                                <select
-                                    value={draft.socialPlatform}
-                                    onChange={e => setPlatform(e.target.value)}
-                                    className="admin-input"
-                                >
-                                    <option value="">{isEnglish ? '— Select —' : '— 选择 —'}</option>
-                                    {platforms.map(p => (
-                                        <option key={p.id} value={p.id}>
-                                            {isEnglish ? p.label : (p.labelCn ?? p.label)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label>
-                                <span>{isEnglish ? 'Handle / profile' : '账号 / 主页'}</span>
-                                <input
-                                    value={draft.socialHandle}
-                                    onChange={e => setHandle(e.target.value)}
-                                    className="admin-input"
-                                    placeholder={selectedPlatform?.placeholder ?? ''}
-                                    disabled={!draft.socialPlatform}
-                                />
-                            </label>
-                            <small className="admin-helper-text admin-form-grid-full">
-                                {builtSocialUrl
-                                    ? `${isEnglish ? 'Links to: ' : '将跳转到：'}${builtSocialUrl}`
-                                    : (isEnglish
-                                        ? 'Pick a platform and enter the handle — we build the profile link for you.'
-                                        : '选择平台并填写账号，我们会自动生成主页链接。')}
-                            </small>
-                            {onManagePlatforms && (
-                                <div className="admin-form-grid-full">
-                                    <button
-                                        type="button"
-                                        className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
-                                        onClick={onManagePlatforms}
-                                    >
-                                        {isEnglish ? 'Edit social platforms' : '编辑社交平台'}
-                                    </button>
-                                </div>
-                            )}
+                {draft.kind === 'social' && (
+                    <div className="admin-form-grid-full">
+                        <span className="admin-field-label">
+                            {isEnglish ? 'Platforms' : '平台'}
+                        </span>
+                        <small className="admin-helper-text">
+                            {isEnglish
+                                ? 'Pick the platforms you will share this link on. Each gets its own QR code and '
+                                + 'link for the same URL, with scans counted separately — you can add or remove '
+                                + 'platforms any time.'
+                                : '选择要投放此链接的平台。每个平台都有自己的二维码和链接（跳转同一网址），扫描数'
+                                + '分别统计 — 之后可随时添加或移除平台。'}
+                        </small>
+                        <div className="admin-qr-platform-grid">
+                            {platforms.map(p => (
+                                <label key={p.id} className="admin-checkbox-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={draft.platforms.includes(p.id)}
+                                        onChange={() => togglePlatform(p.id)}
+                                    />
+                                    <span>{isEnglish ? p.label : (p.labelCn ?? p.label)}</span>
+                                </label>
+                            ))}
+                            {orphanTags.map(id => (
+                                <label key={id} className="admin-checkbox-label">
+                                    <input type="checkbox" checked onChange={() => togglePlatform(id)}/>
+                                    <span>{id}</span>
+                                </label>
+                            ))}
                         </div>
-                    )}
-                </div>
+                        {onManagePlatforms && (
+                            <div className="admin-mt-12">
+                                <button
+                                    type="button"
+                                    className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                                    onClick={onManagePlatforms}
+                                >
+                                    {isEnglish ? 'Edit social platforms' : '编辑社交平台'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
                 <label>
                     <span>{isEnglish ? 'Link to Event (optional)' : '关联活动（可选）'}</span>
                     <select
@@ -338,51 +326,54 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
                 )}
             </div>
 
-            <div className="admin-field-section">
-                <div className="admin-qr-spot-header">
-                    <span className="admin-field-label">{isEnglish ? 'Map Spot (optional)' : '地图位置（可选）'}</span>
+            {draft.kind === 'location' && (
+                <div className="admin-field-section">
+                    <div className="admin-qr-spot-header">
+                        <span
+                            className="admin-field-label">{isEnglish ? 'Map Spot (optional)' : '地图位置（可选）'}</span>
+                        {hasSpot && (
+                            <button
+                                type="button"
+                                className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
+                                onClick={() => setDraft(prev => ({...prev, lat: 0, lng: 0}))}
+                            >
+                                {isEnglish ? 'Clear spot' : '清除位置'}
+                            </button>
+                        )}
+                    </div>
+                    <p className="admin-helper-text admin-field-hint">
+                        {isEnglish
+                            ? 'Pin where the code lives, or leave unset and link it later by scanning the printed code on your phone.'
+                            : '标记二维码所在位置；也可留空，之后用手机扫描已打印的二维码来关联位置。'}
+                    </p>
+                    <MapPicker
+                        value={{lat: draft.lat, lng: draft.lng}}
+                        onChange={({lat, lng}) => setDraft(prev => ({...prev, lat, lng}))}
+                    />
                     {hasSpot && (
-                        <button
-                            type="button"
-                            className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
-                            onClick={() => setDraft(prev => ({...prev, lat: 0, lng: 0}))}
-                        >
-                            {isEnglish ? 'Clear spot' : '清除位置'}
-                        </button>
+                        <div className="admin-form-grid admin-mt-12">
+                            <label>
+                                <span>{isEnglish ? 'Spot note (English)' : '位置说明（英文）'}</span>
+                                <input
+                                    value={draft.spotLabel}
+                                    onChange={e => setDraft(prev => ({...prev, spotLabel: e.target.value}))}
+                                    className="admin-input"
+                                    placeholder={isEnglish ? 'optional' : '可选'}
+                                />
+                            </label>
+                            <label>
+                                <span>{isEnglish ? 'Spot note (Chinese)' : '位置说明（中文）'}</span>
+                                <input
+                                    value={draft.spotLabelCn}
+                                    onChange={e => setDraft(prev => ({...prev, spotLabelCn: e.target.value}))}
+                                    className="admin-input"
+                                    placeholder={isEnglish ? 'optional' : '可选'}
+                                />
+                            </label>
+                        </div>
                     )}
                 </div>
-                <p className="admin-helper-text admin-field-hint">
-                    {isEnglish
-                        ? 'Pin where the code lives, or leave unset and link it later by scanning the printed code on your phone.'
-                        : '标记二维码所在位置；也可留空，之后用手机扫描已打印的二维码来关联位置。'}
-                </p>
-                <MapPicker
-                    value={{lat: draft.lat, lng: draft.lng}}
-                    onChange={({lat, lng}) => setDraft(prev => ({...prev, lat, lng}))}
-                />
-                {hasSpot && (
-                    <div className="admin-form-grid admin-mt-12">
-                        <label>
-                            <span>{isEnglish ? 'Spot note (English)' : '位置说明（英文）'}</span>
-                            <input
-                                value={draft.spotLabel}
-                                onChange={e => setDraft(prev => ({...prev, spotLabel: e.target.value}))}
-                                className="admin-input"
-                                placeholder={isEnglish ? 'optional' : '可选'}
-                            />
-                        </label>
-                        <label>
-                            <span>{isEnglish ? 'Spot note (Chinese)' : '位置说明（中文）'}</span>
-                            <input
-                                value={draft.spotLabelCn}
-                                onChange={e => setDraft(prev => ({...prev, spotLabelCn: e.target.value}))}
-                                className="admin-input"
-                                placeholder={isEnglish ? 'optional' : '可选'}
-                            />
-                        </label>
-                    </div>
-                )}
-            </div>
+            )}
         </>
     );
 };

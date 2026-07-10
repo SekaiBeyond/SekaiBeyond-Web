@@ -11,8 +11,9 @@ export const QrRedirectPage = () => {
     const id = searchParams.get('id');
 
     // Managed codes (saved + tracked) use a short, stable `id`; legacy printed
-    // codes still carry the full url/event/expires in the query string.
-    if (id) return <ManagedQrRedirect id={id}/>;
+    // codes still carry the full url/event/expires in the query string. Social
+    // codes add `p` so the scan tallies under that platform.
+    if (id) return <ManagedQrRedirect id={id} platform={searchParams.get('p') ?? ''}/>;
     return <LegacyQrRedirect/>;
 };
 
@@ -20,13 +21,13 @@ export const QrRedirectPage = () => {
 
 type ManagedStatus = 'loading' | 'redirecting' | 'expired' | 'error';
 
-const ManagedQrRedirect = ({id}: {id: string}) => {
+const ManagedQrRedirect = ({id, platform}: {id: string; platform: string}) => {
     const {isEnglish} = useLanguage();
     const [status, setStatus] = useState<ManagedStatus>('loading');
 
     useEffect(() => {
         let cancelled = false;
-        callRecordQrScan({id})
+        callRecordQrScan(platform ? {id, p: platform} : {id})
             .then(res => {
                 if (cancelled) return;
                 const {active, targetUrl} = res.data;
@@ -44,7 +45,7 @@ const ManagedQrRedirect = ({id}: {id: string}) => {
         return () => {
             cancelled = true;
         };
-    }, [id]);
+    }, [id, platform]);
 
     if (status === 'loading' || status === 'redirecting') {
         return (

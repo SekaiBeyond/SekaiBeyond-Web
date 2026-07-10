@@ -11,6 +11,15 @@ export interface QrCode {
     targetUrl: string;
     /** Optional linked event — drives dashboard filtering and event-based expiry. */
     eventId: string;
+    /**
+     * Source platforms ([] = a location code). A social code is one record for
+     * one URL carrying a QR link per platform (see {@link qrScanUrl}); the list
+     * is editable after creation and each platform's scans tally separately in
+     * {@link platformScans} so click-through can be compared.
+     */
+    platforms: string[];
+    /** Per-platform scan tallies keyed by platform id (social codes only). */
+    platformScans: Record<string, number>;
     expirationMode: QrExpirationMode;
     /** Only set when expirationMode === 'date'. */
     expiresAt: Date | null;
@@ -33,12 +42,22 @@ const toDate = (v: unknown): Date | null =>
 const cache = createCollectionCache<QrCode>('qrCodes', docSnap => {
     const data = docSnap.data();
     const mode = data.expirationMode;
+    const platformScans: Record<string, number> = {};
+    if (data.platformScans && typeof data.platformScans === 'object') {
+        for (const [k, v] of Object.entries(data.platformScans)) {
+            if (typeof v === 'number') platformScans[k] = v;
+        }
+    }
     return {
         id: docSnap.id,
         label: data.label ?? '',
         labelCn: data.labelCn ?? '',
         targetUrl: data.targetUrl ?? '',
         eventId: data.eventId ?? '',
+        platforms: Array.isArray(data.platforms)
+            ? data.platforms.filter((p: unknown): p is string => typeof p === 'string')
+            : [],
+        platformScans,
         expirationMode: (mode === 'event' || mode === 'date') ? mode : 'none',
         expiresAt: toDate(data.expiresAt),
         lat: typeof data.lat === 'number' ? data.lat : 0,
@@ -57,9 +76,18 @@ export function useQrCodes(): {qrCodes: QrCode[]; loading: boolean; refresh: () 
     return {qrCodes: items, loading, refresh};
 }
 
-/** The stable link encoded into a managed QR code's image. */
-export function qrScanUrl(id: string, origin: string): string {
-    return `${origin}/qr?id=${encodeURIComponent(id)}`;
+/**
+ * The stable link encoded into a managed QR code's image. Social codes get one
+ * link per platform — the `p` param routes the scan into that platform's tally.
+ */
+export function qrScanUrl(id: string, origin: string, platform?: string): string {
+    const base = `${origin}/qr?id=${encodeURIComponent(id)}`;
+    return platform ? `${base}&p=${encodeURIComponent(platform)}` : base;
+}
+
+/** Social codes carry platform tags; location codes never do. */
+export function qrIsSocial(code: Pick<QrCode, 'platforms'>): boolean {
+    return code.platforms.length > 0;
 }
 
 /** A spot is "set" only when both coords are finite and not the (0, 0) sentinel. */

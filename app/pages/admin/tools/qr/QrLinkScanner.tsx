@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSetQrSpot } from '~/lib/firebase';
-import { type QrCode, qrHasSpot } from '~/lib/qrCodes';
+import { type QrCode, qrHasSpot, qrIsSocial } from '~/lib/qrCodes';
 import { useQrScanner } from '~/lib/useQrScanner';
 import { QrScannerViewport } from '~/pages/admin/QrScannerViewport';
 
@@ -189,17 +189,25 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
                     <div className="admin-qr-scan-matched">
                         <span className="admin-qr-scan-matched-label">{isEnglish ? 'Scanned' : '已扫描'}</span>
                         <span className="admin-qr-scan-matched-title">{matched.label}</span>
-                        <span className="admin-helper-text">
-                            {isEnglish ? 'Current spot: ' : '当前位置：'}
-                            {linkState === 'done'
-                                ? (isEnglish ? 'updated to your location ✓' : '已更新为你的位置 ✓')
-                                : qrHasSpot(matched)
-                                    ? `${matched.lat.toFixed(5)}, ${matched.lng.toFixed(5)}`
-                                    : (isEnglish ? 'not linked' : '未关联')}
-                        </span>
+                        {!qrIsSocial(matched) && (
+                            <span className="admin-helper-text">
+                                {isEnglish ? 'Current spot: ' : '当前位置：'}
+                                {linkState === 'done'
+                                    ? (isEnglish ? 'updated to your location ✓' : '已更新为你的位置 ✓')
+                                    : qrHasSpot(matched)
+                                        ? `${matched.lat.toFixed(5)}, ${matched.lng.toFixed(5)}`
+                                        : (isEnglish ? 'not linked' : '未关联')}
+                            </span>
+                        )}
                     </div>
 
-                    {linkState !== 'done' && (
+                    {qrIsSocial(matched) ? (
+                        <p className="admin-helper-text">
+                            {isEnglish
+                                ? 'This is a social media code — it tracks a shared link, not a physical spot, so it can\'t be pinned to a location.'
+                                : '这是社交媒体二维码 — 它追踪分享链接而非实体位置，无法关联地图位置。'}
+                        </p>
+                    ) : linkState !== 'done' && (
                         <button className="admin-toggle-btn admin-toggle-save admin-qr-scan-cta"
                                 onClick={setToMyLocation} disabled={busy}>
                             {linkState === 'locating'
