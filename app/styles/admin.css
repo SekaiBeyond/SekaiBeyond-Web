@@ -1873,6 +1873,12 @@
     line-height: 1.1;
 }
 
+/* For tile values that are text (a date) rather than a big number. */
+.admin-stats-tile-value--sm {
+    font-size: 17px;
+    padding-top: 4px;
+}
+
 .admin-stats-tile-sub {
     font-size: 12px;
     color: var(--color-text-muted);
@@ -3436,20 +3442,30 @@ select.admin-tickets-tag:focus {
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    padding: 14px 12px;
-    border-radius: 12px;
-    border: 1px solid #e8e8e8;
+    padding: 16px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 107, 157, 0.14);
     background: white;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-qr-platform-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(255, 150, 200, 0.2);
 }
 
 .admin-qr-platform-card-title {
-    font-weight: 600;
+    font-weight: 700;
     color: var(--color-text);
 }
 
 .admin-qr-platform-card-count {
-    font-size: 12px;
-    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-primary);
+    background: rgba(255, 107, 157, 0.1);
+    padding: 2px 10px;
+    border-radius: 999px;
 }
 
 .admin-qr-badge {
@@ -3457,6 +3473,23 @@ select.admin-tickets-tag:focus {
     font-weight: 700;
     padding: 2px 8px;
     border-radius: 999px;
+}
+
+/* Header-sized status badge with a colored state dot. */
+.admin-qr-badge-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 4px 12px;
+}
+
+.admin-qr-badge-lg::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
 }
 
 .admin-qr-badge-active {
@@ -3469,11 +3502,79 @@ select.admin-tickets-tag:focus {
     color: var(--color-error);
 }
 
+/* Title block: big label, status badge, and social chip on one line. */
+.admin-qr-detail-head {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 16px;
+}
+
+.admin-qr-detail-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.admin-qr-detail-title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.2;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+}
+
+.admin-qr-detail-subtitle {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-text-muted);
+}
+
 .admin-qr-detail-top {
     display: flex;
     flex-wrap: wrap;
-    gap: 24px;
+    gap: 20px;
     align-items: flex-start;
+}
+
+/* The QR presented as the physical tag it becomes when printed: a white
+   "paper" card whose dashed border reads as the cut line. */
+.admin-qr-detail-code {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 20px;
+    width: min(340px, 100%);
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
+}
+
+.admin-qr-paper {
+    width: min(260px, 100%);
+    padding: 12px;
+    background: white;
+    border: 1.5px dashed rgba(122, 129, 144, 0.45);
+    border-radius: 12px;
+    box-shadow: 0 4px 14px rgba(74, 81, 96, 0.1);
+}
+
+.admin-qr-paper canvas,
+.admin-qr-paper svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+}
+
+.admin-qr-paper--sm {
+    width: min(176px, 100%);
+    padding: 9px;
+    border-radius: 10px;
 }
 
 .admin-qr-detail-meta {
@@ -3481,30 +3582,46 @@ select.admin-tickets-tag:focus {
     min-width: 260px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
 }
 
+/* Settings as a single card of hairline-divided rows. */
 .admin-qr-detail-list {
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
 }
 
 .admin-qr-detail-list > div {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
+    padding: 12px 16px;
+}
+
+.admin-qr-detail-list > div + div {
+    border-top: 1px solid rgba(255, 107, 157, 0.1);
 }
 
 .admin-qr-detail-list dt {
-    font-size: 12px;
-    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
     color: var(--color-text-muted);
 }
 
 .admin-qr-detail-list dd {
     margin: 0;
+    min-width: 0;
     font-size: 14px;
     color: var(--color-text);
     word-break: break-all;
@@ -3514,12 +3631,38 @@ select.admin-tickets-tag:focus {
     color: var(--color-link);
 }
 
+/* White card around each lower section (platforms, location, trends). */
+.admin-qr-section {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
+    padding: 16px 18px;
+}
+
+/* Section titles echo the row/tile eyebrow labels: one labeling voice. */
+.admin-qr-section .admin-field-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin-bottom: 0;
+}
+
 .admin-qr-spot-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 4px;
+    margin-bottom: 10px;
+}
+
+/* Lone destructive action, kept quiet at the very bottom of the page. */
+.admin-qr-danger-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
 }
 
 /* Tiny inline "Edit" affordance beside a detail row's name. */
@@ -3528,22 +3671,36 @@ select.admin-tickets-tag:focus {
     background: none;
     color: var(--color-purple);
     font-size: 12px;
-    font-weight: 600;
-    padding: 0;
-    margin-left: 8px;
+    font-weight: 700;
+    letter-spacing: normal;
+    text-transform: none;
+    padding: 3px 10px;
+    margin: -3px 0;
+    border-radius: 999px;
     cursor: pointer;
+    transition: background 0.15s ease;
 }
 
 .admin-qr-row-edit:hover {
-    text-decoration: underline;
+    background: rgba(155, 89, 182, 0.12);
 }
 
-/* In-place editor that swaps in for a row/section's display value. */
+.admin-qr-row-edit:focus-visible {
+    outline: 2px solid var(--color-purple);
+    outline-offset: 1px;
+}
+
+/* In-place editor that swaps in for a row/section's display value;
+   the purple tint marks which facet is "open". */
 .admin-qr-inline-edit {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin-top: 4px;
+    margin-top: 6px;
+    padding: 12px;
+    background: rgba(155, 89, 182, 0.05);
+    border: 1px solid rgba(155, 89, 182, 0.16);
+    border-radius: 12px;
 }
 
 /* The shared field components assume the form grid's stacked-label layout;
@@ -3565,6 +3722,22 @@ select.admin-tickets-tag:focus {
 .admin-qr-clear-row {
     display: flex;
     justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+    .admin-qr-detail-code {
+        margin-inline: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-qr-platform-card {
+        transition: none;
+    }
+
+    .admin-qr-platform-card:hover {
+        transform: none;
+    }
 }
 
 /* Platform filter pills above the scan-trend chart. */

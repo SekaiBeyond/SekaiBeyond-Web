@@ -193,19 +193,38 @@ export const QrCodeDetail = ({
             ? (isEnglish ? 'When the linked event ends' : '关联活动结束时')
             : (isEnglish ? 'Never expires' : '永不过期');
 
+    const title = !isEnglish && code.labelCn ? code.labelCn : code.label;
+    const subtitle = code.labelCn && code.labelCn !== code.label
+        ? (title === code.label ? code.labelCn : code.label)
+        : null;
+
     return (
         <div className="admin-section">
-            <div className="admin-tools-header">
+            <div className="admin-tools-back-row">
                 <button className="admin-btn admin-btn--link" onClick={back} type="button">
                     {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
                 </button>
-                <h3 className="admin-tools-title">{code.label}</h3>
+            </div>
+            <div className="admin-qr-detail-head">
+                <div className="admin-qr-detail-title-row">
+                    <h3 className="admin-qr-detail-title">{title}</h3>
+                    <span
+                        className={`admin-qr-badge admin-qr-badge-lg ${active ? 'admin-qr-badge-active' : 'admin-qr-badge-expired'}`}>
+                        {active ? (isEnglish ? 'Active' : '有效') : (isEnglish ? 'Expired' : '已过期')}
+                    </span>
+                    {social && (
+                        <span className="admin-qr-chip admin-qr-chip-platform">
+                            {isEnglish ? 'Social' : '社交'}
+                        </span>
+                    )}
+                </div>
+                {subtitle && <p className="admin-qr-detail-subtitle">{subtitle}</p>}
             </div>
 
             <div className="admin-qr-detail-top">
                 {!social && (
-                    <div className="admin-single-code admin-single-code-narrow">
-                        <div ref={qrWrapRef} className="admin-single-code-qr">
+                    <div className="admin-qr-detail-code">
+                        <div ref={qrWrapRef} className="admin-qr-paper">
                             <QRCodeCanvas value={scanValue} size={QR_SIZE} level="M" marginSize={2}/>
                         </div>
                         <div className="admin-code-url">
@@ -219,12 +238,10 @@ export const QrCodeDetail = ({
                                 {isEnglish ? 'Copy' : '复制'}
                             </button>
                         </div>
-                        <div className="admin-single-code-actions">
-                            <button className="admin-toggle-btn admin-toggle-save" onClick={downloadPng}
-                                    type="button">
-                                {isEnglish ? 'Download PNG' : '下载 PNG'}
-                            </button>
-                        </div>
+                        <button className="admin-toggle-btn admin-toggle-save" onClick={downloadPng}
+                                type="button">
+                            {isEnglish ? 'Download PNG' : '下载 PNG'}
+                        </button>
                     </div>
                 )}
 
@@ -234,19 +251,19 @@ export const QrCodeDetail = ({
                             <div
                                 className="admin-stats-tile-label">{isEnglish ? 'Total Scans' : '总扫描数'}</div>
                             <div className="admin-stats-tile-value">{code.scanCount}</div>
-                            <div className="admin-stats-tile-sub">
-                                {isEnglish ? 'Last: ' : '最近：'}{fmtDate(code.lastScanAt)}
-                            </div>
                         </div>
                         <div className="admin-stats-tile">
-                            <div className="admin-stats-tile-label">{isEnglish ? 'Status' : '状态'}</div>
-                            <div className="admin-stats-tile-value">
-                                <span
-                                    className={`admin-qr-badge ${active ? 'admin-qr-badge-active' : 'admin-qr-badge-expired'}`}>
-                                    {active ? (isEnglish ? 'Active' : '有效') : (isEnglish ? 'Expired' : '已过期')}
-                                </span>
+                            <div className="admin-stats-tile-label">{isEnglish ? 'Last Scan' : '最近扫描'}</div>
+                            <div className="admin-stats-tile-value admin-stats-tile-value--sm">
+                                {fmtDate(code.lastScanAt)}
                             </div>
                         </div>
+                        {social && (
+                            <div className="admin-stats-tile">
+                                <div className="admin-stats-tile-label">{isEnglish ? 'Platforms' : '平台数'}</div>
+                                <div className="admin-stats-tile-value">{code.platforms.length}</div>
+                            </div>
+                        )}
                     </div>
 
                     <dl className="admin-qr-detail-list">
@@ -311,23 +328,11 @@ export const QrCodeDetail = ({
                             </dd>
                         </div>
                     </dl>
-
-                    {!readOnly && (
-                        <div className="admin-btn-row">
-                            <button
-                                className="admin-toggle-btn admin-toggle-revoke"
-                                onClick={remove}
-                                disabled={deleting}
-                            >
-                                {deleting ? (isEnglish ? 'Deleting...' : '删除中...') : (isEnglish ? 'Delete' : '删除')}
-                            </button>
-                        </div>
-                    )}
                 </div>
             </div>
 
             {social && (
-                <div className="admin-field-section">
+                <div className="admin-field-section admin-qr-section">
                     <div className="admin-qr-spot-header">
                         <span className="admin-field-label">
                             {isEnglish ? 'Platform QR Codes' : '各平台二维码'}
@@ -373,7 +378,7 @@ export const QrCodeDetail = ({
             )}
 
             {!social && (readOnly ? qrHasSpot(code) : true) && (
-                <div className="admin-field-section">
+                <div className="admin-field-section admin-qr-section">
                     <div className="admin-qr-spot-header">
                         <span className="admin-field-label">{isEnglish ? 'Location' : '位置'}</span>
                         {!readOnly && editing !== 'spot' && (
@@ -410,7 +415,7 @@ export const QrCodeDetail = ({
                 </div>
             )}
 
-            <div className="admin-field-section">
+            <div className="admin-field-section admin-qr-section">
                 <div className="admin-qr-spot-header">
                     <span className="admin-field-label">{isEnglish ? 'Scans Over Time' : '扫描时间趋势'}</span>
                     <button className="admin-toggle-btn admin-toggle-edit admin-btn-sm" onClick={loadScans}>
@@ -425,6 +430,20 @@ export const QrCodeDetail = ({
                     <QrScanTrends key={code.id} scans={scans} platforms={code.platforms}/>
                 )}
             </div>
+
+            {!readOnly && (
+                <div className="admin-qr-danger-row">
+                    <button
+                        className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
+                        onClick={remove}
+                        disabled={deleting}
+                    >
+                        {deleting
+                            ? (isEnglish ? 'Deleting...' : '删除中...')
+                            : (isEnglish ? 'Delete QR code' : '删除二维码')}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
@@ -472,7 +491,7 @@ const PlatformQrCard = ({code, platformId, isEnglish, platforms, showToast}: Pla
             <span className="admin-qr-platform-card-count">
                 {isEnglish ? `${count} scans` : `${count} 次扫描`}
             </span>
-            <div ref={wrapRef}>
+            <div ref={wrapRef} className="admin-qr-paper admin-qr-paper--sm">
                 <QRCodeCanvas value={scanValue} size={PLATFORM_QR_SIZE} level="M" marginSize={2}/>
             </div>
             <div className="admin-tag-actions">
