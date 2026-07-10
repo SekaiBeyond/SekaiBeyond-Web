@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Navigation } from '~/components/main/Navigation';
 import { useLanguage } from '~/components/LanguageContextProvider';
@@ -71,7 +71,17 @@ const ManagedQrRedirect = ({id, platform}: {id: string; platform: string}) => {
 export const LegacyQrRedirect = () => {
     const [searchParams] = useSearchParams();
 
-    const targetUrl = searchParams.get('url');
+    const rawUrl = searchParams.get('url');
+    // Only allow http(s) targets — blocks javascript:, data:, and other protocols.
+    const targetUrl = useMemo(() => {
+        if (!rawUrl) return null;
+        try {
+            const parsed = new URL(rawUrl);
+            return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? rawUrl : null;
+        } catch {
+            return null;
+        }
+    }, [rawUrl]);
     const eventId = searchParams.get('event');
     const expiresParam = searchParams.get('expires');
     const startsParam = searchParams.get('starts');

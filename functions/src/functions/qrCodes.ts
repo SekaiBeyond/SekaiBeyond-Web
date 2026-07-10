@@ -260,7 +260,10 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
             }
         }
     }
-    if (active && !data.targetUrl) reason = "no-target";
+    if (active && !data.targetUrl) {
+        active = false;
+        reason = "no-target";
+    }
 
     // Log only failed resolutions so successful redirects stay silent. Filter the
     // function's logs by `recordQrScan: inactive` to see why codes are failing.

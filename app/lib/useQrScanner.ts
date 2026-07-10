@@ -88,6 +88,9 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     }, [stopCamera]);
 
     const startCamera = useCallback(async () => {
+        // Prevent double invocation — a second call while getUserMedia is
+        // in-flight would overwrite streamRef and leak the first stream.
+        if (streamRef.current) return;
         setCameraError(null);
         optionsRef.current.onStart?.();
         cancelledRef.current = false;

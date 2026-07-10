@@ -95,6 +95,7 @@ export const QrCodeDetail = ({
 
     const loadScans = () => {
         setScansError(false);
+        setScans(null);
         fetchQrScans(code.id)
             .then(setScans)
             .catch(() => setScansError(true));
@@ -112,9 +113,9 @@ export const QrCodeDetail = ({
     };
 
     const copyLink = () => {
-        navigator.clipboard.writeText(scanValue).catch(() => { /* clipboard may be unavailable */
-        });
-        showToast(isEnglish ? 'Link copied.' : '链接已复制。', 'success');
+        navigator.clipboard.writeText(scanValue)
+            .then(() => showToast(isEnglish ? 'Link copied.' : '链接已复制。', 'success'))
+            .catch(() => showToast(isEnglish ? 'Failed to copy.' : '复制失败。', 'error'));
     };
 
     const saveEdit = async () => {
@@ -477,12 +478,12 @@ const PlatformQrCard = ({code, platformId, isEnglish, platforms, showToast}: Pla
     };
 
     const copyLink = () => {
-        navigator.clipboard.writeText(scanValue).catch(() => { /* clipboard may be unavailable */
-        });
-        showToast(
-            isEnglish ? `${name} link copied.` : `已复制 ${name} 链接。`,
-            'success',
-        );
+        navigator.clipboard.writeText(scanValue)
+            .then(() => showToast(
+                isEnglish ? `${name} link copied.` : `已复制 ${name} 链接。`,
+                'success',
+            ))
+            .catch(() => showToast(isEnglish ? 'Failed to copy.' : '复制失败。', 'error'));
     };
 
     return (

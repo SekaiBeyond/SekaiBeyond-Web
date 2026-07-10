@@ -31,10 +31,18 @@ export const QuickQrGenerator = () => {
         link.click();
     };
 
+    const [copyLabel, setCopyLabel] = useState('');
     const copyUrl = () => {
         if (!valid) return;
-        navigator.clipboard.writeText(qrValue).catch(() => { /* clipboard may be unavailable */
-        });
+        navigator.clipboard.writeText(qrValue)
+            .then(() => {
+                setCopyLabel(isEnglish ? 'Copied!' : '已复制');
+                setTimeout(() => setCopyLabel(''), 1500);
+            })
+            .catch(() => {
+                setCopyLabel(isEnglish ? 'Failed' : '失败');
+                setTimeout(() => setCopyLabel(''), 1500);
+            });
     };
 
     return (
@@ -70,7 +78,7 @@ export const QuickQrGenerator = () => {
                             className="admin-code-input"
                         />
                         <button className="admin-btn admin-btn--purple" onClick={copyUrl} type="button">
-                            {isEnglish ? 'Copy' : '复制'}
+                            {copyLabel || (isEnglish ? 'Copy' : '复制')}
                         </button>
                     </div>
                     <div className="admin-single-code-actions">
