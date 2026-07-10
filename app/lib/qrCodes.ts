@@ -15,7 +15,8 @@ export interface QrCode {
      * Source platforms ([] = a location code). A social code is one record for
      * one URL carrying a QR link per platform (see {@link qrScanUrl}); the list
      * is editable after creation and each platform's scans tally separately in
-     * {@link platformScans} so click-through can be compared.
+     * {@link platformScans} so click-through can be compared. The kind itself
+     * (social vs. location) is fixed at creation.
      */
     platforms: string[];
     /** Per-platform scan tallies keyed by platform id (social codes only). */

@@ -69,7 +69,8 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
     // one URL carrying a QR link per platform (`/qr?id=…&p=<platform>`); scans
     // are tallied per platform so click-through can be compared, and the list
     // can be changed after creation. A code is either social (platforms, no
-    // map spot) or location (map spot, no platforms) — never both.
+    // map spot) or location (map spot, no platforms) — never both, and the
+    // kind is fixed at creation (enforced in the update path below).
     const platforms = validateStringArray(input.platforms, "platforms", 50, 64);
     for (const p of platforms) {
         if (!PLATFORM_ID_RE.test(p)) {
@@ -105,6 +106,17 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
         if (qrId) {
             const existing = await txn.get(ref);
             if (!existing.exists) throw new HttpsError("not-found", "QR code not found.");
+            // The kind is fixed at creation: the plain link (location) or the
+            // per-platform links (social) are already printed/shared, and
+            // flipping the kind would orphan them and their scan attribution.
+            const existingPlatforms = existing.data()?.platforms;
+            const wasSocial = Array.isArray(existingPlatforms) && existingPlatforms.length > 0;
+            if (wasSocial !== social) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "A code's type (location vs. social media) can't be changed after creation.",
+                );
+            }
             // Drop the stored date when the mode no longer needs one. Existing
             // platformScans tallies are kept so removing/re-adding a platform
             // never loses its history.

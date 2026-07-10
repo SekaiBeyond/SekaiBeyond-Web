@@ -123,7 +123,7 @@ export const QrCodeDetail = ({
             {editing ? (
                 <>
                     <QrCodeForm draft={draft} setDraft={setDraft} events={events} isEnglish={isEnglish}
-                                onManagePlatforms={onManagePlatforms}/>
+                                onManagePlatforms={onManagePlatforms} kindLocked/>
                     <div className="admin-btn-row admin-mt-12">
                         <button className="admin-toggle-btn admin-toggle-save" onClick={saveEdit} disabled={saving}>
                             {saving ? (isEnglish ? 'Saving...' : '保存中...') : (isEnglish ? 'Save' : '保存')}

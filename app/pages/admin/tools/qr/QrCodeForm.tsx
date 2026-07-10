@@ -4,7 +4,8 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { MapPicker } from '../../MapPicker';
 
 /**
- * The two kinds of tracked code — mutually exclusive:
+ * The two kinds of tracked code — mutually exclusive and fixed at creation
+ * (the links already in the wild differ by kind, so a saved code never flips):
  * - 'location': a printed code placed somewhere physical; can pin a map spot,
  *   never carries a platform tag.
  * - 'social': a link shared on social platforms; tagged with a platform so
@@ -143,9 +144,11 @@ interface QrCodeFormProps {
     isEnglish: boolean;
     /** Opens the social-platform manager. */
     onManagePlatforms?: () => void;
+    /** Set when editing a saved code — the kind is fixed at creation. */
+    kindLocked?: boolean;
 }
 
-export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatforms}: QrCodeFormProps) => {
+export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatforms, kindLocked}: QrCodeFormProps) => {
     const {platforms} = useSocialPlatforms();
     const hasSpot = qrHasSpot(draft);
     // Tags from since-deleted platforms still get a checkbox (labelled with the
@@ -164,36 +167,54 @@ export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatform
         <>
             <div className="admin-section-mb">
                 <span className="admin-field-label">{isEnglish ? 'Code type' : '二维码类型'}</span>
-                <div className="admin-qr-mode-toggle" role="tablist">
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={draft.kind === 'location'}
-                        className={`admin-btn admin-btn--ghost${draft.kind === 'location' ? ' admin-btn--ghost-active' : ''}`}
-                        onClick={() => setDraft(prev => ({...prev, kind: 'location'}))}
-                    >
-                        {isEnglish ? '📍 Location' : '📍 地点'}
-                    </button>
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={draft.kind === 'social'}
-                        className={`admin-btn admin-btn--ghost${draft.kind === 'social' ? ' admin-btn--ghost-active' : ''}`}
-                        onClick={() => setDraft(prev => ({...prev, kind: 'social'}))}
-                    >
-                        {isEnglish ? '📣 Social media' : '📣 社交媒体'}
-                    </button>
-                </div>
-                <small className="admin-helper-text">
-                    {draft.kind === 'location'
-                        ? (isEnglish
-                            ? 'A printed code placed somewhere physical — pin it on the map and track scans by spot.'
-                            : '张贴在实体位置的二维码 — 可标记在地图上，按位置追踪扫描。')
-                        : (isEnglish
-                            ? 'A link shared on social platforms — one code per platform for the same URL, so scan '
-                            + 'counts compare click-through by platform.'
-                            : '在社交平台分享的链接 — 同一链接按平台各生成一个二维码，扫描数即可对比各平台的点击表现。')}
-                </small>
+                {kindLocked ? (
+                    <>
+                        <div>
+                            {draft.kind === 'location'
+                                ? (isEnglish ? '📍 Location' : '📍 地点')
+                                : (isEnglish ? '📣 Social media' : '📣 社交媒体')}
+                        </div>
+                        <small className="admin-helper-text">
+                            {isEnglish
+                                ? 'The type is fixed once a code is created — its links are already out there. '
+                                + 'Create a new code to use the other type.'
+                                : '二维码类型创建后无法更改 — 其链接可能已在使用中。如需另一种类型，请新建二维码。'}
+                        </small>
+                    </>
+                ) : (
+                    <>
+                        <div className="admin-qr-mode-toggle" role="tablist">
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={draft.kind === 'location'}
+                                className={`admin-btn admin-btn--ghost${draft.kind === 'location' ? ' admin-btn--ghost-active' : ''}`}
+                                onClick={() => setDraft(prev => ({...prev, kind: 'location'}))}
+                            >
+                                {isEnglish ? '📍 Location' : '📍 地点'}
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={draft.kind === 'social'}
+                                className={`admin-btn admin-btn--ghost${draft.kind === 'social' ? ' admin-btn--ghost-active' : ''}`}
+                                onClick={() => setDraft(prev => ({...prev, kind: 'social'}))}
+                            >
+                                {isEnglish ? '📣 Social media' : '📣 社交媒体'}
+                            </button>
+                        </div>
+                        <small className="admin-helper-text">
+                            {draft.kind === 'location'
+                                ? (isEnglish
+                                    ? 'A printed code placed somewhere physical — pin it on the map and track scans by spot.'
+                                    : '张贴在实体位置的二维码 — 可标记在地图上，按位置追踪扫描。')
+                                : (isEnglish
+                                    ? 'A link shared on social platforms — one code per platform for the same URL, so scan '
+                                    + 'counts compare click-through by platform.'
+                                    : '在社交平台分享的链接 — 同一链接按平台各生成一个二维码，扫描数即可对比各平台的点击表现。')}
+                        </small>
+                    </>
+                )}
             </div>
 
             <div className="admin-form-grid">
