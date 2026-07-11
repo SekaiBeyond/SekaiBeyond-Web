@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteQrCode, callSaveQrCode } from '~/lib/firebase';
 import { fetchQrScans, type QrCode, qrHasSpot, qrIsActive, qrIsSocial, type QrScan, qrScanUrl } from '~/lib/qrCodes';
@@ -16,6 +15,7 @@ import {
     QrTargetField,
     qrToDraft,
 } from './QrCodeForm';
+import { QrPreview, useQrDownload } from './qrExport';
 import { QrScanTrends } from './QrScanTrends';
 import { QrSpotsMap } from './QrSpotsMap';
 
@@ -51,7 +51,7 @@ export const QrCodeDetail = ({
                              }: QrCodeDetailProps) => {
     const {isEnglish} = useLanguage();
     const {platforms} = useSocialPlatforms();
-    const qrWrapRef = useRef<HTMLDivElement>(null);
+    const {request: requestDownload, node: downloadNode} = useQrDownload();
 
     const [editing, setEditing] = useState<EditSection | null>(null);
     // Holds the whole draft while a section edits (saves send the full payload);
@@ -103,13 +103,8 @@ export const QrCodeDetail = ({
     useEffect(loadScans, [code.id]);
 
     const downloadPng = () => {
-        const canvas = qrWrapRef.current?.querySelector('canvas');
-        if (!canvas) return;
         const safe = (code.label || 'qr-code').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-        const link = document.createElement('a');
-        link.download = `qr-${safe}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+        requestDownload(scanValue, `qr-${safe}`);
     };
 
     const copyLink = () => {
@@ -225,8 +220,8 @@ export const QrCodeDetail = ({
             <div className="admin-qr-detail-top">
                 {!social && (
                     <div className="admin-qr-detail-code">
-                        <div ref={qrWrapRef} className="admin-qr-paper">
-                            <QRCodeCanvas value={scanValue} size={QR_SIZE} level="M" marginSize={2}/>
+                        <div className="admin-qr-paper">
+                            <QrPreview value={scanValue} size={QR_SIZE}/>
                         </div>
                         <div className="admin-code-url">
                             <input
@@ -243,6 +238,7 @@ export const QrCodeDetail = ({
                                 type="button">
                             {isEnglish ? 'Download PNG' : '下载 PNG'}
                         </button>
+                        {downloadNode}
                     </div>
                 )}
 
@@ -461,20 +457,15 @@ interface PlatformQrCardProps {
 
 /** One platform's QR + link for a social code, with its own scan tally. */
 const PlatformQrCard = ({code, platformId, isEnglish, platforms, showToast}: PlatformQrCardProps) => {
-    const wrapRef = useRef<HTMLDivElement>(null);
+    const {request: requestDownload, node: downloadNode} = useQrDownload();
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const scanValue = qrScanUrl(code.id, origin, platformId);
     const name = socialPlatformName(platformId, isEnglish, platforms);
     const count = code.platformScans[platformId] ?? 0;
 
     const downloadPng = () => {
-        const canvas = wrapRef.current?.querySelector('canvas');
-        if (!canvas) return;
         const safe = `${code.label || 'qr-code'}-${platformId}`.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-        const link = document.createElement('a');
-        link.download = `qr-${safe}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+        requestDownload(scanValue, `qr-${safe}`);
     };
 
     const copyLink = () => {
@@ -492,8 +483,8 @@ const PlatformQrCard = ({code, platformId, isEnglish, platforms, showToast}: Pla
             <span className="admin-qr-platform-card-count">
                 {isEnglish ? `${count} scans` : `${count} 次扫描`}
             </span>
-            <div ref={wrapRef} className="admin-qr-paper admin-qr-paper--sm">
-                <QRCodeCanvas value={scanValue} size={PLATFORM_QR_SIZE} level="M" marginSize={2}/>
+            <div className="admin-qr-paper admin-qr-paper--sm">
+                <QrPreview value={scanValue} size={PLATFORM_QR_SIZE}/>
             </div>
             <div className="admin-tag-actions">
                 <button className="admin-toggle-btn admin-toggle-edit admin-btn-sm" onClick={copyLink} type="button">
@@ -504,6 +495,7 @@ const PlatformQrCard = ({code, platformId, isEnglish, platforms, showToast}: Pla
                     PNG
                 </button>
             </div>
+            {downloadNode}
         </div>
     );
 };

@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { isValidHttpUrl } from '~/lib/urls';
+import { QrPreview, useQrDownload } from './qrExport';
 
 const QR_SIZE = 280;
 
@@ -13,22 +13,17 @@ const QR_SIZE = 280;
 export const QuickQrGenerator = () => {
     const {isEnglish} = useLanguage();
     const [url, setUrl] = useState('');
-    const qrWrapRef = useRef<HTMLDivElement>(null);
+    const {request: requestDownload, node: downloadNode} = useQrDownload();
 
     const trimmed = url.trim();
     const valid = isValidHttpUrl(trimmed);
     const qrValue = trimmed;
 
     const downloadPng = () => {
-        const canvas = qrWrapRef.current?.querySelector('canvas');
-        if (!canvas) return;
         const now = new Date();
         const pad = (n: number) => String(n).padStart(2, '0');
         const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-        const link = document.createElement('a');
-        link.download = `qr-code-${stamp}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+        requestDownload(qrValue, `qr-code-${stamp}`);
     };
 
     const [copyLabel, setCopyLabel] = useState('');
@@ -67,8 +62,8 @@ export const QuickQrGenerator = () => {
                 </p>
             ) : (
                 <div className="admin-single-code admin-single-code-narrow">
-                    <div ref={qrWrapRef} className="admin-single-code-qr">
-                        <QRCodeCanvas value={qrValue} size={QR_SIZE} level="M" marginSize={2}/>
+                    <div className="admin-single-code-qr">
+                        <QrPreview value={qrValue} size={QR_SIZE}/>
                     </div>
                     <div className="admin-code-url">
                         <input
@@ -88,6 +83,7 @@ export const QuickQrGenerator = () => {
                     </div>
                 </div>
             )}
+            {downloadNode}
         </>
     );
 };
