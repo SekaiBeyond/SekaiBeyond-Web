@@ -167,6 +167,19 @@
     color: var(--color-accent);
 }
 
+.btn-parking {
+    background: linear-gradient(135deg, rgba(72, 219, 251, 0.18), rgba(56, 168, 232, 0.18));
+    color: #2196d8;
+    border: 3px solid #38a8e8;
+    box-shadow: 0 5px 15px rgba(56, 168, 232, 0.2);
+}
+
+.btn-parking:hover {
+    background: linear-gradient(135deg, rgba(72, 219, 251, 0.35), rgba(56, 168, 232, 0.35));
+    transform: translateY(-3px);
+    border-color: #48dbfb;
+}
+
 .con-btn {
     height: 4rem;
 }

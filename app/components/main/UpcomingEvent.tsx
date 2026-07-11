@@ -13,6 +13,7 @@ interface EventCardProps {
 
 const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
     const {venues} = useVenues();
+    const parkingVenue = resolveVenueById(event.venueId, venues);
     const [timeLeft, setTimeLeft] = useState({
         days: 0,
         hours: 0,
@@ -122,7 +123,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                         </div>
                     ))}
                 </div>
-                {event.buyTicket || event.learnMore ? (
+                {event.buyTicket || event.learnMore || event.customButtonLink || parkingVenue ? (
                     <div className="hero-buttons con-buttons">
                         {event.buyTicket && isValidHttpUrl(event.buyTicket) ? (
                             <a href={event.buyTicket} target="_blank" rel="noopener noreferrer"
@@ -130,17 +131,16 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                         {event.learnMore && isValidHttpUrl(event.learnMore) ? (
                             <a href={event.learnMore} target="_blank" rel="noopener noreferrer"
                                className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>) : null}
+                        {event.customButtonLink && isValidHttpUrl(event.customButtonLink) ? (
+                            <a href={event.customButtonLink} target="_blank" rel="noopener noreferrer"
+                               className="btn btn-secondary con-btn">{isEnglish ? event.customButtonText : event.customButtonTextCn}</a>) : null}
+                        {parkingVenue && (
+                            <a href={`/parking/${event.id}`} className="btn btn-parking con-btn">
+                                <span className="parking-guide-link-icon">🅿️</span>
+                                {isEnglish ? 'Parking Guide' : '停车指南'}
+                            </a>
+                        )}
                     </div>) : null}
-                {event.customButtonLink && isValidHttpUrl(event.customButtonLink) ? (
-                    <a href={event.customButtonLink} target="_blank" rel="noopener noreferrer"
-                       className="btn btn-secondary con-btn">{isEnglish ? event.customButtonText : event.customButtonTextCn}</a>
-                ) : null}
-                {resolveVenueById(event.venueId, venues) && (
-                    <a href={`/parking/${event.id}`} className="parking-guide-link">
-                        <span className="parking-guide-link-icon">🅿️</span>
-                        {isEnglish ? 'Parking Guide' : '停车指南'}
-                    </a>
-                )}
             </div>
         </div>
     );

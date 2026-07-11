@@ -801,30 +801,7 @@ a.parking-lot-name:hover {
     font-weight: 600;
 }
 
-/* --- Parking Guide Link (on home page event card) --- */
-.parking-guide-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 24px;
-    background: linear-gradient(135deg, rgba(255, 107, 157, 0.1), rgba(255, 142, 83, 0.1));
-    border: 2px solid rgba(255, 150, 200, 0.3);
-    border-radius: 25px;
-    color: var(--color-primary);
-    text-decoration: none;
-    font-weight: 700;
-    font-size: 14px;
-    transition: all 0.3s ease;
-    margin-top: 12px;
-}
-
-.parking-guide-link:hover {
-    background: linear-gradient(135deg, rgba(255, 107, 157, 0.2), rgba(255, 142, 83, 0.2));
-    border-color: var(--color-primary);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(255, 107, 157, 0.2);
-}
-
+/* --- Parking Guide button (on home page event card) --- */
 .parking-guide-link-icon {
     font-size: 18px;
 }
