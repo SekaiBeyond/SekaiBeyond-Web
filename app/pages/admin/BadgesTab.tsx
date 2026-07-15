@@ -28,7 +28,7 @@ import {
 import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
 import { isValidHttpUrl } from '~/lib/urls';
 import { docToUserRecord } from './utils';
-import { CreatorPicker } from './CreatorPicker';
+import { AccountPicker } from './AccountPicker';
 import { BilingualFormField } from './BilingualFormField';
 import { ImageUploadField } from './ImageUploadField';
 
@@ -451,7 +451,8 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                 placeholderCn={isEnglish ? 'Badge description in Chinese' : '徽章中文描述'}
                                 multiline
                             />
-                            <CreatorPicker
+                            <AccountPicker
+                                label={isEnglish ? 'Creator (optional)' : '创建者（可选）'}
                                 selected={createForm.creatorUser}
                                 onSelect={u => setCreateForm(f => ({...f, creatorUser: u}))}
                                 manualName={createForm.createdByName}
@@ -571,7 +572,8 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                 onChangeCn={v => setEditForm(f => ({...f, descriptionCn: v}))}
                                 multiline
                             />
-                            <CreatorPicker
+                            <AccountPicker
+                                label={isEnglish ? 'Creator (optional)' : '创建者（可选）'}
                                 selected={editForm.creatorUser}
                                 onSelect={u => setEditForm(f => ({
                                     ...f,

@@ -5,23 +5,25 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import type { UserRecord } from './types';
 import { docToUserRecord } from './utils';
 
-interface CreatorPickerProps {
+interface AccountPickerProps {
     selected: UserRecord | null;
     onSelect: (user: UserRecord | null) => void;
     manualName?: string;
     onManualNameChange?: (name: string) => void;
     manualLink?: string;
     onManualLinkChange?: (link: string) => void;
+    label?: string;
 }
 
-export const CreatorPicker = ({
+export const AccountPicker = ({
                                   selected,
                                   onSelect,
                                   manualName,
                                   onManualNameChange,
                                   manualLink,
                                   onManualLinkChange,
-                              }: CreatorPickerProps) => {
+                                  label,
+                              }: AccountPickerProps) => {
     const {isEnglish} = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<UserRecord[]>([]);
@@ -42,9 +44,11 @@ export const CreatorPicker = ({
 
     return (
         <div className="admin-creator-picker">
-            <span className="admin-creator-picker-label">
-                {isEnglish ? 'Creator (optional)' : '创建者（可选）'}
-            </span>
+            {label && (
+                <span className="admin-creator-picker-label">
+                    {label}
+                </span>
+            )}
             {selected ? (
                 <div className="admin-creator-selected">
                     <img src={selected.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>

@@ -3,7 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUploadAdminImage } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
 import { useModalEffects } from '~/lib/useModalEffects';
-import { CreatorPicker } from './CreatorPicker';
+import { AccountPicker } from './AccountPicker';
 import { ImageUploadField } from './ImageUploadField';
 import type { UserRecord } from './types';
 import type { ShowToast } from './utils';
@@ -82,7 +82,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
 
                 <div className="admin-tickets-attendee-edit">
                     <div style={{marginBottom: '16px'}}>
-                        <CreatorPicker
+                        <AccountPicker
+                            label={isEnglish ? 'Linked Account (optional)' : '关联账户（可选）'}
                             selected={formData.uid ? {
                                 uid: formData.uid,
                                 displayName: formData.name,
