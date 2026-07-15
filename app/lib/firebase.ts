@@ -4,6 +4,7 @@ import { type Auth, getAuth, GoogleAuthProvider, signInWithPopup, signOut as fir
 import { type Firestore, getFirestore } from "firebase/firestore";
 import { type Functions, type FunctionsError, getFunctions as _getFunctions, httpsCallable } from "firebase/functions";
 import { type ConEdition } from "~/constants";
+import type { TeamMemberConfig } from "./siteConfig";
 
 const requiredEnvVars = [
     'VITE_FIREBASE_API_KEY',
@@ -281,6 +282,11 @@ export const callSaveSiteConfig = (data: {bilibiliVideoBvid?: string, conEdition
 
 export const callSaveTeamMembers = (data: {teamMembers: any[]}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveTeamMembers')(data);
+
+// Public resolver: returns team members with account-linked fields (name/role/photo)
+// filled from the linked account's live data. Callable without auth.
+export const callGetPublicTeamMembers = () =>
+    httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getPublicTeamMembers')({});
 
 export const callSaveBadge = (data: {
     badgeId?: string;

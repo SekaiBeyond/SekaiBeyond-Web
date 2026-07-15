@@ -521,6 +521,10 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         roleCn: validateStr(m.roleCn, "roleCn", 200),
         imageUrl: validateStr(m.imageUrl, "imageUrl", 500),
         isHonorary: Boolean(m.isHonorary),
+        // Legacy useAccountInfo (single toggle) maps to all three per-field flags.
+        useAccountName: Boolean(m.useAccountName ?? m.useAccountInfo),
+        useAccountRole: Boolean(m.useAccountRole ?? m.useAccountInfo),
+        useAccountPhoto: Boolean(m.useAccountPhoto ?? m.useAccountInfo),
     }));
 
     return adminTransaction(uid, async (txn, callerSnap) => {
@@ -539,4 +543,60 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         });
         return {saved: true};
     });
+});
+
+// Public (unauthenticated) resolver for the "Our Team" section on the landing page.
+// The public site cannot read the users collection directly (Firestore rules gate it
+// to staff/self), so members that opt a field into following their linked account have
+// name/role/photo resolved here from the account's live displayName/title/photoURL.
+// Only members the admin explicitly placed on the public team are looked up, and no
+// email is exposed.
+export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
+    const configSnap = await db.collection("config").doc("main").get();
+    const members = (configSnap.data()?.teamMembers ?? []) as Record<string, unknown>[];
+
+    // Legacy single-toggle members: treat useAccountInfo as all three per-field flags.
+    const follows = (m: Record<string, unknown>) => ({
+        name: Boolean(m.useAccountName ?? m.useAccountInfo),
+        role: Boolean(m.useAccountRole ?? m.useAccountInfo),
+        photo: Boolean(m.useAccountPhoto ?? m.useAccountInfo),
+    });
+
+    const linkedUids = [...new Set(
+        members
+            .filter(m => typeof m?.uid === "string" && m.uid)
+            .filter(m => {
+                const f = follows(m);
+                return f.name || f.role || f.photo;
+            })
+            .map(m => m.uid as string)
+    )];
+
+    const accounts = new Map<string, {displayName: string; title: string; photoURL: string}>();
+    if (linkedUids.length > 0) {
+        const snaps = await db.getAll(...linkedUids.map(uid => db.collection("users").doc(uid)));
+        for (const snap of snaps) {
+            if (!snap.exists) continue;
+            const d = snap.data()!;
+            accounts.set(snap.id, {
+                displayName: (d.displayName as string) ?? "",
+                title: (d.title as string) ?? "",
+                photoURL: (d.photoURL as string) ?? "",
+            });
+        }
+    }
+
+    const teamMembers = members.map(m => {
+        const acc = typeof m?.uid === "string" ? accounts.get(m.uid) : undefined;
+        if (!acc) return m;
+        const f = follows(m);
+        return {
+            ...m,
+            name: f.name ? (acc.displayName || m.name) : m.name,
+            role: f.role ? (acc.title || m.role) : m.role,
+            imageUrl: f.photo ? (acc.photoURL || m.imageUrl) : m.imageUrl,
+        };
+    });
+
+    return {teamMembers};
 });

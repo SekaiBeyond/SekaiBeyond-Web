@@ -1,15 +1,35 @@
+import { useEffect, useState } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
+import { callGetPublicTeamMembers } from "~/lib/firebase";
 import { type TeamMemberConfig, useSiteConfig } from "~/lib/siteConfig";
 
 export const Team = () => {
     const {isEnglish} = useLanguage();
     const {config, loading} = useSiteConfig();
+    // Members can opt name/role/photo into following their linked account live; the site
+    // can't read the users collection directly, so a public Cloud Function resolves those
+    // fields. Falls back to the config snapshot if it fails.
+    const [resolvedMembers, setResolvedMembers] = useState<TeamMemberConfig[] | null>(null);
 
-    if (!loading && (!config.teamMembers || config.teamMembers.length === 0)) {
+    useEffect(() => {
+        let active = true;
+        callGetPublicTeamMembers()
+            .then(res => {
+                if (active) setResolvedMembers(res.data.teamMembers);
+            })
+            .catch(() => {
+                // Keep the config snapshot on failure.
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const teamData = resolvedMembers ?? config.teamMembers ?? [];
+
+    if (!loading && teamData.length === 0) {
         return null;
     }
-
-    const teamData = config.teamMembers || [];
     const activeMembers = teamData.filter(m => !m.isHonorary);
     const honoraryMembers = teamData.filter(m => m.isHonorary);
 
