@@ -1,8 +1,26 @@
 import { useEffect, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSaveTeamMembers } from '~/lib/firebase';
+import { callSaveTeamMembers, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
 import { MemberEditModal } from './MemberEditModal';
+
+interface LinkedAccount {
+    displayName: string;
+    title: string;
+    titleCn: string;
+    photoURL: string;
+}
+
+// Legacy members used a single useAccountInfo toggle; treat it as all three per-field flags.
+const memberFollows = (m: TeamMemberConfig) => {
+    const legacy = (m as {useAccountInfo?: boolean}).useAccountInfo ?? false;
+    return {
+        name: m.useAccountName ?? legacy,
+        role: m.useAccountRole ?? legacy,
+        photo: m.useAccountPhoto ?? legacy,
+    };
+};
 
 interface TeamSectionProps {
     teamMembers: TeamMemberConfig[];
@@ -17,10 +35,51 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
     const [saving, setSaving] = useState(false);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [isAdding, setIsAdding] = useState(false);
+    const [accounts, setAccounts] = useState<Map<string, LinkedAccount>>(new Map());
 
     useEffect(() => {
         setMembers(teamMembers);
     }, [teamMembers]);
+
+    // Mirror the public page: account-linked members that follow their account show its
+    // live displayName/title/titleCn/photo, so the admin preview matches what visitors see.
+    useEffect(() => {
+        const uids = [...new Set(
+            members
+                .filter(m => {
+                    const f = memberFollows(m);
+                    return m.uid && (f.name || f.role || f.photo);
+                })
+                .map(m => m.uid as string)
+        )];
+        if (uids.length === 0) {
+            setAccounts(new Map());
+            return;
+        }
+        let active = true;
+        (async () => {
+            const db = getFirebaseDb();
+            const snaps = await Promise.all(uids.map(uid => getDoc(doc(db, 'users', uid))));
+            if (!active) return;
+            const next = new Map<string, LinkedAccount>();
+            snaps.forEach(snap => {
+                if (!snap.exists()) return;
+                const d = snap.data();
+                next.set(snap.id, {
+                    displayName: d.displayName ?? '',
+                    title: d.title ?? '',
+                    titleCn: d.titleCn ?? '',
+                    photoURL: d.photoURL ?? '',
+                });
+            });
+            setAccounts(next);
+        })().catch(() => {
+            if (active) setAccounts(new Map());
+        });
+        return () => {
+            active = false;
+        };
+    }, [members]);
 
     const saveChanges = async (newMembers: TeamMemberConfig[]) => {
         setMembers(newMembers);
@@ -93,6 +152,13 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
 
     const renderCard = (index: number, isFirstInGroup: boolean, isLastInGroup: boolean) => {
         const member = members[index];
+        const acc = member.uid ? accounts.get(member.uid) : undefined;
+        const f = memberFollows(member);
+        // Each field falls back to the stored value when the account has none set.
+        const displayName = f.name && acc ? (acc.displayName || member.name) : member.name;
+        const displayRole = f.role && acc ? (acc.title || member.role) : member.role;
+        const displayRoleCn = f.role && acc ? (acc.titleCn || member.roleCn) : member.roleCn;
+        const displayImage = f.photo && acc ? (acc.photoURL || member.imageUrl) : member.imageUrl;
         return (
             <div key={member.id} className="admin-event-card"
                  style={{
@@ -103,7 +169,7 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
                      opacity: saving ? 0.7 : 1
                  }}>
                 <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
-                    <img src={member.imageUrl || '/mika.webp'} alt="" className="admin-event-card-img"
+                    <img src={displayImage || '/mika.webp'} alt="" className="admin-event-card-img"
                          style={{
                              borderRadius: '50%',
                              opacity: member.isHonorary ? 0.7 : 1,
@@ -111,10 +177,10 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
                          }}/>
                     <div className="admin-event-card-info">
                         <span className="admin-event-card-title">
-                            {isEnglish ? member.name : (member.nameCn || member.name)}
+                            {isEnglish ? displayName : (member.nameCn || displayName)}
                         </span>
                         <span
-                            className="admin-event-card-date">{isEnglish ? member.role : (member.roleCn || member.role)}</span>
+                            className="admin-event-card-date">{isEnglish ? displayRole : (displayRoleCn || displayRole)}</span>
                     </div>
                 </div>
                 {!readOnly && (

@@ -135,13 +135,16 @@ export const callRequestBadgeDeletion = (data: {badgeId: string}) =>
 export const callCancelBadgeDeletion = (data: {badgeId: string}) =>
     httpsCallable<{badgeId: string}, {cancelled: boolean}>(getFunctions(), 'cancelBadgeDeletion')(data);
 
-export const callChangeUserGroup = (data: {targetUid: string; newGroup: string; title?: string}) =>
-    httpsCallable<{targetUid: string; newGroup: string; title?: string}, {oldGroup: string; newGroup: string}>(
+export const callChangeUserGroup = (data: {targetUid: string; newGroup: string; title?: string; titleCn?: string}) =>
+    httpsCallable<{targetUid: string; newGroup: string; title?: string; titleCn?: string}, {
+        oldGroup: string;
+        newGroup: string
+    }>(
         getFunctions(), 'changeUserGroup'
     )(data);
 
-export const callSetUserTitle = (data: {targetUid: string; title?: string}) =>
-    httpsCallable<{targetUid: string; title?: string}, {success: boolean}>(
+export const callSetUserTitle = (data: {targetUid: string; title?: string; titleCn?: string}) =>
+    httpsCallable<{targetUid: string; title?: string; titleCn?: string}, {success: boolean}>(
         getFunctions(), 'setUserTitle'
     )(data);
 
@@ -431,6 +434,7 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         badgeEarnedAt: Record<string, string>;
         group: string;
         title?: string;
+        titleCn?: string;
     }>(getFunctions(), 'getPublicProfile')(data);
 
 export const callUploadAdminImage = async (file: File, storagePath: string): Promise<string> => {

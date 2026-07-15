@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callUploadAdminImage } from '~/lib/firebase';
+import { callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
 import { useModalEffects } from '~/lib/useModalEffects';
 import { AccountPicker } from './AccountPicker';
@@ -38,6 +39,14 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
     });
 
     const [uploading, setUploading] = useState(false);
+    // Live values of the linked account, so followed fields preview what visitors will see
+    // (the stored formData values are only fallbacks for when the account has none).
+    const [account, setAccount] = useState<{
+        displayName: string;
+        title: string;
+        titleCn: string;
+        photoURL: string
+    } | null>(null);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -46,6 +55,45 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
     }, [onClose]);
+
+    useEffect(() => {
+        const uid = formData.uid;
+        if (!uid) {
+            setAccount(null);
+            return;
+        }
+        let active = true;
+        (async () => {
+            const snap = await getDoc(doc(getFirebaseDb(), 'users', uid));
+            if (!active) return;
+            if (!snap.exists()) {
+                setAccount(null);
+                return;
+            }
+            const d = snap.data();
+            const acc = {
+                displayName: (d.displayName as string) ?? '',
+                title: (d.title as string) ?? '',
+                titleCn: (d.titleCn as string) ?? '',
+                photoURL: (d.photoURL as string) ?? '',
+            };
+            setAccount(acc);
+            // Keep followed fields in step with the account's current info; the stored value
+            // is only a fallback, so unchecking later reveals the up-to-date value, not a stale one.
+            setFormData(prev => ({
+                ...prev,
+                name: prev.useAccountName ? (acc.displayName || prev.name) : prev.name,
+                role: prev.useAccountRole ? (acc.title || prev.role) : prev.role,
+                roleCn: prev.useAccountRole ? (acc.titleCn || prev.roleCn) : prev.roleCn,
+                imageUrl: prev.useAccountPhoto ? (acc.photoURL || prev.imageUrl) : prev.imageUrl,
+            }));
+        })().catch(() => {
+            if (active) setAccount(null);
+        });
+        return () => {
+            active = false;
+        };
+    }, [formData.uid]);
 
     const handleUserSelect = (user: UserRecord | null) => {
         if (user) {
@@ -59,6 +107,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                 useAccountPhoto: true,
                 name: user.displayName || prev.name,
                 role: user.title || prev.role,
+                roleCn: user.titleCn || prev.roleCn,
                 imageUrl: user.photoURL || prev.imageUrl,
             }));
         } else {
@@ -94,6 +143,11 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
     const nameFromAccount = accountLinked && !!formData.useAccountName;
     const roleFromAccount = accountLinked && !!formData.useAccountRole;
     const photoFromAccount = accountLinked && !!formData.useAccountPhoto;
+    // Values shown for followed fields: the account's live value, falling back to the stored one.
+    const accountName = account?.displayName || formData.name;
+    const accountRole = account?.title || formData.role;
+    const accountRoleCn = account?.titleCn || formData.roleCn;
+    const accountPhoto = account?.photoURL || formData.imageUrl;
     const canSave = !uploading
         && (nameFromAccount || formData.name.trim() !== '')
         && (roleFromAccount || formData.role.trim() !== '');
@@ -141,8 +195,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                     {accountLinked && (
                         <p className="admin-helper-text" style={{marginTop: 0, marginBottom: '12px'}}>
                             {isEnglish
-                                ? 'Tick "From account" on any field to have it follow the linked account and update automatically; untick to enter a custom value. Chinese name and role are always custom.'
-                                : '在任意字段勾选“来自账户”，即可让其跟随关联账户并自动更新；取消勾选可输入自定义值。中文姓名和角色始终为自定义。'}
+                                ? 'Tick "From account" on a field to have it follow the linked account and update automatically; untick to enter a custom value. The role follows the account in both English and Chinese. The Chinese name is always custom.'
+                                : '在字段勾选“来自账户”，即可让其跟随关联账户并自动更新；取消勾选可输入自定义值。角色的中英文均跟随账户。中文姓名始终为自定义。'}
                         </p>
                     )}
 
@@ -161,7 +215,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                         checked={nameFromAccount}
                                         onChange={e => setFormData(prev => ({
                                             ...prev,
-                                            useAccountName: e.target.checked
+                                            useAccountName: e.target.checked,
+                                            name: e.target.checked ? (account?.displayName || prev.name) : prev.name,
                                         }))}
                                     />
                                     {isEnglish ? 'From account' : '来自账户'}
@@ -170,7 +225,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                         </span>
                         {nameFromAccount ? (
                             <div className="admin-input" style={fromAccountValueStyle}>
-                                {formData.name || (isEnglish ? '(from account)' : '（来自账户）')}
+                                {accountName || (isEnglish ? '(from account)' : '（来自账户）')}
                             </div>
                         ) : (
                             <input
@@ -207,7 +262,9 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                         checked={roleFromAccount}
                                         onChange={e => setFormData(prev => ({
                                             ...prev,
-                                            useAccountRole: e.target.checked
+                                            useAccountRole: e.target.checked,
+                                            role: e.target.checked ? (account?.title || prev.role) : prev.role,
+                                            roleCn: e.target.checked ? (account?.titleCn || prev.roleCn) : prev.roleCn,
                                         }))}
                                     />
                                     {isEnglish ? 'From account' : '来自账户'}
@@ -216,7 +273,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                         </span>
                         {roleFromAccount ? (
                             <div className="admin-input" style={fromAccountValueStyle}>
-                                {formData.role || (isEnglish ? '(from account title)' : '（来自账户头衔）')}
+                                {accountRole || (isEnglish ? '(from account title)' : '（来自账户头衔）')}
                             </div>
                         ) : (
                             <input
@@ -228,15 +285,21 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                         )}
                     </div>
 
-                    <label className="admin-tickets-template-field">
+                    <div className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Role (Chinese)' : '角色（中文）'}</span>
-                        <input
-                            className="admin-input"
-                            value={formData.roleCn}
-                            onChange={e => setFormData(prev => ({...prev, roleCn: e.target.value}))}
-                            placeholder={isEnglish ? 'e.g. President' : '例如：社长'}
-                        />
-                    </label>
+                        {roleFromAccount ? (
+                            <div className="admin-input" style={fromAccountValueStyle}>
+                                {accountRoleCn || (isEnglish ? '(from account title)' : '（来自账户头衔）')}
+                            </div>
+                        ) : (
+                            <input
+                                className="admin-input"
+                                value={formData.roleCn}
+                                onChange={e => setFormData(prev => ({...prev, roleCn: e.target.value}))}
+                                placeholder={isEnglish ? 'e.g. President' : '例如：社长'}
+                            />
+                        )}
+                    </div>
 
                     <label className="admin-tickets-template-field"
                            style={{flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
@@ -256,7 +319,11 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                 <input
                                     type="checkbox"
                                     checked={photoFromAccount}
-                                    onChange={e => setFormData(prev => ({...prev, useAccountPhoto: e.target.checked}))}
+                                    onChange={e => setFormData(prev => ({
+                                        ...prev,
+                                        useAccountPhoto: e.target.checked,
+                                        imageUrl: e.target.checked ? (account?.photoURL || prev.imageUrl) : prev.imageUrl,
+                                    }))}
                                 />
                                 {isEnglish ? 'Use account photo for avatar' : '头像使用账户照片'}
                             </label>
@@ -265,8 +332,9 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                             <div className="admin-tickets-template-field">
                                 <span>{isEnglish ? 'Member Avatar' : '成员头像'}</span>
                                 <img
-                                    src={formData.imageUrl || '/mika.webp'}
+                                    src={accountPhoto || '/mika.webp'}
                                     alt=""
+                                    referrerPolicy="no-referrer"
                                     style={{width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover'}}
                                 />
                             </div>

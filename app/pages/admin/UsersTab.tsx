@@ -81,6 +81,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const [deletionBusy, setDeletionBusy] = useState(false);
     const [pendingDeletionUids, setPendingDeletionUids] = useState<Set<string>>(new Set());
     const [titleInput, setTitleInput] = useState('');
+    const [titleCnInput, setTitleCnInput] = useState('');
     const [titleBusy, setTitleBusy] = useState(false);
 
     useImperativeHandle(ref, () => ({
@@ -94,6 +95,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const record = docToUserRecord(userSnap);
             setSelectedUser(record);
             setTitleInput(record.title ?? '');
+            setTitleCnInput(record.titleCn ?? '');
             setSearchResults([]);
             setSearchQuery('');
         },
@@ -102,8 +104,9 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     useEffect(() => {
         if (selectedUser) {
             setTitleInput(selectedUser.title ?? '');
+            setTitleCnInput(selectedUser.titleCn ?? '');
         }
-    }, [selectedUser?.uid, selectedUser?.title]);
+    }, [selectedUser?.uid, selectedUser?.title, selectedUser?.titleCn]);
 
     useEffect(() => {
         if (!selectedUser) {
@@ -373,10 +376,12 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         )) return;
         setUpdating(true);
         try {
-            const title = ['staff', 'core-staff'].includes(newGroup) ? (userRecord.title ?? '') : '';
-            await callChangeUserGroup({targetUid: userRecord.uid, newGroup, title});
+            const keepTitles = ['staff', 'core-staff'].includes(newGroup);
+            const title = keepTitles ? (userRecord.title ?? '') : '';
+            const titleCn = keepTitles ? (userRecord.titleCn ?? '') : '';
+            await callChangeUserGroup({targetUid: userRecord.uid, newGroup, title, titleCn});
 
-            const updated = {...userRecord, group: newGroup, title};
+            const updated = {...userRecord, group: newGroup, title, titleCn};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
             showToast(isEnglish ? 'Group updated.' : '用户组已更新。', 'success');
@@ -396,16 +401,22 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         setTitleBusy(true);
         try {
             const newTitle = titleInput.trim();
-            await callSetUserTitle({targetUid: userRecord.uid, title: newTitle || undefined});
+            const newTitleCn = titleCnInput.trim();
+            await callSetUserTitle({
+                targetUid: userRecord.uid,
+                title: newTitle || undefined,
+                titleCn: newTitleCn || undefined,
+            });
 
-            const updated = {...userRecord, title: newTitle};
+            const updated = {...userRecord, title: newTitle, titleCn: newTitleCn};
             if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
             setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            const hasAnyTitle = newTitle || newTitleCn;
             showToast(
-                newTitle
+                hasAnyTitle
                     ? (isEnglish ? 'Title updated.' : '头衔已更新。')
                     : (isEnglish ? 'Title removed.' : '头衔已清除。'),
-                newTitle ? 'success' : 'warning',
+                hasAnyTitle ? 'success' : 'warning',
             );
         } catch {
             showToast(
@@ -471,7 +482,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 </span>
                             )}
                             <span className="admin-user-group-tag" data-group={u.group}>
-                                {formatGroupWithTitle(u.group, u.title, isEnglish)}
+                                {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
                             </span>
                             <span className="admin-user-badge-count">
                                 {u.attendedEvents.length} {isEnglish ? 'events' : '活动'}
@@ -503,7 +514,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 </span>
                             )}
                             <span className="admin-user-group-tag" data-group={u.group}>
-                                {formatGroupWithTitle(u.group, u.title, isEnglish)}
+                                {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
                             </span>
                             <span className="admin-detail-joined">
                                 {u.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
@@ -568,7 +579,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 {isEnglish ? 'Current group: ' : '当前用户组：'}
                             </span>
                                 <span className="admin-user-group-tag" data-group={selectedUser.group}>
-                                {formatGroupWithTitle(selectedUser.group, selectedUser.title, isEnglish)}
+                                {formatGroupWithTitle(selectedUser.group, selectedUser.title, selectedUser.titleCn, isEnglish)}
                             </span>
                             </div>
                             {!readOnly && (
@@ -598,20 +609,43 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 <h4 className="admin-badges-title">
                                     {isEnglish ? 'Title' : '头衔'}
                                 </h4>
+                                <div className="admin-title-fields">
+                                    <label className="admin-title-field">
+                                        <span className="admin-title-field-label">
+                                            {isEnglish ? 'English title' : '英文头衔'}
+                                        </span>
+                                        <input
+                                            type="text"
+                                            className="admin-input admin-input--sm"
+                                            placeholder={isEnglish ? 'e.g. Tech Lead, Event Coordinator...' : '例如：Tech Lead'}
+                                            value={titleInput}
+                                            onChange={(e) => setTitleInput(e.target.value)}
+                                            maxLength={100}
+                                            disabled={titleBusy}
+                                        />
+                                    </label>
+                                    <label className="admin-title-field">
+                                        <span className="admin-title-field-label">
+                                            {isEnglish ? 'Chinese title' : '中文头衔'}
+                                        </span>
+                                        <input
+                                            type="text"
+                                            className="admin-input admin-input--sm"
+                                            placeholder={isEnglish ? 'e.g. 技术负责人' : '例如：技术负责人、活动策划...'}
+                                            value={titleCnInput}
+                                            onChange={(e) => setTitleCnInput(e.target.value)}
+                                            maxLength={100}
+                                            disabled={titleBusy}
+                                        />
+                                    </label>
+                                </div>
                                 <div className="admin-title-input-row">
-                                    <input
-                                        type="text"
-                                        className="admin-input admin-input--sm"
-                                        placeholder={isEnglish ? 'e.g. Tech Lead, Event Coordinator...' : '例如：技术负责人、活动策划...'}
-                                        value={titleInput}
-                                        onChange={(e) => setTitleInput(e.target.value)}
-                                        maxLength={100}
-                                        disabled={titleBusy}
-                                    />
                                     <button
                                         className="admin-btn admin-btn--cta"
                                         onClick={() => setTitle(selectedUser)}
-                                        disabled={titleBusy || titleInput === (selectedUser.title ?? '')}
+                                        disabled={titleBusy
+                                            || (titleInput === (selectedUser.title ?? '')
+                                                && titleCnInput === (selectedUser.titleCn ?? ''))}
                                     >
                                         {titleBusy
                                             ? (isEnglish ? 'Saving...' : '保存中...')
@@ -620,8 +654,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 </div>
                                 <p className="admin-title-hint">
                                     {isEnglish
-                                        ? 'Leave empty to remove title. Title is shown alongside role (e.g., "Core Staff - Tech Lead").'
-                                        : '留空则清除头衔。头衔会与角色一同显示（例如："核心成员 - 技术负责人"）。'}
+                                        ? 'Set the title per language — the English site shows the English title, the Chinese site the Chinese one (each falls back to the other when left blank). Leave both empty to remove. Shown alongside role (e.g., "Core Staff - Tech Lead").'
+                                        : '按语言分别设置头衔 —— 英文站显示英文头衔，中文站显示中文头衔（任一为空时回退到另一种语言）。两者都留空则清除头衔。头衔会与角色一同显示（例如："核心成员 - 技术负责人"）。'}
                                 </p>
                             </div>
                         )}

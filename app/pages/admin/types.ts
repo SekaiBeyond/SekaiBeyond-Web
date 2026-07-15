@@ -42,6 +42,7 @@ export interface UserRecord {
     badges: string[];
     group: UserGroup;
     title?: string;
+    titleCn?: string;
     eventStaffEvents: string[];
 }
 
@@ -148,6 +149,8 @@ export interface ActivityRecord {
     newGroup?: UserGroup;
     oldTitle?: string;
     newTitle?: string;
+    oldTitleCn?: string;
+    newTitleCn?: string;
     oldName?: string;
     newName?: string;
     addedCount?: number;

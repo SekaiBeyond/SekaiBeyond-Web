@@ -48,9 +48,17 @@ export function canManageUser(assignerGroup: UserGroup, userCurrentGroup: UserGr
     return false;
 }
 
-export function formatGroupWithTitle(group: UserGroup, title: string | undefined, isEnglish: boolean): string {
+export function formatGroupWithTitle(
+    group: UserGroup,
+    title: string | undefined,
+    titleCn: string | undefined,
+    isEnglish: boolean,
+): string {
     const label = isEnglish ? GROUP_LABELS[group].en : GROUP_LABELS[group].zh;
-    return title ? `${label} - ${title}` : label;
+    // Prefer the viewer's language, falling back to the other so legacy
+    // single-language titles still render.
+    const resolved = (isEnglish ? title || titleCn : titleCn || title)?.trim();
+    return resolved ? `${label} - ${resolved}` : label;
 }
 
 export interface UserProfile {
@@ -63,6 +71,7 @@ export interface UserProfile {
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
     title?: string;
+    titleCn?: string;
     eventStaffEvents: string[];
 }
 
@@ -132,6 +141,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                             badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
                             group: data.group ?? 'visitor',
                             title: data.title ?? '',
+                            titleCn: data.titleCn ?? '',
                             eventStaffEvents: data.eventStaffEvents ?? [],
                         });
                     } else {
@@ -151,6 +161,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                             badgeEarnedAt: {},
                             group: 'visitor',
                             title: '',
+                            titleCn: '',
                             eventStaffEvents: [],
                         });
                     }
@@ -194,6 +205,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                 badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
                 group: data.group ?? 'visitor',
                 title: data.title ?? '',
+                titleCn: data.titleCn ?? '',
                 eventStaffEvents: data.eventStaffEvents ?? [],
             });
         }

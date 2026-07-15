@@ -118,6 +118,8 @@ export const RecordsTab = ({
                 newGroup: data.newGroup,
                 oldTitle: data.oldTitle,
                 newTitle: data.newTitle,
+                oldTitleCn: data.oldTitleCn,
+                newTitleCn: data.newTitleCn,
                 oldName: data.oldName,
                 newName: data.newName,
                 addedCount: data.addedCount,
@@ -253,8 +255,10 @@ export const RecordsTab = ({
                     ? <>assigned {target} from {GROUP_LABELS[r.oldGroup!].en} to {GROUP_LABELS[r.newGroup!].en}</>
                     : <>将 {target} 从 {GROUP_LABELS[r.oldGroup!].zh} 改为 {GROUP_LABELS[r.newGroup!].zh}</>;
             case 'title-set': {
-                const oldT = r.oldTitle ?? '';
-                const newT = r.newTitle ?? '';
+                const fmtTitle = (en?: string, zh?: string) =>
+                    [en, zh].map(s => (s ?? '').trim()).filter(Boolean).join(' / ');
+                const oldT = fmtTitle(r.oldTitle, r.oldTitleCn);
+                const newT = fmtTitle(r.newTitle, r.newTitleCn);
                 if (!oldT && newT) {
                     return isEnglish
                         ? <>set {target}'s title to "{newT}"</>

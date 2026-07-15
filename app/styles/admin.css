@@ -812,6 +812,27 @@
 }
 
 /* Title Management */
+.admin-title-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.admin-title-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1 1 200px;
+    min-width: 0;
+}
+
+.admin-title-field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
 .admin-title-input-row {
     display: flex;
     gap: 10px;

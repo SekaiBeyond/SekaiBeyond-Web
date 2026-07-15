@@ -512,20 +512,28 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
 
     const input = request.data as {teamMembers?: any[]};
     const members = Array.isArray(input.teamMembers) ? input.teamMembers : [];
-    const validMembers = members.map(m => ({
-        id: validateStr(m.id, "id", 128, true),
-        uid: m.uid ? validateStr(m.uid, "uid", 128) : "",
-        name: validateStr(m.name, "name", 200, true),
-        nameCn: validateStr(m.nameCn, "nameCn", 200),
-        role: validateStr(m.role, "role", 200, true),
-        roleCn: validateStr(m.roleCn, "roleCn", 200),
-        imageUrl: validateStr(m.imageUrl, "imageUrl", 500),
-        isHonorary: Boolean(m.isHonorary),
+    const validMembers = members.map(m => {
         // Legacy useAccountInfo (single toggle) maps to all three per-field flags.
-        useAccountName: Boolean(m.useAccountName ?? m.useAccountInfo),
-        useAccountRole: Boolean(m.useAccountRole ?? m.useAccountInfo),
-        useAccountPhoto: Boolean(m.useAccountPhoto ?? m.useAccountInfo),
-    }));
+        const useAccountName = Boolean(m.useAccountName ?? m.useAccountInfo);
+        const useAccountRole = Boolean(m.useAccountRole ?? m.useAccountInfo);
+        const useAccountPhoto = Boolean(m.useAccountPhoto ?? m.useAccountInfo);
+        // Stored name/role are only fallbacks when the field follows the linked account
+        // (resolved live at read time), so require them only for custom fields — this
+        // matches the client's canSave and allows following an account with no title set.
+        return {
+            id: validateStr(m.id, "id", 128, true),
+            uid: m.uid ? validateStr(m.uid, "uid", 128) : "",
+            name: validateStr(m.name, "name", 200, !useAccountName),
+            nameCn: validateStr(m.nameCn, "nameCn", 200),
+            role: validateStr(m.role, "role", 200, !useAccountRole),
+            roleCn: validateStr(m.roleCn, "roleCn", 200),
+            imageUrl: validateStr(m.imageUrl, "imageUrl", 500),
+            isHonorary: Boolean(m.isHonorary),
+            useAccountName,
+            useAccountRole,
+            useAccountPhoto,
+        };
+    });
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         txn.set(db.collection("config").doc("main"), {
@@ -572,7 +580,7 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
             .map(m => m.uid as string)
     )];
 
-    const accounts = new Map<string, {displayName: string; title: string; photoURL: string}>();
+    const accounts = new Map<string, {displayName: string; title: string; titleCn: string; photoURL: string}>();
     if (linkedUids.length > 0) {
         const snaps = await db.getAll(...linkedUids.map(uid => db.collection("users").doc(uid)));
         for (const snap of snaps) {
@@ -581,6 +589,7 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
             accounts.set(snap.id, {
                 displayName: (d.displayName as string) ?? "",
                 title: (d.title as string) ?? "",
+                titleCn: (d.titleCn as string) ?? "",
                 photoURL: (d.photoURL as string) ?? "",
             });
         }
@@ -590,10 +599,13 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
         const acc = typeof m?.uid === "string" ? accounts.get(m.uid) : undefined;
         if (!acc) return m;
         const f = follows(m);
+        // The role toggle governs both languages: English role follows the account's
+        // English title, Chinese role its Chinese title (each falling back to the custom value).
         return {
             ...m,
             name: f.name ? (acc.displayName || m.name) : m.name,
             role: f.role ? (acc.title || m.role) : m.role,
+            roleCn: f.role ? (acc.titleCn || m.roleCn) : m.roleCn,
             imageUrl: f.photo ? (acc.photoURL || m.imageUrl) : m.imageUrl,
         };
     });

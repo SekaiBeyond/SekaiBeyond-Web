@@ -21,6 +21,7 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
         badges: data.badges ?? [],
         group: data.group ?? 'visitor',
         title: data.title ?? '',
+        titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],
     };
 };

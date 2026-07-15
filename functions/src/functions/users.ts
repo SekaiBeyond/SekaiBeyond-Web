@@ -90,6 +90,7 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         badgeEarnedAt,
         group: data.group ?? "visitor",
         title: data.title ?? "",
+        titleCn: data.titleCn ?? "",
     };
 });
 export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
@@ -211,7 +212,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 
     const uid = request.auth.uid;
 
-    const input = request.data as {targetUid?: string; newGroup?: string; title?: string};
+    const input = request.data as {targetUid?: string; newGroup?: string; title?: string; titleCn?: string};
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const newGroup = input.newGroup;
 
@@ -223,10 +224,11 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("permission-denied", "Cannot change your own group.");
     }
 
-    // Title can only be set when assigning staff or core-staff
+    // Titles can only be set when assigning staff or core-staff
     const title = input.title;
-    if (title) {
-        if (title?.length > 100) {
+    const titleCn = input.titleCn;
+    if (title || titleCn) {
+        if ((title?.length ?? 0) > 100 || (titleCn?.length ?? 0) > 100) {
             throw new HttpsError("invalid-argument", "Invalid title.");
         }
         if (!["staff", "core-staff"].includes(newGroup)) {
@@ -238,6 +240,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 
     let oldGroup: string = "";
     let oldTitle: string = "";
+    let oldTitleCn: string = "";
 
     await db.runTransaction(async (txn) => {
         const [callerSnap, targetSnap] = await Promise.all([
@@ -255,6 +258,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 
         oldGroup = targetSnap.data()!.group;
         oldTitle = targetSnap.data()!.title ?? "";
+        oldTitleCn = targetSnap.data()!.titleCn ?? "";
 
         if (callerGroup !== "president") {
             if (!["visitor", "member", "staff"].includes(oldGroup)) {
@@ -269,11 +273,14 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 
         const shouldHaveTitle = ["staff", "core-staff"].includes(newGroup);
         const newTitle = shouldHaveTitle ? (title ?? "") : "";
+        const newTitleCn = shouldHaveTitle ? (titleCn ?? "") : "";
         const updateData: Record<string, unknown> = {group: newGroup};
         if (shouldHaveTitle) {
             updateData.title = newTitle;
+            updateData.titleCn = newTitleCn;
         } else {
             updateData.title = FieldValue.delete();
+            updateData.titleCn = FieldValue.delete();
         }
 
         txn.update(db.collection("users").doc(targetUid), updateData);
@@ -289,7 +296,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
             expiresAt: recordExpiresAt(),
         });
 
-        if (oldTitle !== newTitle) {
+        if (oldTitle !== newTitle || oldTitleCn !== newTitleCn) {
             txn.set(db.collection("records").doc(), {
                 type: "title-set",
                 performedBy: uid,
@@ -298,6 +305,8 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
                 targetName: targetSnap.data()!.displayName ?? "",
                 oldTitle,
                 newTitle,
+                oldTitleCn,
+                newTitleCn,
                 timestamp: FieldValue.serverTimestamp(),
                 expiresAt: recordExpiresAt(),
             });
@@ -312,11 +321,12 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     }
 
     const uid = request.auth.uid;
-    const input = request.data as {targetUid?: string; title?: string};
+    const input = request.data as {targetUid?: string; title?: string; titleCn?: string};
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const title = input.title;
+    const titleCn = input.titleCn;
 
-    if (title != null && title.length > 100) {
+    if ((title != null && title.length > 100) || (titleCn != null && titleCn.length > 100)) {
         throw new HttpsError("invalid-argument", "Invalid title.");
     }
 
@@ -349,11 +359,8 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
         }
 
         const updateData: Record<string, unknown> = {};
-        if (title) {
-            updateData.title = title;
-        } else {
-            updateData.title = FieldValue.delete();
-        }
+        updateData.title = title ? title : FieldValue.delete();
+        updateData.titleCn = titleCn ? titleCn : FieldValue.delete();
 
         txn.update(db.collection("users").doc(targetUid), updateData);
         txn.set(db.collection("records").doc(), {
@@ -364,6 +371,8 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
             targetName: targetSnap.data()!.displayName ?? "",
             oldTitle: targetSnap.data()!.title ?? "",
             newTitle: title ?? "",
+            oldTitleCn: targetSnap.data()!.titleCn ?? "",
+            newTitleCn: titleCn ?? "",
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });

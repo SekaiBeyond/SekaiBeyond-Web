@@ -30,6 +30,7 @@ interface ViewedProfile {
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
     title?: string;
+    titleCn?: string;
 }
 
 type ToastType = 'success' | 'warning' | 'error';
@@ -270,6 +271,7 @@ export const ProfilePage = () => {
                     badgeEarnedAt: earnedAt,
                     group: (data.group ?? 'visitor') as UserGroup,
                     title: data.title ?? '',
+                    titleCn: data.titleCn ?? '',
                 });
             } catch {
                 if (!stale) setViewedLoadError(true);
@@ -466,6 +468,7 @@ export const ProfilePage = () => {
             eventStaffEvents: profile!.eventStaffEvents,
             group: profile!.group,
             title: profile!.title ?? '',
+            titleCn: profile!.titleCn ?? '',
         }
         : {
             name: viewedProfile!.displayName,
@@ -475,6 +478,7 @@ export const ProfilePage = () => {
             eventStaffEvents: viewedProfile!.eventStaffEvents,
             group: viewedProfile!.group,
             title: viewedProfile!.title ?? '',
+            titleCn: viewedProfile!.titleCn ?? '',
         };
     const staffedSet = new Set(dp.eventStaffEvents);
     const attendedSet = new Set([...dp.attendedEvents, ...dp.eventStaffEvents]);
@@ -649,7 +653,7 @@ export const ProfilePage = () => {
                             })}
                         </p>
                         <span className="profile-group-tag" data-group={dp.group}>
-                            {formatGroupWithTitle(dp.group, dp.title, isEnglish)}
+                            {formatGroupWithTitle(dp.group, dp.title, dp.titleCn, isEnglish)}
                         </span>
                     </div>
                 </div>

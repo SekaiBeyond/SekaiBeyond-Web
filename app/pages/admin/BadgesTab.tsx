@@ -667,7 +667,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             <div className="admin-user-email">{u.email}</div>
                         </div>
                         <span className="admin-user-group-tag" data-group={u.group}>
-                            {formatGroupWithTitle(u.group, u.title, isEnglish)}
+                            {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
                         </span>
                     </div>
                 ))}
