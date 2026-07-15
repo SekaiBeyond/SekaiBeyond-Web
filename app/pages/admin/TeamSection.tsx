@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
+import { accountEffectiveTitle, type UserGroup } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveTeamMembers, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
@@ -9,6 +10,7 @@ interface LinkedAccount {
     displayName: string;
     title: string;
     titleCn: string;
+    group: UserGroup;
     photoURL: string;
 }
 
@@ -69,6 +71,7 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
                     displayName: d.displayName ?? '',
                     title: d.title ?? '',
                     titleCn: d.titleCn ?? '',
+                    group: (d.group ?? 'visitor') as UserGroup,
                     photoURL: d.photoURL ?? '',
                 });
             });
@@ -154,10 +157,12 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
         const member = members[index];
         const acc = member.uid ? accounts.get(member.uid) : undefined;
         const f = memberFollows(member);
-        // Each field falls back to the stored value when the account has none set.
+        // Followed role falls back to the account's group label (e.g. "President"), then to
+        // the stored value; other fields fall back straight to the stored value.
+        const accTitle = acc ? accountEffectiveTitle(acc.group, acc.title, acc.titleCn) : null;
         const displayName = f.name && acc ? (acc.displayName || member.name) : member.name;
-        const displayRole = f.role && acc ? (acc.title || member.role) : member.role;
-        const displayRoleCn = f.role && acc ? (acc.titleCn || member.roleCn) : member.roleCn;
+        const displayRole = f.role && accTitle ? (accTitle.en || member.role) : member.role;
+        const displayRoleCn = f.role && accTitle ? (accTitle.zh || member.roleCn) : member.roleCn;
         const displayImage = f.photo && acc ? (acc.photoURL || member.imageUrl) : member.imageUrl;
         return (
             <div key={member.id} className="admin-event-card"

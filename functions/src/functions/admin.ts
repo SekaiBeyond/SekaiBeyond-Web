@@ -553,6 +553,25 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     });
 });
 
+// Group labels for accounts without an explicit title (e.g. the president, whose
+// effective title is simply "President"). Kept in sync with the client's GROUP_LABELS.
+const GROUP_LABELS: Record<string, {en: string; zh: string}> = {
+    "visitor": {en: "Visitor", zh: "访客"},
+    "member": {en: "Member", zh: "成员"},
+    "staff": {en: "Staff", zh: "工作人员"},
+    "core-staff": {en: "Core Staff", zh: "核心成员"},
+    "president": {en: "President", zh: "社长"},
+};
+
+// An account's effective title per language: its explicit title, else its group label.
+const accountEffectiveTitle = (acc: {group: string; title: string; titleCn: string}) => {
+    const labels = GROUP_LABELS[acc.group] ?? {en: "", zh: ""};
+    return {
+        en: acc.title || acc.titleCn || labels.en,
+        zh: acc.titleCn || acc.title || labels.zh,
+    };
+};
+
 // Public (unauthenticated) resolver for the "Our Team" section on the landing page.
 // The public site cannot read the users collection directly (Firestore rules gate it
 // to staff/self), so members that opt a field into following their linked account have
@@ -580,7 +599,13 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
             .map(m => m.uid as string)
     )];
 
-    const accounts = new Map<string, {displayName: string; title: string; titleCn: string; photoURL: string}>();
+    const accounts = new Map<string, {
+        displayName: string;
+        title: string;
+        titleCn: string;
+        group: string;
+        photoURL: string
+    }>();
     if (linkedUids.length > 0) {
         const snaps = await db.getAll(...linkedUids.map(uid => db.collection("users").doc(uid)));
         for (const snap of snaps) {
@@ -590,6 +615,7 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
                 displayName: (d.displayName as string) ?? "",
                 title: (d.title as string) ?? "",
                 titleCn: (d.titleCn as string) ?? "",
+                group: (d.group as string) ?? "visitor",
                 photoURL: (d.photoURL as string) ?? "",
             });
         }
@@ -599,13 +625,15 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
         const acc = typeof m?.uid === "string" ? accounts.get(m.uid) : undefined;
         if (!acc) return m;
         const f = follows(m);
-        // The role toggle governs both languages: English role follows the account's
-        // English title, Chinese role its Chinese title (each falling back to the custom value).
+        // The role toggle governs both languages: English role follows the account's English
+        // title, Chinese role its Chinese title, each falling back to the account's group label
+        // (so a president with no title shows "President") and then to the stored custom value.
+        const title = accountEffectiveTitle(acc);
         return {
             ...m,
             name: f.name ? (acc.displayName || m.name) : m.name,
-            role: f.role ? (acc.title || m.role) : m.role,
-            roleCn: f.role ? (acc.titleCn || m.roleCn) : m.roleCn,
+            role: f.role ? (title.en || m.role) : m.role,
+            roleCn: f.role ? (title.zh || m.roleCn) : m.roleCn,
             imageUrl: f.photo ? (acc.photoURL || m.imageUrl) : m.imageUrl,
         };
     });

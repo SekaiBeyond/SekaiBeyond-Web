@@ -61,6 +61,20 @@ export function formatGroupWithTitle(
     return resolved ? `${label} - ${resolved}` : label;
 }
 
+// An account's effective title per language: its explicit title, else its group label.
+// Presidents (and anyone without a title) fall back to the group name, e.g. "President".
+export function accountEffectiveTitle(
+    group: UserGroup,
+    title: string | undefined,
+    titleCn: string | undefined,
+): {en: string; zh: string} {
+    const labels = GROUP_LABELS[group] ?? {en: '', zh: ''};
+    return {
+        en: (title || titleCn || labels.en).trim(),
+        zh: (titleCn || title || labels.zh).trim(),
+    };
+}
+
 export interface UserProfile {
     displayName: string;
     email: string;

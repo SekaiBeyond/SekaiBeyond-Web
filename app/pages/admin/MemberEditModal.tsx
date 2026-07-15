@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
+import { accountEffectiveTitle, type UserGroup } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
@@ -45,6 +46,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         displayName: string;
         title: string;
         titleCn: string;
+        group: UserGroup;
         photoURL: string
     } | null>(null);
 
@@ -75,16 +77,18 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                 displayName: (d.displayName as string) ?? '',
                 title: (d.title as string) ?? '',
                 titleCn: (d.titleCn as string) ?? '',
+                group: ((d.group as string) ?? 'visitor') as UserGroup,
                 photoURL: (d.photoURL as string) ?? '',
             };
             setAccount(acc);
             // Keep followed fields in step with the account's current info; the stored value
             // is only a fallback, so unchecking later reveals the up-to-date value, not a stale one.
+            const accTitle = accountEffectiveTitle(acc.group, acc.title, acc.titleCn);
             setFormData(prev => ({
                 ...prev,
                 name: prev.useAccountName ? (acc.displayName || prev.name) : prev.name,
-                role: prev.useAccountRole ? (acc.title || prev.role) : prev.role,
-                roleCn: prev.useAccountRole ? (acc.titleCn || prev.roleCn) : prev.roleCn,
+                role: prev.useAccountRole ? (accTitle.en || prev.role) : prev.role,
+                roleCn: prev.useAccountRole ? (accTitle.zh || prev.roleCn) : prev.roleCn,
                 imageUrl: prev.useAccountPhoto ? (acc.photoURL || prev.imageUrl) : prev.imageUrl,
             }));
         })().catch(() => {
@@ -99,6 +103,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         if (user) {
             // Linking an account defaults every field to following it; snapshot the account's
             // current name/role/photo as a fallback for the public page (which live-resolves).
+            const accTitle = accountEffectiveTitle(user.group, user.title, user.titleCn);
             setFormData(prev => ({
                 ...prev,
                 uid: user.uid,
@@ -106,8 +111,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                 useAccountRole: true,
                 useAccountPhoto: true,
                 name: user.displayName || prev.name,
-                role: user.title || prev.role,
-                roleCn: user.titleCn || prev.roleCn,
+                role: accTitle.en || prev.role,
+                roleCn: accTitle.zh || prev.roleCn,
                 imageUrl: user.photoURL || prev.imageUrl,
             }));
         } else {
@@ -144,9 +149,11 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
     const roleFromAccount = accountLinked && !!formData.useAccountRole;
     const photoFromAccount = accountLinked && !!formData.useAccountPhoto;
     // Values shown for followed fields: the account's live value, falling back to the stored one.
+    // Role uses the account's effective title (its title, or group label like "President").
+    const accTitle = account ? accountEffectiveTitle(account.group, account.title, account.titleCn) : null;
     const accountName = account?.displayName || formData.name;
-    const accountRole = account?.title || formData.role;
-    const accountRoleCn = account?.titleCn || formData.roleCn;
+    const accountRole = accTitle?.en || formData.role;
+    const accountRoleCn = accTitle?.zh || formData.roleCn;
     const accountPhoto = account?.photoURL || formData.imageUrl;
     const canSave = !uploading
         && (nameFromAccount || formData.name.trim() !== '')
@@ -263,8 +270,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                         onChange={e => setFormData(prev => ({
                                             ...prev,
                                             useAccountRole: e.target.checked,
-                                            role: e.target.checked ? (account?.title || prev.role) : prev.role,
-                                            roleCn: e.target.checked ? (account?.titleCn || prev.roleCn) : prev.roleCn,
+                                            role: e.target.checked ? (accTitle?.en || prev.role) : prev.role,
+                                            roleCn: e.target.checked ? (accTitle?.zh || prev.roleCn) : prev.roleCn,
                                         }))}
                                     />
                                     {isEnglish ? 'From account' : '来自账户'}
