@@ -158,11 +158,22 @@ function renderTicketQrBlock(tickets: any[], eventId: string): string {
     }).join("\n");
 }
 
+// Ticket ids are UUIDs and event ids are Firestore doc ids, so both fit this
+// charset well under the length cap. This endpoint is public and uncached for
+// novel inputs, so rejecting off-shape params early keeps an anonymous caller
+// from forcing QR generation for arbitrary (cache-busting) query strings.
+const QR_PARAM_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
 export const serveTicketQr = onRequest({maxInstances: 10, memory: "256MiB"}, async (req, res) => {
     const ticketId = req.query.ticket as string;
     const eventId = req.query.event as string;
     if (!ticketId || !eventId) {
         res.status(400).send("Missing ticket or event parameter");
+        return;
+    }
+    if (typeof ticketId !== "string" || typeof eventId !== "string"
+        || !QR_PARAM_RE.test(ticketId) || !QR_PARAM_RE.test(eventId)) {
+        res.status(400).send("Invalid ticket or event parameter");
         return;
     }
 

@@ -9,6 +9,7 @@ import {
     detectImageMime,
     logStorageCleanupError,
     MAX_UPLOAD_SIZE,
+    MAX_UPLOAD_SIZE_MB,
     validateStoragePath
 } from "../utils/storage";
 import {
@@ -16,7 +17,8 @@ import {
     validateDocId,
     validateISODate,
     validateStorageImageUrl,
-    validateStr
+    validateStr,
+    validateUrl
 } from "../utils/validation";
 
 export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
@@ -44,7 +46,7 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
 
     const buffer = Buffer.from(dataBase64, "base64");
     if (buffer.length > MAX_UPLOAD_SIZE) {
-        throw new HttpsError("invalid-argument", "Image exceeds 5MB limit.");
+        throw new HttpsError("invalid-argument", `Image exceeds ${MAX_UPLOAD_SIZE_MB}MB limit.`);
     }
 
     const detectedMime = detectImageMime(buffer);
@@ -559,14 +561,21 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         // at read time), so require it only when custom — this matches the client's canSave and
         // allows following an account with no title set. The name is always custom, so always
         // required.
+        const name = sanitizeDisplayText(validateStr(m.name, "name", 200, true));
+        if (!name) throw new HttpsError("invalid-argument", "name is required.");
+        const imageUrl = validateStr(m.imageUrl, "imageUrl", 500);
+        // Team photos are either a team/<uuid>.webp storage URL or, for a member
+        // following their account, the account's photoURL fallback — which may be a
+        // Google avatar URL, so validate https rather than a storage-only URL.
+        validateUrl(imageUrl, "imageUrl");
         return {
             id: validateStr(m.id, "id", 128, true),
             uid: m.uid ? validateStr(m.uid, "uid", 128) : "",
-            name: validateStr(m.name, "name", 200, true),
-            nameCn: validateStr(m.nameCn, "nameCn", 200),
-            role: validateStr(m.role, "role", 200, !useAccountRole),
-            roleCn: validateStr(m.roleCn, "roleCn", 200),
-            imageUrl: validateStr(m.imageUrl, "imageUrl", 500),
+            name,
+            nameCn: sanitizeDisplayText(validateStr(m.nameCn, "nameCn", 200)),
+            role: sanitizeDisplayText(validateStr(m.role, "role", 200, !useAccountRole)),
+            roleCn: sanitizeDisplayText(validateStr(m.roleCn, "roleCn", 200)),
+            imageUrl,
             isHonorary: Boolean(m.isHonorary),
             useAccountRole,
             useAccountPhoto,
@@ -680,17 +689,26 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
 
     const teamMembers = members.map(m => {
         const acc = typeof m?.uid === "string" ? accounts.get(m.uid) : undefined;
-        if (!acc) return m;
-        const f = follows(m);
+        const f = acc ? follows(m) : {role: false, photo: false};
         // The role toggle governs both languages: English role follows the account's English
         // title, Chinese role its Chinese title, each falling back to the account's group label
         // (so a president with no title shows "President") and then to the stored custom value.
-        const title = accountEffectiveTitle(acc);
+        const title = acc ? accountEffectiveTitle(acc) : {en: "", zh: ""};
+        const role = (m.role as string) ?? "";
+        const roleCn = (m.roleCn as string) ?? "";
+        const imageUrl = (m.imageUrl as string) ?? "";
+        // Project only display fields — never the internal linked-account uid or the
+        // admin-side follow flags. (The config/main doc backing this is world-readable,
+        // so this alone doesn't hide the uid; it keeps the sanctioned public endpoint
+        // clean and is the right shape if that doc is ever locked down.)
         return {
-            ...m,
-            role: f.role ? (title.en || m.role) : m.role,
-            roleCn: f.role ? (title.zh || m.roleCn) : m.roleCn,
-            imageUrl: f.photo ? (acc.photoURL || m.imageUrl) : m.imageUrl,
+            id: (m.id as string) ?? "",
+            name: (m.name as string) ?? "",
+            nameCn: (m.nameCn as string) ?? "",
+            role: f.role ? (title.en || role) : role,
+            roleCn: f.role ? (title.zh || roleCn) : roleCn,
+            imageUrl: f.photo ? (acc?.photoURL || imageUrl) : imageUrl,
+            isHonorary: Boolean(m.isHonorary),
         };
     });
 

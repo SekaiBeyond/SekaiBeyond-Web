@@ -6,7 +6,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { ADMIN_GROUPS, adminTransaction, checkRateLimit, requireAuth } from "../utils/auth";
 import { deletionExpiresAt, recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
-import { detectImageMime, MAX_UPLOAD_SIZE } from "../utils/storage";
+import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB } from "../utils/storage";
 import { sanitizeDisplayText, validateDocId } from "../utils/validation";
 
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
@@ -228,7 +228,7 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
 
     const buffer = Buffer.from(dataBase64, "base64");
     if (buffer.length > MAX_UPLOAD_SIZE) {
-        throw new HttpsError("invalid-argument", "Image exceeds 5MB limit.");
+        throw new HttpsError("invalid-argument", `Image exceeds ${MAX_UPLOAD_SIZE_MB}MB limit.`);
     }
 
     const detectedMime = detectImageMime(buffer);
@@ -330,8 +330,8 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
     }
 
     // Titles can only be set when assigning staff or core-staff
-    const title = input.title;
-    const titleCn = input.titleCn;
+    const title = typeof input.title === "string" ? sanitizeDisplayText(input.title) : input.title;
+    const titleCn = typeof input.titleCn === "string" ? sanitizeDisplayText(input.titleCn) : input.titleCn;
     if (title || titleCn) {
         if ((title?.length ?? 0) > 100 || (titleCn?.length ?? 0) > 100) {
             throw new HttpsError("invalid-argument", "Invalid title.");
@@ -428,8 +428,8 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     const uid = request.auth.uid;
     const input = request.data as {targetUid?: string; title?: string; titleCn?: string};
     const targetUid = validateDocId(input.targetUid, "targetUid");
-    const title = input.title;
-    const titleCn = input.titleCn;
+    const title = typeof input.title === "string" ? sanitizeDisplayText(input.title) : input.title;
+    const titleCn = typeof input.titleCn === "string" ? sanitizeDisplayText(input.titleCn) : input.titleCn;
 
     if ((title != null && title.length > 100) || (titleCn != null && titleCn.length > 100)) {
         throw new HttpsError("invalid-argument", "Invalid title.");
