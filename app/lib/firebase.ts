@@ -458,11 +458,13 @@ export const callUploadAdminImage = async (file: File, storagePath: string): Pro
     return result.data.url;
 };
 
-export const callUpdateDisplayName = (data: {displayName: string}) =>
-    httpsCallable<{displayName: string}, {displayName: string}>(getFunctions(), 'updateDisplayName')(data);
+export const callUpdateDisplayName = (data: {displayName: string; targetUid?: string}) =>
+    httpsCallable<{displayName: string; targetUid?: string}, {displayName: string}>(
+        getFunctions(), 'updateDisplayName'
+    )(data);
 
-export const callDeleteAvatar = () =>
-    httpsCallable<Record<string, never>, {photoURL: string}>(getFunctions(), 'deleteAvatar')({});
+export const callDeleteAvatar = (data: {targetUid?: string} = {}) =>
+    httpsCallable<{targetUid?: string}, {photoURL: string}>(getFunctions(), 'deleteAvatar')(data);
 
 export const callRequestAccountDeletion = (data: {targetUid?: string} = {}) =>
     httpsCallable<{targetUid?: string}, {deleteAt: string}>(
@@ -474,7 +476,7 @@ export const callCancelAccountDeletion = (data: {targetUid?: string} = {}) =>
         getFunctions(), 'cancelAccountDeletion'
     )(data);
 
-export const callUploadAvatar = async (file: File): Promise<string> => {
+export const callUploadAvatar = async (file: File, targetUid?: string): Promise<string> => {
     const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -485,11 +487,12 @@ export const callUploadAvatar = async (file: File): Promise<string> => {
         reader.readAsDataURL(file);
     });
     const result = await httpsCallable<
-        {data: string; contentType: string},
+        {data: string; contentType: string; targetUid?: string},
         {url: string}
     >(getFunctions(), 'uploadAvatar')({
         data: base64,
         contentType: file.type,
+        targetUid,
     });
     return result.data.url;
 };

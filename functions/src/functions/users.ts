@@ -93,6 +93,57 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         titleCn: data.titleCn ?? "",
     };
 });
+
+interface ProfileTarget {
+    targetUid: string;
+    isSelf: boolean;
+    targetData: FirebaseFirestore.DocumentData;
+    callerName: string;
+}
+
+// Resolves whose profile an edit applies to. Editing your own is always allowed;
+// editing someone else's requires admin rights over their group.
+async function resolveProfileTarget(callerUid: string, rawTargetUid: unknown): Promise<ProfileTarget> {
+    const targetUid = rawTargetUid === undefined || rawTargetUid === null
+        ? callerUid
+        : validateDocId(rawTargetUid, "targetUid");
+    const isSelf = targetUid === callerUid;
+
+    const callerSnap = await db.collection("users").doc(callerUid).get();
+    const targetSnap = isSelf ? callerSnap : await db.collection("users").doc(targetUid).get();
+    if (!targetSnap.exists) {
+        throw new HttpsError("not-found", "User not found.");
+    }
+
+    if (!isSelf) {
+        const callerGroup = callerSnap.data()?.group;
+        if (!ADMIN_GROUPS.includes(callerGroup)) {
+            throw new HttpsError("permission-denied", "Insufficient permissions.");
+        }
+        if (callerGroup !== "president"
+            && !["visitor", "member", "staff"].includes(targetSnap.data()!.group)) {
+            throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
+        }
+    }
+
+    return {
+        targetUid,
+        isSelf,
+        targetData: targetSnap.data()!,
+        callerName: callerSnap.data()?.displayName ?? "",
+    };
+}
+
+// The photo a user reverts to once their uploaded avatar is gone. For the caller
+// this is on their token; for anyone else it has to come from their auth record.
+async function googlePhotoURL(uid: string): Promise<string> {
+    try {
+        return (await getAuth().getUser(uid)).photoURL ?? "";
+    } catch {
+        return "";
+    }
+}
+
 export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -101,7 +152,8 @@ export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
     const uid = request.auth.uid;
     await checkRateLimit(uid);
 
-    const raw = (request.data as {displayName?: string})?.displayName;
+    const input = request.data as {displayName?: string; targetUid?: string};
+    const raw = input?.displayName;
     if (typeof raw !== "string") {
         throw new HttpsError("invalid-argument", "displayName must be a string.");
     }
@@ -114,13 +166,25 @@ export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
         throw new HttpsError("invalid-argument", "displayName exceeds maximum length.");
     }
 
-    const userRef = db.collection("users").doc(uid);
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) {
-        throw new HttpsError("not-found", "User not found.");
+    const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input?.targetUid);
+    const oldName = targetData.displayName ?? "";
+
+    await db.collection("users").doc(targetUid).update({displayName: sanitized});
+
+    if (!isSelf && oldName !== sanitized) {
+        await db.collection("records").add({
+            type: "name-set",
+            performedBy: uid,
+            performedByName: callerName,
+            targetUid,
+            targetName: sanitized,
+            oldName,
+            newName: sanitized,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
     }
 
-    await userRef.update({displayName: sanitized});
     return {displayName: sanitized};
 });
 export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
@@ -131,13 +195,14 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     const uid = request.auth.uid;
     await checkRateLimit(uid);
 
-    const userSnap = await db.collection("users").doc(uid).get();
-    const group = userSnap.data()?.group;
-    if (!group || group === "visitor") {
+    const input = request.data as {data?: string; contentType?: string; targetUid?: string};
+    const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input.targetUid);
+
+    // Visitors can't give themselves an avatar, but an admin can give them one.
+    if (isSelf && targetData.group === "visitor") {
         throw new HttpsError("permission-denied", "Visitors cannot upload avatars.");
     }
 
-    const input = request.data as {data?: string; contentType?: string};
     const dataBase64 = input.data;
     const contentType = input.contentType;
 
@@ -160,7 +225,7 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     }
 
     const bucket = getStorage().bucket();
-    const path = `avatars/${uid}`;
+    const path = `avatars/${targetUid}`;
     const file = bucket.file(path);
     await file.save(buffer, {
         metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
@@ -170,7 +235,19 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     const downloadUrl = `${baseDownloadUrl}&t=${Date.now()}`;
 
     // Atomically set photoURL on the user doc so clients can't set arbitrary URLs
-    await db.collection("users").doc(uid).update({photoURL: downloadUrl});
+    await db.collection("users").doc(targetUid).update({photoURL: downloadUrl});
+
+    if (!isSelf) {
+        await db.collection("records").add({
+            type: "avatar-set",
+            performedBy: uid,
+            performedByName: callerName,
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+    }
 
     return {url: downloadUrl};
 });
@@ -182,25 +259,41 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     const uid = request.auth.uid;
     await checkRateLimit(uid);
 
-    const userSnap = await db.collection("users").doc(uid).get();
-    const group = userSnap.data()?.group;
-    if (!group || group === "visitor") {
+    const input = request.data as {targetUid?: string};
+    const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input?.targetUid);
+
+    // A visitor can't upload an avatar, but may remove one an admin gave them.
+    const hasUploadedAvatar = typeof targetData.photoURL === "string"
+        && targetData.photoURL.includes("firebasestorage.googleapis.com");
+    if (isSelf && targetData.group === "visitor" && !hasUploadedAvatar) {
         throw new HttpsError("permission-denied", "Visitors cannot delete avatars.");
     }
 
-    const userRef = db.collection("users").doc(uid);
-
     const bucket = getStorage().bucket();
-    const file = bucket.file(`avatars/${uid}`);
+    const file = bucket.file(`avatars/${targetUid}`);
     const [exists] = await file.exists();
     if (exists) {
         await file.delete();
     }
 
     // Reset to Google OAuth photo or empty string
-    const googlePhoto = request.auth.token.picture ?? "";
+    const googlePhoto = isSelf
+        ? (request.auth.token.picture ?? "")
+        : await googlePhotoURL(targetUid);
     const photoURL = googlePhoto.slice(0, 500);
-    await userRef.update({photoURL});
+    await db.collection("users").doc(targetUid).update({photoURL});
+
+    if (!isSelf) {
+        await db.collection("records").add({
+            type: "avatar-remove",
+            performedBy: uid,
+            performedByName: callerName,
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+    }
 
     return {photoURL};
 });

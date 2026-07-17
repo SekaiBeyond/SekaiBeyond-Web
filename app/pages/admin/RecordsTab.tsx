@@ -45,7 +45,8 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
         'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
     qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
         'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
-    account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted'],
+    account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
+        'name-set', 'avatar-set', 'avatar-remove'],
     config: ['policy-update', 'config-update'],
     email: ['custom-email-send'],
 };
@@ -276,6 +277,18 @@ export const RecordsTab = ({
                 }
                 return isEnglish ? <>updated {target}'s title</> : <>更新了 {target} 的头衔</>;
             }
+            case 'name-set':
+                return isEnglish
+                    ? <>renamed {target} from "{r.oldName ?? ''}" to "{r.newName ?? ''}"</>
+                    : <>将 {target} 的名称从"{r.oldName ?? ''}"改为"{r.newName ?? ''}"</>;
+            case 'avatar-set':
+                return isEnglish
+                    ? <>updated {target}'s profile photo</>
+                    : <>更新了 {target} 的头像</>;
+            case 'avatar-remove':
+                return isEnglish
+                    ? <>removed {target}'s profile photo</>
+                    : <>删除了 {target} 的头像</>;
             case 'code-create': {
                 if (r.eventId) {
                     const isPast = pastEvents.some(e => e.id === r.eventId);
@@ -730,6 +743,9 @@ export const RecordsTab = ({
             case 'account-deletion-requested':
             case 'account-deletion-cancelled':
             case 'account-deleted':
+            case 'name-set':
+            case 'avatar-set':
+            case 'avatar-remove':
                 return isEnglish ? 'Account' : '账号';
             case 'policy-update':
             case 'config-update':

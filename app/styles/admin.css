@@ -363,6 +363,108 @@
     object-fit: cover;
 }
 
+.admin-detail-avatar-wrapper {
+    position: relative;
+    flex-shrink: 0;
+    line-height: 0;
+}
+
+.admin-detail-avatar-editable .admin-detail-avatar {
+    cursor: pointer;
+}
+
+.admin-detail-avatar-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.admin-detail-avatar-editable:hover .admin-detail-avatar-overlay,
+.admin-detail-avatar-saving .admin-detail-avatar-overlay {
+    opacity: 1;
+}
+
+.admin-detail-avatar-camera {
+    width: 22px;
+    height: 22px;
+    color: #fff;
+}
+
+.admin-detail-avatar-delete {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #ff4d4f;
+    border: 2px solid #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.admin-detail-avatar-delete svg {
+    width: 11px;
+    height: 11px;
+    stroke: #fff;
+}
+
+.admin-detail-avatar-editable:hover .admin-detail-avatar-delete {
+    opacity: 1;
+}
+
+.admin-detail-avatar-delete:hover {
+    background: #e03033;
+}
+
+.admin-detail-name-edit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.admin-detail-name-pencil {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    display: inline-flex;
+    align-items: center;
+    transition: color 0.15s ease;
+}
+
+.admin-detail-name-pencil svg {
+    width: 14px;
+    height: 14px;
+}
+
+.admin-detail-name-pencil:hover {
+    color: var(--color-primary);
+}
+
+/* Touch devices have no hover, so keep the avatar controls visible. */
+@media (max-width: 600px) {
+    .admin-detail-avatar-editable .admin-detail-avatar-overlay,
+    .admin-detail-avatar-editable .admin-detail-avatar-delete {
+        opacity: 1;
+    }
+}
+
 .admin-detail-header .admin-detail-joined {
     font-size: 12px;
     color: var(--color-text-light);

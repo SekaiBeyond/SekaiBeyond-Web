@@ -785,7 +785,8 @@
     stroke: #fff;
 }
 
-.profile-avatar-clickable:hover .profile-avatar-delete {
+/* The button only renders when the photo is removable, so any wrapper hover reveals it. */
+.profile-avatar-wrapper:hover .profile-avatar-delete {
     opacity: 1;
 }
 

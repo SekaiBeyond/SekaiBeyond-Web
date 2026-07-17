@@ -489,6 +489,8 @@ export const ProfilePage = () => {
         .filter(b => dp.badges.includes(b.id))
         .sort((a, b) => (earnedDates[b.id]?.getTime() ?? 0) - (earnedDates[a.id]?.getTime() ?? 0));
     const canEdit = isOwnProfile && profile!.group !== 'visitor';
+    // Visitors can't upload a photo, but may remove one an admin gave them.
+    const canRemovePhoto = isOwnProfile && hasCustomPhoto;
     const isStaff = isOwnProfile && hasPermission(profile!.group, 'staff');
 
     return (
@@ -531,46 +533,46 @@ export const ProfilePage = () => {
                                 {(dp.name?.[0] ?? '?').toUpperCase()}
                             </div>
                         )}
-                        {canEdit && (
-                            <>
-                                <div
-                                    className="profile-avatar-overlay"
-                                    onClick={() => !savingPhoto && fileInputRef.current?.click()}
-                                >
-                                    {savingPhoto ? (
-                                        <div className="profile-avatar-spinner"/>
-                                    ) : (
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                                             strokeLinecap="round" strokeLinejoin="round"
-                                             className="profile-avatar-camera-icon">
-                                            <path
-                                                d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                                            <circle cx="12" cy="13" r="4"/>
-                                        </svg>
-                                    )}
-                                </div>
-                                {hasCustomPhoto && !savingPhoto && (
-                                    <button
-                                        className="profile-avatar-delete"
-                                        onClick={handlePhotoDelete}
-                                        type="button"
-                                        aria-label="Remove photo"
-                                    >
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                                             strokeLinecap="round" strokeLinejoin="round">
-                                            <line x1="18" y1="6" x2="6" y2="18"/>
-                                            <line x1="6" y1="6" x2="18" y2="18"/>
-                                        </svg>
-                                    </button>
+                        {(canEdit || savingPhoto) && (
+                            <div
+                                className="profile-avatar-overlay"
+                                onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
+                            >
+                                {savingPhoto ? (
+                                    <div className="profile-avatar-spinner"/>
+                                ) : (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                         strokeLinecap="round" strokeLinejoin="round"
+                                         className="profile-avatar-camera-icon">
+                                        <path
+                                            d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                        <circle cx="12" cy="13" r="4"/>
+                                    </svg>
                                 )}
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handlePhotoSelect}
-                                    hidden
-                                />
-                            </>
+                            </div>
+                        )}
+                        {canRemovePhoto && !savingPhoto && (
+                            <button
+                                className="profile-avatar-delete"
+                                onClick={handlePhotoDelete}
+                                type="button"
+                                aria-label="Remove photo"
+                            >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                     strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        )}
+                        {canEdit && (
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handlePhotoSelect}
+                                hidden
+                            />
                         )}
                         {!canEdit && isOwnProfile && (
                             <>
@@ -583,9 +585,13 @@ export const ProfilePage = () => {
                                     </svg>
                                 </div>
                                 <span className="profile-avatar-hint-tooltip">
-                                    {isEnglish
-                                        ? 'Visitors cannot set a profile photo. Become a member or staff to upload one.'
-                                        : '访客无法设置头像。成为成员或工作人员后即可上传。'}
+                                    {canRemovePhoto
+                                        ? (isEnglish
+                                            ? 'This photo was set by staff. Visitors cannot change it, but you can remove it.'
+                                            : '此头像由工作人员设置。访客无法更换，但可以将其删除。')
+                                        : (isEnglish
+                                            ? 'Visitors cannot set a profile photo. Become a member or staff to upload one.'
+                                            : '访客无法设置头像。成为成员或工作人员后即可上传。')}
                                 </span>
                             </>
                         )}

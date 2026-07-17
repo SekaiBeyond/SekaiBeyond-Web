@@ -1,4 +1,12 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import {
+    type ChangeEvent,
+    forwardRef,
+    type KeyboardEvent,
+    useEffect,
+    useImperativeHandle,
+    useRef,
+    useState
+} from 'react';
 import { FaExternalLinkAlt } from 'react-icons/fa';
 import {
     collection,
@@ -18,10 +26,13 @@ import {
 import {
     callCancelAccountDeletion,
     callChangeUserGroup,
+    callDeleteAvatar,
     callRequestAccountDeletion,
     callSetUserTitle,
     callToggleAttendance,
     callToggleUserBadge,
+    callUpdateDisplayName,
+    callUploadAvatar,
     functionsErrorCode,
     getFirebaseDb,
 } from '~/lib/firebase';
@@ -38,7 +49,8 @@ import {
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { BadgeDef, UserRecord } from './types';
-import { docToUserRecord } from './utils';
+import { docToUserRecord, validateImageFile } from './utils';
+import { ImageCropModal } from './ImageCropModal';
 
 const PAGE_SIZE = 10;
 
@@ -83,6 +95,18 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const [titleInput, setTitleInput] = useState('');
     const [titleCnInput, setTitleCnInput] = useState('');
     const [titleBusy, setTitleBusy] = useState(false);
+    const [editingName, setEditingName] = useState(false);
+    const [nameInput, setNameInput] = useState('');
+    const [nameBusy, setNameBusy] = useState(false);
+    const [photoBusy, setPhotoBusy] = useState(false);
+    const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const applyUserUpdate = (updated: UserRecord) => {
+        if (selectedUser?.uid === updated.uid) setSelectedUser(updated);
+        setSearchResults(prev => prev.map(u => u.uid === updated.uid ? updated : u));
+        setRecentUsers(prev => prev.map(u => u.uid === updated.uid ? updated : u));
+    };
 
     useImperativeHandle(ref, () => ({
         lookupUserByUid: async (uid: string) => {
@@ -107,6 +131,10 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             setTitleCnInput(selectedUser.titleCn ?? '');
         }
     }, [selectedUser?.uid, selectedUser?.title, selectedUser?.titleCn]);
+
+    useEffect(() => {
+        setEditingName(false);
+    }, [selectedUser?.uid]);
 
     useEffect(() => {
         if (!selectedUser) {
@@ -397,6 +425,86 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         }
     };
 
+    const saveName = async (userRecord: UserRecord) => {
+        const newName = nameInput.trim();
+        if (!newName || newName === userRecord.displayName) {
+            setEditingName(false);
+            return;
+        }
+        setNameBusy(true);
+        try {
+            const result = await callUpdateDisplayName({displayName: newName, targetUid: userRecord.uid});
+            applyUserUpdate({...userRecord, displayName: result.data.displayName});
+            setEditingName(false);
+            showToast(isEnglish ? 'Name updated.' : '名称已更新。', 'success');
+        } catch {
+            showToast(
+                isEnglish
+                    ? 'Failed to update name. You may not have permission.'
+                    : '更新名称失败。你可能没有权限执行此操作。',
+                'error',
+            );
+        } finally {
+            setNameBusy(false);
+        }
+    };
+
+    const handleNameKeyDown = (e: KeyboardEvent, userRecord: UserRecord) => {
+        if (e.key === 'Enter') void saveName(userRecord);
+        if (e.key === 'Escape') setEditingName(false);
+    };
+
+    const handlePhotoSelect = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (!file) return;
+        if (!validateImageFile(file, isEnglish, showToast, true)) return;
+        setPendingPhoto(file);
+    };
+
+    const handlePhotoCropConfirm = async (cropped: File) => {
+        setPendingPhoto(null);
+        if (!selectedUser) return;
+        const userRecord = selectedUser;
+        setPhotoBusy(true);
+        try {
+            const url = await callUploadAvatar(cropped, userRecord.uid);
+            applyUserUpdate({...userRecord, photoURL: url});
+            showToast(isEnglish ? 'Profile photo updated.' : '头像已更新。', 'success');
+        } catch {
+            showToast(
+                isEnglish
+                    ? 'Failed to upload photo. You may not have permission.'
+                    : '上传头像失败。你可能没有权限执行此操作。',
+                'error',
+            );
+        } finally {
+            setPhotoBusy(false);
+        }
+    };
+
+    const deletePhoto = async (userRecord: UserRecord) => {
+        if (!confirm(isEnglish
+            ? `Remove ${userRecord.displayName}'s profile photo? It will revert to their Google account photo.`
+            : `删除 ${userRecord.displayName} 的头像？将恢复为其 Google 账户的头像。`
+        )) return;
+        setPhotoBusy(true);
+        try {
+            const result = await callDeleteAvatar({targetUid: userRecord.uid});
+            applyUserUpdate({...userRecord, photoURL: result.data.photoURL});
+            showToast(isEnglish ? 'Profile photo removed.' : '头像已删除。', 'warning');
+        } catch {
+            showToast(
+                isEnglish
+                    ? 'Failed to remove photo. You may not have permission.'
+                    : '删除头像失败。你可能没有权限执行此操作。',
+                'error',
+            );
+        } finally {
+            setPhotoBusy(false);
+        }
+    };
+
     const setTitle = async (userRecord: UserRecord) => {
         setTitleBusy(true);
         try {
@@ -537,6 +645,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 const manageTooltip = !canManage
                     ? (isEnglish ? 'You cannot manage a user at or above your level' : '你不能管理同级或更高级别的用户')
                     : undefined;
+                const canEditProfile = !readOnly && canManage;
+                const hasCustomPhoto = selectedUser.photoURL.includes('firebasestorage.googleapis.com');
                 return (
                     <div className="admin-user-detail">
                         <button className="admin-btn admin-btn--link" onClick={() => setSelectedUser(null)}>
@@ -544,22 +654,119 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                         </button>
 
                         <div className="admin-detail-header">
-                            <img src={selectedUser.photoURL} alt="" className="admin-detail-avatar"
-                                 referrerPolicy="no-referrer"/>
+                            <div
+                                className={`admin-detail-avatar-wrapper${canEditProfile ? ' admin-detail-avatar-editable' : ''}${photoBusy ? ' admin-detail-avatar-saving' : ''}`}>
+                                <img src={selectedUser.photoURL} alt="" className="admin-detail-avatar"
+                                     referrerPolicy="no-referrer"
+                                     onClick={canEditProfile
+                                         ? () => !photoBusy && fileInputRef.current?.click()
+                                         : undefined}/>
+                                {canEditProfile && (
+                                    <>
+                                        <div
+                                            className="admin-detail-avatar-overlay"
+                                            onClick={() => !photoBusy && fileInputRef.current?.click()}
+                                            title={isEnglish ? 'Change profile photo' : '更换头像'}
+                                        >
+                                            {photoBusy ? (
+                                                <div className="profile-avatar-spinner"/>
+                                            ) : (
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                                                     className="admin-detail-avatar-camera">
+                                                    <path
+                                                        d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                                    <circle cx="12" cy="13" r="4"/>
+                                                </svg>
+                                            )}
+                                        </div>
+                                        {hasCustomPhoto && !photoBusy && (
+                                            <button
+                                                className="admin-detail-avatar-delete"
+                                                onClick={() => deletePhoto(selectedUser)}
+                                                type="button"
+                                                title={isEnglish ? 'Remove profile photo' : '删除头像'}
+                                                aria-label={isEnglish ? 'Remove profile photo' : '删除头像'}
+                                            >
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                                </svg>
+                                            </button>
+                                        )}
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handlePhotoSelect}
+                                            hidden
+                                        />
+                                    </>
+                                )}
+                            </div>
                             <div>
-                                <h3>
-                                    {selectedUser.displayName}
-                                    <a
-                                        href={`/profile?uid=${selectedUser.uid}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="admin-detail-profile-link"
-                                        title={isEnglish ? 'Open profile page' : '打开个人主页'}
-                                        aria-label={isEnglish ? 'Open profile page' : '打开个人主页'}
-                                    >
-                                        <FaExternalLinkAlt/>
-                                    </a>
-                                </h3>
+                                {editingName && canEditProfile ? (
+                                    <div className="admin-detail-name-edit">
+                                        <input
+                                            type="text"
+                                            className="admin-input admin-input--sm"
+                                            value={nameInput}
+                                            onChange={(e) => setNameInput(e.target.value)}
+                                            onKeyDown={(e) => handleNameKeyDown(e, selectedUser)}
+                                            maxLength={50}
+                                            disabled={nameBusy}
+                                            autoFocus
+                                        />
+                                        <button
+                                            className="admin-btn admin-btn--cta"
+                                            onClick={() => saveName(selectedUser)}
+                                            disabled={nameBusy || !nameInput.trim()}
+                                        >
+                                            {nameBusy
+                                                ? (isEnglish ? 'Saving...' : '保存中...')
+                                                : (isEnglish ? 'Save' : '保存')}
+                                        </button>
+                                        <button
+                                            className="admin-btn admin-btn--outline"
+                                            onClick={() => setEditingName(false)}
+                                            disabled={nameBusy}
+                                        >
+                                            {isEnglish ? 'Cancel' : '取消'}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <h3>
+                                        {selectedUser.displayName}
+                                        {canEditProfile && (
+                                            <button
+                                                className="admin-detail-name-pencil"
+                                                onClick={() => {
+                                                    setNameInput(selectedUser.displayName);
+                                                    setEditingName(true);
+                                                }}
+                                                type="button"
+                                                title={isEnglish ? 'Edit name' : '编辑名称'}
+                                                aria-label={isEnglish ? 'Edit name' : '编辑名称'}
+                                            >
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                                                </svg>
+                                            </button>
+                                        )}
+                                        <a
+                                            href={`/profile?uid=${selectedUser.uid}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="admin-detail-profile-link"
+                                            title={isEnglish ? 'Open profile page' : '打开个人主页'}
+                                            aria-label={isEnglish ? 'Open profile page' : '打开个人主页'}
+                                        >
+                                            <FaExternalLinkAlt/>
+                                        </a>
+                                    </h3>
+                                )}
                                 <p>{selectedUser.email}</p>
                                 <p className="admin-detail-joined">
                                     {isEnglish ? 'Joined: ' : '加入时间：'}
@@ -789,6 +996,16 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     </div>
                 );
             })()}
+
+            {pendingPhoto && (
+                <ImageCropModal
+                    imageSource={pendingPhoto}
+                    aspect={1}
+                    onConfirm={handlePhotoCropConfirm}
+                    onCancel={() => setPendingPhoto(null)}
+                    showToast={showToast}
+                />
+            )}
         </div>
     );
 });
