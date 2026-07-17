@@ -17,6 +17,18 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     const uid = request.auth.uid;
     await checkRateLimit(uid);
 
+    // ID tokens outlive account deletion by up to an hour, so a deleted user's
+    // client (AuthProvider auto-creates missing profiles) could resurrect the
+    // doc after onUserDeleted ran. Only Auth itself knows the account is gone.
+    try {
+        await getAuth().getUser(uid);
+    } catch (err: unknown) {
+        if ((err as {code?: string})?.code === "auth/user-not-found") {
+            throw new HttpsError("failed-precondition", "Account has been deleted.");
+        }
+        throw err;
+    }
+
     const userRef = db.collection("users").doc(uid);
 
     const rawName = request.auth.token.name ?? "";
@@ -621,8 +633,12 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
 
     return {cancelled: true};
 });
+// retry: a dropped event would leave the Auth account alive with no user doc,
+// silently undoing the deletion on next sign-in. Re-runs are safe: deleteUser
+// tolerates user-not-found, the avatar delete ignores missing files, and the
+// audit record writes to a fixed id.
 export const onUserDeleted = onDocumentDeleted(
-    {document: "users/{uid}", maxInstances: 10},
+    {document: "users/{uid}", maxInstances: 10, retry: true},
     async (event) => {
         const data = event.data?.data();
         const uid = event.params.uid;
@@ -637,6 +653,14 @@ export const onUserDeleted = onDocumentDeleted(
             }
         }
 
+        // The client can recreate the doc between the TTL delete and the auth
+        // deletion above (createUserProfile's existence check still passes in
+        // that window). Deleting a missing doc is a no-op that fires no event,
+        // so this only re-triggers the function when a resurrected doc really
+        // existed — and the re-fired run's own delete is then a no-op, ending
+        // the chain. Errors propagate so retry re-delivers the event.
+        await db.collection("users").doc(uid).delete();
+
         try {
             await getStorage().bucket().file(`avatars/${uid}`).delete({ignoreNotFound: true});
         } catch (err) {
@@ -644,7 +668,9 @@ export const onUserDeleted = onDocumentDeleted(
         }
 
         try {
-            await db.collection("records").add({
+            // Fixed id: retries and the resurrected-doc re-fire overwrite the
+            // same record instead of duplicating the audit entry.
+            await db.collection("records").doc(`account-deleted-${uid}`).set({
                 type: "account-deleted",
                 targetUid: uid,
                 targetName: data?.displayName ?? "",
