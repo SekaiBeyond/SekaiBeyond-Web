@@ -28,7 +28,6 @@ This repository contains the source code for the official **Sekai Beyond** websi
 | [React](https://react.dev/)                   | UI Framework                   |
 | [React Router](https://reactrouter.com/)      | Framework & Routing            |
 | [TypeScript](https://www.typescriptlang.org/) | Type Safety                    |
-| [TailwindCSS](https://tailwindcss.com/)       | Styling                        |
 | [Vite](https://vitejs.dev/)                   | Build Tool                     |
 | [Firebase](https://firebase.google.com/)      | Auth, Firestore, Cloud Storage, Cloud Functions |
 

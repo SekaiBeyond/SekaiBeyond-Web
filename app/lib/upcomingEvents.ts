@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { doc, getDoc, orderBy, where } from 'firebase/firestore';
+import { createCollectionCache } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
 export interface UpcomingEvent {
@@ -62,49 +63,20 @@ const mapDoc = (docSnap: FirestoreDocLike): UpcomingEvent => {
     };
 };
 
-// ---------- Public (published-only) ----------
+/** Published events only, for the public site. */
+const publishedCache = createCollectionCache<UpcomingEvent>(
+    'upcomingEvents',
+    mapDoc,
+    where('published', '==', true),
+    orderBy('startAt', 'asc'),
+);
 
-let publishedCache: UpcomingEvent[] | null = null;
-let publishedFetchPromise: Promise<UpcomingEvent[]> | null = null;
-let publishedSubscribers: Array<(events: UpcomingEvent[]) => void> = [];
-
-async function fetchPublishedEvents(force = false): Promise<UpcomingEvent[]> {
-    if (publishedFetchPromise) return publishedFetchPromise;
-    if (!force && publishedCache) return publishedCache;
-
-    publishedFetchPromise = (async () => {
-        try {
-            const db = getFirebaseDb();
-            const q = query(
-                collection(db, 'upcomingEvents'),
-                where('published', '==', true),
-                orderBy('startAt', 'asc'),
-            );
-            const snapshot = await getDocs(q);
-            const events: UpcomingEvent[] = snapshot.docs.map(mapDoc);
-            publishedCache = events;
-            publishedFetchPromise = null;
-            return events;
-        } catch (err) {
-            publishedFetchPromise = null;
-            console.error('[fetchPublishedEvents]', err);
-            throw err;
-        }
-    })();
-
-    return publishedFetchPromise;
-}
-
-async function refreshUpcomingEvents(): Promise<UpcomingEvent[]> {
-    try {
-        const events = await fetchPublishedEvents(true);
-        publishedSubscribers.forEach(fn => fn(events));
-        return events;
-    } catch (err) {
-        console.error('[refreshUpcomingEvents]', err);
-        throw err;
-    }
-}
+/** All events including unpublished, for the admin panel. */
+const adminCache = createCollectionCache<UpcomingEvent>(
+    'upcomingEvents',
+    mapDoc,
+    orderBy('startAt', 'asc'),
+);
 
 /** Published upcoming events only. Used by the public site. */
 export function useUpcomingEvents(): {
@@ -114,36 +86,7 @@ export function useUpcomingEvents(): {
     loading: boolean;
     refresh: () => Promise<void>;
 } {
-    const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>(publishedCache ?? []);
-    const [loading, setLoading] = useState(publishedCache === null);
-
-    useEffect(() => {
-        publishedSubscribers.push(setUpcomingEvents);
-        return () => {
-            publishedSubscribers = publishedSubscribers.filter(fn => fn !== setUpcomingEvents);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (publishedCache) {
-            setUpcomingEvents(publishedCache);
-            setLoading(false);
-            return;
-        }
-        fetchPublishedEvents()
-            .then(events => {
-                setUpcomingEvents(events);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error('Failed to load upcoming events:', err);
-                setLoading(false);
-            });
-    }, []);
-
-    const refresh = useCallback(async () => {
-        await refreshUpcomingEvents();
-    }, []);
+    const {items: upcomingEvents, loading, refresh} = publishedCache.useItems();
 
     const activeEvents = useMemo(
         () => upcomingEvents.filter(e => e.endAt > new Date()),
@@ -154,84 +97,17 @@ export function useUpcomingEvents(): {
     return {upcomingEvents, activeEvents, hasActive, loading, refresh};
 }
 
-// ---------- Admin (all events, including unpublished) ----------
-
-let adminCache: UpcomingEvent[] | null = null;
-let adminFetchPromise: Promise<UpcomingEvent[]> | null = null;
-let adminSubscribers: Array<(events: UpcomingEvent[]) => void> = [];
-
-async function fetchAllUpcomingEvents(force = false): Promise<UpcomingEvent[]> {
-    if (adminFetchPromise) return adminFetchPromise;
-    if (!force && adminCache) return adminCache;
-
-    adminFetchPromise = (async () => {
-        try {
-            const db = getFirebaseDb();
-            const q = query(collection(db, 'upcomingEvents'), orderBy('startAt', 'asc'));
-            const snapshot = await getDocs(q);
-            const events: UpcomingEvent[] = snapshot.docs.map(mapDoc);
-            adminCache = events;
-            adminFetchPromise = null;
-            return events;
-        } catch (err) {
-            adminFetchPromise = null;
-            console.error('[fetchAllUpcomingEvents]', err);
-            throw err;
-        }
-    })();
-
-    return adminFetchPromise;
-}
-
-async function refreshAllUpcomingEvents(): Promise<UpcomingEvent[]> {
-    try {
-        const [all] = await Promise.all([
-            fetchAllUpcomingEvents(true),
-            refreshUpcomingEvents(),
-        ]);
-        adminSubscribers.forEach(fn => fn(all));
-        return all;
-    } catch (err) {
-        console.error('[refreshAllUpcomingEvents]', err);
-        throw err;
-    }
-}
-
 /** All upcoming events including unpublished. For admin use only. */
 export function useAllUpcomingEvents(): {
     upcomingEvents: UpcomingEvent[];
     loading: boolean;
     refresh: () => Promise<void>;
 } {
-    const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>(adminCache ?? []);
-    const [loading, setLoading] = useState(adminCache === null);
+    const {items: upcomingEvents, loading} = adminCache.useItems();
 
-    useEffect(() => {
-        adminSubscribers.push(setUpcomingEvents);
-        return () => {
-            adminSubscribers = adminSubscribers.filter(fn => fn !== setUpcomingEvents);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (adminCache) {
-            setUpcomingEvents(adminCache);
-            setLoading(false);
-            return;
-        }
-        fetchAllUpcomingEvents()
-            .then(events => {
-                setUpcomingEvents(events);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error('Failed to load upcoming events:', err);
-                setLoading(false);
-            });
-    }, []);
-
+    // An admin edit also changes what the public site shows, so refresh both caches.
     const refresh = useCallback(async () => {
-        await refreshAllUpcomingEvents();
+        await Promise.all([adminCache.refresh(), publishedCache.refresh()]);
     }, []);
 
     return {upcomingEvents, loading, refresh};
