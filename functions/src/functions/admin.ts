@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
-import { adminTransaction, checkRateLimit, requireAdmin, requireAuth } from "../utils/auth";
+import { ADMIN_GROUPS, adminTransaction, checkRateLimit, requireAdmin, requireAuth } from "../utils/auth";
 import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import {
@@ -582,14 +582,35 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         };
     });
 
+    // Public projection stored in the world-readable config/main doc — display
+    // fields only, never the linked-account uid or the follow flags. The full
+    // roster (with uid/flags) lives in the server-only teamRoster/main doc, read
+    // back by getPublicTeamMembers (to resolve live account data) and getTeamRoster
+    // (the admin editor).
+    const publicMembers = validMembers.map(m => ({
+        id: m.id,
+        name: m.name,
+        nameCn: m.nameCn,
+        role: m.role,
+        roleCn: m.roleCn,
+        imageUrl: m.imageUrl,
+        isHonorary: m.isHonorary,
+    }));
+
     const configRef = db.collection("config").doc("main");
+    const rosterRef = db.collection("teamRoster").doc("main");
     const orphanedImages = await adminTransaction(uid, async (txn, callerSnap) => {
         // Each avatar upload writes a new team/<uuid>.webp rather than overwriting, so images
         // this save stops referencing — replaced ones, and those of removed members — are left
         // behind and deleted once the save commits. A member following their account stores the
         // account photo as its fallback; that lives outside team/ and the prefix guard below
-        // keeps it safe. Read before the writes, as transactions require.
-        const prevMembers = ((await txn.get(configRef)).data()?.teamMembers ?? []) as {imageUrl?: string}[];
+        // keeps it safe. Read before the writes, as transactions require. Before the first
+        // post-split save the roster doc doesn't exist yet, so fall back to the legacy config
+        // roster for orphan detection.
+        const rosterSnap = await txn.get(rosterRef);
+        const prevMembers = rosterSnap.exists
+            ? ((rosterSnap.data()?.teamMembers ?? []) as {imageUrl?: string}[])
+            : (((await txn.get(configRef)).data()?.teamMembers ?? []) as {imageUrl?: string}[]);
         const stillReferenced = new Set(validMembers.map(m => m.imageUrl).filter(Boolean));
         const orphaned = [...new Set(
             prevMembers
@@ -597,8 +618,16 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
                 .filter(url => url && !stillReferenced.has(url))
         )];
 
-        txn.set(configRef, {
+        // Full roster (server-only) and public projection (world-readable) written
+        // together so the two never drift.
+        txn.set(rosterRef, {
             teamMembers: validMembers,
+            updatedBy: uid,
+            updatedByName: callerSnap.data()?.displayName ?? "",
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        txn.set(configRef, {
+            teamMembers: publicMembers,
             updatedBy: uid,
             updatedByName: callerSnap.data()?.displayName ?? "",
             updatedAt: FieldValue.serverTimestamp(),
@@ -647,8 +676,15 @@ const accountEffectiveTitle = (acc: {group: string; title: string; titleCn: stri
 // admin's stored custom value and never resolved from the account. Only members the admin
 // explicitly placed on the public team are looked up, and no email is exposed.
 export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
-    const configSnap = await db.collection("config").doc("main").get();
-    const members = (configSnap.data()?.teamMembers ?? []) as Record<string, unknown>[];
+    // Full roster (with uid/flags) lives in the server-only teamRoster/main doc.
+    const rosterSnap = await db.collection("teamRoster").doc("main").get();
+    let members = rosterSnap.data()?.teamMembers as Record<string, unknown>[] | undefined;
+    if (!Array.isArray(members)) {
+        // Migration fallback: before the first post-split save the roster still
+        // lives in the (world-readable) config/main doc.
+        const configSnap = await db.collection("config").doc("main").get();
+        members = (configSnap.data()?.teamMembers ?? []) as Record<string, unknown>[];
+    }
 
     // Legacy single-toggle members: treat useAccountInfo as both per-field flags. A legacy
     // useAccountName is ignored — names no longer follow accounts.
@@ -698,9 +734,8 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
         const roleCn = (m.roleCn as string) ?? "";
         const imageUrl = (m.imageUrl as string) ?? "";
         // Project only display fields — never the internal linked-account uid or the
-        // admin-side follow flags. (The config/main doc backing this is world-readable,
-        // so this alone doesn't hide the uid; it keeps the sanctioned public endpoint
-        // clean and is the right shape if that doc is ever locked down.)
+        // admin-side follow flags, even though the roster is now sourced from the
+        // server-only teamRoster doc.
         return {
             id: (m.id as string) ?? "",
             name: (m.name as string) ?? "",
@@ -713,4 +748,59 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
     });
 
     return {teamMembers};
+});
+
+// Admin-side roster read for the "Our Team" editor. The full roster (linked-account
+// uid + follow flags) lives in the server-only teamRoster/main doc — never a
+// client-readable one — so the editor fetches it through this callable instead of
+// reading config directly. Gated to staff+ to match who can view the site-config
+// tab (core-staff edit, staff read-only); writes still go through saveTeamMembers,
+// which is core-staff+.
+export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+    const callerSnap = await db.collection("users").doc(uid).get();
+    const group = callerSnap.data()?.group;
+    if (!["staff", "core-staff", "president"].includes(group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+
+    const rosterRef = db.collection("teamRoster").doc("main");
+    const rosterSnap = await rosterRef.get();
+    if (Array.isArray(rosterSnap.data()?.teamMembers)) {
+        return {teamMembers: rosterSnap.data()!.teamMembers};
+    }
+
+    // Not split yet: the legacy full roster still lives in the world-readable
+    // config/main doc. Read it as a fallback so the editor keeps working.
+    const configRef = db.collection("config").doc("main");
+    const legacy = (await configRef.get()).data()?.teamMembers;
+    const members = (Array.isArray(legacy) ? legacy : []) as Record<string, unknown>[];
+
+    // One-time migration on first core-staff+ visit: seed the server-only roster and
+    // strip uid/flags from the public projection now, instead of waiting for the next
+    // manual save, so the legacy uids stop being world-readable. Transactional and
+    // guarded on the roster still being absent, so it can't clobber a save that landed
+    // first. Read-only staff viewers skip this (they can't write).
+    if (members.length > 0 && ADMIN_GROUPS.includes(group)) {
+        try {
+            await db.runTransaction(async (txn) => {
+                if (Array.isArray((await txn.get(rosterRef)).data()?.teamMembers)) return;
+                const publicMembers = members.map(m => ({
+                    id: (m.id as string) ?? "",
+                    name: (m.name as string) ?? "",
+                    nameCn: (m.nameCn as string) ?? "",
+                    role: (m.role as string) ?? "",
+                    roleCn: (m.roleCn as string) ?? "",
+                    imageUrl: (m.imageUrl as string) ?? "",
+                    isHonorary: Boolean(m.isHonorary),
+                }));
+                txn.set(rosterRef, {teamMembers: members, migratedAt: FieldValue.serverTimestamp()});
+                txn.set(configRef, {teamMembers: publicMembers}, {merge: true});
+            });
+        } catch (err) {
+            console.error("getTeamRoster: roster migration failed", err);
+        }
+    }
+
+    return {teamMembers: members};
 });

@@ -291,6 +291,12 @@ export const callSaveTeamMembers = (data: {teamMembers: any[]}) =>
 export const callGetPublicTeamMembers = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getPublicTeamMembers')({});
 
+// Admin editor read: the full roster (incl. linked-account uid + follow flags) from
+// the server-only teamRoster doc. Staff+ only. Public config carries a display-only
+// projection, so the editor can't source uid/flags from there.
+export const callGetTeamRoster = () =>
+    httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getTeamRoster')({});
+
 export const callSaveBadge = (data: {
     badgeId?: string;
     name: string; nameCn: string; description: string; descriptionCn: string;

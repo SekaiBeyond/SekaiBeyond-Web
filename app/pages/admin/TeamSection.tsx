@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { accountEffectiveTitle, type UserGroup } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSaveTeamMembers, getFirebaseDb } from '~/lib/firebase';
+import { callGetTeamRoster, callSaveTeamMembers, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
 import { MemberEditModal } from './MemberEditModal';
 
@@ -24,23 +24,36 @@ const memberFollows = (m: TeamMemberConfig) => {
 };
 
 interface TeamSectionProps {
-    teamMembers: TeamMemberConfig[];
     refreshConfig: () => Promise<void>;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     readOnly?: boolean;
 }
 
-export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: TeamSectionProps) => {
+export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionProps) => {
     const {isEnglish} = useLanguage();
     const [members, setMembers] = useState<TeamMemberConfig[]>([]);
+    const [loadingRoster, setLoadingRoster] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [isAdding, setIsAdding] = useState(false);
     const [accounts, setAccounts] = useState<Map<string, LinkedAccount>>(new Map());
 
+    // The full roster (incl. linked-account uid + follow flags) lives in a server-only
+    // doc, not the public config, so the editor loads it through a staff-gated callable.
+    const loadRoster = useCallback(async () => {
+        try {
+            const res = await callGetTeamRoster();
+            setMembers(res.data.teamMembers);
+        } catch {
+            setMembers([]);
+        } finally {
+            setLoadingRoster(false);
+        }
+    }, []);
+
     useEffect(() => {
-        setMembers(teamMembers);
-    }, [teamMembers]);
+        loadRoster();
+    }, [loadRoster]);
 
     // Mirror the public page: account-linked members that follow their account show its
     // live title/titleCn/photo, so the admin preview matches what visitors see.
@@ -87,7 +100,9 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
         setSaving(true);
         try {
             await callSaveTeamMembers({teamMembers: newMembers});
-            await refreshConfig();
+            // refreshConfig updates the public projection cache elsewhere; loadRoster
+            // pulls the canonical roster (with uid/flags) back into the editor.
+            await Promise.all([refreshConfig(), loadRoster()]);
             showToast(isEnglish ? 'Team updated.' : '团队已更新。', 'success');
         } catch (e: any) {
             showToast(isEnglish ? 'Failed to update team.' : '更新团队失败。', 'error');
@@ -253,58 +268,66 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
                     : '配置在主页上显示的团队成员。更改会自动保存。留空将隐藏该板块。在编辑表单中将成员标记为名誉成员可将其移至名誉组。'}
             </p>
 
-            <div style={groupHeadingStyle}>
-                {isEnglish ? `Active (${activeIndices.length})` : `活跃 (${activeIndices.length})`}
-            </div>
-            {activeIndices.length === 0 ? (
-                <p className="admin-helper-text" style={{fontStyle: 'italic'}}>
-                    {isEnglish ? 'No active members yet.' : '尚无活跃成员。'}
-                </p>
-            ) : (
-                <div className="admin-event-grid">
-                    {activeIndices.map((memberIndex, posInGroup) =>
-                        renderCard(memberIndex, posInGroup === 0, posInGroup === activeIndices.length - 1)
-                    )}
+            {loadingRoster ? (
+                <div className="policy-spinner-wrap">
+                    <div className="profile-spinner"/>
                 </div>
-            )}
-
-            {honoraryIndices.length > 0 && (
+            ) : (
                 <>
                     <div style={groupHeadingStyle}>
-                        {isEnglish ? `Honorary (${honoraryIndices.length})` : `名誉 (${honoraryIndices.length})`}
+                        {isEnglish ? `Active (${activeIndices.length})` : `活跃 (${activeIndices.length})`}
                     </div>
-                    <div className="admin-event-grid">
-                        {honoraryIndices.map((memberIndex, posInGroup) =>
-                            renderCard(memberIndex, posInGroup === 0, posInGroup === honoraryIndices.length - 1)
-                        )}
-                    </div>
+                    {activeIndices.length === 0 ? (
+                        <p className="admin-helper-text" style={{fontStyle: 'italic'}}>
+                            {isEnglish ? 'No active members yet.' : '尚无活跃成员。'}
+                        </p>
+                    ) : (
+                        <div className="admin-event-grid">
+                            {activeIndices.map((memberIndex, posInGroup) =>
+                                renderCard(memberIndex, posInGroup === 0, posInGroup === activeIndices.length - 1)
+                            )}
+                        </div>
+                    )}
+
+                    {honoraryIndices.length > 0 && (
+                        <>
+                            <div style={groupHeadingStyle}>
+                                {isEnglish ? `Honorary (${honoraryIndices.length})` : `名誉 (${honoraryIndices.length})`}
+                            </div>
+                            <div className="admin-event-grid">
+                                {honoraryIndices.map((memberIndex, posInGroup) =>
+                                    renderCard(memberIndex, posInGroup === 0, posInGroup === honoraryIndices.length - 1)
+                                )}
+                            </div>
+                        </>
+                    )}
+
+                    {!readOnly && (
+                        <div className="admin-btn-row admin-mt-12">
+                            <button className="admin-toggle-btn" onClick={() => setIsAdding(true)} disabled={saving}>
+                                {isEnglish ? '+ Add Member' : '+ 添加成员'}
+                            </button>
+                        </div>
+                    )}
+
+                    {isAdding && (
+                        <MemberEditModal
+                            member={null}
+                            onClose={() => setIsAdding(false)}
+                            onSave={addMember}
+                            showToast={showToast}
+                        />
+                    )}
+
+                    {editingIndex !== null && (
+                        <MemberEditModal
+                            member={members[editingIndex]}
+                            onClose={() => setEditingIndex(null)}
+                            onSave={(m) => updateMember(editingIndex, m)}
+                            showToast={showToast}
+                        />
+                    )}
                 </>
-            )}
-
-            {!readOnly && (
-                <div className="admin-btn-row admin-mt-12">
-                    <button className="admin-toggle-btn" onClick={() => setIsAdding(true)} disabled={saving}>
-                        {isEnglish ? '+ Add Member' : '+ 添加成员'}
-                    </button>
-                </div>
-            )}
-
-            {isAdding && (
-                <MemberEditModal
-                    member={null}
-                    onClose={() => setIsAdding(false)}
-                    onSave={addMember}
-                    showToast={showToast}
-                />
-            )}
-
-            {editingIndex !== null && (
-                <MemberEditModal
-                    member={members[editingIndex]}
-                    onClose={() => setEditingIndex(null)}
-                    onSave={(m) => updateMember(editingIndex, m)}
-                    showToast={showToast}
-                />
             )}
         </div>
     );

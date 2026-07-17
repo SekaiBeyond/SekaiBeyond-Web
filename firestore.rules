@@ -122,9 +122,20 @@ service cloud.firestore {
             allow read: if true;
         }
 
-        // Site config (featured video, etc.) — publicly readable; writes via Cloud Functions
+        // Site config (featured video, etc.) — publicly readable; writes via Cloud Functions.
+        // config/main.teamMembers holds ONLY a display projection (no account uid/flags).
+        // The full team roster (with linked-account uids) lives in the server-only
+        // `teamRoster` collection below.
         match /config/{docId} {
             allow read: if true;
+        }
+
+        // Full team roster (display fields + linked-account uid/follow flags).
+        // Server-only: the editor reads it via the getTeamRoster function (staff+) and
+        // all writes go through saveTeamMembers. Keeping account uids out of the public
+        // config/main doc is the whole point — do NOT open this up to client reads.
+        match /teamRoster/{docId} {
+            allow read, write: if false;
         }
 
         // Event venues (parking guide data) — publicly readable; writes via Cloud Functions

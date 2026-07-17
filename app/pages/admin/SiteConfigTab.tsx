@@ -152,8 +152,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
             <div className="admin-divider"/>
 
-            <TeamSection teamMembers={config.teamMembers || []} refreshConfig={refreshConfig} showToast={showToast}
-                         readOnly={readOnly}/>
+            <TeamSection refreshConfig={refreshConfig} showToast={showToast} readOnly={readOnly}/>
 
             <div className="admin-divider"/>
 
