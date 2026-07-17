@@ -154,6 +154,22 @@ export const savePolicy = onCall({maxInstances: 10}, async (request) => {
         return {saved: true};
     });
 });
+// picUrl comes from Bilibili's API response (an untrusted third-party field),
+// so it must not be used as an arbitrary fetch target — that would be an SSRF
+// vector from inside the project. Restrict it to Bilibili's own image CDNs.
+function isBilibiliImageUrl(value: string): boolean {
+    try {
+        const url = new URL(value);
+        if (url.protocol !== "https:") return false;
+        return url.hostname === "hdslb.com"
+            || url.hostname.endsWith(".hdslb.com")
+            || url.hostname === "biliimg.com"
+            || url.hostname.endsWith(".biliimg.com");
+    } catch {
+        return false;
+    }
+}
+
 export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
@@ -192,6 +208,14 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         validateStorageImageUrl(conEdition.image, "convention image");
     }
 
+    // Gate the network + storage side effects behind an admin check BEFORE
+    // running them. adminTransaction below is the authoritative (transactional)
+    // gate for the Firestore write, but the Bilibili fetch and the
+    // config/video-cover storage write happen out here — without this, any
+    // signed-in user could trigger a server-side fetch and overwrite the
+    // public cover object.
+    await requireAdmin(uid);
+
     let coverUrl = '';
     if (bvid) {
         try {
@@ -203,21 +227,29 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
                 const json = await apiResp.json() as {code: number; data?: {pic?: string}};
                 const pic = json?.data?.pic ?? '';
                 const picUrl = pic.startsWith('http:') ? 'https:' + pic.slice(5) : pic;
-                if (picUrl) {
+                if (picUrl && isBilibiliImageUrl(picUrl)) {
                     const imgResp = await fetch(picUrl, {
                         headers: {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.bilibili.com/'},
                         signal: AbortSignal.timeout(10000),
                     });
                     if (imgResp.ok) {
-                        const contentType = imgResp.headers.get('content-type') ?? 'image/jpeg';
                         const buffer = Buffer.from(await imgResp.arrayBuffer());
-                        const bucket = getStorage().bucket();
-                        const file = bucket.file('config/video-cover');
-                        await file.save(buffer, {
-                            metadata: {contentType, cacheControl: 'public, max-age=31536000, immutable'},
-                        });
-                        const baseCoverUrl = await getDownloadURL(file);
-                        coverUrl = `${baseCoverUrl}&t=${Date.now()}`;
+                        // Trust the bytes, not the response's content-type header:
+                        // verify the payload really is an image and is within the
+                        // upload size cap before storing it in the public bucket.
+                        const detectedMime = detectImageMime(buffer);
+                        if (detectedMime && buffer.length <= MAX_UPLOAD_SIZE) {
+                            const bucket = getStorage().bucket();
+                            const file = bucket.file('config/video-cover');
+                            await file.save(buffer, {
+                                metadata: {
+                                    contentType: detectedMime,
+                                    cacheControl: 'public, max-age=31536000, immutable'
+                                },
+                            });
+                            const baseCoverUrl = await getDownloadURL(file);
+                            coverUrl = `${baseCoverUrl}&t=${Date.now()}`;
+                        }
                     }
                 }
             }
