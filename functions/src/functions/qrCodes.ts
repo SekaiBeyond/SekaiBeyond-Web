@@ -352,14 +352,11 @@ export const redirectQr = onRequest({maxInstances: 20, memory: "256MiB"}, async 
     // Internal hand-offs use same-origin relative paths so scanners stay on
     // whatever host served the request (custom domain, preview channel, etc.).
 
-    // No managed id → legacy code; forward the original query to the SPA handler.
+    // No managed id → legacy inline-url code. These are no longer supported
+    // (the inline `url` param was an open-redirect vector), so resolve to the
+    // expired/invalid card instead of honoring the destination.
     if (!id) {
-        const params = new URLSearchParams();
-        for (const [k, v] of Object.entries(req.query)) {
-            if (typeof v === "string") params.set(k, v);
-        }
-        const qs = params.toString();
-        res.redirect(302, `/qr/legacy${qs ? `?${qs}` : ""}`);
+        res.redirect(302, "/qr/expired");
         return;
     }
 

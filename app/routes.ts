@@ -8,6 +8,5 @@ export default [
     route("policy", "routes/policy.tsx"),
     route("qr", "routes/qr.tsx"),
     route("qr/expired", "routes/qrExpired.tsx"),
-    route("qr/legacy", "routes/qrLegacy.tsx"),
     route("parking/:eventId", "routes/parking.tsx"),
 ] satisfies RouteConfig;
