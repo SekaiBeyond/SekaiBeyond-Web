@@ -17,15 +17,10 @@ interface MemberEditModalProps {
     showToast: ShowToast;
 }
 
-export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEditModalProps) => {
-    const {isEnglish} = useLanguage();
-    const overlayRef = useRef<HTMLDivElement>(null);
-    useModalEffects(true, overlayRef);
-
-    // Legacy members used a single useAccountInfo toggle; seed all three per-field flags from it.
+// Legacy members used a single useAccountInfo toggle; seed both per-field flags from it.
+const seedFormData = (member: TeamMemberConfig | null): TeamMemberConfig => {
     const legacyUseAccountInfo = (member as {useAccountInfo?: boolean} | null)?.useAccountInfo ?? false;
-
-    const [formData, setFormData] = useState<TeamMemberConfig>({
+    return {
         id: member?.id || Math.random().toString(36).substring(2, 9),
         uid: member?.uid || '',
         name: member?.name || '',
@@ -34,16 +29,25 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         roleCn: member?.roleCn || '',
         imageUrl: member?.imageUrl || '',
         isHonorary: member?.isHonorary || false,
-        useAccountName: member?.useAccountName ?? legacyUseAccountInfo,
         useAccountRole: member?.useAccountRole ?? legacyUseAccountInfo,
         useAccountPhoto: member?.useAccountPhoto ?? legacyUseAccountInfo,
-    });
+    };
+};
+
+export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEditModalProps) => {
+    const {isEnglish} = useLanguage();
+    const overlayRef = useRef<HTMLDivElement>(null);
+    useModalEffects(true, overlayRef);
+
+    // The member as currently saved, normalized like the form so single fields can be
+    // compared against it and put back.
+    const [saved] = useState<TeamMemberConfig>(() => seedFormData(member));
+    const [formData, setFormData] = useState<TeamMemberConfig>(saved);
 
     const [uploading, setUploading] = useState(false);
     // Live values of the linked account, so followed fields preview what visitors will see
     // (the stored formData values are only fallbacks for when the account has none).
     const [account, setAccount] = useState<{
-        displayName: string;
         title: string;
         titleCn: string;
         group: UserGroup;
@@ -74,7 +78,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
             }
             const d = snap.data();
             const acc = {
-                displayName: (d.displayName as string) ?? '',
                 title: (d.title as string) ?? '',
                 titleCn: (d.titleCn as string) ?? '',
                 group: ((d.group as string) ?? 'visitor') as UserGroup,
@@ -86,7 +89,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
             const accTitle = accountEffectiveTitle(acc.group, acc.title, acc.titleCn);
             setFormData(prev => ({
                 ...prev,
-                name: prev.useAccountName ? (acc.displayName || prev.name) : prev.name,
                 role: prev.useAccountRole ? (accTitle.en || prev.role) : prev.role,
                 roleCn: prev.useAccountRole ? (accTitle.zh || prev.roleCn) : prev.roleCn,
                 imageUrl: prev.useAccountPhoto ? (acc.photoURL || prev.imageUrl) : prev.imageUrl,
@@ -101,16 +103,17 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
 
     const handleUserSelect = (user: UserRecord | null) => {
         if (user) {
-            // Linking an account defaults every field to following it; snapshot the account's
-            // current name/role/photo as a fallback for the public page (which live-resolves).
+            // Linking an account defaults role and photo to following it; snapshot their current
+            // values as a fallback for the public page (which live-resolves). The name never
+            // follows, so the account's only fills a blank one rather than replacing what the
+            // admin typed.
             const accTitle = accountEffectiveTitle(user.group, user.title, user.titleCn);
             setFormData(prev => ({
                 ...prev,
                 uid: user.uid,
-                useAccountName: true,
                 useAccountRole: true,
                 useAccountPhoto: true,
-                name: user.displayName || prev.name,
+                name: prev.name || user.displayName,
                 role: accTitle.en || prev.role,
                 roleCn: accTitle.zh || prev.roleCn,
                 imageUrl: user.photoURL || prev.imageUrl,
@@ -119,7 +122,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
             setFormData(prev => ({
                 ...prev,
                 uid: '',
-                useAccountName: false,
                 useAccountRole: false,
                 useAccountPhoto: false,
             }));
@@ -132,7 +134,11 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         setFormData(prev => ({...prev, imageUrl: previewUrl}));
         try {
             showToast(isEnglish ? 'Uploading image...' : '正在上传图片...', 'warning');
-            const url = await callUploadAdminImage(file, `team/${formData.id}.webp`);
+            // A fresh path per upload, as badges and events do: writing to a path derived from
+            // the member id would overwrite the live image before the admin saves, so cancelling
+            // would leave the saved member pointing at a replaced file. saveTeamMembers deletes
+            // whichever team/ image the save orphans.
+            const url = await callUploadAdminImage(file, `team/${crypto.randomUUID()}.webp`);
             setFormData(prev => ({...prev, imageUrl: url}));
             showToast(isEnglish ? 'Image uploaded.' : '图片已上传。', 'success');
         } catch (err) {
@@ -143,22 +149,80 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
     };
 
     const accountLinked = !!formData.uid;
-    // Each field can independently follow the linked account. A field that follows the
+    // Role and photo can each independently follow the linked account. A field that follows the
     // account is filled from its live value, so it's hidden here and not required to save.
-    const nameFromAccount = accountLinked && !!formData.useAccountName;
+    // Names are always custom, so both are always editable and the English one is always required.
     const roleFromAccount = accountLinked && !!formData.useAccountRole;
     const photoFromAccount = accountLinked && !!formData.useAccountPhoto;
     // Values shown for followed fields: the account's live value, falling back to the stored one.
     // Role uses the account's effective title (its title, or group label like "President").
     const accTitle = account ? accountEffectiveTitle(account.group, account.title, account.titleCn) : null;
-    const accountName = account?.displayName || formData.name;
     const accountRole = accTitle?.en || formData.role;
     const accountRoleCn = accTitle?.zh || formData.roleCn;
     const accountPhoto = account?.photoURL || formData.imageUrl;
     const canSave = !uploading
-        && (nameFromAccount || formData.name.trim() !== '')
+        && formData.name.trim() !== ''
         && (roleFromAccount || formData.role.trim() !== '');
 
+    // Per-field revert back to the saved member. A field that follows the account shows the
+    // account's live value, so its stored value is only an invisible fallback: while it is
+    // followed, the fallback drifting is not a change the admin made and does not count as
+    // edited. Restoring a followed field re-reads the account, mirroring what ticking
+    // "From account" does. Adding a member has nothing saved to go back to.
+    const isEditing = !!member;
+    const revertField = (patch: Partial<TeamMemberConfig>) => setFormData(prev => ({...prev, ...patch}));
+    const accountEdited = isEditing && formData.uid !== saved.uid;
+    const nameEdited = isEditing && formData.name !== saved.name;
+    const nameCnEdited = isEditing && formData.nameCn !== saved.nameCn;
+    const roleEdited = isEditing && (formData.useAccountRole !== saved.useAccountRole
+        || (!formData.useAccountRole
+            && (formData.role !== saved.role || formData.roleCn !== saved.roleCn)));
+    const honoraryEdited = isEditing && !!formData.isHonorary !== !!saved.isHonorary;
+    const photoEdited = isEditing && (formData.useAccountPhoto !== saved.useAccountPhoto
+        || (!formData.useAccountPhoto && formData.imageUrl !== saved.imageUrl));
+
+    // Undoes everything picking an account did, since that is what handleUserSelect changed;
+    // the uid change re-runs the effect above, refreshing whichever fields follow the account.
+    const revertAccount = () => revertField({
+        uid: saved.uid,
+        useAccountRole: saved.useAccountRole,
+        useAccountPhoto: saved.useAccountPhoto,
+        name: saved.name,
+        role: saved.role,
+        roleCn: saved.roleCn,
+        imageUrl: saved.imageUrl,
+    });
+    const revertRole = () => revertField({
+        useAccountRole: saved.useAccountRole,
+        role: saved.useAccountRole ? (accTitle?.en || saved.role) : saved.role,
+        roleCn: saved.useAccountRole ? (accTitle?.zh || saved.roleCn) : saved.roleCn,
+    });
+    const revertPhoto = () => revertField({
+        useAccountPhoto: saved.useAccountPhoto,
+        imageUrl: saved.useAccountPhoto ? (account?.photoURL || saved.imageUrl) : saved.imageUrl,
+    });
+
+    // Only rendered once a field differs from the saved member, so it is never a no-op.
+    const revertButton = (edited: boolean, onRevert: () => void, titleEn: string, titleCn: string) => (
+        edited ? (
+            <button
+                type="button"
+                className="admin-btn admin-btn--revert"
+                onClick={onRevert}
+                title={isEnglish ? titleEn : titleCn}
+            >
+                ↺ {isEnglish ? 'Revert' : '还原'}
+            </button>
+        ) : null
+    );
+
+    // Field label on the left, its "From account" / revert controls on the right.
+    const fieldHeaderStyle: React.CSSProperties = {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '8px',
+    };
     // Small "From account" checkbox shown alongside each account-backed field.
     const fromAccountToggleStyle: React.CSSProperties = {
         display: 'flex',
@@ -197,86 +261,89 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                             } as any : null}
                             onSelect={handleUserSelect}
                         />
+                        {accountEdited && (
+                            <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '6px'}}>
+                                {revertButton(
+                                    accountEdited,
+                                    revertAccount,
+                                    'Revert the linked account, and the name, role and photo it filled in, to the saved values',
+                                    '将关联账户，以及它填入的姓名、角色和照片，还原为已保存的值',
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {accountLinked && (
                         <p className="admin-helper-text" style={{marginTop: 0, marginBottom: '12px'}}>
                             {isEnglish
-                                ? 'Tick "From account" on a field to have it follow the linked account and update automatically; untick to enter a custom value. The role follows the account in both English and Chinese. The Chinese name is always custom.'
-                                : '在字段勾选“来自账户”，即可让其跟随关联账户并自动更新；取消勾选可输入自定义值。角色的中英文均跟随账户。中文姓名始终为自定义。'}
+                                ? 'Tick "From account" on the role, or "Use account photo", to have that field follow the linked account and update automatically; untick to set it yourself. The role follows the account in both English and Chinese. Names are always custom — linking an account only fills in a blank name.'
+                                : '在角色勾选“来自账户”，或勾选“头像使用账户照片”，即可让该字段跟随关联账户并自动更新；取消勾选可自行设置。角色的中英文均跟随账户。姓名始终为自定义——关联账户仅会填充空白的姓名。'}
                         </p>
                     )}
 
                     <div className="admin-tickets-template-field">
-                        <span style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            gap: '8px'
-                        }}>
+                        <span style={fieldHeaderStyle}>
                             <span>{isEnglish ? 'Name (English)' : '姓名（英文）'}</span>
-                            {accountLinked && (
-                                <label style={fromAccountToggleStyle}>
-                                    <input
-                                        type="checkbox"
-                                        checked={nameFromAccount}
-                                        onChange={e => setFormData(prev => ({
-                                            ...prev,
-                                            useAccountName: e.target.checked,
-                                            name: e.target.checked ? (account?.displayName || prev.name) : prev.name,
-                                        }))}
-                                    />
-                                    {isEnglish ? 'From account' : '来自账户'}
-                                </label>
+                            {revertButton(
+                                nameEdited,
+                                () => revertField({name: saved.name}),
+                                'Revert the English name to the saved value',
+                                '将英文姓名还原为已保存的值',
                             )}
                         </span>
-                        {nameFromAccount ? (
-                            <div className="admin-input" style={fromAccountValueStyle}>
-                                {accountName || (isEnglish ? '(from account)' : '（来自账户）')}
-                            </div>
-                        ) : (
-                            <input
-                                className="admin-input"
-                                value={formData.name}
-                                onChange={e => setFormData(prev => ({...prev, name: e.target.value}))}
-                                placeholder={isEnglish ? 'Full name in English' : '英文全名'}
-                            />
-                        )}
+                        <input
+                            className="admin-input"
+                            value={formData.name}
+                            onChange={e => setFormData(prev => ({...prev, name: e.target.value}))}
+                            placeholder={isEnglish ? 'Full name in English' : '英文全名'}
+                        />
                     </div>
 
-                    <label className="admin-tickets-template-field">
-                        <span>{isEnglish ? 'Name (Chinese) (optional)' : '姓名（中文）（可选）'}</span>
+                    <div className="admin-tickets-template-field">
+                        <span style={fieldHeaderStyle}>
+                            <span>{isEnglish ? 'Name (Chinese) (optional)' : '姓名（中文）（可选）'}</span>
+                            {revertButton(
+                                nameCnEdited,
+                                () => revertField({nameCn: saved.nameCn}),
+                                'Revert the Chinese name to the saved value',
+                                '将中文姓名还原为已保存的值',
+                            )}
+                        </span>
                         <input
                             className="admin-input"
                             value={formData.nameCn}
                             onChange={e => setFormData(prev => ({...prev, nameCn: e.target.value}))}
                             placeholder={isEnglish ? 'Full name in Chinese' : '中文全名'}
                         />
-                    </label>
+                    </div>
 
                     <div className="admin-tickets-template-field">
-                        <span style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            gap: '8px'
-                        }}>
+                        <span style={fieldHeaderStyle}>
                             <span>{isEnglish ? 'Role (English)' : '角色（英文）'}</span>
-                            {accountLinked && (
-                                <label style={fromAccountToggleStyle}>
-                                    <input
-                                        type="checkbox"
-                                        checked={roleFromAccount}
-                                        onChange={e => setFormData(prev => ({
-                                            ...prev,
-                                            useAccountRole: e.target.checked,
-                                            role: e.target.checked ? (accTitle?.en || prev.role) : prev.role,
-                                            roleCn: e.target.checked ? (accTitle?.zh || prev.roleCn) : prev.roleCn,
-                                        }))}
-                                    />
-                                    {isEnglish ? 'From account' : '来自账户'}
-                                </label>
-                            )}
+                            <span style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                {accountLinked && (
+                                    <label style={fromAccountToggleStyle}>
+                                        <input
+                                            type="checkbox"
+                                            checked={roleFromAccount}
+                                            onChange={e => setFormData(prev => ({
+                                                ...prev,
+                                                useAccountRole: e.target.checked,
+                                                role: e.target.checked ? (accTitle?.en || prev.role) : prev.role,
+                                                roleCn: e.target.checked ? (accTitle?.zh || prev.roleCn) : prev.roleCn,
+                                            }))}
+                                        />
+                                        {isEnglish ? 'From account' : '来自账户'}
+                                    </label>
+                                )}
+                                {/* One toggle governs both languages, so the pair reverts together. */}
+                                {revertButton(
+                                    roleEdited,
+                                    revertRole,
+                                    'Revert the role, in both English and Chinese, to the saved value',
+                                    '将角色的中英文均还原为已保存的值',
+                                )}
+                            </span>
                         </span>
                         {roleFromAccount ? (
                             <div className="admin-input" style={fromAccountValueStyle}>
@@ -308,48 +375,86 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                         )}
                     </div>
 
-                    <label className="admin-tickets-template-field"
-                           style={{flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
-                        <input
-                            type="checkbox"
-                            checked={!!formData.isHonorary}
-                            onChange={e => setFormData(prev => ({...prev, isHonorary: e.target.checked}))}
-                        />
-                        <span style={{margin: 0}}>
-                            {isEnglish ? 'Honorary member (less active)' : '名誉成员（不太活跃）'}
-                        </span>
-                    </label>
-
-                    <div style={{marginTop: '8px'}}>
-                        {accountLinked && (
-                            <label style={{...fromAccountToggleStyle, marginBottom: '8px'}}>
-                                <input
-                                    type="checkbox"
-                                    checked={photoFromAccount}
-                                    onChange={e => setFormData(prev => ({
-                                        ...prev,
-                                        useAccountPhoto: e.target.checked,
-                                        imageUrl: e.target.checked ? (account?.photoURL || prev.imageUrl) : prev.imageUrl,
-                                    }))}
-                                />
-                                {isEnglish ? 'Use account photo for avatar' : '头像使用账户照片'}
-                            </label>
+                    {/* The revert button sits outside the label so clicking it cannot toggle the box. */}
+                    <div style={fieldHeaderStyle}>
+                        <label className="admin-tickets-template-field"
+                               style={{flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
+                            <input
+                                type="checkbox"
+                                checked={!!formData.isHonorary}
+                                onChange={e => setFormData(prev => ({...prev, isHonorary: e.target.checked}))}
+                            />
+                            <span style={{margin: 0}}>
+                                {isEnglish ? 'Honorary member (less active)' : '名誉成员（不太活跃）'}
+                            </span>
+                        </label>
+                        {revertButton(
+                            honoraryEdited,
+                            () => revertField({isHonorary: saved.isHonorary}),
+                            'Revert honorary member to the saved value',
+                            '将名誉成员还原为已保存的值',
                         )}
+                    </div>
+
+                    {/* The avatar owns a labelled header like every other field; the checkbox
+                        says only where the photo comes from, so it drops "for avatar". */}
+                    <div className="admin-tickets-template-field" style={{marginTop: '8px'}}>
+                        <span style={fieldHeaderStyle}>
+                            <span>{isEnglish ? 'Member Avatar' : '成员头像'}</span>
+                            <span style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                {accountLinked && (
+                                    <label style={fromAccountToggleStyle}>
+                                        <input
+                                            type="checkbox"
+                                            checked={photoFromAccount}
+                                            onChange={e => setFormData(prev => ({
+                                                ...prev,
+                                                useAccountPhoto: e.target.checked,
+                                                imageUrl: e.target.checked ? (account?.photoURL || prev.imageUrl) : prev.imageUrl,
+                                            }))}
+                                        />
+                                        {isEnglish ? 'Use account photo' : '使用账户照片'}
+                                    </label>
+                                )}
+                                {revertButton(
+                                    photoEdited,
+                                    revertPhoto,
+                                    'Revert the avatar to the saved value',
+                                    '将头像还原为已保存的值',
+                                )}
+                            </span>
+                        </span>
                         {photoFromAccount ? (
-                            <div className="admin-tickets-template-field">
-                                <span>{isEnglish ? 'Member Avatar' : '成员头像'}</span>
+                            <div className="admin-avatar-field">
                                 <img
+                                    className={`admin-avatar-preview${accountPhoto ? '' : ' admin-avatar-preview-default'}`}
                                     src={accountPhoto || '/mika.webp'}
                                     alt=""
                                     referrerPolicy="no-referrer"
-                                    style={{width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover'}}
                                 />
+                                <div className="admin-avatar-actions">
+                                    {/* Mirrors what accountPhoto actually resolves to: the account's
+                                        photo, else the member's stored image, else the site default. */}
+                                    <p className="admin-helper-text admin-avatar-helper">
+                                        {account?.photoURL
+                                            ? (isEnglish
+                                                ? 'Updates automatically when they change their account photo.'
+                                                : '当其更换账户照片时会自动更新。')
+                                            : formData.imageUrl
+                                                ? (isEnglish
+                                                    ? 'This account has no photo, so the uploaded image is shown instead.'
+                                                    : '该账户没有照片，因此显示已上传的图片。')
+                                                : (isEnglish
+                                                    ? 'This account has no photo yet, so the default avatar is shown.'
+                                                    : '该账户尚无照片，因此显示默认头像。')}
+                                    </p>
+                                </div>
                             </div>
                         ) : (
                             <ImageUploadField
-                                label="Member Avatar"
-                                labelCn="成员头像"
+                                variant="avatar"
                                 preview={formData.imageUrl || null}
+                                placeholderSrc="/mika.webp"
                                 onFileChange={(file, url) => handleImageChange(file, url)}
                                 convertToWebp
                                 cropAspect={1}

@@ -7,18 +7,17 @@ import type { TeamMemberConfig } from '~/lib/siteConfig';
 import { MemberEditModal } from './MemberEditModal';
 
 interface LinkedAccount {
-    displayName: string;
     title: string;
     titleCn: string;
     group: UserGroup;
     photoURL: string;
 }
 
-// Legacy members used a single useAccountInfo toggle; treat it as all three per-field flags.
+// Legacy members used a single useAccountInfo toggle; treat it as both per-field flags.
+// Names never follow an account, so no name flag is read here.
 const memberFollows = (m: TeamMemberConfig) => {
     const legacy = (m as {useAccountInfo?: boolean}).useAccountInfo ?? false;
     return {
-        name: m.useAccountName ?? legacy,
         role: m.useAccountRole ?? legacy,
         photo: m.useAccountPhoto ?? legacy,
     };
@@ -44,13 +43,13 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
     }, [teamMembers]);
 
     // Mirror the public page: account-linked members that follow their account show its
-    // live displayName/title/titleCn/photo, so the admin preview matches what visitors see.
+    // live title/titleCn/photo, so the admin preview matches what visitors see.
     useEffect(() => {
         const uids = [...new Set(
             members
                 .filter(m => {
                     const f = memberFollows(m);
-                    return m.uid && (f.name || f.role || f.photo);
+                    return m.uid && (f.role || f.photo);
                 })
                 .map(m => m.uid as string)
         )];
@@ -68,7 +67,6 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
                 if (!snap.exists()) return;
                 const d = snap.data();
                 next.set(snap.id, {
-                    displayName: d.displayName ?? '',
                     title: d.title ?? '',
                     titleCn: d.titleCn ?? '',
                     group: (d.group ?? 'visitor') as UserGroup,
@@ -158,9 +156,9 @@ export const TeamSection = ({teamMembers, refreshConfig, showToast, readOnly}: T
         const acc = member.uid ? accounts.get(member.uid) : undefined;
         const f = memberFollows(member);
         // Followed role falls back to the account's group label (e.g. "President"), then to
-        // the stored value; other fields fall back straight to the stored value.
+        // the stored value; the photo falls back straight to the stored value.
         const accTitle = acc ? accountEffectiveTitle(acc.group, acc.title, acc.titleCn) : null;
-        const displayName = f.name && acc ? (acc.displayName || member.name) : member.name;
+        const displayName = member.name;
         const displayRole = f.role && accTitle ? (accTitle.en || member.role) : member.role;
         const displayRoleCn = f.role && accTitle ? (accTitle.zh || member.roleCn) : member.roleCn;
         const displayImage = f.photo && acc ? (acc.photoURL || member.imageUrl) : member.imageUrl;

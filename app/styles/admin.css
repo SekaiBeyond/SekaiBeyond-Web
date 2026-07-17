@@ -180,6 +180,25 @@
     color: var(--color-text-light);
 }
 
+/* Inline "put this field back" action, sized to sit in a field's label row. */
+.admin-btn--revert {
+    border: none;
+    background: none;
+    padding: 0;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.admin-btn--revert:hover:not(:disabled) {
+    text-decoration: underline;
+}
+
 /* Segmented ghost toggle (QR mode switch). */
 .admin-btn--ghost {
     border: none;
@@ -1171,6 +1190,75 @@
     border-radius: 12px;
     margin-top: 8px;
     border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Avatar picker: a round preview beside its action. The circle is the point — team
+   avatars render as circles on the public page, so a square preview would hide how
+   the image is actually cropped. Both the upload and follow-the-account states use
+   this row, so toggling between them doesn't reshuffle the layout. */
+.admin-avatar-field {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.admin-avatar-preview {
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    object-fit: cover;
+    border: var(--admin-field-border);
+    background: rgba(255, 255, 255, 0.85);
+}
+
+/* Nothing has been chosen and the site's default avatar stands in — say so, rather than
+   letting the stand-in read as a photo someone picked. */
+.admin-avatar-preview-default {
+    opacity: 0.55;
+    border-style: dashed;
+}
+
+.admin-avatar-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+}
+
+/* A file input can't be styled, so the real one is visually hidden and this label is
+   the button. The input keeps its place in the tab order rather than display:none. */
+.admin-avatar-choose {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.admin-avatar-choose input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.admin-avatar-choose:focus-within {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.admin-avatar-choose-busy {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+.admin-avatar-helper {
+    margin: 0;
 }
 
 .admin-video-cover-preview {

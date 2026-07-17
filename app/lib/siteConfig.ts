@@ -14,9 +14,8 @@ export interface TeamMemberConfig {
     isHonorary?: boolean;
     // When a member is linked to an account (uid set), each of these opts that field
     // into following the account's live value; the stored value is kept as a fallback.
-    // name -> account displayName, role -> account title (+ titleCn for the Chinese role),
-    // photo -> account photoURL. The Chinese name is always custom (accounts have no Chinese name).
-    useAccountName?: boolean;
+    // role -> account title (+ titleCn for the Chinese role), photo -> account photoURL.
+    // Names are always custom: linking an account only prefills a blank name.
     useAccountRole?: boolean;
     useAccountPhoto?: boolean;
 }

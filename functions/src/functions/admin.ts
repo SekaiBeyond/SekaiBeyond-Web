@@ -4,7 +4,13 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminTransaction, checkRateLimit, requireAdmin, requireAuth } from "../utils/auth";
 import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
-import { detectImageMime, MAX_UPLOAD_SIZE, validateStoragePath } from "../utils/storage";
+import {
+    deleteStorageFile,
+    detectImageMime,
+    logStorageCleanupError,
+    MAX_UPLOAD_SIZE,
+    validateStoragePath
+} from "../utils/storage";
 import {
     sanitizeDisplayText,
     validateDocId,
@@ -513,30 +519,44 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     const input = request.data as {teamMembers?: any[]};
     const members = Array.isArray(input.teamMembers) ? input.teamMembers : [];
     const validMembers = members.map(m => {
-        // Legacy useAccountInfo (single toggle) maps to all three per-field flags.
-        const useAccountName = Boolean(m.useAccountName ?? m.useAccountInfo);
+        // Legacy useAccountInfo (single toggle) maps to both per-field flags. Names never
+        // follow an account, so any legacy useAccountName is deliberately dropped here.
         const useAccountRole = Boolean(m.useAccountRole ?? m.useAccountInfo);
         const useAccountPhoto = Boolean(m.useAccountPhoto ?? m.useAccountInfo);
-        // Stored name/role are only fallbacks when the field follows the linked account
-        // (resolved live at read time), so require them only for custom fields — this
-        // matches the client's canSave and allows following an account with no title set.
+        // The stored role is only a fallback when it follows the linked account (resolved live
+        // at read time), so require it only when custom — this matches the client's canSave and
+        // allows following an account with no title set. The name is always custom, so always
+        // required.
         return {
             id: validateStr(m.id, "id", 128, true),
             uid: m.uid ? validateStr(m.uid, "uid", 128) : "",
-            name: validateStr(m.name, "name", 200, !useAccountName),
+            name: validateStr(m.name, "name", 200, true),
             nameCn: validateStr(m.nameCn, "nameCn", 200),
             role: validateStr(m.role, "role", 200, !useAccountRole),
             roleCn: validateStr(m.roleCn, "roleCn", 200),
             imageUrl: validateStr(m.imageUrl, "imageUrl", 500),
             isHonorary: Boolean(m.isHonorary),
-            useAccountName,
             useAccountRole,
             useAccountPhoto,
         };
     });
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        txn.set(db.collection("config").doc("main"), {
+    const configRef = db.collection("config").doc("main");
+    const orphanedImages = await adminTransaction(uid, async (txn, callerSnap) => {
+        // Each avatar upload writes a new team/<uuid>.webp rather than overwriting, so images
+        // this save stops referencing — replaced ones, and those of removed members — are left
+        // behind and deleted once the save commits. A member following their account stores the
+        // account photo as its fallback; that lives outside team/ and the prefix guard below
+        // keeps it safe. Read before the writes, as transactions require.
+        const prevMembers = ((await txn.get(configRef)).data()?.teamMembers ?? []) as {imageUrl?: string}[];
+        const stillReferenced = new Set(validMembers.map(m => m.imageUrl).filter(Boolean));
+        const orphaned = [...new Set(
+            prevMembers
+                .map(m => m.imageUrl ?? "")
+                .filter(url => url && !stillReferenced.has(url))
+        )];
+
+        txn.set(configRef, {
             teamMembers: validMembers,
             updatedBy: uid,
             updatedByName: callerSnap.data()?.displayName ?? "",
@@ -549,8 +569,15 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
-        return {saved: true};
+        return orphaned;
     });
+
+    for (const url of orphanedImages) {
+        await deleteStorageFile(url, ["team/"])
+            .catch(logStorageCleanupError(`saveTeamMembers ${url}`));
+    }
+
+    return {saved: true};
 });
 
 // Group labels for accounts without an explicit title (e.g. the president, whose
@@ -575,16 +602,16 @@ const accountEffectiveTitle = (acc: {group: string; title: string; titleCn: stri
 // Public (unauthenticated) resolver for the "Our Team" section on the landing page.
 // The public site cannot read the users collection directly (Firestore rules gate it
 // to staff/self), so members that opt a field into following their linked account have
-// name/role/photo resolved here from the account's live displayName/title/photoURL.
-// Only members the admin explicitly placed on the public team are looked up, and no
-// email is exposed.
+// role/photo resolved here from the account's live title/photoURL. Names are always the
+// admin's stored custom value and never resolved from the account. Only members the admin
+// explicitly placed on the public team are looked up, and no email is exposed.
 export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
     const configSnap = await db.collection("config").doc("main").get();
     const members = (configSnap.data()?.teamMembers ?? []) as Record<string, unknown>[];
 
-    // Legacy single-toggle members: treat useAccountInfo as all three per-field flags.
+    // Legacy single-toggle members: treat useAccountInfo as both per-field flags. A legacy
+    // useAccountName is ignored — names no longer follow accounts.
     const follows = (m: Record<string, unknown>) => ({
-        name: Boolean(m.useAccountName ?? m.useAccountInfo),
         role: Boolean(m.useAccountRole ?? m.useAccountInfo),
         photo: Boolean(m.useAccountPhoto ?? m.useAccountInfo),
     });
@@ -594,13 +621,12 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
             .filter(m => typeof m?.uid === "string" && m.uid)
             .filter(m => {
                 const f = follows(m);
-                return f.name || f.role || f.photo;
+                return f.role || f.photo;
             })
             .map(m => m.uid as string)
     )];
 
     const accounts = new Map<string, {
-        displayName: string;
         title: string;
         titleCn: string;
         group: string;
@@ -612,7 +638,6 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
             if (!snap.exists) continue;
             const d = snap.data()!;
             accounts.set(snap.id, {
-                displayName: (d.displayName as string) ?? "",
                 title: (d.title as string) ?? "",
                 titleCn: (d.titleCn as string) ?? "",
                 group: (d.group as string) ?? "visitor",
@@ -631,7 +656,6 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
         const title = accountEffectiveTitle(acc);
         return {
             ...m,
-            name: f.name ? (acc.displayName || m.name) : m.name,
             role: f.role ? (title.en || m.role) : m.role,
             roleCn: f.role ? (title.zh || m.roleCn) : m.roleCn,
             imageUrl: f.photo ? (acc.photoURL || m.imageUrl) : m.imageUrl,
