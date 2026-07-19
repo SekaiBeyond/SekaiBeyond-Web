@@ -1,5 +1,16 @@
-import { collection, type DocumentData, getDocs, limit, query, where } from 'firebase/firestore';
+import {
+    collection,
+    type DocumentData,
+    endAt,
+    getDocs,
+    limit,
+    orderBy,
+    query,
+    startAt,
+    where,
+} from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
+import type { UserGroup } from '~/components/AuthProvider';
 import type { UserRecord } from './types';
 import { MAX_IMAGE_SIZE_MB } from '~/constants';
 
@@ -24,6 +35,51 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
         titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],
     };
+};
+
+export const USER_SEARCH_LIMIT = 10;
+
+// Shared by every admin surface that looks a user up, so they all match the same way.
+// Both displayName and email are matched as prefixes: Firestore has no substring search,
+// but a [p, p + \uf8ff] range covers every value starting with p.
+//
+// Emails are stored lowercase, so one query covers them. displayName is mixed case and
+// Firestore ranges are case-sensitive, so the name query is repeated with the first letter
+// in each case and the results merged — that covers the usual "ben" vs "Ben" mismatch
+// without needing a search index. An "@" can only be an email, so it skips the name queries.
+export const searchUsers = async (rawQuery: string, group: UserGroup | '' = ''): Promise<UserRecord[]> => {
+    const q = rawQuery.trim();
+    if (!q) return [];
+    const users = collection(getFirebaseDb(), 'users');
+
+    const prefixQuery = (field: string, prefix: string) => getDocs(query(
+        users,
+        orderBy(field),
+        startAt(prefix),
+        endAt(prefix + '\uf8ff'),
+        limit(USER_SEARCH_LIMIT),
+    ));
+
+    const searches = [prefixQuery('email', q.toLowerCase())];
+    if (!q.includes('@')) {
+        const names = new Set<string>([q]);
+        const first = q.charAt(0);
+        if (first && first.toLowerCase() !== first.toUpperCase()) {
+            names.add(first.toUpperCase() + q.slice(1));
+            names.add(first.toLowerCase() + q.slice(1));
+        }
+        names.forEach(prefix => searches.push(prefixQuery('displayName', prefix)));
+    }
+
+    const snaps = await Promise.all(searches);
+    // The group filter is applied here rather than in the query: combining it with a prefix
+    // range would need a composite index, and each query is already capped at USER_SEARCH_LIMIT.
+    const deduped = new Map<string, UserRecord>();
+    snaps.forEach(s => s.docs.forEach(d => {
+        const r = docToUserRecord(d);
+        if (!group || r.group === group) deduped.set(r.uid, r);
+    }));
+    return Array.from(deduped.values());
 };
 
 export const fetchEventAttendees = async (eventId: string): Promise<UserRecord[]> => {

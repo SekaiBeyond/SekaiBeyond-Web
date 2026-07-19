@@ -11,7 +11,6 @@ import { FaExternalLinkAlt } from 'react-icons/fa';
 import {
     collection,
     doc,
-    endAt,
     getDoc,
     getDocs,
     limit,
@@ -20,7 +19,6 @@ import {
     query,
     type QueryDocumentSnapshot,
     startAfter,
-    startAt,
     where,
 } from 'firebase/firestore';
 import {
@@ -49,7 +47,7 @@ import {
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { BadgeDef, UserRecord } from './types';
-import { docToUserRecord, validateImageFile } from './utils';
+import { docToUserRecord, searchUsers, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 
 const PAGE_SIZE = 10;
@@ -227,48 +225,12 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         }
     };
 
-    const searchUsers = async () => {
-        const q = searchQuery.trim();
-        if (!q) return;
+    const runSearch = async () => {
+        if (!searchQuery.trim()) return;
         setSearching(true);
         setSelectedUser(null);
         try {
-            const db = getFirebaseDb();
-            const users = collection(db, 'users');
-            let records: UserRecord[];
-            if (q.includes('@')) {
-                const constraints = [where('email', '==', q.toLowerCase())];
-                if (selectedGroup) {
-                    constraints.push(where('group', '==', selectedGroup));
-                }
-                const snap = await getDocs(query(users, ...constraints));
-                records = snap.docs.map(docToUserRecord);
-            } else {
-                const prefixes = new Set<string>([q]);
-                const first = q.charAt(0);
-                if (first && first.toLowerCase() !== first.toUpperCase()) {
-                    prefixes.add(first.toUpperCase() + q.slice(1));
-                    prefixes.add(first.toLowerCase() + q.slice(1));
-                }
-                const snaps = await Promise.all(
-                    Array.from(prefixes).map(p => getDocs(query(
-                        users,
-                        orderBy('displayName'),
-                        startAt(p),
-                        endAt(p + '\uf8ff'),
-                        limit(PAGE_SIZE),
-                    ))),
-                );
-                const deduped = new Map<string, UserRecord>();
-                snaps.forEach(s => s.docs.forEach(d => {
-                    const r = docToUserRecord(d);
-                    if (!selectedGroup || r.group === selectedGroup) {
-                        deduped.set(r.uid, r);
-                    }
-                }));
-                records = Array.from(deduped.values());
-            }
-            setSearchResults(records);
+            setSearchResults(await searchUsers(searchQuery, selectedGroup));
         } catch {
             showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error');
         } finally {
@@ -565,10 +527,10 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                         setSearchQuery(e.target.value);
                         setHasSearched(false);
                     }}
-                    onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
+                    onKeyDown={(e) => e.key === 'Enter' && runSearch()}
                     className="admin-input"
                 />
-                <button onClick={searchUsers} disabled={searching} className="admin-btn admin-btn--cta">
+                <button onClick={runSearch} disabled={searching} className="admin-btn admin-btn--cta">
                     {searching
                         ? (isEnglish ? 'Searching...' : '搜索中...')
                         : (isEnglish ? 'Search' : '搜索')}

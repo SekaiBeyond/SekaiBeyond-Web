@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { getFirebaseDb } from '~/lib/firebase';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { UserRecord } from './types';
-import { docToUserRecord } from './utils';
+import { searchUsers } from './utils';
 
 interface AccountPickerProps {
     selected: UserRecord | null;
@@ -28,17 +26,21 @@ export const AccountPicker = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<UserRecord[]>([]);
     const [searching, setSearching] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
+    const [failed, setFailed] = useState(false);
 
     const search = async () => {
         if (!searchQuery.trim()) return;
         setSearching(true);
+        setFailed(false);
         try {
-            const db = getFirebaseDb();
-            const q = query(collection(db, 'users'), where('email', '==', searchQuery.trim().toLowerCase()));
-            const snapshot = await getDocs(q);
-            setSearchResults(snapshot.docs.map(docToUserRecord));
+            setSearchResults(await searchUsers(searchQuery));
+        } catch {
+            setSearchResults([]);
+            setFailed(true);
         } finally {
             setSearching(false);
+            setHasSearched(true);
         }
     };
 
@@ -65,10 +67,14 @@ export const AccountPicker = ({
                     <div className="admin-creator-search-row">
                         <input
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                setHasSearched(false);
+                                setFailed(false);
+                            }}
                             onKeyDown={(e) => e.key === 'Enter' && search()}
                             className="admin-input"
-                            placeholder={isEnglish ? 'Search user by email' : '通过邮箱搜索用户'}
+                            placeholder={isEnglish ? 'Search user by name or email' : '通过姓名或邮箱搜索用户'}
                         />
                         <button onClick={search} disabled={searching} className="admin-btn admin-btn--cta">
                             {searching
@@ -83,6 +89,7 @@ export const AccountPicker = ({
                             onManualLinkChange?.('');
                             setSearchQuery('');
                             setSearchResults([]);
+                            setHasSearched(false);
                         }}>
                             <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
                             <div>
@@ -91,6 +98,20 @@ export const AccountPicker = ({
                             </div>
                         </div>
                     ))}
+                    {failed && (
+                        <p className="admin-no-results">
+                            {isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。'}
+                        </p>
+                    )}
+                    {/* Both fields match from the start, so say so rather than leaving a
+                        mid-word search looking like the account does not exist. */}
+                    {hasSearched && !failed && searchResults.length === 0 && !searching && (
+                        <p className="admin-no-results">
+                            {isEnglish
+                                ? 'No users found. Names and emails match from the beginning — try their first name, or the start of their email.'
+                                : '未找到用户。姓名与邮箱均从开头匹配 —— 可尝试其名字，或邮箱的开头部分。'}
+                        </p>
+                    )}
                     {searchResults.length === 0 && !searching && onManualNameChange && (
                         <>
                             <label className="admin-mt-8">
