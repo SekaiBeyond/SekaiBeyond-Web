@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { callToggleAttendance, functionsErrorCode } from '~/lib/firebase';
 import { formatGroupWithTitle } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { UserRow } from './UserRow';
 import type { ShowToast } from './utils';
 import type { UserRecord } from './types';
 
@@ -65,13 +66,7 @@ export function EventAttendeesList({
                 </p>
             )}
             {!loading && attendees.map((u) => (
-                <div key={u.uid} className="admin-user-row">
-                    <img src={u.photoURL} alt="" className="admin-user-avatar"
-                         referrerPolicy="no-referrer"/>
-                    <div className="admin-user-info">
-                        <div className="admin-user-name">{u.displayName}</div>
-                        <div className="admin-user-email">{u.email}</div>
-                    </div>
+                <UserRow key={u.uid} user={u}>
                     <span className="admin-user-group-tag" data-group={u.group}>
                         {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
                     </span>
@@ -86,7 +81,7 @@ export function EventAttendeesList({
                                 : (isEnglish ? 'Remove' : '移除')}
                         </button>
                     )}
-                </div>
+                </UserRow>
             ))}
         </div>
     );

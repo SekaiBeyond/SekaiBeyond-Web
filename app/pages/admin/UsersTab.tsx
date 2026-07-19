@@ -47,6 +47,7 @@ import {
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { BadgeDef, UserRecord } from './types';
+import { UserRow } from './UserRow';
 import { docToUserRecord, searchUsers, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 
@@ -540,12 +541,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             {searchResults.length > 0 && !selectedUser && (
                 <div className="admin-results">
                     {searchResults.map((u) => (
-                        <div key={u.uid} className="admin-user-row" onClick={() => setSelectedUser(u)}>
-                            <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
-                            <div>
-                                <div className="admin-user-name">{u.displayName}</div>
-                                <div className="admin-user-email">{u.email}</div>
-                            </div>
+                        <UserRow key={u.uid} user={u} onClick={() => setSelectedUser(u)}>
                             {pendingDeletionUids.has(u.uid) && (
                                 <span className="admin-user-deletion-flag">
                                     {isEnglish ? 'Pending deletion' : '待删除'}
@@ -557,7 +553,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                             <span className="admin-user-badge-count">
                                 {u.attendedEvents.length} {isEnglish ? 'events' : '活动'}
                             </span>
-                        </div>
+                        </UserRow>
                     ))}
                 </div>
             )}
@@ -572,12 +568,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                         {isEnglish ? 'Recent Users' : '最近加入的用户'}
                     </h4>
                     {recentUsers.map((u) => (
-                        <div key={u.uid} className="admin-user-row" onClick={() => setSelectedUser(u)}>
-                            <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
-                            <div>
-                                <div className="admin-user-name">{u.displayName}</div>
-                                <div className="admin-user-email">{u.email}</div>
-                            </div>
+                        <UserRow key={u.uid} user={u} onClick={() => setSelectedUser(u)}>
                             {pendingDeletionUids.has(u.uid) && (
                                 <span className="admin-user-deletion-flag">
                                     {isEnglish ? 'Pending deletion' : '待删除'}
@@ -591,7 +582,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                     year: 'numeric', month: 'short', day: 'numeric',
                                 })}
                             </span>
-                        </div>
+                        </UserRow>
                     ))}
                     {loadingRecent && <div className="profile-spinner admin-spinner-center"/>}
                     {!loadingRecent && hasMoreRecent && recentUsers.length > 0 && (

@@ -29,6 +29,7 @@ import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
 import { isValidHttpUrl } from '~/lib/urls';
 import { docToUserRecord } from './utils';
 import { AccountPicker } from './AccountPicker';
+import { UserRow } from './UserRow';
 import { BilingualFormField } from './BilingualFormField';
 import { ImageUploadField } from './ImageUploadField';
 
@@ -660,16 +661,11 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     <p className="admin-no-results">{isEnglish ? 'No one has this badge yet.' : '暂无人持有此徽章。'}</p>
                 )}
                 {!loadingBadgeHolders && badgeHolders.map((u) => (
-                    <div key={u.uid} className="admin-user-row">
-                        <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
-                        <div>
-                            <div className="admin-user-name">{u.displayName}</div>
-                            <div className="admin-user-email">{u.email}</div>
-                        </div>
+                    <UserRow key={u.uid} user={u}>
                         <span className="admin-user-group-tag" data-group={u.group}>
                             {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
                         </span>
-                    </div>
+                    </UserRow>
                 ))}
                 {!loadingBadgeHolders && hasMoreBadgeHolders && badgeHolders.length > 0 && (
                     <button

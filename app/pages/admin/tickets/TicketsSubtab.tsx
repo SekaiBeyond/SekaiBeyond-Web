@@ -14,8 +14,7 @@ import {
     getFirebaseDb,
 } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
-import { AttendeeAddModal } from '../AttendeeAddModal';
-import { AttendeeEditModal } from '../AttendeeEditModal';
+import { AttendeeModal } from '../AttendeeModal';
 import { TicketScanner } from '../TicketScanner';
 import type { ShowToast } from '../utils';
 import { AttendeesSection } from './AttendeesSection';
@@ -445,7 +444,7 @@ export function TicketsSubtab({
             )}
 
             {editingAttendee && (
-                <AttendeeEditModal
+                <AttendeeModal
                     eventId={eventId}
                     attendee={editingAttendee}
                     onClose={() => setEditingAttendee(null)}
@@ -462,8 +461,9 @@ export function TicketsSubtab({
             )}
 
             {addingAttendee && (
-                <AttendeeAddModal
+                <AttendeeModal
                     eventId={eventId}
+                    attendee={null}
                     existingAttendees={attendees}
                     onClose={() => setAddingAttendee(false)}
                     onAdded={() => void loadAttendees()}

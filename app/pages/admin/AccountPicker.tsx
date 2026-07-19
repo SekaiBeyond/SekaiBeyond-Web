@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { UserRecord } from './types';
+import { UserRow } from './UserRow';
 import { searchUsers } from './utils';
 
 interface AccountPickerProps {
@@ -83,20 +84,14 @@ export const AccountPicker = ({
                         </button>
                     </div>
                     {searchResults.map(u => (
-                        <div key={u.uid} className="admin-user-row" onClick={() => {
+                        <UserRow key={u.uid} user={u} onClick={() => {
                             onSelect(u);
                             onManualNameChange?.('');
                             onManualLinkChange?.('');
                             setSearchQuery('');
                             setSearchResults([]);
                             setHasSearched(false);
-                        }}>
-                            <img src={u.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
-                            <div>
-                                <div className="admin-user-name">{u.displayName}</div>
-                                <div className="admin-user-email">{u.email}</div>
-                            </div>
-                        </div>
+                        }}/>
                     ))}
                     {failed && (
                         <p className="admin-no-results">

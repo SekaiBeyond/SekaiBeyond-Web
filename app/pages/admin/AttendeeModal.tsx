@@ -1,30 +1,47 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callImportEventAttendees, functionsErrorCode } from '~/lib/firebase';
+import { callImportEventAttendees, callUpdateEventAttendee, functionsErrorCode } from '~/lib/firebase';
 import { useModalEffects } from '~/lib/useModalEffects';
 import { type AttendeeData, TICKET_TYPES, type TicketType } from './tickets/types';
 import type { ShowToast } from './utils';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-interface AttendeeAddModalProps {
+interface AttendeeModalProps {
     eventId: string;
-    existingAttendees: AttendeeData[];
+    /** The attendee to edit, or null to add a new one. */
+    attendee: AttendeeData | null;
+    /** Add mode: current attendees, for the duplicate-email check. */
+    existingAttendees?: AttendeeData[];
     onClose: () => void;
-    onAdded: () => void;
+    /** Add mode: called after a successful add (the modal closes itself). */
+    onAdded?: () => void;
+    // Name-only edit: optimistic update with the patched attendee.
+    // Regenerated edit: ticket UUIDs are minted server-side, so the parent must
+    // refetch instead of trusting a placeholder array.
+    onSaved?: (updated: AttendeeData) => void;
+    onRegenerated?: () => void;
     showToast: ShowToast;
 }
 
-export function AttendeeAddModal({
-                                     eventId, existingAttendees, onClose, onAdded, showToast,
-                                 }: AttendeeAddModalProps) {
+export function AttendeeModal({
+                                  eventId,
+                                  attendee,
+                                  existingAttendees = [],
+                                  onClose,
+                                  onAdded,
+                                  onSaved,
+                                  onRegenerated,
+                                  showToast,
+                              }: AttendeeModalProps) {
     const {isEnglish} = useLanguage();
     const overlayRef = useRef<HTMLDivElement>(null);
     useModalEffects(true, overlayRef);
-    const [email, setEmail] = useState('');
-    const [name, setName] = useState('');
-    const [ticketCount, setTicketCount] = useState('1');
-    const [type, setType] = useState<TicketType>('normal');
+    const [email, setEmail] = useState(attendee?.email ?? '');
+    const [name, setName] = useState(attendee?.name ?? '');
+    const [ticketCount, setTicketCount] = useState(attendee ? String(attendee.ticketCount) : '1');
+    const originalType: TicketType = attendee?.tickets[0]?.type || 'normal';
+    const [type, setType] = useState<TicketType>(originalType);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -43,15 +60,22 @@ export function AttendeeAddModal({
     const nameValid = trimmedName.length > 0 && trimmedName.length <= 100;
     const countValid = Number.isInteger(parsedCount) && parsedCount >= 1 && parsedCount <= 50;
 
+    // Edit mode: only enable Save once something actually changed.
+    const nameChanged = !!attendee && nameValid && trimmedName !== attendee.name;
+    const countChanged = !!attendee && countValid && parsedCount !== attendee.ticketCount;
+    const typeChanged = !!attendee && type !== originalType;
+
+    // Add mode: warn when the email already has an attendee record.
     const duplicate = useMemo(() => {
-        if (!emailValid) return null;
+        if (attendee || !emailValid) return null;
         return existingAttendees.find(a => a.email.toLowerCase() === trimmedEmail) ?? null;
-    }, [existingAttendees, trimmedEmail, emailValid]);
+    }, [attendee, existingAttendees, trimmedEmail, emailValid]);
 
-    const canSave = !saving && emailValid && nameValid && countValid;
+    const canSave = !saving && nameValid && countValid && (attendee
+        ? (nameChanged || countChanged || typeChanged)
+        : emailValid);
 
-    const submit = async () => {
-        if (!canSave) return;
+    const submitAdd = async () => {
         if (duplicate) {
             const ok = window.confirm(isEnglish
                 ? `An attendee with email "${trimmedEmail}" already exists. Continuing will re-issue all of their tickets — old QR codes will stop working. Continue?`
@@ -73,7 +97,7 @@ export function AttendeeAddModal({
                         : (isEnglish ? 'No changes.' : '无更改。'),
                 replaced > 0 ? 'warning' : 'success',
             );
-            onAdded();
+            onAdded?.();
             onClose();
         } catch (err) {
             const code = functionsErrorCode(err);
@@ -86,6 +110,57 @@ export function AttendeeAddModal({
         }
     };
 
+    const submitEdit = async (existing: AttendeeData) => {
+        if (countChanged || typeChanged) {
+            const ok = window.confirm(isEnglish
+                ? 'Changing ticket count or type will re-issue ALL tickets for this attendee. Old QR codes will stop working. Continue?'
+                : '修改门票数量或类型会重新签发该参加者的全部门票，旧二维码将立即失效。是否继续？');
+            if (!ok) return;
+        }
+        setSaving(true);
+        try {
+            const result = await callUpdateEventAttendee({
+                eventId,
+                attendeeId: existing.id,
+                name: trimmedName,
+                ticketCount: parsedCount,
+                type,
+            });
+            const regenerated = result.data.regenerated;
+            if (regenerated) {
+                onRegenerated?.();
+            } else {
+                onSaved?.({
+                    ...existing,
+                    name: trimmedName,
+                    ticketCount: parsedCount,
+                    updatedAt: new Date(),
+                });
+            }
+            showToast(
+                regenerated
+                    ? (isEnglish ? 'Attendee updated — tickets re-issued.' : '参加者已更新，门票已重新签发。')
+                    : (isEnglish ? 'Attendee updated.' : '参加者已更新。'),
+                regenerated ? 'warning' : 'success',
+            );
+        } catch (err) {
+            const code = functionsErrorCode(err);
+            showToast(
+                isEnglish
+                    ? `Update failed${code ? ` (${code})` : ''}.`
+                    : `更新失败${code ? `（${code}）` : ''}。`,
+                'error',
+            );
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const submit = () => {
+        if (!canSave) return;
+        void (attendee ? submitEdit(attendee) : submitAdd());
+    };
+
     return (
         <div ref={overlayRef} className="admin-tickets-preview-modal" onClick={onClose}>
             <div
@@ -93,21 +168,30 @@ export function AttendeeAddModal({
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="admin-tickets-preview-header">
-                    <strong>{isEnglish ? 'Add Attendee' : '添加参加者'}</strong>
+                    <strong>
+                        {attendee
+                            ? (isEnglish ? 'Edit Attendee' : '编辑参加者')
+                            : (isEnglish ? 'Add Attendee' : '添加参加者')}
+                    </strong>
                     <button className="admin-tickets-preview-close" onClick={onClose}>×</button>
                 </div>
 
                 <div className="admin-tickets-attendee-edit">
                     <label className="admin-tickets-template-field">
-                        <span>{isEnglish ? 'Email' : '邮箱'}</span>
+                        <span>
+                            {attendee
+                                ? (isEnglish ? 'Email (read-only)' : '邮箱（不可修改）')
+                                : (isEnglish ? 'Email' : '邮箱')}
+                        </span>
                         <input
                             type="email"
                             className="admin-input"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="person@example.com"
-                            disabled={saving}
-                            autoFocus
+                            readOnly={!!attendee}
+                            disabled={!attendee && saving}
+                            autoFocus={!attendee}
                         />
                     </label>
 
@@ -160,15 +244,27 @@ export function AttendeeAddModal({
                         </p>
                     )}
 
+                    {(countChanged || typeChanged) && (
+                        <p className="admin-helper-text admin-tickets-edit-warning">
+                            {isEnglish
+                                ? 'Changing the count or type will re-issue ALL tickets and reset the email-sent status.'
+                                : '修改数量或类型会重新签发所有门票，并重置邮件发送状态。'}
+                        </p>
+                    )}
+
                     <div className="admin-btn-row">
                         <button
                             className="admin-toggle-btn admin-toggle-save"
                             onClick={submit}
                             disabled={!canSave}
                         >
-                            {saving
-                                ? (isEnglish ? 'Adding...' : '添加中...')
-                                : (isEnglish ? 'Add Attendee' : '添加参加者')}
+                            {attendee
+                                ? (saving
+                                    ? (isEnglish ? 'Saving...' : '保存中...')
+                                    : (isEnglish ? 'Save' : '保存'))
+                                : (saving
+                                    ? (isEnglish ? 'Adding...' : '添加中...')
+                                    : (isEnglish ? 'Add Attendee' : '添加参加者'))}
                         </button>
                         <button
                             className="admin-toggle-btn admin-toggle-cancel"

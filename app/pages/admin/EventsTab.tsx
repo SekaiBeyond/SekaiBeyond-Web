@@ -16,10 +16,10 @@ import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import { fetchEventAttendees, fetchEventStaffCount, pastEventHasTickets } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { LocationFormField } from './LocationFormField';
+import { ClaimCodeSection } from './ClaimCodeSection';
 import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
 import { PastEventAttendeesSection } from './PastEventAttendeesSection';
-import { StaffClaimCodeSection } from './StaffClaimCodeSection';
 import { TagMultiSelect } from './TagMultiSelect';
 import { TicketsSubtab } from './tickets/TicketsSubtab';
 
@@ -552,8 +552,9 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             )}
 
                             {eventSubTab === 'staff' && !readOnly && (
-                                <StaffClaimCodeSection
+                                <ClaimCodeSection
                                     eventId={managedEvt.id}
+                                    variant="staff"
                                     showToast={showToast}
                                 />
                             )}

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { collection, endAt, getDocs, limit, orderBy, query, startAt, where, } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { callAssignEventStaff, callRemoveEventStaff, functionsErrorCode, getFirebaseDb, } from '~/lib/firebase';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { UserRow } from './UserRow';
+import { UserSearchAdd } from './UserSearchAdd';
 import { docToUserRecord, type ShowToast } from './utils';
 import type { UserRecord } from './types';
 
@@ -13,8 +15,6 @@ interface EventStaffSectionProps {
     onAttendeeRemoved?: () => void;
 }
 
-const SEARCH_LIMIT = 8;
-
 export function EventStaffSection({
                                       eventId,
                                       showToast,
@@ -25,10 +25,6 @@ export function EventStaffSection({
     const {isEnglish} = useLanguage();
     const [staffList, setStaffList] = useState<UserRecord[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<UserRecord[]>([]);
-    const [searching, setSearching] = useState(false);
-    const [hasSearched, setHasSearched] = useState(false);
     const [busyUid, setBusyUid] = useState<string | null>(null);
 
     useEffect(() => {
@@ -65,53 +61,6 @@ export function EventStaffSection({
         };
     }, [eventId, isEnglish, showToast, onCountChange]);
 
-    const runSearch = async () => {
-        const q = searchQuery.trim();
-        if (!q) {
-            setSearchResults([]);
-            setHasSearched(false);
-            return;
-        }
-        setSearching(true);
-        try {
-            const db = getFirebaseDb();
-            const users = collection(db, 'users');
-            let records: UserRecord[];
-            if (q.includes('@')) {
-                const snap = await getDocs(query(users, where('email', '==', q.toLowerCase())));
-                records = snap.docs.map(docToUserRecord);
-            } else {
-                const prefixes = new Set<string>([q]);
-                const first = q.charAt(0);
-                if (first && first.toLowerCase() !== first.toUpperCase()) {
-                    prefixes.add(first.toUpperCase() + q.slice(1));
-                    prefixes.add(first.toLowerCase() + q.slice(1));
-                }
-                const snaps = await Promise.all(
-                    Array.from(prefixes).map(p => getDocs(query(
-                        users,
-                        orderBy('displayName'),
-                        startAt(p),
-                        endAt(p + ''),
-                        limit(SEARCH_LIMIT),
-                    ))),
-                );
-                const deduped = new Map<string, UserRecord>();
-                snaps.forEach(s => s.docs.forEach(d => {
-                    const r = docToUserRecord(d);
-                    deduped.set(r.uid, r);
-                }));
-                records = Array.from(deduped.values());
-            }
-            setSearchResults(records);
-        } catch {
-            showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error');
-        } finally {
-            setSearching(false);
-            setHasSearched(true);
-        }
-    };
-
     const addStaff = async (user: UserRecord) => {
         setBusyUid(user.uid);
         try {
@@ -131,7 +80,6 @@ export function EventStaffSection({
                 onCountChange?.(next.length);
                 return next;
             });
-            setSearchResults(prev => prev.filter(u => u.uid !== user.uid));
             if (attendeeRemoved) onAttendeeRemoved?.();
             showToast(
                 isEnglish
@@ -188,9 +136,6 @@ export function EventStaffSection({
         }
     };
 
-    const staffUids = new Set(staffList.map(u => u.uid));
-    const candidates = searchResults.filter(u => !staffUids.has(u.uid));
-
     return (
         <div className="admin-attendees-section">
             <p className="admin-title-hint">
@@ -211,13 +156,7 @@ export function EventStaffSection({
                         {staffList.length} {isEnglish ? 'staff' : '位工作人员'}
                     </p>
                     {staffList.map(u => (
-                        <div key={u.uid} className="admin-user-row">
-                            <img src={u.photoURL} alt="" className="admin-user-avatar"
-                                 referrerPolicy="no-referrer"/>
-                            <div className="admin-user-info">
-                                <div className="admin-user-name">{u.displayName}</div>
-                                <div className="admin-user-email">{u.email}</div>
-                            </div>
+                        <UserRow key={u.uid} user={u}>
                             {!readOnly && (
                                 <button
                                     className="admin-toggle-btn admin-toggle-revoke"
@@ -229,62 +168,22 @@ export function EventStaffSection({
                                         : (isEnglish ? 'Remove' : '撤销')}
                                 </button>
                             )}
-                        </div>
+                        </UserRow>
                     ))}
                 </>
             )}
 
-            {!readOnly && <div className="admin-event-staff-add"
-                               style={{marginTop: 16, flexDirection: 'column', alignItems: 'stretch', gap: 8}}>
-                <div className="admin-search">
-                    <input
-                        type="text"
-                        className="admin-input"
-                        placeholder={isEnglish ? 'Search user by email or name...' : '输入邮箱或姓名搜索用户...'}
-                        value={searchQuery}
-                        onChange={(e) => {
-                            setSearchQuery(e.target.value);
-                            setHasSearched(false);
-                        }}
-                        onKeyDown={(e) => e.key === 'Enter' && runSearch()}
-                    />
-                    <button
-                        className="admin-btn admin-btn--cta"
-                        onClick={runSearch}
-                        disabled={searching || !searchQuery.trim()}
-                    >
-                        {searching
-                            ? (isEnglish ? 'Searching...' : '搜索中...')
-                            : (isEnglish ? 'Search' : '搜索')}
-                    </button>
-                </div>
-
-                {hasSearched && !searching && candidates.length === 0 && (
-                    <p className="admin-no-results">
-                        {isEnglish ? 'No users found.' : '未找到匹配用户。'}
-                    </p>
-                )}
-
-                {candidates.map(u => (
-                    <div key={u.uid} className="admin-user-row">
-                        <img src={u.photoURL} alt="" className="admin-user-avatar"
-                             referrerPolicy="no-referrer"/>
-                        <div className="admin-user-info">
-                            <div className="admin-user-name">{u.displayName}</div>
-                            <div className="admin-user-email">{u.email}</div>
-                        </div>
-                        <button
-                            className="admin-toggle-btn admin-toggle-grant"
-                            onClick={() => addStaff(u)}
-                            disabled={busyUid === u.uid}
-                        >
-                            {busyUid === u.uid
-                                ? (isEnglish ? 'Adding...' : '添加中...')
-                                : (isEnglish ? 'Add as staff' : '设为工作人员')}
-                        </button>
-                    </div>
-                ))}
-            </div>}
+            {!readOnly && (
+                <UserSearchAdd
+                    excludeUids={new Set(staffList.map(u => u.uid))}
+                    busyUid={busyUid}
+                    onAdd={addStaff}
+                    addLabel={isEnglish ? 'Add as staff' : '设为工作人员'}
+                    addingLabel={isEnglish ? 'Adding...' : '添加中...'}
+                    noMatchMessage={isEnglish ? 'No users found.' : '未找到匹配用户。'}
+                    showToast={showToast}
+                />
+            )}
         </div>
     );
 }
