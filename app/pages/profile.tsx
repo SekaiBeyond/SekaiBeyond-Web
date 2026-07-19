@@ -12,6 +12,7 @@ import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { isValidHttpUrl } from '~/lib/urls';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 import { validateImageFile } from "~/pages/admin/utils";
+import { ToastContainer, useToasts } from '~/lib/useToasts';
 
 interface BadgeDef extends BaseBadgeDef {
     holderPct?: number;
@@ -32,16 +33,6 @@ interface ViewedProfile {
     title?: string;
     titleCn?: string;
 }
-
-type ToastType = 'success' | 'warning' | 'error';
-
-interface Toast {
-    id: number;
-    message: string;
-    type: ToastType;
-}
-
-let profileToastCounter = 0;
 
 const BadgeCard = ({badge, earnedDate, isEnglish, active, onToggle}: {
     badge: BadgeDef;
@@ -168,14 +159,8 @@ export const ProfilePage = () => {
     const [viewedLoadError, setViewedLoadError] = useState(false);
     const [activeBadge, setActiveBadge] = useState<string | null>(null);
     const badgeGridRef = useRef<HTMLDivElement>(null);
-    const [toasts, setToasts] = useState<Toast[]>([]);
+    const {toasts, showToast} = useToasts();
     const [selectedBadge, setSelectedBadge] = useState<BadgeDef | null>(null);
-
-    const showToast = useCallback((message: string, type: ToastType) => {
-        const id = ++profileToastCounter;
-        setToasts(prev => [...prev, {id, message, type}]);
-        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
-    }, []);
 
     useEffect(() => {
         if (loading || isViewingOther) return;
@@ -495,13 +480,7 @@ export const ProfilePage = () => {
 
     return (
         <>
-            <div className="admin-toast-container">
-                {toasts.map(t => (
-                    <div key={t.id} className={`admin-toast admin-toast-${t.type}`}>
-                        {t.message}
-                    </div>
-                ))}
-            </div>
+            <ToastContainer toasts={toasts}/>
             <nav className="profile-nav">
                 <a href="/" className="profile-nav-home">
                     {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}

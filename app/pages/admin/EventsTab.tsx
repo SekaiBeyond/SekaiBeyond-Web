@@ -6,7 +6,6 @@ import {
     callSavePastEvent,
     callSetPastEventPublished,
     callUploadAdminImage,
-    functionsErrorCode,
 } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
@@ -22,6 +21,12 @@ import { ImageUploadField } from './ImageUploadField';
 import { PastEventAttendeesSection } from './PastEventAttendeesSection';
 import { TagMultiSelect } from './TagMultiSelect';
 import { TicketsSubtab } from './tickets/TicketsSubtab';
+import {
+    DeleteOrCancelButton,
+    PendingDeletionNote,
+    PublishToggleButton,
+    useEventLifecycle,
+} from './useEventLifecycle';
 
 interface EventsTabProps {
     pastEvents: PastEvent[];
@@ -91,8 +96,14 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [savingEvent, setSavingEvent] = useState(false);
     const [eventImage, setEventImage] = useState<File | null>(null);
     const [eventImagePreview, setEventImagePreview] = useState<string | null>(null);
-    const [deletionBusyId, setDeletionBusyId] = useState<string | null>(null);
     const [eventSubTab, setEventSubTab] = useState<'attendees' | 'staff' | 'tickets'>('attendees');
+    const {deletionBusyId, requestDeleteEvent, cancelDeleteEvent, togglePublish} = useEventLifecycle({
+        requestDeletion: callRequestEventDeletion,
+        cancelDeletion: callCancelEventDeletion,
+        setPublished: callSetPastEventPublished,
+        refresh: refreshEvents,
+        showToast,
+    });
     const [staffCount, setStaffCount] = useState<number | null>(null);
     const [isPaidEvent, setIsPaidEvent] = useState(false);
     const selectGenRef = useRef(0);
@@ -235,59 +246,6 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             showToast(isEnglish ? 'Failed to save event.' : '保存活动失败。', 'error');
         } finally {
             setSavingEvent(false);
-        }
-    };
-
-    const togglePublish = async (event: PastEvent) => {
-        const newPublished = !event.published;
-        try {
-            await callSetPastEventPublished({eventId: event.id, published: newPublished});
-            await refreshEvents();
-            showToast(
-                newPublished
-                    ? (isEnglish ? 'Event published.' : '活动已发布。')
-                    : (isEnglish ? 'Event unpublished.' : '活动已取消发布。'),
-                newPublished ? 'success' : 'warning',
-            );
-        } catch (err) {
-            console.error('[togglePublish]', err);
-            showToast(isEnglish ? 'Failed to update publish status.' : '更新发布状态失败。', 'error');
-        }
-    };
-
-    const requestDeleteEvent = async (event: PastEvent) => {
-        if (!confirm(isEnglish
-            ? `Request deletion of "${event.title}"? It will be permanently deleted in about 48 hours unless cancelled.`
-            : `申请删除"${event.title}"？如不取消，约 48 小时后将被永久删除。`
-        )) return;
-        setDeletionBusyId(event.id);
-        try {
-            await callRequestEventDeletion({eventId: event.id});
-            await refreshEvents();
-            showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'warning');
-        } catch (err) {
-            const code = functionsErrorCode(err);
-            const msg = code === 'deletion-already-pending'
-                ? (isEnglish
-                    ? 'Deletion already pending — cancel it first.'
-                    : '已在计划删除中，请先取消。')
-                : (isEnglish ? 'Failed to schedule deletion.' : '计划删除失败。');
-            showToast(msg, 'error');
-        } finally {
-            setDeletionBusyId(null);
-        }
-    };
-
-    const cancelDeleteEvent = async (event: PastEvent) => {
-        setDeletionBusyId(event.id);
-        try {
-            await callCancelEventDeletion({eventId: event.id});
-            await refreshEvents();
-            showToast(isEnglish ? 'Deletion cancelled.' : '已取消删除。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to cancel deletion.' : '取消删除失败。', 'error');
-        } finally {
-            setDeletionBusyId(null);
         }
     };
 
@@ -455,48 +413,19 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                     >
                                         {isEnglish ? 'Edit Event' : '编辑活动'}
                                     </button>
-                                    <button
-                                        className={`admin-toggle-btn ${managedEvt.published ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                        onClick={() => togglePublish(managedEvt)}
-                                    >
-                                        {managedEvt.published
-                                            ? (isEnglish ? 'Unpublish' : '取消发布')
-                                            : (isEnglish ? 'Publish' : '发布')}
-                                    </button>
-                                    {managedEvt.deleteAt ? (
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-grant"
-                                            onClick={() => cancelDeleteEvent(managedEvt)}
-                                            disabled={deletionBusyId === managedEvt.id}
-                                        >
-                                            {deletionBusyId === managedEvt.id
-                                                ? (isEnglish ? 'Working...' : '处理中...')
-                                                : (isEnglish ? 'Cancel deletion' : '取消删除')}
-                                        </button>
-                                    ) : (
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-revoke"
-                                            onClick={() => requestDeleteEvent(managedEvt)}
-                                            disabled={deletionBusyId === managedEvt.id}
-                                        >
-                                            {deletionBusyId === managedEvt.id
-                                                ? (isEnglish ? 'Working...' : '处理中...')
-                                                : (isEnglish ? 'Delete Event' : '删除活动')}
-                                        </button>
-                                    )}
+                                    <PublishToggleButton
+                                        published={managedEvt.published}
+                                        onToggle={() => togglePublish(managedEvt)}
+                                    />
+                                    <DeleteOrCancelButton
+                                        deleteAt={managedEvt.deleteAt}
+                                        busy={deletionBusyId === managedEvt.id}
+                                        onRequest={() => requestDeleteEvent(managedEvt)}
+                                        onCancel={() => cancelDeleteEvent(managedEvt)}
+                                    />
                                 </div>
                             )}
-                            {managedEvt.deleteAt && (
-                                <p className="admin-helper-text">
-                                    {isEnglish
-                                        ? `Pending deletion — scheduled around ${managedEvt.deleteAt.toLocaleString('en-US', {
-                                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                                        })}.`
-                                        : `待删除 — 预计于 ${managedEvt.deleteAt.toLocaleString('zh-CN', {
-                                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                                        })} 前后执行。`}
-                                </p>
-                            )}
+                            <PendingDeletionNote deleteAt={managedEvt.deleteAt}/>
                             <div className="admin-sub-tabs">
                                 {isPaidEvent ? (
                                     <button

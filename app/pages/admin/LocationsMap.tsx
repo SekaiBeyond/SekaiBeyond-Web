@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AdvancedMarker, APIProvider, InfoWindow, Map, useMap } from '@vis.gl/react-google-maps';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_MAP_ID } from '~/lib/googleMaps';
 import { lotBadgeChar, lotTypeLabel, lotTypeShortLabel, type ParkingLot } from '~/lib/parkingLots';
 import { NO_RATE_COLOR, type ParkingRate, rateColorById, rateLabel } from '~/lib/parkingRates';
 import { DEFAULT_ZOOM, hasCoordinates, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
@@ -298,9 +299,6 @@ export const LocationsMap = ({
         }
         : null;
 
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-    const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
-
     return (
         <div className="admin-section admin-locmap">
             <p className="admin-helper-text admin-section-intro">
@@ -345,12 +343,12 @@ export const LocationsMap = ({
             </div>
 
             <div className="admin-locmap-canvas">
-                <APIProvider apiKey={apiKey}>
+                <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
                     <Map
                         defaultBounds={mapBounds ? {...mapBounds, padding: 80} : undefined}
                         defaultCenter={mapBounds ? undefined : (points[0] ?? UW_CAMPUS_CENTER)}
                         defaultZoom={mapBounds ? undefined : DEFAULT_ZOOM}
-                        mapId={mapId}
+                        mapId={GOOGLE_MAPS_MAP_ID}
                         gestureHandling="greedy"
                         disableDefaultUI={true}
                         zoomControl={true}

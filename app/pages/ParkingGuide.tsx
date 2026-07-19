@@ -15,6 +15,7 @@ import { lotBadgeChar, lotTypeLabel, type ParkingLot, useParkingLots } from '~/l
 import { NO_RATE_COLOR, type ParkingRate, rateColorById, rateLabel, useParkingRates } from '~/lib/parkingRates';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_MAP_ID } from '~/lib/googleMaps';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { AdvancedMarker, APIProvider, InfoWindow, Map, useMap } from '@vis.gl/react-google-maps';
 
@@ -478,9 +479,6 @@ export const ParkingGuide = () => {
         );
     }
 
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-    const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
-
     return (
         <div className="parking-page">
             {/* Decorative blobs */}
@@ -522,11 +520,11 @@ export const ParkingGuide = () => {
                     {/* Map */}
                     <div className="parking-map-container">
                         <div className="parking-map">
-                            <APIProvider apiKey={apiKey}>
+                            <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
                                 <Map
                                     key={venue.id}
                                     defaultBounds={{...mapBounds!, padding: mapPadding}}
-                                    mapId={mapId}
+                                    mapId={GOOGLE_MAPS_MAP_ID}
                                     gestureHandling="greedy"
                                     disableDefaultUI={true}
                                     zoomControl={true}

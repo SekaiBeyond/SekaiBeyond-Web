@@ -3,6 +3,7 @@ import { AdvancedMarker, APIProvider, Map, useMap } from '@vis.gl/react-google-m
 import { DEFAULT_ZOOM } from '~/lib/venues';
 import { type QrCode, qrHasSpot } from '~/lib/qrCodes';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_MAP_ID } from '~/lib/googleMaps';
 import { heatColor } from './heat';
 
 interface QrSpotsMapProps {
@@ -17,9 +18,6 @@ interface QrSpotsMapProps {
  */
 export const QrSpotsMap = ({codes, onSelect, height = 340}: QrSpotsMapProps) => {
     const {isEnglish} = useLanguage();
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-    const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
-
     const spotted = codes.filter(qrHasSpot);
     const maxCount = spotted.reduce((m, c) => Math.max(m, c.scanCount), 0);
 
@@ -35,11 +33,11 @@ export const QrSpotsMap = ({codes, onSelect, height = 340}: QrSpotsMapProps) => 
 
     return (
         <div className="admin-qr-map" style={{height}}>
-            <APIProvider apiKey={apiKey}>
+            <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
                 <Map
                     defaultCenter={spotted[0]}
                     defaultZoom={DEFAULT_ZOOM}
-                    mapId={mapId}
+                    mapId={GOOGLE_MAPS_MAP_ID}
                     gestureHandling="greedy"
                     disableDefaultUI={false}
                     zoomControl={true}

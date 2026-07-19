@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdvancedMarker, APIProvider, Map, useMap, useMapsLibrary, } from '@vis.gl/react-google-maps';
+import { GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_MAP_ID } from '~/lib/googleMaps';
 import { DEFAULT_ZOOM, hasCoordinates, UW_CAMPUS_CENTER } from '~/lib/venues';
 import { useLanguage } from '~/components/LanguageContextProvider';
 
@@ -15,22 +16,13 @@ interface MapPickerProps {
  * - Click anywhere on the map to drop the marker at that point.
  * - Drag the marker for fine-tuning.
  */
-export const MapPicker = (props: MapPickerProps) => {
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-    const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
+export const MapPicker = (props: MapPickerProps) => (
+    <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places']}>
+        <MapPickerInner {...props}/>
+    </APIProvider>
+);
 
-    return (
-        <APIProvider apiKey={apiKey} libraries={['places']}>
-            <MapPickerInner {...props} mapId={mapId}/>
-        </APIProvider>
-    );
-};
-
-interface MapPickerInnerProps extends MapPickerProps {
-    mapId: string;
-}
-
-const MapPickerInner = ({value, onChange, height = 320, mapId}: MapPickerInnerProps) => {
+const MapPickerInner = ({value, onChange, height = 320}: MapPickerProps) => {
     const {isEnglish} = useLanguage();
     const hasValue = hasCoordinates(value.lat, value.lng);
     const initialCenter = hasValue ? value : UW_CAMPUS_CENTER;
@@ -42,7 +34,7 @@ const MapPickerInner = ({value, onChange, height = 320, mapId}: MapPickerInnerPr
                 <Map
                     defaultCenter={initialCenter}
                     defaultZoom={DEFAULT_ZOOM}
-                    mapId={mapId}
+                    mapId={GOOGLE_MAPS_MAP_ID}
                     gestureHandling="greedy"
                     disableDefaultUI={false}
                     zoomControl={true}

@@ -10,7 +10,18 @@ interface UserRowProps {
 /** The avatar + name + email row every admin user list is built from. */
 export function UserRow({user, onClick, children}: UserRowProps) {
     return (
-        <div className="admin-user-row" onClick={onClick}>
+        <div
+            className="admin-user-row"
+            onClick={onClick}
+            role={onClick ? 'button' : undefined}
+            tabIndex={onClick ? 0 : undefined}
+            onKeyDown={onClick ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onClick();
+                }
+            } : undefined}
+        >
             <img src={user.photoURL} alt="" className="admin-user-avatar"
                  referrerPolicy="no-referrer"/>
             <div className="admin-user-info">

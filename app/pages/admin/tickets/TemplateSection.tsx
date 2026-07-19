@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUpdateEventEmailTemplate, getFirebaseDb } from '~/lib/firebase';
-import { useModalEffects } from '~/lib/useModalEffects';
+import { ModalShell } from '../ModalShell';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { ShowToast } from '../utils';
 import { DEFAULT_TEMPLATE_BODY_EN, DEFAULT_TEMPLATE_SUBJECT, renderSamplePreview, tsToDate, } from './helpers';
@@ -25,17 +25,6 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
-    const previewOverlayRef = useRef<HTMLDivElement>(null);
-    useModalEffects(showPreview, previewOverlayRef);
-
-    useEffect(() => {
-        if (!showPreview) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setShowPreview(false);
-        };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [showPreview]);
 
     useEffect(() => {
         let cancelled = false;
@@ -208,33 +197,21 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
             )}
 
             {showPreview && (
-                <div ref={previewOverlayRef} className="admin-tickets-preview-modal"
-                     onClick={() => setShowPreview(false)}>
-                    <div
-                        className="admin-tickets-preview-content"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="admin-tickets-preview-header">
-                            <strong>{isEnglish ? 'Preview' : '预览'}</strong>
-                            <button
-                                className="admin-tickets-preview-close"
-                                onClick={() => setShowPreview(false)}
-                            >
-                                ×
-                            </button>
-                        </div>
-                        <div className="admin-tickets-preview-subject">
-                            <strong>{isEnglish ? 'Subject: ' : '主题：'}</strong>
-                            {template.subject.replace(/{{\s*eventTitle\s*}}/g, event.title)
-                                .replace(/{{\s*eventTitleCn\s*}}/g, event.titleCn)
-                                .replace(/{{\s*attendeeName\s*}}/g, 'Sample Attendee')}
-                        </div>
-                        <div
-                            className="admin-tickets-preview-body"
-                            dangerouslySetInnerHTML={{__html: renderSamplePreview(template, event)}}
-                        />
+                <ModalShell
+                    title={isEnglish ? 'Preview' : '预览'}
+                    onClose={() => setShowPreview(false)}
+                >
+                    <div className="admin-tickets-preview-subject">
+                        <strong>{isEnglish ? 'Subject: ' : '主题：'}</strong>
+                        {template.subject.replace(/{{\s*eventTitle\s*}}/g, event.title)
+                            .replace(/{{\s*eventTitleCn\s*}}/g, event.titleCn)
+                            .replace(/{{\s*attendeeName\s*}}/g, 'Sample Attendee')}
                     </div>
-                </div>
+                    <div
+                        className="admin-tickets-preview-body"
+                        dangerouslySetInnerHTML={{__html: renderSamplePreview(template, event)}}
+                    />
+                </ModalShell>
             )}
         </div>
     );

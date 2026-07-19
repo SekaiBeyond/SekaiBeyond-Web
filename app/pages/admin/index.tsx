@@ -26,16 +26,7 @@ import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
 import type { CardHighlightHandle, LocationListHandle } from './useCardHighlight';
-
-type ToastType = 'success' | 'warning' | 'error';
-
-interface Toast {
-    id: number;
-    message: string;
-    type: ToastType;
-}
-
-let toastCounter = 0;
+import { ToastContainer, useToasts } from '~/lib/useToasts';
 
 export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
@@ -80,13 +71,7 @@ export const AdminPage = () => {
     const [parkingRatesOpen, setParkingRatesOpen] = useState(true);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [badgeDefsError, setBadgeDefsError] = useState(false);
-    const [toasts, setToasts] = useState<Toast[]>([]);
-
-    const showToast = useCallback((message: string, type: ToastType) => {
-        const id = ++toastCounter;
-        setToasts(prev => [...prev, {id, message, type}]);
-        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
-    }, []);
+    const {toasts, showToast} = useToasts();
     const {tags, refresh: refreshTags} = useTags();
     const {venues, refresh: refreshVenues} = useVenues();
     const {parkingLots, refresh: refreshParkingLots} = useParkingLots();
@@ -325,13 +310,7 @@ export const AdminPage = () => {
 
     return (
         <>
-            <div className="admin-toast-container">
-                {toasts.map(t => (
-                    <div key={t.id} className={`admin-toast admin-toast-${t.type}`}>
-                        {t.message}
-                    </div>
-                ))}
-            </div>
+            <ToastContainer toasts={toasts}/>
             <nav className="profile-nav">
                 <a href="/" className="profile-nav-home">
                     {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { accountEffectiveTitle, type UserGroup } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
-import { useModalEffects } from '~/lib/useModalEffects';
+import { ModalShell } from './ModalShell';
 import { AccountPicker } from './AccountPicker';
 import { ImageUploadField } from './ImageUploadField';
 import type { UserRecord } from './types';
@@ -36,8 +36,6 @@ const seedFormData = (member: TeamMemberConfig | null): TeamMemberConfig => {
 
 export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEditModalProps) => {
     const {isEnglish} = useLanguage();
-    const overlayRef = useRef<HTMLDivElement>(null);
-    useModalEffects(true, overlayRef);
 
     // The member as currently saved, normalized like the form so single fields can be
     // compared against it and put back.
@@ -53,14 +51,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         group: UserGroup;
         photoURL: string
     } | null>(null);
-
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
-        };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [onClose]);
 
     useEffect(() => {
         const uid = formData.uid;
@@ -242,46 +232,43 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
     };
 
     return (
-        <div ref={overlayRef} className="admin-tickets-preview-modal" onClick={onClose}>
-            <div className="admin-tickets-preview-content" onClick={e => e.stopPropagation()}>
-                <div className="admin-tickets-preview-header">
-                    <strong>{member ? (isEnglish ? 'Edit Member' : '编辑成员') : (isEnglish ? 'Add Member' : '添加成员')}</strong>
-                    <button className="admin-tickets-preview-close" onClick={onClose}>×</button>
+        <ModalShell
+            title={member ? (isEnglish ? 'Edit Member' : '编辑成员') : (isEnglish ? 'Add Member' : '添加成员')}
+            onClose={onClose}
+        >
+            <div className="admin-tickets-attendee-edit">
+                <div style={{marginBottom: '16px'}}>
+                    <AccountPicker
+                        label={isEnglish ? 'Linked Account (optional)' : '关联账户（可选）'}
+                        selected={formData.uid ? {
+                            uid: formData.uid,
+                            displayName: formData.name,
+                            email: '',
+                            photoURL: formData.imageUrl
+                        } as any : null}
+                        onSelect={handleUserSelect}
+                    />
+                    {accountEdited && (
+                        <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '6px'}}>
+                            {revertButton(
+                                accountEdited,
+                                revertAccount,
+                                'Revert the linked account, and the name, role and photo it filled in, to the saved values',
+                                '将关联账户，以及它填入的姓名、角色和照片，还原为已保存的值',
+                            )}
+                        </div>
+                    )}
                 </div>
 
-                <div className="admin-tickets-attendee-edit">
-                    <div style={{marginBottom: '16px'}}>
-                        <AccountPicker
-                            label={isEnglish ? 'Linked Account (optional)' : '关联账户（可选）'}
-                            selected={formData.uid ? {
-                                uid: formData.uid,
-                                displayName: formData.name,
-                                email: '',
-                                photoURL: formData.imageUrl
-                            } as any : null}
-                            onSelect={handleUserSelect}
-                        />
-                        {accountEdited && (
-                            <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '6px'}}>
-                                {revertButton(
-                                    accountEdited,
-                                    revertAccount,
-                                    'Revert the linked account, and the name, role and photo it filled in, to the saved values',
-                                    '将关联账户，以及它填入的姓名、角色和照片，还原为已保存的值',
-                                )}
-                            </div>
-                        )}
-                    </div>
+                {accountLinked && (
+                    <p className="admin-helper-text" style={{marginTop: 0, marginBottom: '12px'}}>
+                        {isEnglish
+                            ? 'Tick "From account" on the role, or "Use account photo", to have that field follow the linked account and update automatically; untick to set it yourself. The role follows the account in both English and Chinese. Names are always custom — linking an account only fills in a blank name.'
+                            : '在角色勾选“来自账户”，或勾选“头像使用账户照片”，即可让该字段跟随关联账户并自动更新；取消勾选可自行设置。角色的中英文均跟随账户。姓名始终为自定义——关联账户仅会填充空白的姓名。'}
+                    </p>
+                )}
 
-                    {accountLinked && (
-                        <p className="admin-helper-text" style={{marginTop: 0, marginBottom: '12px'}}>
-                            {isEnglish
-                                ? 'Tick "From account" on the role, or "Use account photo", to have that field follow the linked account and update automatically; untick to set it yourself. The role follows the account in both English and Chinese. Names are always custom — linking an account only fills in a blank name.'
-                                : '在角色勾选“来自账户”，或勾选“头像使用账户照片”，即可让该字段跟随关联账户并自动更新；取消勾选可自行设置。角色的中英文均跟随账户。姓名始终为自定义——关联账户仅会填充空白的姓名。'}
-                        </p>
-                    )}
-
-                    <div className="admin-tickets-template-field">
+                <div className="admin-tickets-template-field">
                         <span style={fieldHeaderStyle}>
                             <span>{isEnglish ? 'Name (English)' : '姓名（英文）'}</span>
                             {revertButton(
@@ -291,15 +278,15 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                 '将英文姓名还原为已保存的值',
                             )}
                         </span>
-                        <input
-                            className="admin-input"
-                            value={formData.name}
-                            onChange={e => setFormData(prev => ({...prev, name: e.target.value}))}
-                            placeholder={isEnglish ? 'Full name in English' : '英文全名'}
-                        />
-                    </div>
+                    <input
+                        className="admin-input"
+                        value={formData.name}
+                        onChange={e => setFormData(prev => ({...prev, name: e.target.value}))}
+                        placeholder={isEnglish ? 'Full name in English' : '英文全名'}
+                    />
+                </div>
 
-                    <div className="admin-tickets-template-field">
+                <div className="admin-tickets-template-field">
                         <span style={fieldHeaderStyle}>
                             <span>{isEnglish ? 'Name (Chinese) (optional)' : '姓名（中文）（可选）'}</span>
                             {revertButton(
@@ -309,15 +296,15 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                 '将中文姓名还原为已保存的值',
                             )}
                         </span>
-                        <input
-                            className="admin-input"
-                            value={formData.nameCn}
-                            onChange={e => setFormData(prev => ({...prev, nameCn: e.target.value}))}
-                            placeholder={isEnglish ? 'Full name in Chinese' : '中文全名'}
-                        />
-                    </div>
+                    <input
+                        className="admin-input"
+                        value={formData.nameCn}
+                        onChange={e => setFormData(prev => ({...prev, nameCn: e.target.value}))}
+                        placeholder={isEnglish ? 'Full name in Chinese' : '中文全名'}
+                    />
+                </div>
 
-                    <div className="admin-tickets-template-field">
+                <div className="admin-tickets-template-field">
                         <span style={fieldHeaderStyle}>
                             <span>{isEnglish ? 'Role (English)' : '角色（英文）'}</span>
                             <span style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
@@ -345,60 +332,60 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                 )}
                             </span>
                         </span>
-                        {roleFromAccount ? (
-                            <div className="admin-input" style={fromAccountValueStyle}>
-                                {accountRole || (isEnglish ? '(from account title)' : '（来自账户头衔）')}
-                            </div>
-                        ) : (
-                            <input
-                                className="admin-input"
-                                value={formData.role}
-                                onChange={e => setFormData(prev => ({...prev, role: e.target.value}))}
-                                placeholder={isEnglish ? 'e.g. President' : '例如：社长'}
-                            />
-                        )}
-                    </div>
+                    {roleFromAccount ? (
+                        <div className="admin-input" style={fromAccountValueStyle}>
+                            {accountRole || (isEnglish ? '(from account title)' : '（来自账户头衔）')}
+                        </div>
+                    ) : (
+                        <input
+                            className="admin-input"
+                            value={formData.role}
+                            onChange={e => setFormData(prev => ({...prev, role: e.target.value}))}
+                            placeholder={isEnglish ? 'e.g. President' : '例如：社长'}
+                        />
+                    )}
+                </div>
 
-                    <div className="admin-tickets-template-field">
-                        <span>{isEnglish ? 'Role (Chinese)' : '角色（中文）'}</span>
-                        {roleFromAccount ? (
-                            <div className="admin-input" style={fromAccountValueStyle}>
-                                {accountRoleCn || (isEnglish ? '(from account title)' : '（来自账户头衔）')}
-                            </div>
-                        ) : (
-                            <input
-                                className="admin-input"
-                                value={formData.roleCn}
-                                onChange={e => setFormData(prev => ({...prev, roleCn: e.target.value}))}
-                                placeholder={isEnglish ? 'e.g. President' : '例如：社长'}
-                            />
-                        )}
-                    </div>
+                <div className="admin-tickets-template-field">
+                    <span>{isEnglish ? 'Role (Chinese)' : '角色（中文）'}</span>
+                    {roleFromAccount ? (
+                        <div className="admin-input" style={fromAccountValueStyle}>
+                            {accountRoleCn || (isEnglish ? '(from account title)' : '（来自账户头衔）')}
+                        </div>
+                    ) : (
+                        <input
+                            className="admin-input"
+                            value={formData.roleCn}
+                            onChange={e => setFormData(prev => ({...prev, roleCn: e.target.value}))}
+                            placeholder={isEnglish ? 'e.g. President' : '例如：社长'}
+                        />
+                    )}
+                </div>
 
-                    {/* The revert button sits outside the label so clicking it cannot toggle the box. */}
-                    <div style={fieldHeaderStyle}>
-                        <label className="admin-tickets-template-field"
-                               style={{flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
-                            <input
-                                type="checkbox"
-                                checked={!!formData.isHonorary}
-                                onChange={e => setFormData(prev => ({...prev, isHonorary: e.target.checked}))}
-                            />
-                            <span style={{margin: 0}}>
+                {/* The revert button sits outside the label so clicking it cannot toggle the box. */}
+                <div style={fieldHeaderStyle}>
+                    <label className="admin-tickets-template-field"
+                           style={{flexDirection: 'row', alignItems: 'center', gap: '8px'}}>
+                        <input
+                            type="checkbox"
+                            checked={!!formData.isHonorary}
+                            onChange={e => setFormData(prev => ({...prev, isHonorary: e.target.checked}))}
+                        />
+                        <span style={{margin: 0}}>
                                 {isEnglish ? 'Honorary member (less active)' : '名誉成员（不太活跃）'}
                             </span>
-                        </label>
-                        {revertButton(
-                            honoraryEdited,
-                            () => revertField({isHonorary: saved.isHonorary}),
-                            'Revert honorary member to the saved value',
-                            '将名誉成员还原为已保存的值',
-                        )}
-                    </div>
+                    </label>
+                    {revertButton(
+                        honoraryEdited,
+                        () => revertField({isHonorary: saved.isHonorary}),
+                        'Revert honorary member to the saved value',
+                        '将名誉成员还原为已保存的值',
+                    )}
+                </div>
 
-                    {/* The avatar owns a labelled header like every other field; the checkbox
+                {/* The avatar owns a labelled header like every other field; the checkbox
                         says only where the photo comes from, so it drops "for avatar". */}
-                    <div className="admin-tickets-template-field" style={{marginTop: '8px'}}>
+                <div className="admin-tickets-template-field" style={{marginTop: '8px'}}>
                         <span style={fieldHeaderStyle}>
                             <span>{isEnglish ? 'Member Avatar' : '成员头像'}</span>
                             <span style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
@@ -424,62 +411,61 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                 )}
                             </span>
                         </span>
-                        {photoFromAccount ? (
-                            <div className="admin-avatar-field">
-                                <img
-                                    className={`admin-avatar-preview${accountPhoto ? '' : ' admin-avatar-preview-default'}`}
-                                    src={accountPhoto || '/mika.webp'}
-                                    alt=""
-                                    referrerPolicy="no-referrer"
-                                />
-                                <div className="admin-avatar-actions">
-                                    {/* Mirrors what accountPhoto actually resolves to: the account's
-                                        photo, else the member's stored image, else the site default. */}
-                                    <p className="admin-helper-text admin-avatar-helper">
-                                        {account?.photoURL
-                                            ? (isEnglish
-                                                ? 'Updates automatically when they change their account photo.'
-                                                : '当其更换账户照片时会自动更新。')
-                                            : formData.imageUrl
-                                                ? (isEnglish
-                                                    ? 'This account has no photo, so the uploaded image is shown instead.'
-                                                    : '该账户没有照片，因此显示已上传的图片。')
-                                                : (isEnglish
-                                                    ? 'This account has no photo yet, so the default avatar is shown.'
-                                                    : '该账户尚无照片，因此显示默认头像。')}
-                                    </p>
-                                </div>
-                            </div>
-                        ) : (
-                            <ImageUploadField
-                                variant="avatar"
-                                preview={formData.imageUrl || null}
-                                placeholderSrc="/mika.webp"
-                                onFileChange={(file, url) => handleImageChange(file, url)}
-                                convertToWebp
-                                cropAspect={1}
-                                showToast={showToast}
+                    {photoFromAccount ? (
+                        <div className="admin-avatar-field">
+                            <img
+                                className={`admin-avatar-preview${accountPhoto ? '' : ' admin-avatar-preview-default'}`}
+                                src={accountPhoto || '/mika.webp'}
+                                alt=""
+                                referrerPolicy="no-referrer"
                             />
-                        )}
-                    </div>
+                            <div className="admin-avatar-actions">
+                                {/* Mirrors what accountPhoto actually resolves to: the account's
+                                        photo, else the member's stored image, else the site default. */}
+                                <p className="admin-helper-text admin-avatar-helper">
+                                    {account?.photoURL
+                                        ? (isEnglish
+                                            ? 'Updates automatically when they change their account photo.'
+                                            : '当其更换账户照片时会自动更新。')
+                                        : formData.imageUrl
+                                            ? (isEnglish
+                                                ? 'This account has no photo, so the uploaded image is shown instead.'
+                                                : '该账户没有照片，因此显示已上传的图片。')
+                                            : (isEnglish
+                                                ? 'This account has no photo yet, so the default avatar is shown.'
+                                                : '该账户尚无照片，因此显示默认头像。')}
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <ImageUploadField
+                            variant="avatar"
+                            preview={formData.imageUrl || null}
+                            placeholderSrc="/mika.webp"
+                            onFileChange={(file, url) => handleImageChange(file, url)}
+                            convertToWebp
+                            cropAspect={1}
+                            showToast={showToast}
+                        />
+                    )}
+                </div>
 
-                    <div className="admin-btn-row" style={{marginTop: '24px'}}>
-                        <button
-                            className="admin-toggle-btn admin-toggle-save"
-                            onClick={() => onSave(formData)}
-                            disabled={!canSave}
-                        >
-                            {isEnglish ? 'Save Member' : '保存成员'}
-                        </button>
-                        <button
-                            className="admin-toggle-btn admin-toggle-cancel"
-                            onClick={onClose}
-                        >
-                            {isEnglish ? 'Cancel' : '取消'}
-                        </button>
-                    </div>
+                <div className="admin-btn-row" style={{marginTop: '24px'}}>
+                    <button
+                        className="admin-toggle-btn admin-toggle-save"
+                        onClick={() => onSave(formData)}
+                        disabled={!canSave}
+                    >
+                        {isEnglish ? 'Save Member' : '保存成员'}
+                    </button>
+                    <button
+                        className="admin-toggle-btn admin-toggle-cancel"
+                        onClick={onClose}
+                    >
+                        {isEnglish ? 'Cancel' : '取消'}
+                    </button>
                 </div>
             </div>
-        </div>
+        </ModalShell>
     );
 };

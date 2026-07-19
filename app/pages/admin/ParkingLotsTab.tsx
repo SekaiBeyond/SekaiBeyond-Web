@@ -4,6 +4,8 @@ import { callDeleteParkingLot, callSaveParkingLot } from '~/lib/firebase';
 import { lotTypeShortLabel, type ParkingLot } from '~/lib/parkingLots';
 import { type ParkingRate, rateLabel } from '~/lib/parkingRates';
 import { UW_CAMPUS_CENTER } from '~/lib/venues';
+import { BilingualFormField } from './BilingualFormField';
+import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
 import { MapPicker } from './MapPicker';
 import { type LocationListHandle, useCardHighlight } from './useCardHighlight';
 
@@ -138,8 +140,7 @@ export const ParkingLotsTab = forwardRef<LocationListHandle, ParkingLotsTabProps
 
     const deleteLot = async (lot: ParkingLot) => {
         if (!confirm(isEnglish
-            ? `Delete
-                parking lot "${lot.name}"? It will be unlinked from any venues that reference it.`
+            ? `Delete parking lot "${lot.name}"? It will be unlinked from any venues that reference it.`
             : `删除停车场"${lot.name}"？任何关联此停车场的场地将自动解除关联。`
         )) return;
         setDeletingId(lot.id);
@@ -169,37 +170,22 @@ export const ParkingLotsTab = forwardRef<LocationListHandle, ParkingLotsTabProps
                     : '停车场为多个场地共享。请在"场地"区块将其关联到场地。'}
             </p>
 
-            {!readOnly && (showCreate ? (
-                <div className="admin-create-badge-form">
-                    <h4 className="admin-badges-title">{isEnglish ? 'Create New Parking Lot' : '创建新停车场'}</h4>
+            {!readOnly && (
+                <CreateSection
+                    show={showCreate}
+                    setShow={setShowCreate}
+                    newLabel={isEnglish ? '+ New Parking Lot' : '+ 新建停车场'}
+                    title={isEnglish ? 'Create New Parking Lot' : '创建新停车场'}
+                    ctaLabel={isEnglish ? 'Create Lot' : '创建停车场'}
+                    ctaBusyLabel={isEnglish ? 'Creating...' : '创建中...'}
+                    busy={saving}
+                    onCreate={createLot}
+                    onCancel={() => setCreateDraft(emptyDraft())}
+                >
                     <LotForm draft={createDraft} setDraft={setCreateDraft} parkingRates={parkingRates}
                              isEnglish={isEnglish}/>
-                    <div className="admin-btn-row admin-mt-12">
-                        <button
-                            className="admin-toggle-btn admin-toggle-save"
-                            onClick={createLot}
-                            disabled={saving}
-                        >
-                            {saving
-                                ? (isEnglish ? 'Creating...' : '创建中...')
-                                : (isEnglish ? 'Create Lot' : '创建停车场')}
-                        </button>
-                        <button
-                            className="admin-toggle-btn admin-toggle-cancel"
-                            onClick={() => {
-                                setShowCreate(false);
-                                setCreateDraft(emptyDraft());
-                            }}
-                        >
-                            {isEnglish ? 'Cancel' : '取消'}
-                        </button>
-                    </div>
-                </div>
-            ) : (
-                <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={() => setShowCreate(true)}>
-                    {isEnglish ? '+ New Parking Lot' : '+ 新建停车场'}
-                </button>
-            ))}
+                </CreateSection>
+            )}
 
             {parkingLots.length === 0 && !showCreate && (
                 <p className="admin-no-results">{isEnglish ? 'No parking lots yet.' : '暂无停车场。'}</p>
@@ -220,23 +206,12 @@ export const ParkingLotsTab = forwardRef<LocationListHandle, ParkingLotsTabProps
                                     <>
                                         <LotForm draft={editDraft} setDraft={setEditDraft} parkingRates={parkingRates}
                                                  isEnglish={isEnglish}/>
-                                        <div className="admin-tag-actions admin-mt-12">
-                                            <button
-                                                className="admin-toggle-btn admin-toggle-save admin-btn-sm"
-                                                onClick={saveEdit}
-                                                disabled={saving}
-                                            >
-                                                {saving
-                                                    ? (isEnglish ? 'Saving...' : '保存中...')
-                                                    : (isEnglish ? 'Save' : '保存')}
-                                            </button>
-                                            <button
-                                                className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
-                                                onClick={() => setEditingId(null)}
-                                            >
-                                                {isEnglish ? 'Cancel' : '取消'}
-                                            </button>
-                                        </div>
+                                        <CardSaveCancel
+                                            saving={saving}
+                                            onSave={saveEdit}
+                                            onCancel={() => setEditingId(null)}
+                                            topMargin
+                                        />
                                     </>
                                 ) : (
                                     <>
@@ -248,23 +223,11 @@ export const ParkingLotsTab = forwardRef<LocationListHandle, ParkingLotsTabProps
                                             {typeLabel}{rate ? ` · ${rateLabel(rate, isEnglish)}` : ''}
                                         </span>
                                         {!readOnly && (
-                                            <div className="admin-tag-actions">
-                                                <button
-                                                    className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
-                                                    onClick={() => openEdit(lot)}
-                                                >
-                                                    {isEnglish ? 'Edit' : '编辑'}
-                                                </button>
-                                                <button
-                                                    className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                                                    onClick={() => deleteLot(lot)}
-                                                    disabled={deletingId === lot.id}
-                                                >
-                                                    {deletingId === lot.id
-                                                        ? (isEnglish ? 'Deleting...' : '删除中...')
-                                                        : (isEnglish ? 'Delete' : '删除')}
-                                                </button>
-                                            </div>
+                                            <CardEditDeleteActions
+                                                onEdit={() => openEdit(lot)}
+                                                onDelete={() => deleteLot(lot)}
+                                                deleting={deletingId === lot.id}
+                                            />
                                         )}
                                     </>
                                 )}
@@ -288,24 +251,14 @@ interface LotFormProps {
 const LotForm = ({draft, setDraft, parkingRates, isEnglish}: LotFormProps) => (
     <>
         <div className="admin-form-grid">
-            <label>
-                <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
-                <input
-                    value={draft.name}
-                    onChange={e => setDraft(prev => ({...prev, name: e.target.value}))}
-                    className="admin-input"
-                    placeholder="e.g. N24 General Parking"
-                />
-            </label>
-            <label>
-                <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
-                <input
-                    value={draft.nameCn}
-                    onChange={e => setDraft(prev => ({...prev, nameCn: e.target.value}))}
-                    className="admin-input"
-                    placeholder="例如：N24 普通停车场"
-                />
-            </label>
+            <BilingualFormField
+                label="Name" labelCn="名称"
+                value={draft.name} valueCn={draft.nameCn}
+                onChange={v => setDraft(prev => ({...prev, name: v}))}
+                onChangeCn={v => setDraft(prev => ({...prev, nameCn: v}))}
+                placeholder="e.g. N24 General Parking"
+                placeholderCn="例如：N24 普通停车场"
+            />
             <label>
                 <span>{isEnglish ? 'Type' : '类型'}</span>
                 <select

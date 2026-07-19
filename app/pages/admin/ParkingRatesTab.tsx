@@ -2,6 +2,8 @@ import { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteParkingRate, callSaveParkingRate } from '~/lib/firebase';
 import { type ParkingRate, RATE_COLOR_PRESETS, rateColorById } from '~/lib/parkingRates';
+import { BilingualFormField } from './BilingualFormField';
+import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
 import { type CardHighlightHandle, useCardHighlight } from './useCardHighlight';
 
 /** Preset swatches + a native picker for custom colors. `value` is always a hex color. */
@@ -153,52 +155,30 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
                     : '费率档位为多个停车场共享。在此处统一定义后，即可为每个停车场分配。'}
             </p>
 
-            {!readOnly && (showCreate ? (
-                <div className="admin-create-badge-form">
-                    <h4 className="admin-badges-title">
-                        {isEnglish ? 'Create New Rate' : '创建新费率'}
-                    </h4>
+            {!readOnly && (
+                <CreateSection
+                    show={showCreate}
+                    setShow={setShowCreate}
+                    newLabel={isEnglish ? '+ New Rate' : '+ 新建费率'}
+                    title={isEnglish ? 'Create New Rate' : '创建新费率'}
+                    ctaLabel={isEnglish ? 'Create Rate' : '创建费率'}
+                    ctaBusyLabel={isEnglish ? 'Creating...' : '创建中...'}
+                    busy={saving}
+                    ctaDisabled={!labelEn.trim()}
+                    onCreate={createRate}
+                >
                     <div className="admin-form-grid">
-                        <label>
-                            <span>{isEnglish ? 'Rate (English)' : '费率（英文）'}</span>
-                            <input
-                                value={labelEn}
-                                onChange={e => setLabelEn(e.target.value)}
-                                className="admin-input"
-                                placeholder="e.g. $5.00 hourly, $21.00 daily"
-                            />
-                        </label>
-                        <label>
-                            <span>{isEnglish ? 'Rate (Chinese)' : '费率（中文）'}</span>
-                            <input
-                                value={labelCn}
-                                onChange={e => setLabelCn(e.target.value)}
-                                className="admin-input"
-                                placeholder="例如：每小时 $5.00，每日 $21.00"
-                            />
-                        </label>
+                        <BilingualFormField
+                            label="Rate" labelCn="费率"
+                            value={labelEn} valueCn={labelCn}
+                            onChange={setLabelEn} onChangeCn={setLabelCn}
+                            placeholder="e.g. $5.00 hourly, $21.00 daily"
+                            placeholderCn="例如：每小时 $5.00，每日 $21.00"
+                        />
                     </div>
                     <RateColorField value={color || nextPreset} onChange={setColor} isEnglish={isEnglish}/>
-                    <div className="admin-btn-row admin-mt-12">
-                        <button
-                            className="admin-toggle-btn admin-toggle-save"
-                            onClick={createRate}
-                            disabled={saving || !labelEn.trim()}
-                        >
-                            {saving
-                                ? (isEnglish ? 'Creating...' : '创建中...')
-                                : (isEnglish ? 'Create Rate' : '创建费率')}
-                        </button>
-                        <button className="admin-toggle-btn admin-toggle-cancel" onClick={() => setShowCreate(false)}>
-                            {isEnglish ? 'Cancel' : '取消'}
-                        </button>
-                    </div>
-                </div>
-            ) : (
-                <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={() => setShowCreate(true)}>
-                    {isEnglish ? '+ New Rate' : '+ 新建费率'}
-                </button>
-            ))}
+                </CreateSection>
+            )}
 
             {parkingRates.length === 0 && !showCreate && (
                 <p className="admin-no-results">{isEnglish ? 'No rates yet.' : '暂无费率。'}</p>
@@ -227,23 +207,12 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
                                         placeholder={isEnglish ? 'Chinese rate' : '中文费率'}
                                     />
                                     <RateColorField value={editColor} onChange={setEditColor} isEnglish={isEnglish}/>
-                                    <div className="admin-tag-actions">
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-save admin-btn-sm"
-                                            onClick={saveEdit}
-                                            disabled={savingEdit || !editLabelEn.trim()}
-                                        >
-                                            {savingEdit
-                                                ? (isEnglish ? 'Saving...' : '保存中...')
-                                                : (isEnglish ? 'Save' : '保存')}
-                                        </button>
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
-                                            onClick={() => setEditingRate(null)}
-                                        >
-                                            {isEnglish ? 'Cancel' : '取消'}
-                                        </button>
-                                    </div>
+                                    <CardSaveCancel
+                                        saving={savingEdit}
+                                        saveDisabled={!editLabelEn.trim()}
+                                        onSave={saveEdit}
+                                        onCancel={() => setEditingRate(null)}
+                                    />
                                 </>
                             ) : (
                                 <>
@@ -259,23 +228,11 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
                                         <span className="admin-event-card-date">{rate.labelCn}</span>
                                     )}
                                     {!readOnly && (
-                                        <div className="admin-tag-actions">
-                                            <button
-                                                className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
-                                                onClick={() => openEdit(rate)}
-                                            >
-                                                {isEnglish ? 'Edit' : '编辑'}
-                                            </button>
-                                            <button
-                                                className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                                                onClick={() => deleteRate(rate)}
-                                                disabled={deletingId === rate.id}
-                                            >
-                                                {deletingId === rate.id
-                                                    ? (isEnglish ? 'Deleting...' : '删除中...')
-                                                    : (isEnglish ? 'Delete' : '删除')}
-                                            </button>
-                                        </div>
+                                        <CardEditDeleteActions
+                                            onEdit={() => openEdit(rate)}
+                                            onDelete={() => deleteRate(rate)}
+                                            deleting={deletingId === rate.id}
+                                        />
                                     )}
                                 </>
                             )}

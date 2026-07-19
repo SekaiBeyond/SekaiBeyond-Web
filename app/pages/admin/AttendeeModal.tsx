@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportEventAttendees, callUpdateEventAttendee, functionsErrorCode } from '~/lib/firebase';
-import { useModalEffects } from '~/lib/useModalEffects';
+import { ModalShell } from './ModalShell';
 import { type AttendeeData, TICKET_TYPES, type TicketType } from './tickets/types';
 import type { ShowToast } from './utils';
 
@@ -35,22 +35,12 @@ export function AttendeeModal({
                                   showToast,
                               }: AttendeeModalProps) {
     const {isEnglish} = useLanguage();
-    const overlayRef = useRef<HTMLDivElement>(null);
-    useModalEffects(true, overlayRef);
     const [email, setEmail] = useState(attendee?.email ?? '');
     const [name, setName] = useState(attendee?.name ?? '');
     const [ticketCount, setTicketCount] = useState(attendee ? String(attendee.ticketCount) : '1');
     const originalType: TicketType = attendee?.tickets[0]?.type || 'normal';
     const [type, setType] = useState<TicketType>(originalType);
     const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && !saving) onClose();
-        };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [saving, onClose]);
 
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedName = name.trim();
@@ -162,120 +152,115 @@ export function AttendeeModal({
     };
 
     return (
-        <div ref={overlayRef} className="admin-tickets-preview-modal" onClick={onClose}>
-            <div
-                className="admin-tickets-preview-content"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="admin-tickets-preview-header">
-                    <strong>
-                        {attendee
-                            ? (isEnglish ? 'Edit Attendee' : '编辑参加者')
-                            : (isEnglish ? 'Add Attendee' : '添加参加者')}
-                    </strong>
-                    <button className="admin-tickets-preview-close" onClick={onClose}>×</button>
-                </div>
-
-                <div className="admin-tickets-attendee-edit">
-                    <label className="admin-tickets-template-field">
+        <ModalShell
+            title={attendee
+                ? (isEnglish ? 'Edit Attendee' : '编辑参加者')
+                : (isEnglish ? 'Add Attendee' : '添加参加者')}
+            onClose={onClose}
+            closeDisabled={saving}
+        >
+            <form className="admin-tickets-attendee-edit" onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+            }}>
+                <label className="admin-tickets-template-field">
                         <span>
                             {attendee
                                 ? (isEnglish ? 'Email (read-only)' : '邮箱（不可修改）')
                                 : (isEnglish ? 'Email' : '邮箱')}
                         </span>
-                        <input
-                            type="email"
-                            className="admin-input"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="person@example.com"
-                            readOnly={!!attendee}
-                            disabled={!attendee && saving}
-                            autoFocus={!attendee}
-                        />
-                    </label>
+                    <input
+                        type="email"
+                        className="admin-input"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="person@example.com"
+                        readOnly={!!attendee}
+                        disabled={!attendee && saving}
+                        autoFocus={!attendee}
+                    />
+                </label>
 
-                    <label className="admin-tickets-template-field">
-                        <span>{isEnglish ? 'Name' : '姓名'}</span>
-                        <input
-                            type="text"
-                            className="admin-input"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            maxLength={100}
-                            disabled={saving}
-                        />
-                    </label>
+                <label className="admin-tickets-template-field">
+                    <span>{isEnglish ? 'Name' : '姓名'}</span>
+                    <input
+                        type="text"
+                        className="admin-input"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        maxLength={100}
+                        disabled={saving}
+                    />
+                </label>
 
-                    <label className="admin-tickets-template-field">
-                        <span>{isEnglish ? 'Ticket count (1–50)' : '门票数量（1–50）'}</span>
-                        <input
-                            type="number"
-                            className="admin-input"
-                            value={ticketCount}
-                            onChange={(e) => setTicketCount(e.target.value)}
-                            min={1}
-                            max={50}
-                            disabled={saving}
-                        />
-                    </label>
+                <label className="admin-tickets-template-field">
+                    <span>{isEnglish ? 'Ticket count (1–50)' : '门票数量（1–50）'}</span>
+                    <input
+                        type="number"
+                        className="admin-input"
+                        value={ticketCount}
+                        onChange={(e) => setTicketCount(e.target.value)}
+                        min={1}
+                        max={50}
+                        disabled={saving}
+                    />
+                </label>
 
-                    <label className="admin-tickets-template-field">
-                        <span>{isEnglish ? 'Ticket Type' : '门票类型'}</span>
-                        <select
-                            className="admin-input"
-                            value={type}
-                            onChange={(e) => setType(e.target.value as TicketType)}
-                            disabled={saving}
-                        >
-                            {TICKET_TYPES.map(t => (
-                                <option key={t.value} value={t.value}>
-                                    {isEnglish ? t.labelEn : t.labelCn}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
+                <label className="admin-tickets-template-field">
+                    <span>{isEnglish ? 'Ticket Type' : '门票类型'}</span>
+                    <select
+                        className="admin-input"
+                        value={type}
+                        onChange={(e) => setType(e.target.value as TicketType)}
+                        disabled={saving}
+                    >
+                        {TICKET_TYPES.map(t => (
+                            <option key={t.value} value={t.value}>
+                                {isEnglish ? t.labelEn : t.labelCn}
+                            </option>
+                        ))}
+                    </select>
+                </label>
 
-                    {duplicate && (
-                        <p className="admin-helper-text admin-tickets-edit-warning">
-                            {isEnglish
-                                ? `An attendee with this email already exists (${duplicate.name}, ${duplicate.ticketCount} ticket${duplicate.ticketCount === 1 ? '' : 's'}). Saving will re-issue their tickets and reset the email-sent status.`
-                                : `该邮箱已存在参加者（${duplicate.name}，${duplicate.ticketCount} 张门票）。保存将重新签发其门票并重置邮件发送状态。`}
-                        </p>
-                    )}
+                {duplicate && (
+                    <p className="admin-helper-text admin-tickets-edit-warning">
+                        {isEnglish
+                            ? `An attendee with this email already exists (${duplicate.name}, ${duplicate.ticketCount} ticket${duplicate.ticketCount === 1 ? '' : 's'}). Saving will re-issue their tickets and reset the email-sent status.`
+                            : `该邮箱已存在参加者（${duplicate.name}，${duplicate.ticketCount} 张门票）。保存将重新签发其门票并重置邮件发送状态。`}
+                    </p>
+                )}
 
-                    {(countChanged || typeChanged) && (
-                        <p className="admin-helper-text admin-tickets-edit-warning">
-                            {isEnglish
-                                ? 'Changing the count or type will re-issue ALL tickets and reset the email-sent status.'
-                                : '修改数量或类型会重新签发所有门票，并重置邮件发送状态。'}
-                        </p>
-                    )}
+                {(countChanged || typeChanged) && (
+                    <p className="admin-helper-text admin-tickets-edit-warning">
+                        {isEnglish
+                            ? 'Changing the count or type will re-issue ALL tickets and reset the email-sent status.'
+                            : '修改数量或类型会重新签发所有门票，并重置邮件发送状态。'}
+                    </p>
+                )}
 
-                    <div className="admin-btn-row">
-                        <button
-                            className="admin-toggle-btn admin-toggle-save"
-                            onClick={submit}
-                            disabled={!canSave}
-                        >
-                            {attendee
-                                ? (saving
-                                    ? (isEnglish ? 'Saving...' : '保存中...')
-                                    : (isEnglish ? 'Save' : '保存'))
-                                : (saving
-                                    ? (isEnglish ? 'Adding...' : '添加中...')
-                                    : (isEnglish ? 'Add Attendee' : '添加参加者'))}
-                        </button>
-                        <button
-                            className="admin-toggle-btn admin-toggle-cancel"
-                            onClick={onClose}
-                            disabled={saving}
-                        >
-                            {isEnglish ? 'Cancel' : '取消'}
-                        </button>
-                    </div>
+                <div className="admin-btn-row">
+                    <button
+                        className="admin-toggle-btn admin-toggle-save"
+                        onClick={submit}
+                        disabled={!canSave}
+                    >
+                        {attendee
+                            ? (saving
+                                ? (isEnglish ? 'Saving...' : '保存中...')
+                                : (isEnglish ? 'Save' : '保存'))
+                            : (saving
+                                ? (isEnglish ? 'Adding...' : '添加中...')
+                                : (isEnglish ? 'Add Attendee' : '添加参加者'))}
+                    </button>
+                    <button
+                        className="admin-toggle-btn admin-toggle-cancel"
+                        onClick={onClose}
+                        disabled={saving}
+                    >
+                        {isEnglish ? 'Cancel' : '取消'}
+                    </button>
                 </div>
-            </div>
-        </div>
+            </form>
+        </ModalShell>
     );
 }

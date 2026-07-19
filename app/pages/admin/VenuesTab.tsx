@@ -4,6 +4,8 @@ import { callDeleteVenue, callSaveVenue } from '~/lib/firebase';
 import { lotBadgeChar, lotTypeLabel, type ParkingLot } from '~/lib/parkingLots';
 import type { Venue, VenueLotLink } from '~/lib/venues';
 import { UW_CAMPUS_CENTER } from '~/lib/venues';
+import { BilingualFormField } from './BilingualFormField';
+import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
 import { MapPicker } from './MapPicker';
 import { type LocationListHandle, useCardHighlight } from './useCardHighlight';
 
@@ -159,41 +161,26 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                     : '场地数据用于停车指南。每个场地关联一个或多个停车场（在停车场区块管理）。在活动编辑器的“场地”选择器中为活动选择场地，即可为其生成停车指南。'}
             </p>
 
-            {!readOnly && (showCreate ? (
-                <div className="admin-create-badge-form">
-                    <h4 className="admin-badges-title">{isEnglish ? 'Create New Venue' : '创建新场地'}</h4>
+            {!readOnly && (
+                <CreateSection
+                    show={showCreate}
+                    setShow={setShowCreate}
+                    newLabel={isEnglish ? '+ New Venue' : '+ 新建场地'}
+                    title={isEnglish ? 'Create New Venue' : '创建新场地'}
+                    ctaLabel={isEnglish ? 'Create Venue' : '创建场地'}
+                    ctaBusyLabel={isEnglish ? 'Creating...' : '创建中...'}
+                    busy={saving}
+                    onCreate={createVenue}
+                    onCancel={() => setCreateDraft(emptyDraft())}
+                >
                     <VenueForm
                         draft={createDraft}
                         setDraft={setCreateDraft}
                         availableLots={parkingLots}
                         isEnglish={isEnglish}
                     />
-                    <div className="admin-btn-row admin-mt-12">
-                        <button
-                            className="admin-toggle-btn admin-toggle-save"
-                            onClick={createVenue}
-                            disabled={saving}
-                        >
-                            {saving
-                                ? (isEnglish ? 'Creating...' : '创建中...')
-                                : (isEnglish ? 'Create Venue' : '创建场地')}
-                        </button>
-                        <button
-                            className="admin-toggle-btn admin-toggle-cancel"
-                            onClick={() => {
-                                setShowCreate(false);
-                                setCreateDraft(emptyDraft());
-                            }}
-                        >
-                            {isEnglish ? 'Cancel' : '取消'}
-                        </button>
-                    </div>
-                </div>
-            ) : (
-                <button className="admin-btn admin-btn--dashed admin-section-mb" onClick={() => setShowCreate(true)}>
-                    {isEnglish ? '+ New Venue' : '+ 新建场地'}
-                </button>
-            ))}
+                </CreateSection>
+            )}
 
             {venues.length === 0 && !showCreate && (
                 <p className="admin-no-results">{isEnglish ? 'No venues yet.' : '暂无场地。'}</p>
@@ -215,23 +202,12 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                                         availableLots={parkingLots}
                                         isEnglish={isEnglish}
                                     />
-                                    <div className="admin-tag-actions admin-mt-12">
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-save admin-btn-sm"
-                                            onClick={saveEdit}
-                                            disabled={saving}
-                                        >
-                                            {saving
-                                                ? (isEnglish ? 'Saving...' : '保存中...')
-                                                : (isEnglish ? 'Save' : '保存')}
-                                        </button>
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
-                                            onClick={() => setEditingId(null)}
-                                        >
-                                            {isEnglish ? 'Cancel' : '取消'}
-                                        </button>
-                                    </div>
+                                    <CardSaveCancel
+                                        saving={saving}
+                                        onSave={saveEdit}
+                                        onCancel={() => setEditingId(null)}
+                                        topMargin
+                                    />
                                 </>
                             ) : (
                                 <>
@@ -245,23 +221,11 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                                             : `${venue.parkingLots.length} 个停车场`}
                                     </span>
                                     {!readOnly && (
-                                        <div className="admin-tag-actions">
-                                            <button
-                                                className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
-                                                onClick={() => openEdit(venue)}
-                                            >
-                                                {isEnglish ? 'Edit' : '编辑'}
-                                            </button>
-                                            <button
-                                                className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                                                onClick={() => deleteVenue(venue)}
-                                                disabled={deletingId === venue.id}
-                                            >
-                                                {deletingId === venue.id
-                                                    ? (isEnglish ? 'Deleting...' : '删除中...')
-                                                    : (isEnglish ? 'Delete' : '删除')}
-                                            </button>
-                                        </div>
+                                        <CardEditDeleteActions
+                                            onEdit={() => openEdit(venue)}
+                                            onDelete={() => deleteVenue(venue)}
+                                            deleting={deletingId === venue.id}
+                                        />
                                     )}
                                 </>
                             )}
@@ -301,24 +265,14 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
     return (
         <>
             <div className="admin-form-grid">
-                <label>
-                    <span>{isEnglish ? 'Name (English)' : '名称（英文）'}</span>
-                    <input
-                        value={draft.nameEn}
-                        onChange={e => setDraft(prev => ({...prev, nameEn: e.target.value}))}
-                        className="admin-input"
-                        placeholder="e.g. Husky Union Building"
-                    />
-                </label>
-                <label>
-                    <span>{isEnglish ? 'Name (Chinese)' : '名称（中文）'}</span>
-                    <input
-                        value={draft.nameCn}
-                        onChange={e => setDraft(prev => ({...prev, nameCn: e.target.value}))}
-                        className="admin-input"
-                        placeholder="例如：学生活动中心"
-                    />
-                </label>
+                <BilingualFormField
+                    label="Name" labelCn="名称"
+                    value={draft.nameEn} valueCn={draft.nameCn}
+                    onChange={v => setDraft(prev => ({...prev, nameEn: v}))}
+                    onChangeCn={v => setDraft(prev => ({...prev, nameCn: v}))}
+                    placeholder="e.g. Husky Union Building"
+                    placeholderCn="例如：学生活动中心"
+                />
             </div>
 
             <div className="admin-field-section">

@@ -1,4 +1,4 @@
-import { type FC, useEffect, useRef } from "react";
+import { type FC, useRef } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { useModalEffects } from "~/lib/useModalEffects";
 
@@ -11,15 +11,7 @@ interface EventImageModalProps {
 export const EventImageModal: FC<EventImageModalProps> = ({imageUrl, onClose, altText}) => {
     const ref = useRef<HTMLDivElement>(null);
     const {isEnglish} = useLanguage();
-    useModalEffects(true, ref);
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
-        };
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [onClose]);
+    useModalEffects(true, ref, onClose);
 
     return (
         <div ref={ref} className="modal-overlay" onClick={onClose}>
