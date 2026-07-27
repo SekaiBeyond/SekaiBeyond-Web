@@ -24,11 +24,11 @@
     }
 
     .nav-links {
-        position: fixed; /* Fixed to prevent scroll issues */
-        top: 70px; /* Adjust based on navbar height */
+        position: absolute; /* Anchored to the fixed navbar so it sits flush under it */
+        top: 100%;
         left: -100vw;
         width: 100vw;
-        height: calc(100dvh - 70px); /* Use dynamic viewport height */
+        height: calc(100dvh - 100%); /* Fill the viewport below the navbar */
         background: rgba(255, 255, 255, 0.98);
         backdrop-filter: blur(10px);
         flex-direction: column;
