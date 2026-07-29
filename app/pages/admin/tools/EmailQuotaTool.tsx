@@ -17,6 +17,9 @@ interface QuotaStatus {
     };
     providerReported: number | null;
     readingSource: 'live' | 'cached' | 'unavailable';
+    // The server stopped counting at its page budget, so providerReported is a
+    // floor. Only plausible at volumes far above this event's.
+    usageTruncated: boolean;
     sentToday: number;
     dailyCap: number;
     confirmed: number;
@@ -134,7 +137,7 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
             ? (isEnglish
                 ? `last reading ${observedAge ?? 'unknown'}`
                 : `上次读数${observedAge ?? '未知'}`)
-            : (isEnglish ? 'not reported' : '未提供');
+            : (isEnglish ? 'unavailable' : '无法读取');
 
     return (
         <div className="admin-section">
@@ -187,8 +190,8 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
                         <span>
                             {unavailable
                                 ? (isEnglish
-                                    ? `${providerName} is not reporting a daily quota for this account, so usage can't be shown here — check the ${providerName} dashboard. This usually means the account is on a paid plan where the daily limit no longer applies.`
-                                    : `${providerName} 未针对此账号提供每日额度数据，因此此处无法显示用量，请前往 ${providerName} 控制台查看。这通常表示账号已升级为付费方案，每日上限不再适用。`)
+                                    ? `Couldn't read recent sends from ${providerName}, so usage can't be shown here — check the ${providerName} dashboard. Usually the API key lacks permission to list emails, or ${providerName} was unreachable.`
+                                    : `无法从 ${providerName} 读取近期发送记录，因此此处无法显示用量，请前往 ${providerName} 控制台查看。通常是 API 密钥缺少读取邮件列表的权限，或 ${providerName} 暂时无法访问。`)
                                 : atCap && queueFull
                                     ? (isEnglish
                                         ? 'Daily limit reached and the overflow queue is full — new sends will be rejected until the queue drains.'
@@ -248,8 +251,8 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
                             <div className={`admin-stats-tile-value${
                                 status.providerReported === null ? ' admin-stats-tile-value--sm' : ''}`}>
                                 {status.providerReported === null
-                                    ? (isEnglish ? 'Not reported' : '未提供')
-                                    : `${status.providerReported} / ${status.dailyCap}`}
+                                    ? (isEnglish ? 'Unavailable' : '无法读取')
+                                    : `${status.usageTruncated ? '≥' : ''}${status.providerReported} / ${status.dailyCap}`}
                             </div>
                             <div className="admin-stats-tile-sub">{readingLabel}</div>
                         </div>
@@ -301,9 +304,16 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
                         <ul className="admin-quota-notes">
                             <li>
                                 {isEnglish
-                                    ? `"Used per ${providerName}" is read from ${providerName} each time this page loads, so it should match their dashboard.`
-                                    : `"${providerName} 记录用量"在每次打开本页时从 ${providerName} 读取，因此应与其控制台一致。`}
+                                    ? `"Used per ${providerName}" is counted from ${providerName}'s own record of sent mail each time this page loads, so it should match their dashboard. It covers the whole account, including mail sent outside this admin panel.`
+                                    : `"${providerName} 记录用量"在每次打开本页时，根据 ${providerName} 自身的发送记录统计，因此应与其控制台一致。该数字涵盖整个账号，包括在本管理面板之外发送的邮件。`}
                             </li>
+                            {status.usageTruncated && (
+                                <li>
+                                    {isEnglish
+                                        ? 'Sent volume in this window exceeded what this page counts in one pass, so the used figure is a lower bound.'
+                                        : '本窗口内的发送量超出本页单次统计上限，因此显示的用量为下限值。'}
+                                </li>
+                            )}
                             <li>
                                 {isEnglish
                                     ? `"In flight" covers sends already charged against the limit but not yet counted by ${providerName}. Sends are gated on used + in flight, so "Available" can be lower than ${providerName}'s number implies; it clears on its own.`

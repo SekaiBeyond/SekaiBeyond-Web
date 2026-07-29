@@ -4,14 +4,16 @@ import { db } from "./firebase";
 
 // Quota cache doc (system/resendQuota). Two independent counters:
 //
-//   confirmed — Resend's authoritative "used daily quota": the value of the
-//               x-resend-daily-quota response header. Only applyProviderHeaderQuota
-//               writes it. It can move *down* as Resend's sliding 24h window
-//               rolls off old sends — that is how the cache observes headroom
-//               reopening.
+//   confirmed — Resend's authoritative "used daily quota". Only applyProviderUsage
+//               writes it, from either of the two readings Resend gives us: the
+//               x-resend-daily-quota header on a send response (free plan only),
+//               or a count of GET /emails over the window (every plan — see
+//               fetchProviderUsage). It can move *down* as Resend's sliding 24h
+//               window rolls off old sends; that is how the cache observes
+//               headroom reopening.
 //   reserved  — sum of in-flight pre-charges for sends that have been decided
 //               but whose Resend response hasn't landed yet. reserveQuotaInTxn
-//               adds to it; rollbackQuotaReservation and applyProviderHeaderQuota
+//               adds to it; rollbackQuotaReservation and applyProviderUsage
 //               subtract from it.
 //
 // sentToday = confirmed + reserved. Keeping the two separate is what stops a
@@ -116,12 +118,12 @@ export async function rollbackQuotaReservation(amount: number): Promise<void> {
 // Runs in a txn so a reservation racing the write isn't lost — only this send's
 // delta is removed, never a concurrent admin's. Called by resendClient.sendEmails
 // on any response that carried the quota header, success or 4xx/429 alike.
-// Logs and swallows errors; the next header write self-heals.
+// Logs and swallows errors; the next write self-heals.
 //
-// Pass sentDelta = 0 for a reading that wasn't attached to a send (the admin
-// view's probeProviderQuota): it refreshes `confirmed` while leaving in-flight
-// reservations alone, since a probe releases nothing.
-export async function applyProviderHeaderQuota(
+// Pass sentDelta = 0 for a reading that wasn't attached to a send (a
+// fetchProviderUsage scan): it refreshes `confirmed` while leaving in-flight
+// reservations alone, since a scan releases nothing.
+export async function applyProviderUsage(
     headerConsumed: number,
     sentDelta: number,
 ): Promise<void> {

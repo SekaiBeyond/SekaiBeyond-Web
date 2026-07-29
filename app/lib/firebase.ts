@@ -275,10 +275,13 @@ export const callGetEmailQuotaStatus = () =>
             windowKind: 'rolling24h' | 'calendarDay';
             fromAddress: string;
         };
-        // null when the provider has never reported a quota to us — must not
+        // null when the provider's usage could not be read at all — must not
         // be rendered as zero.
         providerReported: number | null;
         readingSource: 'live' | 'cached' | 'unavailable';
+        // The server stopped counting at its page budget, so providerReported
+        // is a lower bound rather than an exact figure.
+        usageTruncated: boolean;
         sentToday: number;
         dailyCap: number;
         confirmed: number;

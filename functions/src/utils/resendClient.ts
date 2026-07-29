@@ -1,6 +1,6 @@
 import { defineSecret } from "firebase-functions/params";
 import { RESEND_FROM_ADDRESS } from "./config";
-import { applyProviderHeaderQuota, rollbackQuotaReservation } from "./quota";
+import { applyProviderUsage, rollbackQuotaReservation } from "./quota";
 
 // Bind to functions that send mail. Without the binding, value() returns "".
 export const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
@@ -82,7 +82,8 @@ function toPayload(e: ResendEnvelope): Record<string, unknown> {
 // A lone email is a genuine single send rather than a batch-of-one — that
 // keeps it on the endpoint that supports attachments/scheduled_at, should a
 // caller ever need them (the batch endpoint supports neither). Both
-// endpoints return x-resend-daily-quota, so quota tracking is identical.
+// endpoints carry x-resend-daily-quota on the same terms, so quota tracking
+// is identical.
 //
 // All-or-nothing: a malformed envelope fails the whole call (the batch
 // endpoint has no per-email error reporting). Validation happens upstream.
@@ -142,9 +143,13 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
         );
     }
 
-    // Read header even on error — Resend documents quota headers as
-    // "following every request," so reservation accuracy survives a 4xx
-    // (a 429 in particular wants the freshest consumed count).
+    // Read header even on error, so reservation accuracy survives a 4xx (a 429
+    // in particular wants the freshest consumed count).
+    //
+    // Often absent: Resend sends the quota headers to free-plan accounts only,
+    // and only on send responses — never on a GET. Treat a present value as a
+    // bonus that re-anchors the cache for free, not as the counter's source;
+    // fetchProviderUsage is what keeps `confirmed` honest on every plan.
     const dailyHeader = resp.headers.get("x-resend-daily-quota");
     const dailyConsumed = dailyHeader !== null && !Number.isNaN(Number(dailyHeader))
         ? Number(dailyHeader)
@@ -157,7 +162,7 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
     // the caller pre-charged). Done before returning/throwing so reservation
     // reads see the fresh count.
     if (dailyConsumed !== null) {
-        await applyProviderHeaderQuota(dailyConsumed, totalRecipients);
+        await applyProviderUsage(dailyConsumed, totalRecipients);
     } else if (resp.ok) {
         // Send succeeded but no header arrived (e.g. on paid plans). Release
         // the pre-charge to prevent the reservation from leaking permanently.

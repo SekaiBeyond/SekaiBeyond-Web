@@ -5,6 +5,7 @@ import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { ADMIN_GROUPS, adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, recordExpiresAt, RESEND_QUEUE_CAP, SEND_CHUNK_SIZE, } from "../utils/config";
 import { db } from "../utils/firebase";
+import { syncProviderUsage } from "../utils/emailProvider";
 import { commitInChunks } from "../utils/helpers";
 import {
     computeEmailQuota,
@@ -1006,6 +1007,14 @@ export const sendTicketEmails = onCall(
         // pre-check is just to short-circuit a no-op chunk before doing real
         // work. Queue capacity stays loose by design — a few overflow items
         // past RESEND_QUEUE_CAP are acceptable.
+        //
+        // Re-anchor `confirmed` against the provider before reading it. The
+        // cache is otherwise only written as a side effect of sending, so it
+        // never observes the rolling window reopening between sends — and on a
+        // plan that gets no quota header it is never written at all, which
+        // would leave the cap unenforced. A failed read leaves the cache as-is
+        // and we gate on it, same as before.
+        await syncProviderUsage();
         const {sentToday, dailyCap} = await computeEmailQuota();
         const prelimRemainingToday = Math.max(0, dailyCap - sentToday);
         const initialQueueDepth = await getScheduledMailQueueDepth();
@@ -1301,10 +1310,18 @@ export const sendTicketEmails = onCall(
 
         return {sentCount, queuedCount, hasMore, ...(nextCursor ? {nextCursor} : {})};
     });
-export const getTicketEmailQuota = onCall({maxInstances: 5}, async (request) => {
+export const getTicketEmailQuota = onCall({
+    maxInstances: 5,
+    // Needed by syncProviderUsage below; without the binding it reads no key
+    // and silently falls back to the cached counter.
+    secrets: [RESEND_API_KEY],
+}, async (request) => {
     const uid = await requireAuth(request);
     await requireAdmin(uid);
 
+    // Same re-anchor as the send path, so the headroom quoted in the send UI
+    // matches what sendTicketEmails will actually gate on a moment later.
+    await syncProviderUsage();
     const [{sentToday, dailyCap}, queuedCount] = await Promise.all([
         computeEmailQuota(),
         getScheduledMailQueueDepth(),

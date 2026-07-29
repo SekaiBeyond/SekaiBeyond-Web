@@ -4,8 +4,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { ADMIN_GROUPS, adminTransaction, checkRateLimit, requireAdmin, requireAuth } from "../utils/auth";
 import { recordExpiresAt, RESEND_QUEUE_CAP } from "../utils/config";
 import { db } from "../utils/firebase";
-import { EMAIL_PROVIDER, probeProviderQuota } from "../utils/emailProvider";
-import { applyProviderHeaderQuota, computeEmailQuotaDetail } from "../utils/quota";
+import { EMAIL_PROVIDER, syncProviderUsage } from "../utils/emailProvider";
+import { computeEmailQuotaDetail } from "../utils/quota";
 import { RESEND_API_KEY } from "../utils/resendClient";
 import { DRAIN_INTERVAL_MINUTES, getScheduledMailQueueStatus } from "./scheduledMail";
 import {
@@ -816,7 +816,7 @@ export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
 //
 //   providerReported — the provider's own used count, i.e. what the provider's
 //                      dashboard shows. Taken live per request via
-//                      probeProviderQuota. null when unavailable.
+//                      syncProviderUsage. null when unavailable.
 //   sentToday        — the local counter that actually gates sends
 //                      (confirmed + in-flight reservations). Runs slightly
 //                      ahead of the provider while sends are in flight.
@@ -824,7 +824,7 @@ export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
 // Reporting only the local counter is what made this view disagree with the
 // Resend dashboard: system/resendQuota is written solely as a side effect of
 // sending, so between sends it sits at a high-water mark while the provider's
-// rolling window keeps rolling. The probe re-anchors it on every read.
+// rolling window keeps rolling. Re-reading the provider re-anchors it here.
 export const getEmailQuotaStatus = onCall({
     maxInstances: 5,
     secrets: [RESEND_API_KEY],
@@ -838,26 +838,23 @@ export const getEmailQuotaStatus = onCall({
     // send path: an admin opening this panel re-anchors the counter that
     // sendTicketEmails will use.
     //
-    // Probing mid-send can briefly double-count: the provider may already have
+    // Reading mid-send can briefly double-count: the provider may already have
     // counted envelopes whose response hasn't landed, while `reserved` still
     // holds them. That errs toward over-counting, which is the safe direction
     // for cap enforcement, and settles as soon as the send response releases
     // its reservation.
-    const probed = await probeProviderQuota();
-    if (probed !== null) {
-        await applyProviderHeaderQuota(probed, 0);
-    }
+    const usage = await syncProviderUsage();
 
     const [quota, queue] = await Promise.all([
         computeEmailQuotaDetail(),
         getScheduledMailQueueStatus(),
     ]);
 
-    // "cached" means the probe came back empty but a past send did record a
-    // reading — show it, aged, rather than pretending to be current.
-    // "unavailable" means the provider has never reported a quota to us at
-    // all; the panel must not render that as 0 of 100.
-    const readingSource = probed !== null ? "live"
+    // "cached" means the live read came back empty but a past send did record
+    // a reading — show it, aged, rather than pretending to be current.
+    // "unavailable" means we have never obtained a usage figure at all; the
+    // panel must not render that as 0 of 100.
+    const readingSource = usage !== null ? "live"
         : quota.observedAt !== null ? "cached"
             : "unavailable";
 
@@ -870,6 +867,9 @@ export const getEmailQuotaStatus = onCall({
         },
         providerReported: readingSource === "unavailable" ? null : quota.confirmed,
         readingSource,
+        // Set when the scan hit its page budget before reaching the window
+        // edge, so the panel can present the figure as a floor.
+        usageTruncated: usage?.truncated ?? false,
         ...quota,
         ...queue,
         queueCap: RESEND_QUEUE_CAP,

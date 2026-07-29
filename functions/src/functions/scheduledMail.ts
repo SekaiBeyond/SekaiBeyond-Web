@@ -1,6 +1,7 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { FieldValue } from "firebase-admin/firestore";
 import { recordExpiresAt } from "../utils/config";
+import { syncProviderUsage } from "../utils/emailProvider";
 import { db } from "../utils/firebase";
 import {
     computeEmailQuota,
@@ -51,14 +52,19 @@ export const scheduledMailDrain = onSchedule({
     retryCount: 0,
     secrets: [RESEND_API_KEY],
 }, async () => {
+    // Re-anchor `confirmed` against the provider first, so headroom reflects
+    // the window as it stands now rather than the high-water mark left by the
+    // last send.
+    await syncProviderUsage();
     const {sentToday, dailyCap} = await computeEmailQuota();
     // Headroom per the cached counter. When it is exhausted we still pull a
-    // single envelope as a *probe* (drainLimit = 1): sendEmails refreshes
-    // `confirmed` from Resend's x-resend-daily-quota header — even on a 429 —
-    // and that is the only way the cache learns Resend's daily window has
-    // recovered. Without the probe the cache pins at the cap forever and the
-    // queue never drains. A genuine 429 just refreshes the cache and leaves
-    // the doc queued for the next run.
+    // single envelope as a *probe* (drainLimit = 1). The sync above is normally
+    // what teaches the cache that the daily window has recovered, but it
+    // returns null when the provider can't be read (network, sending-only key);
+    // the probe is the fallback that keeps the queue from pinning at the cap
+    // forever, since sendEmails also refreshes `confirmed` from the
+    // x-resend-daily-quota header when one arrives — even on a 429. A genuine
+    // 429 just refreshes the cache and leaves the doc queued for the next run.
     const headroom = Math.min(100, Math.max(0, dailyCap - sentToday));
     const probing = headroom === 0;
     const drainLimit = probing ? 1 : headroom;
