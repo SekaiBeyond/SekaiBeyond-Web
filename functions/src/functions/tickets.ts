@@ -1063,7 +1063,7 @@ export const sendTicketEmails = onCall(
         // admin sends both observe pre-reservation state and double-spend:
         // Firestore's optimistic concurrency on system/resendQuota means
         // whichever txn lands second retries against the new total. Once
-        // the send returns, applyResendHeaderQuota releases this send's own
+        // the send returns, applyProviderHeaderQuota releases this send's own
         // reservation and records Resend's authoritative count. Queue audit
         // shares the txn for symmetry — doesn't consume the daily cap, cheap
         // to include.

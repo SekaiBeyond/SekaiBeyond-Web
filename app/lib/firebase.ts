@@ -263,10 +263,22 @@ export const callGetTicketEmailQuota = () =>
     }>(getFunctions(), 'getTicketEmailQuota')({});
 
 // Panel-wide outbound-email capacity, for the admin Email Quota tool. Broader
-// than callGetTicketEmailQuota (which is scoped to one event's send flow):
-// splits the confirmed/reserved counters and reports queue age. Core-staff+.
+// than callGetTicketEmailQuota (which is scoped to one event's send flow): it
+// takes a live reading from the email provider, so `providerReported` matches
+// the provider's own dashboard, while `sentToday` is the local counter that
+// gates sends (provider count + in-flight reservations). Core-staff+.
 export const callGetEmailQuotaStatus = () =>
     httpsCallable<Record<string, never>, {
+        provider: {
+            id: string;
+            name: string;
+            windowKind: 'rolling24h' | 'calendarDay';
+            fromAddress: string;
+        };
+        // null when the provider has never reported a quota to us — must not
+        // be rendered as zero.
+        providerReported: number | null;
+        readingSource: 'live' | 'cached' | 'unavailable';
         sentToday: number;
         dailyCap: number;
         confirmed: number;
@@ -276,7 +288,6 @@ export const callGetEmailQuotaStatus = () =>
         oldestQueuedAt: string | null;
         queueCap: number;
         drainIntervalMinutes: number;
-        fromAddress: string;
         serverNow: string;
     }>(getFunctions(), 'getEmailQuotaStatus')({});
 

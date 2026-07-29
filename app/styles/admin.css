@@ -4104,7 +4104,7 @@ select.admin-tickets-tag:focus {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    margin-bottom: 16px;
+    margin: 16px 0;
 }
 
 /* Two stacked segments (sent + in-flight) sitting on the unfilled remainder,

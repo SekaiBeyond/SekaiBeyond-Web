@@ -2,9 +2,11 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
 import { ADMIN_GROUPS, adminTransaction, checkRateLimit, requireAdmin, requireAuth } from "../utils/auth";
-import { recordExpiresAt, RESEND_FROM_ADDRESS, RESEND_QUEUE_CAP } from "../utils/config";
+import { recordExpiresAt, RESEND_QUEUE_CAP } from "../utils/config";
 import { db } from "../utils/firebase";
-import { computeEmailQuotaDetail } from "../utils/quota";
+import { EMAIL_PROVIDER, probeProviderQuota } from "../utils/emailProvider";
+import { applyProviderHeaderQuota, computeEmailQuotaDetail } from "../utils/quota";
+import { RESEND_API_KEY } from "../utils/resendClient";
 import { DRAIN_INTERVAL_MINUTES, getScheduledMailQueueStatus } from "./scheduledMail";
 import {
     deleteStorageFile,
@@ -807,29 +809,71 @@ export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
     return {teamMembers: members};
 });
 
-// Read-only snapshot of outbound-email capacity for the admin panel's Email
-// Quota tool. Everything here is already tracked for send-vs-queue decisions
-// (system/resendQuota + the /scheduledMail depth); this callable just exposes
-// it on its own, so an admin can check headroom without opening an event's
-// ticket sender. Core-staff+ only, like the sends it describes.
+// Outbound-email capacity for the admin panel's Email Quota tool. Core-staff+
+// only, like the sends it describes.
 //
-// Cheap by construction — one quota doc read, one aggregate count, one 1-doc
-// query — so refreshing is not a Firestore cost concern.
-export const getEmailQuotaStatus = onCall({maxInstances: 5}, async (request) => {
+// Two different numbers come back, and the distinction is the point:
+//
+//   providerReported — the provider's own used count, i.e. what the provider's
+//                      dashboard shows. Taken live per request via
+//                      probeProviderQuota. null when unavailable.
+//   sentToday        — the local counter that actually gates sends
+//                      (confirmed + in-flight reservations). Runs slightly
+//                      ahead of the provider while sends are in flight.
+//
+// Reporting only the local counter is what made this view disagree with the
+// Resend dashboard: system/resendQuota is written solely as a side effect of
+// sending, so between sends it sits at a high-water mark while the provider's
+// rolling window keeps rolling. The probe re-anchors it on every read.
+export const getEmailQuotaStatus = onCall({
+    maxInstances: 5,
+    secrets: [RESEND_API_KEY],
+}, async (request) => {
     const uid = await requireAuth(request);
     await requireAdmin(uid);
+
+    // Live reading first, folded into the cache with a zero send-delta so it
+    // refreshes `confirmed` without disturbing in-flight reservations. Every
+    // later read in this request then sees the fresh value. Also benefits the
+    // send path: an admin opening this panel re-anchors the counter that
+    // sendTicketEmails will use.
+    //
+    // Probing mid-send can briefly double-count: the provider may already have
+    // counted envelopes whose response hasn't landed, while `reserved` still
+    // holds them. That errs toward over-counting, which is the safe direction
+    // for cap enforcement, and settles as soon as the send response releases
+    // its reservation.
+    const probed = await probeProviderQuota();
+    if (probed !== null) {
+        await applyProviderHeaderQuota(probed, 0);
+    }
 
     const [quota, queue] = await Promise.all([
         computeEmailQuotaDetail(),
         getScheduledMailQueueStatus(),
     ]);
 
+    // "cached" means the probe came back empty but a past send did record a
+    // reading — show it, aged, rather than pretending to be current.
+    // "unavailable" means the provider has never reported a quota to us at
+    // all; the panel must not render that as 0 of 100.
+    const readingSource = probed !== null ? "live"
+        : quota.observedAt !== null ? "cached"
+            : "unavailable";
+
     return {
+        provider: {
+            id: EMAIL_PROVIDER.id,
+            name: EMAIL_PROVIDER.name,
+            windowKind: EMAIL_PROVIDER.windowKind,
+            fromAddress: EMAIL_PROVIDER.fromAddress,
+        },
+        providerReported: readingSource === "unavailable" ? null : quota.confirmed,
+        readingSource,
         ...quota,
         ...queue,
         queueCap: RESEND_QUEUE_CAP,
         drainIntervalMinutes: DRAIN_INTERVAL_MINUTES,
-        fromAddress: RESEND_FROM_ADDRESS,
         // Server clock, so the client can age observedAt/oldestQueuedAt
         // without trusting a possibly-skewed local clock.
         serverNow: new Date().toISOString(),

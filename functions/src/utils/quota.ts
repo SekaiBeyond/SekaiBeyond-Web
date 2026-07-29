@@ -5,13 +5,13 @@ import { db } from "./firebase";
 // Quota cache doc (system/resendQuota). Two independent counters:
 //
 //   confirmed — Resend's authoritative "used daily quota": the value of the
-//               x-resend-daily-quota response header. Only applyResendHeaderQuota
+//               x-resend-daily-quota response header. Only applyProviderHeaderQuota
 //               writes it. It can move *down* as Resend's sliding 24h window
 //               rolls off old sends — that is how the cache observes headroom
 //               reopening.
 //   reserved  — sum of in-flight pre-charges for sends that have been decided
 //               but whose Resend response hasn't landed yet. reserveQuotaInTxn
-//               adds to it; rollbackQuotaReservation and applyResendHeaderQuota
+//               adds to it; rollbackQuotaReservation and applyProviderHeaderQuota
 //               subtract from it.
 //
 // sentToday = confirmed + reserved. Keeping the two separate is what stops a
@@ -94,7 +94,7 @@ export function reserveQuotaInTxn(
 
 // Release a `reserveQuotaInTxn` pre-charge when the send never reached Resend
 // (network error, no response header). When Resend *did* respond,
-// applyResendHeaderQuota already released the reservation and this must NOT be
+// applyProviderHeaderQuota already released the reservation and this must NOT be
 // called. Uses increment so it composes with concurrent writes; the read-side
 // clamp keeps `reserved` from going negative. Logs and swallows errors — a
 // failed rollback self-heals on the next header write.
@@ -110,14 +110,18 @@ export async function rollbackQuotaReservation(amount: number): Promise<void> {
     }
 }
 
-// Fold a fresh x-resend-daily-quota reading into the cache: set `confirmed` to
-// Resend's authoritative count and release this send's own reservation
-// (`sentDelta`, the envelope count it pre-charged) from `reserved`. Runs in a
-// txn so a reservation racing the write isn't lost — only this send's delta is
-// removed, never a concurrent admin's. Called by resendClient.sendEmails on any
-// Resend response that carried the quota header, success or 4xx/429 alike.
+// Fold a fresh used-quota reading from the provider into the cache: set
+// `confirmed` to its authoritative count and release this send's own
+// reservation (`sentDelta`, the envelope count it pre-charged) from `reserved`.
+// Runs in a txn so a reservation racing the write isn't lost — only this send's
+// delta is removed, never a concurrent admin's. Called by resendClient.sendEmails
+// on any response that carried the quota header, success or 4xx/429 alike.
 // Logs and swallows errors; the next header write self-heals.
-export async function applyResendHeaderQuota(
+//
+// Pass sentDelta = 0 for a reading that wasn't attached to a send (the admin
+// view's probeProviderQuota): it refreshes `confirmed` while leaving in-flight
+// reservations alone, since a probe releases nothing.
+export async function applyProviderHeaderQuota(
     headerConsumed: number,
     sentDelta: number,
 ): Promise<void> {
@@ -131,6 +135,6 @@ export async function applyResendHeaderQuota(
             });
         });
     } catch (err) {
-        console.error("applyResendHeaderQuota: failed", err);
+        console.error("applyProviderHeaderQuota: failed", err);
     }
 }

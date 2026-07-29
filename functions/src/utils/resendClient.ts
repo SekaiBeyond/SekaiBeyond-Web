@@ -1,6 +1,6 @@
 import { defineSecret } from "firebase-functions/params";
 import { RESEND_FROM_ADDRESS } from "./config";
-import { applyResendHeaderQuota, rollbackQuotaReservation } from "./quota";
+import { applyProviderHeaderQuota, rollbackQuotaReservation } from "./quota";
 
 // Bind to functions that send mail. Without the binding, value() returns "".
 export const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
@@ -157,7 +157,7 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
     // the caller pre-charged). Done before returning/throwing so reservation
     // reads see the fresh count.
     if (dailyConsumed !== null) {
-        await applyResendHeaderQuota(dailyConsumed, totalRecipients);
+        await applyProviderHeaderQuota(dailyConsumed, totalRecipients);
     } else if (resp.ok) {
         // Send succeeded but no header arrived (e.g. on paid plans). Release
         // the pre-charge to prevent the reservation from leaking permanently.
