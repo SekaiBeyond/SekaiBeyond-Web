@@ -67,8 +67,9 @@ export function SendSection({
         : null;
     const quotaNearCap = remainingToday !== null && remainingToday <= 10;
     const quotaAtCap = remainingToday === 0;
-    // Sends are disabled only when BOTH today's cap and the overflow queue
-    // are full — otherwise overflow goes into /scheduledMail for tomorrow.
+    // Sends are disabled only when BOTH the current window's cap and the
+    // overflow queue are full — otherwise overflow goes into /scheduledMail,
+    // which drains automatically as Resend's rolling window reopens headroom.
     const fullyBlocked = quotaAtCap && remainingQueue === 0;
     const chunkSize = quota?.chunkSize ?? FALLBACK_CHUNK_SIZE;
 
@@ -99,8 +100,8 @@ export function SendSection({
                     : `向全部 ${target} 位持有有效门票的参加者重新发送门票邮件？（已发送的会收到重复邮件。）`),
             willQueueAny
                 ? (isEnglish
-                    ? `\n\nNote: ${target} > ${remainingToday} remaining in today's Resend cap. The overflow (up to ${remainingQueue} more) will be queued and sent starting after midnight (America/Los_Angeles).`
-                    : `\n\n注意：${target} 超过今日 Resend 剩余 ${remainingToday} 封。超出部分（至多 ${remainingQueue} 封）将排队，于太平洋时区午夜后开始发送。`)
+                    ? `\n\nNote: ${target} exceeds the ${remainingToday} left in the current Resend window. The overflow (up to ${remainingQueue} more) will be queued and sent automatically as capacity frees up.`
+                    : `\n\n注意：${target} 超过当前 Resend 窗口剩余的 ${remainingToday} 封。超出部分（至多 ${remainingQueue} 封）将排队，待额度恢复后自动发送。`)
                 : '',
             target > chunkSize
                 ? (isEnglish
@@ -147,16 +148,16 @@ export function SendSection({
                 let toastText: string;
                 if (totalSent > 0 && totalQueued > 0) {
                     toastText = isEnglish
-                        ? `Queued ${totalSent} email${totalSent === 1 ? '' : 's'} for immediate send, plus ${totalQueued} for tomorrow.`
-                        : `已排队 ${totalSent} 封邮件立即发送，另有 ${totalQueued} 封将于明日发送。`;
+                        ? `Queued ${totalSent} email${totalSent === 1 ? '' : 's'} for immediate send, plus ${totalQueued} to go out as capacity frees up.`
+                        : `已排队 ${totalSent} 封邮件立即发送，另有 ${totalQueued} 封将在额度恢复后发送。`;
                 } else if (totalSent > 0) {
                     toastText = isEnglish
                         ? `Queued ${totalSent} email${totalSent === 1 ? '' : 's'} for immediate send.`
                         : `已排队 ${totalSent} 封邮件立即发送。`;
                 } else if (totalQueued > 0) {
                     toastText = isEnglish
-                        ? `Daily cap reached — queued ${totalQueued} email${totalQueued === 1 ? '' : 's'} for tomorrow.`
-                        : `已达每日上限，已排队 ${totalQueued} 封邮件明日发送。`;
+                        ? `Daily cap reached — queued ${totalQueued} email${totalQueued === 1 ? '' : 's'} to go out as capacity frees up.`
+                        : `已达每日上限，已排队 ${totalQueued} 封邮件，待额度恢复后发送。`;
                 } else {
                     toastText = isEnglish ? 'No emails queued.' : '未排队任何邮件。';
                 }
@@ -207,8 +208,8 @@ export function SendSection({
         <div className="admin-tickets-send">
             <p className="admin-helper-text">
                 {isEnglish
-                    ? 'Sends ticket QRs via the Firebase Trigger Email extension. Each email contains one QR per ticket for that attendee.'
-                    : '通过 Firebase Trigger Email 扩展发送门票二维码。每封邮件为对应参加者的每张门票包含一个二维码。'}
+                    ? 'Sends ticket QRs through Resend. Each email contains one QR per ticket for that attendee.'
+                    : '通过 Resend 发送门票二维码。每封邮件为对应参加者的每张门票包含一个二维码。'}
             </p>
 
             {noTemplate && (
@@ -244,8 +245,8 @@ export function SendSection({
                 ) : quota ? (
                     <span>
                         {isEnglish
-                            ? `Resend free tier: ${quota.sentToday} / ${quota.dailyCap} emails sent today (${remainingToday} remaining). Overflow queue: ${quota.queuedCount} / ${quota.queueCap} waiting for tomorrow. Resets at midnight America/Los_Angeles.`
-                            : `Resend 免费额度：今日已发送 ${quota.sentToday} / ${quota.dailyCap} 封（剩余 ${remainingToday} 封）。明日待发队列：${quota.queuedCount} / ${quota.queueCap} 封。太平洋时区午夜重置。`}
+                            ? `Resend free tier: ${quota.sentToday} / ${quota.dailyCap} emails used in the last 24h (${remainingToday} remaining). Overflow queue: ${quota.queuedCount} / ${quota.queueCap} waiting to send. Capacity returns gradually as older sends age out of the rolling 24-hour window.`
+                            : `Resend 免费额度：过去 24 小时已使用 ${quota.sentToday} / ${quota.dailyCap} 封（剩余 ${remainingToday} 封）。待发队列：${quota.queuedCount} / ${quota.queueCap} 封。额度随早前邮件超出 24 小时滚动窗口而逐步恢复。`}
                     </span>
                 ) : (
                     <span>
@@ -266,8 +267,8 @@ export function SendSection({
                 <div className="admin-tickets-send-progress">
                     <div className="admin-tickets-send-progress-label">
                         {isEnglish
-                            ? `Sending ${progress.sent} / ${progress.target}${progress.queued > 0 ? ` (+${progress.queued} queued for tomorrow)` : ''}...`
-                            : `发送中 ${progress.sent} / ${progress.target}${progress.queued > 0 ? `（另有 ${progress.queued} 封排队至明日）` : ''}...`}
+                            ? `Sending ${progress.sent} / ${progress.target}${progress.queued > 0 ? ` (+${progress.queued} queued)` : ''}...`
+                            : `发送中 ${progress.sent} / ${progress.target}${progress.queued > 0 ? `（另有 ${progress.queued} 封已排队）` : ''}...`}
                         {cancelRef.current && (
                             <span> {isEnglish ? '(cancelling after current chunk)' : '（将在本批后停止）'}</span>
                         )}

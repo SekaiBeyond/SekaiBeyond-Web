@@ -291,8 +291,8 @@ export function TicketsSubtab({
                     ? (isEnglish ? 'Email queued.' : '邮件已排队发送。')
                     : queued > 0
                         ? (isEnglish
-                            ? 'Daily cap reached — email queued for tomorrow.'
-                            : '已达每日上限，已排队明日发送。')
+                            ? 'Daily cap reached — email queued, will send as capacity frees up.'
+                            : '已达每日上限，邮件已排队，待额度恢复后发送。')
                         : (isEnglish ? 'No email queued.' : '未发送邮件。'),
                 (sent > 0 || queued > 0) ? 'success' : 'warning',
             );

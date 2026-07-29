@@ -41,6 +41,30 @@ export async function computeEmailQuota(): Promise<{sentToday: number; dailyCap:
     return {sentToday: confirmed + reserved, dailyCap: RESEND_DAILY_CAP};
 }
 
+// Read-only expansion of computeEmailQuota for the admin quota view: the same
+// totals plus the raw counters behind them and the age of the cache. Splitting
+// `confirmed` from `reserved` is what lets the panel distinguish mail Resend
+// has actually accepted from sends still in flight, and `observedAt` says how
+// stale the reading is — null on a cache that has never been written (no mail
+// sent yet since the counters were introduced).
+export async function computeEmailQuotaDetail(): Promise<{
+    sentToday: number;
+    dailyCap: number;
+    confirmed: number;
+    reserved: number;
+    observedAt: string | null;
+}> {
+    const data = (await QUOTA_DOC.get()).data();
+    const {confirmed, reserved} = parseQuotaDoc(data);
+    return {
+        sentToday: confirmed + reserved,
+        dailyCap: RESEND_DAILY_CAP,
+        confirmed,
+        reserved,
+        observedAt: data?.observedAt?.toDate?.()?.toISOString?.() ?? null,
+    };
+}
+
 // Transactional variant for atomic send-vs-queue reservation. Reading the
 // quota doc inside the txn means a competing reservation triggers a retry
 // rather than double-spending the cap. Returns `reserved` so the caller can

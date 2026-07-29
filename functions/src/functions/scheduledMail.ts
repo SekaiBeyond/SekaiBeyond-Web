@@ -16,6 +16,10 @@ import {
     sendEmails
 } from "../utils/resendClient";
 
+// Minutes between drain runs. Exported so the admin quota view can state the
+// cadence without hardcoding a second copy that could drift from the schedule.
+export const DRAIN_INTERVAL_MINUTES = 30;
+
 // Drains /scheduledMail into Resend's batch endpoint every 30 minutes.
 //
 // Why every-30-min instead of a single LA-midnight run: Resend's free-plan
@@ -40,7 +44,7 @@ import {
 // often. If this becomes a problem, wrap the per-doc delete in a txn
 // that re-reads the queue doc and bails if it's already gone.
 export const scheduledMailDrain = onSchedule({
-    schedule: "*/30 * * * *",
+    schedule: `*/${DRAIN_INTERVAL_MINUTES} * * * *`,
     timeZone: "UTC",
     timeoutSeconds: 540,
     memory: "256MiB",
@@ -228,4 +232,23 @@ function parseEnvelopeShape(e: Record<string, unknown>): ResendEnvelope | null {
 export async function getScheduledMailQueueDepth(): Promise<number> {
     const snap = await db.collection("scheduledMail").count().get();
     return snap.data().count;
+}
+
+// Queue depth plus the queuedAt of the FIFO head, for the admin quota view.
+// The oldest entry's age is the useful signal: a queue that isn't draining
+// shows up as a head that keeps getting older across refreshes. Ordered the
+// same way scheduledMailDrain pulls, so this really is the next doc to ship.
+export async function getScheduledMailQueueStatus(): Promise<{
+    queuedCount: number;
+    oldestQueuedAt: string | null;
+}> {
+    const [countSnap, oldestSnap] = await Promise.all([
+        db.collection("scheduledMail").count().get(),
+        db.collection("scheduledMail").orderBy("queuedAt", "asc").limit(1).get(),
+    ]);
+    const queuedAt = oldestSnap.docs[0]?.data()?.queuedAt;
+    return {
+        queuedCount: countSnap.data().count,
+        oldestQueuedAt: queuedAt?.toDate?.()?.toISOString?.() ?? null,
+    };
 }

@@ -2,8 +2,10 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
 import { ADMIN_GROUPS, adminTransaction, checkRateLimit, requireAdmin, requireAuth } from "../utils/auth";
-import { recordExpiresAt } from "../utils/config";
+import { recordExpiresAt, RESEND_FROM_ADDRESS, RESEND_QUEUE_CAP } from "../utils/config";
 import { db } from "../utils/firebase";
+import { computeEmailQuotaDetail } from "../utils/quota";
+import { DRAIN_INTERVAL_MINUTES, getScheduledMailQueueStatus } from "./scheduledMail";
 import {
     deleteStorageFile,
     detectImageMime,
@@ -803,4 +805,33 @@ export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
     }
 
     return {teamMembers: members};
+});
+
+// Read-only snapshot of outbound-email capacity for the admin panel's Email
+// Quota tool. Everything here is already tracked for send-vs-queue decisions
+// (system/resendQuota + the /scheduledMail depth); this callable just exposes
+// it on its own, so an admin can check headroom without opening an event's
+// ticket sender. Core-staff+ only, like the sends it describes.
+//
+// Cheap by construction — one quota doc read, one aggregate count, one 1-doc
+// query — so refreshing is not a Firestore cost concern.
+export const getEmailQuotaStatus = onCall({maxInstances: 5}, async (request) => {
+    const uid = await requireAuth(request);
+    await requireAdmin(uid);
+
+    const [quota, queue] = await Promise.all([
+        computeEmailQuotaDetail(),
+        getScheduledMailQueueStatus(),
+    ]);
+
+    return {
+        ...quota,
+        ...queue,
+        queueCap: RESEND_QUEUE_CAP,
+        drainIntervalMinutes: DRAIN_INTERVAL_MINUTES,
+        fromAddress: RESEND_FROM_ADDRESS,
+        // Server clock, so the client can age observedAt/oldestQueuedAt
+        // without trusting a possibly-skewed local clock.
+        serverNow: new Date().toISOString(),
+    };
 });

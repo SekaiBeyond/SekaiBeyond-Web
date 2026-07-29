@@ -140,7 +140,8 @@ export const ParkingLotsTab = forwardRef<LocationListHandle, ParkingLotsTabProps
 
     const deleteLot = async (lot: ParkingLot) => {
         if (!confirm(isEnglish
-            ? `Delete parking lot "${lot.name}"? It will be unlinked from any venues that reference it.`
+            ? `Delete
+                parking lot "${lot.name}"? It will be unlinked from any venues that reference it.`
             : `删除停车场"${lot.name}"？任何关联此停车场的场地将自动解除关联。`
         )) return;
         setDeletingId(lot.id);

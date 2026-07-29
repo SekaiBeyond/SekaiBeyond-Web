@@ -262,6 +262,24 @@ export const callGetTicketEmailQuota = () =>
         queueCap: number;
     }>(getFunctions(), 'getTicketEmailQuota')({});
 
+// Panel-wide outbound-email capacity, for the admin Email Quota tool. Broader
+// than callGetTicketEmailQuota (which is scoped to one event's send flow):
+// splits the confirmed/reserved counters and reports queue age. Core-staff+.
+export const callGetEmailQuotaStatus = () =>
+    httpsCallable<Record<string, never>, {
+        sentToday: number;
+        dailyCap: number;
+        confirmed: number;
+        reserved: number;
+        observedAt: string | null;
+        queuedCount: number;
+        oldestQueuedAt: string | null;
+        queueCap: number;
+        drainIntervalMinutes: number;
+        fromAddress: string;
+        serverNow: string;
+    }>(getFunctions(), 'getEmailQuotaStatus')({});
+
 export const callUpdateEventEmailTemplate = (data: {
     eventId: string;
     subject: string;
