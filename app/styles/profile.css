@@ -718,28 +718,53 @@
     margin-top: 6px;
 }
 
-.profile-tag-row {
-    display: flex;
-    flex-wrap: wrap;
+/* Membership star on the group chip. Gold rather than the chip's own colour so
+   it stays legible on all four group tints, which run grey through pink. */
+.profile-member-star {
+    position: relative;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    margin-left: 5px;
+    vertical-align: -2px;
+    color: #e8a317;
+    cursor: help;
+    outline: none;
 }
 
-.profile-tag-row .profile-member-tag {
-    padding: 4px 14px;
-    border-radius: 20px;
-    font-size: 13px;
-    letter-spacing: 0.3px;
-    margin-top: 6px;
+.profile-member-star svg {
+    width: 13px;
+    height: 13px;
 }
 
-.profile-membership {
-    margin: 8px 0 0;
-    font-size: 13px;
-    color: #777;
+/* :focus, not :focus-visible — tapping the star is the only way to reach the
+   tooltip on a touch screen, where there is no hover. */
+.profile-member-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.4;
+    padding: 5px 9px;
+    border-radius: 6px;
+    width: max-content;
+    max-width: 200px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
 }
 
-/* Group and member tag colors are in components.css */
+.profile-member-star:hover .profile-member-tooltip,
+.profile-member-star:focus .profile-member-tooltip {
+    opacity: 1;
+}
+
+/* Group tag colors are in components.css */
 
 .profile-avatar-wrapper {
     position: relative;

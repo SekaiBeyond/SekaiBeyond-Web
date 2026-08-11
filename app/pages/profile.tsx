@@ -492,6 +492,22 @@ export const ProfilePage = () => {
     // Non-members can't upload a photo, but may remove one an admin gave them.
     const canRemovePhoto = isOwnProfile && hasCustomPhoto;
     const isStaff = isOwnProfile && hasPermission(profile!.group, 'staff');
+    // Label behind the star on the group chip. Only the owner has an expiry date to
+    // reveal — for everyone else the star just says "member", which is all
+    // getPublicProfile hands back.
+    const memberLabel = ((): string | null => {
+        if (!dp.isMember) return null;
+        const expiry = dp.membershipExpiresAt;
+        if (!expiry) return isEnglish ? 'Member' : '会员';
+        const on = expiry.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+            year: 'numeric', month: 'long', day: 'numeric',
+        });
+        // Round up so the last partial day still reads as "1 day left" rather than 0.
+        const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / 86400000);
+        return isEnglish
+            ? `Member until ${on} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`
+            : `会员有效期至 ${on} · 剩余 ${daysLeft} 天`;
+    })();
 
     return (
         <>
@@ -652,33 +668,25 @@ export const ProfilePage = () => {
                                 year: 'numeric', month: 'long', day: 'numeric',
                             })}
                         </p>
-                        <div className="profile-tag-row">
-                            <span className="profile-group-tag" data-group={dp.group}>
-                                {formatGroupWithTitle(dp.group, dp.title, dp.titleCn, isEnglish)}
-                            </span>
-                            {/* Membership is not a group, so it gets its own chip —
-                                otherwise a president who is also a member has nowhere to show it. */}
-                            {dp.isMember && (
-                                <span className="profile-member-tag">
-                                    {isEnglish ? 'Member' : '会员'}
+                        <span className="profile-group-tag" data-group={dp.group}>
+                            {formatGroupWithTitle(dp.group, dp.title, dp.titleCn, isEnglish)}
+                            {/* Membership is not a group, so it rides on the chip as a star
+                                instead of replacing the label — a president can be a member too. */}
+                            {memberLabel && (
+                                <span
+                                    className="profile-member-star"
+                                    role="img"
+                                    aria-label={memberLabel}
+                                    tabIndex={0}
+                                >
+                                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                        <path
+                                            d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                                    </svg>
+                                    <span className="profile-member-tooltip">{memberLabel}</span>
                                 </span>
                             )}
-                        </div>
-                        {isOwnProfile && (
-                            <p className="profile-membership">
-                                {dp.membershipExpiresAt && dp.isMember
-                                    ? (isEnglish
-                                        ? `Member until ${dp.membershipExpiresAt.toLocaleDateString('en-US', {
-                                            year: 'numeric', month: 'long', day: 'numeric',
-                                        })}`
-                                        : `会员有效期至 ${dp.membershipExpiresAt.toLocaleDateString('zh-CN', {
-                                            year: 'numeric', month: 'long', day: 'numeric',
-                                        })}`)
-                                    : dp.membershipExpiresAt
-                                        ? (isEnglish ? 'Membership lapsed' : '会员已过期')
-                                        : (isEnglish ? 'Not a member' : '非会员')}
-                            </p>
-                        )}
+                        </span>
                     </div>
                 </div>
 

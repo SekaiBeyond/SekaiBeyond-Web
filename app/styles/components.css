@@ -481,9 +481,9 @@
 }
 
 /* Membership sits alongside the group tag rather than inside it — any group can
-   hold one, so it needs a chip of its own. */
-.admin-user-member-tag,
-.profile-member-tag {
+   hold one, so it needs a chip of its own. The profile shows the same fact as a
+   star on the group chip instead; admin lists get the word, since they are scanned. */
+.admin-user-member-tag {
     display: inline-block;
     padding: 4px 12px;
     border-radius: 12px;
