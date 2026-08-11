@@ -58,8 +58,6 @@ export type RecordType =
     | 'badge-code-activate'
     | 'badge-code-deactivate'
     | 'code-delete'
-    | 'badge-grant'       // legacy: means event-attend (kept for backward compat with existing records)
-    | 'badge-revoke'      // legacy: means event-unattend (kept for backward compat with existing records)
     | 'event-attend'
     | 'event-unattend'
     | 'event-claim'
@@ -68,13 +66,11 @@ export type RecordType =
     | 'achievement-revoke'
     | 'badge-create'
     | 'badge-edit'
-    | 'badge-delete'
     | 'badge-deletion-requested'
     | 'badge-deletion-cancelled'
     | 'badge-deleted'
     | 'event-create'
     | 'event-edit'
-    | 'event-delete'
     | 'event-deletion-requested'
     | 'event-deletion-cancelled'
     | 'event-deleted'
@@ -82,7 +78,6 @@ export type RecordType =
     | 'past-event-unpublish'
     | 'upcoming-event-create'
     | 'upcoming-event-edit'
-    | 'upcoming-event-delete'
     | 'upcoming-event-deletion-requested'
     | 'upcoming-event-deletion-cancelled'
     | 'upcoming-event-deleted'
@@ -92,6 +87,10 @@ export type RecordType =
     | 'event-code-activate'
     | 'event-code-deactivate'
     | 'event-code-time-window'
+    | 'staff-code-create'
+    | 'staff-code-activate'
+    | 'staff-code-deactivate'
+    | 'staff-code-time-window'
     | 'tag-create'
     | 'tag-edit'
     | 'tag-delete'
@@ -105,11 +104,15 @@ export type RecordType =
     | 'ticket-import'
     | 'ticket-redeem'
     | 'ticket-void'
+    | 'ticket-unvoid'
+    | 'ticket-reset'
+    | 'ticket-type-edit'
     | 'ticket-attendee-delete'
     | 'ticket-attendee-edit'
     | 'ticket-regenerate'
     | 'ticket-email-send'
-    | 'custom-email-send'
+    | 'ticket-email-queue'
+    | 'scheduled-mail-drain'
     | 'event-staff-assign'
     | 'event-staff-remove'
     | 'upcoming-event-email-template-update'
@@ -163,11 +166,11 @@ export interface ActivityRecord {
     newTitleCn?: string;
     oldName?: string;
     newName?: string;
+    oldType?: string;
+    newType?: string;
+    reason?: string;
     addedCount?: number;
     replacedCount?: number;
     sentCount?: number;
-    recipientCount?: number;
-    subject?: string;
-    replyTo?: string;
     timestamp: Date;
 }

@@ -765,6 +765,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
                 targetEmail,
                 eventId,
                 eventTitle,
+                reason: "staff-assignment",
                 timestamp: FieldValue.serverTimestamp(),
                 expiresAt: recordExpiresAt(),
             });

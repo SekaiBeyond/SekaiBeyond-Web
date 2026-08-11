@@ -1729,6 +1729,10 @@
     font-weight: 700;
     letter-spacing: 0.3px;
     white-space: nowrap;
+    /* Neutral fallback so a record type with no colour rule below still reads
+       as a pill instead of bare text. */
+    background: rgba(122, 129, 144, 0.12);
+    color: #4a5160;
 }
 
 /* Record type tag colors — grouped by color */
@@ -1746,19 +1750,21 @@
 .record-type-code-delete,
 .record-type-event-code-activate,
 .record-type-event-code-deactivate,
-.record-type-event-code-time-window {
+.record-type-event-code-time-window,
+.record-type-staff-code-create,
+.record-type-staff-code-activate,
+.record-type-staff-code-deactivate,
+.record-type-staff-code-time-window {
     background: rgba(155, 89, 182, 0.12);
     color: var(--color-purple);
 }
 
-.record-type-badge-grant,
 .record-type-event-attend,
 .record-type-event-claim {
     background: rgba(76, 175, 80, 0.12);
     color: #388e3c;
 }
 
-.record-type-badge-revoke,
 .record-type-event-unattend {
     background: rgba(244, 67, 54, 0.12);
     color: #c62828;
@@ -1768,7 +1774,6 @@
 .record-type-badge-claim,
 .record-type-badge-create,
 .record-type-badge-edit,
-.record-type-badge-delete,
 .record-type-badge-deletion-requested,
 .record-type-badge-deletion-cancelled,
 .record-type-badge-deleted {
@@ -1783,7 +1788,6 @@
 
 .record-type-event-create,
 .record-type-event-edit,
-.record-type-event-delete,
 .record-type-event-deletion-requested,
 .record-type-event-deletion-cancelled,
 .record-type-event-deleted,
@@ -1795,7 +1799,6 @@
 
 .record-type-upcoming-event-create,
 .record-type-upcoming-event-edit,
-.record-type-upcoming-event-delete,
 .record-type-upcoming-event-deletion-requested,
 .record-type-upcoming-event-deletion-cancelled,
 .record-type-upcoming-event-deleted,
@@ -1813,10 +1816,14 @@
 .record-type-ticket-import,
 .record-type-ticket-redeem,
 .record-type-ticket-void,
+.record-type-ticket-unvoid,
+.record-type-ticket-reset,
+.record-type-ticket-type-edit,
 .record-type-ticket-attendee-delete,
 .record-type-ticket-attendee-edit,
 .record-type-ticket-regenerate,
-.record-type-ticket-email-send {
+.record-type-ticket-email-send,
+.record-type-ticket-email-queue {
     background: rgba(255, 107, 157, 0.12);
     color: var(--color-primary);
 }
@@ -1826,6 +1833,49 @@
 .record-type-account-deleted {
     background: rgba(208, 37, 69, 0.12);
     color: #b31c37;
+}
+
+.record-type-membership-grant,
+.record-type-membership-extend,
+.record-type-membership-revoke {
+    background: rgba(63, 81, 181, 0.12);
+    color: #3949ab;
+}
+
+.record-type-name-set,
+.record-type-avatar-set,
+.record-type-avatar-remove {
+    background: rgba(96, 125, 139, 0.14);
+    color: #455a64;
+}
+
+.record-type-venue-create,
+.record-type-venue-edit,
+.record-type-venue-delete,
+.record-type-parkinglot-create,
+.record-type-parkinglot-edit,
+.record-type-parkinglot-delete,
+.record-type-parkingrate-create,
+.record-type-parkingrate-edit,
+.record-type-parkingrate-delete {
+    background: rgba(121, 85, 72, 0.12);
+    color: #5d4037;
+}
+
+.record-type-qrcode-create,
+.record-type-qrcode-edit,
+.record-type-qrcode-delete,
+.record-type-qrcode-spot-set,
+.record-type-social-platform-create,
+.record-type-social-platform-edit,
+.record-type-social-platform-delete {
+    background: rgba(0, 172, 193, 0.14);
+    color: #00838f;
+}
+
+.record-type-scheduled-mail-drain {
+    background: rgba(175, 180, 43, 0.18);
+    color: #827717;
 }
 
 .record-type-policy-update,

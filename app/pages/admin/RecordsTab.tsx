@@ -18,6 +18,7 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Venue } from '~/lib/venues';
 import type { ParkingLot } from '~/lib/parkingLots';
 import type { ParkingRate } from '~/lib/parkingRates';
+import { ticketTypeLabel } from './tickets/types';
 import type { ActivityRecord, BadgeDef, RecordType } from './types';
 
 const PAGE_SIZE = 20;
@@ -27,19 +28,21 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     role: ['group-assign', 'title-set', 'event-staff-assign', 'event-staff-remove'],
     membership: ['membership-grant', 'membership-extend', 'membership-revoke'],
     code: ['code-create', 'badge-code-activate', 'badge-code-deactivate', 'code-delete',
-        'event-code-activate', 'event-code-deactivate', 'event-code-time-window'],
-    attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend', 'event-claim'],
+        'event-code-activate', 'event-code-deactivate', 'event-code-time-window',
+        'staff-code-create', 'staff-code-activate', 'staff-code-deactivate', 'staff-code-time-window'],
+    attend: ['event-attend', 'event-unattend', 'event-claim'],
     badge: ['achievement-grant', 'achievement-revoke', 'badge-claim', 'badge-create', 'badge-edit',
-        'badge-delete', 'badge-deletion-requested', 'badge-deletion-cancelled', 'badge-deleted'],
-    event: ['event-create', 'event-edit', 'event-delete',
+        'badge-deletion-requested', 'badge-deletion-cancelled', 'badge-deleted'],
+    event: ['event-create', 'event-edit',
         'event-deletion-requested', 'event-deletion-cancelled', 'event-deleted',
         'past-event-publish', 'past-event-unpublish',
-        'upcoming-event-create', 'upcoming-event-edit', 'upcoming-event-delete',
+        'upcoming-event-create', 'upcoming-event-edit',
         'upcoming-event-deletion-requested', 'upcoming-event-deletion-cancelled', 'upcoming-event-deleted',
         'upcoming-event-archive', 'upcoming-event-publish', 'upcoming-event-unpublish',
         'upcoming-event-email-template-update'],
-    ticket: ['ticket-import', 'ticket-redeem', 'ticket-void', 'ticket-attendee-delete',
-        'ticket-attendee-edit', 'ticket-regenerate', 'ticket-email-send'],
+    ticket: ['ticket-import', 'ticket-redeem', 'ticket-void', 'ticket-unvoid', 'ticket-reset',
+        'ticket-type-edit', 'ticket-attendee-delete', 'ticket-attendee-edit', 'ticket-regenerate',
+        'ticket-email-send', 'ticket-email-queue'],
     tag: ['tag-create', 'tag-edit', 'tag-delete'],
     location: ['venue-create', 'venue-edit', 'venue-delete',
         'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
@@ -49,7 +52,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
         'name-set', 'avatar-set', 'avatar-remove'],
     config: ['policy-update', 'config-update'],
-    email: ['custom-email-send'],
+    email: ['scheduled-mail-drain'],
 };
 
 interface RecordsTabProps {
@@ -127,12 +130,12 @@ export const RecordsTab = ({
                 newTitleCn: data.newTitleCn,
                 oldName: data.oldName,
                 newName: data.newName,
+                oldType: data.oldType,
+                newType: data.newType,
+                reason: data.reason,
                 addedCount: data.addedCount,
                 replacedCount: data.replacedCount,
                 sentCount: data.sentCount,
-                recipientCount: data.recipientCount,
-                subject: data.subject,
-                replyTo: data.replyTo,
                 timestamp: data.timestamp?.toDate() ?? new Date(),
             };
         });
@@ -165,10 +168,13 @@ export const RecordsTab = ({
             setLastDoc(snapshot.docs[snapshot.docs.length - 1] ?? null);
             setHasMore(snapshot.docs.length === PAGE_SIZE);
 
-            // Track unique actors for the dropdown
+            // Track unique actors for the dropdown. System-written records (the
+            // scheduled mail drain) carry no performedBy, so skip them rather than
+            // adding a blank option that filters to nothing.
             setKnownActors(prev => {
                 const merged = [...prev];
                 for (const item of items) {
+                    if (!item.performedBy) continue;
                     if (!merged.some(a => a.uid === item.performedBy)) {
                         merged.push({uid: item.performedBy, name: item.performedByName});
                     }
@@ -336,18 +342,26 @@ export const RecordsTab = ({
                 const badge = r.badgeId ? clickableBadge(r.badgeId) : r.badgeName;
                 return isEnglish ? <>created claim code for {badge}</> : <>为 {badge} 创建了兑换码</>;
             }
-            case 'badge-grant':  // legacy type — same as event-attend
-            case 'event-attend':
+            case 'event-attend': {
+                // Attendance changed as a side effect of an event-staff assignment
+                // rather than by hand — say so, or the row reads as a manual edit.
+                const viaStaff = r.reason === 'staff-assignment'
+                    ? (isEnglish ? ' (event-staff assignment)' : '（因指派为活动工作人员）')
+                    : '';
                 return isEnglish
                     ? <>marked {target} as
-                        attended {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
-                    : <>标记 {target} 参加了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
-            case 'badge-revoke':  // legacy type — same as event-unattend
-            case 'event-unattend':
+                        attended {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}{viaStaff}</>
+                    : <>标记 {target} 参加了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}{viaStaff}</>;
+            }
+            case 'event-unattend': {
+                const viaStaff = r.reason === 'staff-assignment'
+                    ? (isEnglish ? ' (event-staff assignment)' : '（因指派为活动工作人员）')
+                    : '';
                 return isEnglish
                     ? <>revoked {target}'s attendance
-                        for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
-                    : <>撤销了 {target} 的 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')} 签到</>;
+                        for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}{viaStaff}</>
+                    : <>撤销了 {target} 的 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')} 签到{viaStaff}</>;
+            }
             case 'event-claim':
                 return isEnglish
                     ? <>checked in to {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} with
@@ -385,8 +399,6 @@ export const RecordsTab = ({
                 const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
                 return isEnglish ? <>edited badge {badge}</> : <>编辑了徽章 {badge}</>;
             }
-            case 'badge-delete':
-                return isEnglish ? <>deleted badge {r.badgeName ?? ''}</> : <>删除了徽章 {r.badgeName ?? ''}</>;
             case 'badge-deletion-requested': {
                 const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
                 return isEnglish
@@ -411,10 +423,6 @@ export const RecordsTab = ({
                     ? <>edited
                         event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
                     : <>编辑了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
-            case 'event-delete':
-                return isEnglish
-                    ? <>deleted event {r.eventTitle ?? r.eventId ?? ''}</>
-                    : <>删除了活动 {r.eventTitle ?? r.eventId ?? ''}</>;
             case 'event-deletion-requested':
                 return isEnglish
                     ? <>requested deletion of
@@ -447,10 +455,6 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>edited upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
                     : <>编辑了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
-            case 'upcoming-event-delete':
-                return isEnglish
-                    ? <>deleted upcoming event {r.eventTitle ?? ''}</>
-                    : <>删除了活动预告 {r.eventTitle ?? ''}</>;
             case 'upcoming-event-deletion-requested':
                 return isEnglish
                     ? <>requested deletion of upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
@@ -490,6 +494,30 @@ export const RecordsTab = ({
                     ? <>updated time window for check-in code
                         of {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
                     : <>更新了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} 签到码的时间窗口</>;
+            case 'staff-code-create': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>created staff code for {event}</>
+                    : <>为 {event} 创建了工作人员码</>;
+            }
+            case 'staff-code-activate': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>activated staff code for {event}</>
+                    : <>激活了 {event} 的工作人员码</>;
+            }
+            case 'staff-code-deactivate': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>deactivated staff code for {event}</>
+                    : <>停用了 {event} 的工作人员码</>;
+            }
+            case 'staff-code-time-window': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>updated time window for staff code of {event}</>
+                    : <>更新了 {event} 工作人员码的时间窗口</>;
+            }
             case 'tag-create':
                 return isEnglish
                     ? <>created tag {r.tagName ?? ''}</>
@@ -602,6 +630,27 @@ export const RecordsTab = ({
                     ? <>voided a ticket for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
                     : <>作废了 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 的一张门票</>;
             }
+            case 'ticket-unvoid': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>restored a voided ticket for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
+                    : <>恢复了 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 的一张作废门票</>;
+            }
+            case 'ticket-reset': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                return isEnglish
+                    ? <>reset the check-in state of a ticket for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
+                    : <>重置了 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 的门票签到状态</>;
+            }
+            case 'ticket-type-edit': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                const who = r.targetName ?? r.targetEmail ?? '';
+                const from = ticketTypeLabel(r.oldType ?? '', isEnglish);
+                const to = ticketTypeLabel(r.newType ?? '', isEnglish);
+                return isEnglish
+                    ? <>changed {who}'s ticket type from {from} to {to} at {event}</>
+                    : <>将 {who} 在 {event} 的门票类型从 {from} 改为 {to}</>;
+            }
             case 'ticket-attendee-delete': {
                 const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
                 return isEnglish
@@ -630,17 +679,18 @@ export const RecordsTab = ({
                     ? <>sent {sent} ticket email{sent === 1 ? '' : 's'} for {event}</>
                     : <>为 {event} 发送了 {sent} 封门票邮件</>;
             }
-            case 'custom-email-send': {
-                const subjectText = r.subject ? ` "${r.subject}"` : '';
-                const recipient = r.targetEmail ?? '';
-                const extra = r.recipientCount && r.recipientCount > 1
-                    ? (isEnglish
-                        ? ` (+${r.recipientCount - 1} more)`
-                        : `（另含 ${r.recipientCount - 1} 位）`)
-                    : '';
+            case 'ticket-email-queue': {
+                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                const queued = r.sentCount ?? 0;
                 return isEnglish
-                    ? <>sent email{subjectText} to {recipient}{extra}</>
-                    : <>向 {recipient}{extra} 发送了邮件{subjectText}</>;
+                    ? <>queued {queued} ticket email{queued === 1 ? '' : 's'} for {event} past the daily cap</>
+                    : <>为 {event} 将 {queued} 封门票邮件排入队列（已超出每日上限）</>;
+            }
+            case 'scheduled-mail-drain': {
+                const sent = r.sentCount ?? 0;
+                return isEnglish
+                    ? <>sent {sent} queued email{sent === 1 ? '' : 's'} from the scheduled mail queue</>
+                    : <>从邮件队列中发送了 {sent} 封排队邮件</>;
             }
             case 'upcoming-event-email-template-update':
                 return isEnglish
@@ -691,6 +741,10 @@ export const RecordsTab = ({
                 return isEnglish ? <>updated policy content</> : <>更新了政策内容</>;
             case 'config-update':
                 return isEnglish ? <>updated site config</> : <>更新了网站配置</>;
+            default:
+                // A record type written by a newer Cloud Function than this build
+                // knows about. Show the raw type instead of an empty row.
+                return <>{r.type}</>;
         }
     };
 
@@ -712,9 +766,11 @@ export const RecordsTab = ({
             case 'event-code-activate':
             case 'event-code-deactivate':
             case 'event-code-time-window':
+            case 'staff-code-create':
+            case 'staff-code-activate':
+            case 'staff-code-deactivate':
+            case 'staff-code-time-window':
                 return isEnglish ? 'Code' : '兑换码';
-            case 'badge-grant':
-            case 'badge-revoke':
             case 'event-attend':
             case 'event-unattend':
             case 'event-claim':
@@ -724,14 +780,12 @@ export const RecordsTab = ({
             case 'badge-claim':
             case 'badge-create':
             case 'badge-edit':
-            case 'badge-delete':
             case 'badge-deletion-requested':
             case 'badge-deletion-cancelled':
             case 'badge-deleted':
                 return isEnglish ? 'Badge' : '徽章';
             case 'event-create':
             case 'event-edit':
-            case 'event-delete':
             case 'event-deletion-requested':
             case 'event-deletion-cancelled':
             case 'event-deleted':
@@ -739,7 +793,6 @@ export const RecordsTab = ({
             case 'past-event-unpublish':
             case 'upcoming-event-create':
             case 'upcoming-event-edit':
-            case 'upcoming-event-delete':
             case 'upcoming-event-deletion-requested':
             case 'upcoming-event-deletion-cancelled':
             case 'upcoming-event-deleted':
@@ -751,12 +804,16 @@ export const RecordsTab = ({
             case 'ticket-import':
             case 'ticket-redeem':
             case 'ticket-void':
+            case 'ticket-unvoid':
+            case 'ticket-reset':
+            case 'ticket-type-edit':
             case 'ticket-attendee-delete':
             case 'ticket-attendee-edit':
             case 'ticket-regenerate':
             case 'ticket-email-send':
+            case 'ticket-email-queue':
                 return isEnglish ? 'Ticket' : '门票';
-            case 'custom-email-send':
+            case 'scheduled-mail-drain':
                 return isEnglish ? 'Email' : '邮件';
             case 'tag-create':
             case 'tag-edit':
