@@ -143,6 +143,14 @@ export const callChangeUserGroup = (data: {targetUid: string; newGroup: string; 
         getFunctions(), 'changeUserGroup'
     )(data);
 
+// Exactly one of expiresAt (ISO date, or null to revoke) and extendDays per call.
+export const callSetMembership = (data: {targetUid: string; expiresAt?: string | null; extendDays?: number}) =>
+    httpsCallable<{targetUid: string; expiresAt?: string | null; extendDays?: number}, {
+        membershipExpiresAt: string | null;
+    }>(
+        getFunctions(), 'setMembership'
+    )(data);
+
 export const callSetUserTitle = (data: {targetUid: string; title?: string; titleCn?: string}) =>
     httpsCallable<{targetUid: string; title?: string; titleCn?: string}, {success: boolean}>(
         getFunctions(), 'setUserTitle'
@@ -471,6 +479,7 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         badges: string[];
         badgeEarnedAt: Record<string, string>;
         group: string;
+        isMember: boolean;
         title?: string;
         titleCn?: string;
     }>(getFunctions(), 'getPublicProfile')(data);

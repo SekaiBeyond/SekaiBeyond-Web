@@ -31,6 +31,28 @@ export async function checkRateLimit(uid: string): Promise<void> {
 
 export const ADMIN_GROUPS = ["core-staff", "president"];
 
+// `group` is a pure role ladder. Whether someone has paid lives in
+// membershipExpiresAt and never moves them between these values.
+export const USER_GROUPS = ["user", "staff", "core-staff", "president"] as const;
+export type UserGroup = typeof USER_GROUPS[number];
+
+// Groups core-staff may act on. President may act on anyone.
+export const MANAGEABLE_GROUPS: string[] = ["user", "staff"];
+
+// Documents written before roles and membership were split still carry `visitor`
+// or `member`; both are the base group now. Normalizing on read keeps a
+// half-migrated database from silently denying admin actions against those users.
+export function normalizeGroup(raw: unknown): UserGroup {
+    return raw === "staff" || raw === "core-staff" || raw === "president" ? raw : "user";
+}
+
+// Validates a group supplied by a caller. Unlike normalizeGroup this rejects
+// rather than coerces, so `changeUserGroup` can't be handed a retired value
+// like "member" and silently treat it as "user".
+export function isValidGroup(raw: unknown): raw is UserGroup {
+    return typeof raw === "string" && (USER_GROUPS as readonly string[]).includes(raw);
+}
+
 export async function requireAuth(request: CallableRequest<unknown>): Promise<string> {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");

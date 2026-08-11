@@ -1,6 +1,6 @@
 import { createContext, type FC, type ReactNode, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, type DocumentData, getDoc, Timestamp } from 'firebase/firestore';
 import {
     callCreateUserProfile,
     callDeleteAvatar,
@@ -12,25 +12,38 @@ import {
     signOut as firebaseSignOut
 } from '~/lib/firebase';
 
-export type UserGroup = 'visitor' | 'member' | 'staff' | 'core-staff' | 'president';
+// `group` is a pure role ladder. Whether someone has paid is membership, which
+// lives in membershipExpiresAt and never moves anyone between these values.
+export type UserGroup = 'user' | 'staff' | 'core-staff' | 'president';
 
-export const USER_GROUPS: UserGroup[] = ['visitor', 'member', 'staff', 'core-staff', 'president'];
+export const USER_GROUPS: UserGroup[] = ['user', 'staff', 'core-staff', 'president'];
 
 const GROUP_LEVEL: Record<UserGroup, number> = {
-    'visitor': 0,
-    'member': 1,
-    'staff': 2,
-    'core-staff': 3,
-    'president': 4,
+    'user': 0,
+    'staff': 1,
+    'core-staff': 2,
+    'president': 3,
 };
 
 export const GROUP_LABELS: Record<UserGroup, {en: string; zh: string}> = {
-    'visitor': {en: 'Visitor', zh: '访客'},
-    'member': {en: 'Member', zh: '成员'},
+    'user': {en: 'User', zh: '用户'},
     'staff': {en: 'Staff', zh: '工作人员'},
     'core-staff': {en: 'Core Staff', zh: '核心成员'},
     'president': {en: 'President', zh: '社长'},
 };
+
+// Documents written before roles and membership were split still carry `visitor`
+// or `member`; both are the base group now. Without this, GROUP_LEVEL would come
+// back undefined for such a document and every permission check would read false.
+export function normalizeGroup(raw: unknown): UserGroup {
+    return raw === 'staff' || raw === 'core-staff' || raw === 'president' ? raw : 'user';
+}
+
+// Membership is active purely by comparison — nothing is written when it starts,
+// so nothing has to be undone when it ends.
+export function isMembershipActive(expiresAt: Date | null | undefined): boolean {
+    return expiresAt instanceof Date && expiresAt.getTime() > Date.now();
+}
 
 export function hasPermission(userGroup: UserGroup, requiredGroup: UserGroup): boolean {
     return GROUP_LEVEL[userGroup] >= GROUP_LEVEL[requiredGroup];
@@ -84,6 +97,7 @@ export interface UserProfile {
     badges: string[];
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
+    membershipExpiresAt: Date | null;
     title?: string;
     titleCn?: string;
     eventStaffEvents: string[];
@@ -98,9 +112,29 @@ function parseBadgeEarnedAt(raw: unknown): Record<string, Date> {
     return out;
 }
 
+function toUserProfile(data: DocumentData, email: string): UserProfile {
+    return {
+        displayName: data.displayName,
+        email,
+        photoURL: data.photoURL,
+        joinedAt: data.joinedAt?.toDate() ?? new Date(),
+        attendedEvents: data.attendedEvents ?? [],
+        badges: data.badges ?? [],
+        badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
+        group: normalizeGroup(data.group),
+        membershipExpiresAt: data.membershipExpiresAt?.toDate() ?? null,
+        title: data.title ?? '',
+        titleCn: data.titleCn ?? '',
+        eventStaffEvents: data.eventStaffEvents ?? [],
+    };
+}
+
 interface AuthContextType {
     user: User | null;
     profile: UserProfile | null;
+    // Derived from profile.membershipExpiresAt so membership checks aren't
+    // re-implemented per page. Recomputed on render, not on a timer.
+    isMember: boolean;
     loading: boolean;
     authError: Error | null;
     signIn: () => Promise<void>;
@@ -144,20 +178,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                     const userSnap = await getDoc(userRef);
 
                     if (userSnap.exists()) {
-                        const data = userSnap.data();
-                        setProfile({
-                            displayName: data.displayName,
-                            email: firebaseUser.email ?? '',
-                            photoURL: data.photoURL,
-                            joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                            attendedEvents: data.attendedEvents ?? [],
-                            badges: data.badges ?? [],
-                            badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
-                            group: data.group ?? 'visitor',
-                            title: data.title ?? '',
-                            titleCn: data.titleCn ?? '',
-                            eventStaffEvents: data.eventStaffEvents ?? [],
-                        });
+                        setProfile(toUserProfile(userSnap.data(), firebaseUser.email ?? ''));
                     } else {
                         await callCreateUserProfile();
                         const freshSnap = await getDoc(userRef);
@@ -165,19 +186,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                         if (!data) {
                             throw new Error('Profile creation succeeded but document was not found.');
                         }
-                        setProfile({
-                            displayName: data.displayName,
-                            email: firebaseUser.email ?? '',
-                            photoURL: data.photoURL,
-                            joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                            attendedEvents: [],
-                            badges: [],
-                            badgeEarnedAt: {},
-                            group: 'visitor',
-                            title: '',
-                            titleCn: '',
-                            eventStaffEvents: [],
-                        });
+                        setProfile(toUserProfile(data, firebaseUser.email ?? ''));
                     }
                 } else {
                     setProfile(null);
@@ -208,20 +217,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         const userRef = doc(getFirebaseDb(), 'users', user.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
-            const data = userSnap.data();
-            setProfile({
-                displayName: data.displayName,
-                email: user.email ?? '',
-                photoURL: data.photoURL,
-                joinedAt: data.joinedAt?.toDate() ?? new Date(),
-                attendedEvents: data.attendedEvents ?? [],
-                badges: data.badges ?? [],
-                badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
-                group: data.group ?? 'visitor',
-                title: data.title ?? '',
-                titleCn: data.titleCn ?? '',
-                eventStaffEvents: data.eventStaffEvents ?? [],
-            });
+            setProfile(toUserProfile(userSnap.data(), user.email ?? ''));
         }
     };
 
@@ -249,6 +245,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
     const value: AuthContextType = {
         user,
         profile,
+        isMember: isMembershipActive(profile?.membershipExpiresAt),
         loading,
         authError,
         signIn,

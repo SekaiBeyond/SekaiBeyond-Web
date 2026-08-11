@@ -718,6 +718,52 @@
     margin-top: 6px;
 }
 
+/* Membership star on the group chip. Gold rather than the chip's own colour so
+   it stays legible on all four group tints, which run grey through pink. */
+.profile-member-star {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 5px;
+    vertical-align: -2px;
+    color: #e8a317;
+    cursor: help;
+    outline: none;
+}
+
+.profile-member-star svg {
+    width: 13px;
+    height: 13px;
+}
+
+/* :focus, not :focus-visible — tapping the star is the only way to reach the
+   tooltip on a touch screen, where there is no hover. */
+.profile-member-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.4;
+    padding: 5px 9px;
+    border-radius: 6px;
+    width: max-content;
+    max-width: 200px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.profile-member-star:hover .profile-member-tooltip,
+.profile-member-star:focus .profile-member-tooltip {
+    opacity: 1;
+}
+
 /* Group tag colors are in components.css */
 
 .profile-avatar-wrapper {
@@ -794,7 +840,7 @@
     background: #e03033;
 }
 
-.profile-avatar-visitor-hint {
+.profile-avatar-nonmember-hint {
     cursor: default;
 }
 
@@ -811,7 +857,7 @@
     pointer-events: none;
 }
 
-.profile-avatar-visitor-hint:hover .profile-avatar-hint-overlay {
+.profile-avatar-nonmember-hint:hover .profile-avatar-hint-overlay {
     opacity: 1;
 }
 
@@ -841,7 +887,7 @@
     pointer-events: none;
 }
 
-.profile-avatar-visitor-hint:hover .profile-avatar-hint-tooltip {
+.profile-avatar-nonmember-hint:hover .profile-avatar-hint-tooltip {
     opacity: 1;
 }
 

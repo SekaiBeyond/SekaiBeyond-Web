@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import sanitizeHtml from "sanitize-html";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
-import { ADMIN_GROUPS, adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
+import { ADMIN_GROUPS, adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
 import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, recordExpiresAt, RESEND_QUEUE_CAP, SEND_CHUNK_SIZE, } from "../utils/config";
 import { db } from "../utils/firebase";
 import { syncProviderUsage } from "../utils/emailProvider";
@@ -402,7 +402,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
     return db.runTransaction(async (txn) => {
         const callerSnap = await txn.get(db.collection("users").doc(uid));
         const callerData = callerSnap.data() ?? {};
-        const group = callerData.group ?? "visitor";
+        const group = normalizeGroup(callerData.group);
         const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
         const isCoreStaffOrAbove = ADMIN_GROUPS.includes(group);
         const isEventStaff = callerEventStaff.includes(eventId);

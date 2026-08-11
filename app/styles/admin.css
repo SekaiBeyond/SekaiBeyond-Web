@@ -264,6 +264,23 @@
     display: flex;
     gap: 10px;
     margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+/* Membership is orthogonal to role, so it filters beside the role dropdown
+   rather than as another option inside it. */
+.admin-members-filter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.admin-members-filter input {
+    cursor: pointer;
 }
 
 /* Admin User Row */
@@ -924,6 +941,16 @@
 .admin-group-label {
     font-size: 14px;
     color: var(--color-text-muted);
+}
+
+.admin-membership-status {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.admin-membership-status--active {
+    color: #1976d2;
 }
 
 .admin-group-actions {

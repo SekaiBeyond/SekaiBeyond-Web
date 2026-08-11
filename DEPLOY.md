@@ -237,15 +237,36 @@ Then run `npm run dev` to start the dev server.
 
 ### 4. User Groups
 
-The site uses a role-based group system instead of a simple admin flag. Users are assigned one of the following groups (lowest to highest):
+The site uses a role-based group system instead of a simple admin flag. `group` is a
+pure role ladder — users are assigned one of the following (lowest to highest):
 
 | Group        | Description                                          |
 |--------------|------------------------------------------------------|
-| `visitor`    | Default for newly signed-in users                    |
-| `member`     | Registered club members                              |
+| `user`       | Default for newly signed-in users                    |
 | `staff`      | Staff members                                        |
 | `core-staff` | Core staff — can access the admin panel              |
 | `president`  | Club president — can access the admin panel          |
+
+**Membership** is separate from `group`. It is a time-boxed attribute,
+`users/{uid}.membershipExpiresAt`, and someone is a member exactly while that
+timestamp is in the future. Any group can hold one, so a `president` can be a member
+too, and membership never promotes or demotes anyone. Core-staff and above grant,
+extend, or revoke it from the Users tab of the admin panel; every change is audited
+in Records. There is no scheduled job — membership lapses by timestamp comparison.
+
+**Migrating an existing database** from the older `visitor` group:
+
+```bash
+cd functions
+gcloud auth application-default login
+export GOOGLE_CLOUD_PROJECT=<project-id>
+npx tsx scripts/migrate-groups.ts            # read-only summary
+npx tsx scripts/migrate-groups.ts --apply    # visitor -> user
+```
+
+The script is safe to re-run — migrated documents no longer match its query. It stops
+without writing if it finds anyone still in the retired `member` group, since those
+documents carry no membership term to preserve.
 
 **Bootstrapping the first president:**
 

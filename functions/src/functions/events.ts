@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminTransaction, checkRateLimit, requireAuth } from "../utils/auth";
+import { adminTransaction, checkRateLimit, MANAGEABLE_GROUPS, normalizeGroup, requireAuth } from "../utils/auth";
 import { deletionExpiresAt, recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
@@ -643,7 +643,7 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
         if (
             targetUid !== uid
             && callerGroup !== "president"
-            && !["visitor", "member", "staff"].includes(targetData.group)
+            && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetData.group))
         ) {
             throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
         }

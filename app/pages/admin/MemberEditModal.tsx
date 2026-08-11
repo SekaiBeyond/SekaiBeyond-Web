@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { accountEffectiveTitle, type UserGroup } from '~/components/AuthProvider';
+import { accountEffectiveTitle, normalizeGroup, type UserGroup } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUploadAdminImage, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
@@ -70,7 +70,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
             const acc = {
                 title: (d.title as string) ?? '',
                 titleCn: (d.titleCn as string) ?? '',
-                group: ((d.group as string) ?? 'visitor') as UserGroup,
+                group: normalizeGroup(d.group),
                 photoURL: (d.photoURL as string) ?? '',
             };
             setAccount(acc);

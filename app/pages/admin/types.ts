@@ -41,6 +41,7 @@ export interface UserRecord {
     attendedEvents: string[];
     badges: string[];
     group: UserGroup;
+    membershipExpiresAt: Date | null;
     title?: string;
     titleCn?: string;
     eventStaffEvents: string[];
@@ -50,6 +51,9 @@ export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'records' | 'too
 
 export type RecordType =
     'group-assign'
+    | 'membership-grant'
+    | 'membership-extend'
+    | 'membership-revoke'
     | 'code-create'
     | 'badge-code-activate'
     | 'badge-code-deactivate'
@@ -150,6 +154,9 @@ export interface ActivityRecord {
     code?: string;
     oldGroup?: UserGroup;
     newGroup?: UserGroup;
+    oldExpiresAt?: string;
+    newExpiresAt?: string;
+    extendDays?: number | null;
     oldTitle?: string;
     newTitle?: string;
     oldTitleCn?: string;

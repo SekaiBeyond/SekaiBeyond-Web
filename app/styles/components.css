@@ -456,16 +456,10 @@
 }
 
 /* Shared group tag colors (used on admin + profile pages) */
-.admin-user-group-tag[data-group="visitor"],
-.profile-group-tag[data-group="visitor"] {
+.admin-user-group-tag[data-group="user"],
+.profile-group-tag[data-group="user"] {
     background: rgba(158, 158, 158, 0.15);
     color: #757575;
-}
-
-.admin-user-group-tag[data-group="member"],
-.profile-group-tag[data-group="member"] {
-    background: rgba(33, 150, 243, 0.12);
-    color: #1976d2;
 }
 
 .admin-user-group-tag[data-group="staff"],
@@ -484,6 +478,20 @@
 .profile-group-tag[data-group="president"] {
     background: rgba(255, 107, 157, 0.15);
     color: #d81b60;
+}
+
+/* Membership sits alongside the group tag rather than inside it — any group can
+   hold one, so it needs a chip of its own. The profile shows the same fact as a
+   star on the group chip instead; admin lists get the word, since they are scanned. */
+.admin-user-member-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: rgba(33, 150, 243, 0.12);
+    color: #1976d2;
 }
 
 /* Utility classes (shared across pages) */
