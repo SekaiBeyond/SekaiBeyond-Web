@@ -10,7 +10,7 @@ import {
     startAfter,
     where,
 } from 'firebase/firestore';
-import { GROUP_LABELS } from '~/components/AuthProvider';
+import { GROUP_LABELS, type UserGroup } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
@@ -25,6 +25,7 @@ const PAGE_SIZE = 20;
 // Requires composite Firestore indexes: (type, timestamp) and (performedBy, timestamp)
 const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     role: ['group-assign', 'title-set', 'event-staff-assign', 'event-staff-remove'],
+    membership: ['membership-grant', 'membership-extend', 'membership-revoke'],
     code: ['code-create', 'badge-code-activate', 'badge-code-deactivate', 'code-delete',
         'event-code-activate', 'event-code-deactivate', 'event-code-time-window'],
     attend: ['badge-grant', 'badge-revoke', 'event-attend', 'event-unattend', 'event-claim'],
@@ -117,6 +118,9 @@ export const RecordsTab = ({
                 code: data.code,
                 oldGroup: data.oldGroup,
                 newGroup: data.newGroup,
+                oldExpiresAt: data.oldExpiresAt,
+                newExpiresAt: data.newExpiresAt,
+                extendDays: data.extendDays,
                 oldTitle: data.oldTitle,
                 newTitle: data.newTitle,
                 oldTitleCn: data.oldTitleCn,
@@ -248,13 +252,45 @@ export const RecordsTab = ({
         return <span className="record-clickable-name" onClick={() => onSelectParkingRate(rate.id)}>{text}</span>;
     };
 
+    // Records outlive a group rename by up to RECORD_RETENTION_DAYS, so a stored
+    // value may name a group that no longer has a label. Show the raw value rather
+    // than crashing on an undefined lookup.
+    const groupLabel = (g?: UserGroup) => {
+        const labels = g ? GROUP_LABELS[g] : undefined;
+        if (!labels) return g ?? '';
+        return isEnglish ? labels.en : labels.zh;
+    };
+
+    const fmtExpiry = (iso?: string) => {
+        if (!iso) return isEnglish ? 'never' : '无';
+        const d = new Date(iso);
+        return isNaN(d.getTime())
+            ? iso
+            : d.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                year: 'numeric', month: 'short', day: 'numeric',
+            });
+    };
+
     const getRecordLabel = (r: ActivityRecord): ReactNode => {
         const target = r.targetUid ? clickableName(r.targetUid, r.targetName ?? '') : r.targetName;
         switch (r.type) {
             case 'group-assign':
                 return isEnglish
-                    ? <>assigned {target} from {GROUP_LABELS[r.oldGroup!].en} to {GROUP_LABELS[r.newGroup!].en}</>
-                    : <>将 {target} 从 {GROUP_LABELS[r.oldGroup!].zh} 改为 {GROUP_LABELS[r.newGroup!].zh}</>;
+                    ? <>assigned {target} from {groupLabel(r.oldGroup)} to {groupLabel(r.newGroup)}</>
+                    : <>将 {target} 从 {groupLabel(r.oldGroup)} 改为 {groupLabel(r.newGroup)}</>;
+            case 'membership-grant':
+                return isEnglish
+                    ? <>set {target}'s membership to expire {fmtExpiry(r.newExpiresAt)}</>
+                    : <>将 {target} 的会员到期日设为 {fmtExpiry(r.newExpiresAt)}</>;
+            case 'membership-extend':
+                return isEnglish
+                    ? <>extended {target}'s membership by {r.extendDays} days
+                        (now {fmtExpiry(r.newExpiresAt)})</>
+                    : <>将 {target} 的会员资格延长了 {r.extendDays} 天（现到期于 {fmtExpiry(r.newExpiresAt)}）</>;
+            case 'membership-revoke':
+                return isEnglish
+                    ? <>revoked {target}'s membership</>
+                    : <>撤销了 {target} 的会员资格</>;
             case 'title-set': {
                 const fmtTitle = (en?: string, zh?: string) =>
                     [en, zh].map(s => (s ?? '').trim()).filter(Boolean).join(' / ');
@@ -665,6 +701,10 @@ export const RecordsTab = ({
             case 'event-staff-assign':
             case 'event-staff-remove':
                 return isEnglish ? 'Role' : '角色';
+            case 'membership-grant':
+            case 'membership-extend':
+            case 'membership-revoke':
+                return isEnglish ? 'Membership' : '会员';
             case 'code-create':
             case 'badge-code-activate':
             case 'badge-code-deactivate':
@@ -770,6 +810,7 @@ export const RecordsTab = ({
                 >
                     <option value="">{isEnglish ? 'All Types' : '所有类型'}</option>
                     <option value="role">{isEnglish ? 'Role' : '角色'}</option>
+                    <option value="membership">{isEnglish ? 'Membership' : '会员'}</option>
                     <option value="code">{isEnglish ? 'Code' : '兑换码'}</option>
                     <option value="attend">{isEnglish ? 'Attend' : '签到'}</option>
                     <option value="badge">{isEnglish ? 'Badge' : '徽章'}</option>

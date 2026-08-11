@@ -13,12 +13,9 @@ import {
     doc,
     getDoc,
     getDocs,
-    limit,
     onSnapshot,
-    orderBy,
     query,
     type QueryDocumentSnapshot,
-    startAfter,
     where,
 } from 'firebase/firestore';
 import {
@@ -48,8 +45,9 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { BadgeDef, UserRecord } from './types';
 import { UserRow } from './UserRow';
-import { docToUserRecord, searchUsers, validateImageFile } from './utils';
+import { buildUserListQuery, docToUserRecord, searchUsers, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
+import { MembershipSection } from './MembershipSection';
 
 const PAGE_SIZE = 10;
 
@@ -79,6 +77,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const {isEnglish} = useLanguage();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedGroup, setSelectedGroup] = useState<UserGroup | ''>('');
+    const [membersOnly, setMembersOnly] = useState(false);
     const [searchResults, setSearchResults] = useState<UserRecord[]>([]);
     const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
     const [searching, setSearching] = useState(false);
@@ -173,17 +172,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         const loadRecentUsers = async () => {
             setLoadingRecent(true);
             try {
-                const db = getFirebaseDb();
-                let q = query(collection(db, 'users'), orderBy('joinedAt', 'desc'), limit(PAGE_SIZE));
-                if (selectedGroup) {
-                    q = query(
-                        collection(db, 'users'),
-                        where('group', '==', selectedGroup),
-                        orderBy('joinedAt', 'desc'),
-                        limit(PAGE_SIZE),
-                    );
-                }
-                const snapshot = await getDocs(q);
+                const snapshot = await getDocs(buildUserListQuery({
+                    group: selectedGroup,
+                    membersOnly,
+                    pageSize: PAGE_SIZE,
+                }));
                 setRecentUsers(snapshot.docs.map(docToUserRecord));
                 setLastRecentSnap(snapshot.docs[snapshot.docs.length - 1] ?? null);
                 setHasMoreRecent(snapshot.docs.length === PAGE_SIZE);
@@ -194,29 +187,18 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         loadRecentUsers().catch(err => {
             void err;
         });
-    }, [selectedGroup]);
+    }, [selectedGroup, membersOnly]);
 
     const loadMoreRecentUsers = async () => {
         if (!hasMoreRecent || !lastRecentSnap) return;
         setLoadingRecent(true);
         try {
-            const db = getFirebaseDb();
-            let q = query(
-                collection(db, 'users'),
-                orderBy('joinedAt', 'desc'),
-                startAfter(lastRecentSnap),
-                limit(PAGE_SIZE),
-            );
-            if (selectedGroup) {
-                q = query(
-                    collection(db, 'users'),
-                    where('group', '==', selectedGroup),
-                    orderBy('joinedAt', 'desc'),
-                    startAfter(lastRecentSnap),
-                    limit(PAGE_SIZE),
-                );
-            }
-            const snapshot = await getDocs(q);
+            const snapshot = await getDocs(buildUserListQuery({
+                group: selectedGroup,
+                membersOnly,
+                pageSize: PAGE_SIZE,
+                cursor: lastRecentSnap,
+            }));
             const newUsers = snapshot.docs.map(docToUserRecord);
             setRecentUsers(prev => [...prev, ...newUsers]);
             setLastRecentSnap(snapshot.docs[snapshot.docs.length - 1] ?? lastRecentSnap);
@@ -231,7 +213,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         setSearching(true);
         setSelectedUser(null);
         try {
-            setSearchResults(await searchUsers(searchQuery, selectedGroup));
+            setSearchResults(await searchUsers(searchQuery, selectedGroup, membersOnly));
         } catch {
             showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error');
         } finally {
@@ -520,6 +502,20 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                         </option>
                     ))}
                 </select>
+                {/* Membership is orthogonal to role, so it filters separately rather
+                    than as another entry in the role dropdown. */}
+                <label className="admin-members-filter">
+                    <input
+                        type="checkbox"
+                        checked={membersOnly}
+                        onChange={(e) => {
+                            setMembersOnly(e.target.checked);
+                            setSearchResults([]);
+                            setHasSearched(false);
+                        }}
+                    />
+                    {isEnglish ? 'Members only' : '仅会员'}
+                </label>
                 <input
                     type="text"
                     placeholder={isEnglish ? 'Search by email or name...' : '输入邮箱或姓名搜索...'}
@@ -550,6 +546,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                             <span className="admin-user-group-tag" data-group={u.group}>
                                 {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
                             </span>
+                            {u.membershipExpiresAt && u.membershipExpiresAt.getTime() > Date.now() && (
+                                <span className="admin-user-member-tag">
+                                    {isEnglish ? 'Member' : '会员'}
+                                </span>
+                            )}
                             <span className="admin-user-badge-count">
                                 {u.attendedEvents.length} {isEnglish ? 'events' : '活动'}
                             </span>
@@ -565,7 +566,9 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             {!selectedUser && searchResults.length === 0 && (
                 <div className="admin-recent-users">
                     <h4 className="admin-badges-title">
-                        {isEnglish ? 'Recent Users' : '最近加入的用户'}
+                        {membersOnly
+                            ? (isEnglish ? 'Active Members' : '有效会员')
+                            : (isEnglish ? 'Recent Users' : '最近加入的用户')}
                     </h4>
                     {recentUsers.map((u) => (
                         <UserRow key={u.uid} user={u} onClick={() => setSelectedUser(u)}>
@@ -577,6 +580,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                             <span className="admin-user-group-tag" data-group={u.group}>
                                 {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
                             </span>
+                            {u.membershipExpiresAt && u.membershipExpiresAt.getTime() > Date.now() && (
+                                <span className="admin-user-member-tag">
+                                    {isEnglish ? 'Member' : '会员'}
+                                </span>
+                            )}
                             <span className="admin-detail-joined">
                                 {u.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
                                     year: 'numeric', month: 'short', day: 'numeric',
@@ -763,6 +771,13 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 </div>
                             )}
                         </div>
+
+                        <MembershipSection
+                            user={selectedUser}
+                            canManage={!readOnly && canManage}
+                            onUpdated={applyUserUpdate}
+                            showToast={showToast}
+                        />
 
                         {!readOnly && canManage && ['staff', 'core-staff'].includes(selectedUser.group) && (
                             <div className="admin-group-section">

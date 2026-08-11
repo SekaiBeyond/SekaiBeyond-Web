@@ -3,11 +3,20 @@ import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { ADMIN_GROUPS, adminTransaction, checkRateLimit, requireAuth } from "../utils/auth";
+import {
+    ADMIN_GROUPS,
+    adminTransaction,
+    checkRateLimit,
+    isValidGroup,
+    MANAGEABLE_GROUPS,
+    normalizeGroup,
+    requireAuth,
+} from "../utils/auth";
 import { deletionExpiresAt, recordExpiresAt } from "../utils/config";
+import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS } from "../utils/membership";
 import { db } from "../utils/firebase";
 import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB } from "../utils/storage";
-import { sanitizeDisplayText, validateDocId } from "../utils/validation";
+import { sanitizeDisplayText, validateDocId, validateISODate } from "../utils/validation";
 
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     if (!request.auth) {
@@ -52,7 +61,7 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
             joinedAt: FieldValue.serverTimestamp(),
             attendedEvents: [],
             badges: [],
-            group: "visitor",
+            group: "user",
             eventStaffEvents: [],
         });
     });
@@ -100,7 +109,10 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         eventStaffEvents,
         badges: data.badges ?? [],
         badgeEarnedAt,
-        group: data.group ?? "visitor",
+        group: normalizeGroup(data.group),
+        // Only the membership's existence is public — the expiry date is the
+        // owner's business and stays on their own profile.
+        isMember: isMembershipActive(data),
         title: data.title ?? "",
         titleCn: data.titleCn ?? "",
     };
@@ -133,7 +145,7 @@ async function resolveProfileTarget(callerUid: string, rawTargetUid: unknown): P
             throw new HttpsError("permission-denied", "Insufficient permissions.");
         }
         if (callerGroup !== "president"
-            && !["visitor", "member", "staff"].includes(targetSnap.data()!.group)) {
+            && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetSnap.data()!.group))) {
             throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
         }
     }
@@ -144,6 +156,14 @@ async function resolveProfileTarget(callerUid: string, rawTargetUid: unknown): P
         targetData: targetSnap.data()!,
         callerName: callerSnap.data()?.displayName ?? "",
     };
+}
+
+// Avatar uploads are a membership perk, but staff+ keep them without holding a
+// passport — otherwise this would quietly take avatars away from every staff
+// member who has never bought one. The only people blocked are plain users with
+// no active membership.
+function canSetOwnAvatar(userData: FirebaseFirestore.DocumentData): boolean {
+    return isMembershipActive(userData) || normalizeGroup(userData.group) !== "user";
 }
 
 // The photo a user reverts to once their uploaded avatar is gone. For the caller
@@ -210,9 +230,10 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     const input = request.data as {data?: string; contentType?: string; targetUid?: string};
     const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input.targetUid);
 
-    // Visitors can't give themselves an avatar, but an admin can give them one.
-    if (isSelf && targetData.group === "visitor") {
-        throw new HttpsError("permission-denied", "Visitors cannot upload avatars.");
+    // Uploading your own avatar is a membership perk, but staff+ keep it without
+    // holding a passport. An admin can still give an avatar to anyone.
+    if (isSelf && !canSetOwnAvatar(targetData)) {
+        throw new HttpsError("permission-denied", "An active membership is required to upload an avatar.");
     }
 
     const dataBase64 = input.data;
@@ -274,11 +295,12 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     const input = request.data as {targetUid?: string};
     const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input?.targetUid);
 
-    // A visitor can't upload an avatar, but may remove one an admin gave them.
+    // Someone without an active membership can't upload an avatar, but may remove
+    // one an admin gave them.
     const hasUploadedAvatar = typeof targetData.photoURL === "string"
         && targetData.photoURL.includes("firebasestorage.googleapis.com");
-    if (isSelf && targetData.group === "visitor" && !hasUploadedAvatar) {
-        throw new HttpsError("permission-denied", "Visitors cannot delete avatars.");
+    if (isSelf && !canSetOwnAvatar(targetData) && !hasUploadedAvatar) {
+        throw new HttpsError("permission-denied", "An active membership is required to delete an avatar.");
     }
 
     const bucket = getStorage().bucket();
@@ -309,7 +331,6 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
 
     return {photoURL};
 });
-const VALID_GROUPS = ["visitor", "member", "staff", "core-staff", "president"];
 export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -321,7 +342,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const newGroup = input.newGroup;
 
-    if (!newGroup || !VALID_GROUPS.includes(newGroup)) {
+    if (!isValidGroup(newGroup)) {
         throw new HttpsError("invalid-argument", "Invalid group.");
     }
 
@@ -361,16 +382,16 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
             throw new HttpsError("permission-denied", "Insufficient permissions.");
         }
 
-        oldGroup = targetSnap.data()!.group;
+        oldGroup = normalizeGroup(targetSnap.data()!.group);
         oldTitle = targetSnap.data()!.title ?? "";
         oldTitleCn = targetSnap.data()!.titleCn ?? "";
 
         if (callerGroup !== "president") {
-            if (!["visitor", "member", "staff"].includes(oldGroup)) {
+            if (!MANAGEABLE_GROUPS.includes(oldGroup)) {
                 throw new HttpsError("permission-denied",
                     "Cannot manage users at or above your level.");
             }
-            if (!["visitor", "member", "staff"].includes(newGroup)) {
+            if (!MANAGEABLE_GROUPS.includes(newGroup)) {
                 throw new HttpsError("permission-denied",
                     "Cannot assign this group.");
             }
@@ -419,6 +440,93 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
     });
 
     return {oldGroup, newGroup};
+});
+// Membership is a time-boxed attribute, not a group. This never writes `group` —
+// changeUserGroup is the only function that does, so granting or revoking
+// membership can't promote or demote anyone.
+export const setMembership = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+
+    const uid = request.auth.uid;
+    const input = request.data as {targetUid?: string; expiresAt?: string | null; extendDays?: number};
+    const targetUid = validateDocId(input.targetUid, "targetUid");
+
+    const hasExpiresAt = "expiresAt" in input;
+    const hasExtendDays = input.extendDays !== undefined;
+    if (hasExpiresAt === hasExtendDays) {
+        throw new HttpsError("invalid-argument", "Provide exactly one of expiresAt or extendDays.");
+    }
+
+    // expiresAt: null revokes. A date sets the expiry outright.
+    let absoluteExpiry: Timestamp | null = null;
+    if (hasExpiresAt && input.expiresAt !== null) {
+        const iso = validateISODate(input.expiresAt, "expiresAt");
+        if (!iso) {
+            throw new HttpsError("invalid-argument", "expiresAt must be a date or null.");
+        }
+        absoluteExpiry = Timestamp.fromDate(new Date(iso));
+    }
+
+    let extendDays = 0;
+    if (hasExtendDays) {
+        extendDays = input.extendDays!;
+        if (!Number.isInteger(extendDays) || extendDays === 0 || Math.abs(extendDays) > MAX_GRANT_DAYS) {
+            throw new HttpsError("invalid-argument",
+                `extendDays must be a non-zero integer within ${MAX_GRANT_DAYS} days.`);
+        }
+    }
+
+    await checkRateLimit(uid);
+
+    return db.runTransaction(async (txn) => {
+        const [callerSnap, targetSnap] = await Promise.all([
+            txn.get(db.collection("users").doc(uid)),
+            txn.get(db.collection("users").doc(targetUid)),
+        ]);
+
+        if (!callerSnap.exists) throw new HttpsError("not-found", "Caller not found.");
+        if (!targetSnap.exists) throw new HttpsError("not-found", "Target user not found.");
+
+        const callerGroup = normalizeGroup(callerSnap.data()!.group);
+        if (!ADMIN_GROUPS.includes(callerGroup)) {
+            throw new HttpsError("permission-denied", "Insufficient permissions.");
+        }
+
+        const targetData = targetSnap.data()!;
+        // Same hierarchy guard as changeUserGroup: core-staff act on users and
+        // staff, the president on anyone.
+        if (callerGroup !== "president" && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetData.group))) {
+            throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
+        }
+
+        const oldExpiry: Timestamp | null = targetData.membershipExpiresAt ?? null;
+        const newExpiry = hasExtendDays
+            ? extendedExpiry(oldExpiry, extendDays)
+            : absoluteExpiry;
+
+        txn.update(db.collection("users").doc(targetUid), {
+            membershipExpiresAt: newExpiry === null ? FieldValue.delete() : newExpiry,
+        });
+
+        txn.set(db.collection("records").doc(), {
+            type: newExpiry === null
+                ? "membership-revoke"
+                : hasExtendDays ? "membership-extend" : "membership-grant",
+            performedBy: uid,
+            performedByName: callerSnap.data()!.displayName ?? "",
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            oldExpiresAt: oldExpiry?.toDate?.()?.toISOString() ?? "",
+            newExpiresAt: newExpiry?.toDate?.()?.toISOString() ?? "",
+            extendDays: hasExtendDays ? extendDays : null,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {membershipExpiresAt: newExpiry?.toDate?.()?.toISOString() ?? null};
+    });
 });
 export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) {
@@ -502,7 +610,8 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
         const callerGroup = callerSnap.data()!.group;
         const targetSnap = await txn.get(db.collection("users").doc(targetUid));
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
-        if (callerGroup !== "president" && !["visitor", "member", "staff"].includes(targetSnap.data()!.group)) {
+        if (callerGroup !== "president"
+            && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetSnap.data()!.group))) {
             throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
         }
 
@@ -545,11 +654,9 @@ export const requestAccountDeletion = onCall({maxInstances: 10}, async (request)
         }
         const targetData = targetSnap.data()!;
 
-        if (callerUid === targetUid) {
-            if (targetData.group === "visitor") {
-                throw new HttpsError("permission-denied", "Visitors cannot delete.");
-            }
-        } else {
+        // Deleting your own account is a right every signed-in user has, membership
+        // or not. Deleting someone else's still requires admin rights over them.
+        if (callerUid !== targetUid) {
             if (!callerSnap.exists) {
                 throw new HttpsError("permission-denied", "Insufficient permissions.");
             }
@@ -558,7 +665,7 @@ export const requestAccountDeletion = onCall({maxInstances: 10}, async (request)
                 throw new HttpsError("permission-denied", "Insufficient permissions.");
             }
             if (callerGroup !== "president"
-                && !["visitor", "member", "staff"].includes(targetData.group)) {
+                && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetData.group))) {
                 throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
             }
         }
@@ -610,7 +717,7 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
             }
             const callerGroup = callerSnap.data()!.group;
             if (callerGroup !== "president"
-                && !["visitor", "member", "staff"].includes(targetData.group)) {
+                && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetData.group))) {
                 throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
             }
         }

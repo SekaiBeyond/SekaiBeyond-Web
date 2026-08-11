@@ -718,7 +718,28 @@
     margin-top: 6px;
 }
 
-/* Group tag colors are in components.css */
+.profile-tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-tag-row .profile-member-tag {
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    letter-spacing: 0.3px;
+    margin-top: 6px;
+}
+
+.profile-membership {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: #777;
+}
+
+/* Group and member tag colors are in components.css */
 
 .profile-avatar-wrapper {
     position: relative;
@@ -794,7 +815,7 @@
     background: #e03033;
 }
 
-.profile-avatar-visitor-hint {
+.profile-avatar-nonmember-hint {
     cursor: default;
 }
 
@@ -811,7 +832,7 @@
     pointer-events: none;
 }
 
-.profile-avatar-visitor-hint:hover .profile-avatar-hint-overlay {
+.profile-avatar-nonmember-hint:hover .profile-avatar-hint-overlay {
     opacity: 1;
 }
 
@@ -841,7 +862,7 @@
     pointer-events: none;
 }
 
-.profile-avatar-visitor-hint:hover .profile-avatar-hint-tooltip {
+.profile-avatar-nonmember-hint:hover .profile-avatar-hint-tooltip {
     opacity: 1;
 }
 

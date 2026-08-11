@@ -1,7 +1,14 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
-import { ADMIN_GROUPS, adminTransaction, checkRateLimit, requireAdmin, requireAuth } from "../utils/auth";
+import {
+    ADMIN_GROUPS,
+    adminTransaction,
+    checkRateLimit,
+    normalizeGroup,
+    requireAdmin,
+    requireAuth,
+} from "../utils/auth";
 import { recordExpiresAt, RESEND_QUEUE_CAP } from "../utils/config";
 import { db } from "../utils/firebase";
 import { EMAIL_PROVIDER, syncProviderUsage } from "../utils/emailProvider";
@@ -657,8 +664,7 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
 // Group labels for accounts without an explicit title (e.g. the president, whose
 // effective title is simply "President"). Kept in sync with the client's GROUP_LABELS.
 const GROUP_LABELS: Record<string, {en: string; zh: string}> = {
-    "visitor": {en: "Visitor", zh: "访客"},
-    "member": {en: "Member", zh: "成员"},
+    "user": {en: "User", zh: "用户"},
     "staff": {en: "Staff", zh: "工作人员"},
     "core-staff": {en: "Core Staff", zh: "核心成员"},
     "president": {en: "President", zh: "社长"},
@@ -721,7 +727,7 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
             accounts.set(snap.id, {
                 title: (d.title as string) ?? "",
                 titleCn: (d.titleCn as string) ?? "",
-                group: (d.group as string) ?? "visitor",
+                group: normalizeGroup(d.group),
                 photoURL: (d.photoURL as string) ?? "",
             });
         }

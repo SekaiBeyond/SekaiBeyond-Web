@@ -33,7 +33,8 @@ service cloud.firestore {
                     || (callerEventStaffEvents().size() > 0
                         && resource.data.get('eventStaffEvents', []).hasAny(callerEventStaffEvents())));
 
-            // All user mutations (displayName, photoURL, badges, attendedEvents, group) via Cloud Functions
+            // All user mutations (displayName, photoURL, badges, attendedEvents, group,
+            // membershipExpiresAt) via Cloud Functions
         }
 
         // Activity records — staff+ can read only; all writes via Cloud Functions

@@ -5,12 +5,16 @@ import {
     getDocs,
     limit,
     orderBy,
+    type Query,
     query,
+    type QueryDocumentSnapshot,
+    startAfter,
     startAt,
+    Timestamp,
     where,
 } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
-import type { UserGroup } from '~/components/AuthProvider';
+import { normalizeGroup, type UserGroup } from '~/components/AuthProvider';
 import type { UserRecord } from './types';
 import { MAX_IMAGE_SIZE_MB } from '~/constants';
 
@@ -30,11 +34,36 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
         joinedAt: data.joinedAt?.toDate() ?? new Date(),
         attendedEvents: data.attendedEvents ?? [],
         badges: data.badges ?? [],
-        group: data.group ?? 'visitor',
+        group: normalizeGroup(data.group),
+        membershipExpiresAt: data.membershipExpiresAt?.toDate() ?? null,
         title: data.title ?? '',
         titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],
     };
+};
+
+// The browsable user list, filtered by role and/or active membership. Members-only
+// has to order by membershipExpiresAt because Firestore requires the first orderBy
+// to match the inequality field — so that view is sorted by expiry rather than by
+// join date, which is the more useful ordering for it anyway.
+export const buildUserListQuery = (opts: {
+    group: UserGroup | '';
+    membersOnly: boolean;
+    pageSize: number;
+    cursor?: QueryDocumentSnapshot | null;
+}): Query => {
+    const users = collection(getFirebaseDb(), 'users');
+    const clauses = [];
+    if (opts.group) clauses.push(where('group', '==', opts.group));
+    if (opts.membersOnly) {
+        clauses.push(where('membershipExpiresAt', '>', Timestamp.now()));
+        clauses.push(orderBy('membershipExpiresAt', 'desc'));
+    } else {
+        clauses.push(orderBy('joinedAt', 'desc'));
+    }
+    if (opts.cursor) clauses.push(startAfter(opts.cursor));
+    clauses.push(limit(opts.pageSize));
+    return query(users, ...clauses);
 };
 
 export const USER_SEARCH_LIMIT = 10;
@@ -47,7 +76,11 @@ export const USER_SEARCH_LIMIT = 10;
 // Firestore ranges are case-sensitive, so the name query is repeated with the first letter
 // in each case and the results merged — that covers the usual "ben" vs "Ben" mismatch
 // without needing a search index. An "@" can only be an email, so it skips the name queries.
-export const searchUsers = async (rawQuery: string, group: UserGroup | '' = ''): Promise<UserRecord[]> => {
+export const searchUsers = async (
+    rawQuery: string,
+    group: UserGroup | '' = '',
+    membersOnly = false,
+): Promise<UserRecord[]> => {
     const q = rawQuery.trim();
     if (!q) return [];
     const users = collection(getFirebaseDb(), 'users');
@@ -72,12 +105,15 @@ export const searchUsers = async (rawQuery: string, group: UserGroup | '' = ''):
     }
 
     const snaps = await Promise.all(searches);
-    // The group filter is applied here rather than in the query: combining it with a prefix
-    // range would need a composite index, and each query is already capped at USER_SEARCH_LIMIT.
+    // The group and membership filters are applied here rather than in the query:
+    // combining either with a prefix range would need a composite index, and each
+    // query is already capped at USER_SEARCH_LIMIT.
     const deduped = new Map<string, UserRecord>();
     snaps.forEach(s => s.docs.forEach(d => {
         const r = docToUserRecord(d);
-        if (!group || r.group === group) deduped.set(r.uid, r);
+        if (group && r.group !== group) return;
+        if (membersOnly && !(r.membershipExpiresAt && r.membershipExpiresAt.getTime() > Date.now())) return;
+        deduped.set(r.uid, r);
     }));
     return Array.from(deduped.values());
 };

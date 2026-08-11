@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { accountEffectiveTitle, type UserGroup } from '~/components/AuthProvider';
+import { accountEffectiveTitle, normalizeGroup, type UserGroup } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetTeamRoster, callSaveTeamMembers, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
@@ -82,7 +82,7 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
                 next.set(snap.id, {
                     title: d.title ?? '',
                     titleCn: d.titleCn ?? '',
-                    group: (d.group ?? 'visitor') as UserGroup,
+                    group: normalizeGroup(d.group),
                     photoURL: d.photoURL ?? '',
                 });
             });

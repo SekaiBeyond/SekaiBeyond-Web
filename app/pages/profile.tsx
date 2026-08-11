@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
-import { formatGroupWithTitle, hasPermission, useAuth, type UserGroup } from '~/components/AuthProvider';
+import {
+    formatGroupWithTitle,
+    hasPermission,
+    normalizeGroup,
+    useAuth,
+    type UserGroup,
+} from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetPublicProfile, getFirebaseDb } from '~/lib/firebase';
@@ -30,6 +36,7 @@ interface ViewedProfile {
     badges: string[];
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
+    isMember: boolean;
     title?: string;
     titleCn?: string;
 }
@@ -133,7 +140,7 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
 );
 
 export const ProfilePage = () => {
-    const {user, profile, loading, signIn, updateProfile} = useAuth();
+    const {user, profile, isMember, loading, signIn, updateProfile} = useAuth();
     const {isEnglish} = useLanguage();
     const {pastEvents, loading: eventsLoading} = usePastEvents();
     const {tags} = useTags();
@@ -254,7 +261,8 @@ export const ProfilePage = () => {
                     eventStaffEvents: data.eventStaffEvents ?? [],
                     badges: data.badges ?? [],
                     badgeEarnedAt: earnedAt,
-                    group: (data.group ?? 'visitor') as UserGroup,
+                    group: normalizeGroup(data.group),
+                    isMember: data.isMember ?? false,
                     title: data.title ?? '',
                     titleCn: data.titleCn ?? '',
                 });
@@ -452,6 +460,8 @@ export const ProfilePage = () => {
             attendedEvents: profile!.attendedEvents,
             eventStaffEvents: profile!.eventStaffEvents,
             group: profile!.group,
+            isMember,
+            membershipExpiresAt: profile!.membershipExpiresAt,
             title: profile!.title ?? '',
             titleCn: profile!.titleCn ?? '',
         }
@@ -462,6 +472,9 @@ export const ProfilePage = () => {
             attendedEvents: viewedProfile!.attendedEvents,
             eventStaffEvents: viewedProfile!.eventStaffEvents,
             group: viewedProfile!.group,
+            isMember: viewedProfile!.isMember,
+            // Only the owner sees their own expiry date; others just see the chip.
+            membershipExpiresAt: null,
             title: viewedProfile!.title ?? '',
             titleCn: viewedProfile!.titleCn ?? '',
         };
@@ -473,8 +486,10 @@ export const ProfilePage = () => {
     const earnedBadges = badgeDefs
         .filter(b => dp.badges.includes(b.id))
         .sort((a, b) => (earnedDates[b.id]?.getTime() ?? 0) - (earnedDates[a.id]?.getTime() ?? 0));
-    const canEdit = isOwnProfile && profile!.group !== 'visitor';
-    // Visitors can't upload a photo, but may remove one an admin gave them.
+    // Avatar uploads are a membership perk, but staff+ keep them without one —
+    // the only people blocked are plain users who have never paid.
+    const canEdit = isOwnProfile && (isMember || hasPermission(profile!.group, 'staff'));
+    // Non-members can't upload a photo, but may remove one an admin gave them.
     const canRemovePhoto = isOwnProfile && hasCustomPhoto;
     const isStaff = isOwnProfile && hasPermission(profile!.group, 'staff');
 
@@ -494,7 +509,7 @@ export const ProfilePage = () => {
 
                 <div className="profile-header">
                     <div
-                        className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : isOwnProfile ? 'profile-avatar-visitor-hint' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
+                        className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : isOwnProfile ? 'profile-avatar-nonmember-hint' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
                         {!avatarError && displayedPhoto ? (
                             <img
                                 src={displayedPhoto}
@@ -566,11 +581,11 @@ export const ProfilePage = () => {
                                 <span className="profile-avatar-hint-tooltip">
                                     {canRemovePhoto
                                         ? (isEnglish
-                                            ? 'This photo was set by staff. Visitors cannot change it, but you can remove it.'
-                                            : '此头像由工作人员设置。访客无法更换，但可以将其删除。')
+                                            ? 'This photo was set by staff. You need an active membership to change it, but you can remove it.'
+                                            : '此头像由工作人员设置。需要有效会员资格才能更换，但你可以将其删除。')
                                         : (isEnglish
-                                            ? 'Visitors cannot set a profile photo. Become a member or staff to upload one.'
-                                            : '访客无法设置头像。成为成员或工作人员后即可上传。')}
+                                            ? 'A profile photo needs an active membership. Activate a passport to upload one.'
+                                            : '设置头像需要有效会员资格。激活通行证后即可上传。')}
                                 </span>
                             </>
                         )}
@@ -637,9 +652,33 @@ export const ProfilePage = () => {
                                 year: 'numeric', month: 'long', day: 'numeric',
                             })}
                         </p>
-                        <span className="profile-group-tag" data-group={dp.group}>
-                            {formatGroupWithTitle(dp.group, dp.title, dp.titleCn, isEnglish)}
-                        </span>
+                        <div className="profile-tag-row">
+                            <span className="profile-group-tag" data-group={dp.group}>
+                                {formatGroupWithTitle(dp.group, dp.title, dp.titleCn, isEnglish)}
+                            </span>
+                            {/* Membership is not a group, so it gets its own chip —
+                                otherwise a president who is also a member has nowhere to show it. */}
+                            {dp.isMember && (
+                                <span className="profile-member-tag">
+                                    {isEnglish ? 'Member' : '会员'}
+                                </span>
+                            )}
+                        </div>
+                        {isOwnProfile && (
+                            <p className="profile-membership">
+                                {dp.membershipExpiresAt && dp.isMember
+                                    ? (isEnglish
+                                        ? `Member until ${dp.membershipExpiresAt.toLocaleDateString('en-US', {
+                                            year: 'numeric', month: 'long', day: 'numeric',
+                                        })}`
+                                        : `会员有效期至 ${dp.membershipExpiresAt.toLocaleDateString('zh-CN', {
+                                            year: 'numeric', month: 'long', day: 'numeric',
+                                        })}`)
+                                    : dp.membershipExpiresAt
+                                        ? (isEnglish ? 'Membership lapsed' : '会员已过期')
+                                        : (isEnglish ? 'Not a member' : '非会员')}
+                            </p>
+                        )}
                     </div>
                 </div>
 
