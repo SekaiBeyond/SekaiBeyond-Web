@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 import { useSiteConfig } from "~/lib/siteConfig";
@@ -83,6 +84,11 @@ export const SekaiBeyondCon = () => {
                         <p className="con-description">
                             {isEnglish ? edition.description : edition.descriptionCn}
                         </p>
+
+                        <Link className="btn btn-primary con-page-link" to="/con">
+                            <span>{isEnglish ? "Explore the Con" : "了解漫展详情"}</span>
+                            <span aria-hidden="true">🎪</span>
+                        </Link>
                     </div>
                 </div>
             </div>
