@@ -87,7 +87,6 @@ export const SekaiBeyondCon = () => {
 
                         <Link className="btn btn-primary con-page-link" to="/con">
                             <span>{isEnglish ? "Explore the Con" : "了解漫展详情"}</span>
-                            <span aria-hidden="true">🎪</span>
                         </Link>
                     </div>
                 </div>

@@ -120,7 +120,6 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
 
     const handleImageChange = async (file: File, previewUrl: string) => {
         setUploading(true);
-        // Show local preview immediately
         setFormData(prev => ({...prev, imageUrl: previewUrl}));
         try {
             showToast(isEnglish ? 'Uploading image...' : '正在上传图片...', 'warning');
@@ -131,7 +130,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
             const url = await callUploadAdminImage(file, `team/${crypto.randomUUID()}.webp`);
             setFormData(prev => ({...prev, imageUrl: url}));
             showToast(isEnglish ? 'Image uploaded.' : '图片已上传。', 'success');
-        } catch (err) {
+        } catch {
             showToast(isEnglish ? 'Image upload failed.' : '图片上传失败。', 'error');
         } finally {
             setUploading(false);

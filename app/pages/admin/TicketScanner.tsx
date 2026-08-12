@@ -88,7 +88,6 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 };
                 setStatus({kind: 'success', ...successData});
 
-                // Update RAM cache
                 redeemedCacheRef.current = [
                     {ticketId, ...successData},
                     ...redeemedCacheRef.current,

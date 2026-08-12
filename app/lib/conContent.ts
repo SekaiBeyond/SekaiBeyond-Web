@@ -58,10 +58,6 @@ export type ConContentSection = keyof ConContent;
 
 const BLANK: Localized = {en: '', zh: ''};
 
-/* -------------------------------------------------------------------------- */
-/* Reading                                                                    */
-/* -------------------------------------------------------------------------- */
-
 /**
  * `saveConContent` validates everything on the way in, so a well-formed document
  * is the normal case. These readers exist for the abnormal one — a half-written

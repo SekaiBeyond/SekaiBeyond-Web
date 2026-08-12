@@ -113,8 +113,6 @@ export function useAllUpcomingEvents(): {
     return {upcomingEvents, loading, refresh};
 }
 
-// ---------- Per-ID fetch (event-staff) ----------
-
 /** Fetch specific upcoming events by ID. Safe for event-staff users who lack collection-level read access. */
 export function useUpcomingEventsByIds(ids: string[]): {
     upcomingEvents: UpcomingEvent[];

@@ -298,10 +298,6 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     });
 });
 
-/* -------------------------------------------------------------------------- */
-/* Con page content                                                           */
-/* -------------------------------------------------------------------------- */
-
 // Mirrors ROOM_ACCENTS in app/pages/con/content.ts. Each value names a CSS class
 // (sbc-room-chip--<accent>), so the palette is a whitelist even though the rooms
 // that use it are free-form, admin-managed data.
@@ -831,7 +827,6 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
             if (!existing.exists) throw new HttpsError("not-found", "Venue not found.");
         }
 
-        // Verify referenced lots exist.
         for (const link of parkingLots) {
             const lotSnap = await txn.get(db.collection("parkingLots").doc(link.lotId));
             if (!lotSnap.exists) {

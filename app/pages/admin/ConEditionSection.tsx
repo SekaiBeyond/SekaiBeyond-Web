@@ -40,7 +40,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
             const url = await callUploadAdminImage(file, `config/con-${formData.year}.webp`);
             setFormData(prev => ({...prev, image: url}));
             showToast(isEnglish ? 'Image uploaded.' : '图片已上传。', 'success');
-        } catch (err) {
+        } catch {
             showToast(isEnglish ? 'Image upload failed.' : '图片上传失败。', 'error');
         } finally {
             setUploading(false);
@@ -75,7 +75,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
             await callSaveSiteConfig({conEdition: formData});
             await refreshConfig();
             showToast(isEnglish ? 'Convention edition saved.' : '漫展年度已保存。', 'success');
-        } catch (e: any) {
+        } catch {
             showToast(isEnglish ? 'Failed to save convention edition.' : '保存漫展年度失败。', 'error');
         } finally {
             setSaving(false);
@@ -89,7 +89,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
             await callSaveSiteConfig({conEdition: null});
             await refreshConfig();
             showToast(isEnglish ? 'Convention configuration reset.' : '漫展配置已重置。', 'success');
-        } catch (e: any) {
+        } catch {
             showToast(isEnglish ? 'Failed to reset convention configuration.' : '重置漫展配置失败。', 'error');
         } finally {
             setSaving(false);

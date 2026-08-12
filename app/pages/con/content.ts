@@ -19,10 +19,6 @@
 import { BILIBILI_VIDEO } from '~/constants';
 import type { Localized } from '~/pages/con/i18n';
 
-/* -------------------------------------------------------------------------- */
-/* Event                                                                      */
-/* -------------------------------------------------------------------------- */
-
 /** Page-level switches, kept apart from the copy they govern. */
 export interface ConSettings {
     /**
@@ -110,11 +106,6 @@ export const HERO_VIDEO = {
     poster: '',
 };
 
-/* -------------------------------------------------------------------------- */
-/* Navigation                                                                 */
-
-/* -------------------------------------------------------------------------- */
-
 export interface NavLink {
     id: string
     label: Localized
@@ -129,10 +120,6 @@ export const NAV_LINKS: NavLink[] = [
     {id: 'venue', label: {en: 'Venue', zh: '场地'}},
     {id: 'faq', label: {en: 'FAQ', zh: '常见问题'}},
 ];
-
-/* -------------------------------------------------------------------------- */
-/* About + highlights                                                         */
-/* -------------------------------------------------------------------------- */
 
 export const ABOUT_PARAGRAPHS: Localized[] = [
     {
@@ -202,9 +189,7 @@ export const HIGHLIGHTS: Highlight[] = [
     },
 ];
 
-/* -------------------------------------------------------------------------- */
-/* Rooms + schedule — PLACEHOLDER; the real grid lives in conContent/main      */
-/* -------------------------------------------------------------------------- */
+// Rooms + schedule — PLACEHOLDER; the real grid lives in conContent/main
 
 /**
  * Chip colours a room can use. The palette is fixed in code because each value
@@ -356,10 +341,7 @@ export const SCHEDULE: ScheduleBlock[] = [
     },
 ];
 
-/* -------------------------------------------------------------------------- */
-/* Guests — PLACEHOLDER line-up                                               */
-
-/* -------------------------------------------------------------------------- */
+// Guests — PLACEHOLDER line-up
 
 export interface Guest {
     name: string
@@ -397,10 +379,7 @@ export const GUESTS: Guest[] = [
     },
 ];
 
-/* -------------------------------------------------------------------------- */
-/* Artist alley / vendors — PLACEHOLDER                                       */
-
-/* -------------------------------------------------------------------------- */
+// Artist alley / vendors — PLACEHOLDER
 
 export interface Vendor {
     name: string
@@ -433,10 +412,7 @@ export const VENDOR_CTA: VendorCta = {
     label: {en: 'Ask about tabling', zh: '咨询摊位'},
 };
 
-/* -------------------------------------------------------------------------- */
-/* Tickets — PLACEHOLDER pricing                                              */
-
-/* -------------------------------------------------------------------------- */
+// Tickets — PLACEHOLDER pricing
 
 export interface TicketTier {
     id: string
@@ -486,11 +462,6 @@ export const TICKETS: TicketTier[] = [
     },
 ];
 
-/* -------------------------------------------------------------------------- */
-/* Venue                                                                      */
-
-/* -------------------------------------------------------------------------- */
-
 export interface VenueNote {
     icon: string
     label: Localized
@@ -531,11 +502,6 @@ export const VENUE_NOTES: VenueNote[] = [
         },
     },
 ];
-
-/* -------------------------------------------------------------------------- */
-/* FAQ                                                                        */
-
-/* -------------------------------------------------------------------------- */
 
 export interface FaqEntry {
     q: Localized

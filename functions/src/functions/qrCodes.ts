@@ -301,8 +301,6 @@ async function commitScanTally(ref: FirebaseFirestore.DocumentReference, platfor
     await batch.commit();
 }
 
-// ---------------- Fast public redirect ----------------
-
 // Linked-event end times, cached in-process. While an instance stays warm,
 // repeated scans of the same event-linked code during an event skip the
 // upcomingEvents read entirely. The TTL is short so reschedules and archival

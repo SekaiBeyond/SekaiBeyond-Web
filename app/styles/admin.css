@@ -1,4 +1,3 @@
-/* ===== Admin Page ===== */
 .admin-nav-title {
     font-size: 14px;
     font-weight: 700;
@@ -45,7 +44,6 @@
     margin-top: 10px;
 }
 
-/* ===== Shared admin controls ===== */
 /* One button base + look/size modifiers. Every admin button is
    `.admin-btn` plus a `--variant`; utilities (e.g. .admin-section-mb) still
    win because they are declared later in the cascade. The .admin-toggle-btn
@@ -259,7 +257,6 @@
     resize: vertical;
 }
 
-/* Admin Search */
 .admin-search {
     display: flex;
     gap: 10px;
@@ -283,7 +280,6 @@
     cursor: pointer;
 }
 
-/* Admin User Row */
 .admin-user-row {
     display: flex;
     align-items: center;
@@ -352,7 +348,6 @@
     font-size: 15px;
 }
 
-/* Admin User Detail */
 .admin-detail-header {
     display: flex;
     align-items: center;
@@ -521,7 +516,6 @@
     font-weight: 600;
 }
 
-/* Admin Badge Row */
 .admin-badge-list {
     display: flex;
     flex-direction: column;
@@ -649,7 +643,6 @@
     cursor: not-allowed;
 }
 
-/* Event Management Grid */
 .admin-event-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -742,7 +735,6 @@
     font-weight: 600;
 }
 
-/* Event Detail View */
 .admin-event-detail-header {
     display: flex;
     align-items: center;
@@ -782,7 +774,6 @@
     color: var(--color-primary);
 }
 
-/* Event Sub-Tabs */
 .admin-sub-tabs {
     display: flex;
     gap: 4px;
@@ -834,7 +825,6 @@
     font-weight: 700;
 }
 
-/* Attendees Section */
 .admin-attendees-section {
     margin-top: 4px;
 }
@@ -846,7 +836,6 @@
     margin-bottom: 12px;
 }
 
-/* Codes Section */
 .admin-codes-section {
     margin-top: 4px;
 }
@@ -868,7 +857,6 @@
     font-size: 14px;
 }
 
-/* Admin Responsive */
 @media (max-width: 600px) {
     .admin-search {
         flex-direction: column;
@@ -908,7 +896,6 @@
     }
 }
 
-/* User Group Tags */
 .admin-user-group-tag {
     display: inline-block;
     padding: 3px 10px;
@@ -922,7 +909,6 @@
 
 /* Group tag colors are in components.css */
 
-/* Group Management Section */
 .admin-group-section {
     margin-bottom: 24px;
     padding: 18px;
@@ -959,7 +945,6 @@
     gap: 8px;
 }
 
-/* Title Management */
 .admin-title-fields {
     display: flex;
     flex-wrap: wrap;
@@ -1002,7 +987,6 @@
     font-weight: 500;
 }
 
-/* Admin Badge Codes */
 .admin-single-code {
     display: flex;
     flex-direction: column;
@@ -1121,7 +1105,6 @@
     }
 }
 
-/* Badge Creation Form */
 .admin-create-badge-form {
     background: rgba(255, 255, 255, 0.85);
     border-radius: 16px;
@@ -1354,7 +1337,6 @@
     }
 }
 
-/* Admin Utility Classes */
 .admin-form-grid-full {
     grid-column: 1 / -1;
 }
@@ -1601,7 +1583,6 @@
     color: #999;
 }
 
-/* Collapsible section headers (Events tab) */
 .admin-section-header {
     display: inline-flex;
     align-items: center;
@@ -1653,7 +1634,6 @@
     margin-bottom: 8px;
 }
 
-/* Records Tab */
 .record-filter-bar {
     display: flex;
     align-items: center;
@@ -1731,7 +1711,6 @@
     color: #4a5160;
 }
 
-/* Record type tag colors — grouped by color */
 .record-type-group-assign,
 .record-type-title-set,
 .record-type-event-staff-assign,
@@ -1933,7 +1912,6 @@
     }
 }
 
-/* Image Crop Modal */
 .image-crop-modal {
     max-width: min(440px, 92vw);
     padding: 24px;
@@ -2043,7 +2021,6 @@
     cursor: not-allowed;
 }
 
-/* ===== Admin Tickets (Upcoming Event → Tickets sub-tab) ===== */
 .admin-tickets-section {
     margin-top: 4px;
     display: flex;
@@ -2051,7 +2028,6 @@
     gap: 16px;
 }
 
-/* Third-level tab bar (Scan / Attendees / Import / Template / Send) */
 .admin-tickets-inner-tabs {
     display: flex;
     flex-wrap: wrap;
@@ -2069,7 +2045,6 @@
     font-size: 13px;
 }
 
-/* ----- Attendees section ----- */
 .admin-tickets-attendees {
     display: flex;
     flex-direction: column;
@@ -2218,7 +2193,6 @@
     white-space: nowrap;
 }
 
-/* Collapsible attendee row */
 .admin-tickets-attendee-row {
     background: rgba(255, 255, 255, 0.85);
     border: 1px solid rgba(255, 107, 157, 0.12);
@@ -2314,7 +2288,6 @@
     padding: 18px 20px;
 }
 
-/* Status tags */
 .admin-tickets-tag {
     display: inline-block;
     padding: 3px 10px;
@@ -2404,7 +2377,6 @@ select.admin-tickets-tag:focus {
     border-color: rgba(0, 0, 0, 0.2);
 }
 
-/* Tickets table (used in attendee detail + import preview) */
 .admin-tickets-table-wrap {
     width: 100%;
     overflow-x: auto;
@@ -2504,7 +2476,6 @@ select.admin-tickets-tag:focus {
     border-radius: 14px;
 }
 
-/* ----- Import section ----- */
 .admin-tickets-import-file-row {
     display: flex;
     align-items: center;
@@ -2577,7 +2548,6 @@ select.admin-tickets-tag:focus {
     font-size: 12px;
 }
 
-/* ----- Import preview diff styles ----- */
 .admin-tickets-import-row-changed > td {
     background: rgba(255, 142, 83, 0.08);
 }
@@ -2639,7 +2609,6 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-light);
 }
 
-/* ----- Template section ----- */
 .admin-tickets-template-field {
     display: flex;
     flex-direction: column;
@@ -2687,7 +2656,6 @@ select.admin-tickets-tag:focus {
     margin: 0;
 }
 
-/* ----- Preview / Edit modal ----- */
 .admin-tickets-preview-modal {
     position: fixed;
     inset: 0;
@@ -2792,7 +2760,6 @@ select.admin-tickets-tag:focus {
     max-width: 480px;
 }
 
-/* ----- Send section ----- */
 .admin-tickets-send-stats {
     padding: 12px 16px;
     background: rgba(255, 107, 157, 0.06);
@@ -2876,7 +2843,6 @@ select.admin-tickets-tag:focus {
     transition: width 0.25s ease;
 }
 
-/* ----- Scanner section ----- */
 .admin-tickets-scanner {
     display: flex;
     flex-direction: column;
@@ -2940,7 +2906,6 @@ select.admin-tickets-tag:focus {
     flex-shrink: 0;
 }
 
-/* Scan result banner */
 .admin-tickets-scan-banner {
     padding: 14px 18px;
     border-radius: 14px;
@@ -3016,7 +2981,6 @@ select.admin-tickets-tag:focus {
     color: #1c5b8b;
 }
 
-/* ----- Responsive ----- */
 @media (max-width: 600px) {
     .admin-tickets-inner-tabs .admin-sub-tab {
         min-width: 90px;
@@ -3106,7 +3070,6 @@ select.admin-tickets-tag:focus {
     }
 }
 
-/* --- Venue: Linked Parking Lots --- */
 .admin-venue-lots {
     margin-top: 24px;
     border-top: 1px solid rgba(255, 107, 157, 0.18);
@@ -3276,7 +3239,7 @@ select.admin-tickets-tag:focus {
     }
 }
 
-/* --- Admin form field section heading (reused across lot/venue forms) --- */
+/* Admin form field section heading (reused across lot/venue forms) */
 .admin-field-label {
     display: block;
     font-size: 14px;
@@ -3305,7 +3268,6 @@ select.admin-tickets-tag:focus {
     margin-top: 4px;
 }
 
-/* --- Map-based coordinate picker --- */
 .admin-map-picker {
     display: flex;
     flex-direction: column;
@@ -3326,7 +3288,6 @@ select.admin-tickets-tag:focus {
     opacity: 0.7;
 }
 
-/* --- Locations overview map --- */
 .admin-locmap {
     display: flex;
     flex-direction: column;
@@ -3548,7 +3509,6 @@ select.admin-tickets-tag:focus {
     }
 }
 
-/* --- QR codes tool --- */
 .admin-tools-back-row {
     margin-bottom: 12px;
 }
@@ -4082,8 +4042,6 @@ select.admin-tickets-tag:focus {
     font-size: 15px;
 }
 
-/* --- Parking-rate color picker (Rates tab) --- */
-
 .admin-rate-color-row {
     display: flex;
     flex-wrap: wrap;
@@ -4134,7 +4092,6 @@ select.admin-tickets-tag:focus {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
-/* --- Email quota tool --- */
 /* Pushed to the end of the tool header row so Back/title stay left-aligned. */
 .admin-quota-refresh {
     margin-left: auto;

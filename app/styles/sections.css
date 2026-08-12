@@ -1,4 +1,3 @@
-/* Section styles */
 .section {
     padding: 80px 40px;
     max-width: 1400px;
@@ -28,7 +27,6 @@
     line-height: 1.6;
 }
 
-/* About Section */
 .about-section {
     background: white;
     border-radius: 30px;
@@ -107,7 +105,6 @@
     transform: scale(1.02);
 }
 
-/* Past Events Section */
 .events-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -213,7 +210,6 @@
     transform: translateX(2px);
 }
 
-/* Convention Section */
 .convention-banner {
     background: white;
     padding: 60px 40px;
@@ -238,7 +234,6 @@
     animation: float-around 20s infinite linear;
 }
 
-/* Convention decoration positions */
 .con-deco:nth-child(1) {
     top: 10%;
     left: 5%;
@@ -311,7 +306,6 @@
     margin: 40px auto;
 }
 
-/* Convention poster styles */
 .convention-poster img {
     transition: transform 0.3s ease;
     width: 50%;
@@ -325,7 +319,6 @@
     transform: scale(1.05);
 }
 
-/* Upcoming Event - date, description, poster credit */
 .event-date-text {
     font-size: 30px;
     color: var(--color-accent);
@@ -348,7 +341,6 @@
     font-style: italic;
 }
 
-/* Countdown timer */
 .countdown-container {
     display: flex;
     gap: 20px;
@@ -390,7 +382,6 @@
     font-weight: 600;
 }
 
-/* Carousel */
 .carousel-slide {
     transition: opacity 0.3s ease, transform 0.3s ease;
     opacity: 1;
@@ -473,7 +464,6 @@
     text-align: center;
 }
 
-/* Team Section */
 .team-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -528,7 +518,6 @@
     margin-bottom: 10px;
 }
 
-/* Honorary members sub-section */
 .team-subheading {
     display: flex;
     align-items: center;
@@ -592,7 +581,6 @@
     font-weight: 500;
 }
 
-/* Contact Section */
 .contact-section {
     background: white;
     border-radius: 30px;
@@ -640,7 +628,6 @@
     font-weight: 700;
 }
 
-/* Footer */
 footer {
     padding: 60px 40px 30px;
     text-align: center;

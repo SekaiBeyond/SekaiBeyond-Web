@@ -310,7 +310,6 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
         await file.delete();
     }
 
-    // Reset to Google OAuth photo or empty string
     const googlePhoto = isSelf
         ? (request.auth.token.picture ?? "")
         : await googlePhotoURL(targetUid);

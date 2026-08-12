@@ -36,10 +36,6 @@ const SECTION_LABELS: Record<ConContentSection, Localized> = {
 
 const BLANK: Localized = {en: '', zh: ''};
 
-/* -------------------------------------------------------------------------- */
-/* List helpers                                                               */
-/* -------------------------------------------------------------------------- */
-
 const replaceAt = <T, >(items: T[], index: number, next: T): T[] =>
     items.map((item, i) => (i === index ? next : item));
 
@@ -52,10 +48,6 @@ const moveAt = <T, >(items: T[], index: number, delta: number): T[] => {
     [next[index], next[target]] = [next[target], next[index]];
     return next;
 };
-
-/* -------------------------------------------------------------------------- */
-/* Section plumbing                                                           */
-/* -------------------------------------------------------------------------- */
 
 interface SectionEditor<T> {
     draft: T;
@@ -172,10 +164,6 @@ const SectionShell = <K extends ConContentSection, >(
     );
 };
 
-/* -------------------------------------------------------------------------- */
-/* Shared field pieces                                                        */
-/* -------------------------------------------------------------------------- */
-
 interface LocalizedFieldProps {
     label: Localized;
     value: Localized;
@@ -278,10 +266,6 @@ const EmptyRow = ({label}: {label: Localized}) => {
     const {isEnglish} = useLanguage();
     return <p className="admin-con-empty">{isEnglish ? label.en : label.zh}</p>;
 };
-
-/* -------------------------------------------------------------------------- */
-/* Event details                                                              */
-/* -------------------------------------------------------------------------- */
 
 const EventSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
@@ -409,10 +393,6 @@ const EventSection = ({content, loading, showToast, readOnly}: SectionProps) => 
     );
 };
 
-/* -------------------------------------------------------------------------- */
-/* Page visibility                                                            */
-/* -------------------------------------------------------------------------- */
-
 const SettingsSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('settings', content.settings, loading, showToast);
@@ -452,10 +432,6 @@ const SettingsSection = ({content, loading, showToast, readOnly}: SectionProps) 
         </SectionShell>
     );
 };
-
-/* -------------------------------------------------------------------------- */
-/* Rooms                                                                      */
-/* -------------------------------------------------------------------------- */
 
 const ACCENT_LABELS: Record<RoomAccent, Localized> = {
     pink: {en: 'Pink', zh: '粉色'},
@@ -576,10 +552,6 @@ const RoomsSection = ({content, loading, showToast, readOnly}: SectionProps) => 
         </SectionShell>
     );
 };
-
-/* -------------------------------------------------------------------------- */
-/* Schedule                                                                   */
-/* -------------------------------------------------------------------------- */
 
 const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
@@ -800,10 +772,6 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
     );
 };
 
-/* -------------------------------------------------------------------------- */
-/* Guests                                                                     */
-/* -------------------------------------------------------------------------- */
-
 const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('guests', content.guests, loading, showToast);
@@ -927,10 +895,6 @@ const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) =>
     );
 };
 
-/* -------------------------------------------------------------------------- */
-/* Artist alley                                                               */
-/* -------------------------------------------------------------------------- */
-
 const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('vendors', content.vendors, loading, showToast);
@@ -1046,10 +1010,6 @@ const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) =
         </SectionShell>
     );
 };
-
-/* -------------------------------------------------------------------------- */
-/* Tickets                                                                    */
-/* -------------------------------------------------------------------------- */
 
 const TicketsSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
@@ -1178,10 +1138,6 @@ const TicketsSection = ({content, loading, showToast, readOnly}: SectionProps) =
     );
 };
 
-/* -------------------------------------------------------------------------- */
-/* FAQ                                                                        */
-/* -------------------------------------------------------------------------- */
-
 const FaqSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('faq', content.faq, loading, showToast);
@@ -1244,10 +1200,6 @@ const FaqSection = ({content, loading, showToast, readOnly}: SectionProps) => {
         </SectionShell>
     );
 };
-
-/* -------------------------------------------------------------------------- */
-/* Tab                                                                        */
-/* -------------------------------------------------------------------------- */
 
 interface SectionProps {
     content: ConContent;

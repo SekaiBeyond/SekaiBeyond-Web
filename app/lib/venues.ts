@@ -13,7 +13,6 @@ export interface Venue {
     parkingLots: VenueLotLink[];
 }
 
-// --- UW-specific deployment constants ---
 // These are the values to change if the parking guide is ever used off the UW campus.
 /** Default map center (UW campus center) when no venue-specific center is available. */
 export const UW_CAMPUS_CENTER = {lat: 47.6553, lng: -122.3035};

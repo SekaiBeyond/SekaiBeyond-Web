@@ -16,8 +16,6 @@ export const QrRedirectPage = () => {
     return <ExpiredCard isError={false}/>;
 };
 
-// ---------------- Managed (tracked) codes ----------------
-
 type ManagedStatus = 'loading' | 'redirecting' | 'expired' | 'error';
 
 const ManagedQrRedirect = ({id, platform}: {id: string; platform: string}) => {
@@ -64,8 +62,6 @@ const ManagedQrRedirect = ({id, platform}: {id: string; platform: string}) => {
 
     return <ExpiredCard isError={status === 'error'}/>;
 };
-
-// ---------------- Shared expired / invalid card ----------------
 
 export const ExpiredCard = ({isError}: {isError: boolean}) => {
     const {isEnglish} = useLanguage();

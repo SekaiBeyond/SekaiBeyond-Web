@@ -185,7 +185,6 @@ export const UpcomingEvent = () => {
         switchEvent(newIndex, 'left');
     };
 
-    // Touch swipe support
     const [touchStart, setTouchStart] = useState<number | null>(null);
     const [touchEnd, setTouchEnd] = useState<number | null>(null);
 

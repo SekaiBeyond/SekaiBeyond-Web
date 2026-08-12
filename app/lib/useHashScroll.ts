@@ -12,7 +12,6 @@ export function useHashScroll() {
     useEffect(() => {
         if (!hash) return;
 
-        // Function to perform the scroll
         const scrollToHash = () => {
             const id = hash.replace('#', '');
             const element = document.getElementById(id);
@@ -25,7 +24,6 @@ export function useHashScroll() {
             }
         };
 
-        // Try immediately
         scrollToHash();
 
         // Also try after a short delay to account for async content rendering

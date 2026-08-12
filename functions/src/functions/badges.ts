@@ -137,7 +137,6 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
     const newRef = badgeId ? null : db.collection("badges").doc();
 
     const {result, oldImageUrl} = await adminTransaction(uid, async (txn, callerSnap) => {
-        // Validate createdByUid references an existing user if provided
         if (createdByUid) {
             const creatorSnap = await txn.get(db.collection("users").doc(createdByUid));
             if (!creatorSnap.exists) {

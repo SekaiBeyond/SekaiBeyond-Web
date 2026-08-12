@@ -190,8 +190,6 @@ export const callSetUpcomingEventPublished = (data: {eventId: string; published:
 export const callArchiveUpcomingEvent = (data: {eventId: string; tagIds: string[]}) =>
     httpsCallable<typeof data, {pastEventId: string}>(getFunctions(), 'archiveUpcomingEvent')(data);
 
-// ---- Paid event ticketing ----
-
 export const callImportEventAttendees = (data: {
     eventId: string;
     attendees: Array<{email: string; name: string; ticketCount: number; type: string}>;
@@ -437,8 +435,6 @@ export const callSaveParkingRate = (data: {rateId?: string; labelEn: string; lab
 export const callDeleteParkingRate = (data: {rateId: string}) =>
     httpsCallable<typeof data, {deleted: boolean; unlinkedFrom: number}>(getFunctions(), 'deleteParkingRate')(data);
 
-// ---- Managed QR codes ----
-
 export const callSaveQrCode = (data: {
     qrId?: string;
     label: string;
@@ -462,8 +458,6 @@ export const callDeleteQrCode = (data: {qrId: string}) =>
 
 export const callRecordQrScan = (data: {id: string; p?: string}) =>
     httpsCallable<typeof data, {active: boolean; targetUrl: string}>(getFunctions(), 'recordQrScan')(data);
-
-// ---- Editable social platforms (per-platform QR tracking) ----
 
 export const callSaveSocialPlatform = (data: {
     id?: string;
