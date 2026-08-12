@@ -1,7 +1,7 @@
 import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveConContent, callUploadAdminImage } from '~/lib/firebase';
-import { type ConContent, type ConContentSection, refreshConContent, useConContent, } from '~/lib/conContent';
+import { type ConContent, type ConContentSection, refreshConContent, useConDraft, } from '~/lib/conContent';
 import { ROOM_ACCENTS, type RoomAccent } from '~/pages/con/content';
 import type { Localized } from '~/pages/con/i18n';
 import type { ShowToast } from './utils';
@@ -35,6 +35,14 @@ const SECTION_LABELS: Record<ConContentSection, Localized> = {
 };
 
 const BLANK: Localized = {en: '', zh: ''};
+
+/**
+ * An id for a newly added row. Deliberately not derived from the list length:
+ * deleting `room-2` from three rooms and adding one would mint `room-3` on top of
+ * the `room-3` that is still there. Lowercase hex keeps it inside the slug shape
+ * the server enforces for room ids.
+ */
+const newRowId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 
 const replaceAt = <T, >(items: T[], index: number, next: T): T[] =>
     items.map((item, i) => (i === index ? next : item));
@@ -102,10 +110,16 @@ function useSectionEditor<K extends ConContentSection>(
         try {
             const fresh = await refreshConContent();
             setDraft(fresh[section]);
+            showToast(isEnglish ? `${label.en} saved.` : `${label.zh}已保存。`, 'success');
         } catch {
             // Keep the draft; it is what was just stored.
+            showToast(
+                isEnglish
+                    ? `${label.en} saved, but the page could not re-read it. Reload to see the stored copy.`
+                    : `${label.zh}已保存，但无法重新读取。请刷新页面以查看已存储的内容。`,
+                'warning',
+            );
         }
-        showToast(isEnglish ? `${label.en} saved.` : `${label.zh}已保存。`, 'success');
         setSaving(false);
     };
 
@@ -116,12 +130,19 @@ interface SectionShellProps<K extends ConContentSection> {
     section: K;
     helper: Localized;
     editor: SectionEditor<ConContent[K]>;
+    /**
+     * Blocks Save and Discard while something the draft depends on is still in
+     * flight — an image upload leaves a local `blob:` preview in the draft, which
+     * the server rejects outright.
+     */
+    busy?: boolean;
+    busyLabel?: Localized;
     readOnly?: boolean;
     children: ReactNode;
 }
 
 const SectionShell = <K extends ConContentSection, >(
-    {section, helper, editor, readOnly, children}: SectionShellProps<K>,
+    {section, helper, editor, busy, busyLabel, readOnly, children}: SectionShellProps<K>,
 ) => {
     const {isEnglish} = useLanguage();
     const label = SECTION_LABELS[section];
@@ -145,7 +166,7 @@ const SectionShell = <K extends ConContentSection, >(
                     <button
                         className="admin-toggle-btn admin-toggle-save"
                         onClick={editor.save}
-                        disabled={editor.saving || !editor.dirty}
+                        disabled={editor.saving || busy || !editor.dirty}
                     >
                         {editor.saving
                             ? (isEnglish ? 'Saving...' : '保存中...')
@@ -154,10 +175,15 @@ const SectionShell = <K extends ConContentSection, >(
                     <button
                         className="admin-toggle-btn admin-toggle-cancel"
                         onClick={editor.revert}
-                        disabled={editor.saving || !editor.dirty}
+                        disabled={editor.saving || busy || !editor.dirty}
                     >
                         {isEnglish ? 'Discard Changes' : '放弃更改'}
                     </button>
+                    {busy && busyLabel && (
+                        <span className="admin-helper-text">
+                            {isEnglish ? busyLabel.en : busyLabel.zh}
+                        </span>
+                    )}
                 </div>
             )}
         </div>
@@ -252,13 +278,32 @@ const RowActions = ({index, count, onMove, onRemove, readOnly}: RowActionsProps)
     );
 };
 
-const AddButton = ({label, onClick, readOnly}: {label: Localized; onClick: () => void; readOnly?: boolean}) => {
+interface AddButtonProps {
+    label: Localized;
+    onClick: () => void;
+    readOnly?: boolean;
+    /** Set when the row cannot be created yet, with `blockedHint` saying why. */
+    blocked?: boolean;
+    blockedHint?: Localized;
+}
+
+const AddButton = ({label, onClick, readOnly, blocked, blockedHint}: AddButtonProps) => {
     const {isEnglish} = useLanguage();
     if (readOnly) return null;
     return (
-        <button type="button" className="admin-btn admin-btn--link admin-con-add" onClick={onClick}>
-            {isEnglish ? `+ Add ${label.en}` : `+ 添加${label.zh}`}
-        </button>
+        <>
+            <button
+                type="button"
+                className="admin-btn admin-btn--link admin-con-add"
+                onClick={onClick}
+                disabled={blocked}
+            >
+                {isEnglish ? `+ Add ${label.en}` : `+ 添加${label.zh}`}
+            </button>
+            {blocked && blockedHint && (
+                <p className="admin-con-empty">{isEnglish ? blockedHint.en : blockedHint.zh}</p>
+            )}
+        </>
     );
 };
 
@@ -402,8 +447,8 @@ const SettingsSection = ({content, loading, showToast, readOnly}: SectionProps) 
         <SectionShell
             section="settings"
             helper={{
-                en: 'While the page is unpublished, visitors get a short “coming soon” card instead. Core staff and the president still see the real page, with a banner across the top.',
-                zh: '未发布时，访客将看到简短的「敬请期待」提示页。核心成员与社长仍可查看真实页面，顶部会显示提示横幅。',
+                en: 'While the page is unpublished, visitors get a short “coming soon” card and none of the content below leaves the admin panel. Core staff and the president still see the real page, with a banner along the bottom.',
+                zh: '未发布时，访客将看到简短的「敬请期待」提示页，下方内容不会离开管理面板。核心成员与社长仍可查看真实页面，底部会显示提示横幅。',
             }}
             editor={editor}
             readOnly={readOnly}
@@ -426,8 +471,8 @@ const SettingsSection = ({content, loading, showToast, readOnly}: SectionProps) 
                 {draft.published
                     ? (isEnglish ? 'Currently visible to everyone.' : '当前对所有人可见。')
                     : (isEnglish
-                        ? 'Currently hidden from the public.'
-                        : '当前对公众隐藏。')}
+                        ? 'Hidden from the public, and the saved copy is staff-only until you publish — safe for an unannounced line-up.'
+                        : '当前对公众隐藏，且在发布前已保存的内容仅工作人员可见——可安全用于尚未公布的阵容。')}
             </p>
         </SectionShell>
     );
@@ -542,7 +587,7 @@ const RoomsSection = ({content, loading, showToast, readOnly}: SectionProps) => 
                 <AddButton
                     label={{en: 'room', zh: '房间'}}
                     onClick={() => setDraft(prev => [...prev, {
-                        id: `room-${prev.length + 1}`,
+                        id: newRowId('room'),
                         name: BLANK,
                         accent: ROOM_ACCENTS[prev.length % ROOM_ACCENTS.length],
                     }])}
@@ -756,6 +801,14 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                                         title: BLANK,
                                     }],
                                 })}
+                                // Every item must name a room server-side, so with no
+                                // rooms to pick from the whole section would be
+                                // rejected on Save.
+                                blocked={content.rooms.length === 0}
+                                blockedHint={{
+                                    en: 'Add and save a room above before adding schedule items.',
+                                    zh: '请先在上方添加并保存房间，然后再添加日程条目。',
+                                }}
                                 readOnly={readOnly}
                             />
                         </div>
@@ -764,7 +817,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
 
                 <AddButton
                     label={{en: 'block', zh: '时段'}}
-                    onClick={() => setDraft(prev => [...prev, {id: '', label: BLANK, items: []}])}
+                    onClick={() => setDraft(prev => [...prev, {id: newRowId('block'), label: BLANK, items: []}])}
                     readOnly={readOnly}
                 />
             </div>
@@ -776,14 +829,18 @@ const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) =>
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('guests', content.guests, loading, showToast);
     const {draft, setDraft} = editor;
-    const [uploading, setUploading] = useState<number | null>(null);
+    /**
+     * The in-flight upload's local preview, held beside the draft rather than in
+     * it. A `blob:` URL is not something the server will accept, so putting it in
+     * the draft means a Save landing mid-upload fails the whole section.
+     */
+    const [preview, setPreview] = useState<{index: number; url: string} | null>(null);
 
     const update = (index: number, next: ConContent['guests'][number]) =>
         setDraft(prev => replaceAt(prev, index, next));
 
-    const uploadAvatar = async (index: number, guest: ConContent['guests'][number], file: File, previewUrl: string) => {
-        setUploading(index);
-        update(index, {...guest, avatar: previewUrl});
+    const uploadAvatar = async (index: number, file: File, previewUrl: string) => {
+        setPreview({index, url: previewUrl});
         try {
             showToast(isEnglish ? 'Uploading photo...' : '正在上传照片...', 'warning');
             // Time-stamped rather than indexed: reordering the line-up must not
@@ -792,10 +849,13 @@ const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) =>
             setDraft(prev => replaceAt(prev, index, {...prev[index], avatar: url}));
             showToast(isEnglish ? 'Photo uploaded.' : '照片已上传。', 'success');
         } catch (e: any) {
-            setDraft(prev => replaceAt(prev, index, {...prev[index], avatar: guest.avatar}));
+            // Nothing to roll back — the draft never held the preview.
             showToast(e?.message ?? (isEnglish ? 'Photo upload failed.' : '照片上传失败。'), 'error');
         } finally {
-            setUploading(null);
+            // Safe to revoke immediately: the <img> is swapping to the stored URL in
+            // the same commit, so nothing refetches the blob.
+            URL.revokeObjectURL(previewUrl);
+            setPreview(null);
         }
     };
 
@@ -807,6 +867,8 @@ const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) =>
                 zh: '嘉宾卡片按此顺序展示。未上传照片时将显示名字首字母。',
             }}
             editor={editor}
+            busy={preview !== null}
+            busyLabel={{en: 'Waiting for the photo upload...', zh: '正在等待照片上传...'}}
             readOnly={readOnly}
         >
             <div className="admin-con-list">
@@ -817,7 +879,7 @@ const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) =>
                         <div className="admin-con-card-head">
                             <span className="admin-con-card-title">
                                 {guest.name || (isEnglish ? `Guest ${index + 1}` : `嘉宾 ${index + 1}`)}
-                                {uploading === index && (
+                                {preview?.index === index && (
                                     <span className="admin-con-dirty">
                                         {isEnglish ? 'Uploading...' : '上传中...'}
                                     </span>
@@ -873,8 +935,9 @@ const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) =>
                                     <ImageUploadField
                                         label="Photo"
                                         labelCn="照片"
-                                        preview={guest.avatar || null}
-                                        onFileChange={(file, url) => uploadAvatar(index, guest, file, url)}
+                                        preview={(preview?.index === index ? preview.url : guest.avatar) || null}
+                                        onFileChange={(file, url) => uploadAvatar(index, file, url)}
+                                        onCleanupPreview={url => URL.revokeObjectURL(url)}
                                         cropAspect={1}
                                         convertToWebp
                                         showToast={showToast}
@@ -1125,7 +1188,7 @@ const TicketsSection = ({content, loading, showToast, readOnly}: SectionProps) =
                 <AddButton
                     label={{en: 'tier', zh: '票种'}}
                     onClick={() => setDraft(prev => [...prev, {
-                        id: '',
+                        id: newRowId('tier'),
                         name: BLANK,
                         price: BLANK,
                         note: BLANK,
@@ -1210,7 +1273,7 @@ interface SectionProps {
 
 export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps) => {
     const {isEnglish} = useLanguage();
-    const {content, loading, failed} = useConContent();
+    const {content, loading, failed} = useConDraft();
 
     if (loading) {
         return (

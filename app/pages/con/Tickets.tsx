@@ -18,9 +18,11 @@ export const Tickets = () => {
             />
 
             <div className="sbc-ticket-grid">
-                {content.tickets.map(tier => (
+                {/* Keyed by position, not by content or id: tier ids are generated
+                    and perk text is free-form, so neither is guaranteed unique. */}
+                {content.tickets.map((tier, i) => (
                     <article
-                        key={tier.id}
+                        key={i}
                         className={`sbc-ticket-card${tier.featured ? ' sbc-ticket-card--featured' : ''}`}
                     >
                         {tier.featured && (
@@ -34,8 +36,8 @@ export const Tickets = () => {
                         <p className="sbc-ticket-note">{t(tier.note)}</p>
 
                         <ul className="sbc-ticket-perks">
-                            {tier.perks.map(perk => (
-                                <li key={perk.en}>
+                            {tier.perks.map((perk, perkIndex) => (
+                                <li key={perkIndex}>
                                     <span className="sbc-ticket-check" aria-hidden="true">✓</span>
                                     {t(perk)}
                                 </li>

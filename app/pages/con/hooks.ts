@@ -27,12 +27,21 @@ export interface Countdown {
     seconds: number;
     /** True once the start time has passed. */
     started: boolean;
+    /** True once the end time has passed. */
+    ended: boolean;
 }
 
-const remainingFrom = (target: number): Countdown => {
-    const diff = target - Date.now();
+const remainingFrom = (target: number, end: number): Countdown => {
+    const now = Date.now();
+    const ended = Number.isFinite(end) && now > end;
+    const diff = target - now;
+    // An unparseable date reads as "not started" with zeroed digits rather than
+    // rendering NaN in every segment.
+    if (!Number.isFinite(diff)) {
+        return {days: 0, hours: 0, minutes: 0, seconds: 0, started: false, ended};
+    }
     if (diff <= 0) {
-        return {days: 0, hours: 0, minutes: 0, seconds: 0, started: true};
+        return {days: 0, hours: 0, minutes: 0, seconds: 0, started: true, ended};
     }
     const seconds = Math.floor(diff / 1000);
     return {
@@ -41,21 +50,35 @@ const remainingFrom = (target: number): Countdown => {
         minutes: Math.floor((seconds % 3600) / 60),
         seconds: seconds % 60,
         started: false,
+        ended,
     };
 };
 
-/** Counts down to an ISO date string, ticking once a second. */
-export const useCountdown = (isoDate: string): Countdown => {
+/**
+ * Counts down to `isoDate`, ticking once a second, and reports when `endIsoDate`
+ * has passed too. The timer exists only to move something on screen, so it stops
+ * once the con has ended — until then it has to keep running even after the start
+ * time, because the live → ended transition is what it drives.
+ */
+export const useCountdown = (isoDate: string, endIsoDate: string): Countdown => {
     const target = new Date(isoDate).getTime();
-    const [countdown, setCountdown] = useState(() => remainingFrom(target));
+    const end = new Date(endIsoDate).getTime();
+    const [countdown, setCountdown] = useState(() => remainingFrom(target, end));
 
     useEffect(() => {
-        setCountdown(remainingFrom(target));
-        if (Number.isNaN(target)) return;
+        const tick = () => {
+            const next = remainingFrom(target, end);
+            setCountdown(next);
+            return next;
+        };
 
-        const id = window.setInterval(() => setCountdown(remainingFrom(target)), 1000);
+        if (tick().ended || Number.isNaN(target)) return;
+
+        const id = window.setInterval(() => {
+            if (tick().ended) window.clearInterval(id);
+        }, 1000);
         return () => window.clearInterval(id);
-    }, [target]);
+    }, [target, end]);
 
     return countdown;
 };

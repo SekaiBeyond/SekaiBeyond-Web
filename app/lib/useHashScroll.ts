@@ -5,12 +5,18 @@ import { useLocation } from 'react-router';
  * A hook that handles scrolling to hash anchors (e.g., #upcoming) on page load
  * and when the hash changes. It includes a small delay to ensure that
  * content is rendered before scrolling.
+ *
+ * Pass `ready: false` while the target sections have not rendered yet — a page
+ * that waits on a fetch before drawing its sections would otherwise burn both
+ * scroll attempts on an empty DOM. The effect re-runs when it flips to true.
  */
-export function useHashScroll() {
+export function useHashScroll(ready: boolean = true) {
     const {hash, key} = useLocation();
 
     useEffect(() => {
-        if (!hash) return;
+        if (!hash || !ready) return;
+
+        const timers: ReturnType<typeof setTimeout>[] = [];
 
         const scrollToHash = () => {
             const id = hash.replace('#', '');
@@ -18,17 +24,17 @@ export function useHashScroll() {
             if (element) {
                 // We use a slight delay to allow any layout shifts (like images loading)
                 // to settle, though this isn't perfect.
-                setTimeout(() => {
+                timers.push(setTimeout(() => {
                     element.scrollIntoView({behavior: 'smooth'});
-                }, 100);
+                }, 100));
             }
         };
 
         scrollToHash();
 
         // Also try after a short delay to account for async content rendering
-        const timer = setTimeout(scrollToHash, 500);
+        timers.push(setTimeout(scrollToHash, 500));
 
-        return () => clearTimeout(timer);
-    }, [hash, key]); // Re-run on hash change or route change (key)
+        return () => timers.forEach(clearTimeout);
+    }, [hash, key, ready]); // Re-run on hash change, route change (key), or once ready
 }

@@ -434,6 +434,25 @@ function buildConEvent(raw: unknown) {
     };
 }
 
+/**
+ * Ids for rows the admin never sees or types (schedule blocks, ticket tiers).
+ * The fallback is index-derived, which collides on its own: deleting `tier-2` from
+ * [tier-1, tier-2, tier-3] and adding a row hands the new one index 2, i.e. the
+ * `tier-3` that already exists. Renaming rather than rejecting is deliberate — the
+ * editor exposes no id field, so a rejected duplicate would be unfixable, and these
+ * ids are not referenced from anywhere else the way room ids are.
+ */
+function uniqueConId(raw: unknown, fallback: string, seen: Set<string>, name: string): string {
+    let id = sanitizeDisplayText(validateStr(raw, name, 60)) || fallback;
+    if (seen.has(id)) {
+        let n = 2;
+        while (seen.has(`${id}-${n}`)) n++;
+        id = `${id}-${n}`;
+    }
+    seen.add(id);
+    return id;
+}
+
 /** Room ids are referenced by schedule items, so they must be slug-shaped and unique. */
 function buildConRooms(raw: unknown) {
     const seen = new Set<string>();
@@ -462,8 +481,9 @@ function buildConRooms(raw: unknown) {
 }
 
 function buildConSchedule(raw: unknown) {
+    const seenBlocks = new Set<string>();
     return validateConArray(raw, "schedule", CON_LIMITS.scheduleBlocks).map((block, i) => ({
-        id: sanitizeDisplayText(validateStr(block.id, "block id", 60)) || `block-${i + 1}`,
+        id: uniqueConId(block.id, `block-${i + 1}`, seenBlocks, "block id"),
         label: validateLocalized(block.label, "block label", 120, true),
         items: validateConArray(block.items, "schedule items", CON_LIMITS.scheduleItems).map(item => {
             const room = sanitizeDisplayText(validateStr(item.room, "item room", 60, true));
@@ -481,6 +501,16 @@ function buildConSchedule(raw: unknown) {
             const times = hasStart
                 ? {start: validateConTime(item.start, "item start"), end: validateConTime(item.end, "item end")}
                 : {};
+            // HH:MM sorts chronologically, so this is a plain string compare. It also
+            // means an item that runs past midnight cannot be expressed — acceptable
+            // for a single-day con, and the alternative is silently accepting the far
+            // more common "17:30–15:30" typo.
+            if (times.start && times.end && times.end <= times.start) {
+                throw new HttpsError(
+                    "invalid-argument",
+                    `A schedule item ends at ${times.end}, which is not after its ${times.start} start.`,
+                );
+            }
 
             const detail = validateLocalized(item.detail, "item detail", 1000);
             const location = validateLocalized(item.location, "item location", 200);
@@ -526,8 +556,9 @@ function buildConVendors(raw: unknown) {
 }
 
 function buildConTickets(raw: unknown) {
+    const seen = new Set<string>();
     return validateConArray(raw, "tickets", CON_LIMITS.tickets).map((tier, i) => ({
-        id: sanitizeDisplayText(validateStr(tier.id, "tier id", 60)) || `tier-${i + 1}`,
+        id: uniqueConId(tier.id, `tier-${i + 1}`, seen, "tier id"),
         name: validateLocalized(tier.name, "tier name", 120, true),
         price: validateLocalized(tier.price, "tier price", 60),
         note: validateLocalized(tier.note, "tier note", 300),
@@ -557,11 +588,17 @@ const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
 };
 
 /**
- * Writes one or more sections of the public /con page.
+ * Writes one or more sections of the /con page.
  *
- * Saves are per section on purpose: the editor has six independent Save buttons,
+ * Saves are per section on purpose: the editor has one Save button per section,
  * and a merge write of only the named sections means two people editing
  * different parts of the page cannot overwrite each other's work.
+ *
+ * Everything lands in the staff-only `conContent/draft`. `conContent/main` is a
+ * whole-document mirror of it, created when the con is published and deleted when
+ * it is not — so an unannounced line-up is genuinely not on the public web, rather
+ * than sitting in a world-readable document behind a flag the page is trusted to
+ * respect. The two documents' read rules are in firestore.rules.
  */
 export const saveConContent = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -580,7 +617,16 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
     }
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const ref = db.collection("conContent").doc("main");
+        const draftRef = db.collection("conContent").doc("draft");
+        const publicRef = db.collection("conContent").doc("main");
+
+        let stored = (await txn.get(draftRef)).data();
+        if (stored === undefined) {
+            // Environments edited before the draft/mirror split kept everything in
+            // `main`. Seed the first draft from it so those edits are not lost.
+            // Safe to delete once every environment has saved at least once.
+            stored = (await txn.get(publicRef)).data() ?? {};
+        }
 
         // Rooms and the schedule that references them can be saved separately, so
         // the pairing is only coherent once both sides are known. Check the result
@@ -588,7 +634,6 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
         // both "item points at a room that never existed" and "room deleted while
         // the schedule still uses it".
         if (updateData.rooms !== undefined || updateData.schedule !== undefined) {
-            const stored = (await txn.get(ref)).data() ?? {};
             const rooms = updateData.rooms ?? stored.rooms;
             // Rooms never saved means the page is still on the code defaults, which
             // the server cannot see — nothing to check against yet.
@@ -609,12 +654,30 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             }
         }
 
-        txn.set(ref, {
+        txn.set(draftRef, {
             ...updateData,
             updatedBy: uid,
             updatedByName: callerSnap.data()?.displayName ?? "",
             updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
+
+        // The public document is a mirror of the draft that exists only while the
+        // con is published, so hiding the page removes the copy rather than leaving
+        // it world-readable behind a client-side flag. Written whole, not merged, so
+        // a section deleted in the draft cannot survive in the mirror. `updatedBy`
+        // is deliberately left out — nothing about who edits belongs on a public doc.
+        const merged = {...stored, ...updateData};
+        const published = (merged.settings as {published?: boolean} | undefined)?.published === true;
+        if (published) {
+            const mirror: Record<string, any> = {updatedAt: FieldValue.serverTimestamp()};
+            for (const section of CON_SECTIONS) {
+                if (merged[section] !== undefined) mirror[section] = merged[section];
+            }
+            txn.set(publicRef, mirror);
+        } else {
+            txn.delete(publicRef);
+        }
+
         txn.set(db.collection("records").doc(), {
             type: "con-content-update",
             performedBy: uid,

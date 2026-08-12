@@ -8,7 +8,7 @@ import { SectionHeader } from '~/pages/con/SectionHeader';
 export const About = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
-    const {event} = useConContent().content;
+    const {event, tickets} = useConContent().content;
 
     const facts = [
         {
@@ -23,11 +23,13 @@ export const About = () => {
         },
         {
             icon: '🎟️',
+            // Read off the ticket tiers rather than restated here, so editing prices
+            // in the admin panel cannot leave this card contradicting the Tickets
+            // section further down the same page.
             label: {en: 'Admission', zh: '入场'},
-            value: t({
-                en: 'Free for UW students · $10 general',
-                zh: 'UW 在校生免费 · 普通票 $10',
-            }),
+            value: tickets.length > 0
+                ? tickets.map(tier => `${t(tier.name)} ${t(tier.price)}`).join(' · ')
+                : t({en: 'See the tickets section below', zh: '详见下方门票板块'}),
         },
         {
             icon: '💬',

@@ -123,10 +123,21 @@ service cloud.firestore {
             allow read: if true;
         }
 
-        // Con page copy (schedule, guests, tickets, ...) — publicly readable, since
-        // /con renders it for signed-out visitors; writes via saveConContent.
-        match /conContent/{docId} {
+        // Con page copy (schedule, guests, tickets, ...) — writes via saveConContent.
+        //
+        // Split in two so that "unpublished" means the content is not on the public
+        // web, not merely that the page declines to draw it:
+        //   main  — the published mirror. Public, and written only while the con is
+        //           published; unpublishing deletes it.
+        //   draft — what the admin panel edits and core staff preview. Staff+ only,
+        //           so an unannounced line-up is not readable by querying directly.
+        // Any other document here is server-only.
+        match /conContent/main {
             allow read: if true;
+        }
+        match /conContent/draft {
+            allow read: if request.auth != null
+                && isStaffOrAbove();
         }
 
         // Site config (featured video, etc.) — publicly readable; writes via Cloud Functions.

@@ -13,28 +13,35 @@ export const Schedule = () => {
         [content.rooms],
     );
 
+    // Counted rather than written down, so editing the rooms in the admin panel
+    // cannot leave the subtitle claiming a number of tracks that no longer exists.
+    const tracks = content.rooms.length;
+    const trackLine = tracks > 0
+        ? {en: `One day, ${tracks} ${tracks === 1 ? 'track' : 'tracks'}. `, zh: `一天，${tracks} 条线路。`}
+        : {en: '', zh: ''};
+
     return (
         <section id="schedule" className="sbc-section">
             <SectionHeader
                 eyebrow={{en: 'Programming', zh: '节目安排'}}
                 title={{en: 'Schedule', zh: '活动日程'}}
                 subtitle={{
-                    en: 'One day, four tracks. Times may shift slightly on the day — check the board at registration.',
-                    zh: '一天，四条线路。当天时间可能略有调整，请留意签到处的公告板。',
+                    en: `${trackLine.en}Times may shift slightly on the day — check the board at registration.`,
+                    zh: `${trackLine.zh}当天时间可能略有调整，请留意签到处的公告板。`,
                 }}
             />
 
             <div className="sbc-schedule">
-                {content.schedule.map(block => (
-                    <div key={block.id} className="sbc-schedule-block">
+                {/* Keyed by position: block ids are generated and not guaranteed unique. */}
+                {content.schedule.map((block, blockIndex) => (
+                    <div key={blockIndex} className="sbc-schedule-block">
                         <h3 className="sbc-schedule-block-label">{t(block.label)}</h3>
 
                         <ol className="sbc-timeline">
                             {block.items.map((item, i) => {
                                 const room = roomsById.get(item.room);
                                 return (
-                                    <li key={`${item.start ?? 'tba'}-${item.title.en}-${i}`}
-                                        className="sbc-timeline-item">
+                                    <li key={i} className="sbc-timeline-item">
                                         <div className="sbc-timeline-time">
                                             {item.start ? (
                                                 <>

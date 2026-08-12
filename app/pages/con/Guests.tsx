@@ -18,8 +18,9 @@ export const Guests = () => {
             />
 
             <div className="sbc-guest-grid">
-                {content.guests.map(guest => (
-                    <article key={guest.name} className="sbc-guest-card">
+                {/* Keyed by position: two guests may legitimately share a name. */}
+                {content.guests.map((guest, i) => (
+                    <article key={i} className="sbc-guest-card">
                         {guest.avatar ? (
                             <img className="sbc-guest-avatar" src={guest.avatar} alt={guest.name} loading="lazy"/>
                         ) : (

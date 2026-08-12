@@ -19,8 +19,10 @@ export const Faq = () => {
             />
 
             <div className="sbc-faq-list">
-                {content.faq.map(entry => (
-                    <details key={entry.q.en} className="sbc-faq-item">
+                {/* Keyed by position: two entries may share an English question,
+                    and a collision would cross-link their open/closed state. */}
+                {content.faq.map((entry, i) => (
+                    <details key={i} className="sbc-faq-item">
                         <summary className="sbc-faq-question">
                             <span>{t(entry.q)}</span>
                             <span className="sbc-faq-marker" aria-hidden="true">+</span>

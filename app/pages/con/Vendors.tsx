@@ -19,7 +19,8 @@ export const Vendors = () => {
             />
 
             <div className="sbc-vendor-grid">
-                {list.map(vendor => {
+                {/* Keyed by position: placeholder table names repeat ("Table A1 — TBA"). */}
+                {list.map((vendor, i) => {
                     const body = (
                         <>
                             <h3 className="sbc-vendor-name">{vendor.name}</h3>
@@ -30,7 +31,7 @@ export const Vendors = () => {
 
                     return vendor.link ? (
                         <a
-                            key={vendor.name}
+                            key={i}
                             className="sbc-vendor-card sbc-vendor-card--link"
                             href={vendor.link}
                             target="_blank"
@@ -39,7 +40,7 @@ export const Vendors = () => {
                             {body}
                         </a>
                     ) : (
-                        <article key={vendor.name} className="sbc-vendor-card">{body}</article>
+                        <article key={i} className="sbc-vendor-card">{body}</article>
                     );
                 })}
             </div>

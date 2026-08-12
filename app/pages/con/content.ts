@@ -23,14 +23,20 @@ import type { Localized } from '~/pages/con/i18n';
 export interface ConSettings {
     /**
      * When false, /con is visible to core-staff and the president only; everyone
-     * else gets a short "coming soon" card. Defaults to true so the page does not
-     * disappear the moment this field is introduced.
+     * else gets a short "coming soon" card.
+     *
+     * Defaults to false, and publishing is what creates the public `conContent/main`
+     * mirror in the first place. Nothing about a con is public until someone ticks
+     * the box in Admin → Con Content, which is the only reading under which the
+     * switch is worth anything: the alternative — public by default, hidden by an
+     * explicit flag — leaves the unannounced line-up readable to anyone who asks
+     * the database directly.
      */
     published: boolean
 }
 
 export const CON_SETTINGS: ConSettings = {
-    published: true,
+    published: false,
 };
 
 export interface ConVenue {

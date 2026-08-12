@@ -12,8 +12,19 @@ import { getFirebaseDb } from './firebase';
  * collection). It is not a substitute for a live `onSnapshot` listener.
  */
 export interface ValueCache<T> {
-    /** Hook returning the cached value, a loading flag, and a `refresh` that re-fetches. */
-    useValue: () => {value: T; loading: boolean; refresh: () => Promise<void>};
+    /**
+     * Hook returning the cached value, a loading flag, an `error`, and a `refresh`
+     * that re-fetches. `error` is non-null only while `value` is still the fallback
+     * — i.e. it answers "is this real data?", not "did the last request fail?". A
+     * refresh that fails on top of an already-loaded value leaves it null, because
+     * the value on screen is still the one the server gave us.
+     *
+     * Pass `enabled: false` to hold off the fetch entirely — for a cache the
+     * current viewer is not allowed to read, where firing the request would only
+     * produce a permission error. It reports the fallback and `loading: false`,
+     * and fetches if `enabled` later flips true.
+     */
+    useValue: (enabled?: boolean) => {value: T; loading: boolean; error: unknown; refresh: () => Promise<void>};
     /** Re-fetch and notify all subscribers. Returns the fresh value. */
     refresh: () => Promise<T>;
     /** Synchronous snapshot of the cached value, or null if it hasn't loaded yet. */
@@ -27,7 +38,7 @@ export function createValueCache<T>(
 ): ValueCache<T> {
     let cached: T | null = null;
     let fetchPromise: Promise<T> | null = null;
-    const subscribers = new Set<(value: T) => void>();
+    const subscribers = new Set<(value: T, error: unknown) => void>();
 
     async function fetchValue(force = false): Promise<T> {
         if (!force && cached !== null) return cached;
@@ -48,44 +59,65 @@ export function createValueCache<T>(
     }
 
     async function refresh(): Promise<T> {
-        const value = await fetchValue(true);
-        for (const fn of subscribers) fn(value);
-        return value;
+        try {
+            const value = await fetchValue(true);
+            for (const fn of subscribers) fn(value, null);
+            return value;
+        } catch (err) {
+            // Subscribers holding a previously fetched value keep it — a refresh that
+            // fails is a stale screen, not a missing one. Only a cache that has never
+            // loaded is downgraded to "what you see is the fallback".
+            if (cached === null) for (const fn of subscribers) fn(initialValue, err);
+            throw err;
+        }
     }
 
-    function useValue() {
-        const [value, setValue] = useState<T>(cached ?? initialValue);
-        const [loading, setLoading] = useState(cached === null);
+    interface State {
+        value: T;
+        error: unknown;
+        /** Whether this consumer has a resolved answer — a value or a failure. */
+        settled: boolean;
+    }
+
+    function useValue(enabled: boolean = true) {
+        const [state, setState] = useState<State>(
+            () => (cached !== null
+                ? {value: cached, error: null, settled: true}
+                : {value: initialValue, error: null, settled: false}),
+        );
+
+        // Derived, not stored: `enabled` can flip true a render before the effect
+        // starts the fetch, and a separately-tracked `loading` would read false in
+        // that gap — long enough for a caller to act on the fallback value.
+        const loading = enabled && !state.settled;
 
         useEffect(() => {
-            subscribers.add(setValue);
+            const notify = (value: T, error: unknown) => setState({value, error, settled: true});
+            subscribers.add(notify);
             return () => {
-                subscribers.delete(setValue);
+                subscribers.delete(notify);
             };
         }, []);
 
         useEffect(() => {
+            if (!enabled) return;
             if (cached !== null) {
-                setValue(cached);
-                setLoading(false);
+                setState({value: cached, error: null, settled: true});
                 return;
             }
             fetchValue()
-                .then(result => {
-                    setValue(result);
-                    setLoading(false);
-                })
+                .then(result => setState({value: result, error: null, settled: true}))
                 .catch(err => {
                     console.error(`Failed to load ${label}:`, err);
-                    setLoading(false);
+                    setState({value: initialValue, error: err, settled: true});
                 });
-        }, []);
+        }, [enabled]);
 
         const doRefresh = useCallback(async () => {
             await refresh();
         }, []);
 
-        return {value, loading, refresh: doRefresh};
+        return {value: state.value, loading, error: state.error, refresh: doRefresh};
     }
 
     return {useValue, refresh, peek: () => cached};

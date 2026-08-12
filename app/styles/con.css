@@ -1327,6 +1327,11 @@
     margin: 0 auto;
 }
 
+/* Grid cell; `min-width: 0` keeps the long org blurb from widening the column. */
+.sbc-footer-brand {
+    min-width: 0;
+}
+
 .sbc-footer-logo {
     display: block;
     font-family: var(--font-display);
@@ -1694,10 +1699,15 @@
     }
 }
 
-/* Shown to core staff previewing a con page that is switched off. Sits above the
-   transparent navbar, which would otherwise overlap it. */
+/* Shown to core staff previewing a con page that is switched off. Pinned to the
+   bottom rather than the top: the navbar is `position: fixed; top: 0`, so a banner
+   in the flow above it gets overlapped, and pushing the navbar down instead would
+   mean hard-coding a banner height that this wrapping text does not have. */
 .sbc-preview-banner {
-    position: relative;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 1001;
     padding: 10px 20px;
     background: var(--color-primary);
@@ -1706,6 +1716,19 @@
     font-weight: 700;
     text-align: center;
     letter-spacing: 0.3px;
+}
+
+/* Lift the scroll-to-top button clear of the banner. The clearance is a fixed
+   number because CSS cannot measure the banner, so the banner's copy is kept
+   short enough to stay within one line on desktop and two on a phone. */
+.sbc-page--preview .go-to-top {
+    bottom: 76px;
+}
+
+@media (max-width: 768px) {
+    .sbc-page--preview .go-to-top {
+        bottom: 96px;
+    }
 }
 
 /* The public face of an unpublished con page. */

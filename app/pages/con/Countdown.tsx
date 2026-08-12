@@ -7,11 +7,9 @@ export const Countdown = () => {
     const t = useT();
     const {content} = useConContent();
     const {date, endTime} = content.event;
-    const {days, hours, minutes, seconds, started} = useCountdown(date);
+    const {days, hours, minutes, seconds, started, ended} = useCountdown(date, endTime);
 
-    const isOver = Date.now() > new Date(endTime).getTime();
-
-    if (isOver) {
+    if (ended) {
         return (
             <p className="sbc-countdown-message">
                 {t({
