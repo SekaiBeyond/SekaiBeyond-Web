@@ -1,9 +1,10 @@
-import { GUESTS } from '~/pages/con/content';
+import { useConContent } from '~/lib/conContent';
 import { useT } from '~/pages/con/i18n';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
 export const Guests = () => {
     const t = useT();
+    const {content} = useConContent();
 
     return (
         <section id="guests" className="sbc-section">
@@ -17,7 +18,7 @@ export const Guests = () => {
             />
 
             <div className="sbc-guest-grid">
-                {GUESTS.map(guest => (
+                {content.guests.map(guest => (
                     <article key={guest.name} className="sbc-guest-card">
                         {guest.avatar ? (
                             <img className="sbc-guest-avatar" src={guest.avatar} alt={guest.name} loading="lazy"/>

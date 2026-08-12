@@ -808,7 +808,10 @@
     min-width: 0;
 }
 
-.sbc-track-chip {
+/* Room chips. Which room wears which accent is admin-editable data; the palette
+   itself is fixed here, so a room can only ever pick a colour that is legible
+   against the timeline card. Keep in sync with ROOM_ACCENTS in con/content.ts. */
+.sbc-room-chip {
     display: inline-block;
     margin-bottom: 8px;
     padding: 4px 12px;
@@ -819,24 +822,43 @@
     text-transform: uppercase;
 }
 
-.sbc-track-chip--stage {
+.sbc-room-chip--pink {
     background: rgba(255, 107, 157, 0.16);
     color: #d94a7c;
 }
 
-.sbc-track-chip--panel {
+.sbc-room-chip--violet {
     background: rgba(155, 89, 182, 0.16);
     color: #7d46a0;
 }
 
-.sbc-track-chip--workshop {
+.sbc-room-chip--amber {
     background: rgba(255, 142, 83, 0.18);
     color: #d96a2c;
 }
 
-.sbc-track-chip--open {
+.sbc-room-chip--sky {
     background: rgba(72, 219, 251, 0.2);
     color: #1f8fb5;
+}
+
+.sbc-room-chip--mint {
+    background: rgba(78, 203, 113, 0.18);
+    color: #2f8b4f;
+}
+
+.sbc-room-chip--slate {
+    background: rgba(122, 129, 144, 0.16);
+    color: #5a616f;
+}
+
+/* Announced but unscheduled: keeps the item in the timeline instead of hiding it. */
+.sbc-timeline-tba {
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-text-light);
+    letter-spacing: 1px;
 }
 
 .sbc-timeline-title {
@@ -1724,4 +1746,60 @@
         flex-basis: 60px;
         min-width: 60px;
     }
+}
+
+/* Shown to core staff previewing a con page that is switched off. Sits above the
+   transparent navbar, which would otherwise overlap it. */
+.sbc-preview-banner {
+    position: relative;
+    z-index: 1001;
+    padding: 10px 20px;
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 0.3px;
+}
+
+/* The public face of an unpublished con page. */
+.sbc-unpublished {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    background: #fff8fb;
+}
+
+.sbc-unpublished-card {
+    max-width: 460px;
+    padding: 40px 32px;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: var(--shadow-card);
+    text-align: center;
+}
+
+.sbc-unpublished-mark {
+    display: block;
+    margin-bottom: 12px;
+    font-size: 2rem;
+    color: var(--color-primary);
+}
+
+/* This card sits outside `.sbc-page`, so it cannot use the `--sbc-*` tokens
+   defined there — only the global ones from base.css. */
+.sbc-unpublished-title {
+    margin: 0 0 12px;
+    font-family: var(--font-display);
+    font-size: 1.9rem;
+    color: var(--color-text);
+}
+
+.sbc-unpublished-body {
+    margin: 0 0 24px;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--color-text-body);
 }

@@ -75,34 +75,6 @@ This repository contains the source code for the official **Sekai Beyond** websi
 | `npm run deploy:rules` | Deploy only functions, Firestore rules/indexes, and Storage rules |
 | `npm run deploy:ttl`   | Apply Firestore TTL policies via the gcloud CLI                   |
 
-## The con page (`/con`)
-
-Sekai Beyond Con has its own full page at `/con`, living in [`app/pages/con/`](app/pages/con).
-Unlike the rest of the site it is **not** Firestore-driven — every string is a bilingual
-`{ en, zh }` pair in [`app/pages/con/content.ts`](app/pages/con/content.ts), so updating
-the con means editing that one file and redeploying. Most of it is still seeded with
-placeholder detail (date, venue, ticket link, schedule, line-up, prices); the header
-comment lists what needs replacing before an edition goes public.
-
-A few things worth knowing before working on it:
-
-- **Its styles are `sbc-` prefixed** ([`app/styles/con.css`](app/styles/con.css)). The page
-  carries its own dark navbar and footer, whose natural class names (`.hero`, `.section`,
-  `.navbar`, `.countdown-*`, `.footer-*`) all already mean something else in this folder.
-  It reuses the shared brand tokens and `.btn` styles, and adds only `.sbc-btn-ghost`
-  (glass, for sitting on the hero video) and `.sbc-btn-compact`.
-- **The hero backdrop has three tiers**, picked at runtime in `Hero.tsx`: a self-hosted
-  clip (`HERO_VIDEO.loopMp4`/`loopWebm` in `public/`), else the Bilibili embed, else a
-  poster/gradient. Only the self-hosted clip loops and only it autoplays on phones —
-  Bilibili's iframe has no loop parameter, is cross-origin, and mobile browsers refuse
-  iframe autoplay. To turn looping on, drop a 10–20s silent cut in `public/` and set the
-  paths. Under `prefers-reduced-motion: reduce` neither video mounts.
-- **Anchors clear the fixed navbar** via `scroll-margin-top` on `.sbc-section`, not a
-  global `scroll-padding-top`, so the main site's anchor scrolling is unaffected.
-  `useHashScroll` makes `/con#tickets` work on a cold load.
-- The home page's `#con` teaser (`SekaiBeyondCon.tsx`, driven by the `conEdition`
-  site-config doc) links through to this page.
-
 ## Deployment
 
 See [DEPLOY.md](DEPLOY.md) for full deployment instructions, including Firebase setup, GitHub secrets, user groups, and the deployment workflow.

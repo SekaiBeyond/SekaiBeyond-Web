@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { FiArrowLeft, FiMenu, FiX } from 'react-icons/fi';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
-import { CON, NAV_LINKS } from '~/pages/con/content';
+import { useConContent } from '~/lib/conContent';
+import { NAV_LINKS } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { useActiveSection, useScrolledPast } from '~/pages/con/hooks';
 import { scrollToSection } from '~/pages/con/utils';
 
 export const Navigation = () => {
     const t = useT();
+    const {name, ticketUrl} = useConContent().content.event;
     const [menuOpen, setMenuOpen] = useState(false);
 
     const solid = useScrolledPast(80);
@@ -51,7 +53,7 @@ export const Navigation = () => {
                         onClick={scrollToSection('con-home', () => setMenuOpen(false))}
                     >
                         <span className="sbc-logo-mark" aria-hidden="true">✦</span>
-                        <span className="sbc-logo-text">{t(CON.name)}</span>
+                        <span className="sbc-logo-text">{t(name)}</span>
                     </a>
                 </div>
 
@@ -70,7 +72,7 @@ export const Navigation = () => {
                     <li className="sbc-nav-links-cta">
                         <a
                             className="btn btn-primary sbc-btn-compact"
-                            href={CON.ticketUrl}
+                            href={ticketUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                         >
@@ -90,7 +92,7 @@ export const Navigation = () => {
                     </div>
                     <a
                         className="btn btn-primary sbc-btn-compact sbc-nav-ticket-btn"
-                        href={CON.ticketUrl}
+                        href={ticketUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                     >

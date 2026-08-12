@@ -123,6 +123,12 @@ service cloud.firestore {
             allow read: if true;
         }
 
+        // Con page copy (schedule, guests, tickets, ...) — publicly readable, since
+        // /con renders it for signed-out visitors; writes via saveConContent.
+        match /conContent/{docId} {
+            allow read: if true;
+        }
+
         // Site config (featured video, etc.) — publicly readable; writes via Cloud Functions.
         // config/main.teamMembers holds ONLY a display projection (no account uid/flags).
         // The full team roster (with linked-account uids) lives in the server-only

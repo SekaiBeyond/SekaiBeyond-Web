@@ -1,5 +1,6 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { ABOUT_PARAGRAPHS, CON, HIGHLIGHTS } from '~/pages/con/content';
+import { useConContent } from '~/lib/conContent';
+import { ABOUT_PARAGRAPHS, HIGHLIGHTS } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { formatEventDate, formatTimeRange } from '~/pages/con/utils';
 import { SectionHeader } from '~/pages/con/SectionHeader';
@@ -7,17 +8,18 @@ import { SectionHeader } from '~/pages/con/SectionHeader';
 export const About = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
+    const {event} = useConContent().content;
 
     const facts = [
         {
             icon: '📅',
             label: {en: 'When', zh: '时间'},
-            value: `${formatEventDate(CON.date, currentLanguage)} · ${formatTimeRange(CON.date, CON.endTime, currentLanguage)}`,
+            value: `${formatEventDate(event.date, currentLanguage)} · ${formatTimeRange(event.date, event.endTime, currentLanguage)}`,
         },
         {
             icon: '📍',
             label: {en: 'Where', zh: '地点'},
-            value: `${t(CON.venue.room)}, ${t(CON.venue.name)}`,
+            value: `${t(event.venue.room)}, ${t(event.venue.name)}`,
         },
         {
             icon: '🎟️',

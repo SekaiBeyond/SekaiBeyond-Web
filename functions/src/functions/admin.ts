@@ -298,6 +298,339 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     });
 });
 
+/* -------------------------------------------------------------------------- */
+/* Con page content                                                           */
+/* -------------------------------------------------------------------------- */
+
+// Mirrors ROOM_ACCENTS in app/pages/con/content.ts. Each value names a CSS class
+// (sbc-room-chip--<accent>), so the palette is a whitelist even though the rooms
+// that use it are free-form, admin-managed data.
+const CON_ROOM_ACCENTS = ["pink", "violet", "amber", "sky", "mint", "slate"] as const;
+
+const CON_SECTIONS = ["settings", "event", "rooms", "schedule", "guests", "vendors", "tickets", "faq"] as const;
+type ConSection = typeof CON_SECTIONS[number];
+
+// Caps on how much copy one section can hold. Generous against real use, tight
+// enough that a runaway client cannot grow the public document without bound.
+const CON_LIMITS = {
+    rooms: 24,
+    scheduleBlocks: 12,
+    scheduleItems: 60,
+    guests: 60,
+    vendors: 120,
+    tickets: 8,
+    perks: 12,
+    faq: 40,
+};
+
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+interface LocalizedText {
+    en: string;
+    zh: string;
+}
+
+/**
+ * Con copy is stored as {en, zh} pairs rather than the `field`/`fieldCn` columns
+ * the rest of the admin data uses, because the con page reads it that way.
+ */
+function validateLocalized(raw: unknown, name: string, maxLen: number, required = false): LocalizedText {
+    const value = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    return {
+        en: sanitizeDisplayText(validateStr(value.en, `${name} (English)`, maxLen, required)),
+        zh: sanitizeDisplayText(validateStr(value.zh, `${name} (Chinese)`, maxLen, required)),
+    };
+}
+
+function validateConArray(raw: unknown, name: string, maxItems: number): Record<string, unknown>[] {
+    if (!Array.isArray(raw)) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must be an array.`);
+    }
+    if (raw.length > maxItems) {
+        throw new HttpsError("invalid-argument", `${name} has too many items (max ${maxItems}).`);
+    }
+    return raw.map(item => (item && typeof item === "object" ? item as Record<string, unknown> : {}));
+}
+
+function validateConTime(raw: unknown, name: string): string {
+    const value = validateStr(raw, name, 5, true);
+    if (!HHMM_RE.test(value)) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must be HH:MM.`);
+    }
+    return value;
+}
+
+function requireISODate(raw: unknown, name: string): string {
+    const value = validateISODate(raw, name);
+    if (!value) throw new HttpsError("invalid-argument", `${name} is required.`);
+    return value;
+}
+
+/**
+ * Guest photos come from two places: an admin upload (a Storage download URL) or
+ * a file committed under public/ (a root-relative path). Anything else — an
+ * off-site URL, a traversal attempt — is rejected.
+ */
+function validateConImage(raw: unknown, name: string): string {
+    const value = validateStr(raw, name, 500).trim();
+    if (!value) return "";
+    if (value.startsWith("/")) {
+        if (value.startsWith("//") || value.includes("..") || !/^\/[\w\-./]+$/.test(value)) {
+            throw new HttpsError("invalid-argument", `Invalid ${name}.`);
+        }
+        return value;
+    }
+    validateStorageImageUrl(value, name);
+    return value;
+}
+
+function validateConLink(raw: unknown, name: string): string {
+    const value = validateStr(raw, name, 500).trim();
+    validateUrl(value, name);
+    return value;
+}
+
+/**
+ * Page-level switches. `published: false` takes /con off the public web, so it is
+ * stored as a strict boolean rather than anything truthy — a stray string here
+ * would silently republish the page.
+ */
+function buildConSettings(raw: unknown) {
+    const s = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    if (typeof s.published !== "boolean") {
+        throw new HttpsError("invalid-argument", "published must be true or false.");
+    }
+    return {published: s.published};
+}
+
+function buildConEvent(raw: unknown) {
+    const e = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const venue = e.venue && typeof e.venue === "object" ? e.venue as Record<string, unknown> : {};
+    const edition = Number(e.edition);
+    if (!Number.isInteger(edition) || edition < 2000 || edition > 2200) {
+        throw new HttpsError("invalid-argument", "Invalid edition year.");
+    }
+
+    const date = requireISODate(e.date, "date");
+    const endTime = requireISODate(e.endTime, "endTime");
+    if (Date.parse(endTime) <= Date.parse(date)) {
+        throw new HttpsError("invalid-argument", "End time must be after the start time.");
+    }
+
+    const ticketUrl = validateConLink(e.ticketUrl, "ticketUrl");
+    if (!ticketUrl) throw new HttpsError("invalid-argument", "ticketUrl is required.");
+
+    return {
+        edition,
+        name: validateLocalized(e.name, "name", 120, true),
+        tagline: validateLocalized(e.tagline, "tagline", 300),
+        intro: validateLocalized(e.intro, "intro", 2000),
+        date,
+        endTime,
+        doorsOpen: validateLocalized(e.doorsOpen, "doorsOpen", 200),
+        venue: {
+            name: validateLocalized(venue.name, "venue name", 200, true),
+            room: validateLocalized(venue.room, "venue room", 200),
+            address: sanitizeDisplayText(validateStr(venue.address, "venue address", 300)),
+            mapUrl: validateConLink(venue.mapUrl, "venue mapUrl"),
+        },
+        ticketUrl,
+    };
+}
+
+/** Room ids are referenced by schedule items, so they must be slug-shaped and unique. */
+function buildConRooms(raw: unknown) {
+    const seen = new Set<string>();
+    return validateConArray(raw, "rooms", CON_LIMITS.rooms).map((room, i) => {
+        const id = sanitizeDisplayText(validateStr(room.id, "room id", 60)) || `room-${i + 1}`;
+        if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) {
+            throw new HttpsError(
+                "invalid-argument",
+                `Invalid room id "${id}": use lowercase letters, numbers, and hyphens.`,
+            );
+        }
+        if (seen.has(id)) {
+            throw new HttpsError("invalid-argument", `Duplicate room id "${id}".`);
+        }
+        seen.add(id);
+
+        const accent = typeof room.accent === "string" && (CON_ROOM_ACCENTS as readonly string[]).includes(room.accent)
+            ? room.accent
+            : null;
+        if (!accent) {
+            throw new HttpsError("invalid-argument", `room accent must be one of ${CON_ROOM_ACCENTS.join(", ")}.`);
+        }
+
+        return {id, name: validateLocalized(room.name, "room name", 120, true), accent};
+    });
+}
+
+function buildConSchedule(raw: unknown) {
+    return validateConArray(raw, "schedule", CON_LIMITS.scheduleBlocks).map((block, i) => ({
+        id: sanitizeDisplayText(validateStr(block.id, "block id", 60)) || `block-${i + 1}`,
+        label: validateLocalized(block.label, "block label", 120, true),
+        items: validateConArray(block.items, "schedule items", CON_LIMITS.scheduleItems).map(item => {
+            const room = sanitizeDisplayText(validateStr(item.room, "item room", 60, true));
+
+            // A slot can be announced before it is scheduled. Both times absent
+            // means TBA; exactly one is a half-filled form, not an intent.
+            const hasStart = item.start !== undefined && item.start !== null && item.start !== "";
+            const hasEnd = item.end !== undefined && item.end !== null && item.end !== "";
+            if (hasStart !== hasEnd) {
+                throw new HttpsError(
+                    "invalid-argument",
+                    "An item needs both a start and an end time, or neither (TBA).",
+                );
+            }
+            const times = hasStart
+                ? {start: validateConTime(item.start, "item start"), end: validateConTime(item.end, "item end")}
+                : {};
+
+            const detail = validateLocalized(item.detail, "item detail", 1000);
+            const location = validateLocalized(item.location, "item location", 200);
+            return {
+                ...times,
+                room,
+                title: validateLocalized(item.title, "item title", 200, true),
+                // Stored only when written, so the page's `item.detail &&` check
+                // keeps meaning "there is a detail line" rather than "the key exists".
+                ...(location.en || location.zh ? {location} : {}),
+                ...(detail.en || detail.zh ? {detail} : {}),
+            };
+        }),
+    }));
+}
+
+function buildConGuests(raw: unknown) {
+    return validateConArray(raw, "guests", CON_LIMITS.guests).map(guest => ({
+        name: sanitizeDisplayText(validateStr(guest.name, "guest name", 120, true)),
+        role: validateLocalized(guest.role, "guest role", 120),
+        blurb: validateLocalized(guest.blurb, "guest blurb", 1000),
+        avatar: validateConImage(guest.avatar, "guest avatar"),
+        link: validateConLink(guest.link, "guest link"),
+    }));
+}
+
+function buildConVendors(raw: unknown) {
+    const v = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const cta = v.cta && typeof v.cta === "object" ? v.cta as Record<string, unknown> : {};
+    return {
+        list: validateConArray(v.list, "vendors", CON_LIMITS.vendors).map(vendor => ({
+            name: sanitizeDisplayText(validateStr(vendor.name, "vendor name", 120, true)),
+            kind: validateLocalized(vendor.kind, "vendor kind", 120),
+            handle: sanitizeDisplayText(validateStr(vendor.handle, "vendor handle", 120)),
+            link: validateConLink(vendor.link, "vendor link"),
+        })),
+        cta: {
+            heading: validateLocalized(cta.heading, "vendor CTA heading", 200),
+            body: validateLocalized(cta.body, "vendor CTA body", 1000),
+            label: validateLocalized(cta.label, "vendor CTA label", 120),
+        },
+    };
+}
+
+function buildConTickets(raw: unknown) {
+    return validateConArray(raw, "tickets", CON_LIMITS.tickets).map((tier, i) => ({
+        id: sanitizeDisplayText(validateStr(tier.id, "tier id", 60)) || `tier-${i + 1}`,
+        name: validateLocalized(tier.name, "tier name", 120, true),
+        price: validateLocalized(tier.price, "tier price", 60),
+        note: validateLocalized(tier.note, "tier note", 300),
+        perks: validateConArray(tier.perks, "tier perks", CON_LIMITS.perks)
+            .map(perk => validateLocalized(perk, "perk", 200))
+            .filter(perk => perk.en || perk.zh),
+        featured: tier.featured === true,
+    }));
+}
+
+function buildConFaq(raw: unknown) {
+    return validateConArray(raw, "faq", CON_LIMITS.faq).map(entry => ({
+        q: validateLocalized(entry.q, "question", 300, true),
+        a: validateLocalized(entry.a, "answer", 2000),
+    }));
+}
+
+const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
+    settings: buildConSettings,
+    event: buildConEvent,
+    rooms: buildConRooms,
+    schedule: buildConSchedule,
+    guests: buildConGuests,
+    vendors: buildConVendors,
+    tickets: buildConTickets,
+    faq: buildConFaq,
+};
+
+/**
+ * Writes one or more sections of the public /con page.
+ *
+ * Saves are per section on purpose: the editor has six independent Save buttons,
+ * and a merge write of only the named sections means two people editing
+ * different parts of the page cannot overwrite each other's work.
+ */
+export const saveConContent = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const input = request.data as Record<string, unknown>;
+    const sections = CON_SECTIONS.filter(section => input[section] !== undefined);
+    if (sections.length === 0) {
+        throw new HttpsError("invalid-argument", "No con content sections provided.");
+    }
+
+    const updateData: Record<string, any> = {};
+    for (const section of sections) {
+        updateData[section] = CON_SECTION_BUILDERS[section](input[section]);
+    }
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const ref = db.collection("conContent").doc("main");
+
+        // Rooms and the schedule that references them can be saved separately, so
+        // the pairing is only coherent once both sides are known. Check the result
+        // of this write against whichever side it is not carrying — that catches
+        // both "item points at a room that never existed" and "room deleted while
+        // the schedule still uses it".
+        if (updateData.rooms !== undefined || updateData.schedule !== undefined) {
+            const stored = (await txn.get(ref)).data() ?? {};
+            const rooms = updateData.rooms ?? stored.rooms;
+            // Rooms never saved means the page is still on the code defaults, which
+            // the server cannot see — nothing to check against yet.
+            if (rooms !== undefined) {
+                const schedule = (updateData.schedule ?? stored.schedule ?? []) as {items?: {room?: string}[]}[];
+                const ids = new Set((rooms as {id?: string}[]).map(r => r?.id));
+                const missing = [...new Set(
+                    schedule.flatMap(block => (block?.items ?? []).map(item => item?.room ?? ""))
+                        .filter(room => room && !ids.has(room)),
+                )];
+                if (missing.length > 0) {
+                    throw new HttpsError(
+                        "failed-precondition",
+                        `The schedule still uses ${missing.length === 1 ? "a room" : "rooms"} that would not exist: ` +
+                        `${missing.join(", ")}. Reassign those items first.`,
+                    );
+                }
+            }
+        }
+
+        txn.set(ref, {
+            ...updateData,
+            updatedBy: uid,
+            updatedByName: callerSnap.data()?.displayName ?? "",
+            updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        txn.set(db.collection("records").doc(), {
+            type: "con-content-update",
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            conSection: sections.join(", "),
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return {saved: true};
+    });
+});
+
 const PARKING_LOT_TYPES = ["general", "disabled", "garage"] as const;
 
 export const saveParkingLot = onCall({maxInstances: 10}, async (request) => {

@@ -4215,3 +4215,101 @@ select.admin-tickets-tag:focus {
 .admin-quota-notes li + li {
     margin-top: 4px;
 }
+
+/* Con Content tab — repeated entry cards (schedule blocks, guests, tiers, FAQ).
+   Each card is one editable entry with its own reorder/remove controls; nested
+   .admin-con-item rows are the entries inside an entry (schedule items, perks). */
+.admin-con-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.admin-con-card {
+    padding: 16px;
+    border: var(--admin-field-border);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.admin-con-item {
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(255, 107, 157, 0.04);
+}
+
+.admin-con-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.admin-con-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-con-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.admin-con-icon-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--admin-field-border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--color-text);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.admin-con-icon-btn:hover:not(:disabled) {
+    border-color: var(--color-primary);
+}
+
+.admin-con-icon-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.admin-con-icon-btn--danger:hover:not(:disabled) {
+    border-color: var(--color-error);
+    color: var(--color-error);
+}
+
+.admin-con-add {
+    align-self: flex-start;
+    margin-bottom: 0;
+}
+
+.admin-con-empty {
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+/* Sits inline after a section heading, so an admin who scrolls away from a
+   half-edited section can still see it is waiting on a save. */
+.admin-con-dirty {
+    margin-left: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+/* Reserved for state that is off the normal path — e.g. the con page being
+   unpublished, which is worth noticing while scrolling past. */
+.admin-con-warning {
+    color: var(--color-error) !important;
+    font-weight: 600;
+}

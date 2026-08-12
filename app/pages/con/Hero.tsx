@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { CON, HERO_VIDEO } from '~/pages/con/content';
+import { useConContent } from '~/lib/conContent';
+import { HERO_VIDEO } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { useMediaQuery } from '~/pages/con/hooks';
 import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/con/utils';
@@ -41,6 +42,8 @@ const generateSparkStyles = () =>
 export const Hero = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
+    const {content} = useConContent();
+    const {event} = content;
     const sparks = useMemo(generateSparkStyles, []);
 
     const isWide = useMediaQuery('(min-width: 769px)');
@@ -100,27 +103,27 @@ export const Hero = () => {
 
             <div className="sbc-hero-content">
                 <span className="sbc-hero-badge">
-                    {CON.edition} · {t({en: 'University of Washington', zh: '华盛顿大学'})}
+                    {event.edition} · {t({en: 'University of Washington', zh: '华盛顿大学'})}
                 </span>
 
-                <h1 className="sbc-hero-title">{t(CON.name)}</h1>
-                <p className="sbc-hero-tagline">{t(CON.tagline)}</p>
+                <h1 className="sbc-hero-title">{t(event.name)}</h1>
+                <p className="sbc-hero-tagline">{t(event.tagline)}</p>
 
                 <ul className="sbc-hero-meta">
                     <li>
                         <span aria-hidden="true">📅</span>
                         <span>
-                            {formatEventDate(CON.date, currentLanguage)}
-                            <span className="sbc-hero-meta-dim"> · {formatWeekday(CON.date, currentLanguage)}</span>
+                            {formatEventDate(event.date, currentLanguage)}
+                            <span className="sbc-hero-meta-dim"> · {formatWeekday(event.date, currentLanguage)}</span>
                         </span>
                     </li>
                     <li>
                         <span aria-hidden="true">⏰</span>
-                        <span>{formatTimeRange(CON.date, CON.endTime, currentLanguage)}</span>
+                        <span>{formatTimeRange(event.date, event.endTime, currentLanguage)}</span>
                     </li>
                     <li>
                         <span aria-hidden="true">📍</span>
-                        <span>{t(CON.venue.room)}, {t(CON.venue.name)}</span>
+                        <span>{t(event.venue.room)}, {t(event.venue.name)}</span>
                     </li>
                 </ul>
 
@@ -129,7 +132,7 @@ export const Hero = () => {
                 <div className="sbc-hero-buttons">
                     <a
                         className="btn btn-primary"
-                        href={CON.ticketUrl}
+                        href={event.ticketUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                     >

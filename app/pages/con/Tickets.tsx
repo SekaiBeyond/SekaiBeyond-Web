@@ -1,9 +1,10 @@
-import { CON, TICKETS } from '~/pages/con/content';
+import { useConContent } from '~/lib/conContent';
 import { useT } from '~/pages/con/i18n';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
 export const Tickets = () => {
     const t = useT();
+    const {content} = useConContent();
 
     return (
         <section id="tickets" className="sbc-section">
@@ -17,7 +18,7 @@ export const Tickets = () => {
             />
 
             <div className="sbc-ticket-grid">
-                {TICKETS.map(tier => (
+                {content.tickets.map(tier => (
                     <article
                         key={tier.id}
                         className={`sbc-ticket-card${tier.featured ? ' sbc-ticket-card--featured' : ''}`}
@@ -43,7 +44,7 @@ export const Tickets = () => {
 
                         <a
                             className={`btn ${tier.featured ? 'btn-primary' : 'btn-secondary'} sbc-ticket-cta`}
-                            href={CON.ticketUrl}
+                            href={content.event.ticketUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                         >

@@ -1,14 +1,19 @@
 /**
- * Every piece of copy on the site lives here, in both languages.
+ * Every piece of copy on the con page lives here, in both languages.
  *
- * Editing this file and redeploying is the whole content workflow — no CMS, no
- * database. Anything still marked PLACEHOLDER below needs the real detail
- * before the site goes public:
- *   - CON.date / CON.doorsOpen / CON.venue     (confirmed date + room)
- *   - CON.ticketUrl                            (real ticketing link)
- *   - SCHEDULE                                 (programming grid)
- *   - GUESTS / VENDORS                         (confirmed line-up + art)
- *   - TICKETS                                  (final tiers and prices)
+ * Seven of these exports are also editable from the admin panel's Con Content tab,
+ * which stores overrides in Firestore (`conContent/main`): CON, ROOMS, SCHEDULE,
+ * GUESTS, VENDORS + VENDOR_CTA, TICKETS, and FAQ. What is written below stays the
+ * shipped default — `app/lib/conContent.ts` overlays the stored value section by
+ * section, so an empty or unreachable document falls back to this file rather
+ * than to a blank page. Editing here still works; it sets what a visitor sees
+ * before the fetch lands, and what they keep seeing for any section an admin has
+ * never touched.
+ *
+ * The rest — HERO_VIDEO, NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS, VENUE_NOTES —
+ * is code-only, because it is tied to files in public/ or to section anchors that
+ * an admin cannot add. ROOM_ACCENTS is code-only for the same reason (each value
+ * is a CSS class), but which rooms exist and which accent each wears is data.
  */
 
 import { BILIBILI_VIDEO } from '~/constants';
@@ -18,26 +23,60 @@ import type { Localized } from '~/pages/con/i18n';
 /* Event                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export const CON = {
+/** Page-level switches, kept apart from the copy they govern. */
+export interface ConSettings {
+    /**
+     * When false, /con is visible to core-staff and the president only; everyone
+     * else gets a short "coming soon" card. Defaults to true so the page does not
+     * disappear the moment this field is introduced.
+     */
+    published: boolean
+}
+
+export const CON_SETTINGS: ConSettings = {
+    published: true,
+};
+
+export interface ConVenue {
+    name: Localized
+    room: Localized
+    address: string
+    mapUrl: string
+}
+
+export interface ConEvent {
+    edition: number
+    name: Localized
+    tagline: Localized
+    intro: Localized
+    /** Local time, no timezone suffix. */
+    date: string
+    endTime: string
+    doorsOpen: Localized
+    venue: ConVenue
+    ticketUrl: string
+}
+
+export const CON: ConEvent = {
     edition: 2026,
-    name: {en: 'Sekai Beyond Con', zh: '彼世界漫展'} satisfies Localized,
+    name: {en: 'Sekai Beyond Con', zh: '彼世界漫展'},
     tagline: {
         en: 'One day, one stage, every world you love.',
         zh: '一日一舞台，汇聚你所热爱的每一个世界。',
-    } satisfies Localized,
+    },
     intro: {
         en: 'Anime, comics, games, and music — brought together by the Sekai Beyond community at the University of Washington. Stage performances, artist alley, cosplay, tabletop, and a whole lot of friends you have not met yet.',
         zh: '动漫、漫画、游戏与音乐——由华盛顿大学 Sekai Beyond 社区共同呈现。舞台演出、创作者市集、Cosplay、桌游，以及许多你还没遇见的朋友。',
-    } satisfies Localized,
+    },
 
-    /** PLACEHOLDER — confirm before launch. Local time, no timezone suffix. */
+    /** PLACEHOLDER — confirm before launch. */
     date: '2026-11-14T11:00:00',
     endTime: '2026-11-14T20:00:00',
-    doorsOpen: {en: 'Doors open 11:00 AM', zh: '11:00 开场'} satisfies Localized,
+    doorsOpen: {en: 'Doors open 11:00 AM', zh: '11:00 开场'},
 
     venue: {
-        name: {en: 'Husky Union Building (HUB)', zh: '华盛顿大学学生活动中心 (HUB)'} satisfies Localized,
-        room: {en: 'HUB Ballroom', zh: 'HUB 宴会厅'} satisfies Localized,
+        name: {en: 'Husky Union Building (HUB)', zh: '华盛顿大学学生活动中心 (HUB)'},
+        room: {en: 'HUB Ballroom', zh: 'HUB 宴会厅'},
         address: '4001 E Stevens Way NE, Seattle, WA 98195',
         mapUrl: 'https://maps.google.com/?q=Husky+Union+Building+University+of+Washington',
     },
@@ -164,24 +203,47 @@ export const HIGHLIGHTS: Highlight[] = [
 ];
 
 /* -------------------------------------------------------------------------- */
-/* Schedule — PLACEHOLDER programming, replace with the real grid             */
+/* Rooms + schedule — PLACEHOLDER; the real grid lives in conContent/main      */
 /* -------------------------------------------------------------------------- */
 
-export type TrackId = 'stage' | 'panel' | 'workshop' | 'open'
+/**
+ * Chip colours a room can use. The palette is fixed in code because each value
+ * is a CSS class (`sbc-room-chip--pink`); which room wears which colour is not.
+ */
+export const ROOM_ACCENTS = ['pink', 'violet', 'amber', 'sky', 'mint', 'slate'] as const;
 
-export const TRACKS: Record<TrackId, Localized> = {
-    stage: {en: 'Main Stage', zh: '主舞台'},
-    panel: {en: 'Panel', zh: '座谈'},
-    workshop: {en: 'Workshop', zh: '工作坊'},
-    open: {en: 'Open Floor', zh: '自由活动'},
-};
+export type RoomAccent = typeof ROOM_ACCENTS[number]
+
+export interface Room {
+    /** Stable slug referenced by `ScheduleItem.room`. */
+    id: string
+    name: Localized
+    accent: RoomAccent
+}
+
+/**
+ * Generic placeholder rooms, matching the placeholder programming below. The real
+ * room list for a given year is admin data — this is only what a visitor sees
+ * before the Firestore fetch lands, or if it fails.
+ */
+export const ROOMS: Room[] = [
+    {id: 'stage', name: {en: 'Main Stage', zh: '主舞台'}, accent: 'pink'},
+    {id: 'panel', name: {en: 'Panel Room', zh: '座谈厅'}, accent: 'violet'},
+    {id: 'workshop', name: {en: 'Workshop Room', zh: '工作坊教室'}, accent: 'amber'},
+    {id: 'open', name: {en: 'Open Floor', zh: '自由活动'}, accent: 'sky'},
+];
 
 export interface ScheduleItem {
-    start: string
-    end: string
-    track: TrackId
+    /**
+     * Omitted together when the slot is announced but unscheduled — the page
+     * shows "TBA" in the time column rather than hiding the item.
+     */
+    start?: string
+    end?: string
+    /** A `Room.id`. An id with no matching room renders without a chip. */
+    room: string
     title: Localized
-    location: Localized
+    location?: Localized
     detail?: Localized
 }
 
@@ -199,7 +261,7 @@ export const SCHEDULE: ScheduleBlock[] = [
             {
                 start: '11:00',
                 end: '11:30',
-                track: 'open',
+                room: 'open',
                 title: {en: 'Doors Open & Registration', zh: '开场与签到'},
                 location: {en: 'HUB Lobby', zh: 'HUB 大厅'},
                 detail: {
@@ -210,14 +272,14 @@ export const SCHEDULE: ScheduleBlock[] = [
             {
                 start: '11:30',
                 end: '12:00',
-                track: 'stage',
+                room: 'stage',
                 title: {en: 'Opening Ceremony', zh: '开幕式'},
                 location: {en: 'Main Stage', zh: '主舞台'},
             },
             {
                 start: '12:00',
                 end: '13:00',
-                track: 'stage',
+                room: 'stage',
                 title: {en: 'Student Band Showcase', zh: '学生乐队专场'},
                 location: {en: 'Main Stage', zh: '主舞台'},
             },
@@ -230,7 +292,7 @@ export const SCHEDULE: ScheduleBlock[] = [
             {
                 start: '13:00',
                 end: '14:00',
-                track: 'panel',
+                room: 'panel',
                 title: {en: 'Making It in Anime Illustration', zh: '动漫插画创作分享'},
                 location: {en: 'Panel Room', zh: '座谈厅'},
                 detail: {
@@ -241,14 +303,14 @@ export const SCHEDULE: ScheduleBlock[] = [
             {
                 start: '14:00',
                 end: '15:30',
-                track: 'stage',
+                room: 'stage',
                 title: {en: 'Cosplay Runway', zh: 'Cosplay 走秀'},
                 location: {en: 'Main Stage', zh: '主舞台'},
             },
             {
                 start: '15:30',
                 end: '16:30',
-                track: 'workshop',
+                room: 'workshop',
                 title: {en: 'Prop Crafting 101', zh: '道具制作入门'},
                 location: {en: 'Workshop Room', zh: '工作坊教室'},
                 detail: {
@@ -259,7 +321,7 @@ export const SCHEDULE: ScheduleBlock[] = [
             {
                 start: '16:30',
                 end: '17:30',
-                track: 'open',
+                room: 'open',
                 title: {en: 'Rhythm Game Tournament', zh: '音游比赛'},
                 location: {en: 'Game Zone', zh: '游戏区'},
             },
@@ -272,21 +334,21 @@ export const SCHEDULE: ScheduleBlock[] = [
             {
                 start: '17:30',
                 end: '19:00',
-                track: 'stage',
+                room: 'stage',
                 title: {en: 'Idol & J-pop Night', zh: '偶像与 J-pop 之夜'},
                 location: {en: 'Main Stage', zh: '主舞台'},
             },
             {
                 start: '19:00',
                 end: '19:30',
-                track: 'stage',
+                room: 'stage',
                 title: {en: 'Closing Ceremony', zh: '闭幕式'},
                 location: {en: 'Main Stage', zh: '主舞台'},
             },
             {
                 start: '19:30',
                 end: '20:00',
-                track: 'open',
+                room: 'open',
                 title: {en: 'Group Photo & Teardown', zh: '大合照与撤场'},
                 location: {en: 'HUB Lobby', zh: 'HUB 大厅'},
             },
@@ -356,7 +418,13 @@ export const VENDORS: Vendor[] = [
     {name: 'Table B3 — TBA', kind: {en: 'Zines & Art Books', zh: '画册与刊物'}},
 ];
 
-export const VENDOR_CTA = {
+export interface VendorCta {
+    heading: Localized
+    body: Localized
+    label: Localized
+}
+
+export const VENDOR_CTA: VendorCta = {
     heading: {en: 'Want a table?', zh: '想要摊位？'},
     body: {
         en: 'Artist alley applications open a few weeks before the con. Registered members get first pick of tables.',

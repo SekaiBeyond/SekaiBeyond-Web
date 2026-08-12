@@ -1,10 +1,11 @@
 import { LINKS } from '~/constants';
-import { FAQ } from '~/pages/con/content';
+import { useConContent } from '~/lib/conContent';
 import { useT } from '~/pages/con/i18n';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
 export const Faq = () => {
     const t = useT();
+    const {content} = useConContent();
 
     return (
         <section id="faq" className="sbc-section">
@@ -18,7 +19,7 @@ export const Faq = () => {
             />
 
             <div className="sbc-faq-list">
-                {FAQ.map(entry => (
+                {content.faq.map(entry => (
                     <details key={entry.q.en} className="sbc-faq-item">
                         <summary className="sbc-faq-question">
                             <span>{t(entry.q)}</span>

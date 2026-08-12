@@ -51,7 +51,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
         'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
         'name-set', 'avatar-set', 'avatar-remove'],
-    config: ['policy-update', 'config-update'],
+    config: ['policy-update', 'config-update', 'con-content-update'],
     email: ['scheduled-mail-drain'],
 };
 
@@ -117,6 +117,7 @@ export const RecordsTab = ({
                 rateLabel: data.rateLabel,
                 qrLabel: data.qrLabel,
                 platformLabel: data.platformLabel,
+                conSection: data.conSection,
                 unlinkedFrom: data.unlinkedFrom,
                 code: data.code,
                 oldGroup: data.oldGroup,
@@ -741,6 +742,10 @@ export const RecordsTab = ({
                 return isEnglish ? <>updated policy content</> : <>更新了政策内容</>;
             case 'config-update':
                 return isEnglish ? <>updated site config</> : <>更新了网站配置</>;
+            case 'con-content-update':
+                return isEnglish
+                    ? <>updated con page content {r.conSection ? `(${r.conSection})` : ''}</>
+                    : <>更新了漫展页面内容 {r.conSection ? `(${r.conSection})` : ''}</>;
             default:
                 // A record type written by a newer Cloud Function than this build
                 // knows about. Show the raw type instead of an empty row.
@@ -846,6 +851,7 @@ export const RecordsTab = ({
                 return isEnglish ? 'Account' : '账号';
             case 'policy-update':
             case 'config-update':
+            case 'con-content-update':
                 return isEnglish ? 'Config' : '配置';
             default:
                 return type;

@@ -1,13 +1,15 @@
-import { CON } from '~/pages/con/content';
+import { useConContent } from '~/lib/conContent';
 import { useCountdown } from '~/pages/con/hooks';
 import { useT } from '~/pages/con/i18n';
 import { pad } from '~/pages/con/utils';
 
 export const Countdown = () => {
     const t = useT();
-    const {days, hours, minutes, seconds, started} = useCountdown(CON.date);
+    const {content} = useConContent();
+    const {date, endTime} = content.event;
+    const {days, hours, minutes, seconds, started} = useCountdown(date);
 
-    const isOver = Date.now() > new Date(CON.endTime).getTime();
+    const isOver = Date.now() > new Date(endTime).getTime();
 
     if (isOver) {
         return (

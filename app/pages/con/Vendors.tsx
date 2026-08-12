@@ -1,10 +1,11 @@
 import { LINKS } from '~/constants';
-import { VENDOR_CTA, VENDORS } from '~/pages/con/content';
+import { useConContent } from '~/lib/conContent';
 import { useT } from '~/pages/con/i18n';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
 export const Vendors = () => {
     const t = useT();
+    const {list, cta} = useConContent().content.vendors;
 
     return (
         <section id="vendors" className="sbc-section">
@@ -18,7 +19,7 @@ export const Vendors = () => {
             />
 
             <div className="sbc-vendor-grid">
-                {VENDORS.map(vendor => {
+                {list.map(vendor => {
                     const body = (
                         <>
                             <h3 className="sbc-vendor-name">{vendor.name}</h3>
@@ -45,11 +46,11 @@ export const Vendors = () => {
 
             <div className="sbc-callout">
                 <div>
-                    <h3 className="sbc-callout-title">{t(VENDOR_CTA.heading)}</h3>
-                    <p className="sbc-callout-body">{t(VENDOR_CTA.body)}</p>
+                    <h3 className="sbc-callout-title">{t(cta.heading)}</h3>
+                    <p className="sbc-callout-body">{t(cta.body)}</p>
                 </div>
                 <a className="btn btn-secondary" href={LINKS.email}>
-                    <span>{t(VENDOR_CTA.label)}</span>
+                    <span>{t(cta.label)}</span>
                     <span aria-hidden="true">✉️</span>
                 </a>
             </div>

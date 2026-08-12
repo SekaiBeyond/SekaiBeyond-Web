@@ -1,7 +1,8 @@
 import { Link } from 'react-router';
 import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from 'react-icons/si';
 import { LINKS } from '~/constants';
-import { CON, NAV_LINKS } from '~/pages/con/content';
+import { useConContent } from '~/lib/conContent';
+import { NAV_LINKS } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { scrollToSection } from '~/pages/con/utils';
 
@@ -14,12 +15,13 @@ const SOCIALS = [
 
 export const Footer = () => {
     const t = useT();
+    const {name} = useConContent().content.event;
 
     return (
         <footer className="sbc-footer">
             <div className="sbc-footer-inner">
                 <div className="sbc-footer-brand">
-                    <span className="sbc-footer-logo">{t(CON.name)}</span>
+                    <span className="sbc-footer-logo">{t(name)}</span>
                     <p className="sbc-footer-org">
                         {t({
                             en: 'Hosted by Sekai Beyond, a registered student organization at the University of Washington.',
