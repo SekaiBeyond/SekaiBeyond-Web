@@ -12,7 +12,7 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import type { UserRecord } from './types';
-import { fetchEventAttendees, fetchEventStaffCount } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount, toDatetimeLocal } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { ClaimCodeSection } from './ClaimCodeSection';
 import { LocationFormField } from './LocationFormField';
@@ -43,11 +43,6 @@ interface UpcomingEventsTabProps {
 export interface UpcomingEventsTabHandle {
     selectEvent: (eventId: string) => void;
 }
-
-const toDatetimeLocal = (d: Date): string => {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
 
 interface EventForm {
     title: string;

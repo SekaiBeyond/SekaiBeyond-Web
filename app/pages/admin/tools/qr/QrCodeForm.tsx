@@ -2,6 +2,7 @@ import { type QrCode, type QrExpirationMode, qrHasSpot } from '~/lib/qrCodes';
 import { useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { MapPicker } from '../../MapPicker';
+import { toDatetimeLocal } from '../../utils';
 
 /**
  * The two kinds of tracked code — mutually exclusive and fixed at creation
@@ -36,14 +37,6 @@ export interface QrDraft {
     spotLabelCn: string;
 }
 
-/** Format a Date as the `YYYY-MM-DDTHH:mm` value a datetime-local input expects. */
-function toLocalInput(date: Date | null): string {
-    if (!date) return '';
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-        + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 export function emptyDraft(): QrDraft {
     return {
         label: '', labelCn: '', targetUrl: '', eventId: '',
@@ -60,7 +53,7 @@ export function qrToDraft(code: QrCode): QrDraft {
         targetUrl: code.targetUrl,
         eventId: code.eventId,
         expirationMode: code.expirationMode,
-        expiresLocal: toLocalInput(code.expiresAt),
+        expiresLocal: toDatetimeLocal(code.expiresAt),
         kind: code.platforms.length > 0 ? 'social' : 'location',
         platforms: code.platforms,
         lat: code.lat,

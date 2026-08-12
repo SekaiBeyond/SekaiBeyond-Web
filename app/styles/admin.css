@@ -2315,7 +2315,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 8px 0 4px;
+    padding: 18px 20px;
 }
 
 /* Status tags */
@@ -2800,10 +2800,6 @@ select.admin-tickets-tag:focus {
 /* When the modal is used for the attendee edit form (no body section) */
 .admin-tickets-preview-content:has(.admin-tickets-attendee-edit) {
     max-width: 480px;
-}
-
-.admin-tickets-attendee-edit {
-    padding: 18px 20px;
 }
 
 /* ----- Send section ----- */
@@ -3315,19 +3311,6 @@ select.admin-tickets-tag:focus {
 
 .admin-field-hint {
     margin: 0 0 10px;
-}
-
-/* --- Parking lot description fields --- */
-.admin-char-count {
-    align-self: flex-end;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--color-text-light);
-    font-feature-settings: "tnum";
-}
-
-.admin-char-count.is-near-limit {
-    color: var(--color-accent);
 }
 
 /* Intro blurb at the top of a tab/section. */

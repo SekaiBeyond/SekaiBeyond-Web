@@ -24,6 +24,18 @@ const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
 export type ShowToast = (message: string, type: 'success' | 'warning' | 'error') => void;
 
+/**
+ * Format a Date as the `YYYY-MM-DDTHH:mm` value a `datetime-local` input expects.
+ * Built from local getters rather than `toISOString`, which would shift the
+ * displayed time by the UTC offset. A null date maps to the empty (unset) input.
+ */
+export const toDatetimeLocal = (date: Date | null): string => {
+    if (!date) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+        + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData}): UserRecord => {
     const data = docSnap.data();
     return {

@@ -6,6 +6,7 @@ import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import {
     sanitizeDisplayText,
+    validateCoordinate,
     validateDocId,
     validateISODate,
     validateStr,
@@ -15,16 +16,6 @@ import {
 
 const QR_EXPIRATION_MODES = ["none", "event", "date"] as const;
 type QrExpirationMode = typeof QR_EXPIRATION_MODES[number];
-
-function validateCoordinate(value: unknown, name: string, min: number, max: number): number {
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-        throw new HttpsError("invalid-argument", `Invalid ${name}: must be a number.`);
-    }
-    if (value < min || value > max) {
-        throw new HttpsError("invalid-argument", `Invalid ${name}: out of range.`);
-    }
-    return value;
-}
 
 // Platform ids become Firestore field-path segments (`platformScans.<id>`), so
 // only doc-id-safe characters are allowed. Ids come from the socialPlatforms

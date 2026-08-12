@@ -11,6 +11,16 @@ export function validateISODate(value: unknown, name: string): string | null {
     return value;
 }
 
+export function validateCoordinate(value: unknown, name: string, min: number, max: number): number {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must be a number.`);
+    }
+    if (value < min || value > max) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: out of range.`);
+    }
+    return value;
+}
+
 export function validateMaxUses(value: unknown): number {
     if (value === undefined || value === null) return 0;
     if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {

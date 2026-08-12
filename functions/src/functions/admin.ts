@@ -25,6 +25,7 @@ import {
 } from "../utils/storage";
 import {
     sanitizeDisplayText,
+    validateCoordinate,
     validateDocId,
     validateISODate,
     validateStorageImageUrl,
@@ -296,16 +297,6 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         return {saved: true};
     });
 });
-
-function validateCoordinate(value: unknown, name: string, min: number, max: number): number {
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-        throw new HttpsError("invalid-argument", `Invalid ${name}: must be a number.`);
-    }
-    if (value < min || value > max) {
-        throw new HttpsError("invalid-argument", `Invalid ${name}: out of range.`);
-    }
-    return value;
-}
 
 const PARKING_LOT_TYPES = ["general", "disabled", "garage"] as const;
 
