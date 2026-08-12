@@ -261,7 +261,7 @@ export interface ConContentRead {
  */
 export function useConContent(): ConContentRead {
     const {profile, loading: authLoading} = useAuth();
-    const canPreview = !!profile && hasPermission(profile.group, 'core-staff');
+    const canPreview = !!profile && hasPermission(profile.group, 'staff');
 
     // Only one of the two is ever fetched. The draft is staff-only, so asking for
     // it as an anonymous visitor would just produce a permission error.

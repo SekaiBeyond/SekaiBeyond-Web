@@ -3,13 +3,16 @@ import { Link } from "react-router";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 import { useSiteConfig } from "~/lib/siteConfig";
+import { useConContent } from "~/lib/conContent";
 
 export const SekaiBeyondCon = () => {
     const {isEnglish} = useLanguage();
     const {config, loading} = useSiteConfig();
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const {content: conContent, loading: conLoading} = useConContent();
 
-    if (loading || !config.conEdition) {
+    // Hide the entire section while loading or when there's no edition configured.
+    if (loading || conLoading || !config.conEdition) {
         return null;
     }
 
@@ -85,9 +88,11 @@ export const SekaiBeyondCon = () => {
                             {isEnglish ? edition.description : edition.descriptionCn}
                         </p>
 
-                        <Link className="btn btn-primary con-page-link" to="/con">
-                            <span>{isEnglish ? "Explore the Con" : "了解漫展详情"}</span>
-                        </Link>
+                        {conContent.settings.published && (
+                            <Link className="btn btn-primary con-page-link" to="/con">
+                                <span>{isEnglish ? "Explore the Con" : "了解漫展详情"}</span>
+                            </Link>
+                        )}
                     </div>
                 </div>
             </div>

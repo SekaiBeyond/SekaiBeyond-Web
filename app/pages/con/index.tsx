@@ -33,7 +33,7 @@ export const ConPage = () => {
     // before a cold Firestore read on a slow connection.
     useHashScroll(!loading);
 
-    const canPreview = !!profile && hasPermission(profile.group, 'core-staff');
+    const canPreview = !!profile && hasPermission(profile.group, 'staff');
     // A read that failed falls back to the shipped defaults, and those are not a
     // page anybody agreed to publish.
     const published = content.settings.published && !failed;
@@ -55,8 +55,8 @@ export const ConPage = () => {
                             zh: '无法读取已保存的内容——当前显示内置文案，并对公众隐藏。',
                         })
                         : t({
-                            en: 'Not published — only core staff can see this page. Publish it from Admin → Con Content.',
-                            zh: '尚未发布——仅核心成员可见。可在「管理面板 → 漫展内容」中发布。',
+                            en: 'Not published — only staff can see this page. Publish it from Admin → Con Content.',
+                            zh: '尚未发布——仅工作人员可见。可在「管理面板 → 漫展内容」中发布。',
                         })}
                 </div>
             )}
