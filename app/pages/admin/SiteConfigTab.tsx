@@ -84,7 +84,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         return (
             <div className="admin-section">
                 <div className="policy-spinner-wrap">
-                    <div className="profile-spinner"/>
+                    <div className="spinner"/>
                 </div>
             </div>
         );

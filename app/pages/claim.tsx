@@ -163,7 +163,7 @@ export const ClaimPage = () => {
     if (state === 'loading' || authLoading) {
         return (
             <div className="profile-loading">
-                <div className="profile-spinner"/>
+                <div className="spinner"/>
             </div>
         );
     }
@@ -230,14 +230,14 @@ export const ClaimPage = () => {
 
                 {state === 'claiming' && (
                     <>
-                        <div className="profile-spinner spinner-centered"/>
+                        <div className="spinner spinner-centered"/>
                         <h2>{isEnglish ? 'Checking In...' : '签到中...'}</h2>
                     </>
                 )}
 
                 {state === 'redeeming' && (
                     <>
-                        <div className="profile-spinner spinner-centered"/>
+                        <div className="spinner spinner-centered"/>
                         <h2>{isEnglish ? 'Redeeming Ticket...' : '验证门票中...'}</h2>
                     </>
                 )}

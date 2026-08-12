@@ -56,7 +56,7 @@ export function EventAttendeesList({
 
     return (
         <div className="admin-attendees-section">
-            {loading && <div className="profile-spinner admin-spinner-center"/>}
+            {loading && <div className="spinner spinner-centered"/>}
             {!loading && attendees.length === 0 && (
                 <p className="admin-no-results">{isEnglish ? 'No attendees yet.' : '暂无参加者。'}</p>
             )}

@@ -909,7 +909,7 @@ export const RecordsTab = ({
             </div>
 
             {loadingRecords && records.length === 0 && (
-                <div className="profile-spinner admin-spinner-center"/>
+                <div className="spinner spinner-centered"/>
             )}
 
             {!loadingRecords && records.length === 0 && (

@@ -193,7 +193,7 @@ export const RedeemModal = () => {
 
                 {state === 'claiming' && (
                     <div className="redeem-loading">
-                        <div className="profile-spinner spinner-centered"/>
+                        <div className="spinner spinner-centered"/>
                         <p>{isEnglish ? 'Redeeming...' : '兑换中...'}</p>
                     </div>
                 )}

@@ -656,7 +656,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     {badgeHolders.length > 0 && <span className="admin-badges-count">{badgeHolders.length}</span>}
                 </h4>
 
-                {loadingBadgeHolders && <div className="profile-spinner admin-spinner-center"/>}
+                {loadingBadgeHolders && <div className="spinner spinner-centered"/>}
                 {!loadingBadgeHolders && badgeHolders.length === 0 && (
                     <p className="admin-no-results">{isEnglish ? 'No one has this badge yet.' : '暂无人持有此徽章。'}</p>
                 )}
@@ -738,7 +738,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             </button>
                         </div>
 
-                        {loadingActivationCodes && <div className="profile-spinner admin-spinner-center"/>}
+                        {loadingActivationCodes && <div className="spinner spinner-centered"/>}
                         {!loadingActivationCodes && badgeActivationCodes.length === 0 && (
                             <p className="admin-no-results">{isEnglish ? 'No activation codes yet.' : '暂无激活码。'}</p>
                         )}

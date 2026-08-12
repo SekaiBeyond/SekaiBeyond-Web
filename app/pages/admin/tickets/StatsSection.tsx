@@ -213,7 +213,7 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
     if (loading && attendees.length === 0) {
         return (
             <div className="admin-tickets-stats-page">
-                <div className="profile-spinner admin-spinner-center"/>
+                <div className="spinner spinner-centered"/>
             </div>
         );
     }

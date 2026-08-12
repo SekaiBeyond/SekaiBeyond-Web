@@ -592,7 +592,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                             </span>
                         </UserRow>
                     ))}
-                    {loadingRecent && <div className="profile-spinner admin-spinner-center"/>}
+                    {loadingRecent && <div className="spinner spinner-centered"/>}
                     {!loadingRecent && hasMoreRecent && recentUsers.length > 0 && (
                         <button className="admin-btn admin-btn--outline" onClick={loadMoreRecentUsers}>
                             {isEnglish ? 'Load More' : '加载更多'}

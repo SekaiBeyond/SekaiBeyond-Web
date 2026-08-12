@@ -523,6 +523,9 @@
     margin-top: 40px;
 }
 
+/* Bare button wrapping a clickable image (past-event photos, event and
+   convention posters) — strips the button chrome so only the image shows,
+   while keeping it a real button for keyboard and screen-reader users. */
 .event-image-btn {
     border: none;
     background: none;
@@ -531,6 +534,12 @@
     cursor: pointer;
     display: block;
     width: 100%;
+}
+
+.event-image-btn:focus-visible {
+    outline: 3px solid var(--color-primary);
+    outline-offset: 3px;
+    border-radius: 12px;
 }
 
 /* Loading Spinner */
@@ -560,4 +569,23 @@
     100% {
         transform: rotate(360deg);
     }
+}
+
+/**
+ * The app-wide inline spinner, for the in-place "this panel is loading" case —
+ * smaller and quicker than .loader, which owns the full-section loading state.
+ * Add .spinner-centered when it stands alone in a column rather than sitting
+ * beside other content.
+ */
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 107, 157, 0.2);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: rotation 0.8s linear infinite;
+}
+
+.spinner-centered {
+    margin: 20px auto;
 }

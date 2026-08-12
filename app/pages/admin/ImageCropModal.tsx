@@ -150,7 +150,7 @@ export const ImageCropModal = ({imageSource, aspect, onConfirm, onCancel, showTo
                                 onPointerUp={handlePointerUp}
                                 onPointerCancel={handlePointerUp}
                             />
-                            {!image && <div className="profile-spinner spinner-centered"/>}
+                            {!image && <div className="spinner spinner-centered"/>}
                         </div>
                         <label className="image-crop-zoom">
                             <span>{isEnglish ? 'Zoom' : '缩放'}</span>

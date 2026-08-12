@@ -89,7 +89,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     <div className="convention-poster convention-poster--spaced">
                         <button
                             type="button"
-                            className="convention-poster-btn"
+                            className="event-image-btn"
                             onClick={onPosterClick}
                             aria-label={isEnglish ? "View event poster" : "查看活动海报"}
                         >

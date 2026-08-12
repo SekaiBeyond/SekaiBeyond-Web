@@ -407,7 +407,7 @@ export const ProfilePage = () => {
     if (loading || loadingViewed || eventsLoading) {
         return (
             <div className="profile-loading">
-                <div className="profile-spinner"/>
+                <div className="spinner"/>
             </div>
         );
     }

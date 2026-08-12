@@ -270,7 +270,7 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
 
             {loadingRoster ? (
                 <div className="policy-spinner-wrap">
-                    <div className="profile-spinner"/>
+                    <div className="spinner"/>
                 </div>
             ) : (
                 <>

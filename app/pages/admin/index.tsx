@@ -289,7 +289,7 @@ export const AdminPage = () => {
     if (loading || resolvingEventStaff) {
         return (
             <div className="profile-loading">
-                <div className="profile-spinner"/>
+                <div className="spinner"/>
             </div>
         );
     }

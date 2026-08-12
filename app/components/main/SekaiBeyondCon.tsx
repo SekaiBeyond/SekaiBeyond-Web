@@ -59,7 +59,7 @@ export const SekaiBeyondCon = () => {
                         <div className="convention-poster">
                             <button
                                 type="button"
-                                className="convention-poster-btn"
+                                className="event-image-btn"
                                 onClick={() => setSelectedImage(edition.image)}
                                 aria-label={isEnglish ? `View Sekai Beyond Con ${edition.year} poster` : `查看${edition.year}年彼世界漫展海报`}
                             >

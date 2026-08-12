@@ -52,7 +52,7 @@ const ManagedQrRedirect = ({id, platform}: {id: string; platform: string}) => {
                 <main className="qr-redirect-main">
                     <div className="qr-redirect-blob"></div>
                     <div className="qr-redirect-card">
-                        <div className="profile-spinner admin-spinner-center"/>
+                        <div className="spinner spinner-centered"/>
                         <p className="qr-redirect-message">
                             {isEnglish ? 'Taking you there…' : '正在跳转…'}
                         </p>

@@ -145,7 +145,7 @@ export function EventStaffSection({
             </p>
 
             {loading ? (
-                <div className="profile-spinner admin-spinner-center"/>
+                <div className="spinner spinner-centered"/>
             ) : staffList.length === 0 ? (
                 <p className="admin-no-results">
                     {isEnglish ? 'No event staff yet.' : '暂无工作人员。'}

@@ -213,7 +213,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false}
     if (loading) {
         return (
             <div className="admin-codes-section">
-                <div className="profile-spinner admin-spinner-center"/>
+                <div className="spinner spinner-centered"/>
             </div>
         );
     }
