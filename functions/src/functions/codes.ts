@@ -258,7 +258,6 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                 if (existing.exists) {
                     throw new Error("duplicate");
                 }
-                // Deactivate old codes
                 for (const oldDoc of existingCodes.docs) {
                     txn.update(oldDoc.ref, {active: false});
                     txn.set(db.collection("records").doc(), {

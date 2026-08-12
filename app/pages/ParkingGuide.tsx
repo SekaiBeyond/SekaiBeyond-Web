@@ -277,7 +277,6 @@ export const ParkingGuide = () => {
     // A lot picked from the search, focused on the map.
     const [focusedLotId, setFocusedLotId] = useState<string | null>(null);
 
-    // ---- Fetch event ----
     useEffect(() => {
         if (!eventId) {
             setError('No event ID');

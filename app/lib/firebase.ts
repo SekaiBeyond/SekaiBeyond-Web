@@ -5,6 +5,7 @@ import { type Firestore, getFirestore } from "firebase/firestore";
 import { type Functions, type FunctionsError, getFunctions as _getFunctions, httpsCallable } from "firebase/functions";
 import { type ConEdition } from "~/constants";
 import type { TeamMemberConfig } from "./siteConfig";
+import type { ConContent } from "./conContent";
 
 const requiredEnvVars = [
     'VITE_FIREBASE_API_KEY',
@@ -189,8 +190,6 @@ export const callSetUpcomingEventPublished = (data: {eventId: string; published:
 export const callArchiveUpcomingEvent = (data: {eventId: string; tagIds: string[]}) =>
     httpsCallable<typeof data, {pastEventId: string}>(getFunctions(), 'archiveUpcomingEvent')(data);
 
-// ---- Paid event ticketing ----
-
 export const callImportEventAttendees = (data: {
     eventId: string;
     attendees: Array<{email: string; name: string; ticketCount: number; type: string}>;
@@ -323,6 +322,11 @@ export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
 export const callSaveSiteConfig = (data: {bilibiliVideoBvid?: string, conEdition?: ConEdition | null}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveSiteConfig')(data);
 
+// Only the sections present in `data` are written, so each Save button in the
+// Con Content tab leaves the sections it does not own untouched.
+export const callSaveConContent = (data: Partial<ConContent>) =>
+    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveConContent')(data);
+
 export const callSaveTeamMembers = (data: {teamMembers: any[]}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveTeamMembers')(data);
 
@@ -431,8 +435,6 @@ export const callSaveParkingRate = (data: {rateId?: string; labelEn: string; lab
 export const callDeleteParkingRate = (data: {rateId: string}) =>
     httpsCallable<typeof data, {deleted: boolean; unlinkedFrom: number}>(getFunctions(), 'deleteParkingRate')(data);
 
-// ---- Managed QR codes ----
-
 export const callSaveQrCode = (data: {
     qrId?: string;
     label: string;
@@ -456,8 +458,6 @@ export const callDeleteQrCode = (data: {qrId: string}) =>
 
 export const callRecordQrScan = (data: {id: string; p?: string}) =>
     httpsCallable<typeof data, {active: boolean; targetUrl: string}>(getFunctions(), 'recordQrScan')(data);
-
-// ---- Editable social platforms (per-platform QR tracking) ----
 
 export const callSaveSocialPlatform = (data: {
     id?: string;

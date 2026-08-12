@@ -25,6 +25,7 @@ import { ParkingRatesTab } from './ParkingRatesTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
+import { ConContentTab } from './ConContentTab';
 import type { CardHighlightHandle, LocationListHandle } from './useCardHighlight';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
 
@@ -122,7 +123,7 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(firstEventId);
             }
         } else if (isStaffGroup) {
-            if (tab === 'events' || tab === 'locations' || tab === 'tools' || tab === 'users' || tab === 'badges' || tab === 'records' || tab === 'config') {
+            if (tab === 'events' || tab === 'locations' || tab === 'tools' || tab === 'users' || tab === 'badges' || tab === 'records' || tab === 'config' || tab === 'con') {
                 setActiveTab(tab);
             } else if (tab === 'venues' || tab === 'parking') {
                 setActiveTab('locations');
@@ -142,7 +143,7 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(event);
             }
         } else {
-            if (tab === 'events' || tab === 'locations' || tab === 'badges' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config') {
+            if (tab === 'events' || tab === 'locations' || tab === 'badges' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config' || tab === 'con') {
                 setActiveTab(tab);
             } else if (tab === 'venues' || tab === 'parking') {
                 setActiveTab('locations');
@@ -289,7 +290,7 @@ export const AdminPage = () => {
     if (loading || resolvingEventStaff) {
         return (
             <div className="profile-loading">
-                <div className="profile-spinner"/>
+                <div className="spinner"/>
             </div>
         );
     }
@@ -359,6 +360,14 @@ export const AdminPage = () => {
                             onClick={() => setActiveTab('config')}
                         >
                             {isEnglish ? 'Site Config' : '网站配置'}
+                        </button>
+                    )}
+                    {(isCoreStaffOrAbove || isStaffGroup) && (
+                        <button
+                            className={`admin-tab ${activeTab === 'con' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('con')}
+                        >
+                            {isEnglish ? 'Con Content' : '漫展内容'}
                         </button>
                     )}
                     {(isCoreStaffOrAbove || isStaffGroup) && (
@@ -594,6 +603,10 @@ export const AdminPage = () => {
 
                 {activeTab === 'tools' && (isCoreStaffOrAbove || isStaffGroup) && (
                     <ToolsTab showToast={showToast} readOnly={isStaffGroup}/>
+                )}
+
+                {activeTab === 'con' && (isCoreStaffOrAbove || isStaffGroup) && (
+                    <ConContentTab showToast={showToast} readOnly={isStaffGroup}/>
                 )}
 
                 {activeTab === 'config' && (isCoreStaffOrAbove || isStaffGroup) && (

@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { type AttendeeData, TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
+import { advance, bucketStart, formatBucketLabel, granularityForSpan } from '../timeBuckets';
 
 interface StatsSectionProps {
     loading: boolean;
@@ -68,55 +69,14 @@ interface Timeline {
     types: TicketType[];
 }
 
-type Granularity = 'hour' | 'day' | 'week';
-
-const startOfHour = (d: Date): Date =>
-    new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours());
-
-const startOfDay = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-const startOfWeek = (d: Date): Date => {
-    const s = startOfDay(d);
-    s.setDate(s.getDate() - s.getDay());
-    return s;
-};
-
-const bucketStart: Record<Granularity, (d: Date) => Date> = {
-    hour: startOfHour,
-    day: startOfDay,
-    week: startOfWeek,
-};
-
-// Advance `d` in place by one bucket so the timeline includes empty buckets.
-const advance: Record<Granularity, (d: Date) => void> = {
-    hour: d => d.setHours(d.getHours() + 1),
-    day: d => d.setDate(d.getDate() + 1),
-    week: d => d.setDate(d.getDate() + 7),
-};
-
-const formatBucketLabel = (d: Date, granularity: Granularity, isEnglish: boolean): string => {
-    if (granularity === 'hour') {
-        return isEnglish
-            ? d.toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric'})
-            : `${d.getMonth() + 1}月${d.getDate()}日 ${d.getHours()}时`;
-    }
-    return isEnglish
-        ? `${d.toLocaleDateString('en-US', {month: 'short'})} ${d.getDate()}`
-        : `${d.getMonth() + 1}月${d.getDate()}日`;
-};
-
-// Bucket entries by hour, day, or week depending on the span they cover —
-// hourly when everything falls within ~2 days (e.g. redemptions during an
-// event), weekly when the range exceeds ~3 months, daily otherwise. Each
+// Bucket entries by hour, day, or week depending on the span they cover. Each
 // bucket is split by ticket type and accumulates a running total for the
 // cumulative line. `types` lists the types that actually appear, in canonical
 // order, so the chart only draws bars that carry data.
 const buildTimeline = (entries: TimelineEntry[], isEnglish: boolean): Timeline => {
     if (entries.length === 0) return {data: [], types: []};
     const sorted = [...entries].sort((a, b) => a.date.getTime() - b.date.getTime());
-    const spanDays = (sorted[sorted.length - 1].date.getTime() - sorted[0].date.getTime())
-        / 86_400_000;
-    const granularity: Granularity = spanDays <= 2 ? 'hour' : spanDays > 92 ? 'week' : 'day';
+    const granularity = granularityForSpan(sorted[0].date, sorted[sorted.length - 1].date);
     const bucketOf = bucketStart[granularity];
 
     const buckets = new Map<number, Partial<Record<TicketType, number>>>();
@@ -253,7 +213,7 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
     if (loading && attendees.length === 0) {
         return (
             <div className="admin-tickets-stats-page">
-                <div className="profile-spinner admin-spinner-center"/>
+                <div className="spinner spinner-centered"/>
             </div>
         );
     }

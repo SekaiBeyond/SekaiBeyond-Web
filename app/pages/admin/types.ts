@@ -47,7 +47,7 @@ export interface UserRecord {
     eventStaffEvents: string[];
 }
 
-export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'records' | 'tools' | 'config';
+export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'records' | 'tools' | 'config' | 'con';
 
 export type RecordType =
     'group-assign'
@@ -133,7 +133,8 @@ export type RecordType =
     | 'social-platform-edit'
     | 'social-platform-delete'
     | 'policy-update'
-    | 'config-update';
+    | 'config-update'
+    | 'con-content-update';
 
 export interface ActivityRecord {
     id: string;
@@ -153,6 +154,8 @@ export interface ActivityRecord {
     rateLabel?: string;
     qrLabel?: string;
     platformLabel?: string;
+    /** Comma-separated con page sections touched by a con-content-update. */
+    conSection?: string;
     unlinkedFrom?: number;
     code?: string;
     oldGroup?: UserGroup;

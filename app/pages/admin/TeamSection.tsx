@@ -104,7 +104,7 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
             // pulls the canonical roster (with uid/flags) back into the editor.
             await Promise.all([refreshConfig(), loadRoster()]);
             showToast(isEnglish ? 'Team updated.' : '团队已更新。', 'success');
-        } catch (e: any) {
+        } catch {
             showToast(isEnglish ? 'Failed to update team.' : '更新团队失败。', 'error');
             // Revert state if saving failed
             setMembers(members);
@@ -270,7 +270,7 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
 
             {loadingRoster ? (
                 <div className="policy-spinner-wrap">
-                    <div className="profile-spinner"/>
+                    <div className="spinner"/>
                 </div>
             ) : (
                 <>

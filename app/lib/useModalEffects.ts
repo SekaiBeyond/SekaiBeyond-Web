@@ -27,10 +27,8 @@ export function useModalEffects(
     useEffect(() => {
         if (!open) return;
 
-        // Save the element that had focus before the modal opened
         previouslyFocused.current = document.activeElement as HTMLElement;
 
-        // Lock body scroll
         const prev = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
 
@@ -81,7 +79,6 @@ export function useModalEffects(
             clearTimeout(timerId);
             document.removeEventListener('keydown', handleKeyDown);
             document.body.style.overflow = prev;
-            // Restore focus to the previously focused element
             previouslyFocused.current?.focus();
         };
     }, [open, containerRef]);

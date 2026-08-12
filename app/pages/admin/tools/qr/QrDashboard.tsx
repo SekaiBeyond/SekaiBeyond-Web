@@ -134,7 +134,7 @@ export const QrDashboard = ({
             </div>
 
             {loading && codes.length === 0 ? (
-                <div className="profile-spinner admin-spinner-center"/>
+                <div className="spinner spinner-centered"/>
             ) : filtered.length === 0 ? (
                 <p className="admin-no-results">
                     {codes.length === 0

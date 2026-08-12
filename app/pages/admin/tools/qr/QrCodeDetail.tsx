@@ -422,7 +422,7 @@ export const QrCodeDetail = ({
                 {scansError ? (
                     <p className="admin-no-results">{isEnglish ? 'Failed to load scans.' : '加载扫描记录失败。'}</p>
                 ) : scans === null ? (
-                    <div className="profile-spinner admin-spinner-center"/>
+                    <div className="spinner spinner-centered"/>
                 ) : (
                     <QrScanTrends key={code.id} scans={scans} platforms={code.platforms}/>
                 )}

@@ -150,7 +150,7 @@ export function AttendeesSection({
             {error && <p className="admin-no-results">{error}</p>}
 
             {loading && attendees.length === 0 && (
-                <div className="profile-spinner admin-spinner-center"/>
+                <div className="spinner spinner-centered"/>
             )}
 
             {!loading && attendees.length === 0 && !error && (

@@ -1,24 +1,8 @@
-/* ===== Profile Page ===== */
 .profile-loading {
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-}
-
-.profile-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(255, 107, 157, 0.2);
-    border-top-color: var(--color-primary);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
 }
 
 .profile-login-prompt {
@@ -82,7 +66,6 @@
     text-decoration: underline;
 }
 
-/* Claim Badge Page */
 .claim-card {
     text-align: center;
     background: rgba(255, 255, 255, 0.9);
@@ -159,7 +142,6 @@
     box-shadow: 0 6px 20px rgba(255, 107, 157, 0.4);
 }
 
-/* Profile Nav */
 .profile-nav {
     position: fixed;
     top: 0;
@@ -187,7 +169,6 @@
     text-decoration: none;
 }
 
-/* Profile Header */
 .profile-page {
     max-width: 920px;
     margin: 0 auto;
@@ -245,7 +226,6 @@
     font-size: 13px;
 }
 
-/* Profile Stats */
 .profile-stats {
     display: flex;
     gap: 20px;
@@ -275,7 +255,6 @@
     font-weight: 600;
 }
 
-/* Redeem Modal */
 .redeem-heading {
     text-align: center;
     margin-bottom: 8px;
@@ -323,11 +302,6 @@
     text-align: center;
 }
 
-.spinner-centered {
-    margin: 0 auto 20px;
-}
-
-/* Profile empty state */
 .profile-empty-state {
     text-align: center;
     color: var(--color-text-muted);
@@ -336,7 +310,6 @@
     line-height: 1.6;
 }
 
-/* Profile load error */
 .profile-load-error {
     text-align: center;
     color: var(--color-text-muted);
@@ -347,7 +320,6 @@
     margin-top: 20px;
 }
 
-/* Badge Section */
 .badge-section {
     margin-top: 20px;
 }
@@ -358,7 +330,6 @@
     margin-bottom: 6px;
 }
 
-/* Badge circles */
 .badge-grid {
     display: flex;
     flex-wrap: wrap;
@@ -448,7 +419,6 @@
     display: block;
 }
 
-/* Badge Modal */
 .badge-modal-overlay {
     position: fixed;
     top: 0;
@@ -548,7 +518,6 @@
     text-decoration: underline;
 }
 
-/* Event cards */
 .profile-event-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -707,7 +676,6 @@
     text-decoration: underline;
 }
 
-/* Profile Group Tag */
 .profile-group-tag {
     display: inline-block;
     padding: 4px 14px;
@@ -804,7 +772,7 @@
     border: 3px solid rgba(255, 255, 255, 0.3);
     border-top-color: #fff;
     border-radius: 50%;
-    animation: spin 0.6s linear infinite;
+    animation: rotation 0.6s linear infinite;
 }
 
 .profile-avatar-delete {
@@ -982,7 +950,6 @@
     background: rgba(0, 0, 0, 0.05);
 }
 
-/* Profile Responsive */
 @media (max-width: 600px) {
     .profile-nav {
         padding: 12px 15px;
@@ -1074,7 +1041,6 @@
     }
 }
 
-/* ===== Policy Page ===== */
 .policy-page {
     padding-top: 80px;
     min-height: 100vh;
@@ -1143,7 +1109,6 @@
     opacity: 0.75;
 }
 
-/* Policy textarea in admin */
 .policy-textarea {
     width: 100%;
     min-height: 360px;
@@ -1153,7 +1118,6 @@
     line-height: 1.6;
 }
 
-/* ===== QR Redirect Page ===== */
 .qr-redirect-page {
     min-height: 100vh;
 }

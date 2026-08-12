@@ -177,7 +177,7 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
             )}
 
             {!status && loading && (
-                <div className="profile-spinner admin-spinner-center"/>
+                <div className="spinner spinner-centered"/>
             )}
 
             {status && (

@@ -3,39 +3,7 @@ import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, T
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { QrScan } from '~/lib/qrCodes';
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
-
-type Granularity = 'hour' | 'day' | 'week';
-
-const startOfHour = (d: Date): Date =>
-    new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours());
-const startOfDay = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const startOfWeek = (d: Date): Date => {
-    const s = startOfDay(d);
-    s.setDate(s.getDate() - s.getDay());
-    return s;
-};
-
-const bucketStart: Record<Granularity, (d: Date) => Date> = {
-    hour: startOfHour,
-    day: startOfDay,
-    week: startOfWeek,
-};
-const advance: Record<Granularity, (d: Date) => void> = {
-    hour: d => d.setHours(d.getHours() + 1),
-    day: d => d.setDate(d.getDate() + 1),
-    week: d => d.setDate(d.getDate() + 7),
-};
-
-const formatLabel = (d: Date, g: Granularity, isEnglish: boolean): string => {
-    if (g === 'hour') {
-        return isEnglish
-            ? d.toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric'})
-            : `${d.getMonth() + 1}月${d.getDate()}日 ${d.getHours()}时`;
-    }
-    return isEnglish
-        ? `${d.toLocaleDateString('en-US', {month: 'short'})} ${d.getDate()}`
-        : `${d.getMonth() + 1}月${d.getDate()}日`;
-};
+import { advance, bucketStart, formatBucketLabel, granularityForSpan } from '../../timeBuckets';
 
 // Fixed palette for platform series, assigned in platform order and never
 // cycled. Validated for adjacent-pair colorblind separation on the app's white
@@ -101,8 +69,7 @@ interface Datum {
 function buildSeries(scans: QrScan[], seriesKeys: string[], isEnglish: boolean): Datum[] {
     if (scans.length === 0) return [];
     const sorted = [...scans].sort((a, b) => a.at.getTime() - b.at.getTime());
-    const spanDays = (sorted[sorted.length - 1].at.getTime() - sorted[0].at.getTime()) / 86_400_000;
-    const g: Granularity = spanDays <= 2 ? 'hour' : spanDays > 92 ? 'week' : 'day';
+    const g = granularityForSpan(sorted[0].at, sorted[sorted.length - 1].at);
     const bucketOf = bucketStart[g];
 
     const counts = new Map<number, Map<string, number>>();
@@ -120,7 +87,7 @@ function buildSeries(scans: QrScan[], seriesKeys: string[], isEnglish: boolean):
     const end = bucketOf(sorted[sorted.length - 1].at);
     while (cur <= end) {
         const bucket = counts.get(cur.getTime());
-        const row: Datum = {label: formatLabel(cur, g, isEnglish), cumulative: 0};
+        const row: Datum = {label: formatBucketLabel(cur, g, isEnglish), cumulative: 0};
         for (const key of seriesKeys) {
             const n = bucket?.get(key) ?? 0;
             row[key] = n;

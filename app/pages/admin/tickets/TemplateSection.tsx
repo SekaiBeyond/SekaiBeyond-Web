@@ -125,7 +125,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
     };
 
     if (loading) {
-        return <div className="profile-spinner admin-spinner-center"/>;
+        return <div className="spinner spinner-centered"/>;
     }
 
     return (

@@ -1,6 +1,3 @@
-/* ===== Parking Guide Page ===== */
-
-/* --- Page Layout --- */
 .parking-page {
     min-height: 100vh;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)),
@@ -9,7 +6,6 @@
     padding-bottom: 40px;
 }
 
-/* --- Top bar (back button + language toggle) --- */
 .parking-topbar {
     display: flex;
     align-items: center;
@@ -24,7 +20,6 @@
     margin: 0;
 }
 
-/* --- Back Button --- */
 .parking-back-btn {
     display: inline-flex;
     align-items: center;
@@ -60,7 +55,6 @@
     transform: translateX(-4px);
 }
 
-/* --- Header --- */
 .parking-header {
     text-align: center;
     padding: 30px 40px 10px;
@@ -130,7 +124,6 @@
     color: var(--color-text-secondary);
 }
 
-/* --- Venue Switcher (header) --- */
 .parking-venue-switcher {
     position: relative;
     flex: 0 1 auto;
@@ -276,7 +269,6 @@
     color: var(--color-text-secondary);
 }
 
-/* --- Main Content Area --- */
 .parking-content {
     display: grid;
     grid-template-columns: 2.2fr 1fr;
@@ -287,7 +279,6 @@
     align-items: start;
 }
 
-/* --- Map Container --- */
 .parking-map-container {
     background: white;
     border-radius: 20px;
@@ -371,7 +362,6 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
-/* --- Info Panel --- */
 .parking-info-panel {
     display: flex;
     flex-direction: column;
@@ -440,7 +430,6 @@
     text-decoration: underline;
 }
 
-/* --- Per-lot info cards --- */
 .parking-info-icon--general {
     background: var(--color-accent);
     color: white;
@@ -487,7 +476,6 @@ a.parking-lot-name:hover {
     margin-top: 2px;
 }
 
-/* Straight-line distance readout (lot cards + map popups) */
 .parking-lot-dist {
     display: flex;
     align-items: center;
@@ -505,7 +493,6 @@ a.parking-lot-name:hover {
     color: var(--color-primary);
 }
 
-/* Rate tier readout (lot cards) */
 .parking-lot-rate {
     display: flex;
     align-items: center;
@@ -516,7 +503,6 @@ a.parking-lot-name:hover {
     margin-top: 6px;
 }
 
-/* --- Parking Lot Search (info panel) --- */
 .parking-lot-search {
     position: relative;
     /* Lift the dropdown above the info cards that follow it. */
@@ -642,7 +628,6 @@ a.parking-lot-name:hover {
     color: var(--color-text-secondary);
 }
 
-/* --- Footer Branding --- */
 .parking-footer {
     text-align: center;
     margin-top: 30px;
@@ -671,9 +656,7 @@ a.parking-lot-name:hover {
     opacity: 0.9;
 }
 
-/* --- Custom map markers (Google Maps AdvancedMarker) --- */
-
-/* Venue marker (star / event location) */
+/* Custom map markers (Google Maps AdvancedMarker) */
 .parking-marker-venue-inner {
     width: 40px;
     height: 40px;
@@ -697,7 +680,6 @@ a.parking-lot-name:hover {
     }
 }
 
-/* Parking lot markers */
 .parking-marker-lot-inner {
     display: flex;
     flex-direction: column;
@@ -778,7 +760,6 @@ a.parking-lot-name:hover {
     font-weight: 600;
 }
 
-/* InfoWindow Custom Content */
 .parking-popup-content {
     font-family: var(--font-body);
     font-size: 13px;
@@ -801,12 +782,11 @@ a.parking-lot-name:hover {
     font-weight: 600;
 }
 
-/* --- Parking Guide button (on home page event card) --- */
+/* Parking Guide button (on home page event card) */
 .parking-guide-link-icon {
     font-size: 18px;
 }
 
-/* --- Loading State --- */
 .parking-loading {
     display: flex;
     flex-direction: column;
@@ -822,7 +802,6 @@ a.parking-lot-name:hover {
     font-weight: 600;
 }
 
-/* --- Error / Not Found State --- */
 .parking-error {
     display: flex;
     flex-direction: column;
@@ -857,7 +836,6 @@ a.parking-lot-name:hover {
     line-height: 1.6;
 }
 
-/* --- Decorative Blobs --- */
 .parking-deco-blob {
     position: fixed;
     border-radius: 50%;
@@ -882,7 +860,6 @@ a.parking-lot-name:hover {
     left: -40px;
 }
 
-/* --- Responsive --- */
 @media (max-width: 1024px) {
     .parking-content {
         grid-template-columns: 1fr;

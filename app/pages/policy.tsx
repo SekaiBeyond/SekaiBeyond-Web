@@ -27,7 +27,7 @@ export const PolicyPage = () => {
                     </h1>
                     {loading ? (
                         <div className="policy-spinner-wrap">
-                            <div className="profile-spinner"/>
+                            <div className="spinner"/>
                         </div>
                     ) : content ? (
                         <pre className="policy-text">{content}</pre>

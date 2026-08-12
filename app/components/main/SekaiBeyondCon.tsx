@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 import { useSiteConfig } from "~/lib/siteConfig";
@@ -58,7 +59,7 @@ export const SekaiBeyondCon = () => {
                         <div className="convention-poster">
                             <button
                                 type="button"
-                                className="convention-poster-btn"
+                                className="event-image-btn"
                                 onClick={() => setSelectedImage(edition.image)}
                                 aria-label={isEnglish ? `View Sekai Beyond Con ${edition.year} poster` : `查看${edition.year}年彼世界漫展海报`}
                             >
@@ -83,6 +84,10 @@ export const SekaiBeyondCon = () => {
                         <p className="con-description">
                             {isEnglish ? edition.description : edition.descriptionCn}
                         </p>
+
+                        <Link className="btn btn-primary con-page-link" to="/con">
+                            <span>{isEnglish ? "Explore the Con" : "了解漫展详情"}</span>
+                        </Link>
                     </div>
                 </div>
             </div>
