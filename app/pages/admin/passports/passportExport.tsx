@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { passportScanUrl } from '~/lib/passports';
 import { buildZip, downloadBlob, type ZipEntry } from '~/lib/zip';
+import { QR_LEVEL, QR_MARGIN } from '../tools/qr/qrExport';
 
 /**
  * Print-shop exports for a batch of passports: the CSV pairing each sticker with
@@ -13,8 +14,6 @@ import { buildZip, downloadBlob, type ZipEntry } from '~/lib/zip';
 
 const QR_SIZE = 512;
 const LABEL_HEIGHT = 96;
-const QR_LEVEL = 'M' as const;
-const QR_MARGIN = 2;
 
 /** One passport's sticker: the QR over its printed code, on white. */
 async function composePassportPng(source: HTMLCanvasElement, passportId: string): Promise<Uint8Array<ArrayBuffer>> {
@@ -169,6 +168,14 @@ export const usePassportPngExport = (onFailure: () => void): {
 const csvCell = (value: string): string =>
     /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 
+/** A print-shop CSV: CRLF rows, and a BOM so Excel opens it as UTF-8 rather
+ * than guessing. */
+const buildCsv = (header: string[], rows: string[][]): Blob =>
+    new Blob(
+        [`﻿${[header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n')}\r\n`],
+        {type: 'text/csv;charset=utf-8'},
+    );
+
 /**
  * The print shop's pairing list. This is the only artifact that ever holds the
  * plaintext activation keys — once the generator screen is left they are gone
@@ -178,23 +185,16 @@ export function buildPassportCsv(
     rows: {passportId: string; activationCode: string}[],
     origin: string,
 ): Blob {
-    const lines = [['passportId', 'activationCode', 'scanUrl'].join(',')];
-    for (const row of rows) {
-        lines.push([
-            csvCell(row.passportId),
-            csvCell(row.activationCode),
-            csvCell(passportScanUrl(row.passportId, origin)),
-        ].join(','));
-    }
-    // BOM so Excel opens it as UTF-8 rather than guessing.
-    return new Blob([`﻿${lines.join('\r\n')}\r\n`], {type: 'text/csv;charset=utf-8'});
+    return buildCsv(
+        ['passportId', 'activationCode', 'scanUrl'],
+        rows.map(row => [row.passportId, row.activationCode, passportScanUrl(row.passportId, origin)]),
+    );
 }
 
 /** Public ids only — safe to re-export at any time, unlike the keys. */
 export function buildPassportIdCsv(ids: string[], origin: string): Blob {
-    const lines = [['passportId', 'scanUrl'].join(',')];
-    for (const id of ids) {
-        lines.push([csvCell(id), csvCell(passportScanUrl(id, origin))].join(','));
-    }
-    return new Blob([`﻿${lines.join('\r\n')}\r\n`], {type: 'text/csv;charset=utf-8'});
+    return buildCsv(
+        ['passportId', 'scanUrl'],
+        ids.map(id => [id, passportScanUrl(id, origin)]),
+    );
 }

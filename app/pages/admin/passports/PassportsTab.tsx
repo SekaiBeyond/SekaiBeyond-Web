@@ -9,10 +9,12 @@ import {
     MAX_PASSPORT_BATCH,
     type Passport,
     PASSPORT_ID_LENGTH,
+    passportDateTime,
     passportStatusLabel,
     usePassportDesigns,
 } from '~/lib/passports';
 import { downloadBlob } from '~/lib/zip';
+import { StatTile } from '../StatTile';
 import { searchUsers, type ShowToast } from '../utils';
 import type { UserRecord } from '../types';
 import { PassportDesignsSection } from './PassportDesignsSection';
@@ -38,7 +40,6 @@ interface PassportsTabProps {
  * documents.
  */
 export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabProps) => {
-    const {isEnglish} = useLanguage();
     const {designs, loading: designsLoading, refresh: refreshDesigns} = usePassportDesigns();
 
     const [view, setView] = useState<View>('dashboard');
@@ -71,6 +72,13 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
         if (year !== null) await loadYear(year);
     }, [year, loadYear]);
 
+    // A void or a reissue changes exactly one passport, and the detail page has
+    // already refetched it — patching it in beats re-reading the year, which is
+    // every document the tab is holding.
+    const applyChange = useCallback((fresh: Passport) => {
+        setPassports(list => list?.map(p => p.id === fresh.id ? fresh : p) ?? list);
+    }, []);
+
     const selected = passports?.find(p => p.id === selectedId) ?? null;
 
     if (view === 'designs') {
@@ -92,7 +100,7 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
                 passportId={selectedId}
                 initial={selected}
                 onBack={() => setView('dashboard')}
-                onChanged={refresh}
+                onChanged={applyChange}
                 onLookupUser={onLookupUser}
                 showToast={showToast}
                 readOnly={readOnly}
@@ -214,12 +222,7 @@ const Dashboard = ({
         }
     };
 
-    const fmtDate = (date: Date | null): string =>
-        date
-            ? date.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
-                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-            })
-            : '—';
+    const fmtDate = (date: Date | null): string => passportDateTime(date, isEnglish, '—');
 
     return (
         <div className="admin-section">
@@ -273,11 +276,11 @@ const Dashboard = ({
                     </div>
 
                     <div className="admin-stats-tiles admin-section-mb">
-                        <Tile label={isEnglish ? 'Generated' : '已生成'} value={stats.total}/>
-                        <Tile label={isEnglish ? 'Unclaimed' : '未激活'} value={stats.unclaimed}/>
-                        <Tile label={isEnglish ? 'Claimed' : '已激活'} value={stats.claimed}/>
-                        <Tile label={isEnglish ? 'Void' : '已作废'} value={stats.voided}/>
-                        <Tile label={isEnglish ? 'Scans' : '扫描数'} value={stats.scans}/>
+                        <StatTile label={isEnglish ? 'Generated' : '已生成'} value={stats.total}/>
+                        <StatTile label={isEnglish ? 'Unclaimed' : '未激活'} value={stats.unclaimed}/>
+                        <StatTile label={isEnglish ? 'Claimed' : '已激活'} value={stats.claimed}/>
+                        <StatTile label={isEnglish ? 'Void' : '已作废'} value={stats.voided}/>
+                        <StatTile label={isEnglish ? 'Scans' : '扫描数'} value={stats.scans}/>
                     </div>
 
                     <PassportSearch onOpen={onOpen} showToast={showToast}/>
@@ -371,15 +374,6 @@ const Dashboard = ({
     );
 };
 
-function Tile({label, value}: {label: string; value: number}) {
-    return (
-        <div className="admin-stats-tile">
-            <div className="admin-stats-tile-label">{label}</div>
-            <div className="admin-stats-tile-value">{value}</div>
-        </div>
-    );
-}
-
 /**
  * Look a passport up by the code on the sticker, or by its owner. A 10-character
  * code resolves directly; anything else is matched against users the same way
@@ -402,14 +396,11 @@ const PassportSearch = ({onOpen, showToast}: {onOpen: (id: string) => void; show
                 setResults(passport ? [{passport}] : []);
                 return;
             }
+            // searchUsers returns up to 30 matches; their passports are fetched
+            // together rather than one round trip at a time.
             const owners = await searchUsers(query);
-            const found: {passport: Passport; owner?: UserRecord}[] = [];
-            for (const owner of owners) {
-                for (const passport of await fetchPassportsByOwner(owner.uid)) {
-                    found.push({passport, owner});
-                }
-            }
-            setResults(found);
+            const perOwner = await Promise.all(owners.map(owner => fetchPassportsByOwner(owner.uid)));
+            setResults(owners.flatMap((owner, i) => perOwner[i].map(passport => ({passport, owner}))));
         } catch {
             showToast(isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。', 'error');
         } finally {

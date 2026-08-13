@@ -6,17 +6,10 @@ import { CardEditDeleteActions, CardSaveCancel, CreateSection } from '../CrudShe
 import { ImageUploadField } from '../ImageUploadField';
 import type { ShowToast } from '../utils';
 
-interface Draft {
-    year: number;
-    coverImageUrl: string;
-}
-
-const emptyDraft = (year: number): Draft => ({
+const emptyDraft = (year: number): PassportDesign => ({
     year,
     coverImageUrl: '',
 });
-
-const toDraft = (design: PassportDesign): Draft => ({...design});
 
 interface PassportDesignsSectionProps {
     designs: PassportDesign[];
@@ -43,7 +36,7 @@ export const PassportDesignsSection = ({
                                        }: PassportDesignsSectionProps) => {
     const {isEnglish} = useLanguage();
     const [showCreate, setShowCreate] = useState(false);
-    const [draft, setDraft] = useState<Draft>(() => emptyDraft(new Date().getFullYear()));
+    const [draft, setDraft] = useState<PassportDesign>(() => emptyDraft(new Date().getFullYear()));
     const [coverFile, setCoverFile] = useState<File | null>(null);
     const [coverPreview, setCoverPreview] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -205,7 +198,7 @@ export const PassportDesignsSection = ({
                                                     setShowCreate(false);
                                                     setCoverFile(null);
                                                     setCoverPreview(null);
-                                                    setDraft(toDraft(design));
+                                                    setDraft({...design});
                                                     setEditingYear(design.year);
                                                 }}
                                                 onDelete={() => void remove(design)}

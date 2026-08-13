@@ -32,6 +32,8 @@
     /* Fonts */
     --font-body: 'Quicksand', 'Noto Sans SC', sans-serif;
     --font-display: 'Bubblegum Sans', 'ZCOOL XiaoWei', cursive;
+    /* Printed and hand-typed codes: passport ids, activation keys, QR links. */
+    --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 * {

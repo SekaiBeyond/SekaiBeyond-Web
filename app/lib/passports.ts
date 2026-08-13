@@ -1,7 +1,11 @@
+import { useMemo, useState } from 'react';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
-import { createCollectionCache } from './collectionCache';
-import { getFirebaseDb } from './firebase';
+import { useAuth } from '~/components/AuthProvider';
+import { useLanguage } from '~/components/LanguageContextProvider';
+import { createCollectionCache, toDate } from './collectionCache';
+import { callSetPassportPrivacy, getFirebaseDb } from './firebase';
 import { fetchScans, type ScanEvent } from './scans';
+import type { ShowToast } from './useToasts';
 
 export type PassportStatus = 'unclaimed' | 'claimed' | 'void';
 
@@ -43,6 +47,55 @@ export interface PassportDesign {
     coverImageUrl: string;
 }
 
+export interface PassportPublicBadge {
+    id: string;
+    name: string;
+    nameCn: string;
+    description: string;
+    descriptionCn: string;
+    imageUrl: string;
+    earnedAt: string | null;
+}
+
+/**
+ * One scanned sticker, resolved for anyone — the only unauthenticated read of a
+ * member's public data. It is keyed by the printed passport code, never by uid,
+ * and no uid comes back: `isOwner` is decided server-side.
+ *
+ * Mirrors what getPassportPublicProfile returns in
+ * functions/src/functions/passports.ts.
+ */
+export type PassportPublicProfile =
+    | {status: 'invalid'}
+    | {status: 'private'}
+    | {status: 'unclaimed'; year: number; termDays: number}
+    | {
+    status: 'claimed';
+    year: number;
+    claimedAt: string | null;
+    isOwner: boolean;
+    hidden: boolean;
+    /** Owner-only extras; null for every other visitor. */
+    scanCount: number | null;
+    membershipExpiresAt: string | null;
+    owner: {
+        displayName: string;
+        photoURL: string;
+        joinedAt: string | null;
+        group: string;
+        isMember: boolean;
+        title: string;
+        titleCn: string;
+        // Inlined because the badges collection needs auth to read, which a
+        // signed-out scanner does not have.
+        badges: PassportPublicBadge[];
+        attendedEvents: string[];
+        eventStaffEvents: string[];
+    };
+    /** The owner's collection, by year — no sibling passport ids. */
+    shelf: Array<{year: number; claimedAt: string | null}>;
+};
+
 /** An entry in a passport's permanent audit trail. */
 export interface PassportClaimEvent {
     id: string;
@@ -53,11 +106,6 @@ export interface PassportClaimEvent {
     performedByName: string;
     daysGranted: number | null;
 }
-
-const toDate = (v: unknown): Date | null =>
-    v && typeof (v as {toDate?: () => Date}).toDate === 'function'
-        ? (v as {toDate: () => Date}).toDate()
-        : null;
 
 const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Passport => {
     const data = docSnap.data();
@@ -98,7 +146,55 @@ export function usePassportDesigns(): {
     refresh: () => Promise<void>;
 } {
     const {items, loading, refresh} = designCache.useItems();
-    return {designs: [...items].sort((a, b) => b.year - a.year), loading, refresh};
+    // Memoized so the array keeps its identity between renders: consumers put it
+    // in effect dependencies, and a fresh copy each render would re-run them.
+    const designs = useMemo(() => [...items].sort((a, b) => b.year - a.year), [items]);
+    return {designs, loading, refresh};
+}
+
+/**
+ * Flip the owner's passport page between public and private.
+ *
+ * Both surfaces that offer the switch — the profile shelf and the owner panel on
+ * the passport page itself — go through here, so the call, the profile refresh
+ * that repaints the membership star, and the wording of all three outcomes have
+ * one definition. `onSuccess` is where each caller closes its own chrome.
+ *
+ * A refresh that fails is swallowed: the visibility write already landed, and
+ * reporting it as a failure would be a lie the user would act on.
+ */
+export function usePassportPrivacy(showToast: ShowToast): {
+    saving: boolean;
+    setPrivacy: (hide: boolean, onSuccess?: () => void) => Promise<void>;
+} {
+    const {isEnglish} = useLanguage();
+    const {refreshProfile} = useAuth();
+    const [saving, setSaving] = useState(false);
+
+    const setPrivacy = async (hide: boolean, onSuccess?: () => void) => {
+        setSaving(true);
+        try {
+            await callSetPassportPrivacy({hide});
+            await refreshProfile().catch(() => {
+            });
+            showToast(
+                hide
+                    ? (isEnglish ? 'Your passport page is now private.' : '您的通行证页面已设为私密。')
+                    : (isEnglish ? 'Your passport page is public again.' : '您的通行证页面已重新公开。'),
+                'success',
+            );
+            onSuccess?.();
+        } catch {
+            showToast(
+                isEnglish ? 'Failed to change visibility. Please try again.' : '修改可见性失败，请重试。',
+                'error',
+            );
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return {saving, setPrivacy};
 }
 
 export const passportStatusLabel = (status: PassportStatus, isEnglish: boolean): string => {
@@ -110,6 +206,14 @@ export const passportStatusLabel = (status: PassportStatus, isEnglish: boolean):
 /** What a passport is called, on the shelf and on its page: its year. */
 export const passportName = (year: number, isEnglish: boolean): string =>
     isEnglish ? `${year} Passport` : `${year} 通行证`;
+
+/** Date and time as the admin passport screens show it, with the caller's blank. */
+export const passportDateTime = (date: Date | null, isEnglish: boolean, blank: string): string =>
+    date
+        ? date.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+            year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+        })
+        : blank;
 
 /** The URL encoded on the sticker, and the only address a passport ever has. */
 export const passportScanUrl = (id: string, origin: string): string =>

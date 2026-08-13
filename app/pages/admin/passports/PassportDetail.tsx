@@ -8,13 +8,14 @@ import {
     fetchPassportScans,
     type Passport,
     type PassportClaimEvent,
+    passportDateTime,
     passportName,
     passportScanUrl,
     passportStatusLabel,
 } from '~/lib/passports';
-import type { ScanEvent } from '~/lib/scans';
+import { ScanTrendsSection } from '../ScanTrends';
+import { StatTile } from '../StatTile';
 import { QrPreview } from '../tools/qr/qrExport';
-import { QrScanTrends } from '../tools/qr/QrScanTrends';
 import type { UserRecord } from '../types';
 import { docToUserRecord, type ShowToast } from '../utils';
 import { usePassportPngExport } from './passportExport';
@@ -26,7 +27,8 @@ interface PassportDetailProps {
     /** The row that was clicked, so the page can paint before the refetch lands. */
     initial: Passport | null;
     onBack: () => void;
-    onChanged: () => Promise<void>;
+    /** Hands the refetched passport back so the list can patch it in place. */
+    onChanged: (fresh: Passport) => void;
     onLookupUser: (uid: string) => void;
     showToast: ShowToast;
     readOnly: boolean;
@@ -56,8 +58,6 @@ export const PassportDetail = ({
     const [owner, setOwner] = useState<UserRecord | null>(null);
     const [ownerMissing, setOwnerMissing] = useState(false);
     const [claims, setClaims] = useState<PassportClaimEvent[] | null>(null);
-    const [scans, setScans] = useState<ScanEvent[] | null>(null);
-    const [scansError, setScansError] = useState(false);
     const [busy, setBusy] = useState(false);
     const [reissuedKey, setReissuedKey] = useState<string | null>(null);
 
@@ -96,15 +96,6 @@ export const PassportDetail = ({
         };
     }, [passportId, readOnly]);
 
-    const loadScans = useCallback(() => {
-        setScansError(false);
-        setScans(null);
-        fetchPassportScans(passportId)
-            .then(setScans)
-            .catch(() => setScansError(true));
-    }, [passportId]);
-    useEffect(loadScans, [loadScans]);
-
     const ownerUid = passport?.ownerUid ?? null;
     useEffect(() => {
         if (!ownerUid) {
@@ -128,11 +119,7 @@ export const PassportDetail = ({
     }, [ownerUid]);
 
     const fmtDate = (date: Date | null): string =>
-        date
-            ? date.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
-                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-            })
-            : (isEnglish ? 'Never' : '从未');
+        passportDateTime(date, isEnglish, isEnglish ? 'Never' : '从未');
 
     const copyLink = () => {
         navigator.clipboard.writeText(scanValue)
@@ -147,8 +134,8 @@ export const PassportDetail = ({
         setBusy(true);
         try {
             await callVoidPassport({passportId});
-            await reload();
-            await onChanged();
+            const fresh = await reload();
+            if (fresh) onChanged(fresh);
             showToast(isEnglish ? 'Passport voided.' : '通行证已作废。', 'warning');
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to void passport.' : '作废通行证失败。'), 'error');
@@ -251,22 +238,17 @@ export const PassportDetail = ({
 
                 <div className="admin-qr-detail-meta">
                     <div className="admin-stats-tiles">
-                        <div className="admin-stats-tile">
-                            <div className="admin-stats-tile-label">{isEnglish ? 'Scans' : '扫描数'}</div>
-                            <div className="admin-stats-tile-value">{passport.scanCount}</div>
-                        </div>
-                        <div className="admin-stats-tile">
-                            <div className="admin-stats-tile-label">{isEnglish ? 'Last Scan' : '最近扫描'}</div>
-                            <div className="admin-stats-tile-value admin-stats-tile-value--sm">
-                                {fmtDate(passport.lastScanAt)}
-                            </div>
-                        </div>
-                        <div className="admin-stats-tile">
-                            <div className="admin-stats-tile-label">{isEnglish ? 'Term' : '有效期'}</div>
-                            <div className="admin-stats-tile-value admin-stats-tile-value--sm">
-                                {isEnglish ? `${passport.termDays} days` : `${passport.termDays} 天`}
-                            </div>
-                        </div>
+                        <StatTile label={isEnglish ? 'Scans' : '扫描数'} value={passport.scanCount}/>
+                        <StatTile
+                            label={isEnglish ? 'Last Scan' : '最近扫描'}
+                            value={fmtDate(passport.lastScanAt)}
+                            small
+                        />
+                        <StatTile
+                            label={isEnglish ? 'Term' : '有效期'}
+                            value={isEnglish ? `${passport.termDays} days` : `${passport.termDays} 天`}
+                            small
+                        />
                     </div>
 
                     <dl className="admin-qr-detail-list">
@@ -337,21 +319,7 @@ export const PassportDetail = ({
                 </div>
             )}
 
-            <div className="admin-field-section admin-qr-section">
-                <div className="admin-qr-spot-header">
-                    <span className="admin-field-label">{isEnglish ? 'Scans Over Time' : '扫描时间趋势'}</span>
-                    <button className="admin-toggle-btn admin-toggle-edit admin-btn-sm" onClick={loadScans}>
-                        {isEnglish ? 'Refresh' : '刷新'}
-                    </button>
-                </div>
-                {scansError ? (
-                    <p className="admin-no-results">{isEnglish ? 'Failed to load scans.' : '加载扫描记录失败。'}</p>
-                ) : scans === null ? (
-                    <div className="spinner spinner-centered"/>
-                ) : (
-                    <QrScanTrends key={passport.id} scans={scans}/>
-                )}
-            </div>
+            <ScanTrendsSection id={passport.id} fetchScans={fetchPassportScans}/>
 
             {!readOnly && (
                 <div className="admin-field-section admin-qr-section">

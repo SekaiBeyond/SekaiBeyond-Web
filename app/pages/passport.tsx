@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { formatGroupWithTitle, normalizeGroup, useAuth } from '~/components/AuthProvider';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
@@ -7,11 +7,8 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     callClaimPassport,
     callGetPassportPublicProfile,
-    callSetPassportPrivacy,
     functionsErrorCode,
     functionsErrorDetails,
-    type PassportPublicBadge,
-    type PassportPublicProfile,
 } from '~/lib/firebase';
 import {
     ACTIVATION_KEY_LENGTH,
@@ -19,11 +16,15 @@ import {
     normalizePassportCode,
     PASSPORT_ID_LENGTH,
     passportName,
+    type PassportPublicProfile,
     usePassportDesigns,
+    usePassportPrivacy,
 } from '~/lib/passports';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
-import { ToastContainer, useToasts } from '~/lib/useToasts';
+import { type ShowToast, ToastContainer, useToasts } from '~/lib/useToasts';
+import { PassportShelfCard } from './PassportShelfSection';
+import { BadgeCard, EventCard } from './profile';
 import { ExpiredCard } from './qrRedirect';
 
 /**
@@ -107,6 +108,7 @@ export const PassportPage = () => {
             <ActivationCard
                 passportId={passportId}
                 year={result.year}
+                termDays={result.termDays}
                 onActivated={() => setNonce(n => n + 1)}
             />
         );
@@ -155,6 +157,8 @@ const InvalidPassportCard = ({isError}: {isError: boolean}) => {
 interface ActivationCardProps {
     passportId: string;
     year: number;
+    /** What this particular sticker grants — per-passport data, not a constant. */
+    termDays: number;
     onActivated: () => void;
 }
 
@@ -162,7 +166,7 @@ interface ActivationCardProps {
  * The unclaimed state: sign in, then type the key from the slip packed with the
  * passport. Claiming is one-way — the passport binds to this account for good.
  */
-const ActivationCard = ({passportId, year, onActivated}: ActivationCardProps) => {
+const ActivationCard = ({passportId, year, termDays, onActivated}: ActivationCardProps) => {
     const {isEnglish} = useLanguage();
     const {user, loading: authLoading, signIn, refreshProfile} = useAuth();
     const {designs} = usePassportDesigns();
@@ -258,8 +262,8 @@ const ActivationCard = ({passportId, year, onActivated}: ActivationCardProps) =>
                     <>
                         <p className="passport-notice-text">
                             {isEnglish
-                                ? 'Enter the activation key from the slip of paper packed with your passport. It grants 365 days of membership, added on top of any you already have.'
-                                : '请输入通行证包装内附纸条上的激活码。激活可获得 365 天会员资格，并在您现有会员期限上累加。'}
+                                ? `Enter the activation key from the slip of paper packed with your passport. It grants ${termDays} days of membership, added on top of any you already have.`
+                                : `请输入通行证包装内附纸条上的激活码。激活可获得 ${termDays} 天会员资格，并在您现有会员期限上累加。`}
                         </p>
                         <div className="passport-key-row">
                             <input
@@ -471,33 +475,14 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
                             {isEnglish ? 'Passports Collected' : '通行证收藏'}
                         </h3>
                         <div className="passport-shelf">
-                            {data.shelf.map((entry, i) => {
-                                const entryDesign = designs.find(d => d.year === entry.year);
-                                return (
-                                    <div
-                                        key={`${entry.year}-${entry.claimedAt ?? i}`}
-                                        className={`passport-shelf-card${entry.year === data.year ? ' passport-shelf-card--current' : ''}`}
-                                    >
-                                        {entryDesign?.coverImageUrl ? (
-                                            <img
-                                                src={entryDesign.coverImageUrl}
-                                                alt={passportName(entry.year, isEnglish)}
-                                                className="passport-shelf-cover"
-                                            />
-                                        ) : (
-                                            <div className="passport-shelf-cover passport-shelf-cover--blank">
-                                                {entry.year}
-                                            </div>
-                                        )}
-                                        <span className="passport-shelf-name">
-                                            {passportName(entry.year, isEnglish)}
-                                        </span>
-                                        {entry.claimedAt && (
-                                            <span className="passport-shelf-date">{fmtDate(entry.claimedAt)}</span>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                            {data.shelf.map((entry, i) => (
+                                <PassportShelfCard
+                                    key={`${entry.year}-${entry.claimedAt ?? i}`}
+                                    year={entry.year}
+                                    date={fmtDate(entry.claimedAt)}
+                                    current={entry.year === data.year}
+                                />
+                            ))}
                         </div>
                     </section>
                 )}
@@ -507,9 +492,20 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
                         <h3 className="passport-section-title">{isEnglish ? 'Badges' : '徽章'}</h3>
                         <div className="badge-grid">
                             {owner.badges.map(badge => (
-                                <PassportBadge
+                                <BadgeCard
                                     key={badge.id}
-                                    badge={badge}
+                                    // The public endpoint inlines badge art rather than
+                                    // naming a document, and a badge pending deletion is
+                                    // simply absent — so there is no deleteAt to carry.
+                                    // Empty Chinese copy falls back to the English, which
+                                    // a scanner is likelier to find useful than a blank.
+                                    badge={{
+                                        ...badge,
+                                        nameCn: badge.nameCn || badge.name,
+                                        descriptionCn: badge.descriptionCn || badge.description,
+                                        deleteAt: null,
+                                    }}
+                                    earnedDate={badge.earnedAt ? new Date(badge.earnedAt) : undefined}
                                     isEnglish={isEnglish}
                                     active={activeBadge === badge.id}
                                     onToggle={() => setActiveBadge(prev => prev === badge.id ? null : badge.id)}
@@ -526,40 +522,16 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
                         </h3>
                         <div className="profile-event-grid">
                             {attendedEvents.map(event => (
-                                <div key={event.id} className="profile-event-card">
-                                    <div className="profile-event-icon-wrapper">
-                                        <img
-                                            src={event.icon}
-                                            alt={isEnglish ? event.title : event.titleCn}
-                                            className="profile-event-icon"
-                                        />
-                                        {staffedSet.has(event.id) && (
-                                            <span className="profile-event-staff-tag">
-                                                {isEnglish ? 'Staff' : '工作人员'}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="profile-event-info">
-                                        <span className="profile-event-categories">
-                                            {event.tagIds
-                                                .map(id => tagMap.get(id))
-                                                .filter((t): t is NonNullable<typeof t> => !!t)
-                                                .map(t => (
-                                                    <span key={t.id} className="profile-event-category">
-                                                        {isEnglish ? t.name : t.nameCn}
-                                                    </span>
-                                                ))}
-                                        </span>
-                                        <h4 className="profile-event-title">
-                                            {isEnglish ? event.title : event.titleCn}
-                                        </h4>
-                                        <p className="profile-event-date">
-                                            {new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                                                year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
-                                            })}
-                                        </p>
-                                    </div>
-                                </div>
+                                <EventCard
+                                    key={event.id}
+                                    event={event}
+                                    isEnglish={isEnglish}
+                                    tagLabels={event.tagIds.flatMap(id => {
+                                        const tag = tagMap.get(id);
+                                        return tag ? [isEnglish ? tag.name : tag.nameCn] : [];
+                                    })}
+                                    wasStaff={staffedSet.has(event.id)}
+                                />
                             ))}
                         </div>
                     </section>
@@ -576,38 +548,6 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
     );
 };
 
-/** Same markup (and hover tooltip) as the profile badge grid, with the fields the
- * public endpoint hands back. */
-const PassportBadge = ({badge, isEnglish, active, onToggle}: {
-    badge: PassportPublicBadge;
-    isEnglish: boolean;
-    active: boolean;
-    onToggle: () => void;
-}) => {
-    const name = isEnglish ? badge.name : (badge.nameCn || badge.name);
-    const description = isEnglish ? badge.description : (badge.descriptionCn || badge.description);
-    return (
-        <div className={`badge-circle ${active ? 'badge-circle-active' : ''}`} onClick={onToggle}>
-            <div className="badge-icon-wrapper">
-                <img src={badge.imageUrl} alt={name} className="badge-icon"/>
-            </div>
-            <span className="badge-label">{name}</span>
-            <div className="badge-tooltip">
-                <h4 className="badge-tooltip-name">{name}</h4>
-                <p className="badge-tooltip-desc">{description}</p>
-                {badge.earnedAt && (
-                    <p className="badge-tooltip-date">
-                        {isEnglish ? 'Earned: ' : '获得于：'}
-                        {new Date(badge.earnedAt).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                            year: 'numeric', month: 'short', day: 'numeric',
-                        })}
-                    </p>
-                )}
-            </div>
-        </div>
-    );
-};
-
 /**
  * Shown only to the owner, scanning their own sticker: how long their membership
  * has left, how often the passport has been scanned, and the visibility switch.
@@ -618,40 +558,16 @@ const OwnerPanel = ({hidden, scanCount, membershipExpiresAt, onChanged, showToas
     scanCount: number | null;
     membershipExpiresAt: string | null;
     onChanged: () => void;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
 }) => {
     const {isEnglish} = useLanguage();
-    const {refreshProfile} = useAuth();
+    const {saving: busy, setPrivacy} = usePassportPrivacy(showToast);
     const [open, setOpen] = useState(false);
-    const [busy, setBusy] = useState(false);
 
     const expiry = membershipExpiresAt ? new Date(membershipExpiresAt) : null;
     const daysLeft = expiry && !isNaN(expiry.getTime())
         ? Math.ceil((expiry.getTime() - Date.now()) / 86_400_000)
         : null;
-
-    const toggleVisibility = useCallback(async () => {
-        setBusy(true);
-        try {
-            await callSetPassportPrivacy({hide: !hidden});
-            await refreshProfile().catch(() => {
-            });
-            showToast(
-                !hidden
-                    ? (isEnglish ? 'Your passport page is now private.' : '您的通行证页面已设为私密。')
-                    : (isEnglish ? 'Your passport page is public again.' : '您的通行证页面已重新公开。'),
-                'success',
-            );
-            onChanged();
-        } catch {
-            showToast(
-                isEnglish ? 'Failed to change visibility. Please try again.' : '修改可见性失败，请重试。',
-                'error',
-            );
-        } finally {
-            setBusy(false);
-        }
-    }, [hidden, isEnglish, onChanged, refreshProfile, showToast]);
 
     return (
         <div className="passport-owner-panel">
@@ -706,7 +622,7 @@ const OwnerPanel = ({hidden, scanCount, membershipExpiresAt, onChanged, showToas
                     </p>
                     <button
                         className="admin-btn admin-btn--outline"
-                        onClick={() => void toggleVisibility()}
+                        onClick={() => void setPrivacy(!hidden, onChanged)}
                         disabled={busy}
                         type="button"
                     >

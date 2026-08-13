@@ -1,10 +1,12 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
-import { recordExpiresAt, scanExpiresAt } from "../utils/config";
+import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks, generateSecureCode } from "../utils/helpers";
 import { extendedExpiry, isMembershipActive } from "../utils/membership";
+import { pastEventIds, toStringIds } from "../utils/publicProfile";
+import { recordScan } from "../utils/scans";
 import {
     activationKeyMatches,
     formatActivationKey,
@@ -377,7 +379,13 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 
     if (passport.status !== "claimed" || !passport.ownerUid) {
         await tallyScan(passportRef);
-        return {status: "unclaimed" as const, year};
+        // The term is per-passport data, not a constant: the activation screen
+        // quotes what this sticker actually grants rather than today's default.
+        return {
+            status: "unclaimed" as const,
+            year,
+            termDays: typeof passport.termDays === "number" ? passport.termDays : PASSPORT_TERM_DAYS,
+        };
     }
 
     const ownerUid: string = passport.ownerUid;
@@ -394,10 +402,11 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
         return {status: "private" as const};
     }
 
-    const [badges, attendedEvents, eventStaffEvents, shelf] = await Promise.all([
+    const attended = toStringIds(owner.attendedEvents);
+    const staffed = toStringIds(owner.eventStaffEvents);
+    const [badges, pastEvents, shelf] = await Promise.all([
         resolveBadges(owner),
-        filterToPastEvents(owner.attendedEvents),
-        filterToPastEvents(owner.eventStaffEvents),
+        pastEventIds(attended, staffed),
         resolveShelf(ownerUid),
     ]);
 
@@ -425,31 +434,17 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
             title: owner.title ?? "",
             titleCn: owner.titleCn ?? "",
             badges,
-            attendedEvents,
-            eventStaffEvents,
+            attendedEvents: attended.filter(id => pastEvents.has(id)),
+            eventStaffEvents: staffed.filter(id => pastEvents.has(id)),
         },
         shelf,
     };
 });
 
-/**
- * Bump the scan counters and log a scan event for the trend chart. Scans carry
- * no platform tag, which is what the shared chart treats as a single series.
- * A failed tally must never keep the page from rendering.
- */
+/** A failed tally must never keep the scanned page from rendering. */
 async function tallyScan(ref: FirebaseFirestore.DocumentReference): Promise<void> {
     try {
-        const batch = db.batch();
-        batch.update(ref, {
-            scanCount: FieldValue.increment(1),
-            lastScanAt: FieldValue.serverTimestamp(),
-        });
-        batch.set(ref.collection("scans").doc(), {
-            scannedAt: FieldValue.serverTimestamp(),
-            platform: "",
-            expiresAt: scanExpiresAt(),
-        });
-        await batch.commit();
+        await recordScan(ref);
     } catch (err) {
         console.error(`tallyScan: failed to record scan for passport ${ref.id}`, err);
     }
@@ -478,18 +473,6 @@ async function resolveBadges(owner: FirebaseFirestore.DocumentData): Promise<Pub
         });
     }
     return out;
-}
-
-/**
- * Keep only ids that name an existing past event. Upcoming-event ids would leak
- * unpublished events whose titles are gated by Firestore rules — the same
- * restriction getPublicProfile applies to eventStaffEvents.
- */
-async function filterToPastEvents(raw: unknown): Promise<string[]> {
-    const ids: string[] = Array.isArray(raw) ? raw.filter((id: unknown): id is string => typeof id === "string") : [];
-    if (ids.length === 0) return [];
-    const snaps = await db.getAll(...ids.map(id => db.collection("pastEvents").doc(id)));
-    return ids.filter((_, i) => snaps[i].exists);
 }
 
 /**

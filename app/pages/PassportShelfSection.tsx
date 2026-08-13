@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSetPassportPrivacy } from '~/lib/firebase';
 import {
     fetchPassportsByOwner,
     isPassportCodeShape,
@@ -11,8 +10,48 @@ import {
     PASSPORT_ID_LENGTH,
     passportName,
     usePassportDesigns,
+    usePassportPrivacy,
 } from '~/lib/passports';
 import type { ShowToast } from '~/pages/admin/utils';
+
+/**
+ * One passport on a shelf: its year's cover art, its name, and whatever the
+ * surface wants under it. Shared by the owner's shelf on /profile (which links
+ * to each passport and prints its code) and the collection strip on a public
+ * passport page (which links nowhere and marks the one being viewed).
+ *
+ * `date` arrives pre-formatted because the two surfaces word it differently.
+ */
+export const PassportShelfCard = ({year, date, code, to, current}: {
+    year: number;
+    date?: string;
+    code?: string;
+    to?: string;
+    current?: boolean;
+}) => {
+    const {isEnglish} = useLanguage();
+    const {designs} = usePassportDesigns();
+    const design = designs.find(d => d.year === year);
+    const name = passportName(year, isEnglish);
+
+    const body = (
+        <>
+            {design?.coverImageUrl ? (
+                <img src={design.coverImageUrl} alt={name} className="passport-shelf-cover"/>
+            ) : (
+                <div className="passport-shelf-cover passport-shelf-cover--blank">{year}</div>
+            )}
+            <span className="passport-shelf-name">{name}</span>
+            {date && <span className="passport-shelf-date">{date}</span>}
+            {code && <span className="passport-shelf-code">{code}</span>}
+        </>
+    );
+
+    const className = `passport-shelf-card${current ? ' passport-shelf-card--current' : ''}`;
+    return to
+        ? <Link to={to} className={className}>{body}</Link>
+        : <div className={className}>{body}</div>;
+};
 
 /**
  * The owner's passport shelf on /profile: one card per physical passport they
@@ -24,14 +63,13 @@ import type { ShowToast } from '~/pages/admin/utils';
  */
 export const PassportShelfSection = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
-    const {user, profile, refreshProfile} = useAuth();
-    const {designs} = usePassportDesigns();
+    const {user, profile} = useAuth();
+    const {saving: savingPrivacy, setPrivacy} = usePassportPrivacy(showToast);
     const navigate = useNavigate();
 
     const [passports, setPassports] = useState<Passport[] | null>(null);
     const [loadError, setLoadError] = useState(false);
     const [editingPrivacy, setEditingPrivacy] = useState(false);
-    const [savingPrivacy, setSavingPrivacy] = useState(false);
     const [activateCode, setActivateCode] = useState('');
 
     const uid = user?.uid;
@@ -56,28 +94,6 @@ export const PassportShelfSection = ({showToast}: {showToast: ShowToast}) => {
 
     const hidden = profile.hidePassportPage;
 
-    const setPrivacy = async (hide: boolean) => {
-        setSavingPrivacy(true);
-        try {
-            await callSetPassportPrivacy({hide});
-            await refreshProfile();
-            setEditingPrivacy(false);
-            showToast(
-                hide
-                    ? (isEnglish ? 'Your passport page is now private.' : '您的通行证页面已设为私密。')
-                    : (isEnglish ? 'Your passport page is public again.' : '您的通行证页面已重新公开。'),
-                'success',
-            );
-        } catch {
-            showToast(
-                isEnglish ? 'Failed to change visibility. Please try again.' : '修改可见性失败，请重试。',
-                'error',
-            );
-        } finally {
-            setSavingPrivacy(false);
-        }
-    };
-
     const codeReady = isPassportCodeShape(activateCode, PASSPORT_ID_LENGTH);
     const openActivate = () => {
         if (codeReady) navigate(`/p/${normalizePassportCode(activateCode)}`);
@@ -97,39 +113,17 @@ export const PassportShelfSection = ({showToast}: {showToast: ShowToast}) => {
                 <div className="spinner spinner-centered"/>
             ) : passports && passports.length > 0 ? (
                 <div className="passport-shelf">
-                    {passports.map(passport => {
-                        const design = designs.find(d => d.year === passport.year);
-                        return (
-                            <Link
-                                key={passport.id}
-                                to={`/p/${passport.id}`}
-                                className="passport-shelf-card"
-                            >
-                                {design?.coverImageUrl ? (
-                                    <img
-                                        src={design.coverImageUrl}
-                                        alt={passportName(passport.year, isEnglish)}
-                                        className="passport-shelf-cover"
-                                    />
-                                ) : (
-                                    <div className="passport-shelf-cover passport-shelf-cover--blank">
-                                        {passport.year}
-                                    </div>
-                                )}
-                                <span className="passport-shelf-name">
-                                    {passportName(passport.year, isEnglish)}
-                                </span>
-                                {passport.claimedAt && (
-                                    <span className="passport-shelf-date">
-                                        {passport.claimedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                                            year: 'numeric', month: 'short', day: 'numeric',
-                                        })}
-                                    </span>
-                                )}
-                                <span className="passport-shelf-code">{passport.id}</span>
-                            </Link>
-                        );
-                    })}
+                    {passports.map(passport => (
+                        <PassportShelfCard
+                            key={passport.id}
+                            year={passport.year}
+                            date={passport.claimedAt?.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                                year: 'numeric', month: 'short', day: 'numeric',
+                            })}
+                            code={passport.id}
+                            to={`/p/${passport.id}`}
+                        />
+                    ))}
                 </div>
             ) : !loadError && (
                 <p className="profile-empty-state">
@@ -168,7 +162,7 @@ export const PassportShelfSection = ({showToast}: {showToast: ShowToast}) => {
                         <span className="passport-profile-row-actions">
                             <button
                                 className="admin-btn admin-btn--cta"
-                                onClick={() => void setPrivacy(!hidden)}
+                                onClick={() => void setPrivacy(!hidden, () => setEditingPrivacy(false))}
                                 disabled={savingPrivacy}
                                 type="button"
                             >

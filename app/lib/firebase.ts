@@ -6,6 +6,7 @@ import { type Functions, type FunctionsError, getFunctions as _getFunctions, htt
 import { type ConEdition } from "~/constants";
 import type { TeamMemberConfig } from "./siteConfig";
 import type { ConContent } from "./conContent";
+import type { PassportPublicProfile } from "./passports";
 
 const requiredEnvVars = [
     'VITE_FIREBASE_API_KEY',
@@ -493,50 +494,6 @@ export const callClaimPassport = (data: {passportId: string; activationCode: str
         daysGranted: number;
         year: number;
     }>(getFunctions(), 'claimPassport')(data);
-
-export interface PassportPublicBadge {
-    id: string;
-    name: string;
-    nameCn: string;
-    description: string;
-    descriptionCn: string;
-    imageUrl: string;
-    earnedAt: string | null;
-}
-
-// One scanned sticker, resolved for anyone — the only unauthenticated read of a
-// member's public data. It is keyed by the printed passport code, never by uid,
-// and no uid comes back: `isOwner` is decided server-side.
-export type PassportPublicProfile =
-    | {status: 'invalid'}
-    | {status: 'private'}
-    | {status: 'unclaimed'; year: number}
-    | {
-    status: 'claimed';
-    year: number;
-    claimedAt: string | null;
-    isOwner: boolean;
-    hidden: boolean;
-    /** Owner-only extras; null for every other visitor. */
-    scanCount: number | null;
-    membershipExpiresAt: string | null;
-    owner: {
-        displayName: string;
-        photoURL: string;
-        joinedAt: string | null;
-        group: string;
-        isMember: boolean;
-        title: string;
-        titleCn: string;
-        // Inlined because the badges collection needs auth to read, which a
-        // signed-out scanner does not have.
-        badges: PassportPublicBadge[];
-        attendedEvents: string[];
-        eventStaffEvents: string[];
-    };
-    /** The owner's collection, by year — no sibling passport ids. */
-    shelf: Array<{year: number; claimedAt: string | null}>;
-};
 
 export const callGetPassportPublicProfile = (data: {passportId: string}) =>
     httpsCallable<typeof data, PassportPublicProfile>(getFunctions(), 'getPassportPublicProfile')(data);

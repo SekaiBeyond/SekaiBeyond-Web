@@ -59,7 +59,7 @@ export function formatActivationKey(key: string): string {
     return (key.match(/.{1,4}/g) ?? [key]).join("-");
 }
 
-export function hashActivationKey(key: string, salt: string): string {
+function hashActivationKey(key: string, salt: string): string {
     return crypto.createHash("sha256").update(`${salt}:${key}`).digest("hex");
 }
 

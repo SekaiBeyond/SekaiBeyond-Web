@@ -1,4 +1,5 @@
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
 /**
@@ -21,7 +22,7 @@ export async function fetchScans(parentCollection: string, parentId: string): Pr
     ));
     return snap.docs.flatMap(d => {
         const data = d.data();
-        const at = data.scannedAt?.toDate?.() ?? null;
+        const at = toDate(data.scannedAt);
         return at ? [{at, platform: typeof data.platform === 'string' ? data.platform : ''}] : [];
     });
 }

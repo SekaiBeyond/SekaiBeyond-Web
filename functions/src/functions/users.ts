@@ -15,6 +15,7 @@ import {
 import { deletionExpiresAt, recordExpiresAt } from "../utils/config";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS } from "../utils/membership";
 import { db } from "../utils/firebase";
+import { pastEventIds, toStringIds } from "../utils/publicProfile";
 import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB } from "../utils/storage";
 import { sanitizeDisplayText, validateDocId, validateISODate } from "../utils/validation";
 
@@ -91,15 +92,9 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
 
     // Restrict eventStaffEvents to past events only — upcoming-event ids would
     // leak unpublished events whose titles are otherwise gated by Firestore rules.
-    const rawStaffEvents: string[] = data.eventStaffEvents ?? [];
-    const eventStaffEvents: string[] = [];
-    if (rawStaffEvents.length > 0) {
-        const refs = rawStaffEvents.map(id => db.collection("pastEvents").doc(id));
-        const snaps = await db.getAll(...refs);
-        for (let i = 0; i < snaps.length; i++) {
-            if (snaps[i].exists) eventStaffEvents.push(rawStaffEvents[i]);
-        }
-    }
+    const rawStaffEvents = toStringIds(data.eventStaffEvents);
+    const pastEvents = await pastEventIds(rawStaffEvents);
+    const eventStaffEvents = rawStaffEvents.filter(id => pastEvents.has(id));
 
     return {
         displayName: data.displayName ?? "",

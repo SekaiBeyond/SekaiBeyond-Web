@@ -1,4 +1,4 @@
-import { createCollectionCache } from './collectionCache';
+import { createCollectionCache, toDate } from './collectionCache';
 import { fetchScans, type ScanEvent } from './scans';
 
 export type QrExpirationMode = 'none' | 'event' | 'date';
@@ -33,11 +33,6 @@ export interface QrCode {
     createdAt: Date | null;
     createdByName: string;
 }
-
-const toDate = (v: unknown): Date | null =>
-    v && typeof (v as {toDate?: () => Date}).toDate === 'function'
-        ? (v as {toDate: () => Date}).toDate()
-        : null;
 
 const cache = createCollectionCache<QrCode>('qrCodes', docSnap => {
     const data = docSnap.data();
@@ -107,8 +102,5 @@ export function qrIsActive(code: QrCode, eventEndAt: Date | null): boolean {
     return true;
 }
 
-/** One scan event for a code. Shared with passports — see {@link ScanEvent}. */
-export type QrScan = ScanEvent;
-
 /** Scan events (oldest first) for one code — backs the trend chart. */
-export const fetchQrScans = (id: string): Promise<QrScan[]> => fetchScans('qrCodes', id);
+export const fetchQrScans = (id: string): Promise<ScanEvent[]> => fetchScans('qrCodes', id);

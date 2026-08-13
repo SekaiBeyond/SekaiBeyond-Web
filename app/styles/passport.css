@@ -96,7 +96,7 @@
 /* The printed code, always shown in the same monospaced, spaced-out form it has
    on the sticker so reading one against the other is easy. */
 .passport-code {
-    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 20px;
     font-weight: 600;
     letter-spacing: 0.18em;
@@ -117,7 +117,7 @@
 
 .passport-key-input,
 .passport-code-input {
-    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 18px;
     letter-spacing: 0.12em;
     text-align: center;
@@ -380,7 +380,7 @@ a.passport-shelf-card:hover {
 }
 
 .passport-shelf-code {
-    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.1em;
     color: var(--color-text-light);
