@@ -240,9 +240,15 @@ interface RowActionsProps {
     onMove: (delta: number) => void;
     onRemove: () => void;
     readOnly?: boolean;
+    /**
+     * Cleared while the schedule is filtered to one room. "Up" would then mean
+     * swapping with a neighbour the filter is hiding, which moves the row somewhere
+     * the admin cannot see and reorders the day behind their back.
+     */
+    canMove?: boolean;
 }
 
-const RowActions = ({index, count, onMove, onRemove, readOnly}: RowActionsProps) => {
+const RowActions = ({index, count, onMove, onRemove, readOnly, canMove = true}: RowActionsProps) => {
     const {isEnglish} = useLanguage();
     if (readOnly) return null;
 
@@ -252,7 +258,7 @@ const RowActions = ({index, count, onMove, onRemove, readOnly}: RowActionsProps)
                 type="button"
                 className="admin-con-icon-btn"
                 onClick={() => onMove(-1)}
-                disabled={index === 0}
+                disabled={!canMove || index === 0}
                 aria-label={isEnglish ? 'Move up' : '上移'}
             >
                 ↑
@@ -261,7 +267,7 @@ const RowActions = ({index, count, onMove, onRemove, readOnly}: RowActionsProps)
                 type="button"
                 className="admin-con-icon-btn"
                 onClick={() => onMove(1)}
-                disabled={index === count - 1}
+                disabled={!canMove || index === count - 1}
                 aria-label={isEnglish ? 'Move down' : '下移'}
             >
                 ↓
@@ -602,9 +608,43 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('schedule', content.schedule, loading, showToast);
     const {draft, setDraft} = editor;
+    const [roomFilter, setRoomFilter] = useState<string | null>(null);
 
     const updateBlock = (index: number, next: ConContent['schedule'][number]) =>
         setDraft(prev => replaceAt(prev, index, next));
+
+    /**
+     * Rooms the draft actually uses, listed in the order the Rooms section above
+     * puts them. A room nothing is booked in gets no chip: its only possible result
+     * is an empty section, which reads like the schedule was lost.
+     */
+    const booked = new Set(draft.flatMap(block => block.items.map(item => item.room)));
+    const filterableRooms = content.rooms.filter(room => booked.has(room.id));
+
+    // Derived, not stored: deleting the last item in a room, or reassigning it,
+    // retires that chip on the same render, and the view falls back to showing
+    // everything rather than to an empty list under a chip that no longer exists.
+    const activeRoom = filterableRooms.some(room => room.id === roomFilter) ? roomFilter : null;
+    const filtering = activeRoom !== null;
+
+    /**
+     * Blocks and items paired with their real index in the draft. Every edit, move,
+     * and delete below addresses that index — filtering changes what is on screen,
+     * never what a row points at, so an edit made under a filter cannot land on the
+     * neighbour that happened to take its place in the visible list.
+     *
+     * A block with nothing in the chosen room drops out whole, rather than leaving a
+     * run of headings with no rows under them.
+     */
+    const visibleBlocks = draft
+        .map((block, index) => ({
+            block,
+            index,
+            items: block.items
+                .map((item, itemIndex) => ({item, itemIndex}))
+                .filter(({item}) => !filtering || item.room === activeRoom),
+        }))
+        .filter(({items}) => !filtering || items.length > 0);
 
     return (
         <SectionShell
@@ -616,10 +656,44 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
             editor={editor}
             readOnly={readOnly}
         >
+            {filterableRooms.length > 1 && (
+                <div className="admin-con-filter" role="group"
+                     aria-label={isEnglish ? 'Filter items by room' : '按房间筛选条目'}>
+                    <button
+                        type="button"
+                        className="admin-con-filter-chip"
+                        aria-pressed={!filtering}
+                        onClick={() => setRoomFilter(null)}
+                    >
+                        {isEnglish ? 'All rooms' : '全部房间'}
+                    </button>
+
+                    {filterableRooms.map(room => (
+                        <button
+                            key={room.id}
+                            type="button"
+                            className="admin-con-filter-chip"
+                            aria-pressed={activeRoom === room.id}
+                            onClick={() => setRoomFilter(room.id)}
+                        >
+                            {isEnglish ? room.name.en : room.name.zh}
+                        </button>
+                    ))}
+
+                    {filtering && (
+                        <span className="admin-con-filter-note">
+                            {isEnglish
+                                ? 'Showing one room. Editing and deleting work as usual; clear the filter to reorder rows or add a block.'
+                                : '当前仅显示一个房间。编辑与删除照常可用；如需调整顺序或添加时段，请先清除筛选。'}
+                        </span>
+                    )}
+                </div>
+            )}
+
             <div className="admin-con-list">
                 {draft.length === 0 && <EmptyRow label={{en: 'No schedule blocks yet.', zh: '暂无时段。'}}/>}
 
-                {draft.map((block, blockIndex) => (
+                {visibleBlocks.map(({block, index: blockIndex, items}) => (
                     <div key={blockIndex} className="admin-con-card">
                         <div className="admin-con-card-head">
                             <span className="admin-con-card-title">
@@ -631,6 +705,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                                 onMove={delta => setDraft(prev => moveAt(prev, blockIndex, delta))}
                                 onRemove={() => setDraft(prev => removeAt(prev, blockIndex))}
                                 readOnly={readOnly}
+                                canMove={!filtering}
                             />
                         </div>
 
@@ -644,7 +719,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                         </div>
 
                         <div className="admin-con-list">
-                            {block.items.map((item, itemIndex) => (
+                            {items.map(({item, itemIndex}) => (
                                 <div key={itemIndex} className="admin-con-item">
                                     <div className="admin-con-card-head">
                                         <span className="admin-con-card-title">
@@ -662,6 +737,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                                                 items: removeAt(block.items, itemIndex),
                                             })}
                                             readOnly={readOnly}
+                                            canMove={!filtering}
                                         />
                                     </div>
 
@@ -797,7 +873,9 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                                     items: [...block.items, {
                                         start: '',
                                         end: '',
-                                        room: content.rooms[0]?.id ?? '',
+                                        // Defaults to the room being filtered on, so a
+                                        // row added here is a row that stays on screen.
+                                        room: activeRoom ?? content.rooms[0]?.id ?? '',
                                         title: BLANK,
                                     }],
                                 })}
@@ -815,11 +893,15 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                     </div>
                 ))}
 
-                <AddButton
-                    label={{en: 'block', zh: '时段'}}
-                    onClick={() => setDraft(prev => [...prev, {id: newRowId('block'), label: BLANK, items: []}])}
-                    readOnly={readOnly}
-                />
+                {/* Hidden while filtering: a new block starts empty, so it would match
+                    no room and land off screen, reading as a button that does nothing. */}
+                {!filtering && (
+                    <AddButton
+                        label={{en: 'block', zh: '时段'}}
+                        onClick={() => setDraft(prev => [...prev, {id: newRowId('block'), label: BLANK, items: []}])}
+                        readOnly={readOnly}
+                    />
+                )}
             </div>
         </SectionShell>
     );

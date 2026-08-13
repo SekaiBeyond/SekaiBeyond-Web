@@ -67,18 +67,24 @@ export const CON: ConEvent = {
         zh: '一日一舞台，汇聚你所热爱的每一个世界。',
     },
     intro: {
-        en: 'Anime, comics, games, and music — brought together by the Sekai Beyond community at the University of Washington. Stage performances, artist alley, cosplay, tabletop, and a whole lot of friends you have not met yet.',
-        zh: '动漫、漫画、游戏与音乐——由华盛顿大学 Sekai Beyond 社区共同呈现。舞台演出、创作者市集、Cosplay、桌游，以及许多你还没遇见的朋友。',
+        en: 'Anime, comics, games, and music — brought together by the Sekai Beyond community at the University of Washington. Stage performances, a full-day marketplace, a cosplay contest, idol stages, a maid café, and a whole lot of friends you have not met yet.',
+        zh: '动漫、漫画、游戏与音乐——由华盛顿大学 Sekai Beyond 社区共同呈现。舞台演出、全天市集、Cosplay 大赛、偶像舞台、女仆咖啡，以及许多你还没遇见的朋友。',
     },
 
-    /** PLACEHOLDER — confirm before launch. */
+    /**
+     * PLACEHOLDER date — confirm before launch. The hours are not placeholders:
+     * 11:00 is when the marketplace opens to the public and 20:00 is when the main
+     * hall is out, both per the run-of-show. Note that the run-of-show includes a
+     * "Kawalloween" block, which would put the real date near Halloween rather than
+     * in mid-November.
+     */
     date: '2026-11-14T11:00:00',
     endTime: '2026-11-14T20:00:00',
     doorsOpen: {en: 'Doors open 11:00 AM', zh: '11:00 开场'},
 
     venue: {
         name: {en: 'Husky Union Building (HUB)', zh: '华盛顿大学学生活动中心 (HUB)'},
-        room: {en: 'HUB Ballroom', zh: 'HUB 宴会厅'},
+        room: {en: 'HUB Ballroom + rooms 214 / 334 / 337', zh: 'HUB 宴会厅 + 214 / 334 / 337 教室'},
         address: '4001 E Stevens Way NE, Seattle, WA 98195',
         mapUrl: 'https://maps.google.com/?q=Husky+Union+Building+University+of+Washington',
     },
@@ -133,8 +139,8 @@ export const ABOUT_PARAGRAPHS: Localized[] = [
         zh: '彼世界漫展是我们一年一度的庆典，献给陪我们长大的那些世界——动漫、漫画、游戏，以及与之相伴的音乐。它最初只是学生自办的一个演出下午，如今已成长为面向所有人的整日舞台、市集与聚会。',
     },
     {
-        en: 'Everything you see is built by volunteers from the Sekai Beyond community: the stage crew, the artists in the alley, the cosplayers on the runway, and the students running the door. Come for the line-up, stay for the people.',
-        zh: '你所看到的一切都由 Sekai Beyond 社区的志愿者共同搭建：舞台组、市集上的创作者、走秀的 Coser，以及在门口值班的同学。为节目而来，为伙伴留下。',
+        en: 'Everything you see is built by volunteers from the Sekai Beyond community: the stage crew, the artists in the marketplace, the cosplayers on stage, and the students running the door. Come for the line-up, stay for the people.',
+        zh: '你所看到的一切都由 Sekai Beyond 社区的志愿者共同搭建：舞台组、市集上的创作者、登台的 Coser，以及在门口值班的同学。为节目而来，为伙伴留下。',
     },
 ];
 
@@ -149,57 +155,62 @@ export const HIGHLIGHTS: Highlight[] = [
         icon: '🎤',
         label: {en: 'Live Stage', zh: '现场舞台'},
         blurb: {
-            en: 'Band sets, idol covers, and J-pop performances from student groups all afternoon.',
-            zh: '学生乐队、偶像翻跳与 J-pop 演出，整个下午轮番登场。',
+            en: 'A band set at noon, the idol fest through the afternoon, and a DJ to close the night.',
+            zh: '中午的乐队演出、整个下午的偶像祭，以及压轴的 DJ 现场。',
         },
     },
     {
         icon: '🎨',
-        label: {en: 'Artist Alley', zh: '创作者市集'},
+        label: {en: 'Marketplace', zh: '市集'},
         blurb: {
-            en: 'Prints, charms, and originals straight from the illustrators who made them.',
-            zh: '海报、挂件与原创周边，直接来自绘师本人。',
+            en: 'Prints, charms, and originals straight from the illustrators who made them, 11:00 to 18:00.',
+            zh: '海报、挂件与原创周边，直接来自绘师本人，11:00 至 18:00 开放。',
         },
     },
     {
         icon: '👗',
-        label: {en: 'Cosplay Runway', zh: 'Cosplay 走秀'},
+        label: {en: 'Cosplay Contest', zh: 'Cosplay 大赛'},
         blurb: {
-            en: 'Walk the runway solo or with your group — no judging panel, all encouragement.',
-            zh: '个人或团体皆可上台走秀——没有评委压力，只有掌声。',
+            en: 'Take the main stage solo or with your group in the afternoon contest block.',
+            zh: '下午的主舞台大赛时段，个人或团体皆可登台。',
         },
     },
     {
-        icon: '🎮',
-        label: {en: 'Game Zone', zh: '游戏区'},
+        icon: '🎧',
+        label: {en: 'Idol Stages', zh: '偶像舞台'},
         blurb: {
-            en: 'Rhythm games, fighters, and tabletop tables running free play all day.',
-            zh: '音游、格斗与桌游区域全天开放自由体验。',
+            en: 'Idolfest, call & mix, and guest sets running in HUB 334 and 337 from noon onwards.',
+            zh: '偶像祭、Call & Mix 与嘉宾演出，自中午起在 HUB 334 与 337 轮番上演。',
         },
     },
     {
-        icon: '🃏',
-        label: {en: 'Fan Exchange', zh: '同好交换'},
+        icon: '☕',
+        label: {en: 'Maid Café', zh: '女仆咖啡'},
         blurb: {
-            en: 'Trade badges, cards, and merch at the community swap corner.',
-            zh: '在同好交换角落交换吧唧、卡牌与周边。',
+            en: 'ACGNUW runs the café in HUB 214 from lunchtime through the late afternoon.',
+            zh: 'ACGNUW 在 HUB 214 运营女仆咖啡，从午后开放至傍晚。',
         },
     },
     {
-        icon: '📸',
-        label: {en: 'Photo Wall', zh: '拍照墙'},
+        icon: '🎃',
+        label: {en: 'Kawalloween', zh: 'Kawalloween'},
         blurb: {
-            en: 'Themed backdrops and volunteer photographers for your best shot.',
-            zh: '主题背景板与志愿摄影师，帮你拍下最好的一张。',
+            en: 'The evening block in HUB 214, running until 19:30.',
+            zh: '傍晚于 HUB 214 的企划，持续至 19:30。',
         },
     },
 ];
 
-// Rooms + schedule — PLACEHOLDER; the real grid lives in conContent/main
+// Rooms + schedule, transcribed from the internal run-of-show grid (schedule.xlsx).
+// Crew-only rows — stage set-up and sound checks, vendor load-in and load-out, maid
+// café set-up and strike, the video loop that covers changeovers — are deliberately
+// left out: they are staffing times, not something a visitor can attend. Rooms 238
+// and 307 are held in the grid with nothing booked in them, so they are not listed
+// either; add them when they get programming.
 
 /**
  * Chip colours a room can use. The palette is fixed in code because each value
- * is a CSS class (`sbc-room-chip--pink`); which room wears which colour is not.
+ * is a CSS class (`sbc-accent--pink`); which room wears which colour is not.
  */
 export const ROOM_ACCENTS = ['pink', 'violet', 'amber', 'sky', 'mint', 'slate'] as const;
 
@@ -213,15 +224,16 @@ export interface Room {
 }
 
 /**
- * Generic placeholder rooms, matching the placeholder programming below. The real
- * room list for a given year is admin data — this is only what a visitor sees
+ * The room list for a given year is admin data — this is only what a visitor sees
  * before the Firestore fetch lands, or if it fails.
  */
 export const ROOMS: Room[] = [
-    {id: 'stage', name: {en: 'Main Stage', zh: '主舞台'}, accent: 'pink'},
-    {id: 'panel', name: {en: 'Panel Room', zh: '座谈厅'}, accent: 'violet'},
-    {id: 'workshop', name: {en: 'Workshop Room', zh: '工作坊教室'}, accent: 'amber'},
-    {id: 'open', name: {en: 'Open Floor', zh: '自由活动'}, accent: 'sky'},
+    {id: 'main-stage', name: {en: 'Main Stage', zh: '主舞台'}, accent: 'pink'},
+    {id: 'main-hall', name: {en: 'Main Hall', zh: '主会场'}, accent: 'amber'},
+    {id: 'hub-214', name: {en: 'HUB 214', zh: 'HUB 214'}, accent: 'mint'},
+    {id: 'hub-334', name: {en: 'HUB 334', zh: 'HUB 334'}, accent: 'violet'},
+    {id: 'hub-337', name: {en: 'HUB 337', zh: 'HUB 337'}, accent: 'sky'},
+    {id: 'panel-tba', name: {en: 'Panel Room (TBA)', zh: '座谈厅（待定）'}, accent: 'slate'},
 ];
 
 export interface ScheduleItem {
@@ -251,28 +263,13 @@ export const SCHEDULE: ScheduleBlock[] = [
         items: [
             {
                 start: '11:00',
-                end: '11:30',
-                room: 'open',
-                title: {en: 'Doors Open & Registration', zh: '开场与签到'},
-                location: {en: 'HUB Lobby', zh: 'HUB 大厅'},
+                end: '18:00',
+                room: 'main-hall',
+                title: {en: 'Marketplace', zh: '市集'},
                 detail: {
-                    en: 'Pick up your badge, grab a map, and find the artist alley before it gets busy.',
-                    zh: '领取吧唧与地图，趁人少先逛逛创作者市集。',
+                    en: 'Doors open and the tables go live. The marketplace runs straight through to 18:00 — come early for the best pick.',
+                    zh: '开场，摊位同时开放。市集一直营业至 18:00，建议早到，好货先得。',
                 },
-            },
-            {
-                start: '11:30',
-                end: '12:00',
-                room: 'stage',
-                title: {en: 'Opening Ceremony', zh: '开幕式'},
-                location: {en: 'Main Stage', zh: '主舞台'},
-            },
-            {
-                start: '12:00',
-                end: '13:00',
-                room: 'stage',
-                title: {en: 'Student Band Showcase', zh: '学生乐队专场'},
-                location: {en: 'Main Stage', zh: '主舞台'},
             },
         ],
     },
@@ -281,40 +278,59 @@ export const SCHEDULE: ScheduleBlock[] = [
         label: {en: 'Afternoon', zh: '下午'},
         items: [
             {
-                start: '13:00',
-                end: '14:00',
-                room: 'panel',
-                title: {en: 'Making It in Anime Illustration', zh: '动漫插画创作分享'},
-                location: {en: 'Panel Room', zh: '座谈厅'},
-                detail: {
-                    en: 'Guest illustrators talk commissions, process, and building an audience.',
-                    zh: '嘉宾绘师分享约稿、创作流程与积累观众的经验。',
-                },
+                start: '12:00',
+                end: '13:30',
+                room: 'main-stage',
+                title: {en: 'Live Band Set', zh: '乐队演出'},
+            },
+            {
+                start: '12:00',
+                end: '13:30',
+                room: 'hub-334',
+                title: {en: 'Sakurakaa', zh: 'Sakurakaa'},
+            },
+            {
+                start: '12:00',
+                end: '13:30',
+                room: 'hub-337',
+                title: {en: 'To be announced', zh: '待公布'},
+            },
+            {
+                start: '12:30',
+                end: '16:30',
+                room: 'hub-214',
+                title: {en: 'Maid Café', zh: '女仆咖啡'},
+                detail: {en: 'Hosted by ACGNUW.', zh: '由 ACGNUW 呈现。'},
+            },
+            {
+                start: '13:30',
+                end: '15:00',
+                room: 'hub-334',
+                title: {en: 'I Can Fly! Idolfest', zh: 'I Can Fly! 偶像祭'},
+            },
+            {
+                start: '13:30',
+                end: '15:00',
+                room: 'hub-337',
+                title: {en: 'Beisong · Call & Mix', zh: '北宋 Call & Mix'},
             },
             {
                 start: '14:00',
-                end: '15:30',
-                room: 'stage',
-                title: {en: 'Cosplay Runway', zh: 'Cosplay 走秀'},
-                location: {en: 'Main Stage', zh: '主舞台'},
+                end: '15:00',
+                room: 'main-stage',
+                title: {en: 'Cosplay Contest', zh: 'Cosplay 大赛'},
+            },
+            {
+                start: '15:00',
+                end: '17:30',
+                room: 'hub-334',
+                title: {en: 'Hancheng', zh: '汉承'},
             },
             {
                 start: '15:30',
-                end: '16:30',
-                room: 'workshop',
-                title: {en: 'Prop Crafting 101', zh: '道具制作入门'},
-                location: {en: 'Workshop Room', zh: '工作坊教室'},
-                detail: {
-                    en: 'Hands-on foam and worbla basics. Materials provided, first come first served.',
-                    zh: '现场动手体验 EVA 与热塑板基础，材料现场提供，先到先得。',
-                },
-            },
-            {
-                start: '16:30',
-                end: '17:30',
-                room: 'open',
-                title: {en: 'Rhythm Game Tournament', zh: '音游比赛'},
-                location: {en: 'Game Zone', zh: '游戏区'},
+                end: '18:00',
+                room: 'main-stage',
+                title: {en: 'Idol Fest', zh: '偶像祭'},
             },
         ],
     },
@@ -323,31 +339,42 @@ export const SCHEDULE: ScheduleBlock[] = [
         label: {en: 'Evening', zh: '晚间'},
         items: [
             {
+                start: '17:00',
+                end: '19:30',
+                room: 'hub-214',
+                title: {en: 'Kawalloween', zh: 'Kawalloween'},
+            },
+            {
                 start: '17:30',
                 end: '19:00',
-                room: 'stage',
-                title: {en: 'Idol & J-pop Night', zh: '偶像与 J-pop 之夜'},
-                location: {en: 'Main Stage', zh: '主舞台'},
+                room: 'hub-334',
+                title: {en: 'To be announced', zh: '待公布'},
             },
             {
-                start: '19:00',
-                end: '19:30',
-                room: 'stage',
-                title: {en: 'Closing Ceremony', zh: '闭幕式'},
-                location: {en: 'Main Stage', zh: '主舞台'},
+                start: '18:30',
+                end: '19:45',
+                room: 'main-stage',
+                title: {en: 'DJ Set', zh: 'DJ 现场'},
             },
+        ],
+    },
+    {
+        id: 'tba',
+        label: {en: 'Time to be confirmed', zh: '时间待定'},
+        items: [
             {
-                start: '19:30',
-                end: '20:00',
-                room: 'open',
-                title: {en: 'Group Photo & Teardown', zh: '大合照与撤场'},
-                location: {en: 'HUB Lobby', zh: 'HUB 大厅'},
+                room: 'panel-tba',
+                title: {en: 'TWIG VTuber Concert', zh: 'TWIG VTuber 演唱会'},
+                detail: {
+                    en: 'A one-hour set. Room and start time are still being confirmed.',
+                    zh: '演出时长约一小时，场地与开始时间仍在确认中。',
+                },
             },
         ],
     },
 ];
 
-// Guests — PLACEHOLDER line-up
+// Guests — drawn from the run-of-show; blurbs and links still need confirming
 
 export interface Guest {
     name: string
@@ -360,27 +387,51 @@ export interface Guest {
 
 export const GUESTS: Guest[] = [
     {
-        name: 'Guest Announcement #1',
-        role: {en: 'Illustrator', zh: '插画师'},
+        name: 'TWIG',
+        role: {en: 'VTuber concert', zh: 'VTuber 演唱会'},
         blurb: {
-            en: 'Line-up announcements start rolling out closer to the event — follow us to hear first.',
-            zh: '嘉宾阵容将在临近活动时陆续公布，关注我们第一时间获知。',
+            en: 'A one-hour concert set. Room and start time to be confirmed.',
+            zh: '约一小时的演唱会，场地与开始时间待定。',
         },
     },
     {
-        name: 'Guest Announcement #2',
-        role: {en: 'Cosplayer', zh: 'Coser'},
+        name: 'I Can Fly!',
+        role: {en: 'Idol performance', zh: '偶像演出'},
         blurb: {
-            en: 'Runway guest and photo-wall host for the afternoon block.',
-            zh: '下午场走秀嘉宾与拍照墙主持。',
+            en: 'Idolfest in HUB 334, straight after the opening block.',
+            zh: '于 HUB 334 举行的偶像祭，紧接开场时段。',
         },
     },
     {
-        name: 'Guest Announcement #3',
-        role: {en: 'Performer', zh: '表演嘉宾'},
+        name: '北宋 Beisong',
+        role: {en: 'Call & mix', zh: 'Call & Mix'},
         blurb: {
-            en: 'Headlining the evening stage. Set list to be revealed on the day.',
-            zh: '晚间舞台压轴登场，曲目当天揭晓。',
+            en: 'A call & mix session in HUB 337 — bring your voice.',
+            zh: '于 HUB 337 的 Call & Mix 场，欢迎一起应援。',
+        },
+    },
+    {
+        name: 'Sakurakaa',
+        role: {en: 'Featured programme', zh: '特别企划'},
+        blurb: {
+            en: 'Opening the HUB 334 track at noon. Details to be announced.',
+            zh: '中午于 HUB 334 开场，详情待公布。',
+        },
+    },
+    {
+        name: '汉承 Hancheng',
+        role: {en: 'Featured programme', zh: '特别企划'},
+        blurb: {
+            en: 'An afternoon programme in HUB 334. Details to be announced.',
+            zh: '下午于 HUB 334 的企划，详情待公布。',
+        },
+    },
+    {
+        name: 'ACGNUW',
+        role: {en: 'Maid café', zh: '女仆咖啡'},
+        blurb: {
+            en: 'Runs the maid café in HUB 214 through the afternoon.',
+            zh: '整个下午在 HUB 214 运营女仆咖啡。',
         },
     },
 ];
@@ -438,7 +489,7 @@ export const TICKETS: TicketTier[] = [
         perks: [
             {en: 'Full-day access to every stage and room', zh: '全天通行所有舞台与场地'},
             {en: 'Event badge while supplies last', zh: '活动吧唧，送完为止'},
-            {en: 'Game zone free play', zh: '游戏区自由体验'},
+            {en: 'Access to the marketplace and every side room', zh: '可进入市集与全部分会场'},
         ],
     },
     {
@@ -449,7 +500,7 @@ export const TICKETS: TicketTier[] = [
         perks: [
             {en: 'Full-day access to every stage and room', zh: '全天通行所有舞台与场地'},
             {en: 'Event badge while supplies last', zh: '活动吧唧，送完为止'},
-            {en: 'Game zone free play', zh: '游戏区自由体验'},
+            {en: 'Access to the marketplace and every side room', zh: '可进入市集与全部分会场'},
             {en: 'Priority entry line', zh: '优先入场通道'},
         ],
         featured: true,
@@ -520,6 +571,13 @@ export const FAQ: FaqEntry[] = [
         a: {
             en: 'No. Sekai Beyond Con is open to the public — students, alumni, families, and anyone visiting Seattle for the weekend.',
             zh: '不需要。彼世界漫展面向公众开放——在校生、校友、家人，以及任何周末来到西雅图的朋友都欢迎。',
+        },
+    },
+    {
+        q: {en: 'Which rooms is the con in?', zh: '漫展会用到哪些场地？'},
+        a: {
+            en: 'The main stage and the marketplace are in the main hall, and the side programming runs in HUB 214, 334, and 337. Signage and the map at registration point to all of them.',
+            zh: '主舞台与市集位于主会场，分会场节目在 HUB 214、334、337 举行。现场指示牌与签到处的地图都会标出位置。',
         },
     },
     {

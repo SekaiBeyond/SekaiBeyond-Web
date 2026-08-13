@@ -569,11 +569,19 @@
 }
 
 .sbc-section {
+    --sbc-section-pad-block: 90px;
+
     max-width: 1300px;
     margin: 0 auto;
-    padding: 90px 40px;
-    /* Anchor jumps land below the fixed navbar without a global scroll-padding. */
-    scroll-margin-top: 84px;
+    padding: var(--sbc-section-pad-block) 40px;
+    /*
+     * Anchor jumps land on the section header, not on the section's top edge.
+     * Clearing only the navbar leaves the whole top padding — plus a sliver of
+     * the section above — still on screen, which reads as a jump that stopped
+     * short. Subtracting the padding back out puts every header 94px down the
+     * viewport, 28px clear of the ~66px solid navbar, at every breakpoint.
+     */
+    scroll-margin-top: calc(94px - var(--sbc-section-pad-block));
 }
 
 .sbc-section-header {
@@ -748,9 +756,12 @@
     gap: 4px;
 }
 
+/* The time column is wide enough for a locale-formatted "12:00 PM" in the display
+   font — English times carry a meridiem, so sizing it to a bare "12:00" would clip
+   every row on the page. */
 .sbc-timeline-item {
     display: grid;
-    grid-template-columns: 92px 1fr;
+    grid-template-columns: 112px 1fr;
     gap: 24px;
     padding: 20px 0;
     border-top: 1px solid rgba(255, 182, 193, 0.3);
@@ -786,9 +797,41 @@
     min-width: 0;
 }
 
-/* Room chips. Which room wears which accent is admin-editable data; the palette
+/* Room accents. Which room wears which one is admin-editable data; the palette
    itself is fixed here, so a room can only ever pick a colour that is legible
-   against the timeline card. Keep in sync with ROOM_ACCENTS in con/content.ts. */
+   against the timeline card. The timeline chips and the room filter above them both
+   read these two variables, so each colour is written down once. Keep the class list
+   in sync with ROOM_ACCENTS in con/content.ts. */
+.sbc-accent--pink {
+    --sbc-accent-tint: rgba(255, 107, 157, 0.16);
+    --sbc-accent-ink: #d94a7c;
+}
+
+.sbc-accent--violet {
+    --sbc-accent-tint: rgba(155, 89, 182, 0.16);
+    --sbc-accent-ink: #7d46a0;
+}
+
+.sbc-accent--amber {
+    --sbc-accent-tint: rgba(255, 142, 83, 0.18);
+    --sbc-accent-ink: #d96a2c;
+}
+
+.sbc-accent--sky {
+    --sbc-accent-tint: rgba(72, 219, 251, 0.2);
+    --sbc-accent-ink: #1f8fb5;
+}
+
+.sbc-accent--mint {
+    --sbc-accent-tint: rgba(78, 203, 113, 0.18);
+    --sbc-accent-ink: #2f8b4f;
+}
+
+.sbc-accent--slate {
+    --sbc-accent-tint: rgba(122, 129, 144, 0.16);
+    --sbc-accent-ink: #5a616f;
+}
+
 .sbc-room-chip {
     display: inline-block;
     margin-bottom: 8px;
@@ -798,36 +841,47 @@
     font-weight: 700;
     letter-spacing: 1px;
     text-transform: uppercase;
+    background: var(--sbc-accent-tint);
+    color: var(--sbc-accent-ink);
 }
 
-.sbc-room-chip--pink {
-    background: rgba(255, 107, 157, 0.16);
-    color: #d94a7c;
+/* Room filter. Six tracks run at once, so a flat chronological list answers "what
+   is on at 2pm" well and "what is on in 334" badly — this narrows the timeline to
+   one room without giving up the single-column layout that works on a phone.
+   `aria-pressed` carries the selected state, so the styling hook and the state a
+   screen reader announces cannot drift apart. */
+.sbc-schedule-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 28px;
 }
 
-.sbc-room-chip--violet {
-    background: rgba(155, 89, 182, 0.16);
-    color: #7d46a0;
+.sbc-filter-chip {
+    padding: 8px 16px;
+    border: 1.5px solid transparent;
+    border-radius: var(--sbc-pill);
+    /* The "all rooms" chip wears no accent, so both fall back to neutral. */
+    background: var(--sbc-accent-tint, rgba(122, 129, 144, 0.14));
+    color: var(--sbc-accent-ink, #5a616f);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
 }
 
-.sbc-room-chip--amber {
-    background: rgba(255, 142, 83, 0.18);
-    color: #d96a2c;
+.sbc-filter-chip:hover {
+    border-color: rgba(0, 0, 0, 0.14);
 }
 
-.sbc-room-chip--sky {
-    background: rgba(72, 219, 251, 0.2);
-    color: #1f8fb5;
+.sbc-filter-chip[aria-pressed='true'] {
+    border-color: currentColor;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.09);
 }
 
-.sbc-room-chip--mint {
-    background: rgba(78, 203, 113, 0.18);
-    color: #2f8b4f;
-}
-
-.sbc-room-chip--slate {
-    background: rgba(122, 129, 144, 0.16);
-    color: #5a616f;
+.sbc-filter-chip:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
 }
 
 /* Announced but unscheduled: keeps the item in the timeline instead of hiding it. */
@@ -1526,7 +1580,9 @@
 
 @media (max-width: 768px) {
     .sbc-section {
-        padding: 64px 18px;
+        --sbc-section-pad-block: 64px;
+
+        padding: var(--sbc-section-pad-block) 18px;
     }
 
     .sbc-section-header {

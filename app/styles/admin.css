@@ -4249,6 +4249,52 @@ select.admin-tickets-tag:focus {
     margin-bottom: 0;
 }
 
+/* Room filter over the schedule editor. `aria-pressed` is both the state a screen
+   reader announces and the hook the selected style hangs off, so the two cannot
+   drift apart. */
+.admin-con-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.admin-con-filter-chip {
+    padding: 5px 12px;
+    border: var(--admin-field-border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.admin-con-filter-chip:hover {
+    border-color: var(--color-primary);
+}
+
+.admin-con-filter-chip[aria-pressed='true'] {
+    border-color: var(--color-primary);
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--color-primary);
+}
+
+.admin-con-filter-chip:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+}
+
+/* Takes the whole row so the chips stay on one line above it. */
+.admin-con-filter-note {
+    flex-basis: 100%;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
 .admin-con-empty {
     margin: 0;
     font-size: 13px;
