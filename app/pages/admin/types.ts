@@ -164,7 +164,6 @@ export interface ActivityRecord {
     passportId?: string;
     passportYear?: number | null;
     passportCount?: number;
-    passportDesignName?: string;
     batchId?: string;
     platformLabel?: string;
     /** Comma-separated con page sections touched by a con-content-update. */

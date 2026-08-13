@@ -15,10 +15,10 @@ import {
 } from '~/lib/firebase';
 import {
     ACTIVATION_KEY_LENGTH,
-    designName,
     isPassportCodeShape,
     normalizePassportCode,
     PASSPORT_ID_LENGTH,
+    passportName,
     usePassportDesigns,
 } from '~/lib/passports';
 import { usePastEvents } from '~/lib/pastEvents';
@@ -231,14 +231,14 @@ const ActivationCard = ({passportId, year, onActivated}: ActivationCardProps) =>
                 {design?.coverImageUrl && (
                     <img
                         src={design.coverImageUrl}
-                        alt={designName(design, year, isEnglish)}
+                        alt={passportName(year, isEnglish)}
                         className="passport-activate-cover"
                     />
                 )}
                 <h1 className="passport-activate-title">
                     {isEnglish ? 'Activate Your Passport' : '激活您的通行证'}
                 </h1>
-                <p className="passport-activate-design">{designName(design, year, isEnglish)}</p>
+                <p className="passport-activate-design">{passportName(year, isEnglish)}</p>
                 <p className="passport-code">{passportId}</p>
 
                 {authLoading ? (
@@ -404,7 +404,7 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
                     {design?.coverImageUrl && (
                         <img
                             src={design.coverImageUrl}
-                            alt={designName(design, data.year, isEnglish)}
+                            alt={passportName(data.year, isEnglish)}
                             className="passport-hero-cover"
                         />
                     )}
@@ -412,12 +412,7 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
                         <span className="passport-hero-eyebrow">
                             {isEnglish ? 'Sekai Beyond Passport' : '彼世界通行证'}
                         </span>
-                        <h1 className="passport-hero-title">{designName(design, data.year, isEnglish)}</h1>
-                        {design && (isEnglish ? design.description : (design.descriptionCn || design.description)) && (
-                            <p className="passport-hero-desc">
-                                {isEnglish ? design.description : (design.descriptionCn || design.description)}
-                            </p>
-                        )}
+                        <h1 className="passport-hero-title">{passportName(data.year, isEnglish)}</h1>
                         <p className="passport-code passport-code--sm">{passportId}</p>
                     </div>
                 </div>
@@ -486,7 +481,7 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
                                         {entryDesign?.coverImageUrl ? (
                                             <img
                                                 src={entryDesign.coverImageUrl}
-                                                alt={designName(entryDesign, entry.year, isEnglish)}
+                                                alt={passportName(entry.year, isEnglish)}
                                                 className="passport-shelf-cover"
                                             />
                                         ) : (
@@ -495,7 +490,7 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
                                             </div>
                                         )}
                                         <span className="passport-shelf-name">
-                                            {designName(entryDesign, entry.year, isEnglish)}
+                                            {passportName(entry.year, isEnglish)}
                                         </span>
                                         {entry.claimedAt && (
                                             <span className="passport-shelf-date">{fmtDate(entry.claimedAt)}</span>
@@ -679,8 +674,16 @@ const OwnerPanel = ({hidden, scanCount, membershipExpiresAt, onChanged, showToas
                     <p className="passport-owner-panel-row">
                         {daysLeft !== null && daysLeft > 0 && expiry
                             ? (isEnglish
-                                ? `Membership active — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left, through ${expiry.toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})}.`
-                                : `会员资格有效 — 剩余 ${daysLeft} 天，至 ${expiry.toLocaleDateString('zh-CN', {year: 'numeric', month: 'long', day: 'numeric'})}。`)
+                                ? `Membership active — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left, through ${expiry.toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                })}.`
+                                : `会员资格有效 — 剩余 ${daysLeft} 天，至 ${expiry.toLocaleDateString('zh-CN', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                })}。`)
                             : (isEnglish
                                 ? 'Your membership has lapsed. The passport stays yours — activating another one adds a year.'
                                 : '您的会员资格已过期。通行证仍归您所有 — 激活另一本可再获得一年。')}

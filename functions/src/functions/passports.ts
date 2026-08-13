@@ -10,8 +10,8 @@ import {
     formatActivationKey,
     isLockedOut,
     isPassportYear,
-    LOCKOUT_MS,
     lockedUntilMillis,
+    LOCKOUT_MS,
     MAX_BATCH_COUNT,
     MAX_FAILED_ATTEMPTS,
     newActivationKey,
@@ -20,7 +20,7 @@ import {
     PASSPORT_ID_LENGTH,
     PASSPORT_TERM_DAYS,
 } from "../utils/passports";
-import { sanitizeDisplayText, validateStorageImageUrl, validateStr } from "../utils/validation";
+import { validateStorageImageUrl, validateStr } from "../utils/validation";
 
 /**
  * Physical passports.
@@ -580,7 +580,11 @@ export const setPassportPrivacy = onCall({maxInstances: 10}, async (request) => 
     return {hidePassportPage: hide};
 });
 
-/** Display metadata for one year's design — publicly readable, so no secrets here. */
+/**
+ * One year's cover art — publicly readable, so no secrets here. A design carries
+ * nothing else: the year is the passport's name wherever it is shown, so the art
+ * is the whole document and is therefore required.
+ */
 export const savePassportDesign = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     const callerSnap = await requireAdmin(uid);
@@ -590,12 +594,7 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
         throw new HttpsError("invalid-argument", "Invalid year.");
     }
     const year = input.year;
-    const name = sanitizeDisplayText(validateStr(input.name, "name", 120, true));
-    if (!name) throw new HttpsError("invalid-argument", "name is required.");
-    const nameCn = sanitizeDisplayText(validateStr(input.nameCn, "nameCn", 120));
-    const description = sanitizeDisplayText(validateStr(input.description, "description", 1000));
-    const descriptionCn = sanitizeDisplayText(validateStr(input.descriptionCn, "descriptionCn", 1000));
-    const coverImageUrl = validateStr(input.coverImageUrl, "coverImageUrl", 2000);
+    const coverImageUrl = validateStr(input.coverImageUrl, "coverImageUrl", 2000, true);
     validateStorageImageUrl(coverImageUrl, "coverImageUrl");
 
     const ref = db.collection(DESIGNS).doc(String(year));
@@ -603,10 +602,6 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
 
     await ref.set({
         year,
-        name,
-        nameCn,
-        description,
-        descriptionCn,
         coverImageUrl,
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: uid,
@@ -618,7 +613,6 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
         performedBy: uid,
         performedByName: performerName(callerSnap),
         passportYear: year,
-        passportDesignName: name,
         timestamp: FieldValue.serverTimestamp(),
         expiresAt: recordExpiresAt(),
     });
@@ -655,7 +649,6 @@ export const deletePassportDesign = onCall({maxInstances: 10}, async (request) =
         performedBy: uid,
         performedByName: performerName(callerSnap),
         passportYear: year,
-        passportDesignName: snap.data()?.name ?? "",
         timestamp: FieldValue.serverTimestamp(),
         expiresAt: recordExpiresAt(),
     });

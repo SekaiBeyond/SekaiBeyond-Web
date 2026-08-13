@@ -549,10 +549,6 @@ export const callSetPassportPrivacy = (data: {hide: boolean}) =>
 
 export const callSavePassportDesign = (data: {
     year: number;
-    name: string;
-    nameCn: string;
-    description: string;
-    descriptionCn: string;
     coverImageUrl: string;
 }) => httpsCallable<typeof data, {year: number}>(getFunctions(), 'savePassportDesign')(data);
 

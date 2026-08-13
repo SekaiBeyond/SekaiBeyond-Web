@@ -1,7 +1,7 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
-import { scanExpiresAt, recordExpiresAt } from "../utils/config";
+import { recordExpiresAt, scanExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import {

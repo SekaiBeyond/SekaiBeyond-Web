@@ -42,8 +42,8 @@ function dosDateTime(date: Date): {time: number; date: number} {
 }
 
 class ByteWriter {
-    private readonly chunks: Uint8Array[] = [];
     length = 0;
+    private readonly chunks: Uint8Array[] = [];
 
     push(bytes: Uint8Array): void {
         this.chunks.push(bytes);

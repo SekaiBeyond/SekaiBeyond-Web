@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGeneratePassportBatch } from '~/lib/firebase';
 import {
-    designName,
     fetchPassport,
     fetchPassportsByOwner,
     fetchPassportsByYear,
@@ -92,7 +91,6 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
             <PassportDetail
                 passportId={selectedId}
                 initial={selected}
-                designs={designs}
                 onBack={() => setView('dashboard')}
                 onChanged={refresh}
                 onLookupUser={onLookupUser}
@@ -107,7 +105,6 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
             <BatchGenerator
                 years={designs.map(d => d.year)}
                 defaultYear={year}
-                designLabel={y => designName(designs.find(d => d.year === y), y, isEnglish)}
                 onBack={() => {
                     setView('dashboard');
                     void refresh();
@@ -269,9 +266,7 @@ const Dashboard = ({
                                 onChange={e => setYear(Number(e.target.value))}
                             >
                                 {designs.map(design => (
-                                    <option key={design.year} value={design.year}>
-                                        {design.year} — {designName(design, design.year, isEnglish)}
-                                    </option>
+                                    <option key={design.year} value={design.year}>{design.year}</option>
                                 ))}
                             </select>
                         </label>
@@ -484,7 +479,6 @@ const PassportSearch = ({onOpen, showToast}: {onOpen: (id: string) => void; show
 interface BatchGeneratorProps {
     years: number[];
     defaultYear: number | null;
-    designLabel: (year: number) => string;
     onBack: () => void;
     showToast: ShowToast;
 }
@@ -494,7 +488,7 @@ interface BatchGeneratorProps {
  * response and nowhere else — leaving this screen without exporting means every
  * passport in the batch has to be re-keyed one at a time.
  */
-const BatchGenerator = ({years, defaultYear, designLabel, onBack, showToast}: BatchGeneratorProps) => {
+const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorProps) => {
     const {isEnglish} = useLanguage();
     const [year, setYear] = useState(defaultYear ?? years[0] ?? new Date().getFullYear());
     const [count, setCount] = useState(50);
@@ -565,9 +559,10 @@ const BatchGenerator = ({years, defaultYear, designLabel, onBack, showToast}: Ba
                     <div className="admin-form-grid admin-section-mb">
                         <label>
                             <span>{isEnglish ? 'Year' : '年份'}</span>
-                            <select className="admin-input" value={year} onChange={e => setYear(Number(e.target.value))}>
+                            <select className="admin-input" value={year}
+                                    onChange={e => setYear(Number(e.target.value))}>
                                 {years.map(y => (
-                                    <option key={y} value={y}>{y} — {designLabel(y)}</option>
+                                    <option key={y} value={y}>{y}</option>
                                 ))}
                             </select>
                         </label>

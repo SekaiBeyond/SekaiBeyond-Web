@@ -197,12 +197,6 @@
     color: var(--color-text);
 }
 
-.passport-hero-desc {
-    color: var(--color-text-body);
-    font-size: 15px;
-    line-height: 1.6;
-}
-
 .passport-owner {
     display: flex;
     align-items: center;

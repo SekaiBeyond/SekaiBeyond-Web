@@ -1,27 +1,18 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeletePassportDesign, callSavePassportDesign, callUploadAdminImage } from '~/lib/firebase';
-import type { PassportDesign } from '~/lib/passports';
-import { BilingualFormField } from '../BilingualFormField';
+import { type PassportDesign, passportName } from '~/lib/passports';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from '../CrudShell';
 import { ImageUploadField } from '../ImageUploadField';
 import type { ShowToast } from '../utils';
 
 interface Draft {
     year: number;
-    name: string;
-    nameCn: string;
-    description: string;
-    descriptionCn: string;
     coverImageUrl: string;
 }
 
 const emptyDraft = (year: number): Draft => ({
     year,
-    name: '',
-    nameCn: '',
-    description: '',
-    descriptionCn: '',
     coverImageUrl: '',
 });
 
@@ -37,9 +28,10 @@ interface PassportDesignsSectionProps {
 }
 
 /**
- * One design per year: the art and copy the shelf and the public passport page
- * render. A year's design has to exist before its passports can be generated,
- * and can't be deleted once any have been.
+ * One design per year: the cover art the shelf and the public passport page
+ * render, which is all a design is — a passport goes by its year, so there is
+ * nothing to name or describe. A year's design has to exist before its passports
+ * can be generated, and can't be deleted once any have been.
  */
 export const PassportDesignsSection = ({
                                            designs,
@@ -64,8 +56,11 @@ export const PassportDesignsSection = ({
         setCoverPreview(null);
     };
 
+    // The art is the design, so there is nothing to save without it.
+    const hasCover = !!coverFile || !!draft.coverImageUrl;
+
     const save = async (isNew: boolean) => {
-        if (!draft.name.trim()) return;
+        if (!hasCover) return;
         setSaving(true);
         try {
             let coverImageUrl = draft.coverImageUrl;
@@ -75,14 +70,7 @@ export const PassportDesignsSection = ({
                     `passports/design-${draft.year}-${Date.now().toString(36)}.webp`,
                 );
             }
-            await callSavePassportDesign({
-                year: draft.year,
-                name: draft.name.trim(),
-                nameCn: draft.nameCn.trim(),
-                description: draft.description.trim(),
-                descriptionCn: draft.descriptionCn.trim(),
-                coverImageUrl,
-            });
+            await callSavePassportDesign({year: draft.year, coverImageUrl});
             await onChanged();
             if (isNew) {
                 setShowCreate(false);
@@ -129,22 +117,6 @@ export const PassportDesignsSection = ({
                     />
                 </label>
             )}
-            <BilingualFormField
-                label="Name" labelCn="名称"
-                value={draft.name} valueCn={draft.nameCn}
-                onChange={value => setDraft(d => ({...d, name: value}))}
-                onChangeCn={value => setDraft(d => ({...d, nameCn: value}))}
-                placeholder={isEnglish ? 'e.g. 2027 Starlight Passport' : 'e.g. 2027 Starlight Passport'}
-                placeholderCn="例如：2027 星光通行证"
-            />
-            <BilingualFormField
-                label="Description" labelCn="介绍"
-                value={draft.description} valueCn={draft.descriptionCn}
-                onChange={value => setDraft(d => ({...d, description: value}))}
-                onChangeCn={value => setDraft(d => ({...d, descriptionCn: value}))}
-                multiline
-                fullWidth
-            />
             <div className="admin-form-grid-full">
                 <ImageUploadField
                     label="Cover art"
@@ -186,7 +158,7 @@ export const PassportDesignsSection = ({
                     ctaLabel={isEnglish ? 'Create Design' : '创建设计'}
                     ctaBusyLabel={isEnglish ? 'Saving...' : '保存中...'}
                     busy={saving}
-                    ctaDisabled={!draft.name.trim()}
+                    ctaDisabled={!hasCover}
                     onCreate={() => void save(true)}
                     onCancel={resetDraft}
                 >
@@ -208,7 +180,7 @@ export const PassportDesignsSection = ({
                                         {fields(false)}
                                         <CardSaveCancel
                                             saving={saving}
-                                            saveDisabled={!draft.name.trim()}
+                                            saveDisabled={!hasCover}
                                             onSave={() => void save(false)}
                                             onCancel={() => {
                                                 setEditingYear(null);
@@ -222,19 +194,11 @@ export const PassportDesignsSection = ({
                                         {design.coverImageUrl && (
                                             <img
                                                 src={design.coverImageUrl}
-                                                alt={design.name}
+                                                alt={passportName(design.year, isEnglish)}
                                                 className="admin-passport-design-cover"
                                             />
                                         )}
-                                        <span className="admin-event-card-title">
-                                            {design.year} — {design.name}
-                                        </span>
-                                        {design.nameCn && (
-                                            <span className="admin-event-card-date">{design.nameCn}</span>
-                                        )}
-                                        {design.description && (
-                                            <p className="admin-helper-text">{design.description}</p>
-                                        )}
+                                        <span className="admin-event-card-title">{design.year}</span>
                                         {!readOnly && (
                                             <CardEditDeleteActions
                                                 onEdit={() => {

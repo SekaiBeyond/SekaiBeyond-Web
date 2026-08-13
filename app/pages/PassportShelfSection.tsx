@@ -4,12 +4,12 @@ import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSetPassportPrivacy } from '~/lib/firebase';
 import {
-    designName,
     fetchPassportsByOwner,
     isPassportCodeShape,
     normalizePassportCode,
     type Passport,
     PASSPORT_ID_LENGTH,
+    passportName,
     usePassportDesigns,
 } from '~/lib/passports';
 import type { ShowToast } from '~/pages/admin/utils';
@@ -108,7 +108,7 @@ export const PassportShelfSection = ({showToast}: {showToast: ShowToast}) => {
                                 {design?.coverImageUrl ? (
                                     <img
                                         src={design.coverImageUrl}
-                                        alt={designName(design, passport.year, isEnglish)}
+                                        alt={passportName(passport.year, isEnglish)}
                                         className="passport-shelf-cover"
                                     />
                                 ) : (
@@ -117,7 +117,7 @@ export const PassportShelfSection = ({showToast}: {showToast: ShowToast}) => {
                                     </div>
                                 )}
                                 <span className="passport-shelf-name">
-                                    {designName(design, passport.year, isEnglish)}
+                                    {passportName(passport.year, isEnglish)}
                                 </span>
                                 {passport.claimedAt && (
                                     <span className="passport-shelf-date">

@@ -33,13 +33,13 @@ export interface Passport {
     lastScanAt: Date | null;
 }
 
-/** One year's design — the art and copy shown on the shelf and the public page. */
+/**
+ * One year's design. A design is its art and nothing else — a passport is named
+ * by its year everywhere it appears, so there is no name and no description to
+ * keep in two languages.
+ */
 export interface PassportDesign {
     year: number;
-    name: string;
-    nameCn: string;
-    description: string;
-    descriptionCn: string;
     coverImageUrl: string;
 }
 
@@ -88,10 +88,6 @@ const designCache = createCollectionCache<PassportDesign>('passportDesigns', doc
     const data = docSnap.data();
     return {
         year: typeof data.year === 'number' ? data.year : Number(docSnap.id) || 0,
-        name: data.name ?? '',
-        nameCn: data.nameCn ?? '',
-        description: data.description ?? '',
-        descriptionCn: data.descriptionCn ?? '',
         coverImageUrl: data.coverImageUrl ?? '',
     };
 });
@@ -111,10 +107,9 @@ export const passportStatusLabel = (status: PassportStatus, isEnglish: boolean):
     return isEnglish ? 'Unclaimed' : '未激活';
 };
 
-export const designName = (design: PassportDesign | undefined, year: number, isEnglish: boolean): string => {
-    if (!design) return isEnglish ? `${year} Passport` : `${year} 通行证`;
-    return (isEnglish ? design.name : (design.nameCn || design.name)) || `${year}`;
-};
+/** What a passport is called, on the shelf and on its page: its year. */
+export const passportName = (year: number, isEnglish: boolean): string =>
+    isEnglish ? `${year} Passport` : `${year} 通行证`;
 
 /** The URL encoded on the sticker, and the only address a passport ever has. */
 export const passportScanUrl = (id: string, origin: string): string =>

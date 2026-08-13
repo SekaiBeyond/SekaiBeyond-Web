@@ -121,7 +121,6 @@ export const RecordsTab = ({
                 passportId: data.passportId,
                 passportYear: data.passportYear,
                 passportCount: data.passportCount,
-                passportDesignName: data.passportDesignName,
                 batchId: data.batchId,
                 platformLabel: data.platformLabel,
                 conSection: data.conSection,
@@ -736,8 +735,8 @@ export const RecordsTab = ({
                     : <>为通行证 {r.passportId ?? ''} 重新签发了激活码</>;
             case 'passport-design-create':
                 return isEnglish
-                    ? <>created the {r.passportYear ?? ''} passport design {r.passportDesignName ?? ''}</>
-                    : <>创建了 {r.passportYear ?? ''} 年通行证设计 {r.passportDesignName ?? ''}</>;
+                    ? <>created the {r.passportYear ?? ''} passport design</>
+                    : <>创建了 {r.passportYear ?? ''} 年通行证设计</>;
             case 'passport-design-edit':
                 return isEnglish
                     ? <>edited the {r.passportYear ?? ''} passport design</>

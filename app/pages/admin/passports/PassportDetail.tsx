@@ -3,13 +3,12 @@ import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callReissuePassportKey, callVoidPassport, getFirebaseDb } from '~/lib/firebase';
 import {
-    designName,
     fetchPassport,
     fetchPassportClaims,
     fetchPassportScans,
     type Passport,
     type PassportClaimEvent,
-    type PassportDesign,
+    passportName,
     passportScanUrl,
     passportStatusLabel,
 } from '~/lib/passports';
@@ -26,9 +25,6 @@ interface PassportDetailProps {
     passportId: string;
     /** The row that was clicked, so the page can paint before the refetch lands. */
     initial: Passport | null;
-    /** All designs, so the page names the design of whatever it loads — a search
-     * hit can be from a year other than the one the dashboard has open. */
-    designs: PassportDesign[];
     onBack: () => void;
     onChanged: () => Promise<void>;
     onLookupUser: (uid: string) => void;
@@ -48,7 +44,6 @@ interface PassportDetailProps {
 export const PassportDetail = ({
                                    passportId,
                                    initial,
-                                   designs,
                                    onBack,
                                    onChanged,
                                    onLookupUser,
@@ -200,7 +195,6 @@ export const PassportDetail = ({
         );
     }
 
-    const design = designs.find(d => d.year === passport.year);
     const locked = !!passport.lockedUntil && passport.lockedUntil.getTime() > Date.now();
     const unclaimed = passport.status === 'unclaimed';
 
@@ -225,7 +219,7 @@ export const PassportDetail = ({
                     )}
                 </div>
                 <p className="admin-qr-detail-subtitle">
-                    {passport.year} · {designName(design, passport.year, isEnglish)}
+                    {passportName(passport.year, isEnglish)}
                 </p>
             </div>
 

@@ -212,7 +212,7 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
-        // One passport design per year (name, blurb, cover art). Publicly
+        // One passport design per year — cover art, and nothing else. Publicly
         // readable: a signed-out visitor scanning a sticker needs the artwork,
         // and it holds nothing that isn't already printed on the passport.
         match /passportDesigns/{year} {
