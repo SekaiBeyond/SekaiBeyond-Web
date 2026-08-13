@@ -472,6 +472,93 @@ export const callDeleteSocialPlatform = (data: {id: string}) =>
 export const callSeedSocialPlatforms = () =>
     httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
 
+// Physical passports. The plaintext activation keys come back from
+// callGeneratePassportBatch exactly once and are never re-servable — export the
+// CSV/ZIP before leaving the screen or the batch has to be re-keyed one passport
+// at a time with callReissuePassportKey.
+export const callGeneratePassportBatch = (data: {year: number; count: number}) =>
+    httpsCallable<typeof data, {
+        batchId: string;
+        year: number;
+        passports: Array<{passportId: string; activationCode: string}>;
+    }>(getFunctions(), 'generatePassportBatch')(data);
+
+export const callReissuePassportKey = (data: {passportId: string}) =>
+    httpsCallable<typeof data, {passportId: string; activationCode: string}>(
+        getFunctions(), 'reissuePassportKey')(data);
+
+export const callClaimPassport = (data: {passportId: string; activationCode: string}) =>
+    httpsCallable<typeof data, {
+        membershipExpiresAt: string;
+        daysGranted: number;
+        year: number;
+    }>(getFunctions(), 'claimPassport')(data);
+
+export interface PassportPublicBadge {
+    id: string;
+    name: string;
+    nameCn: string;
+    description: string;
+    descriptionCn: string;
+    imageUrl: string;
+    earnedAt: string | null;
+}
+
+// One scanned sticker, resolved for anyone — the only unauthenticated read of a
+// member's public data. It is keyed by the printed passport code, never by uid,
+// and no uid comes back: `isOwner` is decided server-side.
+export type PassportPublicProfile =
+    | {status: 'invalid'}
+    | {status: 'private'}
+    | {status: 'unclaimed'; year: number}
+    | {
+    status: 'claimed';
+    year: number;
+    claimedAt: string | null;
+    isOwner: boolean;
+    hidden: boolean;
+    /** Owner-only extras; null for every other visitor. */
+    scanCount: number | null;
+    membershipExpiresAt: string | null;
+    owner: {
+        displayName: string;
+        photoURL: string;
+        joinedAt: string | null;
+        group: string;
+        isMember: boolean;
+        title: string;
+        titleCn: string;
+        // Inlined because the badges collection needs auth to read, which a
+        // signed-out scanner does not have.
+        badges: PassportPublicBadge[];
+        attendedEvents: string[];
+        eventStaffEvents: string[];
+    };
+    /** The owner's collection, by year — no sibling passport ids. */
+    shelf: Array<{year: number; claimedAt: string | null}>;
+};
+
+export const callGetPassportPublicProfile = (data: {passportId: string}) =>
+    httpsCallable<typeof data, PassportPublicProfile>(getFunctions(), 'getPassportPublicProfile')(data);
+
+export const callVoidPassport = (data: {passportId: string}) =>
+    httpsCallable<typeof data, {passportId: string; status: 'void'}>(getFunctions(), 'voidPassport')(data);
+
+export const callSetPassportPrivacy = (data: {hide: boolean}) =>
+    httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);
+
+export const callSavePassportDesign = (data: {
+    year: number;
+    name: string;
+    nameCn: string;
+    description: string;
+    descriptionCn: string;
+    coverImageUrl: string;
+}) => httpsCallable<typeof data, {year: number}>(getFunctions(), 'savePassportDesign')(data);
+
+export const callDeletePassportDesign = (data: {year: number}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deletePassportDesign')(data);
+
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {
         displayName: string; photoURL: string; joinedAt: string;

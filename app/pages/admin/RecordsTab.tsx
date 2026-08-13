@@ -47,6 +47,8 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     location: ['venue-create', 'venue-edit', 'venue-delete',
         'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
         'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
+    passport: ['passport-batch-generate', 'passport-claim', 'passport-void', 'passport-key-reissue',
+        'passport-design-create', 'passport-design-edit', 'passport-design-delete'],
     qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
         'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
@@ -116,6 +118,11 @@ export const RecordsTab = ({
                 lotName: data.lotName,
                 rateLabel: data.rateLabel,
                 qrLabel: data.qrLabel,
+                passportId: data.passportId,
+                passportYear: data.passportYear,
+                passportCount: data.passportCount,
+                passportDesignName: data.passportDesignName,
+                batchId: data.batchId,
                 platformLabel: data.platformLabel,
                 conSection: data.conSection,
                 unlinkedFrom: data.unlinkedFrom,
@@ -710,6 +717,35 @@ export const RecordsTab = ({
                     ? <>revoked {target}'s event-staff access to {event}</>
                     : <>撤销了 {target} 对 {event} 的活动工作人员权限</>;
             }
+            case 'passport-batch-generate':
+                return isEnglish
+                    ? <>generated {r.passportCount ?? 0} {r.passportYear ?? ''} passports</>
+                    : <>生成了 {r.passportCount ?? 0} 本 {r.passportYear ?? ''} 年通行证</>;
+            case 'passport-claim':
+                return isEnglish
+                    ? <>activated passport {r.passportId ?? ''} (+{r.extendDays ?? 0} days,
+                        now {fmtExpiry(r.newExpiresAt)})</>
+                    : <>激活了通行证 {r.passportId ?? ''}（+{r.extendDays ?? 0} 天，现到期于 {fmtExpiry(r.newExpiresAt)}）</>;
+            case 'passport-void':
+                return isEnglish
+                    ? <>voided passport {r.passportId ?? ''}</>
+                    : <>作废了通行证 {r.passportId ?? ''}</>;
+            case 'passport-key-reissue':
+                return isEnglish
+                    ? <>issued a new activation key for passport {r.passportId ?? ''}</>
+                    : <>为通行证 {r.passportId ?? ''} 重新签发了激活码</>;
+            case 'passport-design-create':
+                return isEnglish
+                    ? <>created the {r.passportYear ?? ''} passport design {r.passportDesignName ?? ''}</>
+                    : <>创建了 {r.passportYear ?? ''} 年通行证设计 {r.passportDesignName ?? ''}</>;
+            case 'passport-design-edit':
+                return isEnglish
+                    ? <>edited the {r.passportYear ?? ''} passport design</>
+                    : <>编辑了 {r.passportYear ?? ''} 年通行证设计</>;
+            case 'passport-design-delete':
+                return isEnglish
+                    ? <>deleted the {r.passportYear ?? ''} passport design</>
+                    : <>删除了 {r.passportYear ?? ''} 年通行证设计</>;
             case 'qrcode-create':
                 return isEnglish
                     ? <>created QR code {r.qrLabel ?? ''}</>
@@ -834,6 +870,14 @@ export const RecordsTab = ({
             case 'parkingrate-edit':
             case 'parkingrate-delete':
                 return isEnglish ? 'Location' : '场地';
+            case 'passport-batch-generate':
+            case 'passport-claim':
+            case 'passport-void':
+            case 'passport-key-reissue':
+            case 'passport-design-create':
+            case 'passport-design-edit':
+            case 'passport-design-delete':
+                return isEnglish ? 'Passport' : '通行证';
             case 'qrcode-create':
             case 'qrcode-edit':
             case 'qrcode-delete':
@@ -881,6 +925,7 @@ export const RecordsTab = ({
                     <option value="ticket">{isEnglish ? 'Ticket' : '门票'}</option>
                     <option value="tag">{isEnglish ? 'Tag' : '标签'}</option>
                     <option value="location">{isEnglish ? 'Location' : '场地'}</option>
+                    <option value="passport">{isEnglish ? 'Passport' : '通行证'}</option>
                     <option value="qr">{isEnglish ? 'QR' : '二维码'}</option>
                     <option value="account">{isEnglish ? 'Account' : '账号'}</option>
                     <option value="config">{isEnglish ? 'Config' : '配置'}</option>

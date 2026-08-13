@@ -16,6 +16,7 @@ import { useTags } from '~/lib/tags';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { isValidHttpUrl } from '~/lib/urls';
+import { PassportShelfSection } from '~/pages/PassportShelfSection';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 import { validateImageFile } from "~/pages/admin/utils";
 import { ToastContainer, useToasts } from '~/lib/useToasts';
@@ -738,6 +739,11 @@ export const ProfilePage = () => {
                         </p>
                     </section>
                 )}
+
+                {/* Passports are the owner's own business: the shelf, the
+                    visibility switch, and the activation entry point all read
+                    from their profile, and getPublicProfile carries none of it. */}
+                {isOwnProfile && <PassportShelfSection showToast={showToast}/>}
 
                 {attendedEvents.length > 0 ? (
                     <section className="badge-section">

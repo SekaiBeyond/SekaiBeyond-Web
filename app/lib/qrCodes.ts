@@ -1,6 +1,5 @@
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
-import { getFirebaseDb } from './firebase';
 import { createCollectionCache } from './collectionCache';
+import { fetchScans, type ScanEvent } from './scans';
 
 export type QrExpirationMode = 'none' | 'event' | 'date';
 
@@ -108,23 +107,8 @@ export function qrIsActive(code: QrCode, eventEndAt: Date | null): boolean {
     return true;
 }
 
-/** One scan event for a code. */
-export interface QrScan {
-    at: Date;
-    /** Platform tag from the scan link's `p` param ('' for an untagged scan). */
-    platform: string;
-}
+/** One scan event for a code. Shared with passports — see {@link ScanEvent}. */
+export type QrScan = ScanEvent;
 
 /** Scan events (oldest first) for one code — backs the trend chart. */
-export async function fetchQrScans(id: string): Promise<QrScan[]> {
-    const db = getFirebaseDb();
-    const snap = await getDocs(query(
-        collection(db, 'qrCodes', id, 'scans'),
-        orderBy('scannedAt', 'asc'),
-    ));
-    return snap.docs.flatMap(d => {
-        const data = d.data();
-        const at = toDate(data.scannedAt);
-        return at ? [{at, platform: typeof data.platform === 'string' ? data.platform : ''}] : [];
-    });
-}
+export const fetchQrScans = (id: string): Promise<QrScan[]> => fetchScans('qrCodes', id);

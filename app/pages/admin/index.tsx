@@ -22,6 +22,7 @@ import { VenuesTab } from './VenuesTab';
 import { LocationsMap } from './LocationsMap';
 import { ParkingLotsTab } from './ParkingLotsTab';
 import { ParkingRatesTab } from './ParkingRatesTab';
+import { PassportsTab } from './passports/PassportsTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
@@ -123,7 +124,7 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(firstEventId);
             }
         } else if (isStaffGroup) {
-            if (tab === 'events' || tab === 'locations' || tab === 'tools' || tab === 'users' || tab === 'badges' || tab === 'records' || tab === 'config' || tab === 'con') {
+            if (tab === 'events' || tab === 'locations' || tab === 'tools' || tab === 'users' || tab === 'badges' || tab === 'passports' || tab === 'records' || tab === 'config' || tab === 'con') {
                 setActiveTab(tab);
             } else if (tab === 'venues' || tab === 'parking') {
                 setActiveTab('locations');
@@ -143,7 +144,7 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(event);
             }
         } else {
-            if (tab === 'events' || tab === 'locations' || tab === 'badges' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config' || tab === 'con') {
+            if (tab === 'events' || tab === 'locations' || tab === 'badges' || tab === 'passports' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config' || tab === 'con') {
                 setActiveTab(tab);
             } else if (tab === 'venues' || tab === 'parking') {
                 setActiveTab('locations');
@@ -352,6 +353,14 @@ export const AdminPage = () => {
                             onClick={() => setActiveTab('badges')}
                         >
                             {isEnglish ? 'Badges' : '徽章'}
+                        </button>
+                    )}
+                    {(isCoreStaffOrAbove || isStaffGroup) && (
+                        <button
+                            className={`admin-tab ${activeTab === 'passports' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('passports')}
+                        >
+                            {isEnglish ? 'Passports' : '通行证'}
                         </button>
                     )}
                     {(isCoreStaffOrAbove || isStaffGroup) && (
@@ -581,6 +590,14 @@ export const AdminPage = () => {
                             readOnly={isStaffGroup}
                         />
                     )
+                )}
+
+                {activeTab === 'passports' && (isCoreStaffOrAbove || isStaffGroup) && (
+                    <PassportsTab
+                        onLookupUser={handleLookupUser}
+                        showToast={showToast}
+                        readOnly={isStaffGroup}
+                    />
                 )}
 
                 {activeTab === 'records' && (isCoreStaffOrAbove || isStaffGroup) && (

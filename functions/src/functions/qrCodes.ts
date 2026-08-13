@@ -1,7 +1,7 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
-import { qrScanExpiresAt, recordExpiresAt } from "../utils/config";
+import { scanExpiresAt, recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import {
@@ -296,7 +296,7 @@ async function commitScanTally(ref: FirebaseFirestore.DocumentReference, platfor
     batch.set(ref.collection("scans").doc(), {
         scannedAt: FieldValue.serverTimestamp(),
         platform,
-        expiresAt: qrScanExpiresAt(),
+        expiresAt: scanExpiresAt(),
     });
     await batch.commit();
 }

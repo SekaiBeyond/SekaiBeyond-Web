@@ -4316,3 +4316,227 @@ select.admin-tickets-tag:focus {
     color: var(--color-error) !important;
     font-weight: 600;
 }
+
+/* ==========================================================================
+   Passports tab
+
+   Reuses the QR tool's detail chrome (admin-qr-paper, admin-qr-detail-*,
+   admin-stats-tile) — these are the pieces a passport needs that a QR code
+   doesn't: batch grouping, the one-time key table, and the audit trail.
+   ========================================================================== */
+
+.admin-passport-batches {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.admin-passport-batch {
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
+}
+
+.admin-passport-batch-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.admin-passport-batch-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--color-text);
+}
+
+.admin-passport-batch-counts {
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+/* Every code in a batch, dense enough to scan a few hundred at a glance. */
+.admin-passport-codes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.admin-passport-code {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+}
+
+.admin-passport-code--unclaimed {
+    background: rgba(122, 129, 144, 0.1);
+    color: var(--color-text-muted);
+}
+
+.admin-passport-code--claimed {
+    background: rgba(78, 203, 113, 0.16);
+    color: #2f9e57;
+}
+
+.admin-passport-code--void {
+    background: rgba(224, 85, 85, 0.12);
+    color: var(--color-error);
+    text-decoration: line-through;
+}
+
+.admin-passport-code:hover {
+    border-color: var(--color-primary);
+}
+
+/* Status badge colors, matched to the code chips above. */
+.admin-passport-badge--unclaimed {
+    background: rgba(122, 129, 144, 0.12);
+    color: var(--color-text-muted);
+}
+
+.admin-passport-badge--claimed {
+    background: rgba(78, 203, 113, 0.16);
+    color: #2f9e57;
+}
+
+.admin-passport-badge--void {
+    background: rgba(224, 85, 85, 0.14);
+    color: var(--color-error);
+}
+
+.admin-passport-results {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* Generation warnings. The urgent variant is for the one screen where losing
+   the page loses data that cannot be recovered. */
+.admin-passport-warning {
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    border-radius: 14px;
+    background: rgba(254, 202, 87, 0.14);
+    border: 1px solid rgba(254, 202, 87, 0.5);
+    color: #8a6400;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.admin-passport-warning strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.admin-passport-warning--urgent {
+    background: rgba(224, 85, 85, 0.1);
+    border-color: rgba(224, 85, 85, 0.45);
+    color: #a13232;
+}
+
+/* The activation keys, shown exactly once. */
+.admin-passport-key-table {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 107, 157, 0.16);
+    border-radius: 14px;
+    overflow: hidden;
+    background: white;
+}
+
+.admin-passport-key-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 8px 14px;
+    border-top: 1px solid rgba(74, 81, 96, 0.08);
+}
+
+.admin-passport-key-row:first-child {
+    border-top: none;
+}
+
+.admin-passport-key-code,
+.admin-passport-key-secret {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+}
+
+.admin-passport-key-code {
+    min-width: 130px;
+    color: var(--color-text-muted);
+}
+
+.admin-passport-key-secret {
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+/* The printed code as it appears under the QR on the sticker PNG. */
+.admin-passport-sticker-code {
+    margin-top: 6px;
+    text-align: center;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: #000;
+}
+
+.admin-passport-history {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-passport-history-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.1);
+    border-radius: 10px;
+}
+
+.admin-passport-history-text {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    color: var(--color-text);
+}
+
+.admin-passport-action--claim {
+    background: rgba(78, 203, 113, 0.16);
+    color: #2f9e57;
+}
+
+.admin-passport-action--void {
+    background: rgba(224, 85, 85, 0.14);
+    color: var(--color-error);
+}
+
+.admin-passport-action--key-reissue {
+    background: rgba(108, 99, 255, 0.14);
+    color: var(--color-link);
+}
+
+.admin-passport-design-cover {
+    width: 100%;
+    max-width: 180px;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 8px;
+}

@@ -8,6 +8,7 @@ service firebase.storage {
         match /badges/{allPaths=**} { allow read: if true; }
         match /config/{allPaths=**} { allow read: if true; }
         match /team/{allPaths=**} { allow read: if true; }
+        match /passports/{allPaths=**} { allow read: if true; }
 
         // Deny everything else
         match /{allPaths=**} {
