@@ -6,14 +6,23 @@
     letter-spacing: 1px;
 }
 
+/* Wider than a profile page: the nine tabs need ~1100px to sit on one row,
+   and the tables and card grids below them are happier with the extra room. */
+.admin-page {
+    max-width: 1200px;
+}
+
 .admin-tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-top: 24px;
     margin-bottom: 24px;
 }
 
 .admin-tab {
+    /* Below the row's full width the tabs wrap rather than squeeze their labels. */
+    flex: 0 0 auto;
     padding: 10px 24px;
     border: var(--admin-field-border);
     border-radius: 20px;

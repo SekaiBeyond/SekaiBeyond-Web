@@ -323,7 +323,7 @@ export const AdminPage = () => {
                     <LoginButton/>
                 </div>
             </nav>
-            <div className="profile-page">
+            <div className="profile-page admin-page">
                 <div className="admin-tabs">
                     {(isCoreStaffOrAbove || isStaffGroup) && (
                         <button
