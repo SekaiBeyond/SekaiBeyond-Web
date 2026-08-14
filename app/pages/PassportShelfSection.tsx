@@ -12,7 +12,7 @@ import {
     usePassportDesigns,
     usePassportPrivacy,
 } from '~/lib/passports';
-import type { ShowToast } from '~/pages/admin/utils';
+import type { ShowToast } from '~/lib/useToasts';
 
 /**
  * One passport on a shelf: its year's cover art, its name, and whatever the

@@ -1,16 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, } from 'recharts';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ScanEvent } from '~/lib/scans';
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import { advance, bucketStart, formatBucketLabel, granularityForSpan } from './timeBuckets';
-
-/**
- * The scan history of anything scannable. QR codes and passports write the same
- * {@link ScanEvent} shape, so this lives beside the admin panel rather than
- * inside either feature's folder — the platform series below is simply empty for
- * a subject that doesn't tag its scans.
- */
 
 // Fixed palette for platform series, assigned in platform order and never
 // cycled. Validated for adjacent-pair colorblind separation on the app's white
@@ -122,12 +115,20 @@ export function ScanTrendsSection({id, fetchScans, platforms}: {
     const [scans, setScans] = useState<ScanEvent[] | null>(null);
     const [failed, setFailed] = useState(false);
 
+    // Refresh is a button as well as an effect, so a second load has to be able
+    // to overtake the first rather than race it: only the newest one may answer.
+    const token = useRef(0);
     const load = useCallback(() => {
+        const mine = ++token.current;
         setFailed(false);
         setScans(null);
         fetchScans(id)
-            .then(setScans)
-            .catch(() => setFailed(true));
+            .then(list => {
+                if (mine === token.current) setScans(list);
+            })
+            .catch(() => {
+                if (mine === token.current) setFailed(true);
+            });
     }, [id, fetchScans]);
     useEffect(load, [load]);
 
@@ -156,6 +157,12 @@ interface ScanTrendsProps {
     platforms?: string[];
 }
 
+/**
+ * The scan history of anything scannable. QR codes and passports write the same
+ * {@link ScanEvent} shape, so this lives beside the admin panel rather than
+ * inside either feature's folder — the platform series below is simply empty for
+ * a subject that doesn't tag its scans.
+ */
 export function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
     const {isEnglish} = useLanguage();
     const {platforms: platformDefs} = useSocialPlatforms();

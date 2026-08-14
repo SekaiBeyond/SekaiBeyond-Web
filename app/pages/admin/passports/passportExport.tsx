@@ -1,8 +1,7 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { type ReactNode } from 'react';
 import { passportScanUrl } from '~/lib/passports';
 import { buildZip, downloadBlob, type ZipEntry } from '~/lib/zip';
-import { QR_LEVEL, QR_MARGIN } from '../tools/qr/qrExport';
+import { canvasToPng, useQrCanvasBatch } from '../tools/qr/qrExport';
 
 /**
  * Print-shop exports for a batch of passports: the CSV pairing each sticker with
@@ -12,6 +11,12 @@ import { QR_LEVEL, QR_MARGIN } from '../tools/qr/qrExport';
  * that gets scuffed past scanning can still be typed into /p/<code> by hand.
  */
 
+/**
+ * Half the QR tool's export size, deliberately. A sticker is printed at a couple
+ * of centimetres, a batch is up to 200 of them in one ZIP, and this is also the
+ * width {@link LABEL_HEIGHT} is proportioned against — so it is the resolution
+ * the sticker layout is defined at, not just a buffer size.
+ */
 const QR_SIZE = 512;
 const LABEL_HEIGHT = 96;
 
@@ -37,131 +42,46 @@ async function composePassportPng(source: HTMLCanvasElement, passportId: string)
     ctx.letterSpacing = '0.12em';
     ctx.fillText(passportId, canvas.width / 2, source.height + labelArea * 0.44);
 
-    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(b => resolve(b), 'image/png'));
-    if (!blob) throw new Error('encode-failed');
-    return new Uint8Array(await blob.arrayBuffer());
-}
-
-interface PassportPngBatchProps {
-    ids: string[];
-    origin: string;
-    onProgress: (done: number) => void;
-    onDone: (files: ZipEntry[]) => void;
-    onError: () => void;
-}
-
-/**
- * Renders the batch's QRs one at a time, reading each canvas back as a composed
- * PNG before mounting the next. Hundreds of {@link QR_SIZE}px canvases held at
- * once would be hundreds of megabytes; this keeps exactly one alive.
- *
- * qrcode.react draws in its own effect, and a descendant's effect runs before
- * this component's, so the canvas is always painted before it is read (the same
- * ordering useQrDownload relies on).
- */
-const PassportPngBatch = ({ids, origin, onProgress, onDone, onError}: PassportPngBatchProps) => {
-    const wrapRef = useRef<HTMLDivElement>(null);
-    const filesRef = useRef<ZipEntry[]>([]);
-    const [index, setIndex] = useState(0);
-
-    useEffect(() => {
-        if (index >= ids.length) {
-            onDone(filesRef.current);
-            return;
-        }
-        const canvas = wrapRef.current?.querySelector('canvas');
-        if (!canvas) {
-            onError();
-            return;
-        }
-        let cancelled = false;
-        composePassportPng(canvas, ids[index])
-            .then(data => {
-                if (cancelled) return;
-                filesRef.current.push({name: `passport-${ids[index]}.png`, data});
-                onProgress(index + 1);
-                setIndex(i => i + 1);
-            })
-            .catch(() => {
-                if (!cancelled) onError();
-            });
-        return () => {
-            cancelled = true;
-        };
-        // Deliberately keyed on the cursor alone: the callbacks are stable for one
-        // export, and re-running per identity change would double-render a QR.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [index]);
-
-    if (index >= ids.length) return null;
-
-    return (
-        <div
-            ref={wrapRef}
-            aria-hidden
-            style={{position: 'absolute', width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none'}}
-        >
-            <QRCodeCanvas
-                value={passportScanUrl(ids[index], origin)}
-                size={QR_SIZE}
-                level={QR_LEVEL}
-                marginSize={QR_MARGIN}
-            />
-        </div>
-    );
-};
-
-interface ExportRequest {
-    ids: string[];
-    /** A single id downloads as one PNG; anything longer is zipped. */
-    filename: string;
+    return new Uint8Array(await (await canvasToPng(canvas)).arrayBuffer());
 }
 
 /**
  * Sticker-PNG export. Render {@link node} in the tree, call {@link request} with
  * the ids to export, and watch {@link progress} for a long batch.
+ *
+ * A single id downloads as one PNG; anything longer is zipped. The off-screen
+ * rendering and its one-canvas-at-a-time discipline belong to
+ * {@link useQrCanvasBatch}; what is passport-specific is only the sticker
+ * composition and how the results are packaged.
  */
 export const usePassportPngExport = (onFailure: () => void): {
     request: (ids: string[], filename: string) => void;
     progress: {done: number; total: number} | null;
     node: ReactNode;
 } => {
-    const [pending, setPending] = useState<ExportRequest | null>(null);
-    const [done, setDone] = useState(0);
-
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
-    const finish = (files: ZipEntry[]) => {
-        if (files.length === 1) {
-            downloadBlob(new Blob([files[0].data], {type: 'image/png'}), files[0].name);
-        } else if (files.length > 1) {
-            downloadBlob(buildZip(files), `${pending?.filename ?? 'passports'}.zip`);
-        }
-        setPending(null);
-        setDone(0);
-    };
+    const {request, done, total, node} = useQrCanvasBatch<string, ZipEntry>({
+        size: QR_SIZE,
+        value: id => passportScanUrl(id, origin),
+        onCanvas: async (canvas, id) => ({
+            name: `passport-${id}.png`,
+            data: await composePassportPng(canvas, id),
+        }),
+        onFinish: (files, filename) => {
+            if (files.length === 1) {
+                downloadBlob(new Blob([files[0].data], {type: 'image/png'}), files[0].name);
+            } else if (files.length > 1) {
+                downloadBlob(buildZip(files), `${filename}.zip`);
+            }
+        },
+        onFailure,
+    });
 
     return {
-        request: (ids, filename) => {
-            if (ids.length === 0) return;
-            setDone(0);
-            setPending({ids, filename});
-        },
-        progress: pending ? {done, total: pending.ids.length} : null,
-        node: pending ? (
-            <PassportPngBatch
-                key={pending.filename}
-                ids={pending.ids}
-                origin={origin}
-                onProgress={setDone}
-                onDone={finish}
-                onError={() => {
-                    setPending(null);
-                    setDone(0);
-                    onFailure();
-                }}
-            />
-        ) : null,
+        request,
+        progress: total > 0 ? {done, total} : null,
+        node,
     };
 };
 
