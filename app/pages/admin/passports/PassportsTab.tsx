@@ -48,9 +48,12 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
     const [loadError, setLoadError] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
-    // Default to the newest design, and follow it if the design list arrives late.
+    // Default to the newest design, follow it if the design list arrives late, and
+    // fall back to it if the selected year's design is deleted — the `<select>`
+    // would otherwise paint an option the stats and exports below disagree with.
     useEffect(() => {
-        if (year === null && designs.length > 0) setYear(designs[0].year);
+        if (designs.length === 0) return;
+        if (year === null || !designs.some(d => d.year === year)) setYear(designs[0].year);
     }, [designs, year]);
 
     const loadYear = useCallback(async (target: number) => {

@@ -43,17 +43,30 @@ export const PassportDesignsSection = ({
     const [editingYear, setEditingYear] = useState<number | null>(null);
     const [deletingYear, setDeletingYear] = useState<number | null>(null);
 
-    const resetDraft = () => {
-        setDraft(emptyDraft(new Date().getFullYear()));
+    // ImageUploadField only revokes when a *replacement* file is picked, so
+    // whoever drops the preview owns the object URL — as every other tab's reset
+    // does. Picking an image and cancelling would otherwise leak it, and its
+    // decoded bitmap, for the life of the document.
+    const clearCover = () => {
+        if (coverPreview?.startsWith('blob:')) URL.revokeObjectURL(coverPreview);
         setCoverFile(null);
         setCoverPreview(null);
     };
 
+    const resetDraft = () => {
+        setDraft(emptyDraft(new Date().getFullYear()));
+        clearCover();
+    };
+
     // The art is the design, so there is nothing to save without it.
     const hasCover = !!coverFile || !!draft.coverImageUrl;
+    // A design is keyed on its year and saved with a merge, so creating one for a
+    // year that already has a design would silently replace the cover art every
+    // printed passport of that year points at.
+    const yearTaken = designs.some(d => d.year === draft.year);
 
     const save = async (isNew: boolean) => {
-        if (!hasCover) return;
+        if (!hasCover || (isNew && yearTaken)) return;
         setSaving(true);
         try {
             let coverImageUrl = draft.coverImageUrl;
@@ -108,6 +121,13 @@ export const PassportDesignsSection = ({
                         value={draft.year}
                         onChange={e => setDraft(d => ({...d, year: Number(e.target.value) || d.year}))}
                     />
+                    {yearTaken && (
+                        <span className="admin-helper-text admin-field-hint">
+                            {isEnglish
+                                ? `${draft.year} already has a design. Edit it below to change its art.`
+                                : `${draft.year} 年已有设计。如需更换封面，请在下方编辑。`}
+                        </span>
+                    )}
                 </label>
             )}
             <div className="admin-form-grid-full">
@@ -151,7 +171,7 @@ export const PassportDesignsSection = ({
                     ctaLabel={isEnglish ? 'Create Design' : '创建设计'}
                     ctaBusyLabel={isEnglish ? 'Saving...' : '保存中...'}
                     busy={saving}
-                    ctaDisabled={!hasCover}
+                    ctaDisabled={!hasCover || yearTaken}
                     onCreate={() => void save(true)}
                     onCancel={resetDraft}
                 >
@@ -196,8 +216,7 @@ export const PassportDesignsSection = ({
                                             <CardEditDeleteActions
                                                 onEdit={() => {
                                                     setShowCreate(false);
-                                                    setCoverFile(null);
-                                                    setCoverPreview(null);
+                                                    clearCover();
                                                     setDraft({...design});
                                                     setEditingYear(design.year);
                                                 }}

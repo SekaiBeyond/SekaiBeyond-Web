@@ -44,7 +44,8 @@ export const PassportPage = () => {
     const [result, setResult] = useState<PassportPublicProfile | null>(null);
     const [failed, setFailed] = useState(false);
     // Bumped to re-resolve the sticker (after activating, or after the owner
-    // flips visibility) — each resolve is a scan, so it is never automatic.
+    // flips visibility). Both bumps come from the owner, whose resolves the
+    // server declines to tally — so re-resolving never inflates the scan count.
     const [nonce, setNonce] = useState(0);
 
     useEffect(() => {
@@ -345,6 +346,12 @@ function activationError(err: unknown, isEnglish: boolean): string {
             return isEnglish
                 ? 'This passport code is not valid.'
                 : '此通行证编号无效。';
+        case 'no-profile':
+            // The sticker is fine — point at the account rather than sending the
+            // holder off to retype a code that was never wrong.
+            return isEnglish
+                ? 'Your account isn’t set up yet. Please sign out and back in, then try again.'
+                : '您的账号尚未完成设置。请退出登录后重新登录，然后再试。';
         case 'rate-limited':
             return isEnglish
                 ? 'Too many requests. Please wait a moment and try again.'
@@ -480,7 +487,7 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
                                     key={`${entry.year}-${entry.claimedAt ?? i}`}
                                     year={entry.year}
                                     date={fmtDate(entry.claimedAt)}
-                                    current={entry.year === data.year}
+                                    current={entry.isCurrent}
                                 />
                             ))}
                         </div>

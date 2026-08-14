@@ -92,8 +92,12 @@ export type PassportPublicProfile =
         attendedEvents: string[];
         eventStaffEvents: string[];
     };
-    /** The owner's collection, by year — no sibling passport ids. */
-    shelf: Array<{year: number; claimedAt: string | null}>;
+    /**
+     * The owner's collection, by year — no sibling passport ids. `isCurrent`
+     * marks the scanned one, resolved server-side because the year alone can't
+     * tell two passports of the same year apart.
+     */
+    shelf: Array<{year: number; claimedAt: string | null; isCurrent: boolean}>;
 };
 
 /** An entry in a passport's permanent audit trail. */

@@ -195,6 +195,7 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
  * failed-attempt counter is committed rather than rolled back with it. */
 type ClaimFailure =
     | {code: "invalid"}
+    | {code: "no-profile"}
     | {code: "void"}
     | {code: "already-claimed"}
     | {code: "no-key"}
@@ -241,7 +242,11 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
             return {ok: false, failure: {code: "locked", retryAfterMs: lockedUntilMillis(passport) - Date.now()}};
         }
         if (!secretSnap.exists) return {ok: false, failure: {code: "no-key"}};
-        if (!userSnap.exists) return {ok: false, failure: {code: "invalid"}};
+        // Distinct from "invalid": the sticker is fine, the account is the problem
+        // (profile creation failed on first sign-in, or the doc was deleted under
+        // an open tab). Answering "invalid" here sends the holder off to retype a
+        // code that was never wrong.
+        if (!userSnap.exists) return {ok: false, failure: {code: "no-profile"}};
 
         if (!activationKeyMatches(activationCode, secretSnap.data()!)) {
             const attempts = (typeof passport.failedAttempts === "number" ? passport.failedAttempts : 0) + 1;
@@ -314,6 +319,12 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
     switch (failure.code) {
         case "invalid":
             throw new HttpsError("not-found", "This passport code is not valid.", failure);
+        case "no-profile":
+            throw new HttpsError(
+                "failed-precondition",
+                "Your account isn't set up yet. Sign out and back in, then try again.",
+                failure,
+            );
         case "void":
             throw new HttpsError("failed-precondition", "This passport has been voided.", failure);
         case "already-claimed":
@@ -407,10 +418,13 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
     const [badges, pastEvents, shelf] = await Promise.all([
         resolveBadges(owner),
         pastEventIds(attended, staffed),
-        resolveShelf(ownerUid),
+        resolveShelf(ownerUid, passportId),
     ]);
 
-    await tallyScan(passportRef);
+    // The owner's own visits aren't scans. The page re-resolves whenever they
+    // activate or flip visibility, and counting those would report a handful of
+    // scans on a sticker nobody else has ever seen.
+    if (!isOwner) await tallyScan(passportRef);
 
     return {
         status: "claimed" as const,
@@ -480,18 +494,26 @@ async function resolveBadges(owner: FirebaseFirestore.DocumentData): Promise<Pub
  * out: each one is a URL to this same page, and a visitor holding one sticker
  * has no reason to be handed the rest. The client joins these against the
  * publicly readable passportDesigns for the artwork.
+ *
+ * Which card is the scanned one is resolved here, against the document id,
+ * rather than left to the client to infer from the year — an owner who holds two
+ * passports of the same year would otherwise see both marked current.
  */
-async function resolveShelf(ownerUid: string): Promise<{year: number; claimedAt: string | null}[]> {
+async function resolveShelf(
+    ownerUid: string,
+    scannedId: string,
+): Promise<{year: number; claimedAt: string | null; isCurrent: boolean}[]> {
     const snap = await db.collection(PASSPORTS)
         .where("ownerUid", "==", ownerUid)
         .limit(MAX_SHELF)
         .get();
     return snap.docs
-        .map(d => d.data())
-        .filter(d => d.status === "claimed")
-        .map(d => ({
-            year: typeof d.year === "number" ? d.year : 0,
-            claimedAt: (d.claimedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
+        .map(doc => ({id: doc.id, data: doc.data()}))
+        .filter(({data}) => data.status === "claimed")
+        .map(({id, data}) => ({
+            year: typeof data.year === "number" ? data.year : 0,
+            claimedAt: (data.claimedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
+            isCurrent: id === scannedId,
         }))
         .sort((a, b) => b.year - a.year);
 }

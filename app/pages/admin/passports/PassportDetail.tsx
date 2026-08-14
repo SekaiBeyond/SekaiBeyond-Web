@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callReissuePassportKey, callVoidPassport, getFirebaseDb } from '~/lib/firebase';
@@ -55,6 +55,7 @@ export const PassportDetail = ({
     const {isEnglish} = useLanguage();
     const [passport, setPassport] = useState<Passport | null>(initial);
     const [missing, setMissing] = useState(false);
+    const [loadFailed, setLoadFailed] = useState(false);
     const [owner, setOwner] = useState<UserRecord | null>(null);
     const [ownerMissing, setOwnerMissing] = useState(false);
     const [claims, setClaims] = useState<PassportClaimEvent[] | null>(null);
@@ -68,33 +69,37 @@ export const PassportDetail = ({
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const scanValue = passportScanUrl(passportId, origin);
 
+    // Absent and unreadable are different answers: "not found" is only ever shown
+    // for a passport the server confirmed isn't there, never for a failed read.
     const reload = useCallback(async () => {
         const fresh = await fetchPassport(passportId);
         setPassport(fresh);
         setMissing(fresh === null);
+        setLoadFailed(false);
         return fresh;
     }, [passportId]);
 
     useEffect(() => {
-        void reload().catch(() => setMissing(true));
+        void reload().catch(() => setLoadFailed(true));
     }, [reload]);
 
     // Staff (read-only) can't read the claims subcollection — core-staff+ only —
-    // so the request isn't made rather than failing visibly.
-    useEffect(() => {
+    // so the request isn't made rather than failing visibly. Void and reissue
+    // both write to this trail, and call it again once they land.
+    const claimsToken = useRef(0);
+    const loadClaims = useCallback(() => {
         if (readOnly) return;
-        let stale = false;
+        const token = ++claimsToken.current;
         fetchPassportClaims(passportId)
             .then(list => {
-                if (!stale) setClaims(list);
+                if (token === claimsToken.current) setClaims(list);
             })
             .catch(() => {
-                if (!stale) setClaims([]);
+                if (token === claimsToken.current) setClaims([]);
             });
-        return () => {
-            stale = true;
-        };
     }, [passportId, readOnly]);
+
+    useEffect(loadClaims, [loadClaims]);
 
     const ownerUid = passport?.ownerUid ?? null;
     useEffect(() => {
@@ -118,6 +123,22 @@ export const PassportDetail = ({
         };
     }, [ownerUid]);
 
+    /**
+     * What void and reissue both leave behind: a changed passport the list is
+     * still holding the old copy of, and a new entry in the audit trail the
+     * History section exists to show. Failing here is a stale screen, never a
+     * failed action — the write it follows has already committed.
+     */
+    const refreshAfterWrite = async () => {
+        try {
+            const fresh = await reload();
+            if (fresh) onChanged(fresh);
+        } catch {
+            setLoadFailed(true);
+        }
+        loadClaims();
+    };
+
     const fmtDate = (date: Date | null): string =>
         passportDateTime(date, isEnglish, isEnglish ? 'Never' : '从未');
 
@@ -134,14 +155,17 @@ export const PassportDetail = ({
         setBusy(true);
         try {
             await callVoidPassport({passportId});
-            const fresh = await reload();
-            if (fresh) onChanged(fresh);
-            showToast(isEnglish ? 'Passport voided.' : '通行证已作废。', 'warning');
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to void passport.' : '作废通行证失败。'), 'error');
-        } finally {
             setBusy(false);
+            return;
         }
+        // The void has landed. Refreshing what it changed is a separate concern —
+        // a blip here must not report the action itself as failed, or the admin
+        // retries and is told the passport is already void.
+        showToast(isEnglish ? 'Passport voided.' : '通行证已作废。', 'warning');
+        await refreshAfterWrite();
+        setBusy(false);
     };
 
     const reissueKey = async () => {
@@ -152,16 +176,19 @@ export const PassportDetail = ({
         try {
             const res = await callReissuePassportKey({passportId});
             setReissuedKey(res.data.activationCode);
-            await reload();
-            showToast(isEnglish ? 'New activation key issued.' : '已签发新的激活码。', 'success');
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to reissue the key.' : '重新签发激活码失败。'), 'error');
-        } finally {
             setBusy(false);
+            return;
         }
+        showToast(isEnglish ? 'New activation key issued.' : '已签发新的激活码。', 'success');
+        await refreshAfterWrite();
+        setBusy(false);
     };
 
-    if (missing) {
+    // "Not found" is reserved for a read that came back empty. A read that never
+    // came back says so instead, so a network blip can't retire a live passport.
+    if (missing || (loadFailed && !passport)) {
         return (
             <div className="admin-section">
                 <div className="admin-tools-back-row">
@@ -169,7 +196,11 @@ export const PassportDetail = ({
                         {isEnglish ? '← Back to Passports' : '← 返回通行证'}
                     </button>
                 </div>
-                <p className="admin-no-results">{isEnglish ? 'Passport not found.' : '未找到通行证。'}</p>
+                <p className="admin-no-results">
+                    {missing
+                        ? (isEnglish ? 'Passport not found.' : '未找到通行证。')
+                        : (isEnglish ? 'Failed to load this passport.' : '加载此通行证失败。')}
+                </p>
             </div>
         );
     }
@@ -208,6 +239,13 @@ export const PassportDetail = ({
                 <p className="admin-qr-detail-subtitle">
                     {passportName(passport.year, isEnglish)}
                 </p>
+                {loadFailed && (
+                    <p className="admin-helper-text admin-field-hint">
+                        {isEnglish
+                            ? 'Couldn’t refresh — the details below may be out of date.'
+                            : '刷新失败 — 以下信息可能不是最新的。'}
+                    </p>
+                )}
             </div>
 
             <div className="admin-qr-detail-top">
