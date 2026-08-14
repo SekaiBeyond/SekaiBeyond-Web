@@ -10,7 +10,7 @@
     "typecheck": "react-router typegen && tsc",
     "deploy": "npm run build && npm run update-csp-hashes && firebase deploy --config firebase.generated.json",
     "deploy:rules": "npm --prefix functions run build && firebase deploy --only functions,firestore,storage",
-    "deploy:ttl": "for pair in rateLimits:expiresAt records:expiresAt users:deleteAt pastEvents:deleteAt upcomingEvents:deleteAt badges:deleteAt claimCodes:expiresAt badgeActivationCodes:expiresAt scans:expiresAt; do gcloud firestore fields ttls update ${pair#*:} --collection-group=${pair%:*} --enable-ttl --async --quiet || exit 1; done"
+    "deploy:ttl": "for pair in rateLimits:expiresAt records:expiresAt users:deleteAt pastEvents:deleteAt upcomingEvents:deleteAt badges:deleteAt claimCodes:expiresAt badgeActivationCodes:expiresAt scans:expiresAt scanQuota:expiresAt; do gcloud firestore fields ttls update ${pair#*:} --collection-group=${pair%:*} --enable-ttl --async --quiet || exit 1; done"
   },
   "dependencies": {
     "@react-router/node": "^8.2.0",

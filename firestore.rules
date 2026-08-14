@@ -91,6 +91,14 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
+        // How many scans one client has already added to one scannable thing in
+        // the current window, so a looped public scan endpoint can't run a
+        // counter up forever. Server-only, and the ids are salted hashes — there
+        // is nothing here to read even for a president.
+        match /scanQuota/{slot} {
+            allow read, write: if false;
+        }
+
         // Scheduled-mail overflow queue — core-staff+ can read for visibility;
         // writes via Cloud Functions only. Drained at 00:05 LA by the
         // scheduledMailDrain function.
