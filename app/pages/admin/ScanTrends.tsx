@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, } from 'recharts';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import type { ScanEvent } from '~/lib/scans';
+import { SCAN_FETCH_LIMIT, type ScanEvent, type ScanHistory } from '~/lib/scans';
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import { advance, bucketStart, formatBucketLabel, granularityForSpan } from './timeBuckets';
 
@@ -108,11 +108,11 @@ function buildSeries(scans: ScanEvent[], seriesKeys: string[], isEnglish: boolea
  */
 export function ScanTrendsSection({id, fetchScans, platforms}: {
     id: string;
-    fetchScans: (id: string) => Promise<ScanEvent[]>;
+    fetchScans: (id: string) => Promise<ScanHistory>;
     platforms?: string[];
 }) {
     const {isEnglish} = useLanguage();
-    const [scans, setScans] = useState<ScanEvent[] | null>(null);
+    const [history, setHistory] = useState<ScanHistory | null>(null);
     const [failed, setFailed] = useState(false);
 
     // Refresh is a button as well as an effect, so a second load has to be able
@@ -121,10 +121,10 @@ export function ScanTrendsSection({id, fetchScans, platforms}: {
     const load = useCallback(() => {
         const mine = ++token.current;
         setFailed(false);
-        setScans(null);
+        setHistory(null);
         fetchScans(id)
-            .then(list => {
-                if (mine === token.current) setScans(list);
+            .then(result => {
+                if (mine === token.current) setHistory(result);
             })
             .catch(() => {
                 if (mine === token.current) setFailed(true);
@@ -142,10 +142,19 @@ export function ScanTrendsSection({id, fetchScans, platforms}: {
             </div>
             {failed ? (
                 <p className="admin-no-results">{isEnglish ? 'Failed to load scans.' : '加载扫描记录失败。'}</p>
-            ) : scans === null ? (
+            ) : history === null ? (
                 <div className="spinner spinner-centered"/>
             ) : (
-                <ScanTrends key={id} scans={scans} platforms={platforms}/>
+                <>
+                    {history.truncated && (
+                        <p className="admin-helper-text admin-field-hint">
+                            {isEnglish
+                                ? `Showing the most recent ${SCAN_FETCH_LIMIT.toLocaleString()} scans — this code has more than the chart reads.`
+                                : `仅显示最近 ${SCAN_FETCH_LIMIT.toLocaleString()} 次扫描 — 此码的记录多于图表读取的数量。`}
+                        </p>
+                    )}
+                    <ScanTrends key={id} scans={history.events} platforms={platforms}/>
+                </>
             )}
         </div>
     );

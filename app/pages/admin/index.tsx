@@ -4,6 +4,7 @@ import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
+import { confirmExit } from '~/lib/useExitGuard';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents, useUpcomingEventsByIds } from '~/lib/upcomingEvents';
@@ -61,7 +62,13 @@ export const AdminPage = () => {
     const upcomingEvents = (isCoreStaffOrAbove || isStaffGroup) ? allUpcomingEvents : staffUpcomingEvents;
     const refreshUpcoming = (isCoreStaffOrAbove || isStaffGroup) ? refreshAllUpcoming : refreshStaffUpcoming;
 
-    const [activeTab, setActiveTab] = useState<Tab>('users');
+    const [activeTab, selectTab] = useState<Tab>('users');
+    // Switching tabs unmounts the whole tab, so it is a way out of any screen
+    // holding state that can't be recovered — the batch generator's activation
+    // keys, above all. Every caller goes through the guard by construction.
+    const setActiveTab = (tab: Tab) => {
+        if (confirmExit()) selectTab(tab);
+    };
     const [upcomingInDetail, setUpcomingInDetail] = useState(false);
     const [eventsInDetail, setEventsInDetail] = useState(false);
     const [upcomingOpen, setUpcomingOpen] = useState(true);

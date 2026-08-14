@@ -1,5 +1,5 @@
 import { createCollectionCache, toDate } from './collectionCache';
-import { fetchScans, type ScanEvent } from './scans';
+import { fetchScans, type ScanHistory } from './scans';
 
 export type QrExpirationMode = 'none' | 'event' | 'date';
 
@@ -102,5 +102,5 @@ export function qrIsActive(code: QrCode, eventEndAt: Date | null): boolean {
     return true;
 }
 
-/** Scan events (oldest first) for one code — backs the trend chart. */
-export const fetchQrScans = (id: string): Promise<ScanEvent[]> => fetchScans('qrCodes', id);
+/** Scan history for one code — backs the trend chart. */
+export const fetchQrScans = (id: string): Promise<ScanHistory> => fetchScans('qrCodes', id);

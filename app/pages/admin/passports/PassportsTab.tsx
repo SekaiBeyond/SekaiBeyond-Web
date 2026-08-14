@@ -13,6 +13,7 @@ import {
     passportStatusLabel,
     usePassportDesigns,
 } from '~/lib/passports';
+import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
 import { downloadBlob } from '~/lib/zip';
 import { StatTile } from '../StatTile';
 import { searchUsers, type ShowToast } from '../utils';
@@ -499,12 +500,40 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
 
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
+    // Armed the moment keys exist that aren't on disk yet. Covers closing the
+    // tab, reloading, and switching admin tabs — none of which the Back button's
+    // confirm ever saw.
+    useExitGuard(!!issued && !exported, isEnglish
+        ? 'You haven’t downloaded the activation keys. They cannot be retrieved after leaving this screen — each passport would need a new key issued individually. Leave anyway?'
+        : '你还没有下载激活码。离开此页面后将无法再次获取，只能逐个重新签发。仍要离开吗？');
+
+    const exportCsv = (batch: NonNullable<typeof issued>) => {
+        downloadBlob(
+            buildPassportCsv(batch.passports, origin),
+            `passports-${batch.year}-${batch.batchId.slice(0, 6)}-keys.csv`,
+        );
+        setExported(true);
+    };
+
     const generate = async () => {
         setBusy(true);
         try {
             const res = await callGeneratePassportBatch({year, count});
             setIssued(res.data);
+            // Save them without being asked. These keys exist nowhere else and
+            // every way off this screen destroys them, so the file is written
+            // first and the screen becomes a confirmation rather than the only
+            // copy. Only a throw re-arms the warning — a download the browser
+            // silently blocks still reads as exported, which is why the banner
+            // tells the admin to go and look for the file.
             setExported(false);
+            try {
+                exportCsv(res.data);
+            } catch {
+                showToast(isEnglish
+                    ? 'Passports generated, but the keys CSV didn’t download. Use the button below before leaving.'
+                    : '通行证已生成，但激活码 CSV 未能下载。请在离开前使用下方按钮下载。', 'warning');
+            }
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to generate passports.' : '生成通行证失败。'), 'error');
         } finally {
@@ -512,23 +541,10 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
         }
     };
 
+    // The guard owns the wording now, so Back asks the same question every other
+    // way out of this screen does.
     const leave = () => {
-        if (issued && !exported) {
-            const confirmed = window.confirm(isEnglish
-                ? 'You haven’t downloaded the activation keys. They cannot be retrieved after leaving this screen — each passport would need a new key issued individually. Leave anyway?'
-                : '你还没有下载激活码。离开此页面后将无法再次获取，只能逐个重新签发。仍要离开吗？');
-            if (!confirmed) return;
-        }
-        onBack();
-    };
-
-    const downloadCsv = () => {
-        if (!issued) return;
-        downloadBlob(
-            buildPassportCsv(issued.passports, origin),
-            `passports-${issued.year}-${issued.batchId.slice(0, 6)}-keys.csv`,
-        );
-        setExported(true);
+        if (confirmExit()) onBack();
     };
 
     return (
@@ -592,18 +608,31 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
                     <div className={`admin-passport-warning${exported ? '' : ' admin-passport-warning--urgent'}`}>
                         <strong>
                             {exported
-                                ? (isEnglish ? 'Keys exported' : '激活码已导出')
+                                ? (isEnglish ? 'Keys saved' : '激活码已保存')
                                 : (isEnglish ? 'Download the keys now' : '请立即下载激活码')}
                         </strong>
                         <p>
                             {isEnglish
-                                ? `${issued.passports.length} passports generated for ${issued.year}. The activation keys below exist only on this screen.`
-                                : `已为 ${issued.year} 年生成 ${issued.passports.length} 本通行证。以下激活码仅存在于此页面。`}
+                                ? `${issued.passports.length} passports generated for ${issued.year}. `
+                                : `已为 ${issued.year} 年生成 ${issued.passports.length} 本通行证。`}
+                            {exported
+                                ? (isEnglish
+                                    ? 'The keys CSV has been downloaded to this device — check your downloads folder before packing. It is the only copy that will exist once you leave.'
+                                    : '激活码 CSV 已下载到此设备 — 请在装袋前确认下载文件夹。离开此页面后，它将是唯一的副本。')
+                                : (isEnglish
+                                    ? 'The activation keys below exist only on this screen.'
+                                    : '以下激活码仅存在于此页面。')}
                         </p>
                     </div>
                     <div className="admin-btn-row admin-section-mb">
-                        <button className="admin-toggle-btn admin-toggle-save" onClick={downloadCsv} type="button">
-                            {isEnglish ? 'Download keys CSV' : '下载激活码 CSV'}
+                        <button
+                            className="admin-toggle-btn admin-toggle-save"
+                            onClick={() => exportCsv(issued)}
+                            type="button"
+                        >
+                            {exported
+                                ? (isEnglish ? 'Download keys CSV again' : '重新下载激活码 CSV')
+                                : (isEnglish ? 'Download keys CSV' : '下载激活码 CSV')}
                         </button>
                         <button
                             className="admin-toggle-btn admin-toggle-edit"

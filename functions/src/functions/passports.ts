@@ -6,7 +6,7 @@ import { db } from "../utils/firebase";
 import { commitInChunks, generateSecureCode } from "../utils/helpers";
 import { extendedExpiry, isMembershipActive } from "../utils/membership";
 import { pastEventIds, toStringIds } from "../utils/publicProfile";
-import { recordScan, scanClientKey } from "../utils/scans";
+import { recordScan, SCAN_QUOTA_PERSONAL, scanClientKey } from "../utils/scans";
 import {
     activationKeyMatches,
     formatActivationKey,
@@ -459,7 +459,8 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 /** A failed tally must never keep the scanned page from rendering. */
 async function tallyScan(ref: FirebaseFirestore.DocumentReference, clientKey: string): Promise<void> {
     try {
-        await recordScan(ref, clientKey);
+        // A sticker belongs to one person, so the personal ceiling applies.
+        await recordScan(ref, {clientKey, quota: SCAN_QUOTA_PERSONAL});
     } catch (err) {
         console.error(`tallyScan: failed to record scan for passport ${ref.id}`, err);
     }

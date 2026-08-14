@@ -5,18 +5,26 @@ import { db } from "./firebase";
 
 const QUOTA = "scanQuota";
 
-/**
- * How many scans one client may add to one subject before further ones stop
- * counting, and over what window.
- *
- * Deliberately generous rather than tight. The scanners this must not penalise
- * are a room full of people at a con, who are all behind the venue's NAT and so
- * look like one client — thirty scans of a single sticker from one address in
- * half an hour is already an implausible crowd. What it does stop is the shape
- * that has no honest explanation: the same client asking thousands of times.
- */
 export const SCAN_QUOTA_WINDOW_MS = 30 * 60_000;
-export const SCAN_QUOTA_MAX = 30;
+
+/**
+ * How many scans one client may add to one subject per window. The right number
+ * depends entirely on how many people are expected to scan the same thing, so it
+ * is the caller's to choose.
+ *
+ * A passport sticker belongs to one person and is scanned by whoever is standing
+ * in front of them. A poster or standee is scanned by a whole room — all behind
+ * the venue's NAT, sharing a handful of user agents, and therefore looking like
+ * very few clients. Metering both at the personal figure would have stopped
+ * counting a busy poster's scans exactly at the event its analytics exist to
+ * measure.
+ *
+ * Both are loose enough that hitting one is already implausible for honest
+ * traffic; what they stop is the shape with no honest explanation, which is the
+ * same client asking thousands of times.
+ */
+export const SCAN_QUOTA_PERSONAL = 30;
+export const SCAN_QUOTA_PUBLIC = 500;
 
 // Only ever used to salt a hash that is thrown away within the hour. Set
 // SCAN_CLIENT_SALT in the function environment to make the digests unguessable
@@ -69,10 +77,10 @@ function narrowAddress(address: string): string {
  * Best-effort by design: a read that fails lets the scan through rather than
  * dropping a tally over an unrelated outage.
  */
-async function quotaExhausted(ref: FirebaseFirestore.DocumentReference): Promise<boolean> {
+async function quotaExhausted(ref: FirebaseFirestore.DocumentReference, limit: number): Promise<boolean> {
     try {
         const used = (await ref.get()).data()?.count;
-        return typeof used === "number" && used >= SCAN_QUOTA_MAX;
+        return typeof used === "number" && used >= limit;
     } catch (err) {
         console.error(`recordScan: quota read failed for ${ref.id}`, err);
         return false;
@@ -96,15 +104,19 @@ async function quotaExhausted(ref: FirebaseFirestore.DocumentReference): Promise
  */
 export async function recordScan(
     ref: FirebaseFirestore.DocumentReference,
-    clientKey: string,
-    platform = "",
+    {clientKey, quota, platform = ""}: {
+        clientKey: string;
+        /** SCAN_QUOTA_PERSONAL or SCAN_QUOTA_PUBLIC — see their docs. */
+        quota: number;
+        platform?: string;
+    },
 ): Promise<void> {
     const window = Math.floor(Date.now() / SCAN_QUOTA_WINDOW_MS);
     const quotaRef = db.collection(QUOTA).doc(
         createHash("sha256").update(`${ref.path}|${clientKey}|${window}`).digest("hex").slice(0, 32),
     );
 
-    if (await quotaExhausted(quotaRef)) {
+    if (await quotaExhausted(quotaRef, quota)) {
         // The only interesting scan event is the one that stopped counting: this
         // is the signal a passport is being hammered, and the page still renders.
         console.log(`recordScan: quota reached for ${ref.path}, scan not counted`);

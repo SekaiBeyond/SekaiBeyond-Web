@@ -4,7 +4,7 @@ import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
 import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
-import { recordScan, scanClientKey } from "../utils/scans";
+import { recordScan, SCAN_QUOTA_PUBLIC, scanClientKey } from "../utils/scans";
 import {
     sanitizeDisplayText,
     validateCoordinate,
@@ -271,7 +271,13 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
 
     if (active) {
         try {
-            await recordScan(ref, scanClientKey(request.rawRequest), platform);
+            // A printed code is scanned by a crowd, most of it behind one venue
+            // NAT — the public ceiling, or a busy poster stops counting.
+            await recordScan(ref, {
+                clientKey: scanClientKey(request.rawRequest),
+                quota: SCAN_QUOTA_PUBLIC,
+                platform,
+            });
         } catch (err) {
             // A failed counter write must not block the redirect.
             console.error(`recordQrScan: failed to record scan for ${qrId}`, err);
@@ -394,7 +400,7 @@ export const redirectQr = onRequest({maxInstances: 20, memory: "256MiB"}, async 
     // sitting on the redirect's critical path.
     res.redirect(302, data.targetUrl);
     try {
-        await recordScan(ref, scanClientKey(req), platform);
+        await recordScan(ref, {clientKey: scanClientKey(req), quota: SCAN_QUOTA_PUBLIC, platform});
     } catch (err) {
         // The response is already sent; a failed counter write only loses a tally.
         console.error(`redirectQr: failed to record scan for ${id}`, err);

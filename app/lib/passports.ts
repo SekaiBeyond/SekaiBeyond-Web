@@ -4,7 +4,7 @@ import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { createCollectionCache, toDate } from './collectionCache';
 import { callSetPassportPrivacy, getFirebaseDb } from './firebase';
-import { fetchScans, type ScanEvent } from './scans';
+import { fetchScans, type ScanHistory } from './scans';
 import type { ShowToast } from './useToasts';
 
 export type PassportStatus = 'unclaimed' | 'claimed' | 'void';
@@ -270,8 +270,8 @@ export async function fetchPassportClaims(id: string): Promise<PassportClaimEven
         .sort((a, b) => (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0));
 }
 
-/** Scan events for one passport — backs the same trend chart the QR codes use. */
-export const fetchPassportScans = (id: string): Promise<ScanEvent[]> => fetchScans('passports', id);
+/** Scan history for one passport — backs the same trend chart the QR codes use. */
+export const fetchPassportScans = (id: string): Promise<ScanHistory> => fetchScans('passports', id);
 
 // Printed codes are read back by hand, so the dashes we print for legibility,
 // stray spaces, and lowercase are all folded away before the code is used.
