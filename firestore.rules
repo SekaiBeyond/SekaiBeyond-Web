@@ -91,6 +91,14 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
+        // How many scans one client has already added to one scannable thing in
+        // the current window, so a looped public scan endpoint can't run a
+        // counter up forever. Server-only, and the ids are salted hashes — there
+        // is nothing here to read even for a president.
+        match /scanQuota/{slot} {
+            allow read, write: if false;
+        }
+
         // Scheduled-mail overflow queue — core-staff+ can read for visibility;
         // writes via Cloud Functions only. Drained at 00:05 LA by the
         // scheduledMailDrain function.
@@ -182,6 +190,41 @@ service cloud.firestore {
             match /scans/{scanId} {
                 allow read: if request.auth != null && isStaffOrAbove();
             }
+        }
+
+        // Physical passports. Staff+ read the whole collection for the admin
+        // dashboard; an owner may read their own passports (the profile shelf),
+        // which is why the shelf query MUST filter on ownerUid — an unfiltered
+        // read is rejected. Public scanners never read this: they call
+        // getPassportPublicProfile, which resolves the sticker server-side.
+        // All writes (status, ownerUid, scan counters) go through Cloud Functions.
+        match /passports/{passportId} {
+            allow read: if request.auth != null
+                && (isStaffOrAbove() || resource.data.ownerUid == request.auth.uid);
+
+            // Permanent bind/void/key-reissue audit trail — no TTL, core-staff+ only.
+            match /claims/{claimId} {
+                allow read: if request.auth != null && isCoreStaffOrAbove();
+            }
+
+            // Per-scan events backing the trend charts.
+            match /scans/{scanId} {
+                allow read: if request.auth != null && isStaffOrAbove();
+            }
+        }
+
+        // Activation-key hashes. Server-only, no exceptions — the whole
+        // anti-theft story is that an unsold passport's key can't be read off
+        // the wire by anyone, including a president. Same treatment as teamRoster.
+        match /passportSecrets/{passportId} {
+            allow read, write: if false;
+        }
+
+        // One passport design per year — cover art, and nothing else. Publicly
+        // readable: a signed-out visitor scanning a sticker needs the artwork,
+        // and it holds nothing that isn't already printed on the passport.
+        match /passportDesigns/{year} {
+            allow read: if true;
         }
 
         // Editable social-platform templates for the QR "Social profile" mode.

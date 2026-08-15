@@ -30,7 +30,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
    firebase deploy --only functions
    ```
 
-9. Configure **Firestore TTL Policies** — the app relies on TTL-based auto-expiry for rate limiting, audit-log retention, deferred deletion of users/events/badges, cleanup of expired claim/activation codes, and QR scan-event retention. Nine TTL policies are required:
+9. Configure **Firestore TTL Policies** — the app relies on TTL-based auto-expiry for rate limiting, audit-log retention, deferred deletion of users/events/badges, cleanup of expired claim/activation codes, scan-event retention, and per-client scan quotas. Ten TTL policies are required:
 
    | Collection              | Field       | Purpose                                                     |
    |-------------------------|-------------|-------------------------------------------------------------|
@@ -42,9 +42,10 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
    | `pastEvents`            | `deleteAt`  | 48h cooldown for past-event deletion                        |
    | `upcomingEvents`        | `deleteAt`  | 48h cooldown for upcoming-event deletion                    |
    | `badges`                | `deleteAt`  | 48h cooldown for badge deletion                             |
-   | `scans`                 | `expiresAt` | QR-code scan-event retention (365 days), collection-group   |
+   | `scans`                 | `expiresAt` | Scan-event retention (365 days) for QR codes **and** passports — one collection-group policy covers both |
+   | `scanQuota`             | `expiresAt` | Per-client scan-quota windows (two windows' grace)           |
 
-   The fastest way to create all nine is via the included script (requires `gcloud` CLI authenticated to the project):
+   The fastest way to create all ten is via the included script (requires `gcloud` CLI authenticated to the project):
 
    ```bash
    npm run deploy:ttl

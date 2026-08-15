@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, } from 'recharts';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import type { QrScan } from '~/lib/qrCodes';
+import { SCAN_FETCH_LIMIT, type ScanEvent, type ScanHistory } from '~/lib/scans';
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
-import { advance, bucketStart, formatBucketLabel, granularityForSpan } from '../../timeBuckets';
+import { advance, bucketStart, formatBucketLabel, granularityForSpan } from './timeBuckets';
 
 // Fixed palette for platform series, assigned in platform order and never
 // cycled. Validated for adjacent-pair colorblind separation on the app's white
@@ -33,7 +33,7 @@ interface PlatformSeries {
  * scans exist. Empty for a plain location code, which charts as one series.
  */
 function buildPlatformSeries(
-    scans: QrScan[],
+    scans: ScanEvent[],
     platforms: string[],
     defs: SocialPlatform[],
     isEnglish: boolean,
@@ -66,7 +66,7 @@ interface Datum {
 // Bucket scan timestamps into hour/day/week slots (chosen by overall span),
 // counted per series, and carry a running cumulative total so the chart shows
 // both pace and reach.
-function buildSeries(scans: QrScan[], seriesKeys: string[], isEnglish: boolean): Datum[] {
+function buildSeries(scans: ScanEvent[], seriesKeys: string[], isEnglish: boolean): Datum[] {
     if (scans.length === 0) return [];
     const sorted = [...scans].sort((a, b) => a.at.getTime() - b.at.getTime());
     const g = granularityForSpan(sorted[0].at, sorted[sorted.length - 1].at);
@@ -100,13 +100,79 @@ function buildSeries(scans: QrScan[], seriesKeys: string[], isEnglish: boolean):
     return data;
 }
 
-interface QrScanTrendsProps {
-    scans: QrScan[];
-    /** The code's platform ids — fixes series order and colors (social codes). */
+/**
+ * The "Scans Over Time" panel as a detail page mounts it: loads the subject's
+ * scans, offers a refresh, and hands them to {@link ScanTrends}. `fetchScans`
+ * has to be a stable reference (the module-level fetchQrScans /
+ * fetchPassportScans), since it is what re-triggers the load.
+ */
+export function ScanTrendsSection({id, fetchScans, platforms}: {
+    id: string;
+    fetchScans: (id: string) => Promise<ScanHistory>;
+    platforms?: string[];
+}) {
+    const {isEnglish} = useLanguage();
+    const [history, setHistory] = useState<ScanHistory | null>(null);
+    const [failed, setFailed] = useState(false);
+
+    // Refresh is a button as well as an effect, so a second load has to be able
+    // to overtake the first rather than race it: only the newest one may answer.
+    const token = useRef(0);
+    const load = useCallback(() => {
+        const mine = ++token.current;
+        setFailed(false);
+        setHistory(null);
+        fetchScans(id)
+            .then(result => {
+                if (mine === token.current) setHistory(result);
+            })
+            .catch(() => {
+                if (mine === token.current) setFailed(true);
+            });
+    }, [id, fetchScans]);
+    useEffect(load, [load]);
+
+    return (
+        <div className="admin-field-section admin-qr-section">
+            <div className="admin-qr-spot-header">
+                <span className="admin-field-label">{isEnglish ? 'Scans Over Time' : '扫描时间趋势'}</span>
+                <button className="admin-toggle-btn admin-toggle-edit admin-btn-sm" onClick={load}>
+                    {isEnglish ? 'Refresh' : '刷新'}
+                </button>
+            </div>
+            {failed ? (
+                <p className="admin-no-results">{isEnglish ? 'Failed to load scans.' : '加载扫描记录失败。'}</p>
+            ) : history === null ? (
+                <div className="spinner spinner-centered"/>
+            ) : (
+                <>
+                    {history.truncated && (
+                        <p className="admin-helper-text admin-field-hint">
+                            {isEnglish
+                                ? `Showing the most recent ${SCAN_FETCH_LIMIT.toLocaleString()} scans — this code has more than the chart reads.`
+                                : `仅显示最近 ${SCAN_FETCH_LIMIT.toLocaleString()} 次扫描 — 此码的记录多于图表读取的数量。`}
+                        </p>
+                    )}
+                    <ScanTrends key={id} scans={history.events} platforms={platforms}/>
+                </>
+            )}
+        </div>
+    );
+}
+
+interface ScanTrendsProps {
+    scans: ScanEvent[];
+    /** The subject's platform ids — fixes series order and colors (social codes). */
     platforms?: string[];
 }
 
-export function QrScanTrends({scans, platforms = []}: QrScanTrendsProps) {
+/**
+ * The scan history of anything scannable. QR codes and passports write the same
+ * {@link ScanEvent} shape, so this lives beside the admin panel rather than
+ * inside either feature's folder — the platform series below is simply empty for
+ * a subject that doesn't tag its scans.
+ */
+export function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
     const {isEnglish} = useLanguage();
     const {platforms: platformDefs} = useSocialPlatforms();
     // Platform id being viewed ('' = the Direct bucket); null = all stacked.

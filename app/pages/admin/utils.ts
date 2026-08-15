@@ -16,13 +16,16 @@ import {
 import { getFirebaseDb } from '~/lib/firebase';
 import { normalizeGroup, type UserGroup } from '~/components/AuthProvider';
 import type { UserRecord } from './types';
+import type { ShowToast } from '~/lib/useToasts';
 import { MAX_IMAGE_SIZE_MB } from '~/constants';
 
 export const WEBP_QUALITY = 0.95;
 
 const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
-export type ShowToast = (message: string, type: 'success' | 'warning' | 'error') => void;
+// Re-exported so the admin panel keeps importing its toaster type from here,
+// while there is only one definition of it (in ~/lib/useToasts).
+export type { ShowToast };
 
 /**
  * Format a Date as the `YYYY-MM-DDTHH:mm` value a `datetime-local` input expects.

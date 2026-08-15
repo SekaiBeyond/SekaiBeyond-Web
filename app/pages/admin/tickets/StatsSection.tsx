@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { type AttendeeData, TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
+import { StatTile } from '../StatTile';
 import { advance, bucketStart, formatBucketLabel, granularityForSpan } from '../timeBuckets';
 
 interface StatsSectionProps {
@@ -343,16 +344,6 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
                     )}
                 </ChartCard>
             </div>
-        </div>
-    );
-}
-
-function StatTile({label, value, sub}: {label: string; value: number | string; sub?: string}) {
-    return (
-        <div className="admin-stats-tile">
-            <div className="admin-stats-tile-label">{label}</div>
-            <div className="admin-stats-tile-value">{value}</div>
-            {sub && <div className="admin-stats-tile-sub">{sub}</div>}
         </div>
     );
 }

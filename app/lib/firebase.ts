@@ -6,6 +6,7 @@ import { type Functions, type FunctionsError, getFunctions as _getFunctions, htt
 import { type ConEdition } from "~/constants";
 import type { TeamMemberConfig } from "./siteConfig";
 import type { ConContent } from "./conContent";
+import type { PassportPublicProfile } from "./passports";
 
 const requiredEnvVars = [
     'VITE_FIREBASE_API_KEY',
@@ -471,6 +472,45 @@ export const callDeleteSocialPlatform = (data: {id: string}) =>
 
 export const callSeedSocialPlatforms = () =>
     httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
+
+// Physical passports. The plaintext activation keys come back from
+// callGeneratePassportBatch exactly once and are never re-servable — export the
+// CSV/ZIP before leaving the screen or the batch has to be re-keyed one passport
+// at a time with callReissuePassportKey.
+export const callGeneratePassportBatch = (data: {year: number; count: number}) =>
+    httpsCallable<typeof data, {
+        batchId: string;
+        year: number;
+        passports: Array<{passportId: string; activationCode: string}>;
+    }>(getFunctions(), 'generatePassportBatch')(data);
+
+export const callReissuePassportKey = (data: {passportId: string}) =>
+    httpsCallable<typeof data, {passportId: string; activationCode: string}>(
+        getFunctions(), 'reissuePassportKey')(data);
+
+export const callClaimPassport = (data: {passportId: string; activationCode: string}) =>
+    httpsCallable<typeof data, {
+        membershipExpiresAt: string;
+        daysGranted: number;
+        year: number;
+    }>(getFunctions(), 'claimPassport')(data);
+
+export const callGetPassportPublicProfile = (data: {passportId: string}) =>
+    httpsCallable<typeof data, PassportPublicProfile>(getFunctions(), 'getPassportPublicProfile')(data);
+
+export const callVoidPassport = (data: {passportId: string}) =>
+    httpsCallable<typeof data, {passportId: string; status: 'void'}>(getFunctions(), 'voidPassport')(data);
+
+export const callSetPassportPrivacy = (data: {hide: boolean}) =>
+    httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);
+
+export const callSavePassportDesign = (data: {
+    year: number;
+    coverImageUrl: string;
+}) => httpsCallable<typeof data, {year: number}>(getFunctions(), 'savePassportDesign')(data);
+
+export const callDeletePassportDesign = (data: {year: number}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deletePassportDesign')(data);
 
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {

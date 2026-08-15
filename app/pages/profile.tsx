@@ -16,6 +16,7 @@ import { useTags } from '~/lib/tags';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { isValidHttpUrl } from '~/lib/urls';
+import { PassportShelfSection } from '~/pages/PassportShelfSection';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 import { validateImageFile } from "~/pages/admin/utils";
 import { ToastContainer, useToasts } from '~/lib/useToasts';
@@ -41,7 +42,9 @@ interface ViewedProfile {
     titleCn?: string;
 }
 
-const BadgeCard = ({badge, earnedDate, isEnglish, active, onToggle}: {
+/** A badge and its hover tooltip. Shared with the public passport page, which
+ * inlines the badge's fields instead of naming a document. */
+export const BadgeCard = ({badge, earnedDate, isEnglish, active, onToggle}: {
     badge: BadgeDef;
     earnedDate?: Date;
     isEnglish: boolean;
@@ -94,7 +97,9 @@ const BadgeCard = ({badge, earnedDate, isEnglish, active, onToggle}: {
     </div>
 );
 
-const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
+/** One attended event. Shared with the public passport page, which renders the
+ * same grid without the admin link. */
+export const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
     event: PastEvent;
     isEnglish: boolean;
     showAdminLink?: boolean;
@@ -738,6 +743,11 @@ export const ProfilePage = () => {
                         </p>
                     </section>
                 )}
+
+                {/* Passports are the owner's own business: the shelf, the
+                    visibility switch, and the activation entry point all read
+                    from their profile, and getPublicProfile carries none of it. */}
+                {isOwnProfile && <PassportShelfSection showToast={showToast}/>}
 
                 {attendedEvents.length > 0 ? (
                     <section className="badge-section">

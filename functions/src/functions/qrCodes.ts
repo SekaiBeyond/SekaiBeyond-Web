@@ -1,9 +1,10 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
-import { qrScanExpiresAt, recordExpiresAt } from "../utils/config";
+import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
+import { recordScan, SCAN_QUOTA_PUBLIC, scanClientKey } from "../utils/scans";
 import {
     sanitizeDisplayText,
     validateCoordinate,
@@ -270,7 +271,13 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
 
     if (active) {
         try {
-            await commitScanTally(ref, platform);
+            // A printed code is scanned by a crowd, most of it behind one venue
+            // NAT — the public ceiling, or a busy poster stops counting.
+            await recordScan(ref, {
+                clientKey: scanClientKey(request.rawRequest),
+                quota: SCAN_QUOTA_PUBLIC,
+                platform,
+            });
         } catch (err) {
             // A failed counter write must not block the redirect.
             console.error(`recordQrScan: failed to record scan for ${qrId}`, err);
@@ -279,27 +286,6 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
 
     return {active, targetUrl: data.targetUrl ?? ""};
 });
-
-/**
- * Bump the scan counters and log a scan event. Scans carrying a platform tag
- * (social codes' per-platform links) additionally tally under
- * `platformScans.<platform>` so click-through can be compared by platform.
- */
-async function commitScanTally(ref: FirebaseFirestore.DocumentReference, platform: string): Promise<void> {
-    const update: Record<string, unknown> = {
-        scanCount: FieldValue.increment(1),
-        lastScanAt: FieldValue.serverTimestamp(),
-    };
-    if (platform) update[`platformScans.${platform}`] = FieldValue.increment(1);
-    const batch = db.batch();
-    batch.update(ref, update);
-    batch.set(ref.collection("scans").doc(), {
-        scannedAt: FieldValue.serverTimestamp(),
-        platform,
-        expiresAt: qrScanExpiresAt(),
-    });
-    await batch.commit();
-}
 
 // Linked-event end times, cached in-process. While an instance stays warm,
 // repeated scans of the same event-linked code during an event skip the
@@ -414,7 +400,7 @@ export const redirectQr = onRequest({maxInstances: 20, memory: "256MiB"}, async 
     // sitting on the redirect's critical path.
     res.redirect(302, data.targetUrl);
     try {
-        await commitScanTally(ref, platform);
+        await recordScan(ref, {clientKey: scanClientKey(req), quota: SCAN_QUOTA_PUBLIC, platform});
     } catch (err) {
         // The response is already sent; a failed counter write only loses a tally.
         console.error(`redirectQr: failed to record scan for ${id}`, err);

@@ -4,6 +4,7 @@ import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
+import { confirmExit } from '~/lib/useExitGuard';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents, useUpcomingEventsByIds } from '~/lib/upcomingEvents';
@@ -22,6 +23,7 @@ import { VenuesTab } from './VenuesTab';
 import { LocationsMap } from './LocationsMap';
 import { ParkingLotsTab } from './ParkingLotsTab';
 import { ParkingRatesTab } from './ParkingRatesTab';
+import { PassportsTab } from './passports/PassportsTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
@@ -60,7 +62,13 @@ export const AdminPage = () => {
     const upcomingEvents = (isCoreStaffOrAbove || isStaffGroup) ? allUpcomingEvents : staffUpcomingEvents;
     const refreshUpcoming = (isCoreStaffOrAbove || isStaffGroup) ? refreshAllUpcoming : refreshStaffUpcoming;
 
-    const [activeTab, setActiveTab] = useState<Tab>('users');
+    const [activeTab, selectTab] = useState<Tab>('users');
+    // Switching tabs unmounts the whole tab, so it is a way out of any screen
+    // holding state that can't be recovered — the batch generator's activation
+    // keys, above all. Every caller goes through the guard by construction.
+    const setActiveTab = (tab: Tab) => {
+        if (confirmExit()) selectTab(tab);
+    };
     const [upcomingInDetail, setUpcomingInDetail] = useState(false);
     const [eventsInDetail, setEventsInDetail] = useState(false);
     const [upcomingOpen, setUpcomingOpen] = useState(true);
@@ -123,7 +131,7 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(firstEventId);
             }
         } else if (isStaffGroup) {
-            if (tab === 'events' || tab === 'locations' || tab === 'tools' || tab === 'users' || tab === 'badges' || tab === 'records' || tab === 'config' || tab === 'con') {
+            if (tab === 'events' || tab === 'locations' || tab === 'tools' || tab === 'users' || tab === 'badges' || tab === 'passports' || tab === 'records' || tab === 'config' || tab === 'con') {
                 setActiveTab(tab);
             } else if (tab === 'venues' || tab === 'parking') {
                 setActiveTab('locations');
@@ -143,7 +151,7 @@ export const AdminPage = () => {
                 upcomingTabRef.current?.selectEvent(event);
             }
         } else {
-            if (tab === 'events' || tab === 'locations' || tab === 'badges' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config' || tab === 'con') {
+            if (tab === 'events' || tab === 'locations' || tab === 'badges' || tab === 'passports' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config' || tab === 'con') {
                 setActiveTab(tab);
             } else if (tab === 'venues' || tab === 'parking') {
                 setActiveTab('locations');
@@ -322,7 +330,7 @@ export const AdminPage = () => {
                     <LoginButton/>
                 </div>
             </nav>
-            <div className="profile-page">
+            <div className="profile-page admin-page">
                 <div className="admin-tabs">
                     {(isCoreStaffOrAbove || isStaffGroup) && (
                         <button
@@ -352,6 +360,14 @@ export const AdminPage = () => {
                             onClick={() => setActiveTab('badges')}
                         >
                             {isEnglish ? 'Badges' : '徽章'}
+                        </button>
+                    )}
+                    {(isCoreStaffOrAbove || isStaffGroup) && (
+                        <button
+                            className={`admin-tab ${activeTab === 'passports' ? 'admin-tab-active' : ''}`}
+                            onClick={() => setActiveTab('passports')}
+                        >
+                            {isEnglish ? 'Passports' : '通行证'}
                         </button>
                     )}
                     {(isCoreStaffOrAbove || isStaffGroup) && (
@@ -581,6 +597,14 @@ export const AdminPage = () => {
                             readOnly={isStaffGroup}
                         />
                     )
+                )}
+
+                {activeTab === 'passports' && (isCoreStaffOrAbove || isStaffGroup) && (
+                    <PassportsTab
+                        onLookupUser={handleLookupUser}
+                        showToast={showToast}
+                        readOnly={isStaffGroup}
+                    />
                 )}
 
                 {activeTab === 'records' && (isCoreStaffOrAbove || isStaffGroup) && (

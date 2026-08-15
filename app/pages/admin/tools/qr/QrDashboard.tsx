@@ -3,6 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { type QrCode, qrHasSpot, qrIsActive } from '~/lib/qrCodes';
 import { socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
+import { StatTile } from '../../StatTile';
 import { heatColor } from './heat';
 import { QrSpotsMap } from './QrSpotsMap';
 
@@ -110,10 +111,10 @@ export const QrDashboard = ({
             )}
 
             <div className="admin-stats-tiles admin-section-mb">
-                <Tile label={isEnglish ? 'QR Codes' : '二维码数'} value={filtered.length}/>
-                <Tile label={isEnglish ? 'Total Scans' : '总扫描数'} value={totalScans}/>
-                <Tile label={isEnglish ? 'Active' : '有效'} value={activeCount}/>
-                <Tile label={isEnglish ? 'On Map' : '已定位'} value={spotCount}/>
+                <StatTile label={isEnglish ? 'QR Codes' : '二维码数'} value={filtered.length}/>
+                <StatTile label={isEnglish ? 'Total Scans' : '总扫描数'} value={totalScans}/>
+                <StatTile label={isEnglish ? 'Active' : '有效'} value={activeCount}/>
+                <StatTile label={isEnglish ? 'On Map' : '已定位'} value={spotCount}/>
             </div>
 
             <div className="admin-form-grid admin-section-mb">
@@ -198,11 +199,3 @@ export const QrDashboard = ({
     );
 };
 
-function Tile({label, value}: {label: string; value: number}) {
-    return (
-        <div className="admin-stats-tile">
-            <div className="admin-stats-tile-label">{label}</div>
-            <div className="admin-stats-tile-value">{value}</div>
-        </div>
-    );
-}

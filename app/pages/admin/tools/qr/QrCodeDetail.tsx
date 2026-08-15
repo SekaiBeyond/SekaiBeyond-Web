@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteQrCode, callSaveQrCode } from '~/lib/firebase';
-import { fetchQrScans, type QrCode, qrHasSpot, qrIsActive, qrIsSocial, type QrScan, qrScanUrl } from '~/lib/qrCodes';
+import { fetchQrScans, type QrCode, qrHasSpot, qrIsActive, qrIsSocial, qrScanUrl } from '~/lib/qrCodes';
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import {
@@ -16,7 +16,7 @@ import {
     qrToDraft,
 } from './QrCodeForm';
 import { QrPreview, useQrDownload } from './qrExport';
-import { QrScanTrends } from './QrScanTrends';
+import { ScanTrendsSection } from '../../ScanTrends';
 import { QrSpotsMap } from './QrSpotsMap';
 
 const QR_SIZE = 240;
@@ -59,8 +59,6 @@ export const QrCodeDetail = ({
     const [draft, setDraft] = useState<QrDraft>(() => qrToDraft(code));
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
-    const [scans, setScans] = useState<QrScan[] | null>(null);
-    const [scansError, setScansError] = useState(false);
 
     const linkedEvent = events.find(e => e.id === code.eventId) ?? null;
     const active = qrIsActive(code, linkedEvent?.endAt ?? null);
@@ -92,15 +90,6 @@ export const QrCodeDetail = ({
         if (!confirmDiscard()) return;
         onBack();
     };
-
-    const loadScans = () => {
-        setScansError(false);
-        setScans(null);
-        fetchQrScans(code.id)
-            .then(setScans)
-            .catch(() => setScansError(true));
-    };
-    useEffect(loadScans, [code.id]);
 
     const downloadPng = () => {
         const safe = (code.label || 'qr-code').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
@@ -412,21 +401,7 @@ export const QrCodeDetail = ({
                 </div>
             )}
 
-            <div className="admin-field-section admin-qr-section">
-                <div className="admin-qr-spot-header">
-                    <span className="admin-field-label">{isEnglish ? 'Scans Over Time' : '扫描时间趋势'}</span>
-                    <button className="admin-toggle-btn admin-toggle-edit admin-btn-sm" onClick={loadScans}>
-                        {isEnglish ? 'Refresh' : '刷新'}
-                    </button>
-                </div>
-                {scansError ? (
-                    <p className="admin-no-results">{isEnglish ? 'Failed to load scans.' : '加载扫描记录失败。'}</p>
-                ) : scans === null ? (
-                    <div className="spinner spinner-centered"/>
-                ) : (
-                    <QrScanTrends key={code.id} scans={scans} platforms={code.platforms}/>
-                )}
-            </div>
+            <ScanTrendsSection id={code.id} fetchScans={fetchQrScans} platforms={code.platforms}/>
 
             {!readOnly && (
                 <div className="admin-qr-danger-row">

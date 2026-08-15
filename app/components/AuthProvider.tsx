@@ -98,6 +98,8 @@ export interface UserProfile {
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
     membershipExpiresAt: Date | null;
+    /** Opt-out for the public passport page at /p/:passportId. Default false. */
+    hidePassportPage: boolean;
     title?: string;
     titleCn?: string;
     eventStaffEvents: string[];
@@ -123,6 +125,7 @@ function toUserProfile(data: DocumentData, email: string): UserProfile {
         badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
         group: normalizeGroup(data.group),
         membershipExpiresAt: data.membershipExpiresAt?.toDate() ?? null,
+        hidePassportPage: data.hidePassportPage === true,
         title: data.title ?? '',
         titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],

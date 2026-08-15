@@ -3,6 +3,16 @@ import { collection, getDocs, query, type QueryConstraint, type QueryDocumentSna
 import { getFirebaseDb } from './firebase';
 
 /**
+ * A Firestore Timestamp field as a Date, or null when the field is absent or is
+ * something else. Every `mapDoc` below reaches for this, so it lives here rather
+ * than being re-spelled in each data module.
+ */
+export const toDate = (v: unknown): Date | null =>
+    v && typeof (v as {toDate?: () => Date}).toDate === 'function'
+        ? (v as {toDate: () => Date}).toDate()
+        : null;
+
+/**
  * A module-level read-through cache shared across every component that uses it. The first
  * `useValue()` triggers a single fetch; the result is cached in module scope and pushed to
  * all mounted subscribers. `refresh()` re-fetches and fans the new value out to everyone,

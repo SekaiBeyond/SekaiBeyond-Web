@@ -47,7 +47,7 @@ export interface UserRecord {
     eventStaffEvents: string[];
 }
 
-export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'records' | 'tools' | 'config' | 'con';
+export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'passports' | 'records' | 'tools' | 'config' | 'con';
 
 export type RecordType =
     'group-assign'
@@ -125,6 +125,13 @@ export type RecordType =
     | 'parkingrate-create'
     | 'parkingrate-edit'
     | 'parkingrate-delete'
+    | 'passport-batch-generate'
+    | 'passport-claim'
+    | 'passport-void'
+    | 'passport-key-reissue'
+    | 'passport-design-create'
+    | 'passport-design-edit'
+    | 'passport-design-delete'
     | 'qrcode-create'
     | 'qrcode-edit'
     | 'qrcode-delete'
@@ -153,6 +160,11 @@ export interface ActivityRecord {
     lotName?: string;
     rateLabel?: string;
     qrLabel?: string;
+    /** Passport records: the printed code, its design year, and batch details. */
+    passportId?: string;
+    passportYear?: number | null;
+    passportCount?: number;
+    batchId?: string;
     platformLabel?: string;
     /** Comma-separated con page sections touched by a con-content-update. */
     conSection?: string;
