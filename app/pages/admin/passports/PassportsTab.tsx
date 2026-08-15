@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGeneratePassportBatch } from '~/lib/firebase';
 import {
@@ -57,13 +57,19 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
         if (year === null || !designs.some(d => d.year === year)) setYear(designs[0].year);
     }, [designs, year]);
 
+    // The year can be switched again while a load is in flight, and the second
+    // query may well answer first — only the newest load may write, or the tab
+    // paints one year's stock under another year's heading and exports.
+    const yearToken = useRef(0);
     const loadYear = useCallback(async (target: number) => {
+        const mine = ++yearToken.current;
         setLoadError(false);
         setPassports(null);
         try {
-            setPassports(await fetchPassportsByYear(target));
+            const list = await fetchPassportsByYear(target);
+            if (mine === yearToken.current) setPassports(list);
         } catch {
-            setLoadError(true);
+            if (mine === yearToken.current) setLoadError(true);
         }
     }, []);
 
