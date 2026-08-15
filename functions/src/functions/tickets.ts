@@ -1225,7 +1225,16 @@ export const sendTicketEmails = onCall(
         // a failed mark means the email will look "unsent" in the admin
         // UI and would be re-sent on the next 'unsent' drain.
         // Mitigation: log loudly so an admin can manually flag.
-        for (let i = 0; i < sentCount; i++) {
+        // sentCount is the id count Resend returned, not a local length, so
+        // clamp the loop to the targets we actually hold. Overrunning would
+        // throw outside the per-attendee catch below and strand every
+        // remaining mark, re-sending the whole batch on the next drain.
+        if (sentCount > sendCommitTargets.length) {
+            console.error("sendTicketEmails: Resend returned more ids than envelopes sent",
+                sentCount, sendCommitTargets.length);
+        }
+        const markCount = Math.min(sentCount, sendCommitTargets.length);
+        for (let i = 0; i < markCount; i++) {
             const {target} = sendCommitTargets[i];
             try {
                 await target.ref.update({
