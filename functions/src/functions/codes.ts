@@ -3,16 +3,91 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { ADMIN_GROUPS, adminTransaction, checkRateLimit, requireAuth } from "../utils/auth";
 import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
-import { generateSecureCode, validateCodeInTransaction } from "../utils/helpers";
+import { codeKind, issueCode, normalizeCode } from "../utils/codes";
+import { validateCodeInTransaction } from "../utils/helpers";
+import { normalizePassportId } from "../utils/passports";
 import { validateDocId, validateISODate, validateMaxUses } from "../utils/validation";
+
+const INVALID = "Invalid or deactivated code.";
+
+/** The code off a request, canonical, or the same "invalid" every path reports. */
+function requireCode(request: {data: unknown}): string {
+    const code = normalizeCode((request.data as {code?: unknown})?.code);
+    if (!code) throw new HttpsError("invalid-argument", INVALID, {code: "invalid"});
+    return code;
+}
+
+/**
+ * "That isn't one of ours" — the only failure worth trying the next kind on.
+ * Anything else (expired, used up, already held) describes a code we did match,
+ * and re-asking a different collection would replace a true answer with
+ * "invalid".
+ */
+function isUnmatchedCode(err: unknown): boolean {
+    const details = err instanceof HttpsError ? err.details as {code?: string} | undefined : undefined;
+    return details?.code === "invalid" || details?.code === "inactive";
+}
+
+/** The sticker `code` names, if it is a live passport. Void ones read as unknown,
+ * exactly as they do at /p/:id. */
+async function resolvePassportId(code: string): Promise<string | null> {
+    const passportId = normalizePassportId(code);
+    if (!passportId) return null;
+    const snap = await db.collection("passports").doc(passportId).get();
+    if (!snap.exists || snap.data()?.status === "void") return null;
+    return passportId;
+}
+
+/**
+ * One door for every code a member can type: badge codes and staff codes are
+ * redeemed here, and a passport id is answered with the id to go activate.
+ *
+ * The client used to do this dispatch itself by calling each claim function in
+ * turn, which spent a rate-limit slot per guess (requireAuth charges one each
+ * time) and let five mistypes lock someone out for a minute. Guessing from here
+ * costs one slot however many collections it takes, and the guessing stops
+ * entirely for a code whose prefix names its kind.
+ */
+export const redeemCode = onCall({maxInstances: 20}, async (request) => {
+    const uid = await requireAuth(request);
+    const code = requireCode(request);
+
+    switch (codeKind(code)) {
+        case "badge":
+            return {kind: "badge" as const, ...await redeemBadgeCode(uid, code)};
+        case "staff":
+            return {kind: "staff" as const, ...await redeemStaffCode(uid, code)};
+        case "event":
+            // Check-in codes are scanned from their claim URL rather than typed,
+            // so the prefix buys a straight answer instead of "invalid".
+            throw new HttpsError("failed-precondition", "This code checks you in at an event.", {
+                code: "event-code",
+            });
+    }
+
+    // No prefix: either a code issued before they existed or a passport id.
+    // Badge first, then staff, then the sticker — the order the client used to
+    // walk, so a bare code still redeems as whatever it redeemed as yesterday.
+    try {
+        return {kind: "badge" as const, ...await redeemBadgeCode(uid, code)};
+    } catch (err) {
+        if (!isUnmatchedCode(err)) throw err;
+    }
+    try {
+        return {kind: "staff" as const, ...await redeemStaffCode(uid, code)};
+    } catch (err) {
+        if (!isUnmatchedCode(err)) throw err;
+    }
+
+    const passportId = await resolvePassportId(code);
+    if (passportId) return {kind: "passport" as const, passportId};
+
+    throw new HttpsError("not-found", INVALID, {code: "invalid"});
+});
 
 export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
-
-    const code = (request.data as {code?: string})?.code?.trim().toUpperCase();
-    if (!code || !/^[A-Z0-9]{6,20}$/.test(code)) {
-        throw new HttpsError("invalid-argument", "Invalid or deactivated code.", {code: "invalid"});
-    }
+    const code = requireCode(request);
 
     const codeRef = db.collection("claimCodes").doc(code);
     const userRef = db.collection("users").doc(uid);
@@ -69,14 +144,18 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
         return {eventId, eventTitle, eventTitleCn, eventPoster};
     });
 });
+
+/**
+ * Superseded by redeemCode, which reaches this same body. Kept because a client
+ * cached from before that existed still calls it by name.
+ */
 export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
+    return redeemBadgeCode(uid, requireCode(request));
+});
 
-    const code = (request.data as {code?: string})?.code?.trim().toUpperCase();
-    if (!code || !/^[A-Z0-9]{6,20}$/.test(code)) {
-        throw new HttpsError("invalid-argument", "Invalid or deactivated code.", {code: "invalid"});
-    }
-
+/** Binds the badge behind `code` to `uid`. `code` is already canonical. */
+async function redeemBadgeCode(uid: string, code: string) {
     const codeRef = db.collection("badgeActivationCodes").doc(code);
     const userRef = db.collection("users").doc(uid);
 
@@ -99,7 +178,10 @@ export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (reques
 
         const userBadges: string[] = userSnap.data()!.badges ?? [];
         if (userBadges.includes(badgeId)) {
-            throw new HttpsError("already-exists", "You already have this badge.", {code: "already-have"});
+            throw new HttpsError("already-exists", "You already have this badge.", {
+                code: "already-have",
+                kind: "badge",
+            });
         }
 
         txn.update(codeRef, {usedCount: FieldValue.increment(1)});
@@ -127,7 +209,8 @@ export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (reques
             badgeImageUrl: badgeData.imageUrl ?? "",
         };
     });
-});
+}
+
 export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -151,7 +234,7 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
     let code = "";
 
     for (let attempt = 0; attempt < 5; attempt++) {
-        code = generateSecureCode(12);
+        code = issueCode("badge");
         const codeRef = db.collection("badgeActivationCodes").doc(code);
 
         try {
@@ -227,7 +310,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     let code = "";
 
     for (let attempt = 0; attempt < 5; attempt++) {
-        code = generateSecureCode(12);
+        code = issueCode("event");
         const codeRef = db.collection("claimCodes").doc(code);
 
         try {
@@ -457,7 +540,7 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
     let code = "";
 
     for (let attempt = 0; attempt < 5; attempt++) {
-        code = generateSecureCode(12);
+        code = issueCode("staff");
         const codeRef = db.collection("staffClaimCodes").doc(code);
 
         try {
@@ -531,14 +614,15 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
 
     throw new HttpsError("internal", "code-generation-failed");
 });
+
+/** Superseded by redeemCode, and kept for the same reason as the badge one. */
 export const claimStaffCode = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
+    return redeemStaffCode(uid, requireCode(request));
+});
 
-    const code = (request.data as {code?: string})?.code?.trim().toUpperCase();
-    if (!code || !/^[A-Z0-9]{6,20}$/.test(code)) {
-        throw new HttpsError("invalid-argument", "Invalid or deactivated code.", {code: "invalid"});
-    }
-
+/** Makes `uid` staff for the event behind `code`. `code` is already canonical. */
+async function redeemStaffCode(uid: string, code: string) {
     const codeRef = db.collection("staffClaimCodes").doc(code);
     const userRef = db.collection("users").doc(uid);
 
@@ -570,6 +654,7 @@ export const claimStaffCode = onCall({maxInstances: 20}, async (request) => {
         if (staffEvents.includes(eventId)) {
             throw new HttpsError("already-exists", "You are already staff for this event.", {
                 code: "already-have",
+                kind: "staff",
                 eventId,
                 eventTitle,
                 eventTitleCn,
@@ -600,7 +685,8 @@ export const claimStaffCode = onCall({maxInstances: 20}, async (request) => {
         });
         return {eventId, eventTitle, eventTitleCn, eventPoster};
     });
-});
+}
+
 export const toggleStaffCodeActive = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;

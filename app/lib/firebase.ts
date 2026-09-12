@@ -106,6 +106,28 @@ export const callClaimBadgeActivationCode = (data: {code: string}) =>
         badgeImageUrl: string;
     }>(getFunctions(), 'claimBadgeActivationCode')(data);
 
+/**
+ * What one typed code turned out to be. A passport comes back as an id to go
+ * activate rather than something redeemed here: binding one needs the key under
+ * the sticker, which /p/:id asks for.
+ */
+export type RedeemResult =
+    | {
+    kind: 'badge';
+    badgeId: string;
+    badgeName: string;
+    badgeNameCn: string;
+    badgeDescription: string;
+    badgeDescriptionCn: string;
+    badgeImageUrl: string;
+}
+    | {kind: 'staff'; eventId: string; eventTitle: string; eventTitleCn: string; eventPoster: string}
+    | {kind: 'passport'; passportId: string};
+
+/** One call for any code a member can type — see redeemCode in functions. */
+export const callRedeemCode = (data: {code: string}) =>
+    httpsCallable<{code: string}, RedeemResult>(getFunctions(), 'redeemCode')(data);
+
 export const callGenerateBadgeActivationCode = (data: {
     badgeId: string;
     maxUses: number;

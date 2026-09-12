@@ -26,6 +26,7 @@ import {
     getFirebaseDb,
 } from '~/lib/firebase';
 import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
+import { formatCode } from '~/lib/codes';
 import { isValidHttpUrl } from '~/lib/urls';
 import { docToUserRecord } from './utils';
 import { AccountPicker } from './AccountPicker';
@@ -411,8 +412,8 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             : '';
         if (!window.confirm(
             isEnglish
-                ? `Delete activation code "${ac.code}"?${usedNote} This cannot be undone.`
-                : `删除激活码"${ac.code}"？${usedNote}此操作不可撤销。`
+                ? `Delete activation code "${formatCode(ac.code)}"?${usedNote} This cannot be undone.`
+                : `删除激活码"${formatCode(ac.code)}"？${usedNote}此操作不可撤销。`
         )) return;
         const prevSnapshot = [...badgeActivationCodes];
         setBadgeActivationCodes(prev => prev.filter(c => c.id !== ac.id));
@@ -766,9 +767,9 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                     )}
                                 </div>
                                 <div className="admin-code-url">
-                                    <input readOnly value={ac.code} className="admin-code-input"/>
+                                    <input readOnly value={formatCode(ac.code)} className="admin-code-input"/>
                                     <button className="admin-btn admin-btn--purple"
-                                            onClick={() => navigator.clipboard.writeText(ac.code)}>
+                                            onClick={() => navigator.clipboard.writeText(formatCode(ac.code))}>
                                         {isEnglish ? 'Copy' : '复制'}
                                     </button>
                                 </div>

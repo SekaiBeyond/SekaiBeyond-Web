@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callClaimBadgeActivationCode, callClaimStaffCode, functionsErrorCode } from '~/lib/firebase';
-import { isPassportCodeShape, normalizePassportCode, PASSPORT_ID_LENGTH } from '~/lib/passports';
+import { callRedeemCode, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
 import type { BadgeDef } from '~/lib/types';
 import { useModalEffects } from '~/lib/useModalEffects';
 
@@ -64,86 +63,48 @@ export const RedeemModal = () => {
         if (!user || !profile) return;
         if (submittingRef.current) return;
 
-        // A passport id is the one code this modal can't settle by itself:
-        // binding one also needs the activation key hidden under the sticker,
-        // which /p/:id asks for. It is tried last, so a reward code that
-        // happens to share the shape still redeems as a reward code.
-        const passportCode = isPassportCodeShape(trimmed, PASSPORT_ID_LENGTH)
-            ? normalizePassportCode(trimmed)
-            : null;
-
         submittingRef.current = true;
         setState('claiming');
         setError('');
 
-        // Try badge activation code first
+        // One call whatever kind of code this is: the server knows them all, and
+        // guessing from here would spend a rate-limit slot per guess.
         try {
-            const result = await callClaimBadgeActivationCode({code: trimmed});
-            const d = result.data;
-            setBadge({
-                id: d.badgeId,
-                name: d.badgeName,
-                nameCn: d.badgeNameCn,
-                description: d.badgeDescription,
-                descriptionCn: d.badgeDescriptionCn,
-                imageUrl: d.badgeImageUrl || '/mika.webp',
-                deleteAt: null,
-            });
-            setState('badge-success');
-            refreshProfile().catch(() => {
-            });
-            submittingRef.current = false;
-            return;
-        } catch (badgeErr) {
-            const badgeErrCode = functionsErrorCode(badgeErr);
-            // Only fall through to staff code if badge code was simply not found
-            if (badgeErrCode !== 'invalid' && badgeErrCode !== 'inactive') {
-                setState('error');
-                switch (badgeErrCode) {
-                    case 'rate-limited':
-                        setError(isEnglish ? 'Too many attempts. Please wait a moment.' : '尝试次数过多，请稍后再试。');
-                        break;
-                    case 'not-active-yet':
-                        setError(isEnglish ? 'This code is not active yet.' : '此兑换码尚未生效。');
-                        break;
-                    case 'expired':
-                        setError(isEnglish ? 'This code has expired.' : '此兑换码已过期。');
-                        break;
-                    case 'max-uses':
-                        setError(isEnglish ? 'This code has reached its maximum uses.' : '此兑换码已达到最大使用次数。');
-                        break;
-                    case 'already-have':
-                        setError(isEnglish ? 'You already have this badge.' : '您已拥有此徽章。');
-                        break;
-                    default:
-                        setError(isEnglish ? 'Something went wrong. Please try again.' : '出错了，请重试。');
-                }
-                submittingRef.current = false;
-                return;
-            }
-        }
+            const {data} = await callRedeemCode({code: trimmed});
 
-        // Badge code not found — try staff claim code
-        try {
-            const result = await callClaimStaffCode({code: trimmed});
-            const d = result.data;
-            setEventInfo({
-                eventTitle: d.eventTitle,
-                eventTitleCn: d.eventTitleCn,
-                eventPoster: d.eventPoster,
-            });
-            setState('staff-success');
-            refreshProfile().catch(() => {
-            });
-        } catch (staffErr) {
-            const staffErrCode = functionsErrorCode(staffErr);
-            if (passportCode && (staffErrCode === 'invalid' || staffErrCode === 'inactive')) {
+            if (data.kind === 'passport') {
+                // Not something this modal can finish — binding a passport also
+                // needs the activation key hidden under the sticker, and /p/:id
+                // is the screen that asks for it.
                 close();
-                navigate(`/p/${passportCode}`);
+                navigate(`/p/${data.passportId}`);
                 return;
             }
+
+            if (data.kind === 'badge') {
+                setBadge({
+                    id: data.badgeId,
+                    name: data.badgeName,
+                    nameCn: data.badgeNameCn,
+                    description: data.badgeDescription,
+                    descriptionCn: data.badgeDescriptionCn,
+                    imageUrl: data.badgeImageUrl || '/mika.webp',
+                    deleteAt: null,
+                });
+                setState('badge-success');
+            } else {
+                setEventInfo({
+                    eventTitle: data.eventTitle,
+                    eventTitleCn: data.eventTitleCn,
+                    eventPoster: data.eventPoster,
+                });
+                setState('staff-success');
+            }
+            refreshProfile().catch(() => {
+            });
+        } catch (err) {
             setState('error');
-            switch (staffErrCode) {
+            switch (functionsErrorCode(err)) {
                 case 'rate-limited':
                     setError(isEnglish ? 'Too many attempts. Please wait a moment.' : '尝试次数过多，请稍后再试。');
                     break;
@@ -157,7 +118,16 @@ export const RedeemModal = () => {
                     setError(isEnglish ? 'This code has reached its maximum uses.' : '此兑换码已达到最大使用次数。');
                     break;
                 case 'already-have':
-                    setError(isEnglish ? 'You are already staff for this event.' : '您已是此活动的工作人员。');
+                    setError(functionsErrorDetails<{kind?: string}>(err)?.kind === 'staff'
+                        ? (isEnglish ? 'You are already staff for this event.' : '您已是此活动的工作人员。')
+                        : (isEnglish ? 'You already have this badge.' : '您已拥有此徽章。'));
+                    break;
+                // A check-in code names itself, so it can be turned away by name
+                // instead of joining everything else under "invalid".
+                case 'event-code':
+                    setError(isEnglish
+                        ? 'That code checks you in at an event — use the link or QR code from the event itself.'
+                        : '这是活动签到码 — 请使用活动提供的链接或二维码。');
                     break;
                 default:
                     setError(isEnglish ? 'Invalid or deactivated code.' : '兑换码无效或已被停用。');

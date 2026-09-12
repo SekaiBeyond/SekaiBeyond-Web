@@ -11,6 +11,7 @@ import {
     callToggleStaffCodeActive,
     getFirebaseDb,
 } from '~/lib/firebase';
+import { formatCode } from '~/lib/codes';
 import type { BadgeCode } from './types';
 import { getClaimUrl, type ShowToast } from './utils';
 
@@ -207,8 +208,9 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false}
         }
     };
 
-    // Staff codes are claimed by typing the code; check-in codes by scanning the claim URL.
-    const copyValue = code ? (isStaff ? code.code : getClaimUrl(code.code)) : '';
+    // Staff codes are claimed by typing the code, so they show the dashed form;
+    // check-in codes are scanned from a URL, which carries the code as stored.
+    const copyValue = code ? (isStaff ? formatCode(code.code) : getClaimUrl(code.code)) : '';
 
     if (loading) {
         return (
