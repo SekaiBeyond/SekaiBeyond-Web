@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callClaimBadgeActivationCode, callClaimStaffCode, functionsErrorCode } from '~/lib/firebase';
+import { isPassportCodeShape, normalizePassportCode, PASSPORT_ID_LENGTH } from '~/lib/passports';
 import type { BadgeDef } from '~/lib/types';
 import { useModalEffects } from '~/lib/useModalEffects';
 
@@ -14,6 +16,7 @@ interface EventInfo {
 export const RedeemModal = () => {
     const {user, profile, refreshProfile} = useAuth();
     const {isEnglish} = useLanguage();
+    const navigate = useNavigate();
     const [show, setShow] = useState(false);
     const [input, setInput] = useState('');
     const [state, setState] = useState<'idle' | 'claiming' | 'badge-success' | 'staff-success' | 'error'>('idle');
@@ -60,6 +63,14 @@ export const RedeemModal = () => {
         }
         if (!user || !profile) return;
         if (submittingRef.current) return;
+
+        // A passport id is the one code this modal can't settle by itself:
+        // binding one also needs the activation key hidden under the sticker,
+        // which /p/:id asks for. It is tried last, so a reward code that
+        // happens to share the shape still redeems as a reward code.
+        const passportCode = isPassportCodeShape(trimmed, PASSPORT_ID_LENGTH)
+            ? normalizePassportCode(trimmed)
+            : null;
 
         submittingRef.current = true;
         setState('claiming');
@@ -125,8 +136,14 @@ export const RedeemModal = () => {
             refreshProfile().catch(() => {
             });
         } catch (staffErr) {
+            const staffErrCode = functionsErrorCode(staffErr);
+            if (passportCode && (staffErrCode === 'invalid' || staffErrCode === 'inactive')) {
+                close();
+                navigate(`/p/${passportCode}`);
+                return;
+            }
             setState('error');
-            switch (functionsErrorCode(staffErr)) {
+            switch (staffErrCode) {
                 case 'rate-limited':
                     setError(isEnglish ? 'Too many attempts. Please wait a moment.' : '尝试次数过多，请稍后再试。');
                     break;
@@ -164,8 +181,8 @@ export const RedeemModal = () => {
                         </h2>
                         <p className="redeem-subtitle">
                             {isEnglish
-                                ? 'Enter your code to redeem a reward.'
-                                : '输入兑换码以领取奖励。'}
+                                ? 'Enter your code to redeem a reward or activate a passport.'
+                                : '输入兑换码以领取奖励或激活通行证。'}
                         </p>
                         <form onSubmit={handleSubmit}>
                             <input

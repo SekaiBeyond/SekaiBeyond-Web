@@ -115,8 +115,7 @@
     justify-content: center;
 }
 
-.passport-key-input,
-.passport-code-input {
+.passport-key-input {
     font-family: var(--font-mono);
     font-size: 18px;
     letter-spacing: 0.12em;
@@ -129,15 +128,7 @@
     color: var(--color-text);
 }
 
-.passport-code-input {
-    font-size: 15px;
-    padding: 8px 12px;
-    text-align: left;
-    width: min(220px, 100%);
-}
-
-.passport-key-input:focus,
-.passport-code-input:focus {
+.passport-key-input:focus {
     outline: none;
     border-color: var(--color-primary);
 }
