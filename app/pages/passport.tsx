@@ -18,11 +18,10 @@ import {
     passportName,
     type PassportPublicProfile,
     usePassportDesigns,
-    usePassportPrivacy,
 } from '~/lib/passports';
+import { PRIVACY_ROWS } from '~/lib/privacy';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
-import { type ShowToast, ToastContainer, useToasts } from '~/lib/useToasts';
 import { PassportShelfCard } from './PassportShelfSection';
 import { BadgeCard, EventCard } from './profile';
 import { ExpiredCard } from './qrRedirect';
@@ -43,9 +42,9 @@ export const PassportPage = () => {
 
     const [result, setResult] = useState<PassportPublicProfile | null>(null);
     const [failed, setFailed] = useState(false);
-    // Bumped to re-resolve the sticker (after activating, or after the owner
-    // flips visibility). Both bumps come from the owner, whose resolves the
-    // server declines to tally — so re-resolving never inflates the scan count.
+    // Bumped to re-resolve the sticker after the owner activates it. That resolve
+    // is the owner's own, which the server declines to tally — so re-resolving
+    // never inflates the scan count.
     const [nonce, setNonce] = useState(0);
 
     useEffect(() => {
@@ -115,7 +114,7 @@ export const PassportPage = () => {
         );
     }
 
-    return <ClaimedPassport passportId={passportId} data={result} onChanged={() => setNonce(n => n + 1)}/>;
+    return <ClaimedPassport passportId={passportId} data={result}/>;
 };
 
 /** Nav + page frame, matching the profile and admin pages. */
@@ -366,16 +365,14 @@ function activationError(err: unknown, isEnglish: boolean): string {
 interface ClaimedPassportProps {
     passportId: string;
     data: Extract<PassportPublicProfile, {status: 'claimed'}>;
-    onChanged: () => void;
 }
 
 /** The owner's public page. Renders for signed-out visitors — no login wall. */
-const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) => {
+const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
     const {isEnglish} = useLanguage();
     const {designs} = usePassportDesigns();
     const {pastEvents} = usePastEvents();
     const {tags} = useTags();
-    const {toasts, showToast} = useToasts();
     const [activeBadge, setActiveBadge] = useState<string | null>(null);
 
     const {owner} = data;
@@ -409,7 +406,6 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
 
     return (
         <>
-            <ToastContainer toasts={toasts}/>
             <PassportShell>
                 <div className="passport-hero">
                     {design?.coverImageUrl && (
@@ -471,11 +467,14 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
                         hidden={data.hidden}
                         scanCount={data.scanCount}
                         membershipExpiresAt={data.membershipExpiresAt}
-                        onChanged={onChanged}
-                        showToast={showToast}
+                        visibility={data.visibility}
                     />
                 )}
 
+                {/* A section the owner keeps private simply isn't here — the
+                    server withholds it. The owner is the exception: their own
+                    page is unfiltered, and the panel above is where they read
+                    what a visitor actually gets. */}
                 {data.shelf.length > 0 && (
                     <section className="passport-section">
                         <h3 className="passport-section-title">
@@ -557,24 +556,35 @@ const ClaimedPassport = ({passportId, data, onChanged}: ClaimedPassportProps) =>
 
 /**
  * Shown only to the owner, scanning their own sticker: how long their membership
- * has left, how often the passport has been scanned, and the visibility switch.
- * Kept behind a disclosure so a passport page stays a passport page.
+ * has left, how often the passport has been scanned, and what of this page
+ * visitors are actually getting. Kept behind a disclosure so a passport page
+ * stays a passport page.
+ *
+ * It reports; it does not change anything. Every switch it names lives on the
+ * profile page's Settings tab, so there is one control per setting and no second
+ * copy to fall out of step with it.
  */
-const OwnerPanel = ({hidden, scanCount, membershipExpiresAt, onChanged, showToast}: {
+const OwnerPanel = ({hidden, scanCount, membershipExpiresAt, visibility}: {
     hidden: boolean;
     scanCount: number | null;
     membershipExpiresAt: string | null;
-    onChanged: () => void;
-    showToast: ShowToast;
+    visibility: {badges: boolean; events: boolean; passports: boolean};
 }) => {
     const {isEnglish} = useLanguage();
-    const {saving: busy, setPrivacy} = usePassportPrivacy(showToast);
     const [open, setOpen] = useState(false);
 
     const expiry = membershipExpiresAt ? new Date(membershipExpiresAt) : null;
     const daysLeft = expiry && !isNaN(expiry.getTime())
         ? Math.ceil((expiry.getTime() - Date.now()) / 86_400_000)
         : null;
+
+    // Sections the owner sees here but visitors do not. With the page private
+    // none of it reaches anyone anyway, so listing them then would only muddle
+    // the bigger fact stated right above.
+    const hiddenSections = hidden
+        ? []
+        : PRIVACY_ROWS.filter(row => row.key !== 'passportPage'
+            && !visibility[row.key as keyof typeof visibility]);
 
     return (
         <div className="passport-owner-panel">
@@ -627,18 +637,16 @@ const OwnerPanel = ({hidden, scanCount, membershipExpiresAt, onChanged, showToas
                                 ? 'This page is public: anyone who scans your passport sees it.'
                                 : '此页面已公开：任何扫描您通行证的人都能看到它。')}
                     </p>
-                    <button
-                        className="admin-btn admin-btn--outline"
-                        onClick={() => void setPrivacy(!hidden, onChanged)}
-                        disabled={busy}
-                        type="button"
-                    >
-                        {busy
-                            ? (isEnglish ? 'Saving…' : '保存中…')
-                            : hidden
-                                ? (isEnglish ? 'Make my passport page public' : '公开我的通行证页面')
-                                : (isEnglish ? 'Make my passport page private' : '将我的通行证页面设为私密')}
-                    </button>
+                    {hiddenSections.length > 0 && (
+                        <p className="passport-owner-panel-row">
+                            {isEnglish
+                                ? `You are seeing it whole. Visitors don’t see: ${hiddenSections.map(r => r.title.en.toLowerCase()).join(', ')}.`
+                                : `您看到的是完整页面。访客看不到：${hiddenSections.map(r => r.title.zh).join('、')}。`}
+                        </p>
+                    )}
+                    <Link to="/profile?tab=settings" className="admin-btn admin-btn--outline settings-link-btn">
+                        {isEnglish ? 'Change privacy settings' : '修改隐私设置'}
+                    </Link>
                 </div>
             )}
         </div>

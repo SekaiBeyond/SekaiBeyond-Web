@@ -11,6 +11,7 @@ import {
     signInWithGoogle as firebaseSignIn,
     signOut as firebaseSignOut
 } from '~/lib/firebase';
+import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
 
 // `group` is a pure role ladder. Whether someone has paid is membership, which
 // lives in membershipExpiresAt and never moves anyone between these values.
@@ -100,6 +101,8 @@ export interface UserProfile {
     membershipExpiresAt: Date | null;
     /** Opt-out for the public passport page at /p/:passportId. Default false. */
     hidePassportPage: boolean;
+    /** Which sections other people are shown. Anything unset is visible. */
+    profileVisibility: ProfileVisibility;
     title?: string;
     titleCn?: string;
     eventStaffEvents: string[];
@@ -126,6 +129,7 @@ function toUserProfile(data: DocumentData, email: string): UserProfile {
         group: normalizeGroup(data.group),
         membershipExpiresAt: data.membershipExpiresAt?.toDate() ?? null,
         hidePassportPage: data.hidePassportPage === true,
+        profileVisibility: readVisibility(data.profileVisibility),
         title: data.title ?? '',
         titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],

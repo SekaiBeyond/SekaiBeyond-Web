@@ -7,6 +7,7 @@ import { type ConEdition } from "~/constants";
 import type { TeamMemberConfig } from "./siteConfig";
 import type { ConContent } from "./conContent";
 import type { PassportPublicProfile } from "./passports";
+import type { ProfileVisibility } from "./privacy";
 
 const requiredEnvVars = [
     'VITE_FIREBASE_API_KEY',
@@ -526,6 +527,11 @@ export const callVoidPassport = (data: {passportId: string}) =>
 export const callSetPassportPrivacy = (data: {hide: boolean}) =>
     httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);
 
+// Partial on purpose: the settings tab saves one switch at a time and the server
+// merges, so two browser tabs left open can't undo each other's unrelated changes.
+export const callSetProfileVisibility = (data: {sections: Partial<ProfileVisibility>}) =>
+    httpsCallable<typeof data, {visibility: ProfileVisibility}>(getFunctions(), 'setProfileVisibility')(data);
+
 export const callSavePassportDesign = (data: {
     year: number;
     coverImageUrl: string;
@@ -544,6 +550,9 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         isMember: boolean;
         title?: string;
         titleCn?: string;
+        // Sections the owner has switched off arrive empty; these say which, so
+        // the page can tell "kept private" from "none yet".
+        visibility?: {badges: boolean; events: boolean};
     }>(getFunctions(), 'getPublicProfile')(data);
 
 export const callUploadAdminImage = async (file: File, storagePath: string): Promise<string> => {

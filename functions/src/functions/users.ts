@@ -18,6 +18,7 @@ import { db } from "../utils/firebase";
 import { pastEventIds, toStringIds } from "../utils/publicProfile";
 import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB } from "../utils/storage";
 import { sanitizeDisplayText, validateDocId, validateISODate } from "../utils/validation";
+import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     if (!request.auth) {
@@ -83,16 +84,30 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     }
 
     const data = userSnap.data()!;
-    const rawEarnedAt = (data.badgeEarnedAt ?? {}) as Record<string, Timestamp>;
+    // A section the owner has switched off is emptied here rather than at the
+    // client, so hiding it actually withholds the data instead of declining to
+    // draw it. The flags ride along so a viewer reads "kept private" rather than
+    // the empty state, which would otherwise claim they have earned nothing.
+    const visibility = readVisibility(data.profileVisibility);
+    // Your own profile is never filtered: /profile with your own uid in the
+    // query string is still your profile, and hiding it from yourself would
+    // leave no way to tell a hidden section from an empty one.
+    const isSelf = request.auth.uid === targetUid;
+    const showBadges = isSelf || visibility.badges;
+    const showEvents = isSelf || visibility.events;
+
     const badgeEarnedAt: Record<string, string> = {};
-    for (const [k, v] of Object.entries(rawEarnedAt)) {
-        const iso = v?.toDate?.()?.toISOString();
-        if (iso) badgeEarnedAt[k] = iso;
+    if (showBadges) {
+        const rawEarnedAt = (data.badgeEarnedAt ?? {}) as Record<string, Timestamp>;
+        for (const [k, v] of Object.entries(rawEarnedAt)) {
+            const iso = v?.toDate?.()?.toISOString();
+            if (iso) badgeEarnedAt[k] = iso;
+        }
     }
 
     // Restrict eventStaffEvents to past events only — upcoming-event ids would
     // leak unpublished events whose titles are otherwise gated by Firestore rules.
-    const rawStaffEvents = toStringIds(data.eventStaffEvents);
+    const rawStaffEvents = showEvents ? toStringIds(data.eventStaffEvents) : [];
     const pastEvents = await pastEventIds(rawStaffEvents);
     const eventStaffEvents = rawStaffEvents.filter(id => pastEvents.has(id));
 
@@ -100,9 +115,9 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         displayName: data.displayName ?? "",
         photoURL: data.photoURL ?? "",
         joinedAt: data.joinedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
-        attendedEvents: data.attendedEvents ?? [],
+        attendedEvents: showEvents ? (data.attendedEvents ?? []) : [],
         eventStaffEvents,
-        badges: data.badges ?? [],
+        badges: showBadges ? (data.badges ?? []) : [],
         badgeEarnedAt,
         group: normalizeGroup(data.group),
         // Only the membership's existence is public — the expiry date is the
@@ -110,7 +125,36 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         isMember: isMembershipActive(data),
         title: data.title ?? "",
         titleCn: data.titleCn ?? "",
+        // Only the sections this page renders. The passport shelf is the
+        // passport page's business, and naming it here would tell a viewer
+        // about a setting they have no surface for.
+        visibility: {badges: showBadges, events: showEvents},
     };
+});
+
+/**
+ * Switch sections of the caller's profile on or off for everybody else. Self
+ * only, no admin path — the same shape as setPassportPrivacy, which owns the
+ * coarser "is there a passport page at all" switch next to these.
+ *
+ * Updates are partial: the settings tab saves one switch at a time, and merging
+ * means two browser tabs left open can't undo each other's unrelated changes.
+ */
+export const setProfileVisibility = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const sections = parseVisibilityInput((request.data as {sections?: unknown})?.sections);
+
+    const userRef = db.collection("users").doc(uid);
+    const merged = await db.runTransaction(async (txn) => {
+        const snap = await txn.get(userRef);
+        if (!snap.exists) throw new HttpsError("not-found", "User not found.");
+        const next = {...readVisibility(snap.data()?.profileVisibility), ...sections};
+        txn.update(userRef, {profileVisibility: next});
+        return next;
+    });
+
+    return {visibility: merged};
 });
 
 interface ProfileTarget {

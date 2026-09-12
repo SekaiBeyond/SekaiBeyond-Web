@@ -23,6 +23,7 @@ import {
     PASSPORT_TERM_DAYS,
 } from "../utils/passports";
 import { validateStorageImageUrl, validateStr } from "../utils/validation";
+import { readVisibility } from "../utils/visibility";
 
 /**
  * Physical passports.
@@ -414,12 +415,21 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
         return {status: "private" as const};
     }
 
-    const attended = toStringIds(owner.attendedEvents);
-    const staffed = toStringIds(owner.eventStaffEvents);
+    // Per-section switches from the owner's settings. An owner scanning their own
+    // sticker sees the page whole — the point of the panel below is to tell them
+    // what everyone else is getting, which needs the hidden parts present to
+    // compare.
+    const visibility = readVisibility(owner.profileVisibility);
+    const showBadges = isOwner || visibility.badges;
+    const showEvents = isOwner || visibility.events;
+    const showPassports = isOwner || visibility.passports;
+
+    const attended = showEvents ? toStringIds(owner.attendedEvents) : [];
+    const staffed = showEvents ? toStringIds(owner.eventStaffEvents) : [];
     const [badges, pastEvents, shelf] = await Promise.all([
-        resolveBadges(owner),
+        showBadges ? resolveBadges(owner) : Promise.resolve([]),
         pastEventIds(attended, staffed),
-        resolveShelf(ownerUid, passportId),
+        showPassports ? resolveShelf(ownerUid, passportId) : Promise.resolve([]),
     ]);
 
     // The owner's own visits aren't scans. The page re-resolves whenever they
@@ -453,6 +463,14 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
             eventStaffEvents: staffed.filter(id => pastEvents.has(id)),
         },
         shelf,
+        // What the owner has switched off, so a visitor reads "kept private"
+        // instead of an empty state that would claim the section is empty. The
+        // owner gets their true settings, since their own view isn't filtered.
+        visibility: {
+            badges: visibility.badges,
+            events: visibility.events,
+            passports: visibility.passports,
+        },
     };
 });
 

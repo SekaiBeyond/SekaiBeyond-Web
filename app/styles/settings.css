@@ -1,0 +1,156 @@
+/* The Settings tab of /profile — the one place the privacy switches live. The
+   profile page supplies the nav, the header and the tab bar; this is the card
+   under it. */
+
+.settings-section {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 22px;
+    padding: 26px 24px;
+    box-shadow: 0 10px 40px rgba(255, 150, 200, 0.12);
+}
+
+.settings-section-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--color-text);
+    margin-bottom: 8px;
+}
+
+.settings-section-note {
+    font-size: 14px;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    max-width: 62ch;
+    margin-bottom: 12px;
+}
+
+.settings-section-note:last-of-type {
+    margin-bottom: 22px;
+}
+
+.settings-rows {
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 18px 0;
+    border-top: 1px solid rgba(255, 107, 157, 0.12);
+}
+
+.settings-row:first-child {
+    border-top: none;
+    padding-top: 0;
+}
+
+/* A switch whose section has nowhere to appear right now. It still saves — the
+   setting outlives the passport page being private — so it is dimmed, not
+   disabled. */
+.settings-row--moot .settings-row-title,
+.settings-row--moot .settings-row-help {
+    opacity: 0.55;
+}
+
+.settings-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-row-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.settings-row-help {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+}
+
+.settings-row-state {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+.settings-row--moot .settings-row-state {
+    color: var(--color-text-light);
+    font-weight: 500;
+}
+
+.settings-switch {
+    flex-shrink: 0;
+    width: 52px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-radius: 15px;
+    background: #d8dbe3;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.25s ease;
+}
+
+.settings-switch--on {
+    background: var(--gradient-cta);
+}
+
+.settings-switch:disabled {
+    cursor: progress;
+    opacity: 0.6;
+}
+
+.settings-switch:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+}
+
+.settings-switch-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: transform 0.25s ease;
+}
+
+.settings-switch--on .settings-switch-knob {
+    transform: translateX(22px);
+}
+
+/* The passport owner panel's route here: an anchor wearing .admin-btn--outline,
+   which was written for <button>. */
+.settings-link-btn {
+    box-sizing: border-box;
+    text-align: center;
+    text-decoration: none;
+}
+
+@media (max-width: 640px) {
+    .settings-section {
+        padding: 22px 18px;
+        border-radius: 18px;
+    }
+
+    .settings-row {
+        gap: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .settings-switch,
+    .settings-switch-knob {
+        transition: none;
+    }
+}

@@ -2,14 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import {
-    fetchPassportsByOwner,
-    type Passport,
-    passportName,
-    usePassportDesigns,
-    usePassportPrivacy,
-} from '~/lib/passports';
-import type { ShowToast } from '~/lib/useToasts';
+import { fetchPassportsByOwner, type Passport, passportName, usePassportDesigns, } from '~/lib/passports';
 
 /**
  * One passport on a shelf: its year's cover art, its name, and whatever the
@@ -52,20 +45,18 @@ export const PassportShelfCard = ({year, date, code, to, current}: {
 
 /**
  * The owner's passport shelf on /profile: one card per physical passport they
- * hold, plus the visibility switch for the public page. Activating a passport
- * is Redeem Code's job, so there is no code box here.
+ * hold, and nothing else. Activating a passport is Redeem Code's job and who
+ * can see the public page is the Settings tab's, so the shelf is just the shelf.
  *
  * A duplicate year gets its own card rather than a "×3" badge — each passport is
  * a separate object with its own code, its own claim date, and its own page.
  */
-export const PassportShelfSection = ({showToast}: {showToast: ShowToast}) => {
+export const PassportShelfSection = () => {
     const {isEnglish} = useLanguage();
     const {user, profile} = useAuth();
-    const {saving: savingPrivacy, setPrivacy} = usePassportPrivacy(showToast);
 
     const [passports, setPassports] = useState<Passport[] | null>(null);
     const [loadError, setLoadError] = useState(false);
-    const [editingPrivacy, setEditingPrivacy] = useState(false);
 
     const uid = user?.uid;
 
@@ -87,7 +78,6 @@ export const PassportShelfSection = ({showToast}: {showToast: ShowToast}) => {
 
     if (!profile) return null;
 
-    const hidden = profile.hidePassportPage;
     const hasPassports = passports !== null && passports.length > 0;
 
     return (
@@ -122,62 +112,6 @@ export const PassportShelfSection = ({showToast}: {showToast: ShowToast}) => {
                         ? 'No passports yet — a physical passport adds a year of membership and a page of your own. Holding one? Enter its code under Redeem Code in the account menu.'
                         : '还没有通行证 — 一本实体通行证可为你带来一年会员资格和一个属于你的页面。已持有通行证？请在账户菜单的「兑换激活码」中输入编号。'}
                 </p>
-            )}
-
-            {/* Nothing to make public until they hold a passport, so the switch
-                stays out of the way until then. Visibility follows the panel-wide
-                convention: the state reads as text, and the control only appears
-                once it is asked for. */}
-            {hasPassports && (
-                <div className="passport-profile-rows">
-                    <div className="passport-profile-row">
-                        <span className="passport-profile-row-label">
-                            {isEnglish ? 'Passport page' : '通行证页面'}
-                        </span>
-                        <span className="passport-profile-row-value">
-                            {hidden
-                                ? (isEnglish ? 'Private — scanners see a notice' : '私密 — 扫描者只会看到提示')
-                                : (isEnglish ? 'Public — anyone who scans sees it' : '公开 — 任何扫描者都能看到')}
-                        </span>
-                        {!editingPrivacy ? (
-                            <button
-                                className="profile-name-pencil"
-                                onClick={() => setEditingPrivacy(true)}
-                                type="button"
-                                aria-label={isEnglish ? 'Edit passport page visibility' : '编辑通行证页面可见性'}
-                                title={isEnglish ? 'Edit passport page visibility' : '编辑通行证页面可见性'}
-                            >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                                     strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                                </svg>
-                            </button>
-                        ) : (
-                            <span className="passport-profile-row-actions">
-                                <button
-                                    className="admin-btn admin-btn--cta"
-                                    onClick={() => void setPrivacy(!hidden, () => setEditingPrivacy(false))}
-                                    disabled={savingPrivacy}
-                                    type="button"
-                                >
-                                    {savingPrivacy
-                                        ? (isEnglish ? 'Saving…' : '保存中…')
-                                        : hidden
-                                            ? (isEnglish ? 'Make it public' : '设为公开')
-                                            : (isEnglish ? 'Make it private' : '设为私密')}
-                                </button>
-                                <button
-                                    className="admin-btn admin-btn--outline"
-                                    onClick={() => setEditingPrivacy(false)}
-                                    disabled={savingPrivacy}
-                                    type="button"
-                                >
-                                    {isEnglish ? 'Cancel' : '取消'}
-                                </button>
-                            </span>
-                        )}
-                    </div>
-                </div>
             )}
         </section>
     );

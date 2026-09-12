@@ -383,46 +383,6 @@ a.passport-shelf-card:hover {
     margin-top: 44px;
 }
 
-/* --- Rows shared with the profile page ----------------------------------- */
-
-.passport-profile-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 20px;
-}
-
-.passport-profile-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(255, 107, 157, 0.12);
-    border-radius: 14px;
-}
-
-.passport-profile-row-label {
-    font-weight: 700;
-    font-size: 14px;
-    color: var(--color-text);
-    min-width: 140px;
-}
-
-.passport-profile-row-value {
-    flex: 1;
-    min-width: 180px;
-    font-size: 14px;
-    color: var(--color-text-body);
-}
-
-.passport-profile-row-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
 @media (max-width: 640px) {
     .passport-page {
         padding: 88px 14px 60px;
@@ -447,9 +407,5 @@ a.passport-shelf-card:hover {
 
     .passport-owner-info {
         align-items: center;
-    }
-
-    .passport-profile-row-label {
-        min-width: 0;
     }
 }

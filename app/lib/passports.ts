@@ -1,11 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
-import { useAuth } from '~/components/AuthProvider';
-import { useLanguage } from '~/components/LanguageContextProvider';
 import { createCollectionCache, toDate } from './collectionCache';
-import { callSetPassportPrivacy, getFirebaseDb } from './firebase';
+import { getFirebaseDb } from './firebase';
 import { fetchScans, type ScanHistory } from './scans';
-import type { ShowToast } from './useToasts';
 
 export type PassportStatus = 'unclaimed' | 'claimed' | 'void';
 
@@ -96,8 +93,17 @@ export type PassportPublicProfile =
      * The owner's collection, by year — no sibling passport ids. `isCurrent`
      * marks the scanned one, resolved server-side because the year alone can't
      * tell two passports of the same year apart.
+     *
+     * Empty when the owner has switched the collection off — see `visibility`.
      */
     shelf: Array<{year: number; claimedAt: string | null; isCurrent: boolean}>;
+    /**
+     * Which sections the owner shows other people, from their settings. A hidden one
+     * arrives empty, so this is what tells the page to say "kept private"
+     * instead of drawing an empty state. The owner's own view is never filtered,
+     * so for them these describe what *visitors* get.
+     */
+    visibility: {badges: boolean; events: boolean; passports: boolean};
 };
 
 /** An entry in a passport's permanent audit trail. */
@@ -154,51 +160,6 @@ export function usePassportDesigns(): {
     // in effect dependencies, and a fresh copy each render would re-run them.
     const designs = useMemo(() => [...items].sort((a, b) => b.year - a.year), [items]);
     return {designs, loading, refresh};
-}
-
-/**
- * Flip the owner's passport page between public and private.
- *
- * Both surfaces that offer the switch — the profile shelf and the owner panel on
- * the passport page itself — go through here, so the call, the profile refresh
- * that repaints the membership star, and the wording of all three outcomes have
- * one definition. `onSuccess` is where each caller closes its own chrome.
- *
- * A refresh that fails is swallowed: the visibility write already landed, and
- * reporting it as a failure would be a lie the user would act on.
- */
-export function usePassportPrivacy(showToast: ShowToast): {
-    saving: boolean;
-    setPrivacy: (hide: boolean, onSuccess?: () => void) => Promise<void>;
-} {
-    const {isEnglish} = useLanguage();
-    const {refreshProfile} = useAuth();
-    const [saving, setSaving] = useState(false);
-
-    const setPrivacy = async (hide: boolean, onSuccess?: () => void) => {
-        setSaving(true);
-        try {
-            await callSetPassportPrivacy({hide});
-            await refreshProfile().catch(() => {
-            });
-            showToast(
-                hide
-                    ? (isEnglish ? 'Your passport page is now private.' : '您的通行证页面已设为私密。')
-                    : (isEnglish ? 'Your passport page is public again.' : '您的通行证页面已重新公开。'),
-                'success',
-            );
-            onSuccess?.();
-        } catch {
-            showToast(
-                isEnglish ? 'Failed to change visibility. Please try again.' : '修改可见性失败，请重试。',
-                'error',
-            );
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return {saving, setPrivacy};
 }
 
 export const passportStatusLabel = (status: PassportStatus, isEnglish: boolean): string => {

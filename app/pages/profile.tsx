@@ -17,6 +17,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { isValidHttpUrl } from '~/lib/urls';
 import { PassportShelfSection } from '~/pages/PassportShelfSection';
+import { ProfileSettingsTab } from '~/pages/ProfileSettingsTab';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 import { validateImageFile } from "~/pages/admin/utils";
 import { ToastContainer, useToasts } from '~/lib/useToasts';
@@ -40,6 +41,12 @@ interface ViewedProfile {
     isMember: boolean;
     title?: string;
     titleCn?: string;
+    /**
+     * Which sections this member shows other people. A hidden one arrives
+     * empty from the server, so this is what separates "kept private" from
+     * "none yet" — without it the page would claim they had earned nothing.
+     */
+    visibility: {badges: boolean; events: boolean};
 }
 
 /** A badge and its hover tooltip. Shared with the public passport page, which
@@ -150,10 +157,20 @@ export const ProfilePage = () => {
     const {pastEvents, loading: eventsLoading} = usePastEvents();
     const {tags} = useTags();
     const tagMap = useMemo(() => new Map(tags.map(t => [t.id, t])), [tags]);
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const viewUid = searchParams.get('uid');
     const isViewingOther = !!viewUid && viewUid !== user?.uid;
+    // Settings are yours alone, so someone else's profile has no tabs at all —
+    // and ?tab=settings on their uid falls back to the profile itself rather
+    // than showing them your switches.
+    const settingsTab = !isViewingOther && searchParams.get('tab') === 'settings';
+    const openTab = (tab: 'profile' | 'settings') => {
+        const next = new URLSearchParams(searchParams);
+        if (tab === 'settings') next.set('tab', tab);
+        else next.delete('tab');
+        setSearchParams(next);
+    };
     const wasAuthorized = useRef(false);
     const [viewedProfile, setViewedProfile] = useState<ViewedProfile | null>(null);
     const [loadingViewed, setLoadingViewed] = useState(false);
@@ -270,6 +287,11 @@ export const ProfilePage = () => {
                     isMember: data.isMember ?? false,
                     title: data.title ?? '',
                     titleCn: data.titleCn ?? '',
+                    // Absent from an older deploy means nothing was filtered.
+                    visibility: {
+                        badges: data.visibility?.badges !== false,
+                        events: data.visibility?.events !== false,
+                    },
                 });
             } catch {
                 if (!stale) setViewedLoadError(true);
@@ -483,6 +505,13 @@ export const ProfilePage = () => {
             title: viewedProfile!.title ?? '',
             titleCn: viewedProfile!.titleCn ?? '',
         };
+    // A section the viewed member keeps private arrives empty. Own profile is
+    // never filtered — you always see your own page whole.
+    const showBadges = isOwnProfile || viewedProfile!.visibility.badges;
+    const showEvents = isOwnProfile || viewedProfile!.visibility.events;
+    const privateNote = isEnglish
+        ? `${dp.name} keeps this private.`
+        : `${dp.name} 将此内容设为私密。`;
     const staffedSet = new Set(dp.eventStaffEvents);
     const attendedSet = new Set([...dp.attendedEvents, ...dp.eventStaffEvents]);
     const attendedEvents = pastEvents
@@ -695,92 +724,132 @@ export const ProfilePage = () => {
                     </div>
                 </div>
 
-                <div className="profile-stats">
-                    {earnedBadges.length > 0 && (
-                        <div className="profile-stat">
-                            <span className="profile-stat-number">{earnedBadges.length}</span>
-                            <span className="profile-stat-label">{isEnglish ? 'Badges' : '徽章'}</span>
-                        </div>
-                    )}
-                    <div className="profile-stat">
-                        <span className="profile-stat-number">{attendedEvents.length}</span>
-                        <span className="profile-stat-label">{isEnglish ? 'Events Attended' : '参与活动'}</span>
+                {/* Only your own profile has tabs: the header above is shared by
+                    both, so switching keeps your name and photo in place. */}
+                {isOwnProfile && (
+                    <div className="admin-tabs profile-tabs">
+                        <button
+                            type="button"
+                            className={`admin-tab ${!settingsTab ? 'admin-tab-active' : ''}`}
+                            onClick={() => openTab('profile')}
+                        >
+                            {isEnglish ? 'Profile' : '个人主页'}
+                        </button>
+                        <button
+                            type="button"
+                            className={`admin-tab ${settingsTab ? 'admin-tab-active' : ''}`}
+                            onClick={() => openTab('settings')}
+                        >
+                            {isEnglish ? 'Settings' : '设置'}
+                        </button>
                     </div>
-                </div>
-
-                {badgeLoadError && dp.badges.length > 0 && (
-                    <p className="profile-load-error">
-                        {isEnglish ? 'Failed to load badge details.' : '加载徽章详情失败。'}
-                    </p>
-                )}
-                {!badgeLoadError && earnedBadges.length > 0 ? (
-                    <section className="badge-section">
-                        <h2 className="badge-section-title">
-                            {isEnglish ? 'Badges' : '徽章'}
-                        </h2>
-                        <div className="badge-grid" ref={badgeGridRef}>
-                            {earnedBadges.map(badge => (
-                                <BadgeCard
-                                    key={badge.id}
-                                    badge={badge}
-                                    earnedDate={earnedDates[badge.id]}
-                                    isEnglish={isEnglish}
-                                    active={activeBadge === badge.id}
-                                    onToggle={() => toggleBadge(badge)}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                ) : !badgeLoadError && earnedBadges.length === 0 && (
-                    <section className="badge-section">
-                        <h2 className="badge-section-title">
-                            {isEnglish ? 'Badges' : '徽章'}
-                        </h2>
-                        <p className="profile-empty-state">
-                            {isEnglish
-                                ? 'No badges yet — attend events and complete challenges to earn your first!'
-                                : '还没有徽章——参加活动和完成挑战来获得你的第一枚徽章吧！'}
-                        </p>
-                    </section>
                 )}
 
-                {/* Passports are the owner's own business: the shelf, the
-                    visibility switch, and the activation entry point all read
-                    from their profile, and getPublicProfile carries none of it. */}
-                {isOwnProfile && <PassportShelfSection showToast={showToast}/>}
-
-                {attendedEvents.length > 0 ? (
-                    <section className="badge-section">
-                        <h2 className="badge-section-title">
-                            {isEnglish ? 'Events Attended' : '参与活动'}
-                        </h2>
-                        <div className="profile-event-grid">
-                            {attendedEvents.map(event => (
-                                <EventCard
-                                    key={event.id}
-                                    event={event}
-                                    isEnglish={isEnglish}
-                                    showAdminLink={isStaff}
-                                    wasStaff={staffedSet.has(event.id)}
-                                    tagLabels={event.tagIds
-                                        .map(id => tagMap.get(id))
-                                        .filter((t): t is NonNullable<typeof t> => !!t)
-                                        .map(t => isEnglish ? t.name : t.nameCn)}
-                                />
-                            ))}
-                        </div>
-                    </section>
+                {settingsTab ? (
+                    <ProfileSettingsTab showToast={showToast}/>
                 ) : (
-                    <section className="badge-section">
-                        <h2 className="badge-section-title">
-                            {isEnglish ? 'Events Attended' : '参与活动'}
-                        </h2>
-                        <p className="profile-empty-state">
-                            {isEnglish
-                                ? 'No events attended yet — check out our upcoming events and join one!'
-                                : '还没有参加过活动——看看即将到来的活动，来参加一场吧！'}
-                        </p>
-                    </section>
+                    <>
+                        {/* A private section has no count to show: the numbers are
+                        derived from lists the server withheld, so printing them
+                        would just report zero. Someone who hides both leaves nothing
+                        to put in the row, so the row itself goes. */}
+                        {(showEvents || (showBadges && earnedBadges.length > 0)) && (
+                            <div className="profile-stats">
+                                {showBadges && earnedBadges.length > 0 && (
+                                    <div className="profile-stat">
+                                        <span className="profile-stat-number">{earnedBadges.length}</span>
+                                        <span className="profile-stat-label">{isEnglish ? 'Badges' : '徽章'}</span>
+                                    </div>
+                                )}
+                                {showEvents && (
+                                    <div className="profile-stat">
+                                        <span className="profile-stat-number">{attendedEvents.length}</span>
+                                        <span
+                                            className="profile-stat-label">{isEnglish ? 'Events Attended' : '参与活动'}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {badgeLoadError && dp.badges.length > 0 && (
+                            <p className="profile-load-error">
+                                {isEnglish ? 'Failed to load badge details.' : '加载徽章详情失败。'}
+                            </p>
+                        )}
+                        {!badgeLoadError && (
+                            <section className="badge-section">
+                                <h2 className="badge-section-title">
+                                    {isEnglish ? 'Badges' : '徽章'}
+                                </h2>
+                                {!showBadges ? (
+                                    <p className="profile-empty-state">{privateNote}</p>
+                                ) : earnedBadges.length > 0 ? (
+                                    <div className="badge-grid" ref={badgeGridRef}>
+                                        {earnedBadges.map(badge => (
+                                            <BadgeCard
+                                                key={badge.id}
+                                                badge={badge}
+                                                earnedDate={earnedDates[badge.id]}
+                                                isEnglish={isEnglish}
+                                                active={activeBadge === badge.id}
+                                                onToggle={() => toggleBadge(badge)}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="profile-empty-state">
+                                        {isOwnProfile
+                                            ? (isEnglish
+                                                ? 'No badges yet — attend events and complete challenges to earn your first!'
+                                                : '还没有徽章——参加活动和完成挑战来获得你的第一枚徽章吧！')
+                                            : (isEnglish
+                                                ? 'No badges yet.'
+                                                : '还没有徽章。')}
+                                    </p>
+                                )}
+                            </section>
+                        )}
+
+                        {/* Passports are the owner's own business: the shelf and the
+                        activation entry point both read from their profile, and
+                        getPublicProfile carries none of it. */}
+                        {isOwnProfile && <PassportShelfSection/>}
+
+                        <section className="badge-section">
+                            <h2 className="badge-section-title">
+                                {isEnglish ? 'Events Attended' : '参与活动'}
+                            </h2>
+                            {!showEvents ? (
+                                <p className="profile-empty-state">{privateNote}</p>
+                            ) : attendedEvents.length > 0 ? (
+                                <div className="profile-event-grid">
+                                    {attendedEvents.map(event => (
+                                        <EventCard
+                                            key={event.id}
+                                            event={event}
+                                            isEnglish={isEnglish}
+                                            showAdminLink={isStaff}
+                                            wasStaff={staffedSet.has(event.id)}
+                                            tagLabels={event.tagIds
+                                                .map(id => tagMap.get(id))
+                                                .filter((t): t is NonNullable<typeof t> => !!t)
+                                                .map(t => isEnglish ? t.name : t.nameCn)}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="profile-empty-state">
+                                    {isOwnProfile
+                                        ? (isEnglish
+                                            ? 'No events attended yet — check out our upcoming events and join one!'
+                                            : '还没有参加过活动——看看即将到来的活动，来参加一场吧！')
+                                        : (isEnglish
+                                            ? 'No events attended yet.'
+                                            : '还没有参加过活动。')}
+                                </p>
+                            )}
+                        </section>
+                    </>
                 )}
             </div>
             {selectedBadge && (

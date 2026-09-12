@@ -320,6 +320,14 @@
     margin-top: 20px;
 }
 
+/* Profile / Settings. Wears the admin pill tabs — the same borrowing as the
+   .admin-btn family already on the passport page — with the profile page's own
+   spacing around them. */
+.profile-tabs {
+    margin-top: 30px;
+    margin-bottom: 20px;
+}
+
 .badge-section {
     margin-top: 20px;
 }
