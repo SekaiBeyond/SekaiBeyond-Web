@@ -53,10 +53,11 @@ interface ViewedProfile {
 }
 
 /**
- * Width over height of an uploaded banner. The banner holds this shape on every
- * screen (see .profile-hero-banner--image), so the crop is what people see.
+ * Width over height of an uploaded banner: the shape of the banner on the widest
+ * card, 1158px by 96px (see .profile-hero-banner), so there the crop is what
+ * people see. Narrower screens keep the height and trim the sides.
  */
-const BANNER_ASPECT = 5;
+const BANNER_ASPECT = 12;
 // Wide enough to stay sharp across the full-width card on a high-density screen.
 const BANNER_WIDTH = 1500;
 
@@ -651,7 +652,7 @@ export const ProfilePage = () => {
 
                 <div className="profile-hero">
                     <div
-                        className={`profile-hero-banner${showBanner ? ' profile-hero-banner--image' : ''}${savingBanner ? ' profile-hero-banner--saving' : ''}`}>
+                        className={`profile-hero-banner${savingBanner ? ' profile-hero-banner--saving' : ''}`}>
                         {showBanner && (
                             <img
                                 src={bannerURL}

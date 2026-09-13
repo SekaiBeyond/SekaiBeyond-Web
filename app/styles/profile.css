@@ -195,20 +195,17 @@
 }
 
 /* The banner rounds its own corners rather than the card clipping them, so the
-   photo's and the star's tooltips can still spill past the card. */
+   photo's and the star's tooltips can still spill past the card.
+
+   It is the same height with or without a member's own image. On the widest
+   card that height matches the crop's shape, BANNER_ASPECT in profile.tsx; on a
+   narrower screen the image trims its sides. The gradient stays underneath
+   while an image loads. */
 .profile-hero-banner {
     position: relative;
     height: 96px;
     border-radius: 23px 23px 0 0;
     background: var(--gradient-cta);
-}
-
-/* A member's own banner holds one shape at every width — BANNER_ASPECT in
-   profile.tsx — so what they cropped is what everyone sees. The gradient stays
-   underneath while it loads. */
-.profile-hero-banner.profile-hero-banner--image {
-    height: auto;
-    aspect-ratio: 5 / 1;
 }
 
 .profile-hero-banner-image {
@@ -1392,14 +1389,6 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     .profile-hero-banner {
         height: 72px;
         border-radius: 19px 19px 0 0;
-    }
-
-    /* On a phone the shape alone would leave the photo no banner to sit on; the
-       image trims its sides instead. The set width stops the aspect ratio
-       turning that height into a width wider than the card. */
-    .profile-hero-banner.profile-hero-banner--image {
-        width: 100%;
-        min-height: 72px;
     }
 
     .profile-banner-actions {

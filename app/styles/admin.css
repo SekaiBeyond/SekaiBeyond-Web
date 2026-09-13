@@ -509,7 +509,7 @@
 .admin-detail-banner {
     display: block;
     width: 100%;
-    aspect-ratio: 5 / 1;
+    aspect-ratio: 12 / 1;
     margin-bottom: 14px;
     border-radius: 12px;
     object-fit: cover;
