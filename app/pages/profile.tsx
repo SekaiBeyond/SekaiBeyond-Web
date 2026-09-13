@@ -621,10 +621,9 @@ export const ProfilePage = () => {
         year: 'numeric', month: 'long', day: 'numeric',
     });
     // Only the owner has membership dates to show — getPublicProfile hands
-    // everyone else a bare isMember. A start is missing for memberships granted
-    // before it was recorded, and only means anything while one is running.
+    // everyone else a bare isMember. The start only means anything while a
+    // membership is running, and isMember means there is an end.
     const memberSince = isOwnProfile && isMember ? profile!.membershipStartedAt : null;
-    const memberUntil = isOwnProfile && isMember ? profile!.membershipExpiresAt : null;
 
     return (
         <>
@@ -842,7 +841,7 @@ export const ProfilePage = () => {
                                 </span>
                                 <span className="profile-meta-item">
                                     <FiCalendar aria-hidden="true"/>
-                                    {isEnglish ? 'Joined ' : '加入时间：'}
+                                    {isEnglish ? 'Joined: ' : '注册日期：'}
                                     {longDate(dp.joinedAt)}
                                 </span>
                                 {isOwnProfile && 'email' in dp && (
@@ -861,18 +860,18 @@ export const ProfilePage = () => {
                                         {isEnglish ? 'Member' : '会员'}
                                     </span>
                                     {memberSince && (
-                                        <span className="profile-meta-item">
-                                            <FiPlayCircle aria-hidden="true"/>
-                                            {isEnglish ? 'Started ' : '开始时间：'}
-                                            {longDate(memberSince)}
-                                        </span>
-                                    )}
-                                    {memberUntil && (
-                                        <span className="profile-meta-item">
-                                            <FiClock aria-hidden="true"/>
-                                            {isEnglish ? 'Ends ' : '到期时间：'}
-                                            {longDate(memberUntil)}
-                                        </span>
+                                        <>
+                                            <span className="profile-meta-item">
+                                                <FiPlayCircle aria-hidden="true"/>
+                                                {isEnglish ? 'Membership start: ' : '会员开通日期：'}
+                                                {longDate(memberSince)}
+                                            </span>
+                                            <span className="profile-meta-item">
+                                                <FiClock aria-hidden="true"/>
+                                                {isEnglish ? 'Membership end: ' : '会员到期日期：'}
+                                                {longDate(profile!.membershipExpiresAt!)}
+                                            </span>
+                                        </>
                                     )}
                                 </div>
                             )}

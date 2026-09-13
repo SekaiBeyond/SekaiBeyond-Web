@@ -104,8 +104,8 @@ export interface UserProfile {
     group: UserGroup;
     membershipExpiresAt: Date | null;
     /**
-     * When the current run of membership began. Left over from an earlier run
-     * once it lapses, and null for memberships granted before it was recorded.
+     * When the current run of membership began; null for someone who has never
+     * had one. Left over from the last run once it lapses.
      */
     membershipStartedAt: Date | null;
     /** Opt-out for the public passport page at /p/:passportId. Default false. */

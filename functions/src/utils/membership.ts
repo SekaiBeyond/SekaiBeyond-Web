@@ -23,12 +23,9 @@ export function extendedExpiry(current: unknown, days: number): Timestamp {
 // When the membership running to `next` began, for `membershipStartedAt`. A change
 // to one that is still running keeps its start, one that begins a membership
 // starts it today, and null — written as a delete — means none is left running.
-// Memberships granted before the field existed have no start to keep, so they
-// stay blank until they lapse and begin again.
 export function startedAtAfter(current: FirebaseFirestore.DocumentData, next: Timestamp | null): Timestamp | null {
     if (!next || next.toMillis() <= Date.now()) return null;
-    if (!isMembershipActive(current)) return Timestamp.now();
-    return current.membershipStartedAt instanceof Timestamp ? current.membershipStartedAt : null;
+    return isMembershipActive(current) ? current.membershipStartedAt : Timestamp.now();
 }
 
 // Ceiling on a single admin grant. Not a cap on total membership — stacked grants

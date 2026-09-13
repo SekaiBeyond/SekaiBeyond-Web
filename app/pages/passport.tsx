@@ -457,7 +457,7 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
                         )}
                         {joinedOn && (
                             <div className="passport-field">
-                                <dt>{isEnglish ? 'Joined on' : '注册时间'}</dt>
+                                <dt>{isEnglish ? 'Joined on' : '注册日期'}</dt>
                                 <dd>{joinedOn}</dd>
                             </div>
                         )}

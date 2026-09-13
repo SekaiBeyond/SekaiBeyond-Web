@@ -756,7 +756,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 )}
                                 <p>{selectedUser.email}</p>
                                 <p className="admin-detail-joined">
-                                    {isEnglish ? 'Joined: ' : '加入时间：'}
+                                    {isEnglish ? 'Joined: ' : '注册日期：'}
                                     {selectedUser.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
                                         year: 'numeric', month: 'long', day: 'numeric',
                                     })}
