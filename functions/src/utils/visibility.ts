@@ -11,7 +11,7 @@ import { HttpsError } from "firebase-functions/v2/https";
  *
  * Mirrors PROFILE_SECTIONS in app/lib/privacy.ts.
  */
-export const PROFILE_SECTIONS = ["badges", "events", "passports"] as const;
+export const PROFILE_SECTIONS = ["badges", "events"] as const;
 
 export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
 

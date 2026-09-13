@@ -81,9 +81,10 @@ const PrivacySwitch = ({checked, busy, label, onChange}: {
  * The Settings tab of /profile — what other people are shown.
  *
  * Every switch here is enforced server-side: a hidden section is left out of
- * getPublicProfile and getPassportPublicProfile entirely, rather than fetched
- * and not drawn. This is the only place any of them can be changed; the passport
- * owner panel displays their state and links here.
+ * getPublicProfile entirely, rather than fetched and not drawn, and a private
+ * passport page is refused by getPassportPublicProfile. This is the only place
+ * any of them can be changed; the passport owner panel displays the passport
+ * page's state and links here.
  *
  * Rendered inside the profile page, which owns the nav, the sign-in wall and the
  * toasts — so this is only the card.
@@ -109,27 +110,16 @@ export const ProfileSettingsTab = ({showToast}: {showToast: ShowToast}) => {
             <div className="settings-rows">
                 {PRIVACY_ROWS.map(row => {
                     const visible = values[row.key];
-                    // With no public passport page, the sections that only appear
-                    // there have nothing to be visible on. Say so rather than
-                    // leaving a switch that looks live.
-                    const moot = row.key === 'passports' && !values.passportPage;
                     const title = isEnglish ? row.title.en : row.title.zh;
                     return (
-                        <div
-                            key={row.key}
-                            className={`settings-row${moot ? ' settings-row--moot' : ''}`}
-                        >
+                        <div key={row.key} className="settings-row">
                             <div className="settings-row-text">
                                 <span className="settings-row-title">{title}</span>
                                 <span className="settings-row-help">
                                     {isEnglish ? row.help.en : row.help.zh}
                                 </span>
                                 <span className="settings-row-state">
-                                    {moot
-                                        ? (isEnglish
-                                            ? 'Nobody sees this while your passport page is private'
-                                            : '通行证页面为私密时，无人能看到此内容')
-                                        : privacyStateLabel(row, visible, isEnglish)}
+                                    {privacyStateLabel(row, visible, isEnglish)}
                                 </span>
                             </div>
                             <PrivacySwitch

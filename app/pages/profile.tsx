@@ -255,8 +255,11 @@ export const ProfilePage = () => {
         };
     }, [badgeIdsKey]);
 
+    const viewerUid = user?.uid;
     useEffect(() => {
-        if (!viewUid || !isViewingOther) {
+        // getPublicProfile refuses a signed-out caller, so wait for a sign-in
+        // (the page prompts for one) rather than fetching into an error.
+        if (!viewUid || !isViewingOther || !viewerUid) {
             setViewedProfile(null);
             setLoadingViewed(false);
             setViewedLoadError(false);
@@ -303,7 +306,7 @@ export const ProfilePage = () => {
         return () => {
             stale = true;
         };
-    }, [viewUid, isViewingOther]);
+    }, [viewUid, isViewingOther, viewerUid]);
 
     const viewedEarnedAt = viewedProfile?.badgeEarnedAt;
     const ownEarnedAt = profile?.badgeEarnedAt;
@@ -431,10 +434,36 @@ export const ProfilePage = () => {
         if (e.key === 'Escape') cancelEditingName();
     };
 
-    if (loading || loadingViewed || eventsLoading) {
+    // Once signed in, there is a render between auth settling and the fetch
+    // starting with neither a profile nor an error; keep the spinner up through it
+    // rather than flashing "not found".
+    const awaitingViewed = isViewingOther && !!user && !viewedProfile && !viewedLoadError;
+
+    if (loading || loadingViewed || awaitingViewed || eventsLoading) {
         return (
             <div className="profile-loading">
                 <div className="spinner"/>
+            </div>
+        );
+    }
+
+    // Someone else's profile is for signed-in visitors only. A passport scan is
+    // the usual way a signed-out visitor ends up here.
+    if (isViewingOther && !user) {
+        return (
+            <div className="profile-login-prompt">
+                <div className="profile-login-card">
+                    <h2>{isEnglish ? 'Sign in to view this profile' : '登录以查看此个人主页'}</h2>
+                    <p>{isEnglish
+                        ? 'Member profiles are only shown to signed-in visitors.'
+                        : '成员个人主页仅对已登录的访客显示。'}</p>
+                    <button onClick={signIn} className="profile-sign-in-btn">
+                        {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
+                    </button>
+                    <a href="/" className="profile-back-link">
+                        {isEnglish ? 'Back to Home' : '返回首页'}
+                    </a>
+                </div>
             </div>
         );
     }

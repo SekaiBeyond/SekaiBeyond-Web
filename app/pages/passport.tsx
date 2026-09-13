@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { formatGroupWithTitle, normalizeGroup, useAuth } from '~/components/AuthProvider';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
@@ -19,11 +19,6 @@ import {
     type PassportPublicProfile,
     usePassportDesigns,
 } from '~/lib/passports';
-import { PRIVACY_ROWS } from '~/lib/privacy';
-import { usePastEvents } from '~/lib/pastEvents';
-import { useTags } from '~/lib/tags';
-import { PassportShelfCard } from './PassportShelfSection';
-import { BadgeCard, EventCard } from './profile';
 import { ExpiredCard } from './qrRedirect';
 
 /**
@@ -371,13 +366,9 @@ interface ClaimedPassportProps {
 const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
     const {isEnglish} = useLanguage();
     const {designs} = usePassportDesigns();
-    const {pastEvents} = usePastEvents();
-    const {tags} = useTags();
-    const [activeBadge, setActiveBadge] = useState<string | null>(null);
 
     const {owner} = data;
     const design = designs.find(d => d.year === data.year);
-    const tagMap = useMemo(() => new Map(tags.map(t => [t.id, t])), [tags]);
 
     useEffect(() => {
         if (!owner.displayName) return;
@@ -386,12 +377,6 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
             document.title = 'Passport | Sekai Beyond';
         };
     }, [owner.displayName]);
-
-    const staffedSet = useMemo(() => new Set(owner.eventStaffEvents), [owner.eventStaffEvents]);
-    const attendedEvents = useMemo(() => {
-        const attended = new Set([...owner.attendedEvents, ...owner.eventStaffEvents]);
-        return pastEvents.filter(e => attended.has(e.id));
-    }, [pastEvents, owner.attendedEvents, owner.eventStaffEvents]);
 
     const fmtDate = (iso: string | null): string => {
         if (!iso) return '';
@@ -459,6 +444,12 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
                                 {isEnglish ? 'Joined ' : '加入时间：'}{fmtDate(owner.joinedAt)}
                             </p>
                         )}
+                        {/* Absent until the function that sends it is deployed. */}
+                        {owner.uid && (
+                            <Link to={`/profile?uid=${owner.uid}`} className="passport-owner-profile-link">
+                                {isEnglish ? 'View profile →' : '查看个人主页 →'}
+                            </Link>
+                        )}
                     </div>
                 </div>
 
@@ -467,88 +458,8 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
                         hidden={data.hidden}
                         scanCount={data.scanCount}
                         membershipExpiresAt={data.membershipExpiresAt}
-                        visibility={data.visibility}
                     />
                 )}
-
-                {/* A section the owner keeps private simply isn't here — the
-                    server withholds it. The owner is the exception: their own
-                    page is unfiltered, and the panel above is where they read
-                    what a visitor actually gets. */}
-                {data.shelf.length > 0 && (
-                    <section className="passport-section">
-                        <h3 className="passport-section-title">
-                            {isEnglish ? 'Passports Collected' : '通行证收藏'}
-                        </h3>
-                        <div className="passport-shelf">
-                            {data.shelf.map((entry, i) => (
-                                <PassportShelfCard
-                                    key={`${entry.year}-${entry.claimedAt ?? i}`}
-                                    year={entry.year}
-                                    date={fmtDate(entry.claimedAt)}
-                                    current={entry.isCurrent}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                )}
-
-                {owner.badges.length > 0 && (
-                    <section className="passport-section">
-                        <h3 className="passport-section-title">{isEnglish ? 'Badges' : '徽章'}</h3>
-                        <div className="badge-grid">
-                            {owner.badges.map(badge => (
-                                <BadgeCard
-                                    key={badge.id}
-                                    // The public endpoint inlines badge art rather than
-                                    // naming a document, and a badge pending deletion is
-                                    // simply absent — so there is no deleteAt to carry.
-                                    // Empty Chinese copy falls back to the English, which
-                                    // a scanner is likelier to find useful than a blank.
-                                    badge={{
-                                        ...badge,
-                                        nameCn: badge.nameCn || badge.name,
-                                        descriptionCn: badge.descriptionCn || badge.description,
-                                        deleteAt: null,
-                                    }}
-                                    earnedDate={badge.earnedAt ? new Date(badge.earnedAt) : undefined}
-                                    isEnglish={isEnglish}
-                                    active={activeBadge === badge.id}
-                                    onToggle={() => setActiveBadge(prev => prev === badge.id ? null : badge.id)}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                )}
-
-                {attendedEvents.length > 0 && (
-                    <section className="passport-section">
-                        <h3 className="passport-section-title">
-                            {isEnglish ? 'Events Attended' : '参与活动'}
-                        </h3>
-                        <div className="profile-event-grid">
-                            {attendedEvents.map(event => (
-                                <EventCard
-                                    key={event.id}
-                                    event={event}
-                                    isEnglish={isEnglish}
-                                    tagLabels={event.tagIds.flatMap(id => {
-                                        const tag = tagMap.get(id);
-                                        return tag ? [isEnglish ? tag.name : tag.nameCn] : [];
-                                    })}
-                                    wasStaff={staffedSet.has(event.id)}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                )}
-
-                <div className="passport-footer-actions">
-                    <a href="/" className="btn btn-primary">
-                        <span>{isEnglish ? 'Explore Sekai Beyond' : '探索彼世界'}</span>
-                        <span>✨</span>
-                    </a>
-                </div>
             </PassportShell>
         </>
     );
@@ -556,19 +467,18 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
 
 /**
  * Shown only to the owner, scanning their own sticker: how long their membership
- * has left, how often the passport has been scanned, and what of this page
- * visitors are actually getting. Kept behind a disclosure so a passport page
- * stays a passport page.
+ * has left, how often the passport has been scanned, and whether visitors get
+ * this page at all. Kept behind a disclosure so a passport page stays a passport
+ * page.
  *
- * It reports; it does not change anything. Every switch it names lives on the
+ * It reports; it does not change anything. The switch it names lives on the
  * profile page's Settings tab, so there is one control per setting and no second
  * copy to fall out of step with it.
  */
-const OwnerPanel = ({hidden, scanCount, membershipExpiresAt, visibility}: {
+const OwnerPanel = ({hidden, scanCount, membershipExpiresAt}: {
     hidden: boolean;
     scanCount: number | null;
     membershipExpiresAt: string | null;
-    visibility: {badges: boolean; events: boolean; passports: boolean};
 }) => {
     const {isEnglish} = useLanguage();
     const [open, setOpen] = useState(false);
@@ -577,14 +487,6 @@ const OwnerPanel = ({hidden, scanCount, membershipExpiresAt, visibility}: {
     const daysLeft = expiry && !isNaN(expiry.getTime())
         ? Math.ceil((expiry.getTime() - Date.now()) / 86_400_000)
         : null;
-
-    // Sections the owner sees here but visitors do not. With the page private
-    // none of it reaches anyone anyway, so listing them then would only muddle
-    // the bigger fact stated right above.
-    const hiddenSections = hidden
-        ? []
-        : PRIVACY_ROWS.filter(row => row.key !== 'passportPage'
-            && !visibility[row.key as keyof typeof visibility]);
 
     return (
         <div className="passport-owner-panel">
@@ -637,13 +539,6 @@ const OwnerPanel = ({hidden, scanCount, membershipExpiresAt, visibility}: {
                                 ? 'This page is public: anyone who scans your passport sees it.'
                                 : '此页面已公开：任何扫描您通行证的人都能看到它。')}
                     </p>
-                    {hiddenSections.length > 0 && (
-                        <p className="passport-owner-panel-row">
-                            {isEnglish
-                                ? `You are seeing it whole. Visitors don’t see: ${hiddenSections.map(r => r.title.en.toLowerCase()).join(', ')}.`
-                                : `您看到的是完整页面。访客看不到：${hiddenSections.map(r => r.title.zh).join('、')}。`}
-                        </p>
-                    )}
                     <Link to="/profile?tab=settings" className="admin-btn admin-btn--outline settings-link-btn">
                         {isEnglish ? 'Change privacy settings' : '修改隐私设置'}
                     </Link>

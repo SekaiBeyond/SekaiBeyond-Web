@@ -5,7 +5,6 @@ import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks, generateSecureCode } from "../utils/helpers";
 import { extendedExpiry, isMembershipActive } from "../utils/membership";
-import { pastEventIds, toStringIds } from "../utils/publicProfile";
 import { recordScan, SCAN_QUOTA_PERSONAL, scanClientKey } from "../utils/scans";
 import {
     activationKeyMatches,
@@ -23,7 +22,6 @@ import {
     PASSPORT_TERM_DAYS,
 } from "../utils/passports";
 import { validateStorageImageUrl, validateStr } from "../utils/validation";
-import { readVisibility } from "../utils/visibility";
 
 /**
  * Physical passports.
@@ -42,11 +40,6 @@ import { readVisibility } from "../utils/visibility";
 const PASSPORTS = "passports";
 const SECRETS = "passportSecrets";
 const DESIGNS = "passportDesigns";
-
-// The owner's shelf, and the public page's shelf. A passport a year is the
-// intended pace; the cap only keeps a pathological account from unbounded reads.
-const MAX_SHELF = 100;
-const MAX_PUBLIC_BADGES = 60;
 
 const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap.data()?.displayName ?? "";
 
@@ -71,8 +64,8 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
         throw new HttpsError("invalid-argument", `count must be an integer between 1 and ${MAX_BATCH_COUNT}.`);
     }
 
-    // A passport without a design has nothing to render on the shelf or the
-    // public page, so the design comes first.
+    // A passport without a design has nothing to render on the profile shelf or
+    // the public page, so the design comes first.
     const designSnap = await db.collection(DESIGNS).doc(String(year)).get();
     if (!designSnap.exists) {
         throw new HttpsError("failed-precondition", `No passport design exists for ${year}.`, {code: "no-design"});
@@ -347,16 +340,6 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
     }
 });
 
-interface PublicBadge {
-    id: string;
-    name: string;
-    nameCn: string;
-    description: string;
-    descriptionCn: string;
-    imageUrl: string;
-    earnedAt: string | null;
-}
-
 /**
  * Resolve a scanned sticker, for anyone — no sign-in.
  *
@@ -366,10 +349,14 @@ interface PublicBadge {
  * the fact that reaching a real passport means holding a 10-character printed
  * code out of 31^10.
  *
- * It must not widen uid-keyed profile reads: getPublicProfile keeps its sign-in
- * requirement, nothing here accepts a uid, and the response never carries one —
- * `isOwner` is resolved server-side instead. Badge art is inlined because the
- * `badges` collection needs auth to read, which a signed-out scanner does not have.
+ * It must not widen uid-keyed profile reads, and doesn't: nothing here accepts a
+ * uid, and the owner's uid it hands back only builds the link to their profile,
+ * which getPublicProfile still serves to signed-in callers alone and filters by
+ * the owner's section switches. Firestore rules keep the user document itself
+ * unreadable by anyone else. `isOwner` is resolved server-side rather than by
+ * comparing uids on the client. Badges, events, and the owner's other passports
+ * are not part of it: the page doesn't show them, so a scanner isn't handed them
+ * either.
  *
  * Unknown ids, void passports, and passports whose owner deleted their account
  * all answer identically ("invalid"), so a valid id can't be told from a
@@ -415,23 +402,6 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
         return {status: "private" as const};
     }
 
-    // Per-section switches from the owner's settings. An owner scanning their own
-    // sticker sees the page whole — the point of the panel below is to tell them
-    // what everyone else is getting, which needs the hidden parts present to
-    // compare.
-    const visibility = readVisibility(owner.profileVisibility);
-    const showBadges = isOwner || visibility.badges;
-    const showEvents = isOwner || visibility.events;
-    const showPassports = isOwner || visibility.passports;
-
-    const attended = showEvents ? toStringIds(owner.attendedEvents) : [];
-    const staffed = showEvents ? toStringIds(owner.eventStaffEvents) : [];
-    const [badges, pastEvents, shelf] = await Promise.all([
-        showBadges ? resolveBadges(owner) : Promise.resolve([]),
-        pastEventIds(attended, staffed),
-        showPassports ? resolveShelf(ownerUid, passportId) : Promise.resolve([]),
-    ]);
-
     // The owner's own visits aren't scans. The page re-resolves whenever they
     // activate or flip visibility, and counting those would report a handful of
     // scans on a sticker nobody else has ever seen.
@@ -450,6 +420,7 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
             ? ((owner.membershipExpiresAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null)
             : null,
         owner: {
+            uid: ownerUid,
             displayName: owner.displayName ?? "",
             photoURL: owner.photoURL ?? "",
             joinedAt: (owner.joinedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
@@ -458,18 +429,6 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
             isMember: isMembershipActive(owner),
             title: owner.title ?? "",
             titleCn: owner.titleCn ?? "",
-            badges,
-            attendedEvents: attended.filter(id => pastEvents.has(id)),
-            eventStaffEvents: staffed.filter(id => pastEvents.has(id)),
-        },
-        shelf,
-        // What the owner has switched off, so a visitor reads "kept private"
-        // instead of an empty state that would claim the section is empty. The
-        // owner gets their true settings, since their own view isn't filtered.
-        visibility: {
-            badges: visibility.badges,
-            events: visibility.events,
-            passports: visibility.passports,
         },
     };
 });
@@ -482,60 +441,6 @@ async function tallyScan(ref: FirebaseFirestore.DocumentReference, clientKey: st
     } catch (err) {
         console.error(`tallyScan: failed to record scan for passport ${ref.id}`, err);
     }
-}
-
-async function resolveBadges(owner: FirebaseFirestore.DocumentData): Promise<PublicBadge[]> {
-    const ids: string[] = Array.isArray(owner.badges)
-        ? owner.badges.filter((b: unknown): b is string => typeof b === "string").slice(0, MAX_PUBLIC_BADGES)
-        : [];
-    if (ids.length === 0) return [];
-
-    const earnedAt = (owner.badgeEarnedAt ?? {}) as Record<string, Timestamp>;
-    const snaps = await db.getAll(...ids.map(id => db.collection("badges").doc(id)));
-    const out: PublicBadge[] = [];
-    for (const snap of snaps) {
-        if (!snap.exists) continue;
-        const data = snap.data()!;
-        out.push({
-            id: snap.id,
-            name: data.name ?? "",
-            nameCn: data.nameCn ?? "",
-            description: data.description ?? "",
-            descriptionCn: data.descriptionCn ?? "",
-            imageUrl: data.imageUrl ?? "",
-            earnedAt: earnedAt[snap.id]?.toDate?.()?.toISOString() ?? null,
-        });
-    }
-    return out;
-}
-
-/**
- * The owner's collection, by year. Sibling passport ids are deliberately left
- * out: each one is a URL to this same page, and a visitor holding one sticker
- * has no reason to be handed the rest. The client joins these against the
- * publicly readable passportDesigns for the artwork.
- *
- * Which card is the scanned one is resolved here, against the document id,
- * rather than left to the client to infer from the year — an owner who holds two
- * passports of the same year would otherwise see both marked current.
- */
-async function resolveShelf(
-    ownerUid: string,
-    scannedId: string,
-): Promise<{year: number; claimedAt: string | null; isCurrent: boolean}[]> {
-    const snap = await db.collection(PASSPORTS)
-        .where("ownerUid", "==", ownerUid)
-        .limit(MAX_SHELF)
-        .get();
-    return snap.docs
-        .map(doc => ({id: doc.id, data: doc.data()}))
-        .filter(({data}) => data.status === "claimed")
-        .map(({id, data}) => ({
-            year: typeof data.year === "number" ? data.year : 0,
-            claimedAt: (data.claimedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
-            isCurrent: id === scannedId,
-        }))
-        .sort((a, b) => b.year - a.year);
 }
 
 /**

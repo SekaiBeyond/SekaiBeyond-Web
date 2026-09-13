@@ -125,9 +125,6 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         isMember: isMembershipActive(data),
         title: data.title ?? "",
         titleCn: data.titleCn ?? "",
-        // Only the sections this page renders. The passport shelf is the
-        // passport page's business, and naming it here would tell a viewer
-        // about a setting they have no surface for.
         visibility: {badges: showBadges, events: showEvents},
     };
 });

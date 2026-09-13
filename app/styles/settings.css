@@ -47,14 +47,6 @@
     padding-top: 0;
 }
 
-/* A switch whose section has nowhere to appear right now. It still saves — the
-   setting outlives the passport page being private — so it is dimmed, not
-   disabled. */
-.settings-row--moot .settings-row-title,
-.settings-row--moot .settings-row-help {
-    opacity: 0.55;
-}
-
 .settings-row-text {
     display: flex;
     flex-direction: column;
@@ -79,11 +71,6 @@
     font-size: 13px;
     font-weight: 600;
     color: var(--color-primary);
-}
-
-.settings-row--moot .settings-row-state {
-    color: var(--color-text-light);
-    font-weight: 500;
 }
 
 .settings-switch {

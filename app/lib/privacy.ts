@@ -4,7 +4,7 @@
  * functions/src/utils/visibility.ts, which is where the switches are actually
  * enforced — a hidden section is emptied server-side, not merely left undrawn.
  */
-export const PROFILE_SECTIONS = ['badges', 'events', 'passports'] as const;
+export const PROFILE_SECTIONS = ['badges', 'events'] as const;
 
 export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
 
@@ -24,7 +24,6 @@ export const readVisibility = (raw: unknown): ProfileVisibility => {
     return {
         badges: stored.badges !== false,
         events: stored.events !== false,
-        passports: stored.passports !== false,
     };
 };
 
@@ -40,8 +39,7 @@ export interface PrivacyRow {
 
 /**
  * The switches, in the order they are shown. The passport page leads because it
- * outranks the rest: with it off there is no public page for the sections to
- * appear on, and the page says so rather than silently ignoring them.
+ * is the coarsest: it decides whether a scanned sticker shows anything at all.
  */
 export const PRIVACY_ROWS: PrivacyRow[] = [
     {
@@ -70,16 +68,6 @@ export const PRIVACY_ROWS: PrivacyRow[] = [
         help: {
             en: 'Which past events you went to, and which you staffed.',
             zh: '您参加过哪些往期活动，以及担任过哪些活动的工作人员。',
-        },
-        on: {en: 'Visible to everyone', zh: '所有人可见'},
-        off: {en: 'Only you', zh: '仅自己可见'},
-    },
-    {
-        key: 'passports',
-        title: {en: 'Passport collection', zh: '通行证收藏'},
-        help: {
-            en: 'The other passports you hold, shown on your passport page.',
-            zh: '您持有的其他通行证，显示在通行证页面上。',
         },
         on: {en: 'Visible to everyone', zh: '所有人可见'},
         off: {en: 'Only you', zh: '仅自己可见'},

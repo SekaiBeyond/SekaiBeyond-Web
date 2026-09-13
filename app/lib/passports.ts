@@ -44,20 +44,11 @@ export interface PassportDesign {
     coverImageUrl: string;
 }
 
-export interface PassportPublicBadge {
-    id: string;
-    name: string;
-    nameCn: string;
-    description: string;
-    descriptionCn: string;
-    imageUrl: string;
-    earnedAt: string | null;
-}
-
 /**
  * One scanned sticker, resolved for anyone — the only unauthenticated read of a
- * member's public data. It is keyed by the printed passport code, never by uid,
- * and no uid comes back: `isOwner` is decided server-side.
+ * member's public data. It is keyed by the printed passport code, never by uid.
+ * The owner's uid comes back only to link to their profile; `isOwner` is decided
+ * server-side.
  *
  * Mirrors what getPassportPublicProfile returns in
  * functions/src/functions/passports.ts.
@@ -76,6 +67,8 @@ export type PassportPublicProfile =
     scanCount: number | null;
     membershipExpiresAt: string | null;
     owner: {
+        /** For the link to their profile, which still requires signing in. */
+        uid: string;
         displayName: string;
         photoURL: string;
         joinedAt: string | null;
@@ -83,27 +76,7 @@ export type PassportPublicProfile =
         isMember: boolean;
         title: string;
         titleCn: string;
-        // Inlined because the badges collection needs auth to read, which a
-        // signed-out scanner does not have.
-        badges: PassportPublicBadge[];
-        attendedEvents: string[];
-        eventStaffEvents: string[];
     };
-    /**
-     * The owner's collection, by year — no sibling passport ids. `isCurrent`
-     * marks the scanned one, resolved server-side because the year alone can't
-     * tell two passports of the same year apart.
-     *
-     * Empty when the owner has switched the collection off — see `visibility`.
-     */
-    shelf: Array<{year: number; claimedAt: string | null; isCurrent: boolean}>;
-    /**
-     * Which sections the owner shows other people, from their settings. A hidden one
-     * arrives empty, so this is what tells the page to say "kept private"
-     * instead of drawing an empty state. The owner's own view is never filtered,
-     * so for them these describe what *visitors* get.
-     */
-    visibility: {badges: boolean; events: boolean; passports: boolean};
 };
 
 /** An entry in a passport's permanent audit trail. */

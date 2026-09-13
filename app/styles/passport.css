@@ -240,6 +240,17 @@
     color: var(--color-text-light);
 }
 
+.passport-owner-profile-link {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.passport-owner-profile-link:hover {
+    text-decoration: underline;
+}
+
 .passport-chips {
     display: flex;
     flex-wrap: wrap;
@@ -296,18 +307,7 @@
     line-height: 1.5;
 }
 
-/* --- Sections, shelf ------------------------------------------------------ */
-
-.passport-section {
-    margin-top: 36px;
-}
-
-.passport-section-title {
-    font-family: var(--font-display);
-    font-size: 22px;
-    color: var(--color-text);
-    margin-bottom: 16px;
-}
+/* --- Shelf ---------------------------------------------------------------- */
 
 .passport-shelf {
     display: grid;
@@ -375,12 +375,6 @@ a.passport-shelf-card:hover {
     font-size: 11px;
     letter-spacing: 0.1em;
     color: var(--color-text-light);
-}
-
-.passport-footer-actions {
-    display: flex;
-    justify-content: center;
-    margin-top: 44px;
 }
 
 @media (max-width: 640px) {
