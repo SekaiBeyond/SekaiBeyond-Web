@@ -6,6 +6,11 @@ import { callRedeemCode, functionsErrorCode, functionsErrorDetails } from '~/lib
 import type { BadgeDef } from '~/lib/types';
 import { useModalEffects } from '~/lib/useModalEffects';
 
+const OPEN_EVENT = 'open-redeem-modal';
+
+/** Opens the Redeem Code modal, which root mounts once for every page. */
+export const openRedeemModal = () => window.dispatchEvent(new CustomEvent(OPEN_EVENT));
+
 interface EventInfo {
     eventTitle: string;
     eventTitleCn: string;
@@ -39,8 +44,8 @@ export const RedeemModal = () => {
             submittingRef.current = false;
             setTimeout(() => inputRef.current?.focus(), 50);
         };
-        window.addEventListener('open-redeem-modal', handler);
-        return () => window.removeEventListener('open-redeem-modal', handler);
+        window.addEventListener(OPEN_EVENT, handler);
+        return () => window.removeEventListener(OPEN_EVENT, handler);
     }, [user, profile]);
 
     useEffect(() => {

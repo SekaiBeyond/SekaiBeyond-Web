@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { openRedeemModal } from '~/components/RedeemModal';
 
 export const LoginButton = () => {
     const {user, profile, loading, signIn, signOut} = useAuth();
@@ -74,7 +75,7 @@ export const LoginButton = () => {
                         className="user-dropdown-item"
                         onClick={() => {
                             closeDropdown();
-                            window.dispatchEvent(new CustomEvent('open-redeem-modal'));
+                            openRedeemModal();
                         }}
                     >
                         {isEnglish ? 'Redeem Code' : '兑换激活码'}

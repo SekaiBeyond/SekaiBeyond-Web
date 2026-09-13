@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
+import { FiAward, FiCalendar, FiLock, FiMail, FiStar } from 'react-icons/fi';
 import {
     formatGroupWithTitle,
     hasPermission,
@@ -16,7 +17,8 @@ import { useTags } from '~/lib/tags';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { isValidHttpUrl } from '~/lib/urls';
-import { PassportShelfSection } from '~/pages/PassportShelfSection';
+import { PassportShelf, usePassportsByOwner } from '~/pages/PassportShelf';
+import { ProfileCard, ProfileCardNote, ProfileSection, ProfileWelcome, type SectionState, } from '~/pages/ProfileCards';
 import { ProfileSettingsTab } from '~/pages/ProfileSettingsTab';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 import { validateImageFile } from "~/pages/admin/utils";
@@ -49,107 +51,86 @@ interface ViewedProfile {
     visibility: {badges: boolean; events: boolean};
 }
 
-/** A badge and its hover tooltip. Shared with the public passport page, which
- * inlines the badge's fields instead of naming a document. */
-export const BadgeCard = ({badge, earnedDate, isEnglish, active, onToggle}: {
+/**
+ * A badge: a button that opens its detail modal, with a preview on hover or
+ * keyboard focus. The preview carries no links — a link can't sit inside a
+ * button — so who made the badge is left to the modal.
+ */
+const BadgeCard = ({badge, earnedDate, isEnglish, onOpen}: {
     badge: BadgeDef;
     earnedDate?: Date;
     isEnglish: boolean;
-    active: boolean;
-    onToggle: () => void;
+    onOpen: () => void;
 }) => (
-    <div className={`badge-circle ${active ? 'badge-circle-active' : ''}`} onClick={onToggle}>
-        <div className="badge-icon-wrapper">
-            <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn} className="badge-icon"/>
-        </div>
+    <button type="button" className="badge-circle" onClick={onOpen}>
+        <span className="badge-icon-wrapper">
+            <img src={badge.imageUrl} alt="" className="badge-icon"/>
+        </span>
         <span className="badge-label">{isEnglish ? badge.name : badge.nameCn}</span>
-        <div className="badge-tooltip">
-            <h4 className="badge-tooltip-name">{isEnglish ? badge.name : badge.nameCn}</h4>
-            <p className="badge-tooltip-desc">{isEnglish ? badge.description : badge.descriptionCn}</p>
+        <span className="badge-tooltip" aria-hidden="true">
+            <span className="badge-tooltip-name">{isEnglish ? badge.name : badge.nameCn}</span>
+            <span className="badge-tooltip-desc">{isEnglish ? badge.description : badge.descriptionCn}</span>
             {earnedDate && (
-                <p className="badge-tooltip-date">
-                    {isEnglish ? 'Earned: ' : '获得于：'}
+                <span className="badge-tooltip-date">
+                    {isEnglish ? 'Earned ' : '获得于 '}
                     {earnedDate.toLocaleDateString(
                         isEnglish ? 'en-US' : 'zh-CN',
                         {year: 'numeric', month: 'short', day: 'numeric'}
                     )}
-                </p>
+                </span>
             )}
-            {badge.holderPct != null && (
-                <p className="badge-tooltip-pct">
-                    {isEnglish
-                        ? `${badge.holderPct}% of members have this`
-                        : `${badge.holderPct}% 的成员拥有此徽章`}
-                </p>
-            )}
-            {badge.createdByName && (
-                <p className="badge-tooltip-creator">
-                    {isEnglish ? 'Created by ' : '由 '}
-                    {badge.createdByUid ? (
-                        <a href={`/profile?uid=${badge.createdByUid}`}
-                           className="badge-tooltip-creator-link">
-                            {badge.createdByName}
-                        </a>
-                    ) : (badge.createdByLink && isValidHttpUrl(badge.createdByLink)) ? (
-                        <a href={badge.createdByLink} target="_blank"
-                           rel="noopener noreferrer"
-                           className="badge-tooltip-creator-link">
-                            {badge.createdByName}
-                        </a>
-                    ) : badge.createdByName}
-                    {!isEnglish && ' 创建'}
-                </p>
-            )}
-        </div>
-    </div>
+        </span>
+    </button>
 );
 
-/** One attended event. Shared with the public passport page, which renders the
- * same grid without the admin link. */
-export const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
+/** One attended event, with a link to its admin page for staff. */
+const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
     event: PastEvent;
     isEnglish: boolean;
     showAdminLink?: boolean;
     tagLabels?: string[];
     wasStaff?: boolean;
-}) => (
-    <div className="profile-event-card">
-        <div className="profile-event-icon-wrapper">
-            <img src={event.icon} alt={isEnglish ? event.title : event.titleCn} className="profile-event-icon"/>
-            {wasStaff && (
-                <span className="profile-event-staff-tag">
-                    {isEnglish ? 'Staff' : '工作人员'}
-                </span>
-            )}
-        </div>
-        <div className="profile-event-info">
-            {tagLabels && tagLabels.length > 0 ? (
-                <span className="profile-event-categories">
-                    {tagLabels.map((label, i) => (
-                        <span key={i} className="profile-event-category">{label}</span>
-                    ))}
-                </span>
-            ) : (
-                <span className="profile-event-category profile-event-category-hidden">{'\u00A0'}</span>
-            )}
-            <h3 className="profile-event-title">
-                {showAdminLink ? (
-                    <a href={`/admin?tab=events&event=${encodeURIComponent(event.id)}`}
-                       className="profile-event-title-link">
-                        {isEnglish ? event.title : event.titleCn}
-                    </a>
-                ) : (
-                    isEnglish ? event.title : event.titleCn
+}) => {
+    const title = isEnglish ? event.title : event.titleCn;
+    return (
+        <div className="profile-event-card">
+            <div className="profile-event-icon-wrapper">
+                <img src={event.icon} alt={title} className="profile-event-icon"/>
+                {wasStaff && (
+                    <span className="profile-event-staff-tag">
+                        {isEnglish ? 'Staff' : '工作人员'}
+                    </span>
                 )}
-            </h3>
-            <p className="profile-event-date">
-                {new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                    year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
-                })}
-            </p>
+            </div>
+            <div className="profile-event-info">
+                {tagLabels && tagLabels.length > 0 ? (
+                    <span className="profile-event-categories">
+                        {tagLabels.map((label, i) => (
+                            <span key={i} className="profile-event-category">{label}</span>
+                        ))}
+                    </span>
+                ) : (
+                    <span className="profile-event-category profile-event-category-hidden">{'\u00A0'}</span>
+                )}
+                {/* The name wraps to two lines before it is cut; the title attribute
+                    holds the whole of it for a name longer than that. */}
+                <h3 className="profile-event-title" title={title}>
+                    {showAdminLink ? (
+                        <a href={`/admin?tab=events&event=${encodeURIComponent(event.id)}`}
+                           className="profile-event-title-link">
+                            {title}
+                        </a>
+                    ) : title}
+                </h3>
+                <p className="profile-event-date">
+                    {new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                        year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
+                    })}
+                </p>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 export const ProfilePage = () => {
     const {user, profile, isMember, loading, signIn, updateProfile} = useAuth();
@@ -183,13 +164,13 @@ export const ProfilePage = () => {
     const [avatarError, setAvatarError] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
-    const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
+    // null while the definitions for the badge ids are still being read.
+    const [badgeDefs, setBadgeDefs] = useState<BadgeDef[] | null>(null);
     const [badgeLoadError, setBadgeLoadError] = useState(false);
     const [viewedLoadError, setViewedLoadError] = useState(false);
-    const [activeBadge, setActiveBadge] = useState<string | null>(null);
-    const badgeGridRef = useRef<HTMLDivElement>(null);
     const {toasts, showToast} = useToasts();
     const [selectedBadge, setSelectedBadge] = useState<BadgeDef | null>(null);
+    const {passports, failed: passportsFailed} = usePassportsByOwner(isViewingOther ? null : user?.uid ?? null);
 
     useEffect(() => {
         if (loading || isViewingOther) return;
@@ -212,6 +193,7 @@ export const ProfilePage = () => {
             return;
         }
         let stale = false;
+        setBadgeDefs(null);
         const loadBadges = async () => {
             try {
                 const db = getFirebaseDb();
@@ -328,22 +310,6 @@ export const ProfilePage = () => {
         img.onerror = () => setCustomPhotoLoaded(false);
         img.src = profile.photoURL;
     }, [profile?.photoURL, hasCustomPhoto]);
-
-    useEffect(() => {
-        if (!activeBadge) return;
-        const handleClick = (e: MouseEvent) => {
-            if (badgeGridRef.current && !badgeGridRef.current.contains(e.target as Node)) {
-                setActiveBadge(null);
-            }
-        };
-        document.addEventListener('click', handleClick);
-        return () => document.removeEventListener('click', handleClick);
-    }, [activeBadge]);
-
-    const toggleBadge = useCallback((badge: BadgeDef) => {
-        setActiveBadge(prev => prev === badge.id ? null : badge.id);
-        setSelectedBadge(badge);
-    }, []);
 
     useEffect(() => {
         if (isViewingOther && viewedProfile) {
@@ -538,17 +504,51 @@ export const ProfilePage = () => {
     // never filtered — you always see your own page whole.
     const showBadges = isOwnProfile || viewedProfile!.visibility.badges;
     const showEvents = isOwnProfile || viewedProfile!.visibility.events;
-    const privateNote = isEnglish
-        ? `${dp.name} keeps this private.`
-        : `${dp.name} 将此内容设为私密。`;
     const staffedSet = new Set(dp.eventStaffEvents);
     const attendedSet = new Set([...dp.attendedEvents, ...dp.eventStaffEvents]);
     const attendedEvents = pastEvents
         .filter(e => attendedSet.has(e.id))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const earnedBadges = badgeDefs
+    const earnedBadges = (badgeDefs ?? [])
         .filter(b => dp.badges.includes(b.id))
         .sort((a, b) => (earnedDates[b.id]?.getTime() ?? 0) - (earnedDates[a.id]?.getTime() ?? 0));
+
+    // Where each section stands. A badge id whose definition is gone counts for
+    // nothing, so badges are only known to be empty once the definitions are in;
+    // passports belong to the owner alone, so someone else's profile has none.
+    const badgeState: SectionState = !showBadges ? 'private'
+        : dp.badges.length === 0 ? 'empty'
+            : badgeLoadError ? 'failed'
+                : badgeDefs === null ? 'loading'
+                    : earnedBadges.length > 0 ? 'filled' : 'empty';
+    const eventState: SectionState = !showEvents ? 'private'
+        : attendedEvents.length > 0 ? 'filled' : 'empty';
+    const passportState: SectionState | null = !isOwnProfile ? null
+        : passportsFailed ? 'failed'
+            : passports === null ? 'loading'
+                : passports.length > 0 ? 'filled' : 'empty';
+    const states = [badgeState, passportState, eventState].filter((s): s is SectionState => s !== null);
+    const anyFilled = states.includes('filled');
+    const allEmpty = states.every(s => s === 'empty');
+    // Until a section turns up something, a still-loading one could yet leave
+    // the page empty — hold the spinner rather than draw sections that might be
+    // swapped for the welcome card a moment later.
+    const settling = !anyFilled && states.includes('loading');
+
+    // The header's counts. A private section has no count to give — the server
+    // withheld the list — and a profile with nothing in it has no row at all.
+    const stat = (key: string, count: number | null, one: string, many: string, zh: string) =>
+        ({key, count, label: isEnglish ? (count === 1 ? one : many) : zh});
+    const stats = anyFilled ? [
+        // The id count stands in until the definitions arrive; they almost always agree.
+        ...(showBadges
+            ? [stat('badges', badgeDefs === null ? dp.badges.length : earnedBadges.length, 'Badge', 'Badges', '徽章')]
+            : []),
+        ...(isOwnProfile && !passportsFailed
+            ? [stat('passports', passports?.length ?? null, 'Passport', 'Passports', '通行证')]
+            : []),
+        ...(showEvents ? [stat('events', attendedEvents.length, 'Event', 'Events', '活动')] : []),
+    ] : [];
     // Avatar uploads are a membership perk, but staff+ keep them without one —
     // the only people blocked are plain users who have never paid.
     const canEdit = isOwnProfile && (isMember || hasPermission(profile!.group, 'staff'));
@@ -586,271 +586,299 @@ export const ProfilePage = () => {
             </nav>
             <div className="profile-page">
 
-                <div className="profile-header">
-                    <div
-                        className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : isOwnProfile ? 'profile-avatar-nonmember-hint' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
-                        {!avatarError && displayedPhoto ? (
-                            <img
-                                src={displayedPhoto}
-                                alt={dp.name}
-                                className="profile-avatar"
-                                referrerPolicy="no-referrer"
-                                onError={() => setAvatarError(true)}
-                                onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
-                            />
-                        ) : (
-                            <div
-                                className="profile-avatar profile-avatar-initials"
-                                onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
-                            >
-                                {(dp.name?.[0] ?? '?').toUpperCase()}
-                            </div>
-                        )}
-                        {(canEdit || savingPhoto) && (
-                            <div
-                                className="profile-avatar-overlay"
-                                onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
-                            >
-                                {savingPhoto ? (
-                                    <div className="profile-avatar-spinner"/>
-                                ) : (
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                                         strokeLinecap="round" strokeLinejoin="round"
-                                         className="profile-avatar-camera-icon">
-                                        <path
-                                            d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                                        <circle cx="12" cy="13" r="4"/>
-                                    </svg>
-                                )}
-                            </div>
-                        )}
-                        {canRemovePhoto && !savingPhoto && (
-                            <button
-                                className="profile-avatar-delete"
-                                onClick={handlePhotoDelete}
-                                type="button"
-                                aria-label="Remove photo"
-                            >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                                     strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="18" y1="6" x2="6" y2="18"/>
-                                    <line x1="6" y1="6" x2="18" y2="18"/>
-                                </svg>
-                            </button>
-                        )}
-                        {canEdit && (
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                onChange={handlePhotoSelect}
-                                hidden
-                            />
-                        )}
-                        {!canEdit && isOwnProfile && (
-                            <>
-                                <div className="profile-avatar-hint-overlay">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                                         strokeLinecap="round" strokeLinejoin="round"
-                                         className="profile-avatar-hint-icon">
-                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                                    </svg>
-                                </div>
-                                <span className="profile-avatar-hint-tooltip">
-                                    {canRemovePhoto
-                                        ? (isEnglish
-                                            ? 'This photo was set by staff. You need an active membership to change it, but you can remove it.'
-                                            : '此头像由工作人员设置。需要有效会员资格才能更换，但你可以将其删除。')
-                                        : (isEnglish
-                                            ? 'A profile photo needs an active membership. Activate a passport to upload one.'
-                                            : '设置头像需要有效会员资格。激活通行证后即可上传。')}
-                                </span>
-                            </>
-                        )}
-                    </div>
-                    <div className="profile-info">
-                        <div className="profile-name-row">
-                            {editingName && canEdit ? (
-                                <div className="profile-name-edit-group">
-                                    <input
-                                        ref={nameInputRef}
-                                        className="profile-name-input"
-                                        value={editName}
-                                        onChange={e => setEditName(e.target.value)}
-                                        onKeyDown={handleNameKeyDown}
-                                        maxLength={50}
-                                        disabled={savingName}
-                                    />
-                                    {savingName ? (
-                                        <span
-                                            className="profile-name-saving">{isEnglish ? 'Saving...' : '保存中...'}</span>
-                                    ) : (
-                                        <>
-                                            <button type="button" className="profile-name-save"
-                                                    onClick={() => void handleSaveName()}
-                                                    aria-label="Save name">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                     strokeWidth="2.5"
-                                                     strokeLinecap="round" strokeLinejoin="round">
-                                                    <polyline points="20 6 9 17 4 12"/>
-                                                </svg>
-                                            </button>
-                                            <button type="button" className="profile-name-cancel"
-                                                    onClick={cancelEditingName}
-                                                    aria-label="Cancel editing">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                     strokeWidth="2.5"
-                                                     strokeLinecap="round" strokeLinejoin="round">
-                                                    <line x1="18" y1="6" x2="6" y2="18"/>
-                                                    <line x1="6" y1="6" x2="18" y2="18"/>
-                                                </svg>
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
+                <div className="profile-hero">
+                    <div className="profile-hero-banner" aria-hidden="true"/>
+                    <div className="profile-hero-body">
+                        <div
+                            className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : isOwnProfile ? 'profile-avatar-nonmember-hint' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
+                            {!avatarError && displayedPhoto ? (
+                                <img
+                                    src={displayedPhoto}
+                                    alt={dp.name}
+                                    className="profile-avatar"
+                                    referrerPolicy="no-referrer"
+                                    onError={() => setAvatarError(true)}
+                                    onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
+                                />
                             ) : (
-                                <>
-                                    <h1 className="profile-name">{dp.name}</h1>
-                                    {canEdit && (
-                                        <button className="profile-name-pencil" onClick={startEditingName} type="button"
-                                                aria-label="Edit name">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                                                 strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                                            </svg>
-                                        </button>
+                                <div
+                                    className="profile-avatar profile-avatar-initials"
+                                    onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
+                                >
+                                    {(dp.name?.[0] ?? '?').toUpperCase()}
+                                </div>
+                            )}
+                            {(canEdit || savingPhoto) && (
+                                <div
+                                    className="profile-avatar-overlay"
+                                    onClick={canEdit ? () => !savingPhoto && fileInputRef.current?.click() : undefined}
+                                >
+                                    {savingPhoto ? (
+                                        <div className="profile-avatar-spinner"/>
+                                    ) : (
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                             strokeLinecap="round" strokeLinejoin="round"
+                                             className="profile-avatar-camera-icon">
+                                            <path
+                                                d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                            <circle cx="12" cy="13" r="4"/>
+                                        </svg>
                                     )}
+                                </div>
+                            )}
+                            {canRemovePhoto && !savingPhoto && (
+                                <button
+                                    className="profile-avatar-delete"
+                                    onClick={handlePhotoDelete}
+                                    type="button"
+                                    aria-label="Remove photo"
+                                >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                         strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                        <line x1="6" y1="6" x2="18" y2="18"/>
+                                    </svg>
+                                </button>
+                            )}
+                            {canEdit && (
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handlePhotoSelect}
+                                    hidden
+                                />
+                            )}
+                            {!canEdit && isOwnProfile && (
+                                <>
+                                    <div className="profile-avatar-hint-overlay">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                             strokeLinecap="round" strokeLinejoin="round"
+                                             className="profile-avatar-hint-icon">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                        </svg>
+                                    </div>
+                                    <span className="profile-avatar-hint-tooltip">
+                                        {canRemovePhoto
+                                            ? (isEnglish
+                                                ? 'This photo was set by staff. You need an active membership to change it, but you can remove it.'
+                                                : '此头像由工作人员设置。需要有效会员资格才能更换，但你可以将其删除。')
+                                            : (isEnglish
+                                                ? 'A profile photo needs an active membership. Activate a passport to upload one.'
+                                                : '设置头像需要有效会员资格。激活通行证后即可上传。')}
+                                    </span>
                                 </>
                             )}
                         </div>
-                        {isOwnProfile && 'email' in dp && <p className="profile-email">{dp.email}</p>}
-                        <p className="profile-joined">
-                            {isEnglish ? 'Joined ' : '加入时间：'}
-                            {dp.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                                year: 'numeric', month: 'long', day: 'numeric',
-                            })}
-                        </p>
-                        <span className="profile-group-tag" data-group={dp.group}>
-                            {formatGroupWithTitle(dp.group, dp.title, dp.titleCn, isEnglish)}
-                            {/* Membership is not a group, so it rides on the chip as a star
-                                instead of replacing the label — a president can be a member too. */}
-                            {memberLabel && (
-                                <span
-                                    className="profile-member-star"
-                                    role="img"
-                                    aria-label={memberLabel}
-                                    tabIndex={0}
-                                >
-                                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                        <path
-                                            d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-                                    </svg>
-                                    <span className="profile-member-tooltip">{memberLabel}</span>
-                                </span>
-                            )}
-                        </span>
-                    </div>
-                </div>
-
-                {/* Only your own profile has tabs: the header above is shared by
-                    both, so switching keeps your name and photo in place. */}
-                {isOwnProfile && (
-                    <div className="admin-tabs profile-tabs">
-                        <button
-                            type="button"
-                            className={`admin-tab ${!settingsTab ? 'admin-tab-active' : ''}`}
-                            onClick={() => openTab('profile')}
-                        >
-                            {isEnglish ? 'Profile' : '个人主页'}
-                        </button>
-                        <button
-                            type="button"
-                            className={`admin-tab ${settingsTab ? 'admin-tab-active' : ''}`}
-                            onClick={() => openTab('settings')}
-                        >
-                            {isEnglish ? 'Settings' : '设置'}
-                        </button>
-                    </div>
-                )}
-
-                {settingsTab ? (
-                    <ProfileSettingsTab showToast={showToast}/>
-                ) : (
-                    <>
-                        {/* A private section has no count to show: the numbers are
-                        derived from lists the server withheld, so printing them
-                        would just report zero. Someone who hides both leaves nothing
-                        to put in the row, so the row itself goes. */}
-                        {(showEvents || (showBadges && earnedBadges.length > 0)) && (
-                            <div className="profile-stats">
-                                {showBadges && earnedBadges.length > 0 && (
-                                    <div className="profile-stat">
-                                        <span className="profile-stat-number">{earnedBadges.length}</span>
-                                        <span className="profile-stat-label">{isEnglish ? 'Badges' : '徽章'}</span>
-                                    </div>
-                                )}
-                                {showEvents && (
-                                    <div className="profile-stat">
-                                        <span className="profile-stat-number">{attendedEvents.length}</span>
-                                        <span
-                                            className="profile-stat-label">{isEnglish ? 'Events Attended' : '参与活动'}</span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {badgeLoadError && dp.badges.length > 0 && (
-                            <p className="profile-load-error">
-                                {isEnglish ? 'Failed to load badge details.' : '加载徽章详情失败。'}
-                            </p>
-                        )}
-                        {!badgeLoadError && (
-                            <section className="badge-section">
-                                <h2 className="badge-section-title">
-                                    {isEnglish ? 'Badges' : '徽章'}
-                                </h2>
-                                {!showBadges ? (
-                                    <p className="profile-empty-state">{privateNote}</p>
-                                ) : earnedBadges.length > 0 ? (
-                                    <div className="badge-grid" ref={badgeGridRef}>
-                                        {earnedBadges.map(badge => (
-                                            <BadgeCard
-                                                key={badge.id}
-                                                badge={badge}
-                                                earnedDate={earnedDates[badge.id]}
-                                                isEnglish={isEnglish}
-                                                active={activeBadge === badge.id}
-                                                onToggle={() => toggleBadge(badge)}
-                                            />
-                                        ))}
+                        <div className="profile-info">
+                            <div className="profile-name-row">
+                                {editingName && canEdit ? (
+                                    <div className="profile-name-edit-group">
+                                        <input
+                                            ref={nameInputRef}
+                                            className="profile-name-input"
+                                            value={editName}
+                                            onChange={e => setEditName(e.target.value)}
+                                            onKeyDown={handleNameKeyDown}
+                                            maxLength={50}
+                                            disabled={savingName}
+                                        />
+                                        {savingName ? (
+                                            <span
+                                                className="profile-name-saving">{isEnglish ? 'Saving...' : '保存中...'}</span>
+                                        ) : (
+                                            <>
+                                                <button type="button" className="profile-name-save"
+                                                        onClick={() => void handleSaveName()}
+                                                        aria-label="Save name">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                         strokeWidth="2.5"
+                                                         strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="20 6 9 17 4 12"/>
+                                                    </svg>
+                                                </button>
+                                                <button type="button" className="profile-name-cancel"
+                                                        onClick={cancelEditingName}
+                                                        aria-label="Cancel editing">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                         strokeWidth="2.5"
+                                                         strokeLinecap="round" strokeLinejoin="round">
+                                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                                        <line x1="6" y1="6" x2="18" y2="18"/>
+                                                    </svg>
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 ) : (
-                                    <p className="profile-empty-state">
-                                        {isOwnProfile
-                                            ? (isEnglish
-                                                ? 'No badges yet — attend events and complete challenges to earn your first!'
-                                                : '还没有徽章——参加活动和完成挑战来获得你的第一枚徽章吧！')
-                                            : (isEnglish
-                                                ? 'No badges yet.'
-                                                : '还没有徽章。')}
-                                    </p>
+                                    <>
+                                        <h1 className="profile-name">{dp.name}</h1>
+                                        {canEdit && (
+                                            <button className="profile-name-pencil" onClick={startEditingName}
+                                                    type="button"
+                                                    aria-label="Edit name">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                     strokeWidth="2"
+                                                     strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </>
                                 )}
-                            </section>
-                        )}
+                            </div>
+                            <div className="profile-meta">
+                                <span className="profile-group-tag" data-group={dp.group}>
+                                    {formatGroupWithTitle(dp.group, dp.title, dp.titleCn, isEnglish)}
+                                    {/* Membership is not a group, so it rides on the chip as a star
+                                        instead of replacing the label — a president can be a member too. */}
+                                    {memberLabel && (
+                                        <span
+                                            className="profile-member-star"
+                                            role="img"
+                                            aria-label={memberLabel}
+                                            tabIndex={0}
+                                        >
+                                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                <path
+                                                    d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                                            </svg>
+                                            <span className="profile-member-tooltip">{memberLabel}</span>
+                                        </span>
+                                    )}
+                                </span>
+                                <span className="profile-meta-item">
+                                    <FiCalendar aria-hidden="true"/>
+                                    {isEnglish ? 'Joined ' : '加入时间：'}
+                                    {dp.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                                        year: 'numeric', month: 'long', day: 'numeric',
+                                    })}
+                                </span>
+                                {isOwnProfile && 'email' in dp && (
+                                    <span className="profile-meta-item profile-meta-email">
+                                        <FiMail aria-hidden="true"/>
+                                        {dp.email}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
 
-                        {/* Passports are the owner's own business: the shelf and the
-                        activation entry point both read from their profile, and
-                        getPublicProfile carries none of it. */}
-                        {isOwnProfile && <PassportShelfSection/>}
+                    {stats.length > 0 && (
+                        <ul className="profile-stats">
+                            {stats.map(s => (
+                                <li key={s.key} className="profile-stat">
+                                    <span className="profile-stat-number">{s.count ?? '–'}</span>
+                                    <span className="profile-stat-label">{s.label}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
 
-                        <section className="badge-section">
-                            <h2 className="badge-section-title">
-                                {isEnglish ? 'Events Attended' : '参与活动'}
-                            </h2>
-                            {!showEvents ? (
-                                <p className="profile-empty-state">{privateNote}</p>
-                            ) : attendedEvents.length > 0 ? (
+                    {/* Only your own profile has tabs: they sit on the header card,
+                        so switching keeps your name and photo in place. */}
+                    {isOwnProfile && (
+                        <div className="profile-tabs">
+                            <button
+                                type="button"
+                                className={`profile-tab${!settingsTab ? ' profile-tab--active' : ''}`}
+                                aria-current={!settingsTab ? 'page' : undefined}
+                                onClick={() => openTab('profile')}
+                            >
+                                {isEnglish ? 'Profile' : '个人主页'}
+                            </button>
+                            <button
+                                type="button"
+                                className={`profile-tab${settingsTab ? ' profile-tab--active' : ''}`}
+                                aria-current={settingsTab ? 'page' : undefined}
+                                onClick={() => openTab('settings')}
+                            >
+                                {isEnglish ? 'Settings' : '设置'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="profile-tab-body">
+                    {settingsTab ? (
+                        <ProfileSettingsTab showToast={showToast}/>
+                    ) : settling ? (
+                        <div className="spinner spinner-centered"/>
+                    ) : isOwnProfile && allEmpty ? (
+                        <ProfileWelcome/>
+                    ) : !isOwnProfile && allEmpty ? (
+                        <ProfileCard compact>
+                            <ProfileCardNote icon={FiStar} muted>
+                                {isEnglish
+                                    ? `${dp.name} hasn’t earned a badge or checked in at an event yet.`
+                                    : `${dp.name} 还没有获得徽章，也还没有参加过活动。`}
+                            </ProfileCardNote>
+                        </ProfileCard>
+                    ) : !isOwnProfile && badgeState === 'private' && eventState === 'private' ? (
+                        <ProfileCard compact>
+                            <ProfileCardNote icon={FiLock} muted>
+                                {isEnglish
+                                    ? `${dp.name} keeps their badges and events private.`
+                                    : `${dp.name} 将徽章和参与活动设为私密。`}
+                            </ProfileCardNote>
+                        </ProfileCard>
+                    ) : (
+                        <div className="profile-collections">
+                            <ProfileSection
+                                kind="badges"
+                                title={isEnglish ? 'Badges' : '徽章'}
+                                state={badgeState}
+                                own={isOwnProfile}
+                                count={earnedBadges.length}
+                                icon={FiAward}
+                                none={isEnglish ? 'No badges yet.' : '还没有徽章。'}
+                                hidden={isEnglish
+                                    ? `${dp.name} keeps their badges private.`
+                                    : `${dp.name} 将徽章设为私密。`}
+                                failed={isEnglish ? 'Failed to load badge details.' : '加载徽章详情失败。'}
+                            >
+                                <div className="badge-grid">
+                                    {earnedBadges.map(badge => (
+                                        <BadgeCard
+                                            key={badge.id}
+                                            badge={badge}
+                                            earnedDate={earnedDates[badge.id]}
+                                            isEnglish={isEnglish}
+                                            onOpen={() => setSelectedBadge(badge)}
+                                        />
+                                    ))}
+                                </div>
+                            </ProfileSection>
+
+                            {/* Passports are the owner's own business: the shelf reads
+                                straight from their passports, and getPublicProfile
+                                carries none of it. */}
+                            {passportState && (
+                                <ProfileSection
+                                    kind="passports"
+                                    title={isEnglish ? 'Passports' : '通行证'}
+                                    state={passportState}
+                                    own={isOwnProfile}
+                                    count={passports?.length ?? 0}
+                                    failed={isEnglish ? 'Failed to load your passports.' : '加载通行证失败。'}
+                                >
+                                    {passports && <PassportShelf passports={passports}/>}
+                                </ProfileSection>
+                            )}
+
+                            <ProfileSection
+                                kind="events"
+                                title={isEnglish ? 'Events Attended' : '参与活动'}
+                                state={eventState}
+                                own={isOwnProfile}
+                                count={attendedEvents.length}
+                                icon={FiCalendar}
+                                none={isEnglish ? 'No events attended yet.' : '还没有参加过活动。'}
+                                hidden={isEnglish
+                                    ? `${dp.name} keeps their events private.`
+                                    : `${dp.name} 将参与活动设为私密。`}
+                            >
                                 <div className="profile-event-grid">
                                     {attendedEvents.map(event => (
                                         <EventCard
@@ -866,20 +894,10 @@ export const ProfilePage = () => {
                                         />
                                     ))}
                                 </div>
-                            ) : (
-                                <p className="profile-empty-state">
-                                    {isOwnProfile
-                                        ? (isEnglish
-                                            ? 'No events attended yet — check out our upcoming events and join one!'
-                                            : '还没有参加过活动——看看即将到来的活动，来参加一场吧！')
-                                        : (isEnglish
-                                            ? 'No events attended yet.'
-                                            : '还没有参加过活动。')}
-                                </p>
-                            )}
-                        </section>
-                    </>
-                )}
+                            </ProfileSection>
+                        </div>
+                    )}
+                </div>
             </div>
             {selectedBadge && (
                 <div className="badge-modal-overlay" onClick={() => setSelectedBadge(null)}>
