@@ -15,8 +15,8 @@
 }
 
 .passport-page--wide {
-    max-width: 1520px;
-    padding: 100px 32px 40px;
+    max-width: 1840px;
+    padding: 100px 32px 32px;
 }
 
 .passport-loading {
@@ -152,7 +152,7 @@
    on wide screens; on a phone the cover sits above the data page instead.
 
    The spread is sized to fill the screen: --passport-height is the window less
-   the nav and the owner's note, and the cover column is 3:4 of that, so the
+   the page's top and bottom padding, and the cover column is 3:4 of that, so the
    cover sets the spread's height. The cover gives way to the data page on
    narrow windows, and everything on the data page scales with that page's
    width (cqi), so the text grows with the passport rather than the window.
@@ -164,7 +164,7 @@
     --passport-paper: #fffaf4;
     --passport-ink: #e8457f;
     --passport-rule: rgba(255, 107, 157, 0.28);
-    --passport-height: clamp(520px, calc(100svh - 180px), 880px);
+    --passport-height: clamp(520px, calc(100svh - 132px), 1120px);
 
     display: grid;
     grid-template-columns: min(calc(var(--passport-height) * 0.75), 46%) minmax(0, 1fr);
@@ -270,10 +270,10 @@
     gap: clamp(16px, 4.5cqi, 32px);
 }
 
-/* A passport photo is a portrait rectangle, not a profile circle. */
+/* A passport photo is a square, not a profile circle. */
 .passport-holder-photo {
     width: clamp(76px, 24cqi, 170px);
-    aspect-ratio: 4 / 5;
+    aspect-ratio: 1;
     height: auto;
     flex-shrink: 0;
     object-fit: cover;
@@ -436,7 +436,7 @@
     }
 }
 
-/* --- Owner-only: privacy toggle and note ---------------------------------- */
+/* --- Owner-only: privacy toggle ------------------------------------------- */
 
 .passport-privacy {
     position: relative;
@@ -502,15 +502,6 @@
 .passport-privacy:focus-visible .passport-privacy-tip {
     opacity: 1;
     visibility: visible;
-}
-
-.passport-owner-note {
-    max-width: 60ch;
-    margin: 18px auto 0;
-    text-align: center;
-    font-size: clamp(13px, 1.1vw, 15px);
-    line-height: 1.5;
-    color: var(--color-text-muted);
 }
 
 /* --- Shelf ---------------------------------------------------------------- */

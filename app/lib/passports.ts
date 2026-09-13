@@ -63,9 +63,6 @@ export type PassportPublicProfile =
     claimedAt: string | null;
     isOwner: boolean;
     hidden: boolean;
-    /** Owner-only extras; null for every other visitor. */
-    scanCount: number | null;
-    membershipExpiresAt: string | null;
     owner: {
         /** For the link to their profile, which still requires signing in. */
         uid: string;

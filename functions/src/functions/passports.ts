@@ -411,14 +411,10 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
         status: "claimed" as const,
         year,
         claimedAt: (passport.claimedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
-        // The owner is looking at their own passport: give them the management
-        // details a visitor has no business seeing.
+        // The owner is looking at their own passport: the page gives them its
+        // privacy switch.
         isOwner,
         hidden: owner.hidePassportPage === true,
-        scanCount: isOwner && typeof passport.scanCount === "number" ? passport.scanCount : null,
-        membershipExpiresAt: isOwner
-            ? ((owner.membershipExpiresAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null)
-            : null,
         owner: {
             uid: ownerUid,
             displayName: owner.displayName ?? "",

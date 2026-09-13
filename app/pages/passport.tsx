@@ -457,7 +457,7 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
                         )}
                         {joinedOn && (
                             <div className="passport-field">
-                                <dt>{isEnglish ? 'Joined the club' : '入社时间'}</dt>
+                                <dt>{isEnglish ? 'Joined on' : '注册时间'}</dt>
                                 <dd>{joinedOn}</dd>
                             </div>
                         )}
@@ -487,10 +487,6 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
                     </div>
                 </div>
             </article>
-
-            {data.isOwner && (
-                <OwnerNote scanCount={data.scanCount} membershipExpiresAt={data.membershipExpiresAt}/>
-            )}
         </PassportShell>
     );
 };
@@ -542,37 +538,5 @@ const PrivacyToggle = ({initialHidden, showToast}: {initialHidden: boolean; show
             {hidden ? <FiLock aria-hidden="true"/> : <FiGlobe aria-hidden="true"/>}
             <span className="passport-privacy-tip" aria-hidden="true">{state}</span>
         </button>
-    );
-};
-
-/** Under the passport, for its owner: what the page tells nobody else. */
-const OwnerNote = ({scanCount, membershipExpiresAt}: {
-    scanCount: number | null;
-    membershipExpiresAt: string | null;
-}) => {
-    const {isEnglish} = useLanguage();
-
-    const expiry = membershipExpiresAt ? new Date(membershipExpiresAt) : null;
-    const through = expiry && !isNaN(expiry.getTime()) && expiry.getTime() > Date.now()
-        ? expiry.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {year: 'numeric', month: 'long', day: 'numeric'})
-        : null;
-
-    const parts: string[] = [];
-    if (scanCount !== null) {
-        parts.push(isEnglish
-            ? `scanned ${scanCount} ${scanCount === 1 ? 'time' : 'times'}`
-            : `已被扫描 ${scanCount} 次`);
-    }
-    if (through) {
-        parts.push(isEnglish ? `your membership runs through ${through}` : `您的会员资格有效期至 ${through}`);
-    }
-    if (parts.length === 0) return null;
-
-    return (
-        <p className="passport-owner-note">
-            {isEnglish
-                ? `Only you see this: ${parts.join(', and ')}.`
-                : `仅您可见：${parts.join('，')}。`}
-        </p>
     );
 };
