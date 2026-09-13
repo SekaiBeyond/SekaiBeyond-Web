@@ -82,9 +82,9 @@ const PrivacySwitch = ({checked, busy, label, onChange}: {
  *
  * Every switch here is enforced server-side: a hidden section is left out of
  * getPublicProfile entirely, rather than fetched and not drawn, and a private
- * passport page is refused by getPassportPublicProfile. This is the only place
- * any of them can be changed; the passport owner panel displays the passport
- * page's state and links here.
+ * passport page is refused by getPassportPublicProfile. The passport page switch
+ * is also an icon on the owner's own passport page, which saves through the same
+ * call and refreshes the profile this tab reads.
  *
  * Rendered inside the profile page, which owns the nav, the sign-in wall and the
  * toasts — so this is only the card.

@@ -116,14 +116,6 @@
     transform: translateX(22px);
 }
 
-/* The passport owner panel's route here: an anchor wearing .admin-btn--outline,
-   which was written for <button>. */
-.settings-link-btn {
-    box-sizing: border-box;
-    text-align: center;
-    text-decoration: none;
-}
-
 @media (max-width: 640px) {
     .settings-section {
         padding: 22px 18px;

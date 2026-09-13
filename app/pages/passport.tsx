@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
+import { FiGlobe, FiLock } from 'react-icons/fi';
 import { Link, useParams } from 'react-router';
 import { formatGroupWithTitle, normalizeGroup, useAuth } from '~/components/AuthProvider';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
@@ -7,6 +8,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     callClaimPassport,
     callGetPassportPublicProfile,
+    callSetPassportPrivacy,
     functionsErrorCode,
     functionsErrorDetails,
 } from '~/lib/firebase';
@@ -19,6 +21,8 @@ import {
     type PassportPublicProfile,
     usePassportDesigns,
 } from '~/lib/passports';
+import { privacyRow, privacyStateLabel } from '~/lib/privacy';
+import { type ShowToast, ToastContainer, useToasts } from '~/lib/useToasts';
 import { ExpiredCard } from './qrRedirect';
 
 /**
@@ -26,8 +30,8 @@ import { ExpiredCard } from './qrRedirect';
  *
  * What it renders depends on the passport, not on who is looking: an unclaimed
  * sticker is an activation form, a claimed one is its owner's public page (no
- * sign-in required), and a void or unknown code is a dead end. The owner gets an
- * extra management panel on their own passport.
+ * sign-in required), and a void or unknown code is a dead end. The owner also
+ * gets a privacy toggle on their own passport.
  */
 export const PassportPage = () => {
     const {passportId: raw} = useParams();
@@ -112,8 +116,11 @@ export const PassportPage = () => {
     return <ClaimedPassport passportId={passportId} data={result}/>;
 };
 
-/** Nav + page frame, matching the profile and admin pages. */
-const PassportShell = ({children}: {children: ReactNode}) => {
+/**
+ * Nav + page frame, matching the profile and admin pages. `wide` lets the open
+ * passport fill the screen; the message cards keep the narrower frame.
+ */
+const PassportShell = ({children, wide = false}: {children: ReactNode; wide?: boolean}) => {
     const {isEnglish} = useLanguage();
     return (
         <>
@@ -126,7 +133,7 @@ const PassportShell = ({children}: {children: ReactNode}) => {
                     <LoginButton/>
                 </div>
             </nav>
-            <div className="passport-page">{children}</div>
+            <div className={`passport-page${wide ? ' passport-page--wide' : ''}`}>{children}</div>
         </>
     );
 };
@@ -362,13 +369,21 @@ interface ClaimedPassportProps {
     data: Extract<PassportPublicProfile, {status: 'claimed'}>;
 }
 
-/** The owner's public page. Renders for signed-out visitors — no login wall. */
+/**
+ * The owner's public page. Renders for signed-out visitors — no login wall.
+ *
+ * Laid out as an open passport: the year's cover art on one page, the holder's
+ * data page on the other, stamped with their membership. The owner also gets the
+ * privacy toggle in the data page's corner and a line of what only they see.
+ */
 const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
     const {isEnglish} = useLanguage();
     const {designs} = usePassportDesigns();
+    const {toasts, showToast} = useToasts();
 
     const {owner} = data;
     const design = designs.find(d => d.year === data.year);
+    const name = passportName(data.year, isEnglish);
 
     useEffect(() => {
         if (!owner.displayName) return;
@@ -387,163 +402,177 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
     };
 
     const claimedOn = fmtDate(data.claimedAt);
+    const joinedOn = fmtDate(owner.joinedAt);
     const group = normalizeGroup(owner.group);
 
     return (
-        <>
-            <PassportShell>
-                <div className="passport-hero">
-                    {design?.coverImageUrl && (
-                        <img
-                            src={design.coverImageUrl}
-                            alt={passportName(data.year, isEnglish)}
-                            className="passport-hero-cover"
-                        />
+        <PassportShell wide>
+            <ToastContainer toasts={toasts}/>
+            <article className="passport-book">
+                <div className="passport-book-cover">
+                    {design?.coverImageUrl ? (
+                        <>
+                            <img src={design.coverImageUrl} alt="" aria-hidden="true"
+                                 className="passport-book-cover-wash"/>
+                            <img src={design.coverImageUrl} alt={name} className="passport-book-cover-art"/>
+                        </>
+                    ) : (
+                        <span className="passport-book-cover-blank">{isEnglish ? 'Sekai Beyond' : '彼世界动漫社'}</span>
                     )}
-                    <div className="passport-hero-body">
-                        <span className="passport-hero-eyebrow">
-                            {isEnglish ? 'Sekai Beyond Passport' : '彼世界通行证'}
-                        </span>
-                        <h1 className="passport-hero-title">{passportName(data.year, isEnglish)}</h1>
-                        <p className="passport-code passport-code--sm">{passportId}</p>
-                    </div>
                 </div>
 
-                <div className="passport-owner">
-                    {owner.photoURL ? (
-                        <img
-                            src={owner.photoURL}
-                            alt={owner.displayName}
-                            className="passport-owner-avatar"
-                            referrerPolicy="no-referrer"
-                        />
-                    ) : (
-                        <div className="passport-owner-avatar passport-owner-avatar--initials">
-                            {(owner.displayName[0] ?? '?').toUpperCase()}
-                        </div>
-                    )}
-                    <div className="passport-owner-info">
-                        <h2 className="passport-owner-name">{owner.displayName}</h2>
-                        <span className="profile-group-tag" data-group={group}>
-                            {formatGroupWithTitle(group, owner.title, owner.titleCn, isEnglish)}
-                        </span>
-                        <div className="passport-chips">
-                            <span className={`passport-chip${owner.isMember ? ' passport-chip--member' : ''}`}>
-                                {owner.isMember
-                                    ? (isEnglish ? '★ Member' : '★ 会员')
-                                    : (isEnglish ? 'Membership lapsed' : '会员资格已过期')}
-                            </span>
-                            {claimedOn && (
-                                <span className="passport-chip">
-                                    {isEnglish ? `Held since ${claimedOn}` : `持有自 ${claimedOn}`}
-                                </span>
-                            )}
-                        </div>
-                        {owner.joinedAt && (
-                            <p className="passport-owner-joined">
-                                {isEnglish ? 'Joined ' : '加入时间：'}{fmtDate(owner.joinedAt)}
-                            </p>
+                <div className="passport-book-page">
+                    <header className="passport-book-head">
+                        <h1 className="passport-book-title">{name}</h1>
+                        {data.isOwner && <PrivacyToggle initialHidden={data.hidden} showToast={showToast}/>}
+                    </header>
+
+                    <div className="passport-holder">
+                        {owner.photoURL ? (
+                            <img
+                                src={owner.photoURL}
+                                alt=""
+                                className="passport-holder-photo"
+                                referrerPolicy="no-referrer"
+                            />
+                        ) : (
+                            <div className="passport-holder-photo passport-holder-photo--initials" aria-hidden="true">
+                                {(owner.displayName[0] ?? '?').toUpperCase()}
+                            </div>
                         )}
+                        <div className="passport-holder-id">
+                            <h2 className="passport-holder-name">{owner.displayName}</h2>
+                            <span className="profile-group-tag" data-group={group}>
+                                {formatGroupWithTitle(group, owner.title, owner.titleCn, isEnglish)}
+                            </span>
+                        </div>
+                    </div>
+
+                    <dl className="passport-fields">
+                        {claimedOn && (
+                            <div className="passport-field">
+                                <dt>{isEnglish ? 'Held since' : '持有自'}</dt>
+                                <dd>{claimedOn}</dd>
+                            </div>
+                        )}
+                        {joinedOn && (
+                            <div className="passport-field">
+                                <dt>{isEnglish ? 'Joined the club' : '入社时间'}</dt>
+                                <dd>{joinedOn}</dd>
+                            </div>
+                        )}
+                        <div className="passport-field passport-field--wide">
+                            <dt>{isEnglish ? 'Passport no.' : '通行证编号'}</dt>
+                            <dd className="passport-field-code">{passportId}</dd>
+                        </div>
+                    </dl>
+
+                    {/* A div, not <footer>: the landing page styles every footer element. */}
+                    <div className="passport-book-foot">
                         {/* Absent until the function that sends it is deployed. */}
                         {owner.uid && (
-                            <Link to={`/profile?uid=${owner.uid}`} className="passport-owner-profile-link">
-                                {isEnglish ? 'View profile →' : '查看个人主页 →'}
+                            <Link to={`/profile?uid=${owner.uid}`} className="passport-profile-link">
+                                {isEnglish ? 'View profile' : '查看个人主页'}
                             </Link>
                         )}
+                        <span className={`passport-stamp${owner.isMember ? '' : ' passport-stamp--lapsed'}`}>
+                            {/* The stamp's word alone doesn't say what it is stamping. */}
+                            <span className="passport-stamp-context">
+                                {isEnglish ? 'Membership: ' : '会员状态：'}
+                            </span>
+                            {owner.isMember
+                                ? (isEnglish ? 'Member' : '会员')
+                                : (isEnglish ? 'Lapsed' : '已过期')}
+                        </span>
                     </div>
                 </div>
+            </article>
 
-                {data.isOwner && (
-                    <OwnerPanel
-                        hidden={data.hidden}
-                        scanCount={data.scanCount}
-                        membershipExpiresAt={data.membershipExpiresAt}
-                    />
-                )}
-            </PassportShell>
-        </>
+            {data.isOwner && (
+                <OwnerNote scanCount={data.scanCount} membershipExpiresAt={data.membershipExpiresAt}/>
+            )}
+        </PassportShell>
     );
 };
 
 /**
- * Shown only to the owner, scanning their own sticker: how long their membership
- * has left, how often the passport has been scanned, and whether visitors get
- * this page at all. Kept behind a disclosure so a passport page stays a passport
- * page.
- *
- * It reports; it does not change anything. The switch it names lives on the
- * profile page's Settings tab, so there is one control per setting and no second
- * copy to fall out of step with it.
+ * The passport page's privacy switch, as an icon in the corner of the data page:
+ * a globe while scanners can see the page, a lock while they get the private
+ * notice instead. It saves the same setting as the Settings tab on /profile and
+ * refreshes the auth profile afterwards, so that tab reads the new value.
  */
-const OwnerPanel = ({hidden, scanCount, membershipExpiresAt}: {
-    hidden: boolean;
+const PrivacyToggle = ({initialHidden, showToast}: {initialHidden: boolean; showToast: ShowToast}) => {
+    const {isEnglish} = useLanguage();
+    const {refreshProfile} = useAuth();
+    const [hidden, setHidden] = useState(initialHidden);
+    const [busy, setBusy] = useState(false);
+
+    const row = privacyRow('passportPage');
+    const state = privacyStateLabel(row, !hidden, isEnglish);
+
+    const toggle = async () => {
+        const next = !hidden;
+        setBusy(true);
+        try {
+            await callSetPassportPrivacy({hide: next});
+            setHidden(next);
+            showToast(
+                `${isEnglish ? row.title.en : row.title.zh} · ${privacyStateLabel(row, !next, isEnglish)}`,
+                'success',
+            );
+            refreshProfile().catch(() => {
+            });
+        } catch {
+            showToast(isEnglish ? 'Failed to save. Please try again.' : '保存失败，请重试。', 'error');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={!hidden}
+            aria-label={isEnglish ? 'Show this page to people who scan it' : '向扫描者公开此页面'}
+            className={`passport-privacy${hidden ? ' passport-privacy--private' : ''}`}
+            disabled={busy}
+            onClick={() => void toggle()}
+        >
+            {hidden ? <FiLock aria-hidden="true"/> : <FiGlobe aria-hidden="true"/>}
+            <span className="passport-privacy-tip" aria-hidden="true">{state}</span>
+        </button>
+    );
+};
+
+/** Under the passport, for its owner: what the page tells nobody else. */
+const OwnerNote = ({scanCount, membershipExpiresAt}: {
     scanCount: number | null;
     membershipExpiresAt: string | null;
 }) => {
     const {isEnglish} = useLanguage();
-    const [open, setOpen] = useState(false);
 
     const expiry = membershipExpiresAt ? new Date(membershipExpiresAt) : null;
-    const daysLeft = expiry && !isNaN(expiry.getTime())
-        ? Math.ceil((expiry.getTime() - Date.now()) / 86_400_000)
+    const through = expiry && !isNaN(expiry.getTime()) && expiry.getTime() > Date.now()
+        ? expiry.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {year: 'numeric', month: 'long', day: 'numeric'})
         : null;
 
+    const parts: string[] = [];
+    if (scanCount !== null) {
+        parts.push(isEnglish
+            ? `scanned ${scanCount} ${scanCount === 1 ? 'time' : 'times'}`
+            : `已被扫描 ${scanCount} 次`);
+    }
+    if (through) {
+        parts.push(isEnglish ? `your membership runs through ${through}` : `您的会员资格有效期至 ${through}`);
+    }
+    if (parts.length === 0) return null;
+
     return (
-        <div className="passport-owner-panel">
-            <div className="passport-owner-panel-head">
-                <span className="passport-owner-panel-title">
-                    {isEnglish ? 'This passport is yours' : '这是您的通行证'}
-                </span>
-                <button
-                    className="admin-btn admin-btn--link"
-                    onClick={() => setOpen(v => !v)}
-                    type="button"
-                >
-                    {open
-                        ? (isEnglish ? 'Hide' : '收起')
-                        : (isEnglish ? 'Manage' : '管理')}
-                </button>
-            </div>
-            {open && (
-                <div className="passport-owner-panel-body">
-                    <p className="passport-owner-panel-row">
-                        {daysLeft !== null && daysLeft > 0 && expiry
-                            ? (isEnglish
-                                ? `Membership active — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left, through ${expiry.toLocaleDateString('en-US', {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric'
-                                })}.`
-                                : `会员资格有效 — 剩余 ${daysLeft} 天，至 ${expiry.toLocaleDateString('zh-CN', {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric'
-                                })}。`)
-                            : (isEnglish
-                                ? 'Your membership has lapsed. The passport stays yours — activating another one adds a year.'
-                                : '您的会员资格已过期。通行证仍归您所有 — 激活另一本可再获得一年。')}
-                    </p>
-                    {scanCount !== null && (
-                        <p className="passport-owner-panel-row">
-                            {isEnglish
-                                ? `Scanned ${scanCount} ${scanCount === 1 ? 'time' : 'times'}.`
-                                : `已被扫描 ${scanCount} 次。`}
-                        </p>
-                    )}
-                    <p className="passport-owner-panel-row">
-                        {hidden
-                            ? (isEnglish
-                                ? 'This page is private: scanners see a notice instead of your profile.'
-                                : '此页面为私密：扫描者只会看到提示，而看不到您的资料。')
-                            : (isEnglish
-                                ? 'This page is public: anyone who scans your passport sees it.'
-                                : '此页面已公开：任何扫描您通行证的人都能看到它。')}
-                    </p>
-                    <Link to="/profile?tab=settings" className="admin-btn admin-btn--outline settings-link-btn">
-                        {isEnglish ? 'Change privacy settings' : '修改隐私设置'}
-                    </Link>
-                </div>
-            )}
-        </div>
+        <p className="passport-owner-note">
+            {isEnglish
+                ? `Only you see this: ${parts.join(', and ')}.`
+                : `仅您可见：${parts.join('，')}。`}
+        </p>
     );
 };
