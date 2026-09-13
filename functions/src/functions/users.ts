@@ -13,7 +13,7 @@ import {
     requireAuth,
 } from "../utils/auth";
 import { deletionExpiresAt, recordExpiresAt } from "../utils/config";
-import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS } from "../utils/membership";
+import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
 import { pastEventIds, toStringIds } from "../utils/publicProfile";
 import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB } from "../utils/storage";
@@ -600,9 +600,11 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
         const newExpiry = hasExtendDays
             ? extendedExpiry(oldExpiry, extendDays)
             : absoluteExpiry;
+        const newStart = startedAtAfter(targetData, newExpiry);
 
         txn.update(db.collection("users").doc(targetUid), {
             membershipExpiresAt: newExpiry === null ? FieldValue.delete() : newExpiry,
+            membershipStartedAt: newStart ?? FieldValue.delete(),
         });
 
         txn.set(db.collection("records").doc(), {

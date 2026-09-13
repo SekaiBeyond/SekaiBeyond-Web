@@ -3,8 +3,8 @@ import { Timestamp } from "firebase-admin/firestore";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Membership is a time-boxed attribute sitting alongside `group`, never inside it.
-// Nothing is written to the user document when a membership starts, so nothing has
-// to be unwound when it ends — `membershipExpiresAt <= now` *is* the lapsed state,
+// Nothing on the user document marks a membership as running, so nothing has to be
+// unwound when it ends — `membershipExpiresAt <= now` *is* the lapsed state,
 // which is why there is no scheduled sweep and no group ever changes on expiry.
 export function isMembershipActive(data: FirebaseFirestore.DocumentData | undefined): boolean {
     const expiresAt = data?.membershipExpiresAt;
@@ -18,6 +18,17 @@ export function extendedExpiry(current: unknown, days: number): Timestamp {
     const active = current instanceof Timestamp && current.toMillis() > Date.now();
     const base = active ? (current as Timestamp).toMillis() : Date.now();
     return Timestamp.fromMillis(base + days * DAY_MS);
+}
+
+// When the membership running to `next` began, for `membershipStartedAt`. A change
+// to one that is still running keeps its start, one that begins a membership
+// starts it today, and null — written as a delete — means none is left running.
+// Memberships granted before the field existed have no start to keep, so they
+// stay blank until they lapse and begin again.
+export function startedAtAfter(current: FirebaseFirestore.DocumentData, next: Timestamp | null): Timestamp | null {
+    if (!next || next.toMillis() <= Date.now()) return null;
+    if (!isMembershipActive(current)) return Timestamp.now();
+    return current.membershipStartedAt instanceof Timestamp ? current.membershipStartedAt : null;
 }
 
 // Ceiling on a single admin grant. Not a cap on total membership — stacked grants

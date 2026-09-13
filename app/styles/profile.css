@@ -195,7 +195,7 @@
 }
 
 /* The banner rounds its own corners rather than the card clipping them, so the
-   photo's and the star's tooltips can still spill past the card.
+   photo's tooltip can still spill past the card.
 
    It is the same height with or without a member's own image. On the widest
    card that height matches the crop's shape, BANNER_ASPECT in profile.tsx; on a
@@ -1091,7 +1091,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: var(--color-text-light);
 }
 
-/* --- Group chip and membership star ---------------------------------------- */
+/* --- Group chip and membership --------------------------------------------- */
 
 .profile-group-tag {
     display: inline-block;
@@ -1102,53 +1102,30 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     letter-spacing: 0.3px;
 }
 
-/* Membership star on the group chip. Gold rather than the chip's own colour so
-   it stays legible on all four group tints, which run grey through pink. */
-.profile-member-star {
-    position: relative;
+/* Group tag colors are in components.css */
+
+/* Blue, like the admin list's member tag, and far from all four group tints —
+   grey, green, orange, pink — so it never reads as a group. */
+.profile-member-chip {
     display: inline-flex;
     align-items: center;
-    margin-left: 5px;
-    vertical-align: -2px;
-    color: #e8a317;
-    cursor: help;
-    outline: none;
+    gap: 5px;
+    padding: 4px 13px 4px 11px;
+    border-radius: 20px;
+    background: rgba(33, 150, 243, 0.12);
+    color: #1565c0;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
 }
 
-.profile-member-star svg {
-    width: 13px;
-    height: 13px;
+.profile-member-chip svg {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    color: #1e88e5;
 }
-
-/* :focus, not :focus-visible — tapping the star is the only way to reach the
-   tooltip on a touch screen, where there is no hover. */
-.profile-member-tooltip {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.72);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0;
-    line-height: 1.4;
-    padding: 5px 9px;
-    border-radius: 6px;
-    width: max-content;
-    max-width: 200px;
-    text-align: center;
-    opacity: 0;
-    transition: opacity 0.2s;
-    pointer-events: none;
-}
-
-.profile-member-star:hover .profile-member-tooltip,
-.profile-member-star:focus .profile-member-tooltip {
-    opacity: 1;
-}
-
-/* Group tag colors are in components.css */
 
 /* --- Photo and name editing ------------------------------------------------ */
 

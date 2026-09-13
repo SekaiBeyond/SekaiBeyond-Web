@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
-import { FiAward, FiCalendar, FiImage, FiLock, FiMail, FiStar, FiTrash2 } from 'react-icons/fi';
+import { FaStar } from 'react-icons/fa';
+import { FiAward, FiCalendar, FiClock, FiImage, FiLock, FiMail, FiPlayCircle, FiStar, FiTrash2, } from 'react-icons/fi';
 import {
     formatGroupWithTitle,
     hasPermission,
@@ -540,7 +541,6 @@ export const ProfilePage = () => {
             eventStaffEvents: profile!.eventStaffEvents,
             group: profile!.group,
             isMember,
-            membershipExpiresAt: profile!.membershipExpiresAt,
             title: profile!.title ?? '',
             titleCn: profile!.titleCn ?? '',
         }
@@ -552,8 +552,6 @@ export const ProfilePage = () => {
             eventStaffEvents: viewedProfile!.eventStaffEvents,
             group: viewedProfile!.group,
             isMember: viewedProfile!.isMember,
-            // Only the owner sees their own expiry date; others just see the chip.
-            membershipExpiresAt: null,
             title: viewedProfile!.title ?? '',
             titleCn: viewedProfile!.titleCn ?? '',
         };
@@ -619,22 +617,14 @@ export const ProfilePage = () => {
         ? (isEnglish ? 'Change banner' : '更换横幅')
         : (isEnglish ? 'Add banner' : '添加横幅');
     const isStaff = isOwnProfile && hasPermission(profile!.group, 'staff');
-    // Label behind the star on the group chip. Only the owner has an expiry date to
-    // reveal — for everyone else the star just says "member", which is all
-    // getPublicProfile hands back.
-    const memberLabel = ((): string | null => {
-        if (!dp.isMember) return null;
-        const expiry = dp.membershipExpiresAt;
-        if (!expiry) return isEnglish ? 'Member' : '会员';
-        const on = expiry.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-            year: 'numeric', month: 'long', day: 'numeric',
-        });
-        // Round up so the last partial day still reads as "1 day left" rather than 0.
-        const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / 86400000);
-        return isEnglish
-            ? `Member until ${on} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`
-            : `会员有效期至 ${on} · 剩余 ${daysLeft} 天`;
-    })();
+    const longDate = (date: Date) => date.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+        year: 'numeric', month: 'long', day: 'numeric',
+    });
+    // Only the owner has membership dates to show — getPublicProfile hands
+    // everyone else a bare isMember. A start is missing for memberships granted
+    // before it was recorded, and only means anything while one is running.
+    const memberSince = isOwnProfile && isMember ? profile!.membershipStartedAt : null;
+    const memberUntil = isOwnProfile && isMember ? profile!.membershipExpiresAt : null;
 
     return (
         <>
@@ -849,29 +839,11 @@ export const ProfilePage = () => {
                             <div className="profile-meta">
                                 <span className="profile-group-tag" data-group={dp.group}>
                                     {formatGroupWithTitle(dp.group, dp.title, dp.titleCn, isEnglish)}
-                                    {/* Membership is not a group, so it rides on the chip as a star
-                                        instead of replacing the label — a president can be a member too. */}
-                                    {memberLabel && (
-                                        <span
-                                            className="profile-member-star"
-                                            role="img"
-                                            aria-label={memberLabel}
-                                            tabIndex={0}
-                                        >
-                                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                                <path
-                                                    d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-                                            </svg>
-                                            <span className="profile-member-tooltip">{memberLabel}</span>
-                                        </span>
-                                    )}
                                 </span>
                                 <span className="profile-meta-item">
                                     <FiCalendar aria-hidden="true"/>
                                     {isEnglish ? 'Joined ' : '加入时间：'}
-                                    {dp.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-                                        year: 'numeric', month: 'long', day: 'numeric',
-                                    })}
+                                    {longDate(dp.joinedAt)}
                                 </span>
                                 {isOwnProfile && 'email' in dp && (
                                     <span className="profile-meta-item profile-meta-email">
@@ -880,6 +852,30 @@ export const ProfilePage = () => {
                                     </span>
                                 )}
                             </div>
+                            {/* Membership is not a group, so it gets a line of its own
+                                under the group's — a president can be a member too. */}
+                            {dp.isMember && (
+                                <div className="profile-meta">
+                                    <span className="profile-member-chip">
+                                        <FaStar aria-hidden="true"/>
+                                        {isEnglish ? 'Member' : '会员'}
+                                    </span>
+                                    {memberSince && (
+                                        <span className="profile-meta-item">
+                                            <FiPlayCircle aria-hidden="true"/>
+                                            {isEnglish ? 'Started ' : '开始时间：'}
+                                            {longDate(memberSince)}
+                                        </span>
+                                    )}
+                                    {memberUntil && (
+                                        <span className="profile-meta-item">
+                                            <FiClock aria-hidden="true"/>
+                                            {isEnglish ? 'Ends ' : '到期时间：'}
+                                            {longDate(memberUntil)}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 

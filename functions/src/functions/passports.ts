@@ -4,7 +4,7 @@ import { normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
 import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks, generateSecureCode } from "../utils/helpers";
-import { extendedExpiry, isMembershipActive } from "../utils/membership";
+import { extendedExpiry, isMembershipActive, startedAtAfter } from "../utils/membership";
 import { recordScan, SCAN_QUOTA_PERSONAL, scanClientKey } from "../utils/scans";
 import {
     activationKeyMatches,
@@ -258,6 +258,7 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
         const userData = userSnap.data()!;
         const daysGranted = typeof passport.termDays === "number" ? passport.termDays : PASSPORT_TERM_DAYS;
         const membershipExpiresAt = extendedExpiry(userData.membershipExpiresAt ?? null, daysGranted);
+        const membershipStartedAt = startedAtAfter(userData, membershipExpiresAt);
 
         txn.update(passportRef, {
             status: "claimed",
@@ -267,7 +268,10 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
             lockedUntil: null,
         });
         // Membership only. `group` is never touched here — see the file comment.
-        txn.update(userRef, {membershipExpiresAt});
+        txn.update(userRef, {
+            membershipExpiresAt,
+            membershipStartedAt: membershipStartedAt ?? FieldValue.delete(),
+        });
         // The key has done its one job and the binding is permanent, so the hash
         // is deleted rather than left sitting in the database.
         txn.delete(secretRef);

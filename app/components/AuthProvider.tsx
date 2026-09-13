@@ -103,6 +103,11 @@ export interface UserProfile {
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
     membershipExpiresAt: Date | null;
+    /**
+     * When the current run of membership began. Left over from an earlier run
+     * once it lapses, and null for memberships granted before it was recorded.
+     */
+    membershipStartedAt: Date | null;
     /** Opt-out for the public passport page at /p/:passportId. Default false. */
     hidePassportPage: boolean;
     /** Which sections other people are shown. Anything unset is visible. */
@@ -133,6 +138,7 @@ function toUserProfile(data: DocumentData, email: string): UserProfile {
         badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
         group: normalizeGroup(data.group),
         membershipExpiresAt: data.membershipExpiresAt?.toDate() ?? null,
+        membershipStartedAt: data.membershipStartedAt?.toDate() ?? null,
         hidePassportPage: data.hidePassportPage === true,
         profileVisibility: readVisibility(data.profileVisibility),
         title: data.title ?? '',

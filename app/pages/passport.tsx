@@ -187,7 +187,7 @@ const ActivationCard = ({passportId, year, termDays, onActivated}: ActivationCar
         try {
             const res = await callClaimPassport({passportId, activationCode: key});
             setGranted({days: res.data.daysGranted, expiresAt: res.data.membershipExpiresAt});
-            // The membership star and the profile shelf both read the auth
+            // The profile's member chip and passport shelf both read the auth
             // profile, so pull the new expiry in straight away.
             refreshProfile().catch(() => {
             });
