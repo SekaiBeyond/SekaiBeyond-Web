@@ -114,6 +114,7 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     return {
         displayName: data.displayName ?? "",
         photoURL: data.photoURL ?? "",
+        bannerURL: data.bannerURL ?? "",
         joinedAt: data.joinedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
         attendedEvents: showEvents ? (data.attendedEvents ?? []) : [],
         eventStaffEvents,
@@ -194,12 +195,48 @@ async function resolveProfileTarget(callerUid: string, rawTargetUid: unknown): P
     };
 }
 
-// Avatar uploads are a membership perk, but staff+ keep them without holding a
-// passport — otherwise this would quietly take avatars away from every staff
-// member who has never bought one. The only people blocked are plain users with
-// no active membership.
-function canSetOwnAvatar(userData: FirebaseFirestore.DocumentData): boolean {
+// Uploading your own avatar or banner is a membership perk, but staff+ keep it
+// without holding a passport — otherwise this would quietly take it away from
+// every staff member who has never bought one. The only people blocked are plain
+// users with no active membership.
+function canSetOwnImages(userData: FirebaseFirestore.DocumentData): boolean {
     return isMembershipActive(userData) || normalizeGroup(userData.group) !== "user";
+}
+
+// The checks every profile image upload makes before anything touches Storage:
+// an allowed type, within the size limit, and bytes that really are that type.
+function decodeProfileImage(input: {data?: string; contentType?: string}): {buffer: Buffer; contentType: string} {
+    const {data: dataBase64, contentType} = input;
+
+    if (!dataBase64 || !contentType) {
+        throw new HttpsError("invalid-argument", "Missing data or contentType.");
+    }
+
+    if (!["image/webp", "image/jpeg", "image/png"].includes(contentType)) {
+        throw new HttpsError("invalid-argument", "Only image/webp, image/jpeg, or image/png are allowed.");
+    }
+
+    const buffer = Buffer.from(dataBase64, "base64");
+    if (buffer.length > MAX_UPLOAD_SIZE) {
+        throw new HttpsError("invalid-argument", `Image exceeds ${MAX_UPLOAD_SIZE_MB}MB limit.`);
+    }
+
+    const detectedMime = detectImageMime(buffer);
+    if (!detectedMime || detectedMime !== contentType) {
+        throw new HttpsError("invalid-argument", "File content does not match claimed content type.");
+    }
+
+    return {buffer, contentType};
+}
+
+// Saves an image at a fixed path and returns a URL that busts the year-long
+// cache, since every upload for a user overwrites the same object.
+async function saveProfileImage(path: string, buffer: Buffer, contentType: string): Promise<string> {
+    const file = getStorage().bucket().file(path);
+    await file.save(buffer, {
+        metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
+    });
+    return `${await getDownloadURL(file)}&t=${Date.now()}`;
 }
 
 // The photo a user reverts to once their uploaded avatar is gone. For the caller
@@ -268,40 +305,12 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
 
     // Uploading your own avatar is a membership perk, but staff+ keep it without
     // holding a passport. An admin can still give an avatar to anyone.
-    if (isSelf && !canSetOwnAvatar(targetData)) {
+    if (isSelf && !canSetOwnImages(targetData)) {
         throw new HttpsError("permission-denied", "An active membership is required to upload an avatar.");
     }
 
-    const dataBase64 = input.data;
-    const contentType = input.contentType;
-
-    if (!dataBase64 || !contentType) {
-        throw new HttpsError("invalid-argument", "Missing data or contentType.");
-    }
-
-    if (!["image/webp", "image/jpeg", "image/png"].includes(contentType)) {
-        throw new HttpsError("invalid-argument", "Only image/webp, image/jpeg, or image/png are allowed.");
-    }
-
-    const buffer = Buffer.from(dataBase64, "base64");
-    if (buffer.length > MAX_UPLOAD_SIZE) {
-        throw new HttpsError("invalid-argument", `Image exceeds ${MAX_UPLOAD_SIZE_MB}MB limit.`);
-    }
-
-    const detectedMime = detectImageMime(buffer);
-    if (!detectedMime || detectedMime !== contentType) {
-        throw new HttpsError("invalid-argument", "File content does not match claimed content type.");
-    }
-
-    const bucket = getStorage().bucket();
-    const path = `avatars/${targetUid}`;
-    const file = bucket.file(path);
-    await file.save(buffer, {
-        metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
-    });
-
-    const baseDownloadUrl = await getDownloadURL(file);
-    const downloadUrl = `${baseDownloadUrl}&t=${Date.now()}`;
+    const {buffer, contentType} = decodeProfileImage(input);
+    const downloadUrl = await saveProfileImage(`avatars/${targetUid}`, buffer, contentType);
 
     // Atomically set photoURL on the user doc so clients can't set arbitrary URLs
     await db.collection("users").doc(targetUid).update({photoURL: downloadUrl});
@@ -335,7 +344,7 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     // one an admin gave them.
     const hasUploadedAvatar = typeof targetData.photoURL === "string"
         && targetData.photoURL.includes("firebasestorage.googleapis.com");
-    if (isSelf && !canSetOwnAvatar(targetData) && !hasUploadedAvatar) {
+    if (isSelf && !canSetOwnImages(targetData) && !hasUploadedAvatar) {
         throw new HttpsError("permission-denied", "An active membership is required to delete an avatar.");
     }
 
@@ -365,6 +374,57 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     }
 
     return {photoURL};
+});
+/**
+ * The image across the top of the caller's profile. The same membership perk as
+ * an uploaded avatar, but self only: admins can take a banner down
+ * (deleteBanner) but never put one up for somebody else.
+ */
+export const uploadBanner = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const userRef = db.collection("users").doc(uid);
+    const snap = await userRef.get();
+    if (!snap.exists) {
+        throw new HttpsError("not-found", "User not found.");
+    }
+    if (!canSetOwnImages(snap.data()!)) {
+        throw new HttpsError("permission-denied", "An active membership is required to upload a banner.");
+    }
+
+    const {buffer, contentType} = decodeProfileImage(request.data as {data?: string; contentType?: string});
+    const downloadUrl = await saveProfileImage(`banners/${uid}`, buffer, contentType);
+
+    // Set on the user doc here so clients can't point bannerURL anywhere else.
+    await userRef.update({bannerURL: downloadUrl});
+
+    return {url: downloadUrl};
+});
+// Removing your banner needs no membership, so one uploaded before a membership
+// lapsed can still be taken down — the lapsed member just can't put up another.
+// An admin can remove anyone's they manage, for moderation.
+export const deleteBanner = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {targetUid?: string};
+    const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input?.targetUid);
+
+    await getStorage().bucket().file(`banners/${targetUid}`).delete({ignoreNotFound: true});
+    await db.collection("users").doc(targetUid).update({bannerURL: FieldValue.delete()});
+
+    if (!isSelf) {
+        await db.collection("records").add({
+            type: "banner-remove",
+            performedBy: uid,
+            performedByName: callerName,
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+    }
+
+    return {deleted: true};
 });
 export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) {
@@ -777,7 +837,7 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
 });
 // retry: a dropped event would leave the Auth account alive with no user doc,
 // silently undoing the deletion on next sign-in. Re-runs are safe: deleteUser
-// tolerates user-not-found, the avatar delete ignores missing files, and the
+// tolerates user-not-found, the image deletes ignore missing files, and the
 // audit record writes to a fixed id.
 export const onUserDeleted = onDocumentDeleted(
     {document: "users/{uid}", maxInstances: 10, retry: true},
@@ -803,10 +863,12 @@ export const onUserDeleted = onDocumentDeleted(
         // the chain. Errors propagate so retry re-delivers the event.
         await db.collection("users").doc(uid).delete();
 
-        try {
-            await getStorage().bucket().file(`avatars/${uid}`).delete({ignoreNotFound: true});
-        } catch (err) {
-            console.error(`onUserDeleted: avatar delete failed for ${uid}`, err);
+        for (const path of [`avatars/${uid}`, `banners/${uid}`]) {
+            try {
+                await getStorage().bucket().file(path).delete({ignoreNotFound: true});
+            } catch (err) {
+                console.error(`onUserDeleted: ${path} delete failed`, err);
+            }
         }
 
         try {

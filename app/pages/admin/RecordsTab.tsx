@@ -52,7 +52,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
         'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
-        'name-set', 'avatar-set', 'avatar-remove'],
+        'name-set', 'avatar-set', 'avatar-remove', 'banner-remove'],
     config: ['policy-update', 'config-update', 'con-content-update'],
     email: ['scheduled-mail-drain'],
 };
@@ -338,6 +338,10 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>removed {target}'s profile photo</>
                     : <>删除了 {target} 的头像</>;
+            case 'banner-remove':
+                return isEnglish
+                    ? <>removed {target}'s profile banner</>
+                    : <>删除了 {target} 的主页横幅</>;
             case 'code-create': {
                 if (r.eventId) {
                     const isPast = pastEvents.some(e => e.id === r.eventId);
@@ -891,6 +895,7 @@ export const RecordsTab = ({
             case 'name-set':
             case 'avatar-set':
             case 'avatar-remove':
+            case 'banner-remove':
                 return isEnglish ? 'Account' : '账号';
             case 'policy-update':
             case 'config-update':

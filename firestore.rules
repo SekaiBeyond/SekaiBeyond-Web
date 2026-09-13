@@ -33,7 +33,7 @@ service cloud.firestore {
                     || (callerEventStaffEvents().size() > 0
                         && resource.data.get('eventStaffEvents', []).hasAny(callerEventStaffEvents())));
 
-            // All user mutations (displayName, photoURL, badges, attendedEvents, group,
+            // All user mutations (displayName, photoURL, bannerURL, badges, attendedEvents, group,
             // membershipExpiresAt) via Cloud Functions
         }
 

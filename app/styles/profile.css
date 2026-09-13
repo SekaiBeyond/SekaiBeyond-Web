@@ -197,9 +197,102 @@
 /* The banner rounds its own corners rather than the card clipping them, so the
    photo's and the star's tooltips can still spill past the card. */
 .profile-hero-banner {
+    position: relative;
     height: 96px;
     border-radius: 23px 23px 0 0;
     background: var(--gradient-cta);
+}
+
+/* A member's own banner holds one shape at every width — BANNER_ASPECT in
+   profile.tsx — so what they cropped is what everyone sees. The gradient stays
+   underneath while it loads. */
+.profile-hero-banner.profile-hero-banner--image {
+    height: auto;
+    aspect-ratio: 5 / 1;
+}
+
+.profile-hero-banner-image {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+}
+
+/* Change and remove, in the banner's corner. Like the photo's camera they wait
+   for a hover; a phone has no hover, so there they stay out. */
+.profile-banner-actions {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.profile-hero-banner:hover .profile-banner-actions,
+.profile-banner-actions:focus-within,
+.profile-hero-banner--saving .profile-banner-actions {
+    opacity: 1;
+}
+
+.profile-banner-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.5);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    color: #fff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.profile-banner-btn svg {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+}
+
+.profile-banner-btn .profile-avatar-spinner {
+    width: 14px;
+    height: 14px;
+    border-width: 2px;
+}
+
+button.profile-banner-btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.profile-banner-btn:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.profile-banner-btn:disabled,
+.profile-banner-btn--locked {
+    cursor: default;
+}
+
+.profile-banner-btn--remove {
+    width: 32px;
+    padding: 0;
+}
+
+button.profile-banner-btn--remove:hover:not(:disabled) {
+    background: #e03033;
 }
 
 .profile-hero-body {
@@ -1299,6 +1392,35 @@
     .profile-hero-banner {
         height: 72px;
         border-radius: 19px 19px 0 0;
+    }
+
+    /* On a phone the shape alone would leave the photo no banner to sit on; the
+       image trims its sides instead. The set width stops the aspect ratio
+       turning that height into a width wider than the card. */
+    .profile-hero-banner.profile-hero-banner--image {
+        width: 100%;
+        min-height: 72px;
+    }
+
+    .profile-banner-actions {
+        top: 8px;
+        right: 10px;
+        opacity: 1;
+    }
+
+    .profile-banner-btn {
+        width: 30px;
+        height: 30px;
+        padding: 0;
+    }
+
+    .profile-banner-btn-label {
+        display: none;
+    }
+
+    /* The hint under the photo already says a banner needs a membership. */
+    .profile-banner-btn--locked {
+        display: none;
     }
 
     .profile-hero-body {

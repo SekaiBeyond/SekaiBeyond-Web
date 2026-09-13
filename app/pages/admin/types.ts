@@ -37,6 +37,7 @@ export interface UserRecord {
     displayName: string;
     email: string;
     photoURL: string;
+    bannerURL: string;
     joinedAt: Date;
     attendedEvents: string[];
     badges: string[];
@@ -100,6 +101,7 @@ export type RecordType =
     | 'name-set'
     | 'avatar-set'
     | 'avatar-remove'
+    | 'banner-remove'
     | 'title-set'
     | 'ticket-import'
     | 'ticket-redeem'

@@ -505,6 +505,17 @@
     }
 }
 
+/* The shape the profile page shows it in, so a moderator sees what visitors see. */
+.admin-detail-banner {
+    display: block;
+    width: 100%;
+    aspect-ratio: 5 / 1;
+    margin-bottom: 14px;
+    border-radius: 12px;
+    object-fit: cover;
+    background: var(--gradient-cta);
+}
+
 .admin-detail-header .admin-detail-joined {
     font-size: 12px;
     color: var(--color-text-light);
@@ -1994,7 +2005,8 @@
 }
 
 .admin-deletion-request-btn,
-.admin-deletion-cancel-btn {
+.admin-deletion-cancel-btn,
+.admin-banner-remove-btn {
     padding: 8px 18px;
     border-radius: 20px;
     font-size: 14px;
@@ -2004,12 +2016,14 @@
     transition: background 0.2s ease, color 0.2s ease;
 }
 
-.admin-deletion-request-btn {
+.admin-deletion-request-btn,
+.admin-banner-remove-btn {
     background: transparent;
     color: #d02545;
 }
 
-.admin-deletion-request-btn:hover:not(:disabled) {
+.admin-deletion-request-btn:hover:not(:disabled),
+.admin-banner-remove-btn:hover:not(:disabled) {
     background: #d02545;
     color: #fff;
 }
@@ -2025,7 +2039,8 @@
 }
 
 .admin-deletion-request-btn:disabled,
-.admin-deletion-cancel-btn:disabled {
+.admin-deletion-cancel-btn:disabled,
+.admin-banner-remove-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }

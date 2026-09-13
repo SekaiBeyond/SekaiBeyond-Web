@@ -22,6 +22,7 @@ import {
     callCancelAccountDeletion,
     callChangeUserGroup,
     callDeleteAvatar,
+    callDeleteBanner,
     callRequestAccountDeletion,
     callSetUserTitle,
     callToggleAttendance,
@@ -99,6 +100,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const [photoBusy, setPhotoBusy] = useState(false);
     const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [bannerBusy, setBannerBusy] = useState(false);
 
     const applyUserUpdate = (updated: UserRecord) => {
         if (selectedUser?.uid === updated.uid) setSelectedUser(updated);
@@ -450,6 +452,30 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         }
     };
 
+    // Take-down only: a banner is the member's own to put up, so there is no
+    // upload here, and nothing to fall back to but the default gradient.
+    const deleteBanner = async (userRecord: UserRecord) => {
+        if (!confirm(isEnglish
+            ? `Remove ${userRecord.displayName}'s profile banner? Their profile will show the default banner.`
+            : `删除 ${userRecord.displayName} 的主页横幅？其个人主页将显示默认横幅。`
+        )) return;
+        setBannerBusy(true);
+        try {
+            await callDeleteBanner({targetUid: userRecord.uid});
+            applyUserUpdate({...userRecord, bannerURL: ''});
+            showToast(isEnglish ? 'Profile banner removed.' : '主页横幅已删除。', 'warning');
+        } catch {
+            showToast(
+                isEnglish
+                    ? 'Failed to remove banner. You may not have permission.'
+                    : '删除横幅失败。你可能没有权限执行此操作。',
+                'error',
+            );
+        } finally {
+            setBannerBusy(false);
+        }
+    };
+
     const setTitle = async (userRecord: UserRecord) => {
         setTitleBusy(true);
         try {
@@ -737,6 +763,26 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                 </p>
                             </div>
                         </div>
+
+                        {selectedUser.bannerURL && (
+                            <div className="admin-group-section">
+                                <h4 className="admin-badges-title">
+                                    {isEnglish ? 'Profile Banner' : '主页横幅'}
+                                </h4>
+                                <img src={selectedUser.bannerURL} alt="" className="admin-detail-banner"/>
+                                {canEditProfile && (
+                                    <button
+                                        className="admin-banner-remove-btn"
+                                        onClick={() => deleteBanner(selectedUser)}
+                                        disabled={bannerBusy}
+                                    >
+                                        {bannerBusy
+                                            ? (isEnglish ? 'Removing...' : '删除中...')
+                                            : (isEnglish ? 'Remove banner' : '删除横幅')}
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
                         <div className="admin-group-section">
                             <h4 className="admin-badges-title">

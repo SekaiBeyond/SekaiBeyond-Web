@@ -543,6 +543,8 @@ export const callDeletePassportDesign = (data: {year: number}) =>
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {
         displayName: string; photoURL: string; joinedAt: string;
+        // Absent from a deploy older than banners.
+        bannerURL?: string;
         attendedEvents: string[]; eventStaffEvents: string[];
         badges: string[];
         badgeEarnedAt: Record<string, string>;
@@ -555,16 +557,19 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         visibility?: {badges: boolean; events: boolean};
     }>(getFunctions(), 'getPublicProfile')(data);
 
+// Callables carry JSON, so an uploaded file travels as bare base64.
+const readFileAsBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+});
+
 export const callUploadAdminImage = async (file: File, storagePath: string): Promise<string> => {
-    const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1]);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
+    const base64 = await readFileAsBase64(file);
     const result = await httpsCallable<
         {path: string; data: string; contentType: string},
         {url: string}
@@ -595,15 +600,7 @@ export const callCancelAccountDeletion = (data: {targetUid?: string} = {}) =>
     )(data);
 
 export const callUploadAvatar = async (file: File, targetUid?: string): Promise<string> => {
-    const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1]);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
+    const base64 = await readFileAsBase64(file);
     const result = await httpsCallable<
         {data: string; contentType: string; targetUid?: string},
         {url: string}
@@ -614,6 +611,23 @@ export const callUploadAvatar = async (file: File, targetUid?: string): Promise<
     });
     return result.data.url;
 };
+
+// Your own banner only — unlike the avatar, there is no admin path to set one.
+export const callUploadBanner = async (file: File): Promise<string> => {
+    const base64 = await readFileAsBase64(file);
+    const result = await httpsCallable<
+        {data: string; contentType: string},
+        {url: string}
+    >(getFunctions(), 'uploadBanner')({
+        data: base64,
+        contentType: file.type,
+    });
+    return result.data.url;
+};
+
+// No targetUid removes your own; an admin passes one to take down someone else's.
+export const callDeleteBanner = (data: {targetUid?: string} = {}) =>
+    httpsCallable<{targetUid?: string}, {deleted: boolean}>(getFunctions(), 'deleteBanner')(data);
 
 export const functionsErrorCode = (err: unknown): string | null => {
     if (err instanceof FirebaseError && "details" in err) {

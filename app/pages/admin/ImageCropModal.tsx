@@ -6,6 +6,8 @@ import { type ShowToast, WEBP_QUALITY } from './utils';
 interface ImageCropModalProps {
     imageSource: File | string;
     aspect: number;
+    /** Width of the cropped image in pixels; its height follows from the aspect. */
+    outputWidth?: number;
     onConfirm: (cropped: File) => void;
     onCancel: () => void;
     showToast: ShowToast;
@@ -14,7 +16,14 @@ interface ImageCropModalProps {
 const DISPLAY_SIZE = 360;
 const OUTPUT_SIZE = 512;
 
-export const ImageCropModal = ({imageSource, aspect, onConfirm, onCancel, showToast}: ImageCropModalProps) => {
+export const ImageCropModal = ({
+                                   imageSource,
+                                   aspect,
+                                   outputWidth = OUTPUT_SIZE,
+                                   onConfirm,
+                                   onCancel,
+                                   showToast,
+                               }: ImageCropModalProps) => {
     const {isEnglish} = useLanguage();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const dragRef = useRef<{startX: number; startY: number; ox: number; oy: number} | null>(null);
@@ -104,15 +113,15 @@ export const ImageCropModal = ({imageSource, aspect, onConfirm, onCancel, showTo
         setSaving(true);
         try {
             const out = document.createElement('canvas');
-            const outH = Math.round(OUTPUT_SIZE / aspect);
-            out.width = OUTPUT_SIZE;
+            const outH = Math.round(outputWidth / aspect);
+            out.width = outputWidth;
             out.height = outH;
             const octx = out.getContext('2d');
             if (!octx) throw new Error('canvas-unsupported');
-            const k = OUTPUT_SIZE / boxW;
+            const k = outputWidth / boxW;
             const drawW = image.width * scale * k;
             const drawH = image.height * scale * k;
-            const dx = (OUTPUT_SIZE - drawW) / 2 + offset.x * k;
+            const dx = (outputWidth - drawW) / 2 + offset.x * k;
             const dy = (outH - drawH) / 2 + offset.y * k;
             octx.drawImage(image, dx, dy, drawW, drawH);
             const blob = await new Promise<Blob | null>(resolve =>

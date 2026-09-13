@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
-import { FiAward, FiCalendar, FiLock, FiMail, FiStar } from 'react-icons/fi';
+import { FiAward, FiCalendar, FiImage, FiLock, FiMail, FiStar, FiTrash2 } from 'react-icons/fi';
 import {
     formatGroupWithTitle,
     hasPermission,
@@ -34,6 +34,7 @@ interface BadgeDef extends BaseBadgeDef {
 interface ViewedProfile {
     displayName: string;
     photoURL: string;
+    bannerURL: string;
     joinedAt: Date;
     attendedEvents: string[];
     eventStaffEvents: string[];
@@ -50,6 +51,14 @@ interface ViewedProfile {
      */
     visibility: {badges: boolean; events: boolean};
 }
+
+/**
+ * Width over height of an uploaded banner. The banner holds this shape on every
+ * screen (see .profile-hero-banner--image), so the crop is what people see.
+ */
+const BANNER_ASPECT = 5;
+// Wide enough to stay sharp across the full-width card on a high-density screen.
+const BANNER_WIDTH = 1500;
 
 /**
  * A badge: a button that opens its detail modal, with a preview on hover or
@@ -163,6 +172,11 @@ export const ProfilePage = () => {
     const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
     const [avatarError, setAvatarError] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [savingBanner, setSavingBanner] = useState(false);
+    const [pendingBanner, setPendingBanner] = useState<File | null>(null);
+    // The URL that failed to load, so a new upload gets a fresh try.
+    const [failedBanner, setFailedBanner] = useState<string | null>(null);
+    const bannerInputRef = useRef<HTMLInputElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
     // null while the definitions for the badge ids are still being read.
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[] | null>(null);
@@ -263,6 +277,7 @@ export const ProfilePage = () => {
                 setViewedProfile({
                     displayName: data.displayName ?? '',
                     photoURL: data.photoURL ?? '',
+                    bannerURL: data.bannerURL ?? '',
                     joinedAt: data.joinedAt ? new Date(data.joinedAt) : new Date(),
                     attendedEvents: data.attendedEvents ?? [],
                     eventStaffEvents: data.eventStaffEvents ?? [],
@@ -373,6 +388,47 @@ export const ProfilePage = () => {
             showToast(isEnglish ? 'Failed to remove photo. Please try again.' : '删除头像失败，请重试。', 'error');
         } finally {
             setSavingPhoto(false);
+        }
+    };
+
+    const handleBannerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (bannerInputRef.current) bannerInputRef.current.value = '';
+        if (!file || !profile || !user) return;
+        if (!validateImageFile(file, isEnglish, showToast, true)) return;
+        setPendingBanner(file);
+    };
+
+    const handleBannerCropConfirm = async (cropped: File) => {
+        setPendingBanner(null);
+        if (!profile || !user) return;
+        setSavingBanner(true);
+        try {
+            await updateProfile({bannerFile: cropped});
+            showToast(isEnglish ? 'Banner updated.' : '横幅已更新。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to upload banner. Please try again.' : '上传横幅失败，请重试。', 'error');
+        } finally {
+            setSavingBanner(false);
+        }
+    };
+
+    const handleBannerDelete = async () => {
+        if (!profile || !user) return;
+        const confirmed = window.confirm(
+            isEnglish
+                ? 'Remove your banner? Your profile will go back to the default one.'
+                : '确定要删除横幅吗？个人主页将恢复为默认横幅。',
+        );
+        if (!confirmed) return;
+        setSavingBanner(true);
+        try {
+            await updateProfile({deleteBanner: true});
+            showToast(isEnglish ? 'Banner removed.' : '横幅已删除。', 'warning');
+        } catch {
+            showToast(isEnglish ? 'Failed to remove banner. Please try again.' : '删除横幅失败，请重试。', 'error');
+        } finally {
+            setSavingBanner(false);
         }
     };
 
@@ -554,6 +610,13 @@ export const ProfilePage = () => {
     const canEdit = isOwnProfile && (isMember || hasPermission(profile!.group, 'staff'));
     // Non-members can't upload a photo, but may remove one an admin gave them.
     const canRemovePhoto = isOwnProfile && hasCustomPhoto;
+    // The banner follows the same rule as the photo. Only its owner ever sets
+    // one, so a non-member only has one to remove if their membership lapsed.
+    const bannerURL = isOwnProfile ? profile!.bannerURL : viewedProfile!.bannerURL;
+    const showBanner = !!bannerURL && bannerURL !== failedBanner;
+    const bannerLabel = bannerURL
+        ? (isEnglish ? 'Change banner' : '更换横幅')
+        : (isEnglish ? 'Add banner' : '添加横幅');
     const isStaff = isOwnProfile && hasPermission(profile!.group, 'staff');
     // Label behind the star on the group chip. Only the owner has an expiry date to
     // reveal — for everyone else the star just says "member", which is all
@@ -587,7 +650,61 @@ export const ProfilePage = () => {
             <div className="profile-page">
 
                 <div className="profile-hero">
-                    <div className="profile-hero-banner" aria-hidden="true"/>
+                    <div
+                        className={`profile-hero-banner${showBanner ? ' profile-hero-banner--image' : ''}${savingBanner ? ' profile-hero-banner--saving' : ''}`}>
+                        {showBanner && (
+                            <img
+                                src={bannerURL}
+                                alt=""
+                                className="profile-hero-banner-image"
+                                onError={() => setFailedBanner(bannerURL)}
+                            />
+                        )}
+                        {isOwnProfile && (
+                            <div className="profile-banner-actions">
+                                {canEdit ? (
+                                    <button
+                                        type="button"
+                                        className="profile-banner-btn"
+                                        onClick={() => bannerInputRef.current?.click()}
+                                        disabled={savingBanner}
+                                        aria-label={bannerLabel}
+                                    >
+                                        {savingBanner
+                                            ? <span className="profile-avatar-spinner" aria-hidden="true"/>
+                                            : <FiImage aria-hidden="true"/>}
+                                        <span className="profile-banner-btn-label">{bannerLabel}</span>
+                                    </button>
+                                ) : (
+                                    <span className="profile-banner-btn profile-banner-btn--locked">
+                                        <FiLock aria-hidden="true"/>
+                                        <span className="profile-banner-btn-label">
+                                            {isEnglish ? 'Banners are for members' : '横幅为会员专属'}
+                                        </span>
+                                    </span>
+                                )}
+                                {bannerURL && !savingBanner && (
+                                    <button
+                                        type="button"
+                                        className="profile-banner-btn profile-banner-btn--remove"
+                                        onClick={handleBannerDelete}
+                                        aria-label={isEnglish ? 'Remove banner' : '删除横幅'}
+                                    >
+                                        <FiTrash2 aria-hidden="true"/>
+                                    </button>
+                                )}
+                                {canEdit && (
+                                    <input
+                                        ref={bannerInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleBannerSelect}
+                                        hidden
+                                    />
+                                )}
+                            </div>
+                        )}
+                    </div>
                     <div className="profile-hero-body">
                         <div
                             className={`profile-avatar-wrapper ${canEdit ? 'profile-avatar-clickable' : isOwnProfile ? 'profile-avatar-nonmember-hint' : ''} ${savingPhoto ? 'profile-avatar-saving' : ''}`}>
@@ -665,8 +782,8 @@ export const ProfilePage = () => {
                                                 ? 'This photo was set by staff. You need an active membership to change it, but you can remove it.'
                                                 : '此头像由工作人员设置。需要有效会员资格才能更换，但你可以将其删除。')
                                             : (isEnglish
-                                                ? 'A profile photo needs an active membership. Activate a passport to upload one.'
-                                                : '设置头像需要有效会员资格。激活通行证后即可上传。')}
+                                                ? 'A profile photo or banner needs an active membership. Activate a passport to upload one.'
+                                                : '设置头像或横幅需要有效会员资格。激活通行证后即可上传。')}
                                     </span>
                                 </>
                             )}
@@ -955,6 +1072,16 @@ export const ProfilePage = () => {
                     aspect={1}
                     onConfirm={handlePhotoCropConfirm}
                     onCancel={() => setPendingPhoto(null)}
+                    showToast={showToast}
+                />
+            )}
+            {pendingBanner && (
+                <ImageCropModal
+                    imageSource={pendingBanner}
+                    aspect={BANNER_ASPECT}
+                    outputWidth={BANNER_WIDTH}
+                    onConfirm={handleBannerCropConfirm}
+                    onCancel={() => setPendingBanner(null)}
                     showToast={showToast}
                 />
             )}

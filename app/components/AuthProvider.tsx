@@ -4,8 +4,10 @@ import { doc, type DocumentData, getDoc, Timestamp } from 'firebase/firestore';
 import {
     callCreateUserProfile,
     callDeleteAvatar,
+    callDeleteBanner,
     callUpdateDisplayName,
     callUploadAvatar,
+    callUploadBanner,
     getFirebaseAuth,
     getFirebaseDb,
     signInWithGoogle as firebaseSignIn,
@@ -93,6 +95,8 @@ export interface UserProfile {
     displayName: string;
     email: string;
     photoURL: string;
+    /** The member's uploaded profile banner; empty when they have none. */
+    bannerURL: string;
     joinedAt: Date;
     attendedEvents: string[];
     badges: string[];
@@ -122,6 +126,7 @@ function toUserProfile(data: DocumentData, email: string): UserProfile {
         displayName: data.displayName,
         email,
         photoURL: data.photoURL,
+        bannerURL: data.bannerURL ?? '',
         joinedAt: data.joinedAt?.toDate() ?? new Date(),
         attendedEvents: data.attendedEvents ?? [],
         badges: data.badges ?? [],
@@ -151,6 +156,8 @@ interface AuthContextType {
         displayName?: string;
         photoFile?: File;
         deletePhoto?: boolean;
+        bannerFile?: File;
+        deleteBanner?: boolean;
     }) => Promise<void>;
 }
 
@@ -232,6 +239,8 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         displayName?: string;
         photoFile?: File;
         deletePhoto?: boolean;
+        bannerFile?: File;
+        deleteBanner?: boolean;
     }) => {
         if (!user || !profile) return;
 
@@ -246,6 +255,14 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         } else if (updates.photoFile) {
             const url = await callUploadAvatar(updates.photoFile);
             setProfile(prev => prev ? {...prev, photoURL: url} : prev);
+        }
+
+        if (updates.deleteBanner) {
+            await callDeleteBanner();
+            setProfile(prev => prev ? {...prev, bannerURL: ''} : prev);
+        } else if (updates.bannerFile) {
+            const url = await callUploadBanner(updates.bannerFile);
+            setProfile(prev => prev ? {...prev, bannerURL: url} : prev);
         }
     };
 

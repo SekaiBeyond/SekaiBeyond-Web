@@ -3,6 +3,7 @@ service firebase.storage {
     match /b/{bucket}/o {
         // Allow public read for all our asset directories
         match /avatars/{allPaths=**} { allow read: if true; }
+        match /banners/{allPaths=**} { allow read: if true; }
         match /events/{allPaths=**} { allow read: if true; }
         match /upcoming-events/{allPaths=**} { allow read: if true; }
         match /badges/{allPaths=**} { allow read: if true; }
