@@ -72,8 +72,7 @@ This repository contains the source code for the official **Sekai Beyond** websi
 | `npm run start`        | Run production server                                             |
 | `npm run typecheck`    | Run TypeScript compiler check                                     |
 | `npm run deploy`       | Build and deploy to Firebase                                      |
-| `npm run deploy:rules` | Deploy only functions, Firestore rules/indexes, and Storage rules |
-| `npm run deploy:ttl`   | Apply Firestore TTL policies via the gcloud CLI                   |
+| `npm run deploy:rules` | Deploy functions, Firestore rules/indexes/TTL, and Storage rules  |
 
 ## Deployment
 

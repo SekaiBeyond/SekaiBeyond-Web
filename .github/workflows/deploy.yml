@@ -3,8 +3,15 @@ name: Deploy to Firebase
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - README.md
+      - DEPLOY.md
+      - Trademarks.md
+      - LICENSE
   workflow_dispatch:
 
+# Queue deploys rather than cancelling one mid-way: a half-finished functions
+# deploy is worse than waiting. A newer push still replaces an older queued run.
 concurrency:
   group: firebase-deploy
   cancel-in-progress: false
@@ -14,13 +21,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
 
       - name: Install root dependencies
         run: npm ci
@@ -28,6 +38,9 @@ jobs:
       - name: Install functions dependencies
         run: npm ci
         working-directory: functions
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Build
         run: npm run build
@@ -46,17 +59,14 @@ jobs:
         run: npm run update-csp-hashes
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
+      # One command ships everything, TTL policies included (fieldOverrides in
+      # firestore.indexes.json). Hosting is released last, after functions, so
+      # the new frontend never goes live ahead of a function it calls.
       - name: Deploy to Firebase
-        run: npx -y firebase-tools deploy --non-interactive --config firebase.generated.json --project "$FIREBASE_PROJECT_ID"
+        run: npx -y firebase-tools@15 deploy --non-interactive --config firebase.generated.json --project "$FIREBASE_PROJECT_ID"
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Deploy Firestore TTL Policies
-        run: npm run deploy:ttl

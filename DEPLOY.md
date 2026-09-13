@@ -6,7 +6,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
 ### 1. Firebase Project
 
-> **Note:** Steps 5–8 below (rules, indexes, storage, functions) are re-applied automatically by the GitHub Actions workflow on every push to `main`. You only need to run them manually for the initial project setup or when CI is unavailable.
+> **Note:** Steps 5–9 below (rules, indexes, storage, functions, TTL policies) are re-applied automatically by the GitHub Actions workflow on every push to `main`. You only need to run them manually for the initial project setup or when CI is unavailable.
 
 1. Go to [console.firebase.google.com](https://console.firebase.google.com) and create a project
 2. Add a **Web app** and copy the Firebase config values — you'll paste these into [GitHub secrets](#2-github-repository-secrets) for CI and [`.env`](#3-local-development) for local dev
@@ -45,13 +45,13 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
    | `scans`                 | `expiresAt` | Scan-event retention (365 days) for QR codes **and** passports — one collection-group policy covers both |
    | `scanQuota`             | `expiresAt` | Per-client scan-quota windows (two windows' grace)           |
 
-   The fastest way to create all ten is via the included script (requires `gcloud` CLI authenticated to the project):
+   All ten are defined as `fieldOverrides` with `"ttl": true` in [`firestore.indexes.json`](firestore.indexes.json), so they deploy with the indexes:
 
    ```bash
-   npm run deploy:ttl
+   firebase deploy --only firestore:indexes
    ```
 
-   Or create each manually in Firebase Console under **Firestore** > **TTL** > **Create policy**.
+   Each override also lists the field's ascending, descending, and array-contains indexes. An override replaces a field's default indexes rather than adding to them, so leaving those out would drop indexing on the field and break queries such as the admin Users tab's `where('deleteAt', '!=', null)`. Keep them when adding a new TTL field.
 
    > **Note:** Firestore TTL requires the **Blaze plan** (pay-as-you-go). It is not available on the free Spark plan.
 
@@ -282,9 +282,14 @@ Once the first president is set up, they can assign groups to other users throug
 Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deploy.yml`):
 
 1. Installs dependencies (root and `functions/`)
-2. Builds the site with Firebase env vars from secrets
-3. Authenticates to Google Cloud via the service account
-4. Runs `firebase deploy` — ships hosting, Cloud Functions, Firestore rules/indexes, and Storage rules in a single command
+2. Typechecks, so a type error stops the deploy before anything ships
+3. Builds the site with Firebase env vars from secrets
+4. Authenticates to Google Cloud via the service account
+5. Runs `firebase deploy` (firebase-tools pinned to major version 15) — ships hosting, Cloud Functions, Firestore rules/indexes/TTL policies, and Storage rules in a single command. Functions whose source hasn't changed are skipped, and hosting is released last so the new frontend never goes live ahead of a function it calls.
+
+Pushes that only touch `README.md`, `DEPLOY.md`, `Trademarks.md`, or `LICENSE` don't deploy.
+
+Pull requests into `main` run `.github/workflows/check.yml`, which typechecks and builds without deploying. It uses no secrets (the build gets placeholder Firebase config), so PRs from forks are checked too.
 
 You can also trigger a deployment manually from the **Actions** tab > **Deploy to Firebase** > **Run workflow**.
 
@@ -299,9 +304,8 @@ The root `package-lock.json` is intentionally not committed (see `.gitignore`). 
 If CI is unavailable, you can still deploy from your local machine:
 
 ```bash
-npm run deploy            # full deploy (build + hosting + rules + functions + indexes)
-npm run deploy:rules      # just functions, rules, and indexes — skips frontend rebuild
-npm run deploy:ttl        # (re)apply Firestore TTL policies via gcloud
+npm run deploy            # full deploy (build + hosting + rules + functions + indexes + TTL)
+npm run deploy:rules      # just functions, rules, indexes, and TTL — skips frontend rebuild
 ```
 
 Both require `firebase login` locally.
