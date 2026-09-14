@@ -159,8 +159,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
         }
         const ref = db.collection("pastEvents").doc(docId);
         if (eventId) {
-            // Clear the legacy single-tag field now that tags live in `tagIds`.
-            txn.update(ref, {...data, tagId: FieldValue.delete()});
+            txn.update(ref, data);
         } else {
             txn.set(ref, {...data, published: false});
         }
@@ -283,13 +282,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
 
         const ref = db.collection("upcomingEvents").doc(docId);
         if (eventId) {
-            // Delete legacy name/nameCn fields on edit so pre-rename docs migrate cleanly.
-            txn.update(ref, {
-                ...data,
-                published: wasPublished,
-                name: FieldValue.delete(),
-                nameCn: FieldValue.delete(),
-            });
+            txn.update(ref, {...data, published: wasPublished});
         } else {
             txn.set(ref, {...data, published: false});
         }
@@ -351,7 +344,7 @@ export const setUpcomingEventPublished = onCall({maxInstances: 10}, async (reque
             type: input.published ? "upcoming-event-publish" : "upcoming-event-unpublish",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: snap.data()?.title ?? snap.data()?.name ?? eventId,
+            eventTitle: snap.data()?.title ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -381,7 +374,7 @@ export const requestUpcomingEventDeletion = onCall({maxInstances: 10}, async (re
             type: "upcoming-event-deletion-requested",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: data.title ?? data.name ?? eventId,
+            eventTitle: data.title ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -411,7 +404,7 @@ export const cancelUpcomingEventDeletion = onCall({maxInstances: 10}, async (req
             type: "upcoming-event-deletion-cancelled",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: data.title ?? data.name ?? eventId,
+            eventTitle: data.title ?? eventId,
             eventId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -497,7 +490,7 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             await db.collection("records").add({
                 type: "upcoming-event-deleted",
                 eventId,
-                eventTitle: data.title ?? data.name ?? "",
+                eventTitle: data.title ?? "",
                 timestamp: FieldValue.serverTimestamp(),
                 expiresAt: recordExpiresAt(),
             });
@@ -558,8 +551,8 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         }).format(startDate);
 
         txn.set(newDocRef, {
-            title: eventData.title ?? eventData.name ?? "",
-            titleCn: eventData.titleCn ?? eventData.nameCn ?? "",
+            title: eventData.title ?? "",
+            titleCn: eventData.titleCn ?? "",
             date: dateStr,
             location: eventData.location ?? "",
             locationCn: eventData.locationCn ?? "",
@@ -578,7 +571,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             type: "upcoming-event-archive",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventData.title ?? eventData.name ?? eventId,
+            eventTitle: eventData.title ?? eventId,
             eventId: newDocRef.id,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -715,7 +708,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         const existing: string[] = targetData.eventStaffEvents ?? [];
         const alreadyStaff = existing.includes(eventId);
 
-        const eventTitle: string = eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId;
+        const eventTitle: string = eventSnap.data()?.title ?? eventId;
         const callerName: string = callerSnap.data()?.displayName ?? "";
         const targetName: string = targetData.displayName ?? "";
         const attendedEvents: string[] = targetData.attendedEvents ?? [];
@@ -812,7 +805,7 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
 
         const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
         const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            ? (eventSnap.data()?.title ?? eventId)
             : eventId;
 
         txn.update(db.collection("users").doc(targetUid), {

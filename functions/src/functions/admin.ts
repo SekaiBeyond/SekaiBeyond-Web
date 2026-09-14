@@ -1,14 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
-import {
-    ADMIN_GROUPS,
-    adminTransaction,
-    checkRateLimit,
-    normalizeGroup,
-    requireAdmin,
-    requireAuth,
-} from "../utils/auth";
+import { adminTransaction, checkRateLimit, normalizeGroup, requireAdmin, requireAuth, } from "../utils/auth";
 import { recordExpiresAt, RESEND_QUEUE_CAP } from "../utils/config";
 import { db } from "../utils/firebase";
 import { EMAIL_PROVIDER, syncProviderUsage } from "../utils/emailProvider";
@@ -702,13 +695,7 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
         const draftRef = db.collection("conContent").doc("draft");
         const publicRef = db.collection("conContent").doc("main");
 
-        let stored = (await txn.get(draftRef)).data();
-        if (stored === undefined) {
-            // Environments edited before the draft/mirror split kept everything in
-            // `main`. Seed the first draft from it so those edits are not lost.
-            // Safe to delete once every environment has saved at least once.
-            stored = (await txn.get(publicRef)).data() ?? {};
-        }
+        const stored = (await txn.get(draftRef)).data() ?? {};
 
         if (updateData.event !== undefined) {
             const venueSnap = await txn.get(db.collection("venues").doc(updateData.event.venueId));
@@ -1035,10 +1022,8 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     const input = request.data as {teamMembers?: any[]};
     const members = Array.isArray(input.teamMembers) ? input.teamMembers : [];
     const validMembers = members.map(m => {
-        // Legacy useAccountInfo (single toggle) maps to both per-field flags. Names never
-        // follow an account, so any legacy useAccountName is deliberately dropped here.
-        const useAccountRole = Boolean(m.useAccountRole ?? m.useAccountInfo);
-        const useAccountPhoto = Boolean(m.useAccountPhoto ?? m.useAccountInfo);
+        const useAccountRole = Boolean(m.useAccountRole);
+        const useAccountPhoto = Boolean(m.useAccountPhoto);
         // The stored role is only a fallback when it follows the linked account (resolved live
         // at read time), so require it only when custom — this matches the client's canSave and
         // allows following an account with no title set. The name is always custom, so always
@@ -1086,13 +1071,9 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         // this save stops referencing — replaced ones, and those of removed members — are left
         // behind and deleted once the save commits. A member following their account stores the
         // account photo as its fallback; that lives outside team/ and the prefix guard below
-        // keeps it safe. Read before the writes, as transactions require. Before the first
-        // post-split save the roster doc doesn't exist yet, so fall back to the legacy config
-        // roster for orphan detection.
+        // keeps it safe. Read before the writes, as transactions require.
         const rosterSnap = await txn.get(rosterRef);
-        const prevMembers = rosterSnap.exists
-            ? ((rosterSnap.data()?.teamMembers ?? []) as {imageUrl?: string}[])
-            : (((await txn.get(configRef)).data()?.teamMembers ?? []) as {imageUrl?: string}[]);
+        const prevMembers = (rosterSnap.data()?.teamMembers ?? []) as {imageUrl?: string}[];
         const stillReferenced = new Set(validMembers.map(m => m.imageUrl).filter(Boolean));
         const orphaned = [...new Set(
             prevMembers
@@ -1159,19 +1140,11 @@ const accountEffectiveTitle = (acc: {group: string; title: string; titleCn: stri
 export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
     // Full roster (with uid/flags) lives in the server-only teamRoster/main doc.
     const rosterSnap = await db.collection("teamRoster").doc("main").get();
-    let members = rosterSnap.data()?.teamMembers as Record<string, unknown>[] | undefined;
-    if (!Array.isArray(members)) {
-        // Migration fallback: before the first post-split save the roster still
-        // lives in the (world-readable) config/main doc.
-        const configSnap = await db.collection("config").doc("main").get();
-        members = (configSnap.data()?.teamMembers ?? []) as Record<string, unknown>[];
-    }
+    const members = (rosterSnap.data()?.teamMembers ?? []) as Record<string, unknown>[];
 
-    // Legacy single-toggle members: treat useAccountInfo as both per-field flags. A legacy
-    // useAccountName is ignored — names no longer follow accounts.
     const follows = (m: Record<string, unknown>) => ({
-        role: Boolean(m.useAccountRole ?? m.useAccountInfo),
-        photo: Boolean(m.useAccountPhoto ?? m.useAccountInfo),
+        role: Boolean(m.useAccountRole),
+        photo: Boolean(m.useAccountPhoto),
     });
 
     const linkedUids = [...new Set(
@@ -1215,8 +1188,7 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
         const roleCn = (m.roleCn as string) ?? "";
         const imageUrl = (m.imageUrl as string) ?? "";
         // Project only display fields — never the internal linked-account uid or the
-        // admin-side follow flags, even though the roster is now sourced from the
-        // server-only teamRoster doc.
+        // admin-side follow flags.
         return {
             id: (m.id as string) ?? "",
             name: (m.name as string) ?? "",
@@ -1245,45 +1217,8 @@ export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("permission-denied", "Insufficient permissions.");
     }
 
-    const rosterRef = db.collection("teamRoster").doc("main");
-    const rosterSnap = await rosterRef.get();
-    if (Array.isArray(rosterSnap.data()?.teamMembers)) {
-        return {teamMembers: rosterSnap.data()!.teamMembers};
-    }
-
-    // Not split yet: the legacy full roster still lives in the world-readable
-    // config/main doc. Read it as a fallback so the editor keeps working.
-    const configRef = db.collection("config").doc("main");
-    const legacy = (await configRef.get()).data()?.teamMembers;
-    const members = (Array.isArray(legacy) ? legacy : []) as Record<string, unknown>[];
-
-    // One-time migration on first core-staff+ visit: seed the server-only roster and
-    // strip uid/flags from the public projection now, instead of waiting for the next
-    // manual save, so the legacy uids stop being world-readable. Transactional and
-    // guarded on the roster still being absent, so it can't clobber a save that landed
-    // first. Read-only staff viewers skip this (they can't write).
-    if (members.length > 0 && ADMIN_GROUPS.includes(group)) {
-        try {
-            await db.runTransaction(async (txn) => {
-                if (Array.isArray((await txn.get(rosterRef)).data()?.teamMembers)) return;
-                const publicMembers = members.map(m => ({
-                    id: (m.id as string) ?? "",
-                    name: (m.name as string) ?? "",
-                    nameCn: (m.nameCn as string) ?? "",
-                    role: (m.role as string) ?? "",
-                    roleCn: (m.roleCn as string) ?? "",
-                    imageUrl: (m.imageUrl as string) ?? "",
-                    isHonorary: Boolean(m.isHonorary),
-                }));
-                txn.set(rosterRef, {teamMembers: members, migratedAt: FieldValue.serverTimestamp()});
-                txn.set(configRef, {teamMembers: publicMembers}, {merge: true});
-            });
-        } catch (err) {
-            console.error("getTeamRoster: roster migration failed", err);
-        }
-    }
-
-    return {teamMembers: members};
+    const rosterSnap = await db.collection("teamRoster").doc("main").get();
+    return {teamMembers: rosterSnap.data()?.teamMembers ?? []};
 });
 
 // Outbound-email capacity for the admin panel's Email Quota tool. Core-staff+

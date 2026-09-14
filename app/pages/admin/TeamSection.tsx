@@ -13,15 +13,11 @@ interface LinkedAccount {
     photoURL: string;
 }
 
-// Legacy members used a single useAccountInfo toggle; treat it as both per-field flags.
 // Names never follow an account, so no name flag is read here.
-const memberFollows = (m: TeamMemberConfig) => {
-    const legacy = (m as {useAccountInfo?: boolean}).useAccountInfo ?? false;
-    return {
-        role: m.useAccountRole ?? legacy,
-        photo: m.useAccountPhoto ?? legacy,
-    };
-};
+const memberFollows = (m: TeamMemberConfig) => ({
+    role: m.useAccountRole ?? false,
+    photo: m.useAccountPhoto ?? false,
+});
 
 interface TeamSectionProps {
     refreshConfig: () => Promise<void>;

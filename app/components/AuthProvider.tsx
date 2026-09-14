@@ -35,9 +35,8 @@ export const GROUP_LABELS: Record<UserGroup, {en: string; zh: string}> = {
     'president': {en: 'President', zh: '社长'},
 };
 
-// Documents written before roles and membership were split still carry `visitor`
-// or `member`; both are the base group now. Without this, GROUP_LEVEL would come
-// back undefined for such a document and every permission check would read false.
+// Anything that isn't a known group reads as the base group, so GROUP_LEVEL never
+// comes back undefined and turns every permission check false.
 export function normalizeGroup(raw: unknown): UserGroup {
     return raw === 'staff' || raw === 'core-staff' || raw === 'president' ? raw : 'user';
 }
@@ -71,8 +70,8 @@ export function formatGroupWithTitle(
     isEnglish: boolean,
 ): string {
     const label = isEnglish ? GROUP_LABELS[group].en : GROUP_LABELS[group].zh;
-    // Prefer the viewer's language, falling back to the other so legacy
-    // single-language titles still render.
+    // Prefer the viewer's language, falling back to the other so a title set in
+    // only one language still renders.
     const resolved = (isEnglish ? title || titleCn : titleCn || title)?.trim();
     return resolved ? `${label} - ${resolved}` : label;
 }

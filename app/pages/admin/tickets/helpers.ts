@@ -132,7 +132,7 @@ export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEven
         `<code>ticket-uuid-1</code><br/><br/>` +
         `<div style="display:inline-block;background-color:#f39c12;color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">VIP</div><br/>` +
         `<code>ticket-uuid-2</code></div>`;
-    const render = (tpl: string) => tpl
+    const body = template.bodyHtml
         .replace(/{{\s*attendeeEmail\s*}}/g, sampleData.attendeeEmail)
         .replace(/{{\s*attendeeName\s*}}/g, sampleData.attendeeName)
         .replace(/{{\s*eventTitle\s*}}/g, sampleData.eventTitle)
@@ -140,12 +140,8 @@ export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEven
         .replace(/{{\s*eventDate\s*}}/g, sampleData.eventDate)
         .replace(/{{\s*ticketCount\s*}}/g, String(sampleData.ticketCount))
         .replace(/{{\s*eventHeader\s*}}/g, sampleData.headerImage)
-        .replace(/{{\s*eventHeaderBgStyle\s*}}/g, '')
         .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, ticketBlock);
-    const en = render(template.bodyHtml);
-    const cn = render(template.bodyCnHtml);
-    const hr = `<hr style="border:none;border-top:1px solid #ddd;margin:24px 0;"/>`;
     // Sanitize with the same allowlist the server applies at save time so the
     // admin never sees content that wouldn't survive the save.
-    return sanitizeEmailHtml(cn ? `${en}${hr}${cn}` : en);
+    return sanitizeEmailHtml(body);
 };

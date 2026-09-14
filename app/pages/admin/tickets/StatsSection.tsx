@@ -146,11 +146,7 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
                         unredeemedByType[type] = (unredeemedByType[type] || 0) + 1;
                     }
                 }
-                // Fall back to the attendee timestamp for legacy tickets that
-                // predate per-ticket createdAt.
-                createdEntries.push({date: t.createdAt ?? a.createdAt, type});
-                // Only tickets with a recorded redemption time feed the
-                // redemption timeline (legacy redemptions may lack redeemedAt).
+                if (t.createdAt) createdEntries.push({date: t.createdAt, type});
                 if (t.redeemed && t.redeemedAt) redeemedEntries.push({date: t.redeemedAt, type});
             }
         }

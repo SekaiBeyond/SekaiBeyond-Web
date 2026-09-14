@@ -39,9 +39,8 @@ const mapDoc = (docSnap: FirestoreDocLike): UpcomingEvent => {
     const deleteAtRaw = data.deleteAt as {toDate?: () => Date} | undefined;
     return {
         id: docSnap.id,
-        // Fallback to legacy `name`/`nameCn` for docs predating the rename.
-        title: (data.title as string) ?? (data.name as string) ?? '',
-        titleCn: (data.titleCn as string) ?? (data.nameCn as string) ?? '',
+        title: (data.title as string) ?? '',
+        titleCn: (data.titleCn as string) ?? '',
         description: (data.description as string) ?? '',
         descriptionCn: (data.descriptionCn as string) ?? '',
         location: (data.location as string) ?? '',

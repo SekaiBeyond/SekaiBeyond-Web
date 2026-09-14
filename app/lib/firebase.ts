@@ -97,16 +97,6 @@ export const callClaimEventCode = (data: {code: string}) =>
         eventPoster: string;
     }>(getFunctions(), 'claimEventCode')(data);
 
-export const callClaimBadgeActivationCode = (data: {code: string}) =>
-    httpsCallable<{code: string}, {
-        badgeId: string;
-        badgeName: string;
-        badgeNameCn: string;
-        badgeDescription: string;
-        badgeDescriptionCn: string;
-        badgeImageUrl: string;
-    }>(getFunctions(), 'claimBadgeActivationCode')(data);
-
 /**
  * What one typed code turned out to be. A passport comes back as an id to go
  * activate rather than something redeemed here: binding one needs the key under
@@ -329,7 +319,6 @@ export const callUpdateEventEmailTemplate = (data: {
     eventId: string;
     subject: string;
     bodyHtml: string;
-    bodyCnHtml: string;
 }) => httpsCallable<typeof data, {saved: boolean}>(
     getFunctions(), 'updateEventEmailTemplate')(data);
 
@@ -402,14 +391,6 @@ export const callGenerateStaffCode = (data: {
     httpsCallable<typeof data, {id: string; code: string}>(
         getFunctions(), 'generateStaffCode'
     )(data);
-
-export const callClaimStaffCode = (data: {code: string}) =>
-    httpsCallable<{code: string}, {
-        eventId: string;
-        eventTitle: string;
-        eventTitleCn: string;
-        eventPoster: string;
-    }>(getFunctions(), 'claimStaffCode')(data);
 
 export const callToggleStaffCodeActive = (data: {codeId: string; active: boolean}) =>
     httpsCallable<typeof data, {active: boolean}>(getFunctions(), 'toggleStaffCodeActive')(data);
@@ -552,9 +533,7 @@ export const callDeletePassportDesign = (data: {designId: string}) =>
 
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {
-        displayName: string; photoURL: string; joinedAt: string;
-        // Absent from a deploy older than banners.
-        bannerURL?: string;
+        displayName: string; photoURL: string; bannerURL: string; joinedAt: string;
         attendedEvents: string[]; eventStaffEvents: string[];
         badges: string[];
         badgeEarnedAt: Record<string, string>;
@@ -564,7 +543,7 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         titleCn?: string;
         // Sections the owner has switched off arrive empty; these say which, so
         // the page can tell "kept private" from "none yet".
-        visibility?: {badges: boolean; events: boolean};
+        visibility: {badges: boolean; events: boolean};
     }>(getFunctions(), 'getPublicProfile')(data);
 
 // Callables carry JSON, so an uploaded file travels as bare base64.

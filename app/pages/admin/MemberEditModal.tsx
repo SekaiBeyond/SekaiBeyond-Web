@@ -17,22 +17,18 @@ interface MemberEditModalProps {
     showToast: ShowToast;
 }
 
-// Legacy members used a single useAccountInfo toggle; seed both per-field flags from it.
-const seedFormData = (member: TeamMemberConfig | null): TeamMemberConfig => {
-    const legacyUseAccountInfo = (member as {useAccountInfo?: boolean} | null)?.useAccountInfo ?? false;
-    return {
-        id: member?.id || Math.random().toString(36).substring(2, 9),
-        uid: member?.uid || '',
-        name: member?.name || '',
-        nameCn: member?.nameCn || '',
-        role: member?.role || '',
-        roleCn: member?.roleCn || '',
-        imageUrl: member?.imageUrl || '',
-        isHonorary: member?.isHonorary || false,
-        useAccountRole: member?.useAccountRole ?? legacyUseAccountInfo,
-        useAccountPhoto: member?.useAccountPhoto ?? legacyUseAccountInfo,
-    };
-};
+const seedFormData = (member: TeamMemberConfig | null): TeamMemberConfig => ({
+    id: member?.id || Math.random().toString(36).substring(2, 9),
+    uid: member?.uid || '',
+    name: member?.name || '',
+    nameCn: member?.nameCn || '',
+    role: member?.role || '',
+    roleCn: member?.roleCn || '',
+    imageUrl: member?.imageUrl || '',
+    isHonorary: member?.isHonorary || false,
+    useAccountRole: member?.useAccountRole ?? false,
+    useAccountPhoto: member?.useAccountPhoto ?? false,
+});
 
 export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEditModalProps) => {
     const {isEnglish} = useLanguage();

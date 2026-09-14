@@ -114,8 +114,8 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
         if (eventData.paid === true) {
             throw new HttpsError("failed-precondition", "Invalid or deactivated code.", {code: "invalid"});
         }
-        const eventTitle: string = eventData.title ?? eventData.name ?? "";
-        const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
+        const eventTitle: string = eventData.title ?? "";
+        const eventTitleCn: string = eventData.titleCn ?? "";
         const eventPoster: string = eventData.poster ?? "";
 
         const attendedEvents: string[] = userSnap.data()!.attendedEvents ?? [];
@@ -143,15 +143,6 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
         });
         return {eventId, eventTitle, eventTitleCn, eventPoster};
     });
-});
-
-/**
- * Superseded by redeemCode, which reaches this same body. Kept because a client
- * cached from before that existed still calls it by name.
- */
-export const claimBadgeActivationCode = onCall({maxInstances: 20}, async (request) => {
-    const uid = await requireAuth(request);
-    return redeemBadgeCode(uid, requireCode(request));
 });
 
 /** Binds the badge behind `code` to `uid`. `code` is already canonical. */
@@ -347,7 +338,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                         type: "event-code-deactivate",
                         performedBy: uid,
                         performedByName: callerSnap.data()?.displayName ?? "",
-                        eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+                        eventTitle: eventSnap.data()?.title ?? eventId,
                         eventId,
                         code: oldDoc.data().code ?? oldDoc.id,
                         timestamp: FieldValue.serverTimestamp(),
@@ -369,7 +360,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                     type: "code-create",
                     performedBy: uid,
                     performedByName: callerSnap.data()?.displayName ?? "",
-                    eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+                    eventTitle: eventSnap.data()?.title ?? eventId,
                     eventId,
                     code,
                     timestamp: FieldValue.serverTimestamp(),
@@ -413,7 +404,7 @@ export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) 
             type: input.active ? "event-code-activate" : "event-code-deactivate",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? eventSnap?.data()?.name ?? codeData.eventId ?? "",
+            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
             code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
@@ -450,7 +441,7 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
             type: "event-code-time-window",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? eventSnap?.data()?.name ?? codeData.eventId ?? "",
+            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
             code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
@@ -575,7 +566,7 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
                         type: "staff-code-deactivate",
                         performedBy: uid,
                         performedByName: callerSnap.data()?.displayName ?? "",
-                        eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+                        eventTitle: eventSnap.data()?.title ?? eventId,
                         eventId,
                         code: oldDoc.data().code ?? oldDoc.id,
                         timestamp: FieldValue.serverTimestamp(),
@@ -598,7 +589,7 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
                     type: "staff-code-create",
                     performedBy: uid,
                     performedByName: callerSnap.data()?.displayName ?? "",
-                    eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+                    eventTitle: eventSnap.data()?.title ?? eventId,
                     eventId,
                     code,
                     timestamp: FieldValue.serverTimestamp(),
@@ -613,12 +604,6 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
     }
 
     throw new HttpsError("internal", "code-generation-failed");
-});
-
-/** Superseded by redeemCode, and kept for the same reason as the badge one. */
-export const claimStaffCode = onCall({maxInstances: 20}, async (request) => {
-    const uid = await requireAuth(request);
-    return redeemStaffCode(uid, requireCode(request));
 });
 
 /** Makes `uid` staff for the event behind `code`. `code` is already canonical. */
@@ -646,8 +631,8 @@ async function redeemStaffCode(uid: string, code: string) {
         const isPastEvent = !upcomingSnap.exists;
 
         const eventData = eventSnap.data()!;
-        const eventTitle: string = eventData.title ?? eventData.name ?? "";
-        const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
+        const eventTitle: string = eventData.title ?? "";
+        const eventTitleCn: string = eventData.titleCn ?? "";
         const eventPoster: string = eventData.poster ?? eventData.icon ?? "";
 
         const staffEvents: string[] = userSnap.data()!.eventStaffEvents ?? [];
@@ -712,7 +697,7 @@ export const toggleStaffCodeActive = onCall({maxInstances: 10}, async (request) 
             type: input.active ? "staff-code-activate" : "staff-code-deactivate",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? eventSnap?.data()?.name ?? codeData.eventId ?? "",
+            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
             code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
@@ -754,7 +739,7 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
             type: "staff-code-time-window",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? eventSnap?.data()?.name ?? codeData.eventId ?? "",
+            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
             code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),

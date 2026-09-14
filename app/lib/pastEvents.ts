@@ -24,11 +24,7 @@ const cache = createCollectionCache<PastEvent>('pastEvents', docSnap => {
     const data = docSnap.data();
     return {
         id: docSnap.id,
-        // Prefer the multi-tag `tagIds` array; fall back to the legacy
-        // single `tagId` field for events archived before the migration.
-        tagIds: Array.isArray(data.tagIds)
-            ? data.tagIds
-            : (data.tagId ? [data.tagId] : []),
+        tagIds: data.tagIds ?? [],
         title: data.title ?? '',
         titleCn: data.titleCn ?? '',
         date: data.date ?? '',

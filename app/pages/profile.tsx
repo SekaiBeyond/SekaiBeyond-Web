@@ -289,11 +289,7 @@ export const ProfilePage = () => {
                     isMember: data.isMember ?? false,
                     title: data.title ?? '',
                     titleCn: data.titleCn ?? '',
-                    // Absent from an older deploy means nothing was filtered.
-                    visibility: {
-                        badges: data.visibility?.badges !== false,
-                        events: data.visibility?.events !== false,
-                    },
+                    visibility: data.visibility,
                 });
             } catch {
                 if (!stale) setViewedLoadError(true);

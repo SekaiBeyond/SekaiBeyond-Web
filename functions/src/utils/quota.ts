@@ -26,14 +26,12 @@ function num(v: unknown): number {
     return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
-// Read both counters off the doc. `confirmed` falls back to the pre-migration
-// `dailyConsumed` field so the counter survives the schema change without a
-// one-window reset; both counters are clamped non-negative.
+// Read both counters off the doc, clamped non-negative.
 function parseQuotaDoc(
     data: FirebaseFirestore.DocumentData | undefined,
 ): {confirmed: number; reserved: number} {
     return {
-        confirmed: Math.max(0, num(data?.confirmed ?? data?.dailyConsumed)),
+        confirmed: Math.max(0, num(data?.confirmed)),
         reserved: Math.max(0, num(data?.reserved)),
     };
 }

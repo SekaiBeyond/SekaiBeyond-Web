@@ -179,31 +179,22 @@ const readVendors = (raw: unknown): ConContent['vendors'] => {
     };
 };
 
-/**
- * Prices used to be free text stored as {en, zh}. Reading the digits out of the
- * English side keeps a pre-change "$10" at 10 (and "Free" at 0) instead of every
- * tier suddenly reading as free. Safe to drop the object branch after every
- * environment has saved its tickets once.
- */
-const readPrice = (raw: unknown): number => {
-    if (typeof raw === 'number') return Number.isFinite(raw) && raw >= 0 ? raw : 0;
-    const legacy = Number(loc(raw).en.replace(/[^\d.]/g, ''));
-    return Number.isFinite(legacy) ? legacy : 0;
-};
+const nonNegative = (raw: unknown): number =>
+    typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? raw : 0;
 
 const readEarlyBird = (raw: unknown): EarlyBird | undefined => {
     const e = obj(raw);
     const endsAt = optStr(e.endsAt);
     // A deadline is what makes it an early bird. Without one there is nothing
     // to say about when the price changes, so the tier reads as regular-priced.
-    return endsAt ? {price: readPrice(e.price), endsAt} : undefined;
+    return endsAt ? {price: nonNegative(e.price), endsAt} : undefined;
 };
 
 const readTickets = (raw: unknown): TicketTier[] =>
     list(raw, TICKETS, tier => ({
         id: str(tier.id),
         name: loc(tier.name),
-        price: readPrice(tier.price),
+        price: nonNegative(tier.price),
         // Always present, even when undefined, so the key sits in the same place
         // as in the editor's draft — its dirty check compares JSON strings.
         earlyBird: readEarlyBird(tier.earlyBird),
@@ -211,9 +202,6 @@ const readTickets = (raw: unknown): TicketTier[] =>
         perks: Array.isArray(tier.perks) ? tier.perks.map(perk => loc(perk)) : [],
         featured: tier.featured === true,
     }));
-
-const nonNegative = (raw: unknown): number =>
-    typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? raw : 0;
 
 const readTicketFee = (raw: unknown): TicketFee => {
     if (!raw || typeof raw !== 'object') return TICKET_FEE;
@@ -261,13 +249,7 @@ const publicCache = createValueCache<ConContent>('con content', async () => {
     const snap = await getDoc(doc(db, 'conContent', 'main'));
     const data = snap.data();
     if (!data) return DEFAULT_CON_CONTENT;
-    return {
-        ...readSections(data),
-        // The mirror only exists when published. The `!== false` is for documents
-        // written before the split, which kept the switch inline: a page that was
-        // off stays off until the next save rewrites the mirror.
-        settings: {published: data.settings?.published !== false},
-    };
+    return {...readSections(data), settings: {published: true}};
 }, DEFAULT_CON_CONTENT);
 
 /**
@@ -276,11 +258,7 @@ const publicCache = createValueCache<ConContent>('con content', async () => {
  */
 const draftCache = createValueCache<ConContent>('con content draft', async () => {
     const db = getFirebaseDb();
-    let snap = await getDoc(doc(db, 'conContent', 'draft'));
-    // Environments edited before the draft/mirror split kept everything in `main`.
-    // Seeding from it once keeps those edits; the first save writes a real draft.
-    // Safe to delete after every environment has saved once.
-    if (!snap.exists()) snap = await getDoc(doc(db, 'conContent', 'main'));
+    const snap = await getDoc(doc(db, 'conContent', 'draft'));
 
     const data = snap.data();
     if (!data) return DEFAULT_CON_CONTENT;

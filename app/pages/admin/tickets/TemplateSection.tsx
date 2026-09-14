@@ -17,10 +17,10 @@ interface TemplateSectionProps {
 export function TemplateSection({event, readOnly, showToast}: TemplateSectionProps) {
     const {isEnglish} = useLanguage();
     const [template, setTemplate] = useState<EmailTemplate>({
-        subject: '', bodyHtml: '', bodyCnHtml: '', updatedAt: null, updatedBy: '',
+        subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
     });
     const [initialTemplate, setInitialTemplate] = useState<EmailTemplate>({
-        subject: '', bodyHtml: '', bodyCnHtml: '', updatedAt: null, updatedBy: '',
+        subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -38,13 +38,9 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                 if (cancelled) return;
                 if (snap.exists()) {
                     const data = snap.data();
-                    // bodyCnHtml is intentionally dropped from the editor — the
-                    // template UI is English-only. Any legacy CN content is
-                    // cleared on the next save (see save() below).
                     const t: EmailTemplate = {
                         subject: (data.subject as string) ?? '',
                         bodyHtml: (data.bodyHtml as string) ?? '',
-                        bodyCnHtml: '',
                         updatedAt: tsToDate(data.updatedAt),
                         updatedBy: (data.updatedBy as string) ?? '',
                     };
@@ -57,12 +53,11 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                     setTemplate({
                         subject: DEFAULT_TEMPLATE_SUBJECT,
                         bodyHtml: DEFAULT_TEMPLATE_BODY_EN,
-                        bodyCnHtml: '',
                         updatedAt: null,
                         updatedBy: '',
                     });
                     setInitialTemplate({
-                        subject: '', bodyHtml: '', bodyCnHtml: '', updatedAt: null, updatedBy: '',
+                        subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
                     });
                 }
             } catch (err) {
@@ -113,7 +108,6 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                 eventId: event.id,
                 subject: template.subject,
                 bodyHtml: template.bodyHtml,
-                bodyCnHtml: '',
             });
             setInitialTemplate({...template, updatedAt: new Date()});
             showToast(isEnglish ? 'Template saved.' : '模板已保存。', 'success');

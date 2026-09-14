@@ -39,16 +39,14 @@ export type UserGroup = typeof USER_GROUPS[number];
 // Groups core-staff may act on. President may act on anyone.
 export const MANAGEABLE_GROUPS: string[] = ["user", "staff"];
 
-// Documents written before roles and membership were split still carry `visitor`
-// or `member`; both are the base group now. Normalizing on read keeps a
-// half-migrated database from silently denying admin actions against those users.
+// Anything that isn't a known group reads as the base group.
 export function normalizeGroup(raw: unknown): UserGroup {
     return raw === "staff" || raw === "core-staff" || raw === "president" ? raw : "user";
 }
 
 // Validates a group supplied by a caller. Unlike normalizeGroup this rejects
-// rather than coerces, so `changeUserGroup` can't be handed a retired value
-// like "member" and silently treat it as "user".
+// rather than coerces, so `changeUserGroup` can't be handed an unknown value
+// and silently treat it as "user".
 export function isValidGroup(raw: unknown): raw is UserGroup {
     return typeof raw === "string" && (USER_GROUPS as readonly string[]).includes(raw);
 }

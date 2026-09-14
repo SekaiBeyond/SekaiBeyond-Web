@@ -81,10 +81,10 @@ function buildFreshTickets(count: number, type = "normal"): {tickets: NewTicket[
     return {tickets, ticketIds};
 }
 
-function formatEventDateForEmail(startAt: Timestamp | undefined, locale: string): string {
+function formatEventDateForEmail(startAt: Timestamp | undefined): string {
     if (!startAt) return "";
     try {
-        return new Intl.DateTimeFormat(locale, {
+        return new Intl.DateTimeFormat("en-US", {
             timeZone: "America/Los_Angeles",
             year: "numeric", month: "long", day: "numeric",
             hour: "numeric", minute: "2-digit",
@@ -97,7 +97,6 @@ function formatEventDateForEmail(startAt: Timestamp | undefined, locale: string)
 interface EmailTemplateDoc {
     subject: string;
     bodyHtml: string;
-    bodyCnHtml: string;
 }
 
 const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
@@ -241,9 +240,6 @@ function renderTemplate(
         .replace(/{{\s*eventTitleCn\s*}}/g, sub(data.eventTitleCn))
         .replace(/{{\s*eventDate\s*}}/g, sub(data.eventDate))
         .replace(/{{\s*eventHeader\s*}}/g, headerImage)
-        // Back-compat: drop the old CSS-based placeholder so any saved template
-        // that still references it doesn't ship the literal `{{...}}` string.
-        .replace(/{{\s*eventHeaderBgStyle\s*}}/g, "")
         .replace(/{{\s*ticketCount\s*}}/g, String(data.ticketCount))
         // {{ ticketIds[] }} — with optional surrounding <p>/<div> tags collapsed.
         // ticketBlock is server-built HTML, never escaped.
@@ -298,7 +294,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
     const eventTitle = await adminTransaction(uid, async (txn) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        return (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId) as string;
+        return (eventSnap.data()?.title ?? eventId) as string;
     });
 
     const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
@@ -442,7 +438,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         const callerName: string = callerData.displayName ?? "";
         const attendeeEmail: string = attendeeData.email ?? "";
         const attendeeName: string = attendeeData.name ?? "";
-        const eventTitle: string = eventSnap.data()?.title ?? eventSnap.data()?.name ?? "";
+        const eventTitle: string = eventSnap.data()?.title ?? "";
 
         const now = Timestamp.now();
         const REDEEM_GRACE_PERIOD_MS = 15_000;
@@ -534,7 +530,7 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
         tickets[idx] = {...tickets[idx], voided: true};
 
         const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            ? (eventSnap.data()?.title ?? eventId)
             : eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
@@ -582,7 +578,7 @@ export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
         tickets[idx] = {...tickets[idx], voided: false};
 
         const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            ? (eventSnap.data()?.title ?? eventId)
             : eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
@@ -646,7 +642,7 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
         };
 
         const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            ? (eventSnap.data()?.title ?? eventId)
             : eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
@@ -706,7 +702,7 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
         };
 
         const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            ? (eventSnap.data()?.title ?? eventId)
             : eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
@@ -759,7 +755,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
         const prevType = prevTickets[0]?.type ?? "normal";
 
         const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            ? (eventSnap.data()?.title ?? eventId)
             : eventId;
 
         const countChanged = ticketCount !== prevTicketCount;
@@ -846,7 +842,7 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
         tickets[idx] = {...tickets[idx], type};
 
         const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            ? (eventSnap.data()?.title ?? eventId)
             : eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
@@ -890,7 +886,7 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             (t: Record<string, unknown>) => t as unknown as NewTicket
         );
         const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId)
+            ? (eventSnap.data()?.title ?? eventId)
             : eventId;
         txn.delete(attendeeRef);
         txn.set(db.collection("records").doc(), {
@@ -951,7 +947,6 @@ export const sendTicketEmails = onCall(
         const template: EmailTemplateDoc = {
             subject: (templateData.subject as string) ?? "",
             bodyHtml: (templateData.bodyHtml as string) ?? "",
-            bodyCnHtml: (templateData.bodyCnHtml as string) ?? "",
         };
         if (!template.subject.trim() || !template.bodyHtml.trim()) {
             throw new HttpsError("failed-precondition",
@@ -991,11 +986,10 @@ export const sendTicketEmails = onCall(
             queriedCount = snap.docs.length;
         }
 
-        const eventTitle: string = eventData.title ?? eventData.name ?? "";
-        const eventTitleCn: string = eventData.titleCn ?? eventData.nameCn ?? "";
+        const eventTitle: string = eventData.title ?? "";
+        const eventTitleCn: string = eventData.titleCn ?? "";
         const emailHeaderBg: string = eventData.emailHeaderBg ?? "";
-        const eventDateEn = formatEventDateForEmail(eventData.startAt, "en-US");
-        const eventDateCn = formatEventDateForEmail(eventData.startAt, "zh-CN");
+        const eventDateEn = formatEventDateForEmail(eventData.startAt);
 
         // Enforce the Resend daily cap server-side so a buggy/malicious client
         // (or parallel admins) can't blow past it. Anything past the daily cap
@@ -1155,7 +1149,7 @@ export const sendTicketEmails = onCall(
                 ticketCount: tickets.length,
                 ticketBlock: "",
             }, false).replace(/[\x00-\x1F\x7F]+/g, " ").trim();
-            const renderedBodyEn = renderTemplate(template.bodyHtml, {
+            const html = renderTemplate(template.bodyHtml, {
                 attendeeEmail: data.email ?? "",
                 attendeeName: data.name ?? "",
                 eventTitle, eventTitleCn,
@@ -1164,18 +1158,6 @@ export const sendTicketEmails = onCall(
                 ticketCount: tickets.length,
                 ticketBlock,
             }, true);
-            const renderedBodyCn = renderTemplate(template.bodyCnHtml, {
-                attendeeEmail: data.email ?? "",
-                attendeeName: data.name ?? "",
-                eventTitle, eventTitleCn,
-                eventDate: eventDateCn,
-                emailHeaderBg,
-                ticketCount: tickets.length,
-                ticketBlock,
-            }, true);
-            const html = renderedBodyCn
-                ? `${renderedBodyEn}\n<hr style="border:none;border-top:1px solid #ddd;margin:24px 0;"/>\n${renderedBodyCn}`
-                : renderedBodyEn;
 
             const envelope: ResendEnvelope = {
                 to: data.email,
@@ -1350,17 +1332,12 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
         eventId?: string;
         subject?: unknown;
         bodyHtml?: unknown;
-        bodyCnHtml?: unknown;
     };
     const eventId = validateDocId(input.eventId, "eventId");
     const subject = validateStr(input.subject, "subject", 500, true);
     const rawBodyHtml = validateStr(input.bodyHtml, "bodyHtml", 20000);
-    const rawBodyCnHtml = validateStr(input.bodyCnHtml, "bodyCnHtml", 20000);
 
     const bodyHtml = sanitizeHtml(rawBodyHtml, EMAIL_HTML_SANITIZE_OPTIONS);
-    const bodyCnHtml = rawBodyCnHtml
-        ? sanitizeHtml(rawBodyCnHtml, EMAIL_HTML_SANITIZE_OPTIONS)
-        : "";
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
@@ -1368,7 +1345,7 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
         const templateRef = db.collection("upcomingEvents").doc(eventId)
             .collection("emailTemplate").doc("default");
         txn.set(templateRef, {
-            subject, bodyHtml, bodyCnHtml,
+            subject, bodyHtml,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: uid,
         }, {merge: true});
@@ -1377,7 +1354,7 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
-            eventTitle: eventSnap.data()?.title ?? eventSnap.data()?.name ?? eventId,
+            eventTitle: eventSnap.data()?.title ?? eventId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });

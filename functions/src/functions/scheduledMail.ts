@@ -196,25 +196,10 @@ export const scheduledMailDrain = onSchedule({
         `probe=${probing} sendError=${sendError ? "yes" : "no"}`);
 });
 
-// Convert a queue doc into a ResendEnvelope. Handles both the current
-// `envelope` shape and the legacy `payload` shape — {to, message:{subject,
-// html}, cc?, bcc?, replyTo?} — written before the direct-Resend migration,
-// so queue docs that predate the deploy still get delivered instead of being
-// dropped as malformed. Returns null for genuinely malformed entries.
+// Convert a queue doc into a ResendEnvelope. Returns null for malformed entries.
 function extractEnvelope(data: FirebaseFirestore.DocumentData): ResendEnvelope | null {
     if (data.envelope && typeof data.envelope === "object") {
         return parseEnvelopeShape(data.envelope as Record<string, unknown>);
-    }
-    // Legacy: the pre-migration queue stored a Trigger-Email mail doc whose
-    // subject/html sat under a nested `message` object.
-    if (data.payload && typeof data.payload === "object") {
-        const p = data.payload as Record<string, unknown>;
-        if (!p.message || typeof p.message !== "object") return null;
-        const m = p.message as Record<string, unknown>;
-        return parseEnvelopeShape({
-            to: p.to, subject: m.subject, html: m.html,
-            replyTo: p.replyTo, cc: p.cc, bcc: p.bcc,
-        });
     }
     return null;
 }

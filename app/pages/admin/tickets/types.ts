@@ -45,7 +45,6 @@ export interface AttendeeData {
 export interface EmailTemplate {
     subject: string;
     bodyHtml: string;
-    bodyCnHtml: string;
     updatedAt: Date | null;
     updatedBy: string;
 }
