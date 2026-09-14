@@ -17,6 +17,8 @@ export const PASSPORT_ID_LENGTH = 10;
 // anyway, because the passportId is public and tells an attacker which door to knock on.
 export const ACTIVATION_KEY_LENGTH = 12;
 
+// Each design sets its own term, copied onto its passports at generation. This
+// only stands in when reading a passport that somehow has none.
 export const PASSPORT_TERM_DAYS = 365;
 
 // Brute-force guard on the key. Per-passport rather than per-caller: the uid

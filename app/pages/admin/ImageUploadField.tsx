@@ -17,7 +17,9 @@ interface ImageUploadFieldProps {
     // 'avatar' swaps the labelled file input for a round preview beside a styled button,
     // so the admin sees the same circular crop the site renders. The caller owns the field
     // label in this variant, since it also owns the controls that sit beside it.
-    variant?: 'field' | 'avatar';
+    // 'cover' does the same for a passport cover: a 3:4 frame, which is the only shape
+    // the site ever shows one in, over its button.
+    variant?: 'field' | 'avatar' | 'cover';
     // Shown in the avatar preview when there is no image yet — the same default the
     // public page falls back to, so an empty picker tells the truth about the result.
     placeholderSrc?: string;
@@ -96,16 +98,27 @@ export const ImageUploadField = ({
         />
     ) : null;
 
-    if (variant === 'avatar') {
+    if (variant === 'avatar' || variant === 'cover') {
+        const cover = variant === 'cover';
         return (
             <>
-                <div className="admin-avatar-field">
-                    <img
-                        className={`admin-avatar-preview${preview ? '' : ' admin-avatar-preview-default'}`}
-                        src={preview || placeholderSrc || ''}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                    />
+                <div className={`admin-avatar-field${cover ? ' admin-avatar-field--cover' : ''}`}>
+                    {cover ? (
+                        preview ? (
+                            <img className="admin-cover-preview" src={preview} alt=""/>
+                        ) : (
+                            <div className="admin-cover-preview admin-cover-preview--empty">
+                                {isEnglish ? 'No cover art yet' : '尚无封面图'}
+                            </div>
+                        )
+                    ) : (
+                        <img
+                            className={`admin-avatar-preview${preview ? '' : ' admin-avatar-preview-default'}`}
+                            src={preview || placeholderSrc || ''}
+                            alt=""
+                            referrerPolicy="no-referrer"
+                        />
+                    )}
                     <div className="admin-avatar-actions">
                         {/* The input is visually hidden but still focusable, so this label is
                             the button and :focus-within draws its ring. */}
@@ -114,14 +127,18 @@ export const ImageUploadField = ({
                             <input type="file" accept={accept} onChange={handleChange} disabled={converting}/>
                             {converting
                                 ? (isEnglish ? 'Converting…' : '转换中…')
-                                : preview
-                                    ? (isEnglish ? 'Replace photo' : '更换照片')
-                                    : (isEnglish ? 'Choose photo' : '选择照片')}
+                                : cover
+                                    ? preview
+                                        ? (isEnglish ? 'Replace image' : '更换图片')
+                                        : (isEnglish ? 'Choose image' : '选择图片')
+                                    : preview
+                                        ? (isEnglish ? 'Replace photo' : '更换照片')
+                                        : (isEnglish ? 'Choose photo' : '选择照片')}
                         </label>
                         <p className="admin-helper-text admin-avatar-helper">
                             {isEnglish
-                                ? `Any image up to ${MAX_IMAGE_SIZE_MB} MB.${cropAspect ? " You'll crop it before it's saved." : ''}`
-                                : `任意图片，最大 ${MAX_IMAGE_SIZE_MB} MB。${cropAspect ? '保存前需先裁剪。' : ''}`}
+                                ? `Any image up to ${MAX_IMAGE_SIZE_MB} MB.${cropAspect ? " You'll crop it before it's saved." : ''}${cover ? ' Shown at 3:4, trimmed to fill.' : ''}`
+                                : `任意图片，最大 ${MAX_IMAGE_SIZE_MB} MB。${cropAspect ? '保存前需先裁剪。' : ''}${cover ? '按 3:4 显示，超出部分会被裁切。' : ''}`}
                         </p>
                     </div>
                 </div>

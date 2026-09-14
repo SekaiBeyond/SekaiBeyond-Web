@@ -12,6 +12,7 @@ import {
     passportName,
     passportScanUrl,
     passportStatusLabel,
+    usePassportDesigns,
 } from '~/lib/passports';
 import { ScanTrendsSection } from '../ScanTrends';
 import { StatTile } from '../StatTile';
@@ -55,6 +56,7 @@ export const PassportDetail = ({
                                    readOnly,
                                }: PassportDetailProps) => {
     const {isEnglish} = useLanguage();
+    const {designs} = usePassportDesigns();
     const [passport, setPassport] = useState<Passport | null>(initial);
     const [missing, setMissing] = useState(false);
     const [loadFailed, setLoadFailed] = useState(false);
@@ -265,7 +267,7 @@ export const PassportDetail = ({
                     )}
                 </div>
                 <p className="admin-qr-detail-subtitle">
-                    {passportName(passport.year, isEnglish)}
+                    {passportName(designs.find(d => d.id === passport.designId), isEnglish)}
                 </p>
                 {loadFailed && (
                     <p className="admin-helper-text admin-field-hint">

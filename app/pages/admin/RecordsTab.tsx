@@ -120,6 +120,7 @@ export const RecordsTab = ({
                 qrLabel: data.qrLabel,
                 passportId: data.passportId,
                 passportYear: data.passportYear,
+                passportDesignName: data.passportDesignName,
                 passportCount: data.passportCount,
                 batchId: data.batchId,
                 platformLabel: data.platformLabel,
@@ -722,8 +723,9 @@ export const RecordsTab = ({
             }
             case 'passport-batch-generate':
                 return isEnglish
-                    ? <>generated {r.passportCount ?? 0} {r.passportYear ?? ''} passports</>
-                    : <>生成了 {r.passportCount ?? 0} 本 {r.passportYear ?? ''} 年通行证</>;
+                    ? <>generated {r.passportCount ?? 0} passports from the {r.passportYear ?? ''} design
+                        “{r.passportDesignName ?? ''}”</>
+                    : <>用 {r.passportYear ?? ''} 年设计「{r.passportDesignName ?? ''}」生成了 {r.passportCount ?? 0} 本通行证</>;
             case 'passport-claim':
                 return isEnglish
                     ? <>activated passport {r.passportId ?? ''} (+{r.extendDays ?? 0} days,
@@ -743,16 +745,16 @@ export const RecordsTab = ({
                     : <>查看了通行证 {r.passportId ?? ''} 的激活码</>;
             case 'passport-design-create':
                 return isEnglish
-                    ? <>created the {r.passportYear ?? ''} passport design</>
-                    : <>创建了 {r.passportYear ?? ''} 年通行证设计</>;
+                    ? <>created the {r.passportYear ?? ''} passport design “{r.passportDesignName ?? ''}”</>
+                    : <>创建了 {r.passportYear ?? ''} 年通行证设计「{r.passportDesignName ?? ''}」</>;
             case 'passport-design-edit':
                 return isEnglish
-                    ? <>edited the {r.passportYear ?? ''} passport design</>
-                    : <>编辑了 {r.passportYear ?? ''} 年通行证设计</>;
+                    ? <>edited the {r.passportYear ?? ''} passport design “{r.passportDesignName ?? ''}”</>
+                    : <>编辑了 {r.passportYear ?? ''} 年通行证设计「{r.passportDesignName ?? ''}」</>;
             case 'passport-design-delete':
                 return isEnglish
-                    ? <>deleted the {r.passportYear ?? ''} passport design</>
-                    : <>删除了 {r.passportYear ?? ''} 年通行证设计</>;
+                    ? <>deleted the {r.passportYear ?? ''} passport design “{r.passportDesignName ?? ''}”</>
+                    : <>删除了 {r.passportYear ?? ''} 年通行证设计「{r.passportDesignName ?? ''}」</>;
             case 'qrcode-create':
                 return isEnglish
                     ? <>created QR code {r.qrLabel ?? ''}</>

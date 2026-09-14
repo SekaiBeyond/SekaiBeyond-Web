@@ -119,8 +119,8 @@ function useCollectionPrompts(): Record<CollectionKind, CollectionPrompt> {
             icon: FiBookOpen,
             title: isEnglish ? 'Activate a passport' : '激活通行证',
             how: isEnglish
-                ? 'A physical passport adds a year of membership and a page of your own. Scan its sticker, or enter the code printed on it.'
-                : '一本实体通行证可为你带来一年会员资格和一个属于你的页面。扫描贴纸，或输入上面印的编号即可激活。',
+                ? 'A physical passport adds membership time and a page of your own. Scan its sticker, or enter the code printed on it.'
+                : '一本实体通行证可为你增加会员时长，并带来一个属于你的页面。扫描贴纸，或输入上面印的编号即可激活。',
             none: isEnglish ? 'No passports yet.' : '还没有通行证。',
             action: (
                 <ProfileAction onClick={openRedeemModal}>

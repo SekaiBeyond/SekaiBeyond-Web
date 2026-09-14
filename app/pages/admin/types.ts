@@ -163,9 +163,10 @@ export interface ActivityRecord {
     lotName?: string;
     rateLabel?: string;
     qrLabel?: string;
-    /** Passport records: the printed code, its design year, and batch details. */
+    /** Passport records: the printed code, its design's year and name, and batch details. */
     passportId?: string;
     passportYear?: number | null;
+    passportDesignName?: string;
     passportCount?: number;
     batchId?: string;
     platformLabel?: string;

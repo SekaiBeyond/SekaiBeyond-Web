@@ -1,10 +1,10 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
+import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
 import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks, generateSecureCode } from "../utils/helpers";
-import { extendedExpiry, isMembershipActive, startedAtAfter } from "../utils/membership";
+import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { recordScan, SCAN_QUOTA_PERSONAL, scanClientKey } from "../utils/scans";
 import {
     activationKeyMatches,
@@ -21,7 +21,7 @@ import {
     PASSPORT_ID_LENGTH,
     PASSPORT_TERM_DAYS,
 } from "../utils/passports";
-import { validateStorageImageUrl, validateStr } from "../utils/validation";
+import { sanitizeDisplayText, validateDocId, validateStorageImageUrl, validateStr } from "../utils/validation";
 
 /**
  * Physical passports.
@@ -44,7 +44,7 @@ const DESIGNS = "passportDesigns";
 const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap.data()?.displayName ?? "";
 
 /**
- * Generate a batch of passports for one year's design.
+ * Generate a batch of passports from one design.
  *
  * The keys come back in bulk only in this response. If the export is lost before
  * the slips are printed, revealPassportKey serves them again one passport at a
@@ -54,11 +54,8 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
     const uid = await requireAuth(request);
     const callerSnap = await requireAdmin(uid);
 
-    const input = request.data as {year?: unknown; count?: unknown};
-    if (!isPassportYear(input.year)) {
-        throw new HttpsError("invalid-argument", "Invalid year.");
-    }
-    const year = input.year;
+    const input = request.data as {designId?: unknown; count?: unknown};
+    const designId = validateDocId(input.designId, "designId");
     const count = input.count;
     if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > MAX_BATCH_COUNT) {
         throw new HttpsError("invalid-argument", `count must be an integer between 1 and ${MAX_BATCH_COUNT}.`);
@@ -66,10 +63,18 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
 
     // A passport without a design has nothing to render on the profile shelf or
     // the public page, so the design comes first.
-    const designSnap = await db.collection(DESIGNS).doc(String(year)).get();
+    const designSnap = await db.collection(DESIGNS).doc(designId).get();
     if (!designSnap.exists) {
-        throw new HttpsError("failed-precondition", `No passport design exists for ${year}.`, {code: "no-design"});
+        throw new HttpsError("failed-precondition", "That passport design doesn't exist.", {code: "no-design"});
     }
+    // Copied onto every passport: a design's year is fixed once it is created,
+    // and the shelf sorts on it and records log it without reading designs.
+    const year: number = designSnap.data()!.year;
+    const designName: string = designSnap.data()!.name ?? "";
+    // Copied too, but for a different reason: the term can be edited, and a
+    // passport grants what its slip was sold with, not whatever the design says
+    // by the time it's activated.
+    const termDays: number = designSnap.data()!.termDays;
 
     const batchId = db.collection(PASSPORTS).doc().id;
     const issued: {passportId: string; activationCode: string}[] = [];
@@ -89,11 +94,12 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
 
         ops.push((batch) => {
             batch.create(db.collection(PASSPORTS).doc(passportId), {
+                designId,
                 year,
                 status: "unclaimed",
                 ownerUid: null,
                 claimedAt: null,
-                termDays: PASSPORT_TERM_DAYS,
+                termDays,
                 batchId,
                 createdAt: FieldValue.serverTimestamp(),
                 createdBy: uid,
@@ -116,13 +122,15 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
         performedBy: uid,
         performedByName: performerName(callerSnap),
         batchId,
+        passportDesignId: designId,
+        passportDesignName: designName,
         passportYear: year,
         passportCount: count,
         timestamp: FieldValue.serverTimestamp(),
         expiresAt: recordExpiresAt(),
     });
 
-    return {batchId, year, passports: issued};
+    return {batchId, designId, year, passports: issued};
 });
 
 /**
@@ -254,8 +262,8 @@ type ClaimFailure =
     | {code: "bad-key"; attemptsLeft: number};
 
 /**
- * Claim a passport with the key from its slip. Grants the passport's term
- * (365 days), stacked onto any membership the caller already has, and binds the
+ * Claim a passport with the key from its slip. Grants the passport's term (set
+ * by its design), stacked onto any membership the caller already has, and binds the
  * passport permanently.
  */
 export const claimPassport = onCall({maxInstances: 20}, async (request) => {
@@ -437,7 +445,9 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
     const passport = passportSnap.data()!;
     if (passport.status === "void") return {status: "invalid" as const};
 
-    const year = typeof passport.year === "number" ? passport.year : 0;
+    // The page reads the design itself (passportDesigns is public), for its name
+    // and cover art.
+    const designId: string = passport.designId ?? "";
 
     if (passport.status !== "claimed" || !passport.ownerUid) {
         await tallyScan(passportRef, clientKey);
@@ -445,7 +455,7 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
         // quotes what this sticker actually grants rather than today's default.
         return {
             status: "unclaimed" as const,
-            year,
+            designId,
             termDays: typeof passport.termDays === "number" ? passport.termDays : PASSPORT_TERM_DAYS,
         };
     }
@@ -471,7 +481,7 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 
     return {
         status: "claimed" as const,
-        year,
+        designId,
         claimedAt: (passport.claimedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
         // The owner is looking at their own passport: the page gives them its
         // privacy switch.
@@ -568,65 +578,108 @@ export const setPassportPrivacy = onCall({maxInstances: 10}, async (request) => 
     return {hidePassportPage: hide};
 });
 
+/** The names a design is shown under, folded for comparison. The Chinese name
+ * falls back to the English one, as the pages that render it do. */
+const shownNames = (design: {name?: unknown; nameCn?: unknown}): string[] => {
+    const name = typeof design.name === "string" ? design.name : "";
+    const nameCn = typeof design.nameCn === "string" && design.nameCn ? design.nameCn : name;
+    return [name.toLowerCase(), nameCn.toLowerCase()];
+};
+
 /**
- * One year's cover art — publicly readable, so no secrets here. A design carries
- * nothing else: the year is the passport's name wherever it is shown, so the art
- * is the whole document and is therefore required.
+ * Create or edit a design: the name passports generated from it go by, their
+ * cover art, and the membership term they grant. Publicly readable, so no
+ * secrets here.
+ *
+ * A year can have any number of designs, told apart by name, so a name may not
+ * repeat within its year in either language. The year is set on creation and
+ * never changes after. The term can change, but only for batches generated
+ * afterwards: every passport keeps the term it was generated with.
  */
 export const savePassportDesign = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
-    const callerSnap = await requireAdmin(uid);
 
     const input = request.data as Record<string, unknown>;
-    if (!isPassportYear(input.year)) {
+    const designId = input.designId ? validateDocId(input.designId, "designId") : null;
+    const createYear = isPassportYear(input.year) ? input.year : null;
+    if (!designId && createYear === null) {
         throw new HttpsError("invalid-argument", "Invalid year.");
     }
-    const year = input.year;
+    const name = sanitizeDisplayText(validateStr(input.name, "name", 100, true));
+    const nameCn = sanitizeDisplayText(validateStr(input.nameCn, "nameCn", 100));
+    if (!name) throw new HttpsError("invalid-argument", "name is required.");
     const coverImageUrl = validateStr(input.coverImageUrl, "coverImageUrl", 2000, true);
     validateStorageImageUrl(coverImageUrl, "coverImageUrl");
+    const termDays = input.termDays;
+    if (typeof termDays !== "number" || !Number.isInteger(termDays) || termDays < 1 || termDays > MAX_GRANT_DAYS) {
+        throw new HttpsError("invalid-argument", `termDays must be an integer between 1 and ${MAX_GRANT_DAYS}.`);
+    }
 
-    const ref = db.collection(DESIGNS).doc(String(year));
-    const existed = (await ref.get()).exists;
+    const ref = designId ? db.collection(DESIGNS).doc(designId) : db.collection(DESIGNS).doc();
 
-    await ref.set({
-        year,
-        coverImageUrl,
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: uid,
-        ...(existed ? {} : {createdAt: FieldValue.serverTimestamp()}),
-    }, {merge: true});
+    await adminTransaction(uid, async (txn, callerSnap) => {
+        let year: number;
+        if (designId) {
+            const existing = await txn.get(ref);
+            if (!existing.exists) throw new HttpsError("not-found", "Design not found.");
+            year = existing.data()!.year;
+        } else {
+            year = createYear!;
+        }
 
-    await db.collection("records").add({
-        type: existed ? "passport-design-edit" : "passport-design-create",
-        performedBy: uid,
-        performedByName: performerName(callerSnap),
-        passportYear: year,
-        timestamp: FieldValue.serverTimestamp(),
-        expiresAt: recordExpiresAt(),
+        const names = shownNames({name, nameCn});
+        const sameYear = await txn.get(db.collection(DESIGNS).where("year", "==", year));
+        const clash = sameYear.docs.some(d =>
+            d.id !== ref.id && shownNames(d.data()).some(n => names.includes(n)));
+        if (clash) {
+            throw new HttpsError("already-exists", `${year} already has a design with that name.`, {code: "name-taken"});
+        }
+
+        const changes = {
+            name,
+            nameCn,
+            coverImageUrl,
+            termDays,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: uid,
+        };
+        if (designId) {
+            txn.update(ref, changes);
+        } else {
+            txn.create(ref, {...changes, year, createdAt: FieldValue.serverTimestamp()});
+        }
+        txn.set(db.collection("records").doc(), {
+            type: designId ? "passport-design-edit" : "passport-design-create",
+            performedBy: uid,
+            performedByName: performerName(callerSnap),
+            passportDesignId: ref.id,
+            passportDesignName: name,
+            passportYear: year,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
     });
 
-    return {year};
+    return {designId: ref.id};
 });
 
-/** Remove a design. Refused once passports of that year exist — they would be
- * left with nothing to render. */
+/** Remove a design. Refused once any passport has been generated from it — that
+ * passport would be left with nothing to render. */
 export const deletePassportDesign = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     const callerSnap = await requireAdmin(uid);
 
-    const raw = (request.data as {year?: unknown})?.year;
-    if (!isPassportYear(raw)) throw new HttpsError("invalid-argument", "Invalid year.");
-    const year = raw;
+    const designId = validateDocId((request.data as {designId?: unknown})?.designId, "designId");
 
-    const ref = db.collection(DESIGNS).doc(String(year));
+    const ref = db.collection(DESIGNS).doc(designId);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError("not-found", "Design not found.");
 
-    const inUse = await db.collection(PASSPORTS).where("year", "==", year).limit(1).get();
+    const inUse = await db.collection(PASSPORTS).where("designId", "==", designId).limit(1).get();
     if (!inUse.empty) {
         throw new HttpsError(
             "failed-precondition",
-            `Passports have already been generated for ${year}.`,
+            "Passports have already been generated from this design.",
             {code: "in-use"},
         );
     }
@@ -636,7 +689,9 @@ export const deletePassportDesign = onCall({maxInstances: 10}, async (request) =
         type: "passport-design-delete",
         performedBy: uid,
         performedByName: performerName(callerSnap),
-        passportYear: year,
+        passportDesignId: designId,
+        passportDesignName: snap.data()?.name ?? "",
+        passportYear: snap.data()?.year ?? null,
         timestamp: FieldValue.serverTimestamp(),
         expiresAt: recordExpiresAt(),
     });

@@ -4586,11 +4586,215 @@ select.admin-tickets-tag:focus {
     margin: 20px 0 0;
 }
 
-.admin-passport-design-cover {
-    width: 100%;
-    max-width: 180px;
+/* Designs, listed under their year — a year can have several. */
+.admin-passport-design-years {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.admin-passport-design-year {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0 0 12px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-passport-design-year-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-light);
+}
+
+.admin-passport-designs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+    min-width: 0;
+}
+
+.admin-passport-design-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    border: 2px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+/* The one shape a cover is ever shown in. With no art yet, the year holds its place. */
+.admin-passport-design-card-cover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     aspect-ratio: 3 / 4;
+    background: rgba(255, 107, 157, 0.06);
+    color: var(--color-text-light);
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.admin-passport-design-card-cover img {
+    display: block;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
+}
+
+.admin-passport-design-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 12px 14px 14px;
+}
+
+.admin-passport-design-card-name,
+.admin-passport-design-card-name-cn {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-passport-design-card-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-passport-design-card-name-cn {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.admin-passport-design-term {
+    align-self: flex-start;
+    margin-top: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 107, 157, 0.1);
+    color: var(--color-primary);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* Create and edit share it. Editing, it takes the whole row of the card it replaces. */
+.admin-passport-design-editor {
+    grid-column: 1 / -1;
+    margin-bottom: 20px;
+    padding: 20px;
+    border: 2px solid rgba(255, 107, 157, 0.25);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.admin-passport-designs .admin-passport-design-editor {
+    margin-bottom: 0;
+}
+
+.admin-passport-design-editor-body {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+
+/* Top-aligned: the term column runs taller than the year beside it, and a stretched
+   label would grow .admin-input (flex: 1) to match. */
+.admin-passport-design-editor-body .admin-form-grid {
+    align-items: start;
+    margin-bottom: 0;
+}
+
+.admin-avatar-field--cover {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+
+.admin-cover-preview {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    box-sizing: border-box;
+    object-fit: cover;
+    border: var(--admin-field-border);
     border-radius: 12px;
-    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.85);
+}
+
+.admin-cover-preview--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    border-style: dashed;
+    color: var(--color-text-light);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.admin-passport-term-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* The unit sits inside the box, so the term lines up with the year beside it. */
+.admin-passport-term {
+    position: relative;
+    display: flex;
+}
+
+.admin-passport-term .admin-input {
+    min-width: 0;
+    padding-right: 64px;
+}
+
+.admin-form-grid label .admin-passport-term-unit {
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    font-size: 14px;
+    pointer-events: none;
+}
+
+.admin-passport-term-presets .admin-btn--chip {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+.admin-passport-design-editor .admin-passport-design-hint {
+    margin: 0;
+    color: var(--color-text-light);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.admin-passport-design-editor .admin-passport-design-hint--warn {
+    color: var(--color-error);
+}
+
+@media (max-width: 600px) {
+    .admin-passport-design-editor-body {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-avatar-field--cover {
+        max-width: 200px;
+    }
+
+    .admin-passport-designs {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
 }

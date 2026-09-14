@@ -106,7 +106,7 @@ export const PassportPage = () => {
         return (
             <ActivationCard
                 passportId={passportId}
-                year={result.year}
+                designId={result.designId}
                 termDays={result.termDays}
                 onActivated={() => setNonce(n => n + 1)}
             />
@@ -158,7 +158,7 @@ const InvalidPassportCard = ({isError}: {isError: boolean}) => {
 
 interface ActivationCardProps {
     passportId: string;
-    year: number;
+    designId: string;
     /** What this particular sticker grants — per-passport data, not a constant. */
     termDays: number;
     onActivated: () => void;
@@ -168,11 +168,12 @@ interface ActivationCardProps {
  * The unclaimed state: sign in, then type the key from the slip packed with the
  * passport. Claiming is one-way — the passport binds to this account for good.
  */
-const ActivationCard = ({passportId, year, termDays, onActivated}: ActivationCardProps) => {
+const ActivationCard = ({passportId, designId, termDays, onActivated}: ActivationCardProps) => {
     const {isEnglish} = useLanguage();
     const {user, loading: authLoading, signIn, refreshProfile} = useAuth();
     const {designs} = usePassportDesigns();
-    const design = designs.find(d => d.year === year);
+    const design = designs.find(d => d.id === designId);
+    const name = passportName(design, isEnglish);
 
     const [key, setKey] = useState('');
     const [busy, setBusy] = useState(false);
@@ -237,14 +238,14 @@ const ActivationCard = ({passportId, year, termDays, onActivated}: ActivationCar
                 {design?.coverImageUrl && (
                     <img
                         src={design.coverImageUrl}
-                        alt={passportName(year, isEnglish)}
+                        alt={name}
                         className="passport-activate-cover"
                     />
                 )}
                 <h1 className="passport-activate-title">
                     {isEnglish ? 'Activate Your Passport' : '激活您的通行证'}
                 </h1>
-                <p className="passport-activate-design">{passportName(year, isEnglish)}</p>
+                <p className="passport-activate-design">{name}</p>
                 <p className="passport-code">{passportId}</p>
 
                 {authLoading ? (
@@ -372,7 +373,7 @@ interface ClaimedPassportProps {
 /**
  * The owner's public page. Renders for signed-out visitors — no login wall.
  *
- * Laid out as an open passport: the year's cover art on one page, the holder's
+ * Laid out as an open passport: the design's cover art on one page, the holder's
  * data page on the other, stamped with their membership. The owner also gets the
  * privacy toggle in the data page's corner and a line of what only they see.
  */
@@ -382,8 +383,8 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
     const {toasts, showToast} = useToasts();
 
     const {owner} = data;
-    const design = designs.find(d => d.year === data.year);
-    const name = passportName(data.year, isEnglish);
+    const design = designs.find(d => d.id === data.designId);
+    const name = passportName(design, isEnglish);
 
     useEffect(() => {
         if (!owner.displayName) return;

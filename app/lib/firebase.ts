@@ -499,9 +499,10 @@ export const callSeedSocialPlatforms = () =>
 // Physical passports. The activation keys come back in bulk from
 // callGeneratePassportBatch only — export the CSV before leaving the screen, or
 // they have to be looked up one passport at a time with callRevealPassportKey.
-export const callGeneratePassportBatch = (data: {year: number; count: number}) =>
+export const callGeneratePassportBatch = (data: {designId: string; count: number}) =>
     httpsCallable<typeof data, {
         batchId: string;
+        designId: string;
         year: number;
         passports: Array<{passportId: string; activationCode: string}>;
     }>(getFunctions(), 'generatePassportBatch')(data);
@@ -535,12 +536,18 @@ export const callSetPassportPrivacy = (data: {hide: boolean}) =>
 export const callSetProfileVisibility = (data: {sections: Partial<ProfileVisibility>}) =>
     httpsCallable<typeof data, {visibility: ProfileVisibility}>(getFunctions(), 'setProfileVisibility')(data);
 
+/** `designId` edits that design; without it, `year` is required and a new one is
+ * created. A design's year can't be changed after that. */
 export const callSavePassportDesign = (data: {
-    year: number;
+    designId?: string;
+    year?: number;
+    name: string;
+    nameCn: string;
     coverImageUrl: string;
-}) => httpsCallable<typeof data, {year: number}>(getFunctions(), 'savePassportDesign')(data);
+    termDays: number;
+}) => httpsCallable<typeof data, {designId: string}>(getFunctions(), 'savePassportDesign')(data);
 
-export const callDeletePassportDesign = (data: {year: number}) =>
+export const callDeletePassportDesign = (data: {designId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deletePassportDesign')(data);
 
 export const callGetPublicProfile = (data: {uid: string}) =>

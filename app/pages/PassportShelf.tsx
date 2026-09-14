@@ -4,12 +4,13 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { fetchPassportsByOwner, type Passport, passportName, usePassportDesigns, } from '~/lib/passports';
 
 /**
- * One passport on the shelf: its year's cover art, its name, and whatever the
+ * One passport on the shelf: its design's cover art, its name, and whatever the
  * surface wants under it.
  *
  * `date` arrives pre-formatted so the caller decides how to word it.
  */
-export const PassportShelfCard = ({year, date, code, to, current}: {
+export const PassportShelfCard = ({designId, year, date, code, to, current}: {
+    designId: string;
     year: number;
     date?: string;
     code?: string;
@@ -18,8 +19,8 @@ export const PassportShelfCard = ({year, date, code, to, current}: {
 }) => {
     const {isEnglish} = useLanguage();
     const {designs} = usePassportDesigns();
-    const design = designs.find(d => d.year === year);
-    const name = passportName(year, isEnglish);
+    const design = designs.find(d => d.id === designId);
+    const name = passportName(design, isEnglish);
 
     const body = (
         <>
@@ -74,8 +75,8 @@ export function usePassportsByOwner(uid: string | null): {passports: Passport[] 
  * hold. Loading, failure and the empty shelf are the profile page's to draw, the
  * same as for its other sections.
  *
- * A duplicate year gets its own card rather than a "×3" badge — each passport is
- * a separate object with its own code, its own claim date, and its own page.
+ * A duplicate design gets its own card rather than a "×3" badge — each passport
+ * is a separate object with its own code, its own claim date, and its own page.
  */
 export const PassportShelf = ({passports}: {passports: Passport[]}) => {
     const {isEnglish} = useLanguage();
@@ -84,6 +85,7 @@ export const PassportShelf = ({passports}: {passports: Passport[]}) => {
             {passports.map(passport => (
                 <PassportShelfCard
                     key={passport.id}
+                    designId={passport.designId}
                     year={passport.year}
                     date={passport.claimedAt?.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
                         year: 'numeric', month: 'short', day: 'numeric',

@@ -3,13 +3,15 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGeneratePassportBatch } from '~/lib/firebase';
 import {
     fetchPassport,
+    fetchPassportsByDesign,
     fetchPassportsByOwner,
-    fetchPassportsByYear,
     isPassportCodeShape,
     MAX_PASSPORT_BATCH,
     type Passport,
     PASSPORT_ID_LENGTH,
     passportDateTime,
+    type PassportDesign,
+    passportName,
     passportStatusLabel,
     usePassportDesigns,
 } from '~/lib/passports';
@@ -32,58 +34,62 @@ interface PassportsTabProps {
     readOnly: boolean;
 }
 
+/** How the admin screens tell designs apart: a year can have several. */
+const designLabel = (design: PassportDesign, isEnglish: boolean): string =>
+    `${design.year} · ${passportName(design, isEnglish)}`;
+
 /**
- * Passports tab: one year's stock at a time, with batch generation, per-batch
+ * Passports tab: one design's stock at a time, with batch generation, per-batch
  * exports, a code/owner lookup, and the design editor.
  *
- * Queries are equality-only (`year`, `ownerUid`, or a document id) and sorting
- * happens here, so no composite index is needed — a year is a few hundred
- * documents.
+ * Queries are equality-only (`designId`, `ownerUid`, or a document id) and
+ * sorting happens here, so no composite index is needed — a design is a few
+ * hundred documents.
  */
 export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabProps) => {
     const {designs, loading: designsLoading, refresh: refreshDesigns} = usePassportDesigns();
 
     const [view, setView] = useState<View>('dashboard');
-    const [year, setYear] = useState<number | null>(null);
+    const [designId, setDesignId] = useState<string | null>(null);
     const [passports, setPassports] = useState<Passport[] | null>(null);
     const [loadError, setLoadError] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
     // Default to the newest design, follow it if the design list arrives late, and
-    // fall back to it if the selected year's design is deleted — the `<select>`
-    // would otherwise paint an option the stats and exports below disagree with.
+    // fall back to it if the selected design is deleted — the `<select>` would
+    // otherwise paint an option the stats and exports below disagree with.
     useEffect(() => {
         if (designs.length === 0) return;
-        if (year === null || !designs.some(d => d.year === year)) setYear(designs[0].year);
-    }, [designs, year]);
+        if (designId === null || !designs.some(d => d.id === designId)) setDesignId(designs[0].id);
+    }, [designs, designId]);
 
-    // The year can be switched again while a load is in flight, and the second
+    // The design can be switched again while a load is in flight, and the second
     // query may well answer first — only the newest load may write, or the tab
-    // paints one year's stock under another year's heading and exports.
-    const yearToken = useRef(0);
-    const loadYear = useCallback(async (target: number) => {
-        const mine = ++yearToken.current;
+    // paints one design's stock under another design's heading and exports.
+    const designToken = useRef(0);
+    const loadDesign = useCallback(async (target: string) => {
+        const mine = ++designToken.current;
         setLoadError(false);
         setPassports(null);
         try {
-            const list = await fetchPassportsByYear(target);
-            if (mine === yearToken.current) setPassports(list);
+            const list = await fetchPassportsByDesign(target);
+            if (mine === designToken.current) setPassports(list);
         } catch {
-            if (mine === yearToken.current) setLoadError(true);
+            if (mine === designToken.current) setLoadError(true);
         }
     }, []);
 
     useEffect(() => {
-        if (year === null) return;
-        void loadYear(year);
-    }, [year, loadYear]);
+        if (designId === null) return;
+        void loadDesign(designId);
+    }, [designId, loadDesign]);
 
     const refresh = useCallback(async () => {
-        if (year !== null) await loadYear(year);
-    }, [year, loadYear]);
+        if (designId !== null) await loadDesign(designId);
+    }, [designId, loadDesign]);
 
     // A void or a reissue changes exactly one passport, and the detail page has
-    // already refetched it — patching it in beats re-reading the year, which is
+    // already refetched it — patching it in beats re-reading the design, which is
     // every document the tab is holding.
     const applyChange = useCallback((fresh: Passport) => {
         setPassports(list => list?.map(p => p.id === fresh.id ? fresh : p) ?? list);
@@ -121,8 +127,8 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
     if (view === 'generate' && !readOnly) {
         return (
             <BatchGenerator
-                years={designs.map(d => d.year)}
-                defaultYear={year}
+                designs={designs}
+                defaultDesignId={designId}
                 onBack={() => {
                     setView('dashboard');
                     void refresh();
@@ -136,8 +142,8 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
         <Dashboard
             designs={designs}
             designsLoading={designsLoading}
-            year={year}
-            setYear={setYear}
+            designId={designId}
+            setDesignId={setDesignId}
             passports={passports}
             loadError={loadError}
             onRefresh={refresh}
@@ -154,10 +160,10 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
 };
 
 interface DashboardProps {
-    designs: ReturnType<typeof usePassportDesigns>['designs'];
+    designs: PassportDesign[];
     designsLoading: boolean;
-    year: number | null;
-    setYear: (year: number) => void;
+    designId: string | null;
+    setDesignId: (designId: string) => void;
     passports: Passport[] | null;
     loadError: boolean;
     onRefresh: () => Promise<void>;
@@ -171,8 +177,8 @@ interface DashboardProps {
 const Dashboard = ({
                        designs,
                        designsLoading,
-                       year,
-                       setYear,
+                       designId,
+                       setDesignId,
                        passports,
                        loadError,
                        onRefresh,
@@ -189,6 +195,7 @@ const Dashboard = ({
     );
 
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const year = designs.find(d => d.id === designId)?.year;
 
     const stats = useMemo(() => {
         const list = passports ?? [];
@@ -265,21 +272,21 @@ const Dashboard = ({
             ) : designs.length === 0 ? (
                 <p className="admin-no-results">
                     {isEnglish
-                        ? 'No passport designs yet. One design per year — add this year’s before generating passports.'
-                        : '暂无通行证设计。每年一款设计 — 请先添加本年度设计，然后再生成通行证。'}
+                        ? 'No passport designs yet. Add one before generating passports — a year can have several.'
+                        : '暂无通行证设计。请先添加设计，然后再生成通行证 — 每年可以有多款设计。'}
                 </p>
             ) : (
                 <>
                     <div className="admin-form-grid admin-section-mb">
                         <label>
-                            <span>{isEnglish ? 'Year' : '年份'}</span>
+                            <span>{isEnglish ? 'Design' : '设计'}</span>
                             <select
                                 className="admin-input"
-                                value={year ?? ''}
-                                onChange={e => setYear(Number(e.target.value))}
+                                value={designId ?? ''}
+                                onChange={e => setDesignId(e.target.value)}
                             >
                                 {designs.map(design => (
-                                    <option key={design.year} value={design.year}>{design.year}</option>
+                                    <option key={design.id} value={design.id}>{designLabel(design, isEnglish)}</option>
                                 ))}
                             </select>
                         </label>
@@ -293,7 +300,7 @@ const Dashboard = ({
                         <StatTile label={isEnglish ? 'Scans' : '扫描数'} value={stats.scans}/>
                     </div>
 
-                    <PassportSearch onOpen={onOpen} showToast={showToast}/>
+                    <PassportSearch designs={designs} onOpen={onOpen} showToast={showToast}/>
 
                     {loadError ? (
                         <p className="admin-no-results">
@@ -304,8 +311,8 @@ const Dashboard = ({
                     ) : batches.length === 0 ? (
                         <p className="admin-no-results">
                             {isEnglish
-                                ? 'No passports generated for this year yet.'
-                                : '本年度尚未生成通行证。'}
+                                ? 'No passports generated from this design yet.'
+                                : '此设计尚未生成通行证。'}
                         </p>
                     ) : (
                         <div className="admin-field-section">
@@ -389,7 +396,11 @@ const Dashboard = ({
  * code resolves directly; anything else is matched against users the same way
  * every other admin surface does, then each match's passports are listed.
  */
-const PassportSearch = ({onOpen, showToast}: {onOpen: (id: string) => void; showToast: ShowToast}) => {
+const PassportSearch = ({designs, onOpen, showToast}: {
+    designs: PassportDesign[];
+    onOpen: (id: string) => void;
+    showToast: ShowToast;
+}) => {
     const {isEnglish} = useLanguage();
     const [term, setTerm] = useState('');
     const [busy, setBusy] = useState(false);
@@ -465,7 +476,7 @@ const PassportSearch = ({onOpen, showToast}: {onOpen: (id: string) => void; show
                                     </span>
                                 </span>
                                 <span className="admin-qr-row-sub">
-                                    {passport.year}
+                                    {passport.year} · {passportName(designs.find(d => d.id === passport.designId), isEnglish)}
                                     {owner ? ` · ${owner.displayName} (${owner.email})` : ''}
                                 </span>
                             </span>
@@ -478,8 +489,8 @@ const PassportSearch = ({onOpen, showToast}: {onOpen: (id: string) => void; show
 };
 
 interface BatchGeneratorProps {
-    years: number[];
-    defaultYear: number | null;
+    designs: PassportDesign[];
+    defaultDesignId: string | null;
     onBack: () => void;
     showToast: ShowToast;
 }
@@ -489,13 +500,14 @@ interface BatchGeneratorProps {
  * activation keys come back in bulk — leaving this screen without exporting means
  * looking each passport's key up one at a time.
  */
-const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorProps) => {
+const BatchGenerator = ({designs, defaultDesignId, onBack, showToast}: BatchGeneratorProps) => {
     const {isEnglish} = useLanguage();
-    const [year, setYear] = useState(defaultYear ?? years[0] ?? new Date().getFullYear());
+    const [designId, setDesignId] = useState(defaultDesignId ?? designs[0]?.id ?? '');
     const [count, setCount] = useState(50);
     const [busy, setBusy] = useState(false);
     const [issued, setIssued] = useState<{
         batchId: string;
+        designId: string;
         year: number;
         passports: {passportId: string; activationCode: string}[];
     } | null>(null);
@@ -505,6 +517,8 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
     );
 
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const selectedDesign = designs.find(d => d.id === designId);
+    const issuedDesign = passportName(designs.find(d => d.id === issued?.designId), isEnglish);
 
     // Armed the moment keys exist that aren't on disk yet. Covers closing the
     // tab, reloading, and switching admin tabs — none of which the Back button's
@@ -524,7 +538,7 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
     const generate = async () => {
         setBusy(true);
         try {
-            const res = await callGeneratePassportBatch({year, count});
+            const res = await callGeneratePassportBatch({designId, count});
             setIssued(res.data);
             // Save them without being asked. Every way off this screen leaves the
             // keys retrievable only one passport at a time, so the file is written
@@ -574,13 +588,20 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
                     </div>
                     <div className="admin-form-grid admin-section-mb">
                         <label>
-                            <span>{isEnglish ? 'Year' : '年份'}</span>
-                            <select className="admin-input" value={year}
-                                    onChange={e => setYear(Number(e.target.value))}>
-                                {years.map(y => (
-                                    <option key={y} value={y}>{y}</option>
+                            <span>{isEnglish ? 'Design' : '设计'}</span>
+                            <select className="admin-input" value={designId}
+                                    onChange={e => setDesignId(e.target.value)}>
+                                {designs.map(design => (
+                                    <option key={design.id} value={design.id}>{designLabel(design, isEnglish)}</option>
                                 ))}
                             </select>
+                            {selectedDesign && (
+                                <small className="admin-title-hint">
+                                    {isEnglish
+                                        ? `Each passport grants ${selectedDesign.termDays} days of membership.`
+                                        : `每本通行证授予 ${selectedDesign.termDays} 天会员资格。`}
+                                </small>
+                            )}
                         </label>
                         <label>
                             <span>{isEnglish ? `Count (1–${MAX_PASSPORT_BATCH})` : `数量（1–${MAX_PASSPORT_BATCH}）`}</span>
@@ -598,7 +619,7 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
                         <button
                             className="admin-toggle-btn admin-toggle-save"
                             onClick={() => void generate()}
-                            disabled={busy}
+                            disabled={busy || !designId}
                         >
                             {busy
                                 ? (isEnglish ? 'Generating...' : '生成中...')
@@ -619,8 +640,8 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
                         </strong>
                         <p>
                             {isEnglish
-                                ? `${issued.passports.length} passports generated for ${issued.year}. `
-                                : `已为 ${issued.year} 年生成 ${issued.passports.length} 本通行证。`}
+                                ? `${issued.passports.length} passports generated from ${issued.year} · ${issuedDesign}. `
+                                : `已根据 ${issued.year} · ${issuedDesign} 生成 ${issued.passports.length} 本通行证。`}
                             {exported
                                 ? (isEnglish
                                     ? 'The keys CSV has been downloaded to this device — check your downloads folder before packing. Once you leave, it is the only list of the whole batch.'

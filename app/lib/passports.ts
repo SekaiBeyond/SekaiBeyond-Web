@@ -16,6 +16,8 @@ export type PassportStatus = 'unclaimed' | 'claimed' | 'void';
  */
 export interface Passport {
     id: string;
+    designId: string;
+    /** The design's year, copied at generation — a design's year never changes. */
     year: number;
     status: PassportStatus;
     ownerUid: string | null;
@@ -35,13 +37,21 @@ export interface Passport {
 }
 
 /**
- * One year's design. A design is its art and nothing else — a passport is named
- * by its year everywhere it appears, so there is no name and no description to
- * keep in two languages.
+ * What a batch of passports is printed from: the name they go by and their cover
+ * art. A year can have several designs, and no two in the same year share a name
+ * in either language.
  */
 export interface PassportDesign {
+    id: string;
+    /** Set on creation and fixed after. */
     year: number;
+    name: string;
+    /** Optional; the English name stands in when it's blank. */
+    nameCn: string;
     coverImageUrl: string;
+    /** Days of membership its passports grant. Copied onto each passport at
+     * generation, so an edit only reaches batches generated afterwards. */
+    termDays: number;
 }
 
 /**
@@ -56,10 +66,10 @@ export interface PassportDesign {
 export type PassportPublicProfile =
     | {status: 'invalid'}
     | {status: 'private'}
-    | {status: 'unclaimed'; year: number; termDays: number}
+    | {status: 'unclaimed'; designId: string; termDays: number}
     | {
     status: 'claimed';
-    year: number;
+    designId: string;
     claimedAt: string | null;
     isOwner: boolean;
     hidden: boolean;
@@ -92,6 +102,7 @@ const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Pas
     const status = data.status;
     return {
         id: docSnap.id,
+        designId: data.designId ?? '',
         year: typeof data.year === 'number' ? data.year : 0,
         status: (status === 'claimed' || status === 'void') ? status : 'unclaimed',
         ownerUid: typeof data.ownerUid === 'string' ? data.ownerUid : null,
@@ -109,17 +120,22 @@ const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Pas
     };
 };
 
-// Designs are a handful of documents that change once a year, and they are
-// publicly readable — the public passport page reads them straight from here
+// Designs are a handful of documents that change a few times a year, and they
+// are publicly readable — the public passport page reads them straight from here
 // while signed out.
 const designCache = createCollectionCache<PassportDesign>('passportDesigns', docSnap => {
     const data = docSnap.data();
     return {
-        year: typeof data.year === 'number' ? data.year : Number(docSnap.id) || 0,
+        id: docSnap.id,
+        year: typeof data.year === 'number' ? data.year : 0,
+        name: data.name ?? '',
+        nameCn: data.nameCn ?? '',
         coverImageUrl: data.coverImageUrl ?? '',
+        termDays: typeof data.termDays === 'number' ? data.termDays : 0,
     };
 });
 
+/** Newest year first, then by name within a year. */
 export function usePassportDesigns(): {
     designs: PassportDesign[];
     loading: boolean;
@@ -128,7 +144,10 @@ export function usePassportDesigns(): {
     const {items, loading, refresh} = designCache.useItems();
     // Memoized so the array keeps its identity between renders: consumers put it
     // in effect dependencies, and a fresh copy each render would re-run them.
-    const designs = useMemo(() => [...items].sort((a, b) => b.year - a.year), [items]);
+    const designs = useMemo(
+        () => [...items].sort((a, b) => b.year - a.year || a.name.localeCompare(b.name)),
+        [items],
+    );
     return {designs, loading, refresh};
 }
 
@@ -138,9 +157,10 @@ export const passportStatusLabel = (status: PassportStatus, isEnglish: boolean):
     return isEnglish ? 'Unclaimed' : '未激活';
 };
 
-/** What a passport is called, on the shelf and on its page: its year. */
-export const passportName = (year: number, isEnglish: boolean): string =>
-    isEnglish ? `${year} Passport` : `${year} 通行证`;
+/** What a passport is called, on the shelf and on its page: its design's name.
+ * Blank while the designs are still loading. */
+export const passportName = (design: PassportDesign | undefined, isEnglish: boolean): string =>
+    !design ? '' : isEnglish ? design.name : (design.nameCn || design.name);
 
 /** Date and time as the admin passport screens show it, with the caller's blank. */
 export const passportDateTime = (date: Date | null, isEnglish: boolean, blank: string): string =>
@@ -155,12 +175,12 @@ export const passportScanUrl = (id: string, origin: string): string =>
     `${origin}/p/${encodeURIComponent(id)}`;
 
 /**
- * All passports of one year, for the admin dashboard. Filtering and per-batch
- * counts are done on the result: a year is hundreds of documents, and equality
- * on one field needs no composite index.
+ * All passports generated from one design, for the admin dashboard. Filtering
+ * and per-batch counts are done on the result: a design is hundreds of
+ * documents, and equality on one field needs no composite index.
  */
-export async function fetchPassportsByYear(year: number): Promise<Passport[]> {
-    const snap = await getDocs(query(collection(getFirebaseDb(), 'passports'), where('year', '==', year)));
+export async function fetchPassportsByDesign(designId: string): Promise<Passport[]> {
+    const snap = await getDocs(query(collection(getFirebaseDb(), 'passports'), where('designId', '==', designId)));
     return snap.docs.map(toPassport).sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
 }
 
@@ -216,6 +236,10 @@ export const PASSPORT_ID_LENGTH = 10;
 export const ACTIVATION_KEY_LENGTH = 12;
 /** Mirrors MAX_BATCH_COUNT in functions/src/utils/passports.ts, which enforces it. */
 export const MAX_PASSPORT_BATCH = 200;
+/** What a new design's term starts at. */
+export const DEFAULT_PASSPORT_TERM_DAYS = 365;
+/** Mirrors MAX_GRANT_DAYS in functions/src/utils/membership.ts, which enforces it. */
+export const MAX_PASSPORT_TERM_DAYS = 3650;
 /** Ambiguous glyphs (O/0, I/1/L) are absent by construction — see CODE_ALPHABET. */
 const CODE_CHAR = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]*$/;
 
