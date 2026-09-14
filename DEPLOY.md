@@ -21,7 +21,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
 7. Deploy **Storage Rules** — copy the contents of [`storage.rules`](storage.rules) into the Storage Rules editor, or deploy via `firebase deploy --only storage`
 
-   Storage rules control access to user avatars and admin-uploaded images (event/badge images). Without deploying these, storage defaults to locked-down and all image uploads will fail.
+   The rules allow public reads under the asset folders (`avatars/`, `banners/`, `events/`, `badges/`, and so on) and deny every client write. The app doesn't depend on them: the browser never uses the Storage SDK, uploads go through Cloud Functions (the Admin SDK isn't bound by rules), and images load through tokened download URLs, which bypass rules. What the rules do is stop anyone from writing to the bucket directly.
 
 8. Deploy **Cloud Functions** — the app uses callable Cloud Functions plus Firestore-trigger functions for all data mutations (user profile creation, admin operations, badge/event management, image uploads, ticketing, TTL-driven deletions, etc.). Without these, the entire app is non-functional:
 
@@ -57,7 +57,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
    Without these policies, rate-limit entries and audit logs accumulate indefinitely, and deletion cooldowns will never fire the cleanup triggers.
 
-10. Configure **outbound email (Resend)** — paid event ticketing and admin custom emails are delivered through **[Resend](https://resend.com)**. The `sendTicketEmails`, `sendCustomEmail`, and `scheduledMailDrain` Cloud Functions call the Resend API directly (the batch endpoint). Resend's free tier (3,000/mo, 100/day) covers the project's expected ~1,000 emails/month with headroom for event-day bursts, and its DNS setup plays cleanly with Cloudflare.
+10. Configure **outbound email (Resend)** — paid event ticket emails are delivered through **[Resend](https://resend.com)**. The `sendTicketEmails` and `scheduledMailDrain` Cloud Functions call the Resend API directly (the batch endpoint). Resend's free tier (3,000/mo, 100/day) covers the project's expected ~1,000 emails/month with headroom for event-day bursts, and its DNS setup plays cleanly with Cloudflare.
 
     **Step A — Set up Resend and verify `sekaibeyond.com`**
 
@@ -82,13 +82,11 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     **Step C — Send a test**
 
-    After deploying Functions, trigger a real ticket email or a custom email from the **Admin Panel**. Cross-check Resend's **Logs** tab in the dashboard, which surfaces bounces, suppressions, and DKIM failures. As a second signal, the functions cache Resend's daily-quota counter in the `system/resendQuota` Firestore doc — a populated `dailyConsumed` value there after a send confirms the response-header path works.
+    After deploying Functions, send a real ticket email from the **Admin Panel**. Cross-check Resend's **Logs** tab in the dashboard, which surfaces bounces, suppressions, and DKIM failures. As a second signal, the functions cache Resend's daily usage in the `system/resendQuota` Firestore doc — a populated `confirmed` count there after a send shows the functions are reading usage back from Resend.
 
     > If Cloudflare Email Routing is also handling inbound mail for `sekaibeyond.com`, leave its existing MX records on the apex (`sekaibeyond.com`) untouched — Resend's MX is on the `send.` subdomain and won't conflict.
 
     > **Overflow queue:** sends past Resend's 100/day cap are written to a `scheduledMail` collection and drained by the `scheduledMailDrain` scheduled function every 30 minutes as quota frees up. No setup needed — it deploys with the other functions.
-
-    > **Migrated from the Trigger Email extension:** earlier versions delivered mail via the Firebase "Trigger Email" extension, which read a `mail/{autoId}` collection. The functions no longer write to `/mail`. If that extension is still installed it is now idle and can be uninstalled.
 
 11. Configure **Firebase App Check** — the app initializes App Check with reCAPTCHA v3 to protect Firestore, Storage, and callable Functions from unauthorized clients. If App Check is enforced in Firebase Console without the steps below, all reads/writes will fail with `FirebaseError: Missing or insufficient permissions`.
 
@@ -125,13 +123,12 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     For local dev (or staging hosts not registered with reCAPTCHA), set `VITE_APP_CHECK_DEBUG_TOKEN=true` in `.env`. The first page load logs a debug token to the browser console; copy it into Firebase Console > App Check > Apps > **Manage debug tokens** to allow that specific token through enforced services. Set `VITE_APP_CHECK_DEBUG_TOKEN=<token>` in `.env` to reuse the same token across sessions.
 
-12. Override `PUBLIC_ORIGIN` for forks — `sendTicketEmails` embeds ticket-claim URLs (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into the QR images it generates. Without this, forks will send QR codes pointing at the original site (`https://sekaibeyond.com`, the in-source default — see `functions/src/index.ts`) instead of their own deployment.
+12. Override `PUBLIC_ORIGIN` for forks — ticket emails from `sendTicketEmails` embed QR images served from `{PUBLIC_ORIGIN}/api/ticket-qr`, and `serveTicketQr` encodes a ticket-claim URL (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into each one. Without this, forks will send QR codes pointing at the original site (`https://sekaibeyond.com`, the in-source default — see `functions/src/utils/config.ts`) instead of their own deployment.
 
-    The function reads `process.env.PUBLIC_ORIGIN` at runtime, so any of these will work:
+    The functions read `process.env.PUBLIC_ORIGIN` at runtime. Set it in a dotenv file under `functions/`:
 
-    - **Project-scoped dotenv (recommended):** create `functions/.env.<project-id>` (e.g. `functions/.env.sekaibeyond-fc616`, suffix from `.firebaserc`) containing `PUBLIC_ORIGIN=https://your-site.example.com`. Firebase loads it only when deploying to that project, so values don't leak into other environments. (Project-scoped also sidesteps Firebase's rejection of `FIREBASE_`/`X_GOOGLE_`/`EXT_`-prefixed keys in plain `.env`.)
+    - **Project-scoped dotenv (recommended):** create `functions/.env.<project-id>` (e.g. `functions/.env.sekaibeyond-fc616`, suffix from `.firebaserc`) containing `PUBLIC_ORIGIN=https://your-site.example.com`. Firebase loads it only when deploying to that project, so values don't leak into other environments.
     - **Generic dotenv:** `functions/.env` applies to every project this repo deploys to.
-    - **gcloud:** `gcloud functions deploy <name> --update-env-vars PUBLIC_ORIGIN=...` (per function — tedious for this codebase since there are many).
 
     Then redeploy Functions so the new value is picked up:
 
@@ -139,9 +136,9 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
     firebase deploy --only functions
     ```
 
-    The same mechanism applies to the optional settings `RESEND_FROM_ADDRESS` (default `mika@sekaibeyond.com`), `RESEND_DAILY_CAP` (default 100), `SEND_CHUNK_SIZE` (default 100), and `IMPORT_MAX_ROWS` (default 1000). See `functions/.env.example` for the full list. Note that `RESEND_API_KEY` is *not* one of these — it is a Secret Manager secret, set via `firebase functions:secrets:set` (see Step 10).
+    The same mechanism applies to the optional settings `RESEND_FROM_ADDRESS` (default `mika@sekaibeyond.com`), `RESEND_DAILY_CAP` (default 100), `SEND_CHUNK_SIZE` (default 100), `RESEND_QUEUE_CAP` (default 500), `IMPORT_MAX_ROWS` (default 1000), `MAX_UPLOAD_SIZE_MB` (default 10), and `SCAN_CLIENT_SALT`. The salt has a fallback in source, so set your own to keep the hashed scan-client keys from being reversed by someone holding both the source and a database export. `functions/.env.example` describes each one. Note that `RESEND_API_KEY` is *not* one of these — it is a Secret Manager secret, set via `firebase functions:secrets:set` (see Step 10).
 
-13. Configure **Google Maps Platform** — the **Parking Guide** page and the admin **Map Picker** render an interactive map via `@vis.gl/react-google-maps`, keyed by `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID`. Without these, the map silently fails to load (the script request goes out with an empty `key=`, and the Maps JS API logs `The Google Maps JavaScript API could not load`).
+13. Configure **Google Maps Platform** — the **Parking Guide** page and the admin panel's maps (the Locations map, the **Map Picker** for venues and parking lots, and the QR spots map) render interactive maps via `@vis.gl/react-google-maps`, keyed by `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID`. Without these, the map silently fails to load (the script request goes out with an empty `key=`, and the Maps JS API logs `The Google Maps JavaScript API could not load`).
 
     **Step A — Enable the API and create a browser key**
 
@@ -180,7 +177,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
 Firestore requires composite indexes for queries that filter on multiple fields. Each index is a sorted table covering the fields in order, allowing O(1) lookups instead of O(n) collection scans.
 
-The app currently requires 7 composite indexes (defined in [`firestore.indexes.json`](firestore.indexes.json)):
+The app currently requires 8 composite indexes (defined in [`firestore.indexes.json`](firestore.indexes.json)):
 
 | Collection | Fields | Purpose |
 |---|---|---|
@@ -191,6 +188,7 @@ The app currently requires 7 composite indexes (defined in [`firestore.indexes.j
 | `records` | `[type, performedBy, timestamp desc]` | Activity log filtered by type and user |
 | `upcomingEvents` | `[published, startAt]` | Public listing of published upcoming events, sorted by start time |
 | `users` | `[group, joinedAt desc]` | Admin panel: list users by group, newest first |
+| `users` | `[group, membershipExpiresAt desc]` | Admin panel: list current members in a group, latest expiry first |
 
 ### 2. GitHub Repository Secrets
 
@@ -255,20 +253,6 @@ too, and membership never promotes or demotes anyone. Core-staff and above grant
 extend, or revoke it from the Users tab of the admin panel; every change is audited
 in Records. There is no scheduled job — membership lapses by timestamp comparison.
 
-**Migrating an existing database** from the older `visitor` group:
-
-```bash
-cd functions
-gcloud auth application-default login
-export GOOGLE_CLOUD_PROJECT=<project-id>
-npx tsx scripts/migrate-groups.ts            # read-only summary
-npx tsx scripts/migrate-groups.ts --apply    # visitor -> user
-```
-
-The script is safe to re-run — migrated documents no longer match its query. It stops
-without writing if it finds anyone still in the retired `member` group, since those
-documents carry no membership term to preserve.
-
 **Bootstrapping the first president:**
 
 1. Sign in to the site so your user document is created in Firestore
@@ -289,15 +273,15 @@ Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deplo
 
 Pushes that only touch `README.md`, `DEPLOY.md`, `Trademarks.md`, or `LICENSE` don't deploy.
 
-Pull requests into `main` run `.github/workflows/check.yml`, which typechecks and builds without deploying. It uses no secrets (the build gets placeholder Firebase config), so PRs from forks are checked too.
-
 You can also trigger a deployment manually from the **Actions** tab > **Deploy to Firebase** > **Run workflow**.
 
 ### Lockfiles
 
-The root `package-lock.json` is intentionally not committed (see `.gitignore`). The root `package.json` dependency set is small and pinned to stable, actively-maintained packages, so `npm install` in CI or a fresh clone resolves to the same effective tree without the extra churn of tracking the lockfile through every transitive bump. If a future dependency change requires a pinned lockfile (e.g. a semver-range-sensitive package, a native dep that needs exact-version resolution, or a supply-chain hardening requirement), restore it by removing the `package-lock.json` line from `.gitignore` and committing the generated file.
+Both `package-lock.json` and `functions/package-lock.json` are committed, and both must stay that way. The deploy workflow installs with `npm ci`, which fails without a lockfile, and `actions/setup-node` keys its npm cache on the two files. Cloud Functions deploys also run `npm ci` against `functions/package-lock.json`, and the functions runtime is much more sensitive to transitive-dep drift (native modules, Node-version-specific builds). After changing either `package.json`, run `npm install` in that directory and commit the updated lockfile alongside it.
 
-`functions/package-lock.json` **is** committed — Cloud Functions deploys run `npm ci` against it and the functions runtime is much more sensitive to transitive-dep drift (native modules, Node-version-specific builds).
+### Node versions
+
+CI builds on Node 26 (`node-version` in `deploy.yml`), but Cloud Functions still runs on `nodejs24` (`firebase.json`): Node 26 is only in preview on Cloud Run functions, and the Firebase CLI doesn't accept `nodejs26` yet. `functions/package.json` keeps `@types/node` at `^24` so `tsc` rejects Node APIs the deployed runtime doesn't have. When moving the functions runtime up, bump `runtime` and that `@types/node` range together.
 
 ### Manual deploy (escape hatch)
 

@@ -35,7 +35,7 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v24 or higher recommended)
+- [Node.js](https://nodejs.org/) (v26 or higher recommended)
 - npm, yarn, pnpm, or bun
 
 ### Installation
