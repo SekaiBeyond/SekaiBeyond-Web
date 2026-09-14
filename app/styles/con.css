@@ -1174,6 +1174,13 @@
     font-weight: 800;
 }
 
+.sbc-ticket-fee {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+
 .sbc-ticket-note {
     margin-top: 8px;
     font-size: 0.85rem;
@@ -1208,6 +1215,63 @@
 .sbc-ticket-cta {
     margin-top: auto;
     width: 100%;
+}
+
+.sbc-inperson-note {
+    max-width: 620px;
+    margin-top: 10px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+}
+
+.sbc-inperson-sessions {
+    list-style: none;
+    display: grid;
+    gap: 10px;
+    width: min(100%, 280px);
+}
+
+.sbc-inperson-session {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 2px 12px;
+    padding: 12px 18px;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: var(--shadow-card);
+    text-align: left;
+}
+
+.sbc-inperson-day,
+.sbc-inperson-time {
+    grid-column: 1;
+}
+
+.sbc-inperson-day {
+    font-weight: 700;
+    color: var(--sbc-heading);
+}
+
+.sbc-inperson-time {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.sbc-inperson-open {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    padding: 3px 10px;
+    border-radius: var(--sbc-pill);
+    background: var(--gradient-primary);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
 }
 
 .sbc-ticket-footnote {
@@ -1707,9 +1771,14 @@
     }
 
     .sbc-callout-actions,
-    .sbc-callout .btn {
+    .sbc-callout .btn,
+    .sbc-inperson-sessions {
         width: 100%;
         justify-content: center;
+    }
+
+    .sbc-inperson-note {
+        margin-inline: auto;
     }
 
     .sbc-venue-address-card {

@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react';
-import type { EarlyBird, TicketTier } from '~/pages/con/content';
+import type { EarlyBird, InPersonSession, TicketFee, TicketTier } from '~/pages/con/content';
 import type { ConLanguage } from '~/pages/con/i18n';
 
 const locales: Record<ConLanguage, string> = {en: 'en-US', zh: 'zh-CN'};
@@ -53,6 +53,36 @@ export const activeEarlyBird = (tier: TicketTier, now: number): EarlyBird | null
     const ends = new Date(tier.earlyBird.endsAt).getTime();
     return Number.isFinite(ends) && now < ends ? tier.earlyBird : null;
 };
+
+/**
+ * The online transaction fee on a ticket that costs `price`, rounded to the cent.
+ * A free ticket has no payment to charge a fee on, so it stays at 0 whatever
+ * the flat part is.
+ */
+export const ticketFeeFor = (price: number, fee: TicketFee) => {
+    if (price <= 0) return 0;
+    // In whole cents and hundredths of a percent, because the float version rounds
+    // 2.9% of $25 (72.5¢) down: 25 * 2.9 comes out as 72.4999…
+    const cents = Math.round(price * 100);
+    const basisPoints = Math.round(fee.percent * 100);
+    return (Math.round(cents * basisPoints / 10000) + Math.round(fee.flat * 100)) / 100;
+};
+
+/** "Mon, Oct 5" / "10月5日周一" for a bare YYYY-MM-DD. */
+export const formatSessionDay = (date: string, lang: ConLanguage) =>
+    // With a time attached the date parses in the viewer's clock. Bare, it would
+    // parse as UTC midnight and read as the day before anywhere west of Greenwich.
+    new Date(`${date}T00:00`).toLocaleDateString(locales[lang], {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+    });
+
+/** When an in-person session opens and closes, as zoneless ISO strings. */
+export const sessionBounds = (session: InPersonSession) => ({
+    opens: `${session.date}T${session.start}`,
+    closes: `${session.date}T${session.end}`,
+});
 
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 

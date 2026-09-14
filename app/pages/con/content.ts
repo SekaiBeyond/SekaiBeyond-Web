@@ -1,14 +1,14 @@
 /**
  * Every piece of copy on the con page lives here, in both languages.
  *
- * Seven of these exports are also editable from the admin panel's Con Content tab,
+ * Nine of these exports are also editable from the admin panel's Con Content tab,
  * which stores overrides in Firestore (`conContent/main`): CON, ROOMS, SCHEDULE,
- * GUESTS, VENDORS + VENDOR_CTA, TICKETS, and FAQ. What is written below stays the
- * shipped default — `app/lib/conContent.ts` overlays the stored value section by
- * section, so an empty or unreachable document falls back to this file rather
- * than to a blank page. Editing here still works; it sets what a visitor sees
- * before the fetch lands, and what they keep seeing for any section an admin has
- * never touched.
+ * GUESTS, VENDORS + VENDOR_CTA, TICKETS, TICKET_FEE, IN_PERSON_SALES, and FAQ.
+ * What is written below stays the shipped default — `app/lib/conContent.ts`
+ * overlays the stored value section by section, so an empty or unreachable
+ * document falls back to this file rather than to a blank page. Editing here
+ * still works; it sets what a visitor sees before the fetch lands, and what they
+ * keep seeing for any section an admin has never touched.
  *
  * The rest — HERO_VIDEO, NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS, VENUE_NOTES —
  * is code-only, because it is tied to files in public/ or to section anchors that
@@ -527,6 +527,50 @@ export const TICKETS: TicketTier[] = [
         ],
     },
 ];
+
+/**
+ * What buying a ticket online adds on top of its price, per paid ticket: a share
+ * of the price plus a flat amount, the shape most payment processors charge in.
+ * Either can be 0, and both at 0 means no fee line on the cards at all.
+ */
+export interface TicketFee {
+    /** Percent of the ticket price, e.g. 2.9 for 2.9%. */
+    percent: number
+    /** US dollars. */
+    flat: number
+}
+
+export const TICKET_FEE: TicketFee = {
+    percent: 0,
+    flat: 0,
+};
+
+/** One day the in-person table is selling. Zoneless, read in the viewer's clock. */
+export interface InPersonSession {
+    /** YYYY-MM-DD */
+    date: string
+    /** HH:MM */
+    start: string
+    end: string
+}
+
+/**
+ * Tickets sold in person before the con, which skip the online transaction fee.
+ * The page shows the block while any session is still to come, and drops each
+ * session once it ends.
+ */
+export interface InPersonSales {
+    location: Localized
+    /** Optional — payment methods, where to find the table. */
+    note: Localized
+    sessions: InPersonSession[]
+}
+
+export const IN_PERSON_SALES: InPersonSales = {
+    location: {en: 'Red Square', zh: '红场'},
+    note: {en: '', zh: ''},
+    sessions: [],
+};
 
 export interface VenueNote {
     icon: string

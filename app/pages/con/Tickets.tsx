@@ -2,8 +2,9 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent } from '~/lib/conContent';
 import { useNowAcross } from '~/pages/con/hooks';
 import { useT } from '~/pages/con/i18n';
+import { InPersonSales } from '~/pages/con/InPersonSales';
 import { SectionHeader } from '~/pages/con/SectionHeader';
-import { activeEarlyBird, formatDeadline, formatPrice } from '~/pages/con/utils';
+import { activeEarlyBird, formatDeadline, formatPrice, ticketFeeFor } from '~/pages/con/utils';
 
 export const Tickets = () => {
     const t = useT();
@@ -27,6 +28,7 @@ export const Tickets = () => {
                     and perk text is free-form, so neither is guaranteed unique. */}
                 {content.tickets.map((tier, i) => {
                     const earlyBird = activeEarlyBird(tier, now);
+                    const fee = ticketFeeFor(earlyBird ? earlyBird.price : tier.price, content.ticketFee);
 
                     return (
                         <article
@@ -59,6 +61,15 @@ export const Tickets = () => {
                                 <p className="sbc-ticket-price">{formatPrice(tier.price, currentLanguage)}</p>
                             )}
 
+                            {fee > 0 && (
+                                <p className="sbc-ticket-fee">
+                                    {t({
+                                        en: `+ ${formatPrice(fee, 'en')} transaction fee online`,
+                                        zh: `线上购票另收 ${formatPrice(fee, 'zh')} 手续费`,
+                                    })}
+                                </p>
+                            )}
+
                             <p className="sbc-ticket-note">{t(tier.note)}</p>
 
                             <ul className="sbc-ticket-perks">
@@ -82,6 +93,8 @@ export const Tickets = () => {
                     );
                 })}
             </div>
+
+            <InPersonSales/>
 
             <p className="sbc-ticket-footnote">
                 {t({

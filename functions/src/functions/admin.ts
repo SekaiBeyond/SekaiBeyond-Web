@@ -303,7 +303,9 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
 // that use it are free-form, admin-managed data.
 const CON_ROOM_ACCENTS = ["pink", "violet", "amber", "sky", "mint", "slate"] as const;
 
-const CON_SECTIONS = ["settings", "event", "rooms", "schedule", "guests", "vendors", "tickets", "faq"] as const;
+const CON_SECTIONS = [
+    "settings", "event", "rooms", "schedule", "guests", "vendors", "tickets", "ticketFee", "inPersonSales", "faq",
+] as const;
 type ConSection = typeof CON_SECTIONS[number];
 
 // Caps on how much copy one section can hold. Generous against real use, tight
@@ -316,6 +318,7 @@ const CON_LIMITS = {
     vendors: 120,
     tickets: 8,
     perks: 12,
+    inPersonSessions: 30,
     faq: 40,
 };
 
@@ -599,6 +602,53 @@ function buildConTickets(raw: unknown) {
     });
 }
 
+function buildConTicketFee(raw: unknown) {
+    const f = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const percent = f.percent;
+    if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 100) {
+        throw new HttpsError("invalid-argument", "Invalid fee percent: must be from 0 to 100.");
+    }
+    return {
+        percent: Math.round(percent * 100) / 100,
+        flat: validateConPrice(f.flat, "flat fee"),
+    };
+}
+
+/** A real calendar day as YYYY-MM-DD — Date.parse alone lets "2026-02-31" through as March 3. */
+function validateConDay(raw: unknown, name: string): string {
+    const value = validateStr(raw, name, 10, true);
+    const ms = Date.parse(`${value}T00:00:00Z`);
+    // toISOString throws on an invalid date, hence the NaN check first.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 10) !== value) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must be a date.`);
+    }
+    return value;
+}
+
+function buildConInPersonSales(raw: unknown) {
+    const s = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const sessions = validateConArray(s.sessions, "in-person sessions", CON_LIMITS.inPersonSessions)
+        .map(session => {
+            const date = validateConDay(session.date, "in-person sale date");
+            const start = validateConTime(session.start, `${date} start`);
+            const end = validateConTime(session.end, `${date} end`);
+            // HH:MM sorts chronologically, as in buildConSchedule.
+            if (end <= start) {
+                throw new HttpsError("invalid-argument", `The ${date} in-person sale ends before it starts.`);
+            }
+            return {date, start, end};
+        })
+        // Stored in date order, so the editor has no reorder buttons to keep in step.
+        .sort((a, b) => `${a.date}T${a.start}`.localeCompare(`${b.date}T${b.start}`));
+
+    return {
+        // Only needed while there is somewhere to send people.
+        location: validateLocalized(s.location, "in-person sale location", 200, sessions.length > 0),
+        note: validateLocalized(s.note, "in-person sale note", 500),
+        sessions,
+    };
+}
+
 function buildConFaq(raw: unknown) {
     return validateConArray(raw, "faq", CON_LIMITS.faq).map(entry => ({
         q: validateLocalized(entry.q, "question", 300, true),
@@ -614,6 +664,8 @@ const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
     guests: buildConGuests,
     vendors: buildConVendors,
     tickets: buildConTickets,
+    ticketFee: buildConTicketFee,
+    inPersonSales: buildConInPersonSales,
     faq: buildConFaq,
 };
 

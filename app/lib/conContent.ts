@@ -13,6 +13,8 @@ import {
     type FaqEntry,
     type Guest,
     GUESTS,
+    IN_PERSON_SALES,
+    type InPersonSales,
     type Room,
     ROOM_ACCENTS,
     type RoomAccent,
@@ -20,6 +22,8 @@ import {
     SCHEDULE,
     type ScheduleBlock,
     type ScheduleItem,
+    TICKET_FEE,
+    type TicketFee,
     TICKETS,
     type TicketTier,
     type Vendor,
@@ -42,6 +46,8 @@ export interface ConContent {
     guests: Guest[];
     vendors: {list: Vendor[]; cta: VendorCta};
     tickets: TicketTier[];
+    ticketFee: TicketFee;
+    inPersonSales: InPersonSales;
     faq: FaqEntry[];
 }
 
@@ -54,6 +60,8 @@ export const DEFAULT_CON_CONTENT: ConContent = {
     guests: GUESTS,
     vendors: {list: VENDORS, cta: VENDOR_CTA},
     tickets: TICKETS,
+    ticketFee: TICKET_FEE,
+    inPersonSales: IN_PERSON_SALES,
     faq: FAQ,
 };
 
@@ -204,6 +212,29 @@ const readTickets = (raw: unknown): TicketTier[] =>
         featured: tier.featured === true,
     }));
 
+const nonNegative = (raw: unknown): number =>
+    typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? raw : 0;
+
+const readTicketFee = (raw: unknown): TicketFee => {
+    if (!raw || typeof raw !== 'object') return TICKET_FEE;
+    const f = obj(raw);
+    return {percent: nonNegative(f.percent), flat: nonNegative(f.flat)};
+};
+
+const readInPersonSales = (raw: unknown): InPersonSales => {
+    if (!raw || typeof raw !== 'object') return IN_PERSON_SALES;
+    const s = obj(raw);
+    return {
+        location: loc(s.location, IN_PERSON_SALES.location),
+        note: loc(s.note),
+        sessions: list(s.sessions, [], session => ({
+            date: str(session.date),
+            start: str(session.start),
+            end: str(session.end),
+        })),
+    };
+};
+
 const readFaq = (raw: unknown): FaqEntry[] =>
     list(raw, FAQ, entry => ({q: loc(entry.q), a: loc(entry.a)}));
 
@@ -214,6 +245,8 @@ const readSections = (data: Record<string, unknown>): Omit<ConContent, 'settings
     guests: readGuests(data.guests),
     vendors: readVendors(data.vendors),
     tickets: readTickets(data.tickets),
+    ticketFee: readTicketFee(data.ticketFee),
+    inPersonSales: readInPersonSales(data.inPersonSales),
     faq: readFaq(data.faq),
 });
 
