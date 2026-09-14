@@ -56,7 +56,7 @@ const SHARED_LINKS: NavLink[] = [
         id: 'con',
         href: '#con',
         labelEn: 'Sekai Beyond Con',
-        labelCn: '彼世界漫展',
+        labelCn: '彼世界动漫游戏展',
     },
     {
         id: 'events',

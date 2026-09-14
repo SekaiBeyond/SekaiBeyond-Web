@@ -1220,29 +1220,12 @@
     font-family: var(--font-display);
     font-size: 1.9rem;
     line-height: 1.25;
-    margin-bottom: 6px;
+    margin-bottom: 26px;
 }
 
-.sbc-venue-room {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--sbc-gold);
-    margin-bottom: 18px;
-}
-
-.sbc-venue-address {
-    font-style: normal;
-    font-size: 0.95rem;
-    font-weight: 500;
-    line-height: 1.7;
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.sbc-venue-doors {
-    margin: 14px 0 26px;
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: rgba(255, 255, 255, 0.92);
+/* No map button follows when the venue has no coordinates. */
+.sbc-venue-name:last-child {
+    margin-bottom: 0;
 }
 
 .sbc-venue-notes {

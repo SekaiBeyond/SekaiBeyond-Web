@@ -19,7 +19,7 @@ export const Unpublished = () => {
                 <p className="sbc-unpublished-body">
                     {t({
                         en: 'Sekai Beyond Con is still being put together. Check back soon, or follow us to hear the moment it goes live.',
-                        zh: '彼世界漫展正在筹备中。请稍后再来，或关注我们以第一时间获知最新消息。',
+                        zh: '彼世界动漫游戏展正在筹备中。请稍后再来，或关注我们以第一时间获知最新消息。',
                     })}
                 </p>
                 <Link className="btn btn-primary" to="/">

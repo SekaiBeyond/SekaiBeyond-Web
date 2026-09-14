@@ -64,11 +64,11 @@ export const SekaiBeyondCon = () => {
                                 type="button"
                                 className="event-image-btn"
                                 onClick={() => setSelectedImage(edition.image)}
-                                aria-label={isEnglish ? `View Sekai Beyond Con ${edition.year} poster` : `查看${edition.year}年彼世界漫展海报`}
+                                aria-label={isEnglish ? `View Sekai Beyond Con ${edition.year} poster` : `查看${edition.year}年彼世界动漫游戏展海报`}
                             >
                                 <img
                                     src={edition.image}
-                                    alt={isEnglish ? `Sekai Beyond Con ${edition.year}` : `彼世界漫展 ${edition.year}`}
+                                    alt={isEnglish ? `Sekai Beyond Con ${edition.year}` : `彼世界动漫游戏展 ${edition.year}`}
                                 />
                             </button>
                         </div>

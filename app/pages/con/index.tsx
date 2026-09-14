@@ -2,6 +2,7 @@ import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { GoToTop } from '~/components/GoToTop';
 import { useConContent } from '~/lib/conContent';
 import { useHashScroll } from '~/lib/useHashScroll';
+import { useVenues } from '~/lib/venues';
 import { Navigation } from '~/pages/con/Navigation';
 import { Hero } from '~/pages/con/Hero';
 import { About } from '~/pages/con/About';
@@ -25,7 +26,11 @@ export const ConPage = () => {
     const t = useT();
     // Resolves to the published mirror, or to the draft when core staff are
     // previewing; `loading` already covers waiting on the viewer's group.
-    const {content, loading, failed} = useConContent();
+    const {content, loading: contentLoading, failed} = useConContent();
+    // Fetched alongside the content so the venue name is there on first paint,
+    // rather than the hero reading "TBA" for a moment and then correcting itself.
+    const {loading: venuesLoading} = useVenues();
+    const loading = contentLoading || venuesLoading;
     const {profile} = useAuth();
 
     // The sections a hash points at do not exist until the content lands, so the

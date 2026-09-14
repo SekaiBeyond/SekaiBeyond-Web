@@ -102,7 +102,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
         <div className="admin-section">
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                 <h3 className="admin-badges-title" style={{marginBottom: 0}}>
-                    {isEnglish ? 'Sekai Beyond Con' : '彼世界漫展'}
+                    {isEnglish ? 'Sekai Beyond Con' : '彼世界动漫游戏展'}
                     {(saving || uploading) &&
                         <span style={{marginLeft: '12px', fontSize: '12px', color: 'var(--color-primary)'}}>
                         {uploading ? (isEnglish ? 'Uploading...' : '上传中...') : (isEnglish ? 'Saving...' : '保存中...')}

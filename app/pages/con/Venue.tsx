@@ -1,11 +1,11 @@
-import { useConContent } from '~/lib/conContent';
-import { VENUE_NOTES } from '~/pages/con/content';
+import { useConVenue } from '~/lib/conContent';
+import { VENUE_NOTES, VENUE_TBA } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
 export const Venue = () => {
     const t = useT();
-    const {venue, doorsOpen} = useConContent().content.event;
+    const venue = useConVenue();
 
     return (
         <section id="venue" className="sbc-section">
@@ -21,19 +21,18 @@ export const Venue = () => {
             <div className="sbc-venue-layout">
                 <div className="sbc-venue-address-card">
                     <span className="sbc-venue-pin" aria-hidden="true">📍</span>
-                    <h3 className="sbc-venue-name">{t(venue.name)}</h3>
-                    <p className="sbc-venue-room">{t(venue.room)}</p>
-                    <address className="sbc-venue-address">{venue.address}</address>
-                    <p className="sbc-venue-doors">{t(doorsOpen)}</p>
-                    <a
-                        className="btn btn-secondary"
-                        href={venue.mapUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        <span>{t({en: 'Open in Maps', zh: '在地图中打开'})}</span>
-                        <span aria-hidden="true">🗺️</span>
-                    </a>
+                    <h3 className="sbc-venue-name">{t(venue?.name ?? VENUE_TBA)}</h3>
+                    {venue?.mapUrl && (
+                        <a
+                            className="btn btn-secondary"
+                            href={venue.mapUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <span>{t({en: 'Open in Maps', zh: '在地图中打开'})}</span>
+                            <span aria-hidden="true">🗺️</span>
+                        </a>
+                    )}
                 </div>
 
                 <div className="sbc-venue-notes">

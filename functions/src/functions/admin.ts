@@ -401,7 +401,6 @@ function buildConSettings(raw: unknown) {
 
 function buildConEvent(raw: unknown) {
     const e = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-    const venue = e.venue && typeof e.venue === "object" ? e.venue as Record<string, unknown> : {};
     const edition = Number(e.edition);
     if (!Number.isInteger(edition) || edition < 2000 || edition > 2200) {
         throw new HttpsError("invalid-argument", "Invalid edition year.");
@@ -416,20 +415,17 @@ function buildConEvent(raw: unknown) {
     const ticketUrl = validateConLink(e.ticketUrl, "ticketUrl");
     if (!ticketUrl) throw new HttpsError("invalid-argument", "ticketUrl is required.");
 
+    // That the venue exists is checked inside saveConContent's transaction.
+    if (!e.venueId) throw new HttpsError("invalid-argument", "Select a venue.");
+    const venueId = validateDocId(e.venueId, "venueId");
+
     return {
         edition,
-        name: validateLocalized(e.name, "name", 120, true),
         tagline: validateLocalized(e.tagline, "tagline", 300),
         intro: validateLocalized(e.intro, "intro", 2000),
         date,
         endTime,
-        doorsOpen: validateLocalized(e.doorsOpen, "doorsOpen", 200),
-        venue: {
-            name: validateLocalized(venue.name, "venue name", 200, true),
-            room: validateLocalized(venue.room, "venue room", 200),
-            address: sanitizeDisplayText(validateStr(venue.address, "venue address", 300)),
-            mapUrl: validateConLink(venue.mapUrl, "venue mapUrl"),
-        },
+        venueId,
         ticketUrl,
     };
 }
@@ -626,6 +622,13 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             // `main`. Seed the first draft from it so those edits are not lost.
             // Safe to delete once every environment has saved at least once.
             stored = (await txn.get(publicRef)).data() ?? {};
+        }
+
+        if (updateData.event !== undefined) {
+            const venueSnap = await txn.get(db.collection("venues").doc(updateData.event.venueId));
+            if (!venueSnap.exists) {
+                throw new HttpsError("failed-precondition", "The selected venue no longer exists. Pick another.");
+            }
         }
 
         // Rooms and the schedule that references them can be saved separately, so

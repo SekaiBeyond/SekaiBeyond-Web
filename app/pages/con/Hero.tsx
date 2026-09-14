@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { useConContent } from '~/lib/conContent';
-import { HERO_VIDEO } from '~/pages/con/content';
+import { useConContent, useConVenue } from '~/lib/conContent';
+import { CON_NAME, HERO_VIDEO, VENUE_TBA } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { useMediaQuery } from '~/pages/con/hooks';
 import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/con/utils';
@@ -43,6 +43,7 @@ export const Hero = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
     const {content} = useConContent();
+    const venue = useConVenue();
     const {event} = content;
     const sparks = useMemo(generateSparkStyles, []);
 
@@ -106,7 +107,7 @@ export const Hero = () => {
                     {event.edition} · {t({en: 'University of Washington', zh: '华盛顿大学'})}
                 </span>
 
-                <h1 className="sbc-hero-title">{t(event.name)}</h1>
+                <h1 className="sbc-hero-title">{t(CON_NAME)}</h1>
                 <p className="sbc-hero-tagline">{t(event.tagline)}</p>
 
                 <ul className="sbc-hero-meta">
@@ -123,7 +124,7 @@ export const Hero = () => {
                     </li>
                     <li>
                         <span aria-hidden="true">📍</span>
-                        <span>{t(event.venue.room)}, {t(event.venue.name)}</span>
+                        <span>{t(venue?.name ?? VENUE_TBA)}</span>
                     </li>
                 </ul>
 

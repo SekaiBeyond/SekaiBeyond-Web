@@ -2,6 +2,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { createValueCache } from './collectionCache';
 import { getFirebaseDb } from './firebase';
+import { hasCoordinates, resolveVenueById, useVenues } from './venues';
 import {
     CON,
     CON_SETTINGS,
@@ -112,21 +113,13 @@ const readSettings = (raw: unknown): ConSettings => {
 const readEvent = (raw: unknown): ConEvent => {
     if (!raw || typeof raw !== 'object') return CON;
     const e = obj(raw);
-    const venue = obj(e.venue);
     return {
         edition: typeof e.edition === 'number' ? e.edition : CON.edition,
-        name: loc(e.name, CON.name),
         tagline: loc(e.tagline, CON.tagline),
         intro: loc(e.intro, CON.intro),
         date: str(e.date, CON.date),
         endTime: str(e.endTime, CON.endTime),
-        doorsOpen: loc(e.doorsOpen, CON.doorsOpen),
-        venue: {
-            name: loc(venue.name, CON.venue.name),
-            room: loc(venue.room, CON.venue.room),
-            address: str(venue.address, CON.venue.address),
-            mapUrl: str(venue.mapUrl, CON.venue.mapUrl),
-        },
+        venueId: str(e.venueId, CON.venueId),
         ticketUrl: str(e.ticketUrl, CON.ticketUrl),
     };
 };
@@ -274,6 +267,28 @@ export function useConContent(): ConContentRead {
         loading: authLoading || chosen.loading,
         failed: chosen.error !== null,
         refresh: chosen.refresh,
+    };
+}
+
+export interface ConVenue {
+    name: Localized;
+    /** Empty when the venue has no coordinates to point a map at. */
+    mapUrl: string;
+}
+
+/**
+ * Where the con is, looked up from the venue picked in the event details. Null
+ * when none is picked or the picked venue has since been deleted from Locations.
+ */
+export function useConVenue(): ConVenue | null {
+    const {venueId} = useConContent().content.event;
+    const venue = resolveVenueById(venueId, useVenues().venues);
+    if (!venue) return null;
+    return {
+        name: {en: venue.nameEn, zh: venue.nameCn || venue.nameEn},
+        mapUrl: hasCoordinates(venue.lat, venue.lng)
+            ? `https://www.google.com/maps/search/?api=1&query=${venue.lat},${venue.lng}`
+            : '',
     };
 }
 

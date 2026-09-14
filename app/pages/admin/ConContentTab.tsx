@@ -2,6 +2,7 @@ import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveConContent, callUploadAdminImage } from '~/lib/firebase';
 import { type ConContent, type ConContentSection, refreshConContent, useConDraft, } from '~/lib/conContent';
+import { useVenues } from '~/lib/venues';
 import { ROOM_ACCENTS, type RoomAccent } from '~/pages/con/content';
 import type { Localized } from '~/pages/con/i18n';
 import type { ShowToast } from './utils';
@@ -322,6 +323,7 @@ const EventSection = ({content, loading, showToast, readOnly}: SectionProps) => 
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('event', content.event, loading, showToast);
     const {draft, setDraft} = editor;
+    const {venues, loading: venuesLoading} = useVenues();
 
     const set = <K extends keyof typeof draft, >(key: K, value: typeof draft[K]) =>
         setDraft(prev => ({...prev, [key]: value}));
@@ -360,12 +362,6 @@ const EventSection = ({content, loading, showToast, readOnly}: SectionProps) => 
                 </label>
 
                 <LocalizedField
-                    label={{en: 'Con name', zh: '漫展名称'}}
-                    value={draft.name}
-                    onChange={next => set('name', next)}
-                    readOnly={readOnly}
-                />
-                <LocalizedField
                     label={{en: 'Tagline', zh: '标语'}}
                     value={draft.tagline}
                     onChange={next => set('tagline', next)}
@@ -400,44 +396,33 @@ const EventSection = ({content, loading, showToast, readOnly}: SectionProps) => 
                     />
                 </label>
 
-                <LocalizedField
-                    label={{en: 'Doors line', zh: '开场提示'}}
-                    value={draft.doorsOpen}
-                    onChange={next => set('doorsOpen', next)}
-                    readOnly={readOnly}
-                />
-                <LocalizedField
-                    label={{en: 'Venue name', zh: '场地名称'}}
-                    value={draft.venue.name}
-                    onChange={next => set('venue', {...draft.venue, name: next})}
-                    readOnly={readOnly}
-                />
-                <LocalizedField
-                    label={{en: 'Room', zh: '房间'}}
-                    value={draft.venue.room}
-                    onChange={next => set('venue', {...draft.venue, room: next})}
-                    readOnly={readOnly}
-                />
-
-                <label>
-                    <span>{isEnglish ? 'Street address' : '街道地址'}</span>
-                    <input
+                <label className="admin-form-grid-full">
+                    <span>{isEnglish ? 'Venue' : '场地'}</span>
+                    <select
                         className="admin-input"
-                        value={draft.venue.address}
-                        onChange={e => !readOnly && set('venue', {...draft.venue, address: e.target.value})}
-                        readOnly={readOnly}
-                    />
-                </label>
-                <label>
-                    <span>{isEnglish ? 'Map link' : '地图链接'}</span>
-                    <input
-                        className="admin-input"
-                        type="url"
-                        value={draft.venue.mapUrl}
-                        onChange={e => !readOnly && set('venue', {...draft.venue, mapUrl: e.target.value})}
-                        readOnly={readOnly}
-                        placeholder="https://maps.google.com/..."
-                    />
+                        value={draft.venueId}
+                        onChange={e => !readOnly && set('venueId', e.target.value)}
+                        disabled={readOnly}
+                    >
+                        <option value="">{isEnglish ? '— Select a venue —' : '— 选择场地 —'}</option>
+                        {/* A venue deleted from Locations still has to show as the
+                            current value, or the select would quietly read as blank. */}
+                        {draft.venueId && !venuesLoading && !venues.some(v => v.id === draft.venueId) && (
+                            <option value={draft.venueId}>
+                                {isEnglish ? '(Deleted venue)' : '（已删除的场地）'}
+                            </option>
+                        )}
+                        {venues.map(v => (
+                            <option key={v.id} value={v.id}>
+                                {isEnglish ? v.nameEn : (v.nameCn || v.nameEn)}
+                            </option>
+                        ))}
+                    </select>
+                    <span className="admin-helper-text admin-mt-4">
+                        {isEnglish
+                            ? 'Add or edit venues in the Locations tab. The map button uses the venue’s coordinates.'
+                            : '可在「场地管理」标签页中添加或编辑场地。地图按钮使用场地的坐标。'}
+                    </span>
                 </label>
             </div>
         </SectionShell>

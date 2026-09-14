@@ -1,6 +1,6 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { useConContent } from '~/lib/conContent';
-import { ABOUT_PARAGRAPHS, HIGHLIGHTS } from '~/pages/con/content';
+import { useConContent, useConVenue } from '~/lib/conContent';
+import { ABOUT_PARAGRAPHS, HIGHLIGHTS, VENUE_TBA } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { formatEventDate, formatTimeRange } from '~/pages/con/utils';
 import { SectionHeader } from '~/pages/con/SectionHeader';
@@ -9,6 +9,7 @@ export const About = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
     const {event, tickets} = useConContent().content;
+    const venue = useConVenue();
 
     const facts = [
         {
@@ -19,7 +20,7 @@ export const About = () => {
         {
             icon: '📍',
             label: {en: 'Where', zh: '地点'},
-            value: `${t(event.venue.room)}, ${t(event.venue.name)}`,
+            value: t(venue?.name ?? VENUE_TBA),
         },
         {
             icon: '🎟️',

@@ -14,6 +14,7 @@
  * is code-only, because it is tied to files in public/ or to section anchors that
  * an admin cannot add. ROOM_ACCENTS is code-only for the same reason (each value
  * is a CSS class), but which rooms exist and which accent each wears is data.
+ * CON_NAME is code-only because the con's name does not change between editions.
  */
 
 import { BILIBILI_VIDEO } from '~/constants';
@@ -39,29 +40,26 @@ export const CON_SETTINGS: ConSettings = {
     published: false,
 };
 
-export interface ConVenue {
-    name: Localized
-    room: Localized
-    address: string
-    mapUrl: string
-}
+/** Shown in the hero, the navbar logo, and the footer. */
+export const CON_NAME: Localized = {en: 'Sekai Beyond Con', zh: '彼世界动漫游戏展'};
+
+/** Shown wherever the venue name goes while no venue is picked in the event details. */
+export const VENUE_TBA: Localized = {en: 'Venue TBA', zh: '场地待定'};
 
 export interface ConEvent {
     edition: number
-    name: Localized
     tagline: Localized
     intro: Localized
     /** Local time, no timezone suffix. */
     date: string
     endTime: string
-    doorsOpen: Localized
-    venue: ConVenue
+    /** A document in `venues`, managed in Admin → Locations. */
+    venueId: string
     ticketUrl: string
 }
 
 export const CON: ConEvent = {
     edition: 2026,
-    name: {en: 'Sekai Beyond Con', zh: '彼世界漫展'},
     tagline: {
         en: 'One day, one stage, every world you love.',
         zh: '一日一舞台，汇聚你所热爱的每一个世界。',
@@ -80,14 +78,9 @@ export const CON: ConEvent = {
      */
     date: '2026-11-14T11:00:00',
     endTime: '2026-11-14T20:00:00',
-    doorsOpen: {en: 'Doors open 11:00 AM', zh: '11:00 开场'},
 
-    venue: {
-        name: {en: 'Husky Union Building (HUB)', zh: '华盛顿大学学生活动中心 (HUB)'},
-        room: {en: 'HUB Ballroom + rooms 214 / 334 / 337', zh: 'HUB 宴会厅 + 214 / 334 / 337 教室'},
-        address: '4001 E Stevens Way NE, Seattle, WA 98195',
-        mapUrl: 'https://maps.google.com/?q=Husky+Union+Building+University+of+Washington',
-    },
+    /** Venue ids only exist in Firestore, so the page reads "TBA" until one is picked. */
+    venueId: '',
 
     /** PLACEHOLDER — swap for the real ticketing link. */
     ticketUrl: 'https://huskylink.washington.edu/organization/sekaibeyond',
@@ -136,7 +129,7 @@ export const NAV_LINKS: NavLink[] = [
 export const ABOUT_PARAGRAPHS: Localized[] = [
     {
         en: 'Sekai Beyond Con is our annual celebration of the worlds we grew up in — anime, comics, games, and the music that came with them. It started as a student-run afternoon of performances and has grown into a full day of stages, markets, and meetups open to everyone.',
-        zh: '彼世界漫展是我们一年一度的庆典，献给陪我们长大的那些世界——动漫、漫画、游戏，以及与之相伴的音乐。它最初只是学生自办的一个演出下午，如今已成长为面向所有人的整日舞台、市集与聚会。',
+        zh: '彼世界动漫游戏展是我们一年一度的庆典，献给陪我们长大的那些世界——动漫、漫画、游戏，以及与之相伴的音乐。它最初只是学生自办的一个演出下午，如今已成长为面向所有人的整日舞台、市集与聚会。',
     },
     {
         en: 'Everything you see is built by volunteers from the Sekai Beyond community: the stage crew, the artists in the marketplace, the cosplayers on stage, and the students running the door. Come for the line-up, stay for the people.',
@@ -570,7 +563,7 @@ export const FAQ: FaqEntry[] = [
         q: {en: 'Do I need to be a UW student to come?', zh: '一定要是 UW 学生才能参加吗？'},
         a: {
             en: 'No. Sekai Beyond Con is open to the public — students, alumni, families, and anyone visiting Seattle for the weekend.',
-            zh: '不需要。彼世界漫展面向公众开放——在校生、校友、家人，以及任何周末来到西雅图的朋友都欢迎。',
+            zh: '不需要。彼世界动漫游戏展面向公众开放——在校生、校友、家人，以及任何周末来到西雅图的朋友都欢迎。',
         },
     },
     {
