@@ -3,7 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveConContent, callUploadAdminImage } from '~/lib/firebase';
 import { type ConContent, type ConContentSection, refreshConContent, useConDraft, } from '~/lib/conContent';
 import { useVenues } from '~/lib/venues';
-import { ROOM_ACCENTS, type RoomAccent } from '~/pages/con/content';
+import { type EarlyBird, ROOM_ACCENTS, type RoomAccent } from '~/pages/con/content';
 import type { Localized } from '~/pages/con/i18n';
 import type { ShowToast } from './utils';
 import { ImageUploadField } from './ImageUploadField';
@@ -1147,6 +1147,47 @@ const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) =
     );
 };
 
+interface EarlyBirdFieldsProps {
+    earlyBird: EarlyBird;
+    onChange: (next: EarlyBird) => void;
+    readOnly?: boolean;
+}
+
+const EarlyBirdFields = ({earlyBird, onChange, readOnly}: EarlyBirdFieldsProps) => {
+    const {isEnglish} = useLanguage();
+    const ended = earlyBird.endsAt !== '' && new Date(earlyBird.endsAt).getTime() <= Date.now();
+
+    return (
+        <>
+            <LocalizedField
+                label={{en: 'Early bird price', zh: '早鸟价格'}}
+                value={earlyBird.price}
+                onChange={next => onChange({...earlyBird, price: next})}
+                readOnly={readOnly}
+            />
+            <label className="admin-form-grid-full">
+                <span>{isEnglish ? 'Early bird ends' : '早鸟截止时间'}</span>
+                <input
+                    className="admin-input"
+                    type="datetime-local"
+                    value={earlyBird.endsAt}
+                    onChange={e => !readOnly && onChange({...earlyBird, endsAt: e.target.value})}
+                    readOnly={readOnly}
+                />
+                <span className={`admin-helper-text admin-mt-4${ended ? ' admin-con-warning' : ''}`}>
+                    {ended
+                        ? (isEnglish
+                            ? 'This time has passed — visitors see only the regular price.'
+                            : '该时间已过，访客只会看到常规价格。')
+                        : (isEnglish
+                            ? 'Until then the card shows the early bird price, when it ends, and the regular price after. It switches over on its own.'
+                            : '截止前，卡片会显示早鸟价、截止时间以及之后的常规价格，到时自动切换。')}
+                </span>
+            </label>
+        </>
+    );
+};
+
 const TicketsSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('tickets', content.tickets, loading, showToast);
@@ -1191,11 +1232,35 @@ const TicketsSection = ({content, loading, showToast, readOnly}: SectionProps) =
                                 readOnly={readOnly}
                             />
                             <LocalizedField
-                                label={{en: 'Price', zh: '价格'}}
+                                label={tier.earlyBird
+                                    ? {en: 'Regular price', zh: '常规价格'}
+                                    : {en: 'Price', zh: '价格'}}
                                 value={tier.price}
                                 onChange={next => update(index, {...tier, price: next})}
                                 readOnly={readOnly}
                             />
+
+                            <label className="admin-checkbox-label admin-form-grid-full">
+                                <input
+                                    type="checkbox"
+                                    checked={!!tier.earlyBird}
+                                    onChange={e => !readOnly && update(index, {
+                                        ...tier,
+                                        earlyBird: e.target.checked ? {price: BLANK, endsAt: ''} : undefined,
+                                    })}
+                                    disabled={readOnly}
+                                />
+                                <span>{isEnglish ? 'Offer an early bird price' : '提供早鸟价'}</span>
+                            </label>
+
+                            {tier.earlyBird && (
+                                <EarlyBirdFields
+                                    earlyBird={tier.earlyBird}
+                                    onChange={next => update(index, {...tier, earlyBird: next})}
+                                    readOnly={readOnly}
+                                />
+                            )}
+
                             <LocalizedField
                                 label={{en: 'Note', zh: '说明'}}
                                 value={tier.note}

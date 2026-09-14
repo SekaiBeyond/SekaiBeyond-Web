@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react';
+import type { EarlyBird, TicketTier } from '~/pages/con/content';
 import type { ConLanguage } from '~/pages/con/i18n';
 
 const locales: Record<ConLanguage, string> = {en: 'en-US', zh: 'zh-CN'};
@@ -22,6 +23,21 @@ export const formatTimeRange = (startIso: string, endIso: string, lang: ConLangu
     const start = new Date(startIso).toLocaleTimeString(locales[lang], TIME_OPTIONS);
     const end = new Date(endIso).toLocaleTimeString(locales[lang], TIME_OPTIONS);
     return `${start} – ${end}`;
+};
+
+/** "Oct 1, 11:59 PM" / "10月1日 23:59" */
+export const formatDeadline = (iso: string, lang: ConLanguage) =>
+    new Date(iso).toLocaleString(locales[lang], {month: 'short', day: 'numeric', ...TIME_OPTIONS});
+
+/**
+ * The tier's early bird if it is still running at `now`, else null. An
+ * unparseable deadline reads as ended, so a bad date shows the regular price
+ * rather than a discount with "Invalid Date" beside it.
+ */
+export const activeEarlyBird = (tier: TicketTier, now: number): EarlyBird | null => {
+    if (!tier.earlyBird) return null;
+    const ends = new Date(tier.earlyBird.endsAt).getTime();
+    return Number.isFinite(ends) && now < ends ? tier.earlyBird : null;
 };
 
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;

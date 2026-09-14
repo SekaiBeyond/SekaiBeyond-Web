@@ -2,7 +2,8 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent, useConVenue } from '~/lib/conContent';
 import { ABOUT_PARAGRAPHS, HIGHLIGHTS, VENUE_TBA } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
-import { formatEventDate, formatTimeRange } from '~/pages/con/utils';
+import { useNowAcross } from '~/pages/con/hooks';
+import { activeEarlyBird, formatEventDate, formatTimeRange } from '~/pages/con/utils';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
 export const About = () => {
@@ -10,6 +11,7 @@ export const About = () => {
     const {currentLanguage} = useLanguage();
     const {event, tickets} = useConContent().content;
     const venue = useConVenue();
+    const now = useNowAcross(tickets.flatMap(tier => tier.earlyBird ? [tier.earlyBird.endsAt] : []));
 
     const facts = [
         {
@@ -29,7 +31,12 @@ export const About = () => {
             // section further down the same page.
             label: {en: 'Admission', zh: '入场'},
             value: tickets.length > 0
-                ? tickets.map(tier => `${t(tier.name)} ${t(tier.price)}`).join(' · ')
+                ? tickets.map(tier => {
+                    const earlyBird = activeEarlyBird(tier, now);
+                    return earlyBird
+                        ? `${t(tier.name)} ${t(earlyBird.price)}${t({en: ' (early bird)', zh: '（早鸟）'})}`
+                        : `${t(tier.name)} ${t(tier.price)}`;
+                }).join(' · ')
                 : t({en: 'See the tickets section below', zh: '详见下方门票板块'}),
         },
         {

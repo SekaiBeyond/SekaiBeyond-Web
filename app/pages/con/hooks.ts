@@ -83,6 +83,35 @@ export const useCountdown = (isoDate: string, endIsoDate: string): Countdown => 
     return countdown;
 };
 
+// setTimeout overflows past ~24.8 days and fires immediately, so longer waits
+// are taken in hops of this size.
+const MAX_TIMEOUT = 2 ** 31 - 1;
+
+/**
+ * The current time, re-read the moment each of `isoDates` passes and at no
+ * other time. Lets a page left open across an early bird deadline switch to the
+ * regular price without ticking every second to catch it.
+ */
+export const useNowAcross = (isoDates: string[]) => {
+    const [now, setNow] = useState(() => Date.now());
+    // Joined so a fresh array with the same dates does not reschedule the timer.
+    const key = isoDates.join('|');
+
+    useEffect(() => {
+        const next = Math.min(
+            ...key.split('|')
+                .map(iso => new Date(iso).getTime())
+                .filter(time => Number.isFinite(time) && time > now),
+        );
+        if (!Number.isFinite(next)) return;
+
+        const id = window.setTimeout(() => setNow(Date.now()), Math.min(next - now, MAX_TIMEOUT));
+        return () => window.clearTimeout(id);
+    }, [key, now]);
+
+    return now;
+};
+
 /** True once the page has scrolled past `offset` — used to solidify the con navbar. */
 export const useScrolledPast = (offset: number) => {
     const [passed, setPassed] = useState(false);

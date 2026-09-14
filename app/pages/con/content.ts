@@ -464,10 +464,22 @@ export const VENDOR_CTA: VendorCta = {
 
 // Tickets — PLACEHOLDER pricing
 
+/**
+ * A cheaper price that holds until `endsAt`, a zoneless `YYYY-MM-DDTHH:MM` read
+ * in the viewer's clock like the event's own date. After it passes, the page
+ * shows the tier's regular `price` on its own.
+ */
+export interface EarlyBird {
+    price: Localized
+    endsAt: string
+}
+
 export interface TicketTier {
     id: string
     name: Localized
+    /** The regular price — what the tier costs once any early bird has ended. */
     price: Localized
+    earlyBird?: EarlyBird
     note: Localized
     perks: Localized[]
     featured?: boolean

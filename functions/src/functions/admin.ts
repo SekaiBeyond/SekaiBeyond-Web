@@ -553,16 +553,40 @@ function buildConVendors(raw: unknown) {
 
 function buildConTickets(raw: unknown) {
     const seen = new Set<string>();
-    return validateConArray(raw, "tickets", CON_LIMITS.tickets).map((tier, i) => ({
-        id: uniqueConId(tier.id, `tier-${i + 1}`, seen, "tier id"),
-        name: validateLocalized(tier.name, "tier name", 120, true),
-        price: validateLocalized(tier.price, "tier price", 60),
-        note: validateLocalized(tier.note, "tier note", 300),
-        perks: validateConArray(tier.perks, "tier perks", CON_LIMITS.perks)
-            .map(perk => validateLocalized(perk, "perk", 200))
-            .filter(perk => perk.en || perk.zh),
-        featured: tier.featured === true,
-    }));
+    return validateConArray(raw, "tickets", CON_LIMITS.tickets).map((tier, i) => {
+        const name = validateLocalized(tier.name, "tier name", 120, true);
+
+        // The page tells visitors what the tier costs once the early bird ends,
+        // so an early bird is all-or-nothing: its own price, a deadline, and a
+        // regular price to fall back to. A half-filled one is a form mistake.
+        const hasEarlyBird = tier.earlyBird !== undefined && tier.earlyBird !== null;
+        const price = validateLocalized(
+            tier.price,
+            hasEarlyBird ? `${name.en} regular price` : "tier price",
+            60,
+            hasEarlyBird,
+        );
+        let earlyBird: {price: LocalizedText; endsAt: string} | undefined;
+        if (hasEarlyBird) {
+            const e = typeof tier.earlyBird === "object" ? tier.earlyBird as Record<string, unknown> : {};
+            earlyBird = {
+                price: validateLocalized(e.price, `${name.en} early bird price`, 60, true),
+                endsAt: requireISODate(e.endsAt, `${name.en} early bird end`),
+            };
+        }
+
+        return {
+            id: uniqueConId(tier.id, `tier-${i + 1}`, seen, "tier id"),
+            name,
+            price,
+            ...(earlyBird ? {earlyBird} : {}),
+            note: validateLocalized(tier.note, "tier note", 300),
+            perks: validateConArray(tier.perks, "tier perks", CON_LIMITS.perks)
+                .map(perk => validateLocalized(perk, "perk", 200))
+                .filter(perk => perk.en || perk.zh),
+            featured: tier.featured === true,
+        };
+    });
 }
 
 function buildConFaq(raw: unknown) {

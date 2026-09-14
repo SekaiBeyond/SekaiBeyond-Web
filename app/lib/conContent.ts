@@ -8,6 +8,7 @@ import {
     CON_SETTINGS,
     type ConEvent,
     type ConSettings,
+    type EarlyBird,
     FAQ,
     type FaqEntry,
     type Guest,
@@ -170,11 +171,22 @@ const readVendors = (raw: unknown): ConContent['vendors'] => {
     };
 };
 
+const readEarlyBird = (raw: unknown): EarlyBird | undefined => {
+    const e = obj(raw);
+    const endsAt = optStr(e.endsAt);
+    // A deadline is what makes it an early bird. Without one there is nothing
+    // to say about when the price changes, so the tier reads as regular-priced.
+    return endsAt ? {price: loc(e.price), endsAt} : undefined;
+};
+
 const readTickets = (raw: unknown): TicketTier[] =>
     list(raw, TICKETS, tier => ({
         id: str(tier.id),
         name: loc(tier.name),
         price: loc(tier.price),
+        // Always present, even when undefined, so the key sits in the same place
+        // as in the editor's draft — its dirty check compares JSON strings.
+        earlyBird: readEarlyBird(tier.earlyBird),
         note: loc(tier.note),
         perks: Array.isArray(tier.perks) ? tier.perks.map(perk => loc(perk)) : [],
         featured: tier.featured === true,
