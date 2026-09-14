@@ -39,10 +39,11 @@ interface PassportDetailProps {
  * One passport's page: who holds it, how it has been scanned, and its permanent
  * audit trail.
  *
- * The only actions are for stock that has never been sold — view its key slip,
- * reissue it, or void the passport. A claimed passport has no controls at all:
- * the binding is permanent by design, and membership it granted is adjusted
- * through the user's membership row, not from here.
+ * Any passport that isn't void can have its key slip viewed. The only other
+ * actions are for stock that has never been sold — reissue the slip, or void the
+ * passport. A claimed passport has no controls beyond viewing its key: the
+ * binding is permanent by design, and membership it granted is adjusted through
+ * the user's membership row, not from here.
  */
 export const PassportDetail = ({
                                    passportId,
@@ -241,6 +242,7 @@ export const PassportDetail = ({
 
     const locked = !!passport.lockedUntil && passport.lockedUntil.getTime() > Date.now();
     const unclaimed = passport.status === 'unclaimed';
+    const keyViewable = !readOnly && passport.status !== 'void';
 
     return (
         <div className="admin-section">
@@ -338,10 +340,12 @@ export const PassportDetail = ({
                                 )}
                             </dd>
                         </div>
-                        <div>
-                            <dt>{isEnglish ? 'Activated' : '激活时间'}</dt>
-                            <dd>{passport.claimedAt ? fmtDate(passport.claimedAt) : (isEnglish ? '—' : '—')}</dd>
-                        </div>
+                        {passport.claimedAt && (
+                            <div>
+                                <dt>{isEnglish ? 'Activated' : '激活时间'}</dt>
+                                <dd>{fmtDate(passport.claimedAt)}</dd>
+                            </div>
+                        )}
                         <div>
                             <dt>{isEnglish ? 'Generated' : '生成时间'}</dt>
                             <dd>
@@ -352,7 +356,7 @@ export const PassportDetail = ({
                         <div>
                             <dt>
                                 {isEnglish ? 'Key slip' : '激活码纸条'}
-                                {!readOnly && unclaimed && (
+                                {keyViewable && (
                                     <button
                                         type="button"
                                         className="admin-qr-row-edit"
@@ -373,11 +377,13 @@ export const PassportDetail = ({
                                         : (isEnglish
                                             ? `Issued ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · reissued ${passport.keyReissueCount}×` : ''}`
                                             : `签发于 ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · 已重新签发 ${passport.keyReissueCount} 次` : ''}`)}
-                                {!readOnly && unclaimed && (
-                                    <div className="admin-passport-key-secret">
-                                        {keyShown && key ? key : MASKED_KEY}
+                                {keyViewable && (keyShown && key ? (
+                                    <div className="admin-passport-key-secret">{key}</div>
+                                ) : (
+                                    <div className="admin-passport-key-secret admin-passport-key-secret--masked">
+                                        {MASKED_KEY}
                                     </div>
-                                )}
+                                ))}
                             </dd>
                         </div>
                         {locked && passport.lockedUntil && (
@@ -394,7 +400,9 @@ export const PassportDetail = ({
 
             {!readOnly && (
                 <div className="admin-field-section admin-qr-section">
-                    <span className="admin-field-label">{isEnglish ? 'History' : '历史记录'}</span>
+                    <div className="admin-qr-spot-header">
+                        <span className="admin-field-label">{isEnglish ? 'History' : '历史记录'}</span>
+                    </div>
                     {claims === null ? (
                         <div className="spinner spinner-centered"/>
                     ) : claims.length === 0 ? (
@@ -439,7 +447,7 @@ export const PassportDetail = ({
                 </div>
             )}
             {!readOnly && passport.status === 'claimed' && (
-                <p className="admin-helper-text admin-field-hint">
+                <p className="admin-helper-text admin-passport-bound-note">
                     {isEnglish
                         ? 'A claimed passport is permanently bound to its holder: it can’t be unbound, rebound, or voided. To adjust what it granted, edit the holder’s membership in Users Management.'
                         : '已激活的通行证与持有者永久绑定：无法解绑、转绑或作废。若需调整其授予的会员资格，请在用户管理中修改该用户的会员期限。'}

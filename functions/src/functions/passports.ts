@@ -186,9 +186,11 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
 });
 
 /**
- * Serve an unclaimed passport's current key, to reprint its slip. Every call is
- * written to the passport's trail and to records: the key is what makes an
- * unsold passport worth stealing, so who has looked at it is part of its history.
+ * Serve a passport's current key: an unclaimed one's to reprint its slip, a
+ * claimed one's to check the key it was activated with. A void passport's key is
+ * discarded with it. Every call is written to the passport's trail and to
+ * records: the key is what makes an unsold passport worth stealing, so who has
+ * looked at it is part of its history.
  */
 export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -204,20 +206,16 @@ export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
         const [snap, secretSnap] = await Promise.all([txn.get(ref), txn.get(secretRef)]);
         if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
         const status = snap.data()?.status;
-        if (status !== "unclaimed") {
-            throw new HttpsError(
-                "failed-precondition",
-                status === "claimed"
-                    ? "This passport has already been claimed; its key is spent."
-                    : "This passport is void.",
-                {code: status === "claimed" ? "already-claimed" : "void"},
-            );
+        if (status === "void") {
+            throw new HttpsError("failed-precondition", "This passport is void.", {code: "void"});
         }
         const stored = secretSnap.data()?.key;
         if (typeof stored !== "string") {
             throw new HttpsError(
                 "failed-precondition",
-                "No viewable key is on file for this passport. Reissue its key slip to get one.",
+                status === "claimed"
+                    ? "No viewable key is on file for this passport."
+                    : "No viewable key is on file for this passport. Reissue its key slip to get one.",
                 {code: "no-key"},
             );
         }
@@ -331,9 +329,10 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
             membershipExpiresAt,
             membershipStartedAt: membershipStartedAt ?? FieldValue.delete(),
         });
-        // The key has done its one job and the binding is permanent, so it and
-        // its hash are deleted rather than left sitting in the database.
-        txn.delete(secretRef);
+        // The binding is permanent, so the hash has done its one job and is
+        // dropped. The key stays so an admin can still look up what was on the
+        // slip (revealPassportKey).
+        txn.update(secretRef, {salt: FieldValue.delete(), secretHash: FieldValue.delete()});
         txn.set(passportRef.collection("claims").doc(), {
             action: "claim",
             uid,
