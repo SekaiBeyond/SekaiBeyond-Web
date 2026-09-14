@@ -7,6 +7,7 @@ import { ROOM_ACCENTS, type RoomAccent } from '~/pages/con/content';
 import type { Localized } from '~/pages/con/i18n';
 import type { ShowToast } from './utils';
 import { ImageUploadField } from './ImageUploadField';
+import { SectionNav } from './SectionNav';
 
 /**
  * Editor for the public /con page's copy. Everything here is stored in
@@ -34,6 +35,11 @@ const SECTION_LABELS: Record<ConContentSection, Localized> = {
     tickets: {en: 'Tickets', zh: '门票'},
     faq: {en: 'FAQ', zh: '常见问题'},
 };
+
+/** The section navigator's order — keep it matching the order ConContentTab renders them in. */
+const SECTION_ORDER: ConContentSection[] = ['settings', 'event', 'rooms', 'schedule', 'guests', 'vendors', 'tickets', 'faq'];
+
+const conSectionId = (section: ConContentSection) => `admin-sec-con-${section}`;
 
 const BLANK: Localized = {en: '', zh: ''};
 
@@ -149,7 +155,7 @@ const SectionShell = <K extends ConContentSection, >(
     const label = SECTION_LABELS[section];
 
     return (
-        <div className="admin-section">
+        <div id={conSectionId(section)} className="admin-section">
             <h3 className="admin-badges-title">
                 {isEnglish ? label.en : label.zh}
                 {editor.dirty && !readOnly && (
@@ -1396,6 +1402,13 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
             <TicketsSection {...sectionProps}/>
             <div className="admin-divider"/>
             <FaqSection {...sectionProps}/>
+
+            <SectionNav
+                sections={SECTION_ORDER.map(section => ({
+                    id: conSectionId(section),
+                    label: isEnglish ? SECTION_LABELS[section].en : SECTION_LABELS[section].zh,
+                }))}
+            />
         </>
     );
 };

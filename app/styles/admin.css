@@ -1604,35 +1604,12 @@
 }
 
 .admin-section-header {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
     padding: 8px 4px;
-    min-height: 44px;
-    background: none;
-    border: none;
     margin-bottom: 14px;
-    cursor: pointer;
-    text-align: left;
-    font-family: inherit;
-}
-
-.admin-section-header-title {
+    color: var(--color-text);
     font-size: 18px;
     font-weight: 700;
-    color: var(--color-text);
-}
-
-.admin-section-chevron {
-    font-size: 22px;
-    color: var(--color-text-muted);
-    transform: rotate(-90deg);
-    transition: transform 0.25s ease;
-    line-height: 1;
-}
-
-.admin-section-chevron-open {
-    transform: rotate(0deg);
+    line-height: 28px;
 }
 
 .admin-tag-card {
@@ -4796,5 +4773,190 @@ select.admin-tickets-tag:focus {
 
     .admin-passport-designs {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+}
+
+/* ==========================================================================
+   Section navigator — a floating previous / jump-to / next pill for tabs that
+   stack several long sections (Events, Locations, Site Config, Con Content).
+   Sits under modals (z-index 1000+) and clear of the toasts in the top right.
+   ========================================================================== */
+
+.admin-secnav-spacer {
+    height: 40px;
+}
+
+.admin-secnav {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    max-width: calc(100vw - 48px);
+    padding: 4px;
+    border: var(--admin-field-border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(8px);
+    box-shadow: var(--shadow-card);
+}
+
+.admin-secnav-step {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-secnav-step svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.admin-secnav-step:hover:not(:disabled) {
+    background: rgba(255, 107, 157, 0.1);
+    color: var(--color-primary);
+}
+
+.admin-secnav-step:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.admin-secnav-current {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 36px;
+    padding: 0 12px;
+    border: none;
+    border-radius: 999px;
+    background: none;
+    color: var(--color-text);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-secnav-current:hover,
+.admin-secnav-current[aria-expanded="true"] {
+    background: rgba(255, 107, 157, 0.1);
+    color: var(--color-primary);
+}
+
+.admin-secnav-label {
+    max-width: 180px;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.admin-secnav-count {
+    flex: 0 0 auto;
+    color: var(--color-text-light);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-secnav-caret {
+    flex: 0 0 auto;
+    color: var(--color-text-light);
+    font-size: 12px;
+    line-height: 1;
+    transition: transform 0.25s ease;
+}
+
+.admin-secnav-caret-open {
+    transform: rotate(180deg);
+}
+
+.admin-secnav-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    min-width: 220px;
+    max-width: calc(100vw - 48px);
+    max-height: min(60vh, 420px);
+    overflow-y: auto;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    border: var(--admin-field-border);
+    border-radius: 16px;
+    background: white;
+    box-shadow: var(--shadow-hover);
+}
+
+.admin-secnav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 12px;
+    border: none;
+    border-radius: 10px;
+    background: none;
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-secnav-item:hover {
+    background: rgba(255, 107, 157, 0.08);
+    color: var(--color-primary);
+}
+
+.admin-secnav-item[aria-current="true"] {
+    background: var(--color-primary);
+    color: white;
+}
+
+.admin-secnav-item-num {
+    flex: 0 0 auto;
+    min-width: 16px;
+    color: var(--color-text-light);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-secnav-item[aria-current="true"] .admin-secnav-item-num {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+@media (max-width: 600px) {
+    .admin-secnav {
+        right: max(16px, env(safe-area-inset-right));
+        bottom: max(16px, env(safe-area-inset-bottom));
+        max-width: calc(100vw - 32px);
+    }
+
+    .admin-secnav-menu {
+        max-width: calc(100vw - 32px);
+    }
+
+    .admin-secnav-label {
+        max-width: 140px;
     }
 }

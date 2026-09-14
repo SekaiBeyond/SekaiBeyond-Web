@@ -58,7 +58,13 @@ export const PassportDesignsSection = ({
     const remove = async (design: PassportDesign) => {
         const name = passportName(design, isEnglish);
         if (!window.confirm(isEnglish
-            ? `Delete the ${design.year} design “${name}”? This is only possible while no passports have been generated from it.`
+            ? `Delete
+                the
+                ${design.year}
+                design
+                “
+                ${name}
+                ”? This is only possible while no passports have been generated from it.`
             : `删除 ${design.year} 年的设计「${name}」？仅在尚未用它生成通行证时可删除。`)) return;
         setDeletingId(design.id);
         try {

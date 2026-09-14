@@ -6,6 +6,7 @@ import { usePolicy } from '~/lib/policy';
 import { BILIBILI_VIDEO } from '~/constants';
 import { TeamSection } from './TeamSection';
 import { ConEditionSection } from './ConEditionSection';
+import { SectionNav } from './SectionNav';
 
 interface SiteConfigTabProps {
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
@@ -94,7 +95,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
     return (
         <>
-            <div className="admin-section">
+            <div id="admin-sec-video" className="admin-section">
                 <h3 className="admin-badges-title">
                     {isEnglish ? 'Featured Video' : '精选视频'}
                 </h3>
@@ -152,17 +153,20 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
             <div className="admin-divider"/>
 
-            <TeamSection refreshConfig={refreshConfig} showToast={showToast} readOnly={readOnly}/>
+            <div id="admin-sec-team">
+                <TeamSection refreshConfig={refreshConfig} showToast={showToast} readOnly={readOnly}/>
+            </div>
 
             <div className="admin-divider"/>
 
-            <ConEditionSection conEdition={config.conEdition} refreshConfig={refreshConfig} showToast={showToast}
-                               readOnly={readOnly}/>
+            <div id="admin-sec-con-edition">
+                <ConEditionSection conEdition={config.conEdition} refreshConfig={refreshConfig}
+                                   showToast={showToast} readOnly={readOnly}/>
+            </div>
 
             <div className="admin-divider"/>
 
-
-            <div className="admin-section">
+            <div id="admin-sec-policy" className="admin-section">
                 <h3 className="admin-badges-title">
                     {isEnglish ? 'Policy Content' : '政策内容'}
                 </h3>
@@ -207,6 +211,15 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                     </div>
                 )}
             </div>
+
+            <SectionNav
+                sections={[
+                    {id: 'admin-sec-video', label: isEnglish ? 'Featured Video' : '精选视频'},
+                    {id: 'admin-sec-team', label: isEnglish ? 'Our Team' : '我们的团队'},
+                    {id: 'admin-sec-con-edition', label: isEnglish ? 'Sekai Beyond Con' : '彼世界动漫游戏展'},
+                    {id: 'admin-sec-policy', label: isEnglish ? 'Policy Content' : '政策内容'},
+                ]}
+            />
         </>
     );
 };

@@ -28,6 +28,7 @@ import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
 import { ConContentTab } from './ConContentTab';
+import { SectionNav } from './SectionNav';
 import type { CardHighlightHandle, LocationListHandle } from './useCardHighlight';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
 
@@ -71,13 +72,6 @@ export const AdminPage = () => {
     };
     const [upcomingInDetail, setUpcomingInDetail] = useState(false);
     const [eventsInDetail, setEventsInDetail] = useState(false);
-    const [upcomingOpen, setUpcomingOpen] = useState(true);
-    const [pastOpen, setPastOpen] = useState(true);
-    const [tagsOpen, setTagsOpen] = useState(true);
-    const [locationsMapOpen, setLocationsMapOpen] = useState(true);
-    const [venuesOpen, setVenuesOpen] = useState(true);
-    const [parkingLotsOpen, setParkingLotsOpen] = useState(true);
-    const [parkingRatesOpen, setParkingRatesOpen] = useState(true);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
     const [badgeDefsError, setBadgeDefsError] = useState(false);
     const {toasts, showToast} = useToasts();
@@ -96,8 +90,8 @@ export const AdminPage = () => {
     const venuesTabRef = useRef<LocationListHandle>(null);
     const parkingLotsTabRef = useRef<LocationListHandle>(null);
     const parkingRatesTabRef = useRef<CardHighlightHandle>(null);
-    // Cross-tab/section "jump to this card" requests. Held in state (not a ref) with a
-    // nonce so the effect below fires after the target tab/section has mounted — and
+    // Cross-tab "jump to this card" requests. Held in state (not a ref) with a
+    // nonce so the effect below fires after the target tab has mounted — and
     // re-fires even when the target tab is already active (e.g. map → list jumps).
     const actionNonce = useRef(0);
     const [pendingAction, setPendingAction] = useState<{type: string; id: string; nonce: number} | null>(null);
@@ -213,47 +207,40 @@ export const AdminPage = () => {
 
     const handleSelectEvent = useCallback((eventId: string) => {
         setActiveTab('events');
-        setPastOpen(true);
         queueAction('selectEvent', eventId);
     }, [queueAction]);
 
     const handleSelectUpcomingEvent = useCallback((eventId: string) => {
         setActiveTab('events');
-        setUpcomingOpen(true);
         queueAction('selectUpcomingEvent', eventId);
     }, [queueAction]);
 
     const handleSelectVenue = useCallback((venueId: string) => {
         setActiveTab('locations');
-        setVenuesOpen(true);
         queueAction('selectVenue', venueId);
     }, [queueAction]);
 
     const handleSelectParkingLot = useCallback((lotId: string) => {
         setActiveTab('locations');
-        setParkingLotsOpen(true);
         queueAction('selectParkingLot', lotId);
     }, [queueAction]);
 
     const handleSelectParkingRate = useCallback((rateId: string) => {
         setActiveTab('locations');
-        setParkingRatesOpen(true);
         queueAction('selectParkingRate', rateId);
     }, [queueAction]);
 
     const handleEditVenue = useCallback((venueId: string) => {
         setActiveTab('locations');
-        setVenuesOpen(true);
         queueAction('editVenue', venueId);
     }, [queueAction]);
 
     const handleEditParkingLot = useCallback((lotId: string) => {
         setActiveTab('locations');
-        setParkingLotsOpen(true);
         queueAction('editParkingLot', lotId);
     }, [queueAction]);
 
-    // Execute pending jump actions after the target tab/section mounts (same commit:
+    // Execute pending jump actions after the target tab mounts (same commit:
     // card refs register during mount, then this effect runs and can scroll to them).
     useEffect(() => {
         const action = pendingAction;
@@ -419,93 +406,73 @@ export const AdminPage = () => {
 
                 {activeTab === 'events' && (
                     <>
-                        <div style={eventsInDetail ? {display: 'none'} : undefined}>
+                        <div id="admin-sec-upcoming" style={eventsInDetail ? {display: 'none'} : undefined}>
                             {!upcomingInDetail && (
-                                <button
-                                    className="admin-section-header"
-                                    onClick={() => setUpcomingOpen(v => !v)}
-                                >
-                                    <span className="admin-section-header-title">
-                                        {isEnglish ? 'Upcoming Events' : '活动预告'}
-                                    </span>
-                                    <span
-                                        className={`admin-section-chevron${upcomingOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
-                                </button>
+                                <h2 className="admin-section-header">
+                                    {isEnglish ? 'Upcoming Events' : '活动预告'}
+                                </h2>
                             )}
-                            <div style={!upcomingOpen && !upcomingInDetail ? {display: 'none'} : undefined}>
-                                <UpcomingEventsTab
-                                    ref={upcomingTabRef}
-                                    upcomingEvents={upcomingEvents}
-                                    refreshEvents={refreshUpcoming}
-                                    refreshPastEvents={refreshEvents}
-                                    tags={tags}
-                                    showToast={showToast}
-                                    readOnly={!isCoreStaffOrAbove}
-                                    eventStaffEvents={profile.eventStaffEvents}
-                                    onDetailChange={setUpcomingInDetail}
-                                />
-                            </div>
+                            <UpcomingEventsTab
+                                ref={upcomingTabRef}
+                                upcomingEvents={upcomingEvents}
+                                refreshEvents={refreshUpcoming}
+                                refreshPastEvents={refreshEvents}
+                                tags={tags}
+                                showToast={showToast}
+                                readOnly={!isCoreStaffOrAbove}
+                                eventStaffEvents={profile.eventStaffEvents}
+                                onDetailChange={setUpcomingInDetail}
+                            />
                         </div>
                         {(isCoreStaffOrAbove || isStaffGroup) && (
-                            <div style={upcomingInDetail ? {display: 'none'} : undefined}>
+                            <div id="admin-sec-past" style={upcomingInDetail ? {display: 'none'} : undefined}>
                                 {!eventsInDetail && (
-                                    <button
-                                        className="admin-section-header admin-section-mt"
-                                        onClick={() => setPastOpen(v => !v)}
-                                    >
-                                        <span className="admin-section-header-title">
-                                            {isEnglish ? 'Past Events' : '往期活动'}
-                                        </span>
-                                        <span
-                                            className={`admin-section-chevron${pastOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
-                                    </button>
+                                    <h2 className="admin-section-header admin-section-mt">
+                                        {isEnglish ? 'Past Events' : '往期活动'}
+                                    </h2>
                                 )}
-                                <div style={!pastOpen && !eventsInDetail ? {display: 'none'} : undefined}>
-                                    <EventsTab
-                                        ref={eventsTabRef}
-                                        pastEvents={pastEvents}
-                                        refreshEvents={refreshEvents}
-                                        tags={tags}
-                                        showToast={showToast}
-                                        onDetailChange={setEventsInDetail}
-                                        readOnly={isStaffGroup}
-                                    />
-                                </div>
+                                <EventsTab
+                                    ref={eventsTabRef}
+                                    pastEvents={pastEvents}
+                                    refreshEvents={refreshEvents}
+                                    tags={tags}
+                                    showToast={showToast}
+                                    onDetailChange={setEventsInDetail}
+                                    readOnly={isStaffGroup}
+                                />
                             </div>
                         )}
                         {(isCoreStaffOrAbove || isStaffGroup) && !upcomingInDetail && !eventsInDetail && (
-                            <div>
-                                <button
-                                    className="admin-section-header admin-section-mt"
-                                    onClick={() => setTagsOpen(v => !v)}
-                                >
-                                    <span className="admin-section-header-title">
-                                        {isEnglish ? 'Tags' : '标签'}
-                                    </span>
-                                    <span
-                                        className={`admin-section-chevron${tagsOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
-                                </button>
-                                {tagsOpen && <TagsTab tags={tags} refreshTags={refreshTags} showToast={showToast}
-                                                      readOnly={isStaffGroup}/>}
+                            <div id="admin-sec-tags">
+                                <h2 className="admin-section-header admin-section-mt">
+                                    {isEnglish ? 'Tags' : '标签'}
+                                </h2>
+                                <TagsTab tags={tags} refreshTags={refreshTags} showToast={showToast}
+                                         readOnly={isStaffGroup}/>
                             </div>
+                        )}
+                        {/* An open event's detail view is the only thing on screen. */}
+                        {!upcomingInDetail && !eventsInDetail && (
+                            <SectionNav
+                                sections={[
+                                    {id: 'admin-sec-upcoming', label: isEnglish ? 'Upcoming Events' : '活动预告'},
+                                    ...(isCoreStaffOrAbove || isStaffGroup ? [
+                                        {id: 'admin-sec-past', label: isEnglish ? 'Past Events' : '往期活动'},
+                                        {id: 'admin-sec-tags', label: isEnglish ? 'Tags' : '标签'},
+                                    ] : []),
+                                ]}
+                            />
                         )}
                     </>
                 )}
 
                 {activeTab === 'locations' && (isCoreStaffOrAbove || isStaffGroup) && (
                     <>
-                        <div>
-                            <button
-                                className="admin-section-header"
-                                onClick={() => setLocationsMapOpen(v => !v)}
-                            >
-                                <span className="admin-section-header-title">
-                                    {isEnglish ? 'Overview Map' : '总览地图'}
-                                </span>
-                                <span
-                                    className={`admin-section-chevron${locationsMapOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
-                            </button>
-                            {locationsMapOpen && <LocationsMap
+                        <div id="admin-sec-map">
+                            <h2 className="admin-section-header">
+                                {isEnglish ? 'Overview Map' : '总览地图'}
+                            </h2>
+                            <LocationsMap
                                 venues={venues}
                                 parkingLots={parkingLots}
                                 parkingRates={parkingRates}
@@ -514,60 +481,39 @@ export const AdminPage = () => {
                                 onEditVenue={handleEditVenue}
                                 onEditLot={handleEditParkingLot}
                                 readOnly={isStaffGroup}
-                            />}
+                            />
                         </div>
-                        <div>
-                            <button
-                                className="admin-section-header admin-section-mt"
-                                onClick={() => setVenuesOpen(v => !v)}
-                            >
-                                <span className="admin-section-header-title">
-                                    {isEnglish ? 'Venues' : '场地'}
-                                </span>
-                                <span
-                                    className={`admin-section-chevron${venuesOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
-                            </button>
-                            {venuesOpen && <VenuesTab
+                        <div id="admin-sec-venues">
+                            <h2 className="admin-section-header admin-section-mt">
+                                {isEnglish ? 'Venues' : '场地'}
+                            </h2>
+                            <VenuesTab
                                 ref={venuesTabRef}
                                 venues={venues}
                                 parkingLots={parkingLots}
                                 refreshVenues={refreshVenues}
                                 showToast={showToast}
                                 readOnly={isStaffGroup}
-                            />}
+                            />
                         </div>
-                        <div>
-                            <button
-                                className="admin-section-header admin-section-mt"
-                                onClick={() => setParkingRatesOpen(v => !v)}
-                            >
-                                <span className="admin-section-header-title">
-                                    {isEnglish ? 'Parking Rates' : '停车费率'}
-                                </span>
-                                <span
-                                    className={`admin-section-chevron${parkingRatesOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
-                            </button>
-                            {parkingRatesOpen && <ParkingRatesTab
+                        <div id="admin-sec-parking-rates">
+                            <h2 className="admin-section-header admin-section-mt">
+                                {isEnglish ? 'Parking Rates' : '停车费率'}
+                            </h2>
+                            <ParkingRatesTab
                                 ref={parkingRatesTabRef}
                                 parkingRates={parkingRates}
                                 refreshParkingRates={refreshParkingRates}
                                 refreshParkingLots={refreshParkingLots}
                                 showToast={showToast}
                                 readOnly={isStaffGroup}
-                            />}
+                            />
                         </div>
-                        <div>
-                            <button
-                                className="admin-section-header admin-section-mt"
-                                onClick={() => setParkingLotsOpen(v => !v)}
-                            >
-                                <span className="admin-section-header-title">
-                                    {isEnglish ? 'Parking Lots' : '停车场'}
-                                </span>
-                                <span
-                                    className={`admin-section-chevron${parkingLotsOpen ? ' admin-section-chevron-open' : ''}`}>▾</span>
-                            </button>
-                            {parkingLotsOpen && <ParkingLotsTab
+                        <div id="admin-sec-parking-lots">
+                            <h2 className="admin-section-header admin-section-mt">
+                                {isEnglish ? 'Parking Lots' : '停车场'}
+                            </h2>
+                            <ParkingLotsTab
                                 ref={parkingLotsTabRef}
                                 parkingLots={parkingLots}
                                 parkingRates={parkingRates}
@@ -575,8 +521,16 @@ export const AdminPage = () => {
                                 refreshVenues={refreshVenues}
                                 showToast={showToast}
                                 readOnly={isStaffGroup}
-                            />}
+                            />
                         </div>
+                        <SectionNav
+                            sections={[
+                                {id: 'admin-sec-map', label: isEnglish ? 'Overview Map' : '总览地图'},
+                                {id: 'admin-sec-venues', label: isEnglish ? 'Venues' : '场地'},
+                                {id: 'admin-sec-parking-rates', label: isEnglish ? 'Parking Rates' : '停车费率'},
+                                {id: 'admin-sec-parking-lots', label: isEnglish ? 'Parking Lots' : '停车场'},
+                            ]}
+                        />
                     </>
                 )}
 
