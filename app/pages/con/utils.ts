@@ -30,6 +30,20 @@ export const formatDeadline = (iso: string, lang: ConLanguage) =>
     new Date(iso).toLocaleString(locales[lang], {month: 'short', day: 'numeric', ...TIME_OPTIONS});
 
 /**
+ * 10 → "$10", 12.5 → "$12.50", 0 → "Free" / "免费". Cents only show when there
+ * are some, and `narrowSymbol` keeps zh-CN at "$" rather than "US$".
+ */
+export const formatPrice = (price: number, lang: ConLanguage) => {
+    if (price === 0) return lang === 'en' ? 'Free' : '免费';
+    return price.toLocaleString(locales[lang], {
+        style: 'currency',
+        currency: 'USD',
+        currencyDisplay: 'narrowSymbol',
+        minimumFractionDigits: Number.isInteger(price) ? 0 : 2,
+    });
+};
+
+/**
  * The tier's early bird if it is still running at `now`, else null. An
  * unparseable deadline reads as ended, so a bad date shows the regular price
  * rather than a discount with "Invalid Date" beside it.

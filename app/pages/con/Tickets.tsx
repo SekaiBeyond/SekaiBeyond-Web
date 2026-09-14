@@ -3,7 +3,7 @@ import { useConContent } from '~/lib/conContent';
 import { useNowAcross } from '~/pages/con/hooks';
 import { useT } from '~/pages/con/i18n';
 import { SectionHeader } from '~/pages/con/SectionHeader';
-import { activeEarlyBird, formatDeadline } from '~/pages/con/utils';
+import { activeEarlyBird, formatDeadline, formatPrice } from '~/pages/con/utils';
 
 export const Tickets = () => {
     const t = useT();
@@ -46,17 +46,17 @@ export const Tickets = () => {
                                     <span className="sbc-ticket-earlybird-tag">
                                         {t({en: 'Early bird', zh: '早鸟价'})}
                                     </span>
-                                    <p className="sbc-ticket-price">{t(earlyBird.price)}</p>
+                                    <p className="sbc-ticket-price">{formatPrice(earlyBird.price, currentLanguage)}</p>
                                     <p className="sbc-ticket-earlybird">
                                         {t({en: 'Ends', zh: '截止于'})}{' '}
                                         <time
                                             dateTime={earlyBird.endsAt}>{formatDeadline(earlyBird.endsAt, currentLanguage)}</time>
                                         {t({en: ' — then ', zh: '，之后为 '})}
-                                        <strong>{t(tier.price)}</strong>
+                                        <strong>{formatPrice(tier.price, currentLanguage)}</strong>
                                     </p>
                                 </>
                             ) : (
-                                <p className="sbc-ticket-price">{t(tier.price)}</p>
+                                <p className="sbc-ticket-price">{formatPrice(tier.price, currentLanguage)}</p>
                             )}
 
                             <p className="sbc-ticket-note">{t(tier.note)}</p>

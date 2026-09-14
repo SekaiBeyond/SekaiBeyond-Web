@@ -3,7 +3,7 @@ import { useConContent, useConVenue } from '~/lib/conContent';
 import { ABOUT_PARAGRAPHS, HIGHLIGHTS, VENUE_TBA } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { useNowAcross } from '~/pages/con/hooks';
-import { activeEarlyBird, formatEventDate, formatTimeRange } from '~/pages/con/utils';
+import { activeEarlyBird, formatEventDate, formatPrice, formatTimeRange } from '~/pages/con/utils';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
 export const About = () => {
@@ -34,8 +34,11 @@ export const About = () => {
                 ? tickets.map(tier => {
                     const earlyBird = activeEarlyBird(tier, now);
                     return earlyBird
-                        ? `${t(tier.name)} ${t(earlyBird.price)}${t({en: ' (early bird)', zh: '（早鸟）'})}`
-                        : `${t(tier.name)} ${t(tier.price)}`;
+                        ? `${t(tier.name)} ${formatPrice(earlyBird.price, currentLanguage)}${t({
+                            en: ' (early bird)',
+                            zh: '（早鸟）'
+                        })}`
+                        : `${t(tier.name)} ${formatPrice(tier.price, currentLanguage)}`;
                 }).join(' · ')
                 : t({en: 'See the tickets section below', zh: '详见下方门票板块'}),
         },

@@ -171,19 +171,31 @@ const readVendors = (raw: unknown): ConContent['vendors'] => {
     };
 };
 
+/**
+ * Prices used to be free text stored as {en, zh}. Reading the digits out of the
+ * English side keeps a pre-change "$10" at 10 (and "Free" at 0) instead of every
+ * tier suddenly reading as free. Safe to drop the object branch after every
+ * environment has saved its tickets once.
+ */
+const readPrice = (raw: unknown): number => {
+    if (typeof raw === 'number') return Number.isFinite(raw) && raw >= 0 ? raw : 0;
+    const legacy = Number(loc(raw).en.replace(/[^\d.]/g, ''));
+    return Number.isFinite(legacy) ? legacy : 0;
+};
+
 const readEarlyBird = (raw: unknown): EarlyBird | undefined => {
     const e = obj(raw);
     const endsAt = optStr(e.endsAt);
     // A deadline is what makes it an early bird. Without one there is nothing
     // to say about when the price changes, so the tier reads as regular-priced.
-    return endsAt ? {price: loc(e.price), endsAt} : undefined;
+    return endsAt ? {price: readPrice(e.price), endsAt} : undefined;
 };
 
 const readTickets = (raw: unknown): TicketTier[] =>
     list(raw, TICKETS, tier => ({
         id: str(tier.id),
         name: loc(tier.name),
-        price: loc(tier.price),
+        price: readPrice(tier.price),
         // Always present, even when undefined, so the key sits in the same place
         // as in the editor's draft — its dirty check compares JSON strings.
         earlyBird: readEarlyBird(tier.earlyBird),

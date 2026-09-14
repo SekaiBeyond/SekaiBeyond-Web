@@ -470,15 +470,19 @@ export const VENDOR_CTA: VendorCta = {
  * shows the tier's regular `price` on its own.
  */
 export interface EarlyBird {
-    price: Localized
+    price: number
     endsAt: string
 }
 
 export interface TicketTier {
     id: string
     name: Localized
-    /** The regular price — what the tier costs once any early bird has ended. */
-    price: Localized
+    /**
+     * The regular price in US dollars — what the tier costs once any early bird
+     * has ended. A number, not copy: `formatPrice` renders it per language, and 0
+     * reads as "Free".
+     */
+    price: number
     earlyBird?: EarlyBird
     note: Localized
     perks: Localized[]
@@ -489,7 +493,7 @@ export const TICKETS: TicketTier[] = [
     {
         id: 'student',
         name: {en: 'UW Student', zh: 'UW 在校生'},
-        price: {en: 'Free', zh: '免费'},
+        price: 0,
         note: {en: 'With a valid Husky Card at the door', zh: '凭有效 Husky Card 现场入场'},
         perks: [
             {en: 'Full-day access to every stage and room', zh: '全天通行所有舞台与场地'},
@@ -500,7 +504,7 @@ export const TICKETS: TicketTier[] = [
     {
         id: 'general',
         name: {en: 'General Admission', zh: '普通票'},
-        price: {en: '$10', zh: '$10'},
+        price: 10,
         note: {en: 'Cheaper in advance than at the door', zh: '预售价低于现场购票'},
         perks: [
             {en: 'Full-day access to every stage and room', zh: '全天通行所有舞台与场地'},
@@ -513,7 +517,7 @@ export const TICKETS: TicketTier[] = [
     {
         id: 'supporter',
         name: {en: 'Supporter', zh: '支持者票'},
-        price: {en: '$25', zh: '$25'},
+        price: 25,
         note: {en: 'Helps fund the stage and student artists', zh: '用于支持舞台与学生创作者'},
         perks: [
             {en: 'Everything in General Admission', zh: '包含普通票所有内容'},

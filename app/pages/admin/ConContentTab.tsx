@@ -241,6 +241,50 @@ const LocalizedField = ({label, value, onChange, readOnly, multiline, full}: Loc
     );
 };
 
+interface PriceFieldProps {
+    label: Localized;
+    value: number;
+    onChange: (next: number) => void;
+    readOnly?: boolean;
+    helper?: Localized;
+}
+
+/** A ticket price is a dollar amount, not copy, so one input serves both languages. */
+const PriceField = ({label, value, onChange, readOnly, helper}: PriceFieldProps) => {
+    const {isEnglish} = useLanguage();
+    // Held as text apart from the number: bound straight to `value`, React refills
+    // a cleared number input with "0" and the next keystroke lands after it ("015").
+    const [text, setText] = useState(String(value));
+    useEffect(() => {
+        // Follow outside changes (a discard, a fresh load) without undoing a blank
+        // or a trailing "12." the admin is still typing.
+        setText(prev => (Number(prev) === value ? prev : String(value)));
+    }, [value]);
+
+    return (
+        <label>
+            <span>{isEnglish ? `${label.en} (USD)` : `${label.zh}（美元）`}</span>
+            <input
+                className="admin-input"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.01}
+                value={text}
+                onChange={e => {
+                    if (readOnly) return;
+                    setText(e.target.value);
+                    onChange(Number(e.target.value));
+                }}
+                readOnly={readOnly}
+            />
+            {helper && (
+                <span className="admin-helper-text admin-mt-4">{isEnglish ? helper.en : helper.zh}</span>
+            )}
+        </label>
+    );
+};
+
 interface RowActionsProps {
     index: number;
     count: number;
@@ -1159,13 +1203,13 @@ const EarlyBirdFields = ({earlyBird, onChange, readOnly}: EarlyBirdFieldsProps) 
 
     return (
         <>
-            <LocalizedField
+            <PriceField
                 label={{en: 'Early bird price', zh: '早鸟价格'}}
                 value={earlyBird.price}
                 onChange={next => onChange({...earlyBird, price: next})}
                 readOnly={readOnly}
             />
-            <label className="admin-form-grid-full">
+            <label>
                 <span>{isEnglish ? 'Early bird ends' : '早鸟截止时间'}</span>
                 <input
                     className="admin-input"
@@ -1231,13 +1275,14 @@ const TicketsSection = ({content, loading, showToast, readOnly}: SectionProps) =
                                 onChange={next => update(index, {...tier, name: next})}
                                 readOnly={readOnly}
                             />
-                            <LocalizedField
+                            <PriceField
                                 label={tier.earlyBird
                                     ? {en: 'Regular price', zh: '常规价格'}
                                     : {en: 'Price', zh: '价格'}}
                                 value={tier.price}
                                 onChange={next => update(index, {...tier, price: next})}
                                 readOnly={readOnly}
+                                helper={{en: '0 shows as “Free”.', zh: '填 0 时显示为「免费」。'}}
                             />
 
                             <label className="admin-checkbox-label admin-form-grid-full">
@@ -1246,7 +1291,7 @@ const TicketsSection = ({content, loading, showToast, readOnly}: SectionProps) =
                                     checked={!!tier.earlyBird}
                                     onChange={e => !readOnly && update(index, {
                                         ...tier,
-                                        earlyBird: e.target.checked ? {price: BLANK, endsAt: ''} : undefined,
+                                        earlyBird: e.target.checked ? {price: 0, endsAt: ''} : undefined,
                                     })}
                                     disabled={readOnly}
                                 />
@@ -1328,7 +1373,7 @@ const TicketsSection = ({content, loading, showToast, readOnly}: SectionProps) =
                     onClick={() => setDraft(prev => [...prev, {
                         id: newRowId('tier'),
                         name: BLANK,
-                        price: BLANK,
+                        price: 0,
                         note: BLANK,
                         perks: [],
                     }])}

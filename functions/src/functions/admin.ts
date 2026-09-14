@@ -551,28 +551,38 @@ function buildConVendors(raw: unknown) {
     };
 }
 
+/** A ticket price in US dollars. Stray fractions of a cent are rounded off. */
+function validateConPrice(raw: unknown, name: string): number {
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0 || raw > 10000) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must be a dollar amount from 0 to 10000.`);
+    }
+    return Math.round(raw * 100) / 100;
+}
+
 function buildConTickets(raw: unknown) {
     const seen = new Set<string>();
     return validateConArray(raw, "tickets", CON_LIMITS.tickets).map((tier, i) => {
         const name = validateLocalized(tier.name, "tier name", 120, true);
 
         // The page tells visitors what the tier costs once the early bird ends,
-        // so an early bird is all-or-nothing: its own price, a deadline, and a
-        // regular price to fall back to. A half-filled one is a form mistake.
+        // so an early bird is all-or-nothing: its own price and a deadline. A
+        // half-filled one is a form mistake.
         const hasEarlyBird = tier.earlyBird !== undefined && tier.earlyBird !== null;
-        const price = validateLocalized(
-            tier.price,
-            hasEarlyBird ? `${name.en} regular price` : "tier price",
-            60,
-            hasEarlyBird,
-        );
-        let earlyBird: {price: LocalizedText; endsAt: string} | undefined;
+        const price = validateConPrice(tier.price, `${name.en} price`);
+        let earlyBird: {price: number; endsAt: string} | undefined;
         if (hasEarlyBird) {
             const e = typeof tier.earlyBird === "object" ? tier.earlyBird as Record<string, unknown> : {};
             earlyBird = {
-                price: validateLocalized(e.price, `${name.en} early bird price`, 60, true),
+                price: validateConPrice(e.price, `${name.en} early bird price`),
                 endsAt: requireISODate(e.endsAt, `${name.en} early bird end`),
             };
+            // "Early bird $10, then $10" is not an offer.
+            if (earlyBird.price >= price) {
+                throw new HttpsError(
+                    "invalid-argument",
+                    `${name.en} early bird price must be lower than the regular price.`,
+                );
+            }
         }
 
         return {
