@@ -97,9 +97,9 @@ const buildCsv = (header: string[], rows: string[][]): Blob =>
     );
 
 /**
- * The print shop's pairing list. This is the only artifact that ever holds the
- * plaintext activation keys — once the generator screen is left they are gone
- * from everywhere but this file.
+ * The print shop's pairing list. Once the generator screen is left, this is the
+ * only place a batch's keys are together — the server serves them back one
+ * passport at a time.
  */
 export function buildPassportCsv(
     rows: {passportId: string; activationCode: string}[],
@@ -111,7 +111,7 @@ export function buildPassportCsv(
     );
 }
 
-/** Public ids only — safe to re-export at any time, unlike the keys. */
+/** Public ids only — safe to re-export at any time. */
 export function buildPassportIdCsv(ids: string[], origin: string): Blob {
     return buildCsv(
         ['passportId', 'scanUrl'],

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callReissuePassportKey, callVoidPassport, getFirebaseDb } from '~/lib/firebase';
+import { callReissuePassportKey, callRevealPassportKey, callVoidPassport, getFirebaseDb } from '~/lib/firebase';
 import {
     fetchPassport,
     fetchPassportClaims,
@@ -21,6 +21,7 @@ import { docToUserRecord, type ShowToast } from '../utils';
 import { usePassportPngExport } from './passportExport';
 
 const QR_SIZE = 200;
+const MASKED_KEY = '••••-••••-••••';
 
 interface PassportDetailProps {
     passportId: string;
@@ -38,10 +39,10 @@ interface PassportDetailProps {
  * One passport's page: who holds it, how it has been scanned, and its permanent
  * audit trail.
  *
- * The only two write actions are for stock that has never been sold — void it, or
- * reissue its key slip. A claimed passport has no controls at all: the binding is
- * permanent by design, and membership it granted is adjusted through the user's
- * membership row, not from here.
+ * The only actions are for stock that has never been sold — view its key slip,
+ * reissue it, or void the passport. A claimed passport has no controls at all:
+ * the binding is permanent by design, and membership it granted is adjusted
+ * through the user's membership row, not from here.
  */
 export const PassportDetail = ({
                                    passportId,
@@ -60,7 +61,10 @@ export const PassportDetail = ({
     const [ownerMissing, setOwnerMissing] = useState(false);
     const [claims, setClaims] = useState<PassportClaimEvent[] | null>(null);
     const [busy, setBusy] = useState(false);
-    const [reissuedKey, setReissuedKey] = useState<string | null>(null);
+    // Fetched on the first Show, since every fetch is logged on the passport's
+    // trail. Hide only masks it, so showing it again isn't a second look.
+    const [key, setKey] = useState<string | null>(null);
+    const [keyShown, setKeyShown] = useState(false);
 
     const {request: requestPng, node: pngNode} = usePassportPngExport(
         () => showToast(isEnglish ? 'Failed to render the QR code.' : '生成二维码失败。', 'error'),
@@ -168,14 +172,36 @@ export const PassportDetail = ({
         setBusy(false);
     };
 
+    const toggleKey = async () => {
+        if (keyShown || key) {
+            setKeyShown(!keyShown);
+            return;
+        }
+        setBusy(true);
+        try {
+            const res = await callRevealPassportKey({passportId});
+            setKey(res.data.activationCode);
+            setKeyShown(true);
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to load the key.' : '加载激活码失败。'), 'error');
+            setBusy(false);
+            return;
+        }
+        setBusy(false);
+        // The look itself is now on the trail.
+        loadClaims();
+    };
+
     const reissueKey = async () => {
         if (!window.confirm(isEnglish
-            ? `Issue a new activation key for ${passportId}? The key on the current slip stops working immediately — print the replacement slip before packing it.`
-            : `为 ${passportId} 签发新的激活码？当前纸条上的激活码将立即失效 — 请在装袋前打印新的纸条。`)) return;
+            ? `Issue a new activation key for ${passportId}? The key on the current slip stops working immediately — print the replacement slip before packing it. If the slip was only lost, use Show key instead.`
+            : `为 ${passportId} 签发新的激活码？当前纸条上的激活码将立即失效 — 请在装袋前打印新的纸条。如果只是纸条丢失，请改用“显示激活码”。`)) return;
         setBusy(true);
         try {
             const res = await callReissuePassportKey({passportId});
-            setReissuedKey(res.data.activationCode);
+            // Shown straight away: the admin asked for it in order to print it.
+            setKey(res.data.activationCode);
+            setKeyShown(true);
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to reissue the key.' : '重新签发激活码失败。'), 'error');
             setBusy(false);
@@ -324,7 +350,21 @@ export const PassportDetail = ({
                             </dd>
                         </div>
                         <div>
-                            <dt>{isEnglish ? 'Key slip' : '激活码纸条'}</dt>
+                            <dt>
+                                {isEnglish ? 'Key slip' : '激活码纸条'}
+                                {!readOnly && unclaimed && (
+                                    <button
+                                        type="button"
+                                        className="admin-qr-row-edit"
+                                        onClick={() => void toggleKey()}
+                                        disabled={busy}
+                                    >
+                                        {keyShown
+                                            ? (isEnglish ? 'Hide key' : '隐藏激活码')
+                                            : (isEnglish ? 'Show key' : '显示激活码')}
+                                    </button>
+                                )}
+                            </dt>
                             <dd>
                                 {passport.status === 'claimed'
                                     ? (isEnglish ? 'Spent on activation' : '已在激活时使用')
@@ -333,6 +373,11 @@ export const PassportDetail = ({
                                         : (isEnglish
                                             ? `Issued ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · reissued ${passport.keyReissueCount}×` : ''}`
                                             : `签发于 ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · 已重新签发 ${passport.keyReissueCount} 次` : ''}`)}
+                                {!readOnly && unclaimed && (
+                                    <div className="admin-passport-key-secret">
+                                        {keyShown && key ? key : MASKED_KEY}
+                                    </div>
+                                )}
                             </dd>
                         </div>
                         {locked && passport.lockedUntil && (
@@ -344,18 +389,6 @@ export const PassportDetail = ({
                     </dl>
                 </div>
             </div>
-
-            {reissuedKey && (
-                <div className="admin-passport-warning admin-passport-warning--urgent">
-                    <strong>{isEnglish ? 'New activation key' : '新的激活码'}</strong>
-                    <p className="admin-passport-key-secret">{reissuedKey}</p>
-                    <p>
-                        {isEnglish
-                            ? 'Shown once. Print the replacement slip now — it is stored only as a hash.'
-                            : '仅显示一次。请立即打印替换纸条 — 系统中只保存其哈希值。'}
-                    </p>
-                </div>
-            )}
 
             <ScanTrendsSection id={passport.id} fetchScans={fetchPassportScans}/>
 
@@ -420,5 +453,6 @@ export const PassportDetail = ({
 const actionLabel = (action: PassportClaimEvent['action'], isEnglish: boolean): string => {
     if (action === 'void') return isEnglish ? 'Void' : '作废';
     if (action === 'key-reissue') return isEnglish ? 'Key' : '激活码';
+    if (action === 'key-view') return isEnglish ? 'Viewed' : '查看';
     return isEnglish ? 'Claim' : '激活';
 };

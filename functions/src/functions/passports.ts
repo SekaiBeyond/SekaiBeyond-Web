@@ -46,9 +46,9 @@ const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap
 /**
  * Generate a batch of passports for one year's design.
  *
- * The plaintext activation keys exist only in this response — they are hashed
- * before storage and never re-served. If the export is lost before the slips are
- * printed, reissuePassportKey mints a replacement key per passport.
+ * The keys come back in bulk only in this response. If the export is lost before
+ * the slips are printed, revealPassportKey serves them again one passport at a
+ * time.
  */
 export const generatePassportBatch = onCall({maxInstances: 5}, async (request) => {
     const uid = await requireAuth(request);
@@ -105,7 +105,7 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
                 scanCount: 0,
                 lastScanAt: null,
             });
-            batch.create(db.collection(SECRETS).doc(passportId), {salt, secretHash});
+            batch.create(db.collection(SECRETS).doc(passportId), {salt, secretHash, key});
         });
     }
 
@@ -127,9 +127,9 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
 
 /**
  * Mint a replacement activation key for an unclaimed passport, for when a key
- * slip is lost or damaged before the passport is sold. The stored hash is the
- * only copy of the old key, so this cannot reprint the original slip — it
- * invalidates it and hands back a new one, once.
+ * slip may have been seen by someone it shouldn't have been. A slip that was
+ * merely lost or damaged doesn't need this — revealPassportKey reprints it. This
+ * invalidates the old key and hands back the new one.
  */
 export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -155,7 +155,7 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
             );
         }
 
-        txn.set(db.collection(SECRETS).doc(passportId), {salt, secretHash});
+        txn.set(db.collection(SECRETS).doc(passportId), {salt, secretHash, key});
         txn.update(ref, {
             keyIssuedAt: FieldValue.serverTimestamp(),
             keyReissueCount: FieldValue.increment(1),
@@ -180,6 +180,65 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
+    });
+
+    return {passportId, activationCode: formatActivationKey(key)};
+});
+
+/**
+ * Serve an unclaimed passport's current key, to reprint its slip. Every call is
+ * written to the passport's trail and to records: the key is what makes an
+ * unsold passport worth stealing, so who has looked at it is part of its history.
+ */
+export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+    const callerSnap = await requireAdmin(uid);
+
+    const passportId = normalizePassportId((request.data as {passportId?: unknown})?.passportId);
+    if (!passportId) throw new HttpsError("invalid-argument", "Invalid passportId.");
+
+    const ref = db.collection(PASSPORTS).doc(passportId);
+    const secretRef = db.collection(SECRETS).doc(passportId);
+
+    const key = await db.runTransaction(async (txn) => {
+        const [snap, secretSnap] = await Promise.all([txn.get(ref), txn.get(secretRef)]);
+        if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
+        const status = snap.data()?.status;
+        if (status !== "unclaimed") {
+            throw new HttpsError(
+                "failed-precondition",
+                status === "claimed"
+                    ? "This passport has already been claimed; its key is spent."
+                    : "This passport is void.",
+                {code: status === "claimed" ? "already-claimed" : "void"},
+            );
+        }
+        const stored = secretSnap.data()?.key;
+        if (typeof stored !== "string") {
+            throw new HttpsError(
+                "failed-precondition",
+                "No viewable key is on file for this passport. Reissue its key slip to get one.",
+                {code: "no-key"},
+            );
+        }
+
+        txn.set(ref.collection("claims").doc(), {
+            action: "key-view",
+            uid: null,
+            at: FieldValue.serverTimestamp(),
+            performedBy: uid,
+            performedByName: performerName(callerSnap),
+        });
+        txn.set(db.collection("records").doc(), {
+            type: "passport-key-view",
+            performedBy: uid,
+            performedByName: performerName(callerSnap),
+            passportId,
+            passportYear: snap.data()?.year ?? null,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+        return stored;
     });
 
     return {passportId, activationCode: formatActivationKey(key)};
@@ -272,8 +331,8 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
             membershipExpiresAt,
             membershipStartedAt: membershipStartedAt ?? FieldValue.delete(),
         });
-        // The key has done its one job and the binding is permanent, so the hash
-        // is deleted rather than left sitting in the database.
+        // The key has done its one job and the binding is permanent, so it and
+        // its hash are deleted rather than left sitting in the database.
         txn.delete(secretRef);
         txn.set(passportRef.collection("claims").doc(), {
             action: "claim",

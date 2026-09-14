@@ -4556,6 +4556,11 @@ select.admin-tickets-tag:focus {
     color: var(--color-link);
 }
 
+.admin-passport-action--key-view {
+    background: rgba(74, 81, 96, 0.1);
+    color: var(--color-text-muted);
+}
+
 .admin-passport-design-cover {
     width: 100%;
     max-width: 180px;

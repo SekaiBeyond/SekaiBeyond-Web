@@ -131,6 +131,7 @@ export type RecordType =
     | 'passport-claim'
     | 'passport-void'
     | 'passport-key-reissue'
+    | 'passport-key-view'
     | 'passport-design-create'
     | 'passport-design-edit'
     | 'passport-design-delete'

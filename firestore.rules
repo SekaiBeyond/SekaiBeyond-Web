@@ -202,7 +202,7 @@ service cloud.firestore {
             allow read: if request.auth != null
                 && (isStaffOrAbove() || resource.data.ownerUid == request.auth.uid);
 
-            // Permanent bind/void/key-reissue audit trail — no TTL, core-staff+ only.
+            // Permanent bind/void/key audit trail — no TTL, core-staff+ only.
             match /claims/{claimId} {
                 allow read: if request.auth != null && isCoreStaffOrAbove();
             }
@@ -213,9 +213,10 @@ service cloud.firestore {
             }
         }
 
-        // Activation-key hashes. Server-only, no exceptions — the whole
-        // anti-theft story is that an unsold passport's key can't be read off
-        // the wire by anyone, including a president. Same treatment as teamRoster.
+        // Activation keys and their hashes. Server-only, no exceptions — an
+        // unsold passport's key never comes off the wire from a client read.
+        // Admins see one through revealPassportKey, which logs every look.
+        // Same treatment as teamRoster.
         match /passportSecrets/{passportId} {
             allow read, write: if false;
         }

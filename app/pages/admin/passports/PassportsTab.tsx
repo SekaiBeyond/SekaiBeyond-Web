@@ -356,8 +356,8 @@ const Dashboard = ({
                                         </div>
                                         <p className="admin-helper-text admin-field-hint">
                                             {isEnglish
-                                                ? 'Re-exports carry public codes only — activation keys are never re-servable.'
-                                                : '重新导出仅包含公开编号 — 激活码无法再次获取。'}
+                                                ? 'Re-exports carry public codes only — open a passport to view its activation key.'
+                                                : '重新导出仅包含公开编号 — 打开单本通行证即可查看其激活码。'}
                                         </p>
                                         <div className="admin-passport-codes">
                                             {batch.list.map(passport => (
@@ -485,9 +485,9 @@ interface BatchGeneratorProps {
 }
 
 /**
- * Generate a batch and hand over the print files. The activation keys are in the
- * response and nowhere else — leaving this screen without exporting means every
- * passport in the batch has to be re-keyed one at a time.
+ * Generate a batch and hand over the print files. This is the only place the
+ * activation keys come back in bulk — leaving this screen without exporting means
+ * looking each passport's key up one at a time.
  */
 const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorProps) => {
     const {isEnglish} = useLanguage();
@@ -510,8 +510,8 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
     // tab, reloading, and switching admin tabs — none of which the Back button's
     // confirm ever saw.
     useExitGuard(!!issued && !exported, isEnglish
-        ? 'You haven’t downloaded the activation keys. They cannot be retrieved after leaving this screen — each passport would need a new key issued individually. Leave anyway?'
-        : '你还没有下载激活码。离开此页面后将无法再次获取，只能逐个重新签发。仍要离开吗？');
+        ? 'You haven’t downloaded the activation keys. After leaving this screen they can only be viewed one passport at a time. Leave anyway?'
+        : '你还没有下载激活码。离开此页面后只能逐本查看。仍要离开吗？');
 
     const exportCsv = (batch: NonNullable<typeof issued>) => {
         downloadBlob(
@@ -526,10 +526,10 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
         try {
             const res = await callGeneratePassportBatch({year, count});
             setIssued(res.data);
-            // Save them without being asked. These keys exist nowhere else and
-            // every way off this screen destroys them, so the file is written
+            // Save them without being asked. Every way off this screen leaves the
+            // keys retrievable only one passport at a time, so the file is written
             // first and the screen becomes a confirmation rather than the only
-            // copy. Only a throw re-arms the warning — a download the browser
+            // batch copy. Only a throw re-arms the warning — a download the browser
             // silently blocks still reads as exported, which is why the banner
             // tells the admin to go and look for the file.
             setExported(false);
@@ -568,8 +568,8 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
                         <strong>{isEnglish ? 'Read before generating' : '生成前请阅读'}</strong>
                         <p>
                             {isEnglish
-                                ? 'Each passport gets a public code for its sticker and a secret activation key for the slip packed beside it. The keys are shown once, on the next screen, and are stored only as hashes — download the CSV before you leave it.'
-                                : '每本通行证都会生成一个用于贴纸的公开编号，以及一个印在同装纸条上的秘密激活码。激活码仅在下一屏显示一次，数据库中只保存其哈希值 — 请在离开前下载 CSV。'}
+                                ? 'Each passport gets a public code for its sticker and a secret activation key for the slip packed beside it. The keys are listed together only on the next screen — download the CSV before you leave it. After that, each passport’s key can be viewed from its own page.'
+                                : '每本通行证都会生成一个用于贴纸的公开编号，以及一个印在同装纸条上的秘密激活码。激活码仅在下一屏集中列出 — 请在离开前下载 CSV。之后只能在每本通行证的页面中单独查看。'}
                         </p>
                     </div>
                     <div className="admin-form-grid admin-section-mb">
@@ -623,11 +623,11 @@ const BatchGenerator = ({years, defaultYear, onBack, showToast}: BatchGeneratorP
                                 : `已为 ${issued.year} 年生成 ${issued.passports.length} 本通行证。`}
                             {exported
                                 ? (isEnglish
-                                    ? 'The keys CSV has been downloaded to this device — check your downloads folder before packing. It is the only copy that will exist once you leave.'
-                                    : '激活码 CSV 已下载到此设备 — 请在装袋前确认下载文件夹。离开此页面后，它将是唯一的副本。')
+                                    ? 'The keys CSV has been downloaded to this device — check your downloads folder before packing. Once you leave, it is the only list of the whole batch.'
+                                    : '激活码 CSV 已下载到此设备 — 请在装袋前确认下载文件夹。离开此页面后，它将是整批激活码的唯一清单。')
                                 : (isEnglish
-                                    ? 'The activation keys below exist only on this screen.'
-                                    : '以下激活码仅存在于此页面。')}
+                                    ? 'This is the only screen that lists the whole batch’s keys.'
+                                    : '只有此页面会列出整批激活码。')}
                         </p>
                     </div>
                     <div className="admin-btn-row admin-section-mb">

@@ -496,10 +496,9 @@ export const callDeleteSocialPlatform = (data: {id: string}) =>
 export const callSeedSocialPlatforms = () =>
     httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
 
-// Physical passports. The plaintext activation keys come back from
-// callGeneratePassportBatch exactly once and are never re-servable — export the
-// CSV/ZIP before leaving the screen or the batch has to be re-keyed one passport
-// at a time with callReissuePassportKey.
+// Physical passports. The activation keys come back in bulk from
+// callGeneratePassportBatch only — export the CSV before leaving the screen, or
+// they have to be looked up one passport at a time with callRevealPassportKey.
 export const callGeneratePassportBatch = (data: {year: number; count: number}) =>
     httpsCallable<typeof data, {
         batchId: string;
@@ -510,6 +509,10 @@ export const callGeneratePassportBatch = (data: {year: number; count: number}) =
 export const callReissuePassportKey = (data: {passportId: string}) =>
     httpsCallable<typeof data, {passportId: string; activationCode: string}>(
         getFunctions(), 'reissuePassportKey')(data);
+
+export const callRevealPassportKey = (data: {passportId: string}) =>
+    httpsCallable<typeof data, {passportId: string; activationCode: string}>(
+        getFunctions(), 'revealPassportKey')(data);
 
 export const callClaimPassport = (data: {passportId: string; activationCode: string}) =>
     httpsCallable<typeof data, {

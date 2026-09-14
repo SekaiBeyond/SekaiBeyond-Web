@@ -79,7 +79,7 @@ export type PassportPublicProfile =
 /** An entry in a passport's permanent audit trail. */
 export interface PassportClaimEvent {
     id: string;
-    action: 'claim' | 'void' | 'key-reissue';
+    action: 'claim' | 'void' | 'key-reissue' | 'key-view';
     uid: string | null;
     at: Date | null;
     performedBy: string;
@@ -181,7 +181,7 @@ export async function fetchPassportsByOwner(uid: string): Promise<Passport[]> {
         b.year - a.year || (b.claimedAt?.getTime() ?? 0) - (a.claimedAt?.getTime() ?? 0));
 }
 
-/** The bind/void/reissue trail for one passport (newest first). Core-staff+. */
+/** The bind/void/key trail for one passport (newest first). Core-staff+. */
 export async function fetchPassportClaims(id: string): Promise<PassportClaimEvent[]> {
     const snap = await getDocs(collection(getFirebaseDb(), 'passports', id, 'claims'));
     return snap.docs
@@ -190,7 +190,9 @@ export async function fetchPassportClaims(id: string): Promise<PassportClaimEven
             const action = data.action;
             return {
                 id: d.id,
-                action: (action === 'void' || action === 'key-reissue') ? action : 'claim' as const,
+                action: (action === 'void' || action === 'key-reissue' || action === 'key-view')
+                    ? action
+                    : 'claim' as const,
                 uid: typeof data.uid === 'string' ? data.uid : null,
                 at: toDate(data.at),
                 performedBy: data.performedBy ?? '',

@@ -64,9 +64,9 @@ function hashActivationKey(key: string, salt: string): string {
 }
 
 /**
- * A fresh key plus the server-only material that verifies it. The plaintext is
- * returned to the generating admin once and never stored — a lost slip is
- * reprinted with a new key (reissuePassportKey), not recovered.
+ * A fresh key plus the server-only material that verifies it. Claims check the
+ * salted hash; the plaintext is stored beside it in the same server-only doc so
+ * an admin can reprint the current slip (revealPassportKey) without re-keying.
  */
 export function newActivationKey(): {key: string; salt: string; secretHash: string} {
     const key = generateSecureCode(ACTIVATION_KEY_LENGTH);

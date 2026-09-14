@@ -48,7 +48,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
         'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
         'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
     passport: ['passport-batch-generate', 'passport-claim', 'passport-void', 'passport-key-reissue',
-        'passport-design-create', 'passport-design-edit', 'passport-design-delete'],
+        'passport-key-view', 'passport-design-create', 'passport-design-edit', 'passport-design-delete'],
     qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
         'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
@@ -737,6 +737,10 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>issued a new activation key for passport {r.passportId ?? ''}</>
                     : <>为通行证 {r.passportId ?? ''} 重新签发了激活码</>;
+            case 'passport-key-view':
+                return isEnglish
+                    ? <>viewed the activation key for passport {r.passportId ?? ''}</>
+                    : <>查看了通行证 {r.passportId ?? ''} 的激活码</>;
             case 'passport-design-create':
                 return isEnglish
                     ? <>created the {r.passportYear ?? ''} passport design</>
@@ -877,6 +881,7 @@ export const RecordsTab = ({
             case 'passport-claim':
             case 'passport-void':
             case 'passport-key-reissue':
+            case 'passport-key-view':
             case 'passport-design-create':
             case 'passport-design-edit':
             case 'passport-design-delete':
