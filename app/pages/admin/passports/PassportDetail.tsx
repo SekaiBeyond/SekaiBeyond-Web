@@ -353,6 +353,83 @@ export const PassportDetail = ({
             : `会员到期日将从 ${from} 变更为 ${fmtDate(reduction.expiresAt)}。`;
     };
 
+    const design = designs.find(d => d.id === passport.designId);
+    const designName = passportName(design, isEnglish);
+
+    /** The holder card's body — the one fact the page is mostly opened for. */
+    const holderBody = () => {
+        if (unclaimed) {
+            return (
+                <div className="admin-passport-holder-empty">
+                    <p className="admin-passport-holder-empty-title">
+                        {isEnglish ? 'Not activated yet' : '尚未激活'}
+                    </p>
+                    <p className="admin-passport-holder-empty-note">
+                        {isEnglish
+                            ? 'This one is still stock. Whoever enters its key binds it to their account for good — there is no unbind.'
+                            : '此通行证仍是库存。输入激活码的账号将与其永久绑定 — 无法解绑。'}
+                    </p>
+                </div>
+            );
+        }
+        if (owner) {
+            const membership = owner.membershipExpiresAt;
+            const active = !!membership && membership.getTime() > Date.now();
+            return (
+                <button
+                    type="button"
+                    className="admin-passport-holder-card"
+                    onClick={() => onLookupUser(owner.uid)}
+                >
+                    {owner.photoURL ? (
+                        <img src={owner.photoURL} alt="" className="admin-user-avatar"
+                             referrerPolicy="no-referrer"/>
+                    ) : (
+                        // An account with no photo, rather than the broken image
+                        // an empty src would paint at this size.
+                        <span className="admin-user-avatar admin-passport-holder-initial">
+                            {Array.from(owner.displayName.trim())[0]?.toUpperCase() ?? '?'}
+                        </span>
+                    )}
+                    <span className="admin-passport-holder-lines">
+                        <span className="admin-passport-holder-display">{owner.displayName}</span>
+                        <span className="admin-passport-holder-mail">{owner.email}</span>
+                        <span
+                            className={`admin-passport-holder-member${active ? '' : ' admin-passport-holder-member--lapsed'}`}>
+                            {active
+                                ? (isEnglish
+                                    ? `Member until ${fmtDate(membership)}`
+                                    : `会员资格至 ${fmtDate(membership)}`)
+                                : membership
+                                    ? (isEnglish
+                                        ? `Membership ran out ${fmtDate(membership)}`
+                                        : `会员资格已于 ${fmtDate(membership)} 到期`)
+                                    : (isEnglish ? 'No membership on file' : '无会员资格记录')}
+                        </span>
+                    </span>
+                    <span className="admin-passport-holder-go">
+                        {isEnglish ? 'Open in Users →' : '在用户管理中打开 →'}
+                    </span>
+                </button>
+            );
+        }
+        if (ownerMissing) {
+            return (
+                <div className="admin-passport-holder-empty">
+                    <p className="admin-passport-holder-empty-title">
+                        {isEnglish ? 'Account deleted' : '账号已删除'}
+                    </p>
+                    <p className="admin-passport-holder-empty-note">
+                        {isEnglish
+                            ? 'The passport stays bound to it, and its public page no longer resolves.'
+                            : '通行证仍与该账号保持绑定，其公开页面不再显示。'}
+                    </p>
+                </div>
+            );
+        }
+        return <div className="admin-passport-holder-empty"><span className="spinner"/></div>;
+    };
+
     return (
         <div className="admin-section">
             <div className="admin-tools-back-row">
@@ -361,32 +438,170 @@ export const PassportDetail = ({
                 </button>
             </div>
 
-            <div className="admin-qr-detail-head">
-                <div className="admin-qr-detail-title-row">
-                    <h3 className="admin-qr-detail-title">{passport.id}</h3>
+            {/* The passport as an object: its cover, the code printed on it, and
+                what state that code is in. */}
+            <header className={`admin-passport-hero admin-passport-hero--${passport.status}`}>
+                <div className="admin-passport-hero-cover">
+                    {design?.coverImageUrl
+                        ? <img src={design.coverImageUrl} alt=""/>
+                        : <span>{passport.year || '—'}</span>}
+                </div>
+                <div className="admin-passport-hero-text">
+                    <p className="admin-passport-hero-design">
+                        {designName
+                            ? `${passport.year} · ${designName}`
+                            : (passport.year || '')}
+                    </p>
+                    <h3 className="admin-passport-hero-code">{passport.id}</h3>
+                    <p className="admin-passport-hero-term">
+                        {isEnglish
+                            ? `${passport.termDays}-day membership term`
+                            : `${passport.termDays} 天会员期限`}
+                    </p>
+                </div>
+                <div className="admin-passport-hero-badges">
                     <span className={`admin-qr-badge admin-qr-badge-lg admin-passport-badge--${passport.status}`}>
                         {passportStatusLabel(passport.status, isEnglish)}
                     </span>
                     {locked && (
-                        <span className="admin-qr-badge admin-qr-badge-expired">
+                        <span className="admin-qr-badge admin-qr-badge-lg admin-qr-badge-expired">
                             {isEnglish ? 'Locked' : '已锁定'}
                         </span>
                     )}
                 </div>
-                <p className="admin-qr-detail-subtitle">
-                    {passportName(designs.find(d => d.id === passport.designId), isEnglish)}
-                </p>
-                {loadFailed && (
-                    <p className="admin-helper-text admin-field-hint">
-                        {isEnglish
-                            ? 'Couldn’t refresh — the details below may be out of date.'
-                            : '刷新失败 — 以下信息可能不是最新的。'}
-                    </p>
-                )}
-            </div>
+            </header>
 
-            <div className="admin-qr-detail-top">
-                <div className="admin-qr-detail-code">
+            {loadFailed && (
+                <p className="admin-passport-stale">
+                    {isEnglish
+                        ? 'Couldn’t refresh — the details below may be out of date.'
+                        : '刷新失败 — 以下信息可能不是最新的。'}
+                </p>
+            )}
+
+            <div className="admin-passport-detail-grid">
+                <div className="admin-passport-detail-main">
+                    <section className="admin-passport-panel">
+                        <h4 className="admin-passport-panel-title">
+                            {isEnglish ? 'Holder' : '持有者'}
+                        </h4>
+                        {holderBody()}
+                    </section>
+
+                    {/* The slip that ships in the bag, and the only action that
+                        touches it — kept beside the key rather than exiled to a
+                        row of buttons at the foot of the page. */}
+                    <section className="admin-passport-panel">
+                        <div className="admin-passport-panel-head">
+                            <h4 className="admin-passport-panel-title">
+                                {isEnglish ? 'Key slip' : '激活码纸条'}
+                            </h4>
+                            {keyViewable && (
+                                <button
+                                    type="button"
+                                    className="admin-qr-row-edit"
+                                    onClick={() => void toggleKey()}
+                                    disabled={busy}
+                                >
+                                    {keyShown
+                                        ? (isEnglish ? 'Hide key' : '隐藏激活码')
+                                        : (isEnglish ? 'Show key' : '显示激活码')}
+                                </button>
+                            )}
+                        </div>
+                        {/* Only for someone who can ask for it: a masked
+                            readout with no Show beside it is decoration. */}
+                        {keyViewable && (
+                            <div className={`admin-passport-key-readout${
+                                keyShown && key ? '' : ' admin-passport-key-readout--masked'}`}>
+                                {keyShown && key ? key : MASKED_KEY}
+                            </div>
+                        )}
+                        <p className="admin-passport-key-meta">
+                            {passport.status === 'claimed'
+                                ? (isEnglish ? 'Spent on activation' : '已在激活时使用')
+                                : (isEnglish
+                                    ? `Issued ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · reissued ${passport.keyReissueCount}×` : ''}`
+                                    : `签发于 ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · 已重新签发 ${passport.keyReissueCount} 次` : ''}`)}
+                        </p>
+                        {!readOnly && unclaimed && (
+                            <div className="admin-passport-panel-foot">
+                                <button
+                                    className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                                    onClick={() => void reissueKey()}
+                                    disabled={busy}
+                                    type="button"
+                                >
+                                    {isEnglish ? 'Reissue key slip' : '重新签发纸条'}
+                                </button>
+                                <span className="admin-passport-panel-foot-note">
+                                    {isEnglish
+                                        ? 'Retires the printed key and mints a new one.'
+                                        : '作废已印刷的激活码并生成新的。'}
+                                </span>
+                            </div>
+                        )}
+                    </section>
+
+                    <section className="admin-passport-panel">
+                        <h4 className="admin-passport-panel-title">
+                            {isEnglish ? 'Record' : '记录'}
+                        </h4>
+                        <dl className="admin-passport-facts">
+                            <div>
+                                {/* Not a lifetime: a passport never expires.
+                                    This is what activating it awarded, fixed
+                                    when the passport was generated. */}
+                                <dt>{isEnglish ? 'Grants' : '授予'}</dt>
+                                <dd>
+                                    {isEnglish
+                                        ? `${passport.termDays} days of membership`
+                                        : `${passport.termDays} 天会员资格`}
+                                </dd>
+                            </div>
+                            {passport.claimedAt && (
+                                <div>
+                                    <dt>{isEnglish ? 'Activated' : '激活时间'}</dt>
+                                    <dd>{fmtDate(passport.claimedAt)}</dd>
+                                </div>
+                            )}
+                            <div>
+                                <dt>{isEnglish ? 'Generated' : '生成时间'}</dt>
+                                <dd>
+                                    {fmtDate(passport.createdAt)}
+                                    {passport.createdByName && (
+                                        <span className="admin-passport-fact-by">
+                                            {passport.createdByName}
+                                        </span>
+                                    )}
+                                </dd>
+                            </div>
+                            {locked && passport.lockedUntil && (
+                                <div>
+                                    <dt>{isEnglish ? 'Locked until' : '锁定至'}</dt>
+                                    <dd>
+                                        {fmtDate(passport.lockedUntil)}
+                                        {passport.failedAttempts > 0 && (
+                                            <span className="admin-passport-fact-by">
+                                                {isEnglish
+                                                    ? `after ${passport.failedAttempts} failed activation ${passport.failedAttempts === 1 ? 'attempt' : 'attempts'}`
+                                                    : `已有 ${passport.failedAttempts} 次激活失败`}
+                                            </span>
+                                        )}
+                                    </dd>
+                                </div>
+                            )}
+                        </dl>
+                    </section>
+                </div>
+
+                {/* The printed side of the passport, kept together: what the
+                    sticker shows, where it points, and how to get it back out
+                    as artwork. */}
+                <aside className="admin-passport-panel admin-passport-sticker">
+                    <h4 className="admin-passport-panel-title">
+                        {isEnglish ? 'Sticker' : '贴纸'}
+                    </h4>
                     <div className="admin-qr-paper">
                         <QrPreview value={scanValue} size={QR_SIZE}/>
                         <p className="admin-passport-sticker-code">{passport.id}</p>
@@ -403,188 +618,105 @@ export const PassportDetail = ({
                         </button>
                     </div>
                     <button
-                        className="admin-toggle-btn admin-toggle-save"
+                        className="admin-toggle-btn admin-toggle-save admin-btn-sm"
                         onClick={() => requestPng([passport.id], `passport-${passport.id}`)}
                         type="button"
                     >
                         {isEnglish ? 'Download sticker PNG' : '下载贴纸 PNG'}
                     </button>
-                </div>
-
-                <div className="admin-qr-detail-meta">
-                    <dl className="admin-qr-detail-list">
-                        <div>
-                            <dt>{isEnglish ? 'Holder' : '持有者'}</dt>
-                            <dd>
-                                {passport.status !== 'claimed' ? (
-                                    isEnglish ? 'Not activated yet' : '尚未激活'
-                                ) : owner ? (
-                                    <>
-                                        <span className="record-clickable-name"
-                                              onClick={() => onLookupUser(owner.uid)}>
-                                            {owner.displayName}
-                                        </span>
-                                        <span className="admin-user-email"> {owner.email}</span>
-                                    </>
-                                ) : ownerMissing ? (
-                                    isEnglish
-                                        ? 'Account deleted — the passport stays bound and no longer resolves.'
-                                        : '账号已删除 — 通行证仍保持绑定，且页面不再显示。'
-                                ) : (
-                                    <span className="spinner"/>
-                                )}
-                            </dd>
-                        </div>
-                        {passport.claimedAt && (
-                            <div>
-                                <dt>{isEnglish ? 'Activated' : '激活时间'}</dt>
-                                <dd>{fmtDate(passport.claimedAt)}</dd>
-                            </div>
-                        )}
-                        <div>
-                            {/* Not a lifetime: a passport never expires. This
-                                is what activating it awarded, fixed when the
-                                passport was generated. */}
-                            <dt>{isEnglish ? 'Grants' : '授予'}</dt>
-                            <dd>
-                                {isEnglish
-                                    ? `${passport.termDays} days of membership`
-                                    : `${passport.termDays} 天会员资格`}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>{isEnglish ? 'Generated' : '生成时间'}</dt>
-                            <dd>
-                                {fmtDate(passport.createdAt)}
-                                {passport.createdByName && ` · ${passport.createdByName}`}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>
-                                {isEnglish ? 'Key slip' : '激活码纸条'}
-                                {keyViewable && (
-                                    <button
-                                        type="button"
-                                        className="admin-qr-row-edit"
-                                        onClick={() => void toggleKey()}
-                                        disabled={busy}
-                                    >
-                                        {keyShown
-                                            ? (isEnglish ? 'Hide key' : '隐藏激活码')
-                                            : (isEnglish ? 'Show key' : '显示激活码')}
-                                    </button>
-                                )}
-                            </dt>
-                            <dd>
-                                {passport.status === 'claimed'
-                                    ? (isEnglish ? 'Spent on activation' : '已在激活时使用')
-                                    : (isEnglish
-                                        ? `Issued ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · reissued ${passport.keyReissueCount}×` : ''}`
-                                        : `签发于 ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · 已重新签发 ${passport.keyReissueCount} 次` : ''}`)}
-                                {keyViewable && (keyShown && key ? (
-                                    <div className="admin-passport-key-secret">{key}</div>
-                                ) : (
-                                    <div className="admin-passport-key-secret admin-passport-key-secret--masked">
-                                        {MASKED_KEY}
-                                    </div>
-                                ))}
-                            </dd>
-                        </div>
-                        {locked && passport.lockedUntil && (
-                            <div>
-                                <dt>{isEnglish ? 'Locked until' : '锁定至'}</dt>
-                                <dd>{fmtDate(passport.lockedUntil)}</dd>
-                            </div>
-                        )}
-                    </dl>
-                </div>
+                </aside>
             </div>
 
-            {!readOnly && unclaimed && (
-                <div className="admin-qr-danger-row">
-                    <button
-                        className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
-                        onClick={() => void reissueKey()}
-                        disabled={busy}
-                    >
-                        {isEnglish ? 'Reissue key slip' : '重新签发激活码纸条'}
-                    </button>
-                    <button
-                        className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                        onClick={() => void deleteStock()}
-                        disabled={busy}
-                    >
-                        {isEnglish ? 'Delete passport' : '删除通行证'}
-                    </button>
-                </div>
-            )}
-            {!readOnly && passport.status === 'claimed' && (
-                !confirmingDelete ? (
-                    <div className="admin-qr-danger-row">
-                        <button
-                            className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                            onClick={() => {
-                                // Off every time it opens: taking days back is
-                                // its own decision, not the one carried over
-                                // from the last passport.
-                                setSubtractDays(false);
-                                setConfirmingDelete(true);
-                            }}
-                        >
-                            {isEnglish ? 'Delete passport' : '删除通行证'}
-                        </button>
-                    </div>
-                ) : (
-                    <div
-                        className="admin-passport-warning admin-passport-warning--urgent admin-passport-delete-panel">
-                        <strong>
-                            {isEnglish
-                                ? `Delete passport ${passport.id}?`
-                                : `删除通行证 ${passport.id}？`}
-                        </strong>
-                        <p>
-                            {isEnglish
-                                ? `It leaves ${owner?.displayName || 'the holder'}’s shelf, its sticker stops working, and its activation key goes with it. This can’t be undone.`
-                                : `该通行证将从${owner?.displayName || '持有者'}的书架上消失，贴纸随之失效，激活码一并移除。此操作无法撤销。`}
-                        </p>
-
-                        <label className="admin-checkbox-label admin-passport-delete-choice">
-                            <input
-                                type="checkbox"
-                                checked={subtractDays}
-                                onChange={e => setSubtractDays(e.target.checked)}
-                                disabled={busy || !reduction}
-                            />
-                            <span>
-                                {isEnglish
-                                    ? `Also take back the ${passport.termDays} days it granted`
-                                    : `同时收回其授予的 ${passport.termDays} 天会员资格`}
-                            </span>
-                        </label>
-                        <p className="admin-passport-delete-effect">{deleteEffect()}</p>
-
-                        <div className="admin-btn-row">
+            {/* Everything that can't be taken back, in the one place on the page
+                that says so before it is read. */}
+            {!readOnly && (
+                <section className={`admin-passport-danger${
+                    confirmingDelete ? ' admin-passport-danger--open' : ''}`}>
+                    <h4 className="admin-passport-danger-title">
+                        {isEnglish ? 'Danger zone' : '危险操作'}
+                    </h4>
+                    {!confirmingDelete ? (
+                        <div className="admin-passport-danger-row">
+                            <p className="admin-passport-danger-note">
+                                {unclaimed
+                                    ? (isEnglish
+                                        ? 'Removes this passport and its key. For stock that was destroyed or mispacked.'
+                                        : '移除该通行证及其激活码。适用于已损毁或错误包装的库存。')
+                                    : (isEnglish
+                                        ? 'Breaks a permanent binding. For a passport activated by mistake, or onto the wrong account.'
+                                        : '解除永久绑定。适用于误激活或激活到错误账号的通行证。')}
+                            </p>
                             <button
                                 className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                                onClick={() => void deleteClaimed()}
+                                onClick={() => {
+                                    if (unclaimed) {
+                                        void deleteStock();
+                                        return;
+                                    }
+                                    // Off every time it opens: taking days back is
+                                    // its own decision, not the one carried over
+                                    // from the last passport.
+                                    setSubtractDays(false);
+                                    setConfirmingDelete(true);
+                                }}
                                 disabled={busy}
                                 type="button"
                             >
-                                {busy
-                                    ? (isEnglish ? 'Deleting…' : '删除中…')
-                                    : (isEnglish ? 'Delete passport' : '删除通行证')}
-                            </button>
-                            <button
-                                className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
-                                onClick={() => setConfirmingDelete(false)}
-                                disabled={busy}
-                                type="button"
-                            >
-                                {isEnglish ? 'Cancel' : '取消'}
+                                {isEnglish ? 'Delete passport' : '删除通行证'}
                             </button>
                         </div>
-                    </div>
-                )
+                    ) : (
+                        <div
+                            className="admin-passport-warning admin-passport-warning--urgent admin-passport-delete-panel">
+                            <strong>
+                                {isEnglish
+                                    ? `Delete passport ${passport.id}?`
+                                    : `删除通行证 ${passport.id}？`}
+                            </strong>
+                            <p>
+                                {isEnglish
+                                    ? `It leaves ${owner?.displayName || 'the holder'}’s shelf, its sticker stops working, and its activation key goes with it. This can’t be undone.`
+                                    : `该通行证将从${owner?.displayName || '持有者'}的书架上消失，贴纸随之失效，激活码一并移除。此操作无法撤销。`}
+                            </p>
+
+                            <label className="admin-checkbox-label admin-passport-delete-choice">
+                                <input
+                                    type="checkbox"
+                                    checked={subtractDays}
+                                    onChange={e => setSubtractDays(e.target.checked)}
+                                    disabled={busy || !reduction}
+                                />
+                                <span>
+                                    {isEnglish
+                                        ? `Also take back the ${passport.termDays} days it granted`
+                                        : `同时收回其授予的 ${passport.termDays} 天会员资格`}
+                                </span>
+                            </label>
+                            <p className="admin-passport-delete-effect">{deleteEffect()}</p>
+
+                            <div className="admin-btn-row">
+                                <button
+                                    className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
+                                    onClick={() => void deleteClaimed()}
+                                    disabled={busy}
+                                    type="button"
+                                >
+                                    {busy
+                                        ? (isEnglish ? 'Deleting…' : '删除中…')
+                                        : (isEnglish ? 'Delete passport' : '删除通行证')}
+                                </button>
+                                <button
+                                    className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
+                                    onClick={() => setConfirmingDelete(false)}
+                                    disabled={busy}
+                                    type="button"
+                                >
+                                    {isEnglish ? 'Cancel' : '取消'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </section>
             )}
             {pngNode}
         </div>

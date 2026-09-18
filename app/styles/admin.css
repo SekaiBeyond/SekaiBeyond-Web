@@ -4365,9 +4365,11 @@ select.admin-tickets-tag:focus {
 /* ==========================================================================
    Passports tab
 
-   Reuses the QR tool's detail chrome (admin-qr-paper, admin-qr-detail-*,
-   admin-stats-tile) — these are the pieces a passport needs that a QR code
-   doesn't: the stock grid, the one-time key table, and the audit trail.
+   Borrows only the small shared pieces from the QR tool — the dashed "paper"
+   the code is printed on, the status badge and the inline row control. The
+   stock grid, the one-time key table and the detail page below are the
+   passport's own: it is an object with a cover, a holder and a printed slip,
+   which a QR code is not.
    ========================================================================== */
 
 /* Which slice of the stock the table is showing. Underlined rather than boxed,
@@ -4620,16 +4622,6 @@ select.admin-tickets-tag:focus {
     color: var(--color-text);
 }
 
-/* The Key slip row's key, under its issued/spent line. */
-.admin-qr-detail-list .admin-passport-key-secret {
-    margin-top: 4px;
-}
-
-.admin-passport-key-secret--masked {
-    font-weight: 400;
-    color: var(--color-text-light);
-}
-
 /* The printed code as it appears under the QR on the sticker PNG. */
 .admin-passport-sticker-code {
     margin-top: 6px;
@@ -4645,7 +4637,7 @@ select.admin-tickets-tag:focus {
    panel, since it is the same kind of thing said at the same volume, and adds
    the room its choice and its buttons need. */
 .admin-passport-delete-panel {
-    margin: 20px 0 0;
+    margin: 0;
 }
 
 .admin-passport-delete-panel p {
@@ -4680,6 +4672,475 @@ select.admin-tickets-tag:focus {
 
 .admin-passport-delete-panel .admin-btn-row {
     margin-top: 14px;
+}
+
+/* --------------------------------------------------------------------------
+   One passport's page
+
+   Laid out as the thing it describes rather than as a form: a band up top for
+   the object itself, the record beside the printed side, and the single
+   irreversible action fenced off at the foot where nothing is clicked by
+   accident on the way past.
+   -------------------------------------------------------------------------- */
+
+/* The passport as it is held — cover, printed code, state. */
+.admin-passport-hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 18px;
+    padding: 18px 20px;
+    border: 1px solid rgba(255, 107, 157, 0.16);
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(255, 107, 157, 0.09), rgba(255, 142, 83, 0.06)),
+    rgba(255, 255, 255, 0.85);
+    box-shadow: 0 2px 10px rgba(255, 150, 200, 0.08);
+}
+
+/* Claimed tints green, the same green as the status dots in the stock table,
+   so the band itself answers the question the badge spells out. */
+.admin-passport-hero--claimed {
+    border-color: rgba(78, 203, 113, 0.28);
+    background: linear-gradient(135deg, rgba(78, 203, 113, 0.12), rgba(108, 99, 255, 0.05)),
+    rgba(255, 255, 255, 0.85);
+}
+
+/* The 3/4 shape a cover is shown in everywhere else, at thumbnail size. With
+   no art on the design yet, the year holds its place, as on the design card. */
+.admin-passport-hero-cover {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 3px 10px rgba(74, 81, 96, 0.14);
+    color: var(--color-text-light);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.admin-passport-hero-cover img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.admin-passport-hero-text {
+    flex: 1 1 200px;
+    min-width: 0;
+}
+
+.admin-passport-hero-design {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+/* Mono and spaced out: this is the string someone reads off a sticker and
+   types, so it is set the way it is printed. */
+.admin-passport-hero-code {
+    margin: 2px 0 0;
+    font-family: var(--font-mono);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    line-height: 1.15;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+}
+
+.admin-passport-hero-term {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+.admin-passport-hero-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-passport-stale {
+    margin: 10px 0 0;
+    font-size: 13px;
+    color: var(--color-error);
+}
+
+/* Record on the left, printed side on the right; one column as soon as the
+   sticker no longer fits beside it. */
+.admin-passport-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 16px;
+    align-items: start;
+    margin-top: 16px;
+}
+
+.admin-passport-detail-main {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+/* One card per thing the page is about: holder, key slip, record, sticker. */
+.admin-passport-panel {
+    min-width: 0;
+    padding: 16px 18px;
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
+}
+
+/* The same eyebrow voice the detail rows use, so a card title and a field
+   label read as one labelling system. */
+.admin-passport-panel-title {
+    margin: 0 0 12px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+/* A title with its one control pushed to the far edge (Show/Hide key). */
+.admin-passport-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.admin-passport-panel-head .admin-passport-panel-title {
+    margin-bottom: 0;
+}
+
+/* An action and the one line that says what it does, ruled off at the foot of
+   the card it belongs to. */
+.admin-passport-panel-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 107, 157, 0.12);
+}
+
+.admin-passport-panel-foot-note {
+    flex: 1;
+    min-width: 160px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+/* The holder, as the avatar row they are elsewhere in the panel — and the way
+   through to their account, since nothing about them is edited here. */
+.admin-passport-holder-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 107, 157, 0.14);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.6);
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-passport-holder-card:hover {
+    background: rgba(255, 107, 157, 0.07);
+    border-color: rgba(255, 107, 157, 0.3);
+}
+
+.admin-passport-holder-card:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* Stands in for a missing photo at avatar size: the holder's first letter. */
+.admin-passport-holder-initial {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--color-primary);
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.admin-passport-holder-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+/* A long name or address is clipped rather than widening the card; the
+   membership line below wraps instead, since a half-shown date is worse than
+   a second line. */
+.admin-passport-holder-display,
+.admin-passport-holder-mail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-passport-holder-display {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-passport-holder-mail {
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+/* Not this page's to change, but it is the figure the delete below subtracts
+   from — so the answer is on screen before the choice is made. */
+.admin-passport-holder-member {
+    margin-top: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2f9e57;
+}
+
+.admin-passport-holder-member--lapsed {
+    color: var(--color-text-light);
+}
+
+.admin-passport-holder-go {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-primary);
+    white-space: nowrap;
+}
+
+/* No holder to show: stock, a deleted account, or still loading. Dashed, so
+   the empty state reads as a space waiting to be filled rather than a card. */
+.admin-passport-holder-empty {
+    padding: 14px;
+    border: 1px dashed rgba(122, 129, 144, 0.32);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.admin-passport-holder-empty-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-passport-holder-empty-note {
+    margin: 4px 0 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+}
+
+/* The key at the size it is read off a slip. The masked and revealed states
+   are the same box, so showing it doesn't shift what is underneath. */
+.admin-passport-key-readout {
+    padding: 12px 14px;
+    border: 1px solid rgba(74, 81, 96, 0.1);
+    border-radius: 12px;
+    background: rgba(74, 81, 96, 0.05);
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-align: center;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+}
+
+.admin-passport-key-readout--masked {
+    font-weight: 400;
+    color: var(--color-text-light);
+}
+
+.admin-passport-key-meta {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+/* The dates, as hairline-divided rows: label left, value right. */
+.admin-passport-facts {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-passport-facts > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 0;
+}
+
+.admin-passport-facts > div + div {
+    border-top: 1px solid rgba(255, 107, 157, 0.12);
+}
+
+.admin-passport-facts > div:first-child {
+    padding-top: 0;
+}
+
+.admin-passport-facts > div:last-child {
+    padding-bottom: 0;
+}
+
+.admin-passport-facts dt {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+}
+
+.admin-passport-facts dd {
+    margin: 0;
+    min-width: 0;
+    font-size: 14px;
+    text-align: right;
+    color: var(--color-text);
+}
+
+/* Who generated it, or why it is locked: the quiet half of a value. */
+.admin-passport-fact-by {
+    display: block;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+/* The printed side, kept together: what the sticker shows, where it points,
+   and how to get it back out as artwork. */
+.admin-passport-sticker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.admin-passport-sticker .admin-passport-panel-title {
+    align-self: flex-start;
+    margin-bottom: 0;
+}
+
+.admin-passport-sticker .admin-qr-paper {
+    width: min(240px, 100%);
+}
+
+/* Stacked under the record, the card goes full width while its contents stay
+   at sticker size rather than stretching across the page. */
+.admin-passport-sticker .admin-code-url {
+    max-width: 260px;
+}
+
+/* The one part of the page that can't be taken back, fenced and labelled
+   before it is read. */
+.admin-passport-danger {
+    margin-top: 20px;
+    padding: 16px 18px;
+    border: 1px solid rgba(224, 85, 85, 0.3);
+    border-radius: 16px;
+    background: rgba(224, 85, 85, 0.04);
+}
+
+/* Opened, the panel inside is its own fence and says everything the frame
+   did — so the frame gets out of its way rather than stacking red on red. */
+.admin-passport-danger--open {
+    padding: 0;
+    border-color: transparent;
+    background: none;
+}
+
+.admin-passport-danger-title {
+    margin: 0 0 12px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--color-error);
+}
+
+.admin-passport-danger-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-passport-danger-note {
+    flex: 1;
+    min-width: 200px;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+}
+
+@media (max-width: 900px) {
+    .admin-passport-detail-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Too narrow for the holder's details and the way through to their account
+   side by side: the link drops to its own line rather than squeezing the
+   membership date into an ellipsis. */
+@media (max-width: 560px) {
+    .admin-passport-holder-card {
+        flex-wrap: wrap;
+    }
+
+    .admin-passport-holder-go {
+        width: 100%;
+        text-align: right;
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-passport-hero {
+        gap: 14px;
+        padding: 16px;
+    }
+
+    .admin-passport-hero-code {
+        font-size: 21px;
+    }
+
+    .admin-passport-key-readout {
+        font-size: 16px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-passport-holder-card {
+        transition: none;
+    }
 }
 
 /* Designs, listed under their year — a year can have several. */
