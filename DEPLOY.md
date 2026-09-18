@@ -42,7 +42,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
    | `pastEvents`            | `deleteAt`  | 48h cooldown for past-event deletion                        |
    | `upcomingEvents`        | `deleteAt`  | 48h cooldown for upcoming-event deletion                    |
    | `badges`                | `deleteAt`  | 48h cooldown for badge deletion                             |
-   | `scans`                 | `expiresAt` | Scan-event retention (365 days) for QR codes **and** passports — one collection-group policy covers both |
+   | `scans`                 | `expiresAt` | Scan-event retention (365 days) for QR codes                 |
    | `scanQuota`             | `expiresAt` | Per-client scan-quota windows (two windows' grace)           |
 
    All ten are defined as `fieldOverrides` with `"ttl": true` in [`firestore.indexes.json`](firestore.indexes.json), so they deploy with the indexes:

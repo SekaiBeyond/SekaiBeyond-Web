@@ -2,14 +2,10 @@ import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
-/**
- * One scan event. QR codes and passports both write this shape into a `scans`
- * subcollection (and share one TTL policy on that collection group), so both
- * read through here and render through the same trend chart.
- */
+/** One scan event, as recordScan writes it under a QR code's `scans` subcollection. */
 export interface ScanEvent {
     at: Date;
-    /** Platform tag from a QR link's `p` param. Always '' for passport scans. */
+    /** Platform tag from a QR link's `p` param; '' for a code reached without one. */
     platform: string;
 }
 
@@ -21,7 +17,7 @@ export interface ScanEvent {
  */
 export const SCAN_FETCH_LIMIT = 5000;
 
-/** What one subject's scan history looks like once it has been read. */
+/** What one code's scan history looks like once it has been read. */
 export interface ScanHistory {
     /** Oldest first, as the chart wants them. */
     events: ScanEvent[];

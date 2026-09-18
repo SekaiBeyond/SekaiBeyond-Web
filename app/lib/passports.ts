@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { createCollectionCache, toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
-import { fetchScans, type ScanHistory } from './scans';
 
 export type PassportStatus = 'unclaimed' | 'claimed' | 'void';
 
@@ -31,8 +30,6 @@ export interface Passport {
     keyReissueCount: number;
     failedAttempts: number;
     lockedUntil: Date | null;
-    scanCount: number;
-    lastScanAt: Date | null;
 }
 
 /**
@@ -117,8 +114,6 @@ const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Pas
         keyReissueCount: typeof data.keyReissueCount === 'number' ? data.keyReissueCount : 0,
         failedAttempts: typeof data.failedAttempts === 'number' ? data.failedAttempts : 0,
         lockedUntil: toDate(data.lockedUntil),
-        scanCount: typeof data.scanCount === 'number' ? data.scanCount : 0,
-        lastScanAt: toDate(data.lastScanAt),
     };
 };
 
@@ -225,9 +220,6 @@ export async function fetchPassportClaims(id: string): Promise<PassportClaimEven
         })
         .sort((a, b) => (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0));
 }
-
-/** Scan history for one passport — backs the same trend chart the QR codes use. */
-export const fetchPassportScans = (id: string): Promise<ScanHistory> => fetchScans('passports', id);
 
 // Printed codes are read back by hand, so the dashes we print for legibility,
 // stray spaces, and lowercase are all folded away before the code is used.

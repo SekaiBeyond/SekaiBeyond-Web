@@ -8,23 +8,18 @@ const QUOTA = "scanQuota";
 export const SCAN_QUOTA_WINDOW_MS = 30 * 60_000;
 
 /**
- * How many scans one client may add to one subject per window. The right number
- * depends entirely on how many people are expected to scan the same thing, so it
- * is the caller's to choose.
+ * How many scans one client may add to one code per window.
  *
- * A passport sticker belongs to one person and is scanned by whoever is standing
- * in front of them. A poster or standee is scanned by a whole room — all behind
- * the venue's NAT, sharing a handful of user agents, and therefore looking like
- * very few clients. Metering both at the personal figure would have stopped
- * counting a busy poster's scans exactly at the event its analytics exist to
- * measure.
+ * A poster or standee is scanned by a whole room — all behind the venue's NAT,
+ * sharing a handful of user agents, and therefore looking like very few clients.
+ * A tighter ceiling would have stopped counting a busy poster's scans exactly at
+ * the event its analytics exist to measure.
  *
- * Both are loose enough that hitting one is already implausible for honest
- * traffic; what they stop is the shape with no honest explanation, which is the
- * same client asking thousands of times.
+ * It is loose enough that reaching it is already implausible for honest traffic;
+ * what it stops is the shape with no honest explanation, which is the same
+ * client asking thousands of times.
  */
-export const SCAN_QUOTA_PERSONAL = 30;
-export const SCAN_QUOTA_PUBLIC = 500;
+export const SCAN_QUOTA = 500;
 
 // Only ever used to salt a hash that is thrown away within the hour. Set
 // SCAN_CLIENT_SALT in the function environment to make the digests unguessable
@@ -67,7 +62,7 @@ function narrowAddress(address: string): string {
 }
 
 /**
- * Whether this client has already used up its allowance on this subject.
+ * Whether this client has already used up its allowance on this code.
  *
  * The window is part of the document id rather than a field, so each one gets a
  * fresh document and there is no stale-window branch to get wrong — and because
@@ -77,10 +72,10 @@ function narrowAddress(address: string): string {
  * Best-effort by design: a read that fails lets the scan through rather than
  * dropping a tally over an unrelated outage.
  */
-async function quotaExhausted(ref: FirebaseFirestore.DocumentReference, limit: number): Promise<boolean> {
+async function quotaExhausted(ref: FirebaseFirestore.DocumentReference): Promise<boolean> {
     try {
         const used = (await ref.get()).data()?.count;
-        return typeof used === "number" && used >= limit;
+        return typeof used === "number" && used >= SCAN_QUOTA;
     } catch (err) {
         console.error(`recordScan: quota read failed for ${ref.id}`, err);
         return false;
@@ -88,26 +83,23 @@ async function quotaExhausted(ref: FirebaseFirestore.DocumentReference, limit: n
 }
 
 /**
- * Bump a scannable document's counters and log one scan event under its `scans`
+ * Bump a QR code's counters and log one scan event under its `scans`
  * subcollection.
  *
- * QR codes and passports both write this shape, and that is what lets a single
- * TTL policy cover the whole `scans` collection group and a single chart read it
- * (see fetchScans in app/lib/scans.ts). Keeping the write in one place is what
- * keeps those three in agreement — and is why the per-client quota below covers
- * every scannable thing rather than whichever one was fixed last.
+ * Both entry points — the recordQrScan callable and the redirectQr request
+ * handler — write through here, which is what keeps the counters, the `scans`
+ * TTL policy and the chart that reads them (see fetchScans in app/lib/scans.ts)
+ * in agreement.
  *
  * `platform` is a QR link's `p` tag, which additionally tallies under
- * `platformScans.<platform>` so click-through can be compared by platform.
- * Passports carry none and pass "", which skips that field and reads as a single
- * series in the chart.
+ * `platformScans.<platform>` so click-through can be compared by platform. A
+ * code reached without one passes "", which skips that field and reads as a
+ * single series in the chart.
  */
 export async function recordScan(
     ref: FirebaseFirestore.DocumentReference,
-    {clientKey, quota, platform = ""}: {
+    {clientKey, platform = ""}: {
         clientKey: string;
-        /** SCAN_QUOTA_PERSONAL or SCAN_QUOTA_PUBLIC — see their docs. */
-        quota: number;
         platform?: string;
     },
 ): Promise<void> {
@@ -116,9 +108,9 @@ export async function recordScan(
         createHash("sha256").update(`${ref.path}|${clientKey}|${window}`).digest("hex").slice(0, 32),
     );
 
-    if (await quotaExhausted(quotaRef, quota)) {
+    if (await quotaExhausted(quotaRef)) {
         // The only interesting scan event is the one that stopped counting: this
-        // is the signal a passport is being hammered, and the page still renders.
+        // is the signal a code is being hammered, and the redirect still runs.
         console.log(`recordScan: quota reached for ${ref.path}, scan not counted`);
         return;
     }

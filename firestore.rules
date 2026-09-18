@@ -91,10 +91,10 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
-        // How many scans one client has already added to one scannable thing in
-        // the current window, so a looped public scan endpoint can't run a
-        // counter up forever. Server-only, and the ids are salted hashes — there
-        // is nothing here to read even for a president.
+        // How many scans one client has already added to one QR code in the
+        // current window, so a looped public scan endpoint can't run a counter up
+        // forever. Server-only, and the ids are salted hashes — there is nothing
+        // here to read even for a president.
         match /scanQuota/{slot} {
             allow read, write: if false;
         }
@@ -197,7 +197,7 @@ service cloud.firestore {
         // which is why the shelf query MUST filter on ownerUid — an unfiltered
         // read is rejected. Public scanners never read this: they call
         // getPassportPublicProfile, which resolves the sticker server-side.
-        // All writes (status, ownerUid, scan counters) go through Cloud Functions.
+        // All writes (status, ownerUid) go through Cloud Functions.
         match /passports/{passportId} {
             allow read: if request.auth != null
                 && (isStaffOrAbove() || resource.data.ownerUid == request.auth.uid);
@@ -205,11 +205,6 @@ service cloud.firestore {
             // Permanent bind/void/key audit trail — no TTL, core-staff+ only.
             match /claims/{claimId} {
                 allow read: if request.auth != null && isCoreStaffOrAbove();
-            }
-
-            // Per-scan events backing the trend charts.
-            match /scans/{scanId} {
-                allow read: if request.auth != null && isStaffOrAbove();
             }
         }
 

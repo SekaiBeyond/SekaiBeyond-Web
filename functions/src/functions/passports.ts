@@ -5,7 +5,6 @@ import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks, generateSecureCode } from "../utils/helpers";
 import { extendedExpiry, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
-import { recordScan, SCAN_QUOTA_PERSONAL, scanClientKey } from "../utils/scans";
 import {
     activationKeyMatches,
     formatActivationKey,
@@ -108,8 +107,6 @@ export const generatePassports = onCall({maxInstances: 5}, async (request) => {
                 keyReissueCount: 0,
                 failedAttempts: 0,
                 lockedUntil: null,
-                scanCount: 0,
-                lastScanAt: null,
             });
             batch.create(db.collection(SECRETS).doc(passportId), {salt, secretHash, key});
         });
@@ -436,9 +433,7 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
     const passportId = normalizePassportId((request.data as {passportId?: unknown})?.passportId);
     if (!passportId) return {status: "invalid" as const};
 
-    const clientKey = scanClientKey(request.rawRequest);
-    const passportRef = db.collection(PASSPORTS).doc(passportId);
-    const passportSnap = await passportRef.get();
+    const passportSnap = await db.collection(PASSPORTS).doc(passportId).get();
     if (!passportSnap.exists) return {status: "invalid" as const};
 
     const passport = passportSnap.data()!;
@@ -449,7 +444,6 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
     const designId: string = passport.designId ?? "";
 
     if (passport.status !== "claimed" || !passport.ownerUid) {
-        await tallyScan(passportRef, clientKey);
         // The term is per-passport data, not a constant: the activation screen
         // quotes what this sticker actually grants rather than today's default.
         return {
@@ -468,15 +462,7 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 
     const owner = ownerSnap.data()!;
     const isOwner = request.auth?.uid === ownerUid;
-    if (owner.hidePassportPage === true && !isOwner) {
-        await tallyScan(passportRef, clientKey);
-        return {status: "private" as const};
-    }
-
-    // The owner's own visits aren't scans. The page re-resolves whenever they
-    // activate or flip visibility, and counting those would report a handful of
-    // scans on a sticker nobody else has ever seen.
-    if (!isOwner) await tallyScan(passportRef, clientKey);
+    if (owner.hidePassportPage === true && !isOwner) return {status: "private" as const};
 
     return {
         status: "claimed" as const,
@@ -497,16 +483,6 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
         },
     };
 });
-
-/** A failed tally must never keep the scanned page from rendering. */
-async function tallyScan(ref: FirebaseFirestore.DocumentReference, clientKey: string): Promise<void> {
-    try {
-        // A sticker belongs to one person, so the personal ceiling applies.
-        await recordScan(ref, {clientKey, quota: SCAN_QUOTA_PERSONAL});
-    } catch (err) {
-        console.error(`tallyScan: failed to record scan for passport ${ref.id}`, err);
-    }
-}
 
 /**
  * Void an unclaimed passport — a sticker destroyed in packing, a pack whose

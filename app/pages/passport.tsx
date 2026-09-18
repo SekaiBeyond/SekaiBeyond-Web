@@ -42,9 +42,7 @@ export const PassportPage = () => {
 
     const [result, setResult] = useState<PassportPublicProfile | null>(null);
     const [failed, setFailed] = useState(false);
-    // Bumped to re-resolve the sticker after the owner activates it. That resolve
-    // is the owner's own, which the server declines to tally — so re-resolving
-    // never inflates the scan count.
+    // Bumped to re-resolve the sticker after the owner activates it.
     const [nonce, setNonce] = useState(0);
 
     useEffect(() => {

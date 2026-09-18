@@ -2426,15 +2426,6 @@ select.admin-tickets-tag:focus {
     background: rgba(255, 107, 157, 0.04);
 }
 
-/* Counts and other figures read down the column, not across it. Qualified by the
-   element so it outweighs the `th`/`td` rules above without reaching for
-   !important. */
-.admin-data-table th.admin-data-table-num,
-.admin-data-table td.admin-data-table-num {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-
 /* A header that sorts. The caret is the only thing that moves, so the heading
    stays where the eye left it when the column is clicked. */
 .admin-data-table-sort {
@@ -2449,10 +2440,6 @@ select.admin-tickets-tag:focus {
     text-transform: inherit;
     letter-spacing: inherit;
     cursor: pointer;
-}
-
-.admin-data-table-num .admin-data-table-sort {
-    flex-direction: row-reverse;
 }
 
 .admin-data-table-sort:hover,

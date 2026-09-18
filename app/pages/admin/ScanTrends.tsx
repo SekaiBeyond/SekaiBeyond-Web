@@ -101,10 +101,10 @@ function buildSeries(scans: ScanEvent[], seriesKeys: string[], isEnglish: boolea
 }
 
 /**
- * The "Scans Over Time" panel as a detail page mounts it: loads the subject's
+ * The "Scans Over Time" panel as a detail page mounts it: loads the code's
  * scans, offers a refresh, and hands them to {@link ScanTrends}. `fetchScans`
- * has to be a stable reference (the module-level fetchQrScans /
- * fetchPassportScans), since it is what re-triggers the load.
+ * has to be a stable reference (the module-level fetchQrScans), since it is what
+ * re-triggers the load.
  */
 export function ScanTrendsSection({id, fetchScans, platforms}: {
     id: string;
@@ -162,15 +162,13 @@ export function ScanTrendsSection({id, fetchScans, platforms}: {
 
 interface ScanTrendsProps {
     scans: ScanEvent[];
-    /** The subject's platform ids — fixes series order and colors (social codes). */
+    /** The code's platform ids — fixes series order and colors (social codes). */
     platforms?: string[];
 }
 
 /**
- * The scan history of anything scannable. QR codes and passports write the same
- * {@link ScanEvent} shape, so this lives beside the admin panel rather than
- * inside either feature's folder — the platform series below is simply empty for
- * a subject that doesn't tag its scans.
+ * One QR code's scan history over time. The platform series below is simply
+ * empty for a code that doesn't tag its scans, which charts as one series.
  */
 export function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
     const {isEnglish} = useLanguage();

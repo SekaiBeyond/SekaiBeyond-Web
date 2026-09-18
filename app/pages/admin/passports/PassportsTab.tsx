@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGeneratePassports } from '~/lib/firebase';
 import {
@@ -209,16 +209,6 @@ const Dashboard = ({
 
     const year = designs.find(d => d.id === designId)?.year;
 
-    // The per-status counts live on the table's own tabs; what is worth a tile up
-    // here is the pair they don't carry.
-    const stats = useMemo(() => {
-        const list = passports ?? [];
-        return {
-            total: list.length,
-            scans: list.reduce((sum, p) => sum + p.scanCount, 0),
-        };
-    }, [passports]);
-
     const doRefresh = async () => {
         setRefreshing(true);
         try {
@@ -279,9 +269,10 @@ const Dashboard = ({
                         </label>
                     </div>
 
+                    {/* The per-status counts live on the table's own tabs; the run
+                        total is the one figure they don't carry. */}
                     <div className="admin-stats-tiles admin-section-mb">
-                        <StatTile label={isEnglish ? 'Generated' : '已生成'} value={stats.total}/>
-                        <StatTile label={isEnglish ? 'Scans' : '扫描数'} value={stats.scans}/>
+                        <StatTile label={isEnglish ? 'Generated' : '已生成'} value={passports?.length ?? 0}/>
                     </div>
 
                     <PassportSearch designs={designs} onOpen={onOpen} showToast={showToast}/>

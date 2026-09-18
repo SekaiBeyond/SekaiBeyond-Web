@@ -5,7 +5,6 @@ import { callReissuePassportKey, callRevealPassportKey, callVoidPassport, getFir
 import {
     fetchPassport,
     fetchPassportClaims,
-    fetchPassportScans,
     type Passport,
     type PassportClaimEvent,
     passportDateTime,
@@ -14,8 +13,6 @@ import {
     passportStatusLabel,
     usePassportDesigns,
 } from '~/lib/passports';
-import { ScanTrendsSection } from '../ScanTrends';
-import { StatTile } from '../StatTile';
 import { QrPreview } from '../tools/qr/qrExport';
 import type { UserRecord } from '../types';
 import { docToUserRecord, type ShowToast } from '../utils';
@@ -37,8 +34,8 @@ interface PassportDetailProps {
 }
 
 /**
- * One passport's page: who holds it, how it has been scanned, and its permanent
- * audit trail.
+ * One passport's page: who holds it, its sticker, and its permanent audit
+ * trail.
  *
  * Any passport that isn't void can have its key slip viewed. The only other
  * actions are for stock that has never been sold — reissue the slip, or void the
@@ -305,20 +302,6 @@ export const PassportDetail = ({
                 </div>
 
                 <div className="admin-qr-detail-meta">
-                    <div className="admin-stats-tiles">
-                        <StatTile label={isEnglish ? 'Scans' : '扫描数'} value={passport.scanCount}/>
-                        <StatTile
-                            label={isEnglish ? 'Last Scan' : '最近扫描'}
-                            value={fmtDate(passport.lastScanAt)}
-                            small
-                        />
-                        <StatTile
-                            label={isEnglish ? 'Term' : '有效期'}
-                            value={isEnglish ? `${passport.termDays} days` : `${passport.termDays} 天`}
-                            small
-                        />
-                    </div>
-
                     <dl className="admin-qr-detail-list">
                         <div>
                             <dt>{isEnglish ? 'Holder' : '持有者'}</dt>
@@ -348,6 +331,10 @@ export const PassportDetail = ({
                                 <dd>{fmtDate(passport.claimedAt)}</dd>
                             </div>
                         )}
+                        <div>
+                            <dt>{isEnglish ? 'Term' : '有效期'}</dt>
+                            <dd>{isEnglish ? `${passport.termDays} days` : `${passport.termDays} 天`}</dd>
+                        </div>
                         <div>
                             <dt>{isEnglish ? 'Generated' : '生成时间'}</dt>
                             <dd>
@@ -397,8 +384,6 @@ export const PassportDetail = ({
                     </dl>
                 </div>
             </div>
-
-            <ScanTrendsSection id={passport.id} fetchScans={fetchPassportScans}/>
 
             {!readOnly && (
                 <div className="admin-field-section admin-qr-section">

@@ -22,7 +22,7 @@ const PAGE_SIZE = 50;
 type StatusFilter = 'all' | PassportStatus;
 const STATUS_FILTERS: StatusFilter[] = ['all', 'unclaimed', 'claimed', 'void'];
 
-type SortKey = 'code' | 'status' | 'holder' | 'generated' | 'scans';
+type SortKey = 'code' | 'status' | 'holder' | 'generated';
 type SortDir = 'asc' | 'desc';
 
 /**
@@ -50,10 +50,9 @@ export const INITIAL_STOCK_VIEW: StockView = {
 interface Column {
     key: SortKey;
     label: {en: string; cn: string};
-    /** Which way the first click sorts: text reads A–Z, dates and counts read
-     * biggest first, because that is what each is usually being looked for. */
+    /** Which way the first click sorts: text reads A–Z, dates read newest
+     * first, because that is what each is usually being looked for. */
     first: SortDir;
-    numeric?: boolean;
 }
 
 const COLUMNS: Column[] = [
@@ -61,7 +60,6 @@ const COLUMNS: Column[] = [
     {key: 'status', label: {en: 'Status', cn: '状态'}, first: 'asc'},
     {key: 'holder', label: {en: 'Holder', cn: '持有者'}, first: 'asc'},
     {key: 'generated', label: {en: 'Generated', cn: '生成时间'}, first: 'desc'},
-    {key: 'scans', label: {en: 'Scans', cn: '扫描数'}, first: 'desc', numeric: true},
 ];
 
 /** Sorting by status walks the lifecycle rather than the alphabet. */
@@ -171,8 +169,6 @@ export const PassportStock = ({
                 }
                 case 'generated':
                     return ((a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0)) * factor;
-                case 'scans':
-                    return (a.scanCount - b.scanCount) * factor;
             }
         };
         // The id breaks every tie, so equal rows keep one stable order instead of
@@ -268,7 +264,6 @@ export const PassportStock = ({
                                 {COLUMNS.map(column => (
                                     <th
                                         key={column.key}
-                                        className={column.numeric ? 'admin-data-table-num' : undefined}
                                         aria-sort={view.sortKey !== column.key
                                             ? 'none'
                                             : view.sortDir === 'asc' ? 'ascending' : 'descending'}
@@ -325,7 +320,6 @@ export const PassportStock = ({
                                             <span className="admin-passport-cell-by">{passport.createdByName}</span>
                                         )}
                                     </td>
-                                    <td className="admin-data-table-num">{passport.scanCount}</td>
                                 </tr>
                             ))}
                             </tbody>
