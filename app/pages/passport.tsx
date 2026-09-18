@@ -209,9 +209,25 @@ const ActivationCard = ({passportId, designId, termDays, onActivated}: Activatio
                     <h1 className="passport-notice-title">
                         {isEnglish ? 'Passport Activated!' : '通行证已激活！'}
                     </h1>
+                    {/* The payoff, at the size of a payoff: what the slip was
+                        worth, rather than a sentence mentioning it. */}
                     <p className="passport-grant">
-                        {isEnglish ? `+${granted.days} days of membership` : `会员资格 +${granted.days} 天`}
+                        <span className="passport-grant-number">+{granted.days}</span>
+                        <span className="passport-grant-unit">
+                            {isEnglish
+                                ? `${granted.days === 1 ? 'day' : 'days'} of membership`
+                                : '天会员资格'}
+                        </span>
                     </p>
+                    {/* What was just bound is a thing in the holder's hands, so
+                        the screen that confirms it shows the thing. */}
+                    <PassportIdent
+                        design={design}
+                        name={name}
+                        passportId={passportId}
+                        termDays={termDays}
+                        isEnglish={isEnglish}
+                    />
                     <p className="passport-notice-text">
                         {isEnglish
                             ? `Your membership now runs to ${on}. This passport is yours from here on — anyone who scans it lands on your page.`
@@ -222,7 +238,10 @@ const ActivationCard = ({passportId, designId, termDays, onActivated}: Activatio
                             <span>{isEnglish ? 'View My Passport Page' : '查看我的通行证页面'}</span>
                             <span>✨</span>
                         </button>
-                        <a href="/profile" className="profile-back-link">
+                        {/* The site's own pairing for two actions of equal
+                            weight — a back link beside a primary read as a
+                            footnote next to it. */}
+                        <a href="/profile" className="btn btn-secondary">
                             {isEnglish ? 'Go to My Profile' : '前往个人主页'}
                         </a>
                     </div>
@@ -234,57 +253,67 @@ const ActivationCard = ({passportId, designId, termDays, onActivated}: Activatio
     return (
         <PassportShell>
             <div className="passport-activate">
-                {design?.coverImageUrl && (
-                    <img
-                        src={design.coverImageUrl}
-                        alt={name}
-                        className="passport-activate-cover"
-                    />
-                )}
-                <h1 className="passport-activate-title">
-                    {isEnglish ? 'Activate Your Passport' : '激活您的通行证'}
-                </h1>
-                <p className="passport-activate-design">{name}</p>
-                <p className="passport-code">{passportId}</p>
+                <PassportIdent
+                    design={design}
+                    name={name}
+                    passportId={passportId}
+                    termDays={termDays}
+                    isEnglish={isEnglish}
+                />
 
-                {authLoading ? (
-                    <div className="spinner spinner-centered"/>
-                ) : !user ? (
-                    <>
-                        <p className="passport-notice-text">
-                            {isEnglish
-                                ? 'Sign in first — a passport is bound to the account that activates it, permanently.'
-                                : '请先登录 — 通行证会永久绑定到激活它的账号。'}
-                        </p>
-                        <button onClick={() => void signIn()} className="profile-sign-in-btn">
-                            {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        <p className="passport-notice-text">
-                            {isEnglish
-                                ? `Enter the activation key from the slip of paper packed with your passport. It grants ${termDays} days of membership, added on top of any you already have.`
-                                : `请输入通行证包装内附纸条上的激活码。激活可获得 ${termDays} 天会员资格，并在您现有会员期限上累加。`}
-                        </p>
-                        <div className="passport-key-row">
-                            <input
-                                className="passport-key-input"
-                                value={key}
-                                onChange={e => setKey(e.target.value.toUpperCase())}
-                                onKeyDown={e => {
-                                    if (e.key === 'Enter' && keyReady && !busy) void activate();
-                                }}
-                                placeholder="XXXX-XXXX-XXXX"
-                                autoComplete="off"
-                                autoCapitalize="characters"
-                                spellCheck={false}
-                                maxLength={ACTIVATION_KEY_LENGTH + 4}
-                                disabled={busy}
-                                aria-label={isEnglish ? 'Activation key' : '激活码'}
-                            />
+                <div className="passport-activate-body">
+                    <h1 className="passport-activate-title">
+                        {isEnglish ? 'Activate Your Passport' : '激活您的通行证'}
+                    </h1>
+
+                    {authLoading ? (
+                        <div className="spinner spinner-centered"/>
+                    ) : !user ? (
+                        <>
+                            <p className="passport-activate-lead">
+                                {isEnglish
+                                    ? 'Sign in to activate it. The key is printed on the slip of paper packed with your passport.'
+                                    : '请登录后激活。激活码印在通行证包装内附的纸条上。'}
+                            </p>
+                            <button onClick={() => void signIn()} className="profile-sign-in-btn">
+                                {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <p className="passport-activate-lead">
+                                {isEnglish
+                                    ? `Enter the key printed on the slip of paper packed with your passport. It adds ${termDays} days of membership on top of any you already have.`
+                                    : `请输入通行证包装内附纸条上的激活码。它将在您现有会员期限上增加 ${termDays} 天。`}
+                            </p>
+                            {/* The field takes the width it has, and the advice
+                                that is needed while typing sits under it rather
+                                than below the button. */}
+                            <div className="passport-key-field">
+                                <input
+                                    className="passport-key-input"
+                                    value={key}
+                                    onChange={e => setKey(e.target.value.toUpperCase())}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && keyReady && !busy) void activate();
+                                    }}
+                                    placeholder="XXXX-XXXX-XXXX"
+                                    autoComplete="off"
+                                    autoCapitalize="characters"
+                                    spellCheck={false}
+                                    maxLength={ACTIVATION_KEY_LENGTH + 4}
+                                    disabled={busy}
+                                    aria-label={isEnglish ? 'Activation key' : '激活码'}
+                                />
+                                <p className="passport-key-hint">
+                                    {isEnglish
+                                        ? 'Dashes and capitalisation don’t matter. A key has no letter O or I — those are the digits 0 and 1.'
+                                        : '横线和大小写无需在意。激活码中不含字母 O 和 I — 相似字符为数字 0 和 1。'}
+                                </p>
+                            </div>
+                            {error && <p className="passport-error">{error}</p>}
                             <button
-                                className="btn btn-primary"
+                                className="btn btn-primary passport-activate-go"
                                 onClick={() => void activate()}
                                 disabled={busy || !keyReady}
                                 type="button"
@@ -293,15 +322,18 @@ const ActivationCard = ({passportId, designId, termDays, onActivated}: Activatio
                                     ? (isEnglish ? 'Activating…' : '激活中…')
                                     : (isEnglish ? 'Activate' : '激活')}
                             </button>
-                        </div>
-                        <p className="passport-key-hint">
-                            {isEnglish
-                                ? 'Dashes and capitalisation don’t matter. The key has no letter O or I — those are the digits 0 and 1.'
-                                : '横线和大小写无需在意。激活码中不含字母 O 和 I — 相似字符为数字 0 和 1。'}
-                        </p>
-                        {error && <p className="passport-error">{error}</p>}
-                    </>
-                )}
+                        </>
+                    )}
+
+                    {/* Said to everyone, signed in or not. It is the one thing
+                        about activating that can't be taken back, and before
+                        this only someone who arrived signed out was told. */}
+                    <p className="passport-activate-bind">
+                        {isEnglish
+                            ? 'Activating binds this passport to your account permanently — it can’t be moved to another one later.'
+                            : '激活后，此通行证将永久绑定到您的账号 — 之后无法转移到其他账号。'}
+                    </p>
+                </div>
 
                 <a href="/" className="profile-back-link">
                     {isEnglish ? 'Back to Home' : '返回首页'}
@@ -310,6 +342,48 @@ const ActivationCard = ({passportId, designId, termDays, onActivated}: Activatio
         </PassportShell>
     );
 };
+
+/**
+ * The passport itself: its cover, what it grants, and the code printed on the
+ * sticker.
+ *
+ * The code is labelled because this sits on a screen asking for a key — an
+ * unlabelled code beside that field is one a holder can reasonably try to type
+ * into it. It is shown again after activating, since what was just bound is a
+ * thing in their hands and the screen confirming it should hold the thing.
+ */
+const PassportIdent = ({design, name, passportId, termDays, isEnglish}: {
+    design: PassportDesign | undefined;
+    name: string;
+    passportId: string;
+    termDays: number;
+    isEnglish: boolean;
+}) => (
+    <div className="passport-ident">
+        <div className="passport-ident-cover">
+            {design?.coverImageUrl
+                ? <img src={design.coverImageUrl} alt=""/>
+                : <span>{design?.year || ''}</span>}
+        </div>
+        <div className="passport-ident-lines">
+            <p className="passport-ident-name">
+                {name || (isEnglish ? 'Passport' : '通行证')}
+            </p>
+            <p className="passport-ident-meta">
+                {design?.year ? `${design.year} · ` : ''}
+                {isEnglish
+                    ? `${termDays} days of membership`
+                    : `${termDays} 天会员资格`}
+            </p>
+            <p className="passport-ident-code">
+                <span className="passport-ident-code-label">
+                    {isEnglish ? 'Code on the sticker' : '贴纸上的编号'}
+                </span>
+                {passportId}
+            </p>
+        </div>
+    </div>
+);
 
 /** Server rejection → something the holder can act on. */
 function activationError(err: unknown, isEnglish: boolean): string {

@@ -33,15 +33,66 @@
     border: 1px solid rgba(255, 107, 157, 0.16);
     border-radius: 24px;
     box-shadow: var(--shadow-card);
-    padding: 40px 32px;
     text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
+}
+
+.passport-notice {
+    padding: 40px 32px;
     gap: 14px;
 }
 
+/* A form rather than a message: narrow enough that the field it is built around
+   is the width of the card, and grouped — the passport, then the key, then the
+   way out — instead of one evenly spaced column of everything. */
+.passport-activate {
+    width: min(460px, 100%);
+    margin: 0 auto;
+    padding: 28px 24px 32px;
+    gap: 22px;
+}
+
+.passport-activate-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+}
+
+.passport-activate-lead {
+    max-width: 40ch;
+    color: var(--color-text-body);
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+/* The field and the advice that is read while typing into it. */
+.passport-key-field {
+    width: 100%;
+}
+
+.passport-activate-go {
+    width: 100%;
+    justify-content: center;
+}
+
+/* The one thing about activating that can't be taken back, under the button
+   that does it. */
+.passport-activate-bind {
+    max-width: 42ch;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--color-text-muted);
+}
+
+/* Held to roughly the width of the form it replaces, so activating doesn't
+   throw the card it happens in from 460px to the full page. */
 .passport-notice--success {
+    width: min(560px, 100%);
+    margin: 0 auto;
     border-color: rgba(78, 203, 113, 0.35);
 }
 
@@ -65,65 +116,153 @@
     line-height: 1.6;
 }
 
+/* Two ways on from a finished activation, of equal weight. The hero button's
+   own padding is wider than the card, so they are trimmed to sit as a pair —
+   and matched in width once they stack, so neither reads as the lesser one. */
 .passport-notice-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: 14px;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.passport-notice-actions .btn {
+    padding: 14px 26px;
+    font-size: 16px;
+}
+
+@media (max-width: 560px) {
+    .passport-notice-actions {
+        flex-direction: column;
+        align-items: stretch;
+        width: min(300px, 100%);
+    }
+
+    .passport-notice-actions .btn {
+        justify-content: center;
+    }
 }
 
 .passport-notice-cta {
     margin-top: 4px;
 }
 
-/* The headline number on a successful activation. */
+/* What the slip was worth, at the size of a payoff. */
 .passport-grant {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
     font-family: var(--font-display);
-    font-size: 24px;
+}
+
+.passport-grant-number {
+    font-size: 54px;
+    line-height: 1;
     background: var(--gradient-cta);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
-.passport-activate-cover {
-    width: min(240px, 70%);
-    border-radius: 16px;
-    box-shadow: var(--shadow-soft);
-}
-
-.passport-activate-design {
-    font-weight: 600;
+.passport-grant-unit {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
     color: var(--color-text-muted);
 }
 
-/* The printed code, always shown in the same monospaced, spaced-out form it has
-   on the sticker so reading one against the other is easy. */
-.passport-code {
-    font-family: var(--font-mono);
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: 0.18em;
+/* The passport as an object, on the screen that asks for its key and again on
+   the one that confirms it is bound. */
+.passport-ident {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: min(360px, 100%);
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 107, 157, 0.16);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.72);
+    text-align: left;
+}
+
+/* The 3/4 shape a cover is shown in everywhere, at the size of a thumbnail: it
+   is what confirms the right passport, not the subject of the screen. */
+.passport-ident-cover {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    border-radius: 10px;
+    background: rgba(255, 107, 157, 0.08);
+    box-shadow: 0 4px 14px rgba(74, 81, 96, 0.16);
+    color: var(--color-text-light);
+    font-weight: 700;
+}
+
+.passport-ident-cover img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.passport-ident-lines {
+    min-width: 0;
+}
+
+.passport-ident-name {
+    font-family: var(--font-display);
+    font-size: 19px;
+    line-height: 1.2;
     color: var(--color-text);
 }
 
-.passport-key-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    justify-content: center;
+.passport-ident-meta {
+    margin-top: 2px;
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+/* The printed code, in the same monospaced, spaced-out form it has on the
+   sticker so reading one against the other is easy — and labelled, since it
+   sits beside a field it would be wrong to type it into. */
+.passport-ident-code {
+    margin-top: 9px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+}
+
+.passport-ident-code-label {
+    display: block;
+    font-family: var(--font-body);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    color: var(--color-text-light);
 }
 
 .passport-key-input {
+    display: block;
+    width: 100%;
     font-family: var(--font-mono);
-    font-size: 18px;
-    letter-spacing: 0.12em;
+    font-size: 21px;
+    letter-spacing: 0.16em;
     text-align: center;
-    padding: 12px 16px;
-    width: min(280px, 100%);
+    padding: 14px 16px;
     border: var(--admin-field-border);
-    border-radius: 12px;
+    border-radius: 14px;
     background: white;
     color: var(--color-text);
 }
@@ -133,10 +272,17 @@
     border-color: var(--color-primary);
 }
 
-.passport-key-hint {
-    max-width: 46ch;
-    font-size: 13px;
+.passport-key-input::placeholder {
     color: var(--color-text-light);
+    letter-spacing: 0.12em;
+}
+
+/* Advice that is acted on, not decoration, so it is set to be read. */
+.passport-key-hint {
+    margin-top: 9px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted);
 }
 
 .passport-error {
@@ -740,9 +886,13 @@ a.passport-shelf-card:hover {
         padding: 88px 14px 60px;
     }
 
-    .passport-notice,
-    .passport-activate {
+    .passport-notice {
         padding: 28px 20px;
+        border-radius: 20px;
+    }
+
+    .passport-activate {
+        padding: 24px 18px 28px;
         border-radius: 20px;
     }
 
