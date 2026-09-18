@@ -41,12 +41,6 @@ const PASSPORTS = "passports";
 const SECRETS = "passportSecrets";
 const DESIGNS = "passportDesigns";
 
-/** How many deleted passports' trails are read at once. They are separate reads
- * — a subcollection can't be queried across parents by passport — and almost all
- * of them come back empty, so they go out in parallel a chunk at a time rather
- * than one after another. */
-const TRAIL_READ_CHUNK = 25;
-
 const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap.data()?.displayName ?? "";
 
 /**
@@ -172,13 +166,6 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
             failedAttempts: 0,
             lockedUntil: null,
         });
-        txn.set(ref.collection("claims").doc(), {
-            action: "key-reissue",
-            uid: null,
-            at: FieldValue.serverTimestamp(),
-            performedBy: uid,
-            performedByName: performerName(callerSnap),
-        });
         txn.set(db.collection("records").doc(), {
             type: "passport-key-reissue",
             performedBy: uid,
@@ -196,8 +183,8 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
 /**
  * Serve a passport's current key: an unclaimed one's to reprint its slip, a
  * claimed one's to check the key it was activated with. Every call is written to
- * the passport's trail and to records: the key is what makes an unsold passport
- * worth stealing, so who has looked at it is part of its history.
+ * records: the key is what makes an unsold passport worth stealing, so who has
+ * looked at it is worth keeping, and the Records tab is where it is kept.
  */
 export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -224,13 +211,6 @@ export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
             );
         }
 
-        txn.set(ref.collection("claims").doc(), {
-            action: "key-view",
-            uid: null,
-            at: FieldValue.serverTimestamp(),
-            performedBy: uid,
-            performedByName: performerName(callerSnap),
-        });
         txn.set(db.collection("records").doc(), {
             type: "passport-key-view",
             performedBy: uid,
@@ -335,14 +315,6 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
         // dropped. The key stays so an admin can still look up what was on the
         // slip (revealPassportKey).
         txn.update(secretRef, {salt: FieldValue.delete(), secretHash: FieldValue.delete()});
-        txn.set(passportRef.collection("claims").doc(), {
-            action: "claim",
-            uid,
-            at: FieldValue.serverTimestamp(),
-            performedBy: uid,
-            performedByName: userData.displayName ?? "",
-            daysGranted,
-        });
         txn.set(db.collection("records").doc(), {
             type: "passport-claim",
             performedBy: uid,
@@ -481,8 +453,8 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 
 /**
  * Delete unclaimed passports — a sticker destroyed in packing, a pack whose slip
- * and sticker were mismatched, stock written off. Each one's document, key and
- * trail all go, so the code stops resolving and is free to be minted again.
+ * and sticker were mismatched, stock written off. Each one's document and key
+ * both go, so the code stops resolving and is free to be minted again.
  *
  * Claimed passports are never deleted here, however the selection was built:
  * the binding is permanent and the page belongs to its owner, so unbinding one
@@ -561,27 +533,6 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
         });
     }
 
-    // A subcollection outlives its parent's delete, so the trails are swept after
-    // the fact. Each is a handful of key reissues and key views — an unclaimed
-    // passport has no claim on it, and most have nothing at all — and nothing can
-    // reach one once its passport is gone, so a failure here is orphaned data to
-    // log, never a failed delete.
-    if (deleted.length > 0) {
-        try {
-            const trailOps: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
-            for (let i = 0; i < deleted.length; i += TRAIL_READ_CHUNK) {
-                const trails = await Promise.all(deleted.slice(i, i + TRAIL_READ_CHUNK).map(
-                    id => db.collection(PASSPORTS).doc(id).collection("claims").get()));
-                for (const trail of trails) {
-                    for (const entry of trail.docs) trailOps.push(batch => batch.delete(entry.ref));
-                }
-            }
-            if (trailOps.length > 0) await commitInChunks(trailOps);
-        } catch (err) {
-            console.error(`deletePassports: trail cleanup failed for ${deleted.join(",")}`, err);
-        }
-    }
-
     return {deleted, claimed, missing};
 });
 
@@ -608,11 +559,11 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
  * days stack from several sources, so a passport can never pull a membership
  * below the day it is taken back on, and a lapsed one has nothing left to take.
  *
- * Nothing about the passport survives: its document, its key and its trail all
- * go, /p/<code> stops resolving, the holder's shelf loses it, and the code is
- * free to be minted again. The one `records` entry this writes — naming the
- * holder, since nothing else will afterwards, and carrying the days taken the way
- * passport-claim carries the days given — is what is left.
+ * Nothing about the passport survives: its document and its key both go,
+ * /p/<code> stops resolving, the holder's shelf loses it, and the code is free to
+ * be minted again. The one `records` entry this writes — naming the holder, since
+ * nothing else will afterwards, and carrying the days taken the way passport-claim
+ * carries the days given — is what is left.
  */
 export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -705,18 +656,6 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
             nothingToSubtract: subtractDays && !reduced,
         };
     });
-
-    // Swept after the fact for the same reason as the bulk delete: a subcollection
-    // outlives its parent, nothing can reach this one now that the passport is
-    // gone, and a failure here is orphaned data to log rather than a failed delete.
-    try {
-        const trail = await ref.collection("claims").get();
-        if (!trail.empty) {
-            await commitInChunks(trail.docs.map(entry => (b: FirebaseFirestore.WriteBatch) => b.delete(entry.ref)));
-        }
-    } catch (err) {
-        console.error(`deleteClaimedPassport: trail cleanup failed for ${passportId}`, err);
-    }
 
     return {deleted: true, ...outcome};
 });

@@ -201,13 +201,6 @@ service cloud.firestore {
         match /passports/{passportId} {
             allow read: if request.auth != null
                 && (isStaffOrAbove() || resource.data.ownerUid == request.auth.uid);
-
-            // Permanent bind/key audit trail — no TTL, core-staff+ only. It
-            // outlives everything but its own passport: deleting one sweeps
-            // its trail with it, which is the only way a trail ever ends.
-            match /claims/{claimId} {
-                allow read: if request.auth != null && isCoreStaffOrAbove();
-            }
         }
 
         // Activation keys and their hashes. Server-only, no exceptions — an

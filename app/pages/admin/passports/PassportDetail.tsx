@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -10,9 +10,7 @@ import {
 } from '~/lib/firebase';
 import {
     fetchPassport,
-    fetchPassportClaims,
     type Passport,
-    type PassportClaimEvent,
     passportDateTime,
     passportName,
     passportScanUrl,
@@ -64,8 +62,7 @@ interface PassportDetailProps {
 }
 
 /**
- * One passport's page: who holds it, its sticker, and its permanent audit
- * trail.
+ * One passport's page: who holds it and its sticker.
  *
  * Any passport's key slip can be viewed. Stock that has never been sold can have
  * its slip reissued or be deleted outright.
@@ -95,10 +92,9 @@ export const PassportDetail = ({
     const [loadFailed, setLoadFailed] = useState(false);
     const [owner, setOwner] = useState<UserRecord | null>(null);
     const [ownerMissing, setOwnerMissing] = useState(false);
-    const [claims, setClaims] = useState<PassportClaimEvent[] | null>(null);
     const [busy, setBusy] = useState(false);
-    // Fetched on the first Show, since every fetch is logged on the passport's
-    // trail. Hide only masks it, so showing it again isn't a second look.
+    // Fetched on the first Show, since every fetch is written to the Records tab.
+    // Hide only masks it, so showing it again isn't a second look.
     const [key, setKey] = useState<string | null>(null);
     const [keyShown, setKeyShown] = useState(false);
     // The claimed passport's delete is a panel rather than a window.confirm,
@@ -128,24 +124,6 @@ export const PassportDetail = ({
         void reload().catch(() => setLoadFailed(true));
     }, [reload]);
 
-    // Staff (read-only) can't read the claims subcollection — core-staff+ only —
-    // so the request isn't made rather than failing visibly. A reissue and a key
-    // view both write to this trail, and call it again once they land.
-    const claimsToken = useRef(0);
-    const loadClaims = useCallback(() => {
-        if (readOnly) return;
-        const token = ++claimsToken.current;
-        fetchPassportClaims(passportId)
-            .then(list => {
-                if (token === claimsToken.current) setClaims(list);
-            })
-            .catch(() => {
-                if (token === claimsToken.current) setClaims([]);
-            });
-    }, [passportId, readOnly]);
-
-    useEffect(loadClaims, [loadClaims]);
-
     const ownerUid = passport?.ownerUid ?? null;
     useEffect(() => {
         if (!ownerUid) {
@@ -169,10 +147,9 @@ export const PassportDetail = ({
     }, [ownerUid]);
 
     /**
-     * What a reissue or a key view leaves behind: a changed passport the list is
-     * still holding the old copy of, and a new entry in the audit trail the
-     * History section exists to show. Failing here is a stale screen, never a
-     * failed action — the write it follows has already committed.
+     * What a reissue leaves behind: a changed passport the list is still holding
+     * the old copy of. Failing here is a stale screen, never a failed action — the
+     * write it follows has already committed.
      */
     const refreshAfterWrite = async () => {
         try {
@@ -181,7 +158,6 @@ export const PassportDetail = ({
         } catch {
             setLoadFailed(true);
         }
-        loadClaims();
     };
 
     const fmtDate = (date: Date | null): string =>
@@ -195,8 +171,8 @@ export const PassportDetail = ({
 
     const deleteStock = async () => {
         if (!window.confirm(isEnglish
-            ? `Delete passport ${passportId}? The passport, its activation key and its history are all removed, and its sticker stops working. This can't be undone. Use it for stock that was destroyed or mispacked.`
-            : `删除通行证 ${passportId}？该通行证及其激活码、历史记录都将被移除，贴纸随之失效。此操作无法撤销。请仅对已损毁或错误包装的库存使用。`)) return;
+            ? `Delete passport ${passportId}? The passport and its activation key are both removed, and its sticker stops working. This can't be undone. Use it for stock that was destroyed or mispacked.`
+            : `删除通行证 ${passportId}？该通行证及其激活码都将被移除，贴纸随之失效。此操作无法撤销。请仅对已损毁或错误包装的库存使用。`)) return;
         setBusy(true);
         let result;
         try {
@@ -290,8 +266,6 @@ export const PassportDetail = ({
             return;
         }
         setBusy(false);
-        // The look itself is now on the trail.
-        loadClaims();
     };
 
     const reissueKey = async () => {
@@ -526,36 +500,6 @@ export const PassportDetail = ({
                 </div>
             </div>
 
-            {!readOnly && (
-                <div className="admin-field-section admin-qr-section">
-                    <div className="admin-qr-spot-header">
-                        <span className="admin-field-label">{isEnglish ? 'History' : '历史记录'}</span>
-                    </div>
-                    {claims === null ? (
-                        <div className="spinner spinner-centered"/>
-                    ) : claims.length === 0 ? (
-                        <p className="admin-no-results">{isEnglish ? 'Nothing recorded yet.' : '暂无记录。'}</p>
-                    ) : (
-                        <div className="admin-passport-history">
-                            {claims.map(event => (
-                                <div key={event.id} className="admin-passport-history-row">
-                                    <span className={`record-type-tag admin-passport-action--${event.action}`}>
-                                        {actionLabel(event.action, isEnglish)}
-                                    </span>
-                                    <span className="admin-passport-history-text">
-                                        {event.performedByName || event.performedBy || (isEnglish ? 'System' : '系统')}
-                                        {event.daysGranted !== null && (isEnglish
-                                            ? ` · +${event.daysGranted} days`
-                                            : ` · +${event.daysGranted} 天`)}
-                                    </span>
-                                    <span className="record-time">{fmtDate(event.at)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-
             {!readOnly && unclaimed && (
                 <div className="admin-qr-danger-row">
                     <button
@@ -606,8 +550,8 @@ export const PassportDetail = ({
                             </strong>
                             <p>
                                 {isEnglish
-                                    ? `It leaves ${owner?.displayName || 'the holder'}’s shelf, its sticker stops working, and its activation key and history go with it. This can’t be undone.`
-                                    : `该通行证将从${owner?.displayName || '持有者'}的书架上消失，贴纸随之失效，激活码与历史记录一并移除。此操作无法撤销。`}
+                                    ? `It leaves ${owner?.displayName || 'the holder'}’s shelf, its sticker stops working, and its activation key goes with it. This can’t be undone.`
+                                    : `该通行证将从${owner?.displayName || '持有者'}的书架上消失，贴纸随之失效，激活码一并移除。此操作无法撤销。`}
                             </p>
 
                             <label className="admin-checkbox-label admin-passport-delete-choice">
@@ -652,10 +596,4 @@ export const PassportDetail = ({
             {pngNode}
         </div>
     );
-};
-
-const actionLabel = (action: PassportClaimEvent['action'], isEnglish: boolean): string => {
-    if (action === 'key-reissue') return isEnglish ? 'Key' : '激活码';
-    if (action === 'key-view') return isEnglish ? 'Viewed' : '查看';
-    return isEnglish ? 'Claim' : '激活';
 };

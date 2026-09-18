@@ -258,8 +258,8 @@ export const PassportStock = ({
             return;
         }
         if (!window.confirm(isEnglish
-            ? `Delete ${count} ${count === 1 ? 'passport' : 'passports'}? Their activation keys and history go with them, and their stickers stop working. This can't be undone.`
-            : `删除 ${count} 本通行证？其激活码与历史记录将一并移除，贴纸随之失效。此操作无法撤销。`)) return;
+            ? `Delete ${count} ${count === 1 ? 'passport' : 'passports'}? Their activation keys go with them and their stickers stop working. This can't be undone.`
+            : `删除 ${count} 本通行证？其激活码将一并移除，贴纸随之失效。此操作无法撤销。`)) return;
 
         setDeleting(true);
         let result;

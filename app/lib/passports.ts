@@ -88,17 +88,6 @@ export type PassportPublicProfile =
     };
 };
 
-/** An entry in a passport's permanent audit trail. */
-export interface PassportClaimEvent {
-    id: string;
-    action: 'claim' | 'key-reissue' | 'key-view';
-    uid: string | null;
-    at: Date | null;
-    performedBy: string;
-    performedByName: string;
-    daysGranted: number | null;
-}
-
 const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Passport => {
     const data = docSnap.data();
     return {
@@ -197,27 +186,6 @@ export async function fetchPassportsByOwner(uid: string): Promise<Passport[]> {
     const snap = await getDocs(query(collection(getFirebaseDb(), 'passports'), where('ownerUid', '==', uid)));
     return snap.docs.map(toPassport).sort((a, b) =>
         b.year - a.year || (b.claimedAt?.getTime() ?? 0) - (a.claimedAt?.getTime() ?? 0));
-}
-
-/** The bind/key trail for one passport (newest first). Core-staff+. It is
- * deleted with its passport, so it only ever covers one that still exists. */
-export async function fetchPassportClaims(id: string): Promise<PassportClaimEvent[]> {
-    const snap = await getDocs(collection(getFirebaseDb(), 'passports', id, 'claims'));
-    return snap.docs
-        .map(d => {
-            const data = d.data();
-            const action = data.action;
-            return {
-                id: d.id,
-                action: (action === 'key-reissue' || action === 'key-view') ? action : 'claim' as const,
-                uid: typeof data.uid === 'string' ? data.uid : null,
-                at: toDate(data.at),
-                performedBy: data.performedBy ?? '',
-                performedByName: data.performedByName ?? '',
-                daysGranted: typeof data.daysGranted === 'number' ? data.daysGranted : null,
-            };
-        })
-        .sort((a, b) => (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0));
 }
 
 // Printed codes are read back by hand, so the dashes we print for legibility,

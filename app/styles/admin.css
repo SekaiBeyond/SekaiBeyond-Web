@@ -4641,52 +4641,6 @@ select.admin-tickets-tag:focus {
     color: #000;
 }
 
-/* Hairline-divided rows, matching the detail list, rather than cards inside
-   the section's card. */
-.admin-passport-history {
-    display: flex;
-    flex-direction: column;
-}
-
-.admin-passport-history-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 2px;
-}
-
-.admin-passport-history-row + .admin-passport-history-row {
-    border-top: 1px solid rgba(255, 107, 157, 0.1);
-}
-
-/* One width for every action tag, so the names line up down the list. */
-.admin-passport-history-row .record-type-tag {
-    min-width: 64px;
-    text-align: center;
-}
-
-.admin-passport-history-text {
-    flex: 1;
-    min-width: 0;
-    font-size: 13px;
-    color: var(--color-text);
-}
-
-.admin-passport-action--claim {
-    background: rgba(78, 203, 113, 0.16);
-    color: #2f9e57;
-}
-
-.admin-passport-action--key-reissue {
-    background: rgba(108, 99, 255, 0.14);
-    color: var(--color-link);
-}
-
-.admin-passport-action--key-view {
-    background: rgba(74, 81, 96, 0.1);
-    color: var(--color-text-muted);
-}
-
 /* Sits above the delete on a claimed passport and explains it, so it takes the
    action row's top margin and the row keeps its own below. */
 .admin-passport-bound-note {
