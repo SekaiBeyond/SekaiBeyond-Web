@@ -36,7 +36,7 @@ export const Footer = () => {
                                 {labelFor(link)}
                             </a>
                         )}
-                        {link.id === 'huskylink' && hasActive && (
+                        {link.id === 'team' && hasActive && (
                             <a href={`/parking/${activeEvents[0].id}`} className="footer-link">
                                 {isEnglish ? 'Parking Guide' : '停车指南'}
                             </a>

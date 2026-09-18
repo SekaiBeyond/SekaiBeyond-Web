@@ -13,7 +13,6 @@ export const BILIBILI_VIDEO = {
 
 export const LINKS = {
     discord: "https://discord.gg/4xPFPmwsW3",
-    huskylink: "https://huskylink.washington.edu/organization/sekaibeyond",
     instagram: "https://www.instagram.com/sekai_beyond/",
     bilibili: "https://space.bilibili.com/3546779589020292",
     xiaohongshu: "https://www.xiaohongshu.com/user/profile/62d4eefd000000000e00ed42",
@@ -80,12 +79,6 @@ const SHARED_LINKS: NavLink[] = [
 
 export const FOOTER_LINKS: NavLink[] = [
     ...SHARED_LINKS,
-    {
-        id: 'huskylink',
-        href: LINKS.huskylink,
-        labelEn: 'HuskyLink',
-        labelCn: 'HuskyLink',
-    },
     {
         id: 'github',
         href: LINKS.github,

@@ -82,8 +82,13 @@ export const CON: ConEvent = {
     /** Venue ids only exist in Firestore, so the page reads "TBA" until one is picked. */
     venueId: '',
 
-    /** PLACEHOLDER — swap for the real ticketing link. */
-    ticketUrl: 'https://huskylink.washington.edu/organization/sekaibeyond',
+    /**
+     * PLACEHOLDER — empty until a ticketing link exists. saveConContent requires a
+     * real URL, so this is only ever what a visitor sees before the fetch lands, or
+     * while no event details have been saved; until then the ticket buttons point
+     * nowhere.
+     */
+    ticketUrl: '',
 };
 
 /**
@@ -657,8 +662,8 @@ export const FAQ: FaqEntry[] = [
     {
         q: {en: 'How do I volunteer?', zh: '如何成为志愿者？'},
         a: {
-            en: 'Volunteer sign-ups run through our Discord and HuskyLink in the weeks before the con. Stage crew, door, and photo team are always looking for help.',
-            zh: '志愿者报名将在展前数周通过 Discord 与 HuskyLink 开放。舞台组、门口接待与摄影组长期需要帮手。',
+            en: 'Volunteer sign-ups run through our Discord in the weeks before the con. Stage crew, door, and photo team are always looking for help.',
+            zh: '志愿者报名将在展前数周通过 Discord 开放。舞台组、门口接待与摄影组长期需要帮手。',
         },
     },
     {
