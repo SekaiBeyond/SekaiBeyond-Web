@@ -12,6 +12,7 @@ import {
     isPassportYear,
     lockedUntilMillis,
     LOCKOUT_MS,
+    MAX_DELETE_COUNT,
     MAX_FAILED_ATTEMPTS,
     MAX_GENERATE_COUNT,
     newActivationKey,
@@ -39,6 +40,12 @@ import { sanitizeDisplayText, validateDocId, validateStorageImageUrl, validateSt
 const PASSPORTS = "passports";
 const SECRETS = "passportSecrets";
 const DESIGNS = "passportDesigns";
+
+/** How many deleted passports' trails are read at once. They are separate reads
+ * — a subcollection can't be queried across parents by passport — and almost all
+ * of them come back empty, so they go out in parallel a chunk at a time rather
+ * than one after another. */
+const TRAIL_READ_CHUNK = 25;
 
 const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap.data()?.displayName ?? "";
 
@@ -473,64 +480,106 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 });
 
 /**
- * Delete an unclaimed passport — a sticker destroyed in packing, a pack whose
- * slip and sticker were mismatched, stock written off. The document, its key and
- * its trail all go, so the code stops resolving and is free to be minted again.
- * A claimed passport can never be deleted: the binding is permanent and its page
+ * Delete unclaimed passports — a sticker destroyed in packing, a pack whose slip
+ * and sticker were mismatched, stock written off. Each one's document, key and
+ * trail all go, so the code stops resolving and is free to be minted again. A
+ * claimed passport can never be deleted: the binding is permanent and its page
  * belongs to its owner.
  *
- * Nothing about the passport survives except the `records` entry this writes,
- * which is what an admin looking for where a code went is left with.
+ * One passport or a whole selection comes through here, because the guard is the
+ * same either way. Nothing is refused for the sake of the rest: a claimed or
+ * already-gone passport is reported back as skipped and the others still go, so
+ * a stale row in the admin's table can't block the delete it is part of.
+ *
+ * Nothing about a deleted passport survives except the one `records` entry this
+ * writes, which is what an admin looking for where a code went is left with.
  */
-export const deletePassport = onCall({maxInstances: 10}, async (request) => {
+export const deletePassports = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     const callerSnap = await requireAdmin(uid);
 
-    const passportId = normalizePassportId((request.data as {passportId?: unknown})?.passportId);
-    if (!passportId) throw new HttpsError("invalid-argument", "Invalid passportId.");
+    const input = (request.data as {passportIds?: unknown})?.passportIds;
+    if (!Array.isArray(input) || input.length < 1 || input.length > MAX_DELETE_COUNT) {
+        throw new HttpsError(
+            "invalid-argument",
+            `passportIds must hold between 1 and ${MAX_DELETE_COUNT} passport codes.`,
+        );
+    }
+    // Deduplicated before the reads: the same code twice would otherwise be
+    // counted twice in the record and deleted twice in the same batch.
+    const passportIds = [...new Set(input.map(normalizePassportId))];
+    if (passportIds.some(id => id === null)) {
+        throw new HttpsError("invalid-argument", "Invalid passportId.");
+    }
 
-    const ref = db.collection(PASSPORTS).doc(passportId);
+    const refs = (passportIds as string[]).map(id => db.collection(PASSPORTS).doc(id));
+    const snaps = await db.getAll(...refs);
 
-    // The guard and the delete are one transaction: a claim landing between them
-    // would otherwise bind a passport that is already on its way out, spending a
-    // key and granting membership against a document about to disappear.
-    await db.runTransaction(async (txn) => {
-        const snap = await txn.get(ref);
-        if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
-        if (snap.data()?.status === "claimed") {
-            throw new HttpsError(
-                "failed-precondition",
-                "A claimed passport can't be deleted — it is permanently bound to its owner.",
-                {code: "already-claimed"},
-            );
+    const deleted: string[] = [];
+    const claimed: string[] = [];
+    const missing: string[] = [];
+    const ops: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
+    let year: number | null = null;
+
+    for (const snap of snaps) {
+        if (!snap.exists) {
+            missing.push(snap.id);
+            continue;
         }
+        if (snap.data()?.status === "claimed") {
+            claimed.push(snap.id);
+            continue;
+        }
+        deleted.push(snap.id);
+        if (year === null && typeof snap.data()?.year === "number") year = snap.data()!.year;
 
-        txn.delete(ref);
-        txn.delete(db.collection(SECRETS).doc(passportId));
-        txn.set(db.collection("records").doc(), {
+        // The delete carries the version the guard was read at, so a claim landing
+        // between the two fails this write rather than binding a passport already
+        // on its way out. What a transaction gave a single delete, a precondition
+        // gives the whole selection — and a batch that fails this way commits
+        // nothing, so the admin retries and sees the passport reported claimed.
+        const updateTime = snap.updateTime;
+        ops.push(batch => batch.delete(snap.ref, {lastUpdateTime: updateTime}));
+        ops.push(batch => batch.delete(db.collection(SECRETS).doc(snap.id)));
+    }
+
+    if (ops.length > 0) {
+        await commitInChunks(ops);
+        await db.collection("records").add({
             type: "passport-delete",
             performedBy: uid,
             performedByName: performerName(callerSnap),
-            passportId,
-            passportYear: snap.data()?.year ?? null,
+            // Named only when there is one to name; the count carries the rest.
+            passportId: deleted.length === 1 ? deleted[0] : null,
+            passportCount: deleted.length,
+            passportYear: year,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
-    });
-
-    // A subcollection outlives its parent's delete, so the trail is swept after
-    // the fact. It is a handful of key reissues and key views — an unclaimed
-    // passport has no claim on it — and nothing can reach it once the passport is
-    // gone, so a failure here is orphaned data to log, never a failed delete.
-    try {
-        const claims = await ref.collection("claims").get();
-        const ops = claims.docs.map(d => (batch: FirebaseFirestore.WriteBatch) => batch.delete(d.ref));
-        if (ops.length > 0) await commitInChunks(ops);
-    } catch (err) {
-        console.error(`deletePassport: trail cleanup failed for ${passportId}`, err);
     }
 
-    return {passportId, deleted: true};
+    // A subcollection outlives its parent's delete, so the trails are swept after
+    // the fact. Each is a handful of key reissues and key views — an unclaimed
+    // passport has no claim on it, and most have nothing at all — and nothing can
+    // reach one once its passport is gone, so a failure here is orphaned data to
+    // log, never a failed delete.
+    if (deleted.length > 0) {
+        try {
+            const trailOps: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
+            for (let i = 0; i < deleted.length; i += TRAIL_READ_CHUNK) {
+                const trails = await Promise.all(deleted.slice(i, i + TRAIL_READ_CHUNK).map(
+                    id => db.collection(PASSPORTS).doc(id).collection("claims").get()));
+                for (const trail of trails) {
+                    for (const entry of trail.docs) trailOps.push(batch => batch.delete(entry.ref));
+                }
+            }
+            if (trailOps.length > 0) await commitInChunks(trailOps);
+        } catch (err) {
+            console.error(`deletePassports: trail cleanup failed for ${deleted.join(",")}`, err);
+        }
+    }
+
+    return {deleted, claimed, missing};
 });
 
 /** Hide or show the caller's own passport page. Self only, no admin path. */

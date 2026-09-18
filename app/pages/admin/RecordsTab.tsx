@@ -731,9 +731,16 @@ export const RecordsTab = ({
                         now {fmtExpiry(r.newExpiresAt)})</>
                     : <>激活了通行证 {r.passportId ?? ''}（+{r.extendDays ?? 0} 天，现到期于 {fmtExpiry(r.newExpiresAt)}）</>;
             case 'passport-delete':
+                // One deletion names its passport; a bulk one only counts them,
+                // since the codes it removed no longer resolve to anything.
+                if (r.passportId) {
+                    return isEnglish
+                        ? <>deleted passport {r.passportId}</>
+                        : <>删除了通行证 {r.passportId}</>;
+                }
                 return isEnglish
-                    ? <>deleted passport {r.passportId ?? ''}</>
-                    : <>删除了通行证 {r.passportId ?? ''}</>;
+                    ? <>deleted {r.passportCount ?? 0} {r.passportYear ?? ''} passports</>
+                    : <>删除了 {r.passportCount ?? 0} 本 {r.passportYear ?? ''} 年通行证</>;
             case 'passport-key-reissue':
                 return isEnglish
                     ? <>issued a new activation key for passport {r.passportId ?? ''}</>

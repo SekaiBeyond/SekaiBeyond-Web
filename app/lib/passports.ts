@@ -232,6 +232,9 @@ export const ACTIVATION_KEY_LENGTH = 12;
 export const MAX_PASSPORT_GENERATE = 200;
 /** What a new design's term starts at. */
 export const DEFAULT_PASSPORT_TERM_DAYS = 365;
+/** How many passports one delete call may remove. Mirrors MAX_DELETE_COUNT in
+ * functions/src/utils/passports.ts, which enforces it. */
+export const MAX_PASSPORT_DELETE = 200;
 /** Mirrors MAX_GRANT_DAYS in functions/src/utils/membership.ts, which enforces it. */
 export const MAX_PASSPORT_TERM_DAYS = 3650;
 /** Ambiguous glyphs (O/0, I/1/L) are absent by construction — see CODE_ALPHABET. */

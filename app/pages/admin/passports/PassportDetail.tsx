@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeletePassport, callReissuePassportKey, callRevealPassportKey, getFirebaseDb } from '~/lib/firebase';
+import { callDeletePassports, callReissuePassportKey, callRevealPassportKey, getFirebaseDb } from '~/lib/firebase';
 import {
     fetchPassport,
     fetchPassportClaims,
@@ -160,11 +160,28 @@ export const PassportDetail = ({
             ? `Delete passport ${passportId}? The passport, its activation key and its history are all removed, and its sticker stops working. This can't be undone. Use it for stock that was destroyed or mispacked.`
             : `删除通行证 ${passportId}？该通行证及其激活码、历史记录都将被移除，贴纸随之失效。此操作无法撤销。请仅对已损毁或错误包装的库存使用。`)) return;
         setBusy(true);
+        let result;
         try {
-            await callDeletePassport({passportId});
+            result = (await callDeletePassports({passportIds: [passportId]})).data;
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to delete passport.' : '删除通行证失败。'), 'error');
             setBusy(false);
+            return;
+        }
+        // The call reports a skip rather than failing, so a passport claimed or
+        // already deleted under this open page says so here instead of vanishing
+        // from a list it is still in.
+        if (result.deleted.length === 0) {
+            showToast(
+                result.claimed.length > 0
+                    ? (isEnglish
+                        ? 'This passport has just been claimed, so it can no longer be deleted.'
+                        : '此通行证刚刚被激活，已无法删除。')
+                    : (isEnglish ? 'This passport no longer exists.' : '此通行证已不存在。'),
+                'error',
+            );
+            setBusy(false);
+            await refreshAfterWrite();
             return;
         }
         // Nothing left to refetch: the page goes back to the list, which drops the

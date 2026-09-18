@@ -31,6 +31,10 @@ export const LOCKOUT_MS = 15 * 60 * 1000;
 // at or under half of BATCH_LIMIT for one call to commit in a single chunk.
 export const MAX_GENERATE_COUNT = Math.min(200, Math.floor(BATCH_LIMIT / 2));
 
+// Per-call ceiling on a bulk delete, for the same reason and with the same
+// arithmetic: a deleted passport erases the passport and its secret.
+export const MAX_DELETE_COUNT = MAX_GENERATE_COUNT;
+
 // Codes are printed and read back by hand, so input is normalized before it is
 // compared: lowercase is folded, and the dashes we print for legibility (plus
 // any spaces the reader adds) are dropped.

@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { type Passport, passportDateTime, type PassportStatus, passportStatusLabel, } from '~/lib/passports';
+import { callDeletePassports } from '~/lib/firebase';
+import {
+    MAX_PASSPORT_DELETE,
+    type Passport,
+    passportDateTime,
+    type PassportStatus,
+    passportStatusLabel,
+} from '~/lib/passports';
 import { downloadBlob } from '~/lib/zip';
 import { fetchUsersByUids, type ShowToast } from '../utils';
 import type { UserRecord } from '../types';
@@ -14,6 +21,11 @@ import { buildPassportIdCsv, fileStamp, usePassportPngExport } from './passportE
  * a page at a time. Everything happens on the array the tab already holds — a
  * design is a few hundred documents, and re-querying to sort would be slower
  * than sorting them here.
+ *
+ * Every action hangs off ticked rows, which is how a set of passports that share
+ * nothing in the data — the ones in one envelope, the ones that came back damaged
+ * — is acted on at all. A selection exports its codes and its stickers, and can
+ * be deleted in one call.
  */
 
 /** About a screenful, and few enough rows that a re-sort is instant. */
@@ -83,8 +95,17 @@ interface PassportStockProps {
     year: number | undefined;
     view: StockView;
     onViewChange: (view: StockView) => void;
+    /** Ticked passport ids. Lifted for the same reason as the view — opening a
+     * passport unmounts the table, and a selection built across three pages
+     * shouldn't be the price of checking one of them. */
+    selected: string[];
+    onSelectedChange: (selected: string[]) => void;
+    /** The passports a bulk delete removed, so the list drops those rows. */
+    onDeleted: (passportIds: string[]) => void;
     onOpen: (id: string) => void;
     showToast: ShowToast;
+    /** Staff (read-only) still export; only deleting is theirs to lose. */
+    readOnly: boolean;
 }
 
 export const PassportStock = ({
@@ -92,11 +113,16 @@ export const PassportStock = ({
                                   year,
                                   view,
                                   onViewChange,
+                                  selected,
+                                  onSelectedChange,
+                                  onDeleted,
                                   onOpen,
                                   showToast,
+                                  readOnly,
                               }: PassportStockProps) => {
     const {isEnglish} = useLanguage();
     const [owners, setOwners] = useState<Map<string, UserRecord> | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const {request: requestPngs, progress, node: pngNode} = usePassportPngExport(
         () => showToast(isEnglish ? 'Failed to render the QR codes.' : '生成二维码失败。', 'error'),
     );
@@ -182,6 +208,79 @@ export const PassportStock = ({
     const from = page * PAGE_SIZE;
     const rows = sorted.slice(from, from + PAGE_SIZE);
 
+    const selectedSet = useMemo(() => new Set(selected), [selected]);
+    // Resolved against the whole design rather than the current filter, so a
+    // selection survives switching tabs to look at something else, and so an id
+    // left over from a row someone else deleted drops out on its own.
+    const selectedPassports = useMemo(
+        () => passports.filter(p => selectedSet.has(p.id)),
+        [passports, selectedSet],
+    );
+    // Only unclaimed stock can be deleted; claimed passports in a selection are
+    // exported with the rest and left alone by the delete.
+    const deletable = useMemo(
+        () => selectedPassports.filter(p => p.status === 'unclaimed'),
+        [selectedPassports],
+    );
+
+    const viewSelectedCount = sorted.reduce((n, p) => n + (selectedSet.has(p.id) ? 1 : 0), 0);
+    const allInViewSelected = sorted.length > 0 && viewSelectedCount === sorted.length;
+
+    const toggleOne = (id: string) => onSelectedChange(
+        selectedSet.has(id) ? selected.filter(s => s !== id) : [...selected, id]);
+
+    // The header box takes the whole filtered view, not the page on screen — the
+    // same set the exports below cover, so "all" means one thing on this screen.
+    const toggleView = () => {
+        const inView = new Set(sorted.map(p => p.id));
+        onSelectedChange(allInViewSelected
+            ? selected.filter(id => !inView.has(id))
+            : [...new Set([...selected, ...inView])]);
+    };
+
+    const deleteSelected = async () => {
+        if (deletable.length === 0) return;
+        if (deletable.length > MAX_PASSPORT_DELETE) {
+            showToast(isEnglish
+                ? `Select at most ${MAX_PASSPORT_DELETE} passports to delete at once.`
+                : `一次最多只能删除 ${MAX_PASSPORT_DELETE} 本通行证。`, 'error');
+            return;
+        }
+        const kept = selectedPassports.length - deletable.length;
+        const keptNote = kept === 0 ? '' : isEnglish
+            ? ` ${kept} claimed ${kept === 1 ? 'passport is' : 'passports are'} in the selection and will be kept.`
+            : ` 所选内容中有 ${kept} 本已激活的通行证，将予以保留。`;
+        if (!window.confirm(isEnglish
+            ? `Delete ${deletable.length} ${deletable.length === 1 ? 'passport' : 'passports'}? Their activation keys and history go with them, and their stickers stop working. This can't be undone.${keptNote}`
+            : `删除 ${deletable.length} 本通行证？其激活码与历史记录将一并移除，贴纸随之失效。此操作无法撤销。${keptNote}`)) return;
+
+        setDeleting(true);
+        let result;
+        try {
+            result = (await callDeletePassports({passportIds: deletable.map(p => p.id)})).data;
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to delete passports.' : '删除通行证失败。'), 'error');
+            setDeleting(false);
+            return;
+        }
+        setDeleting(false);
+
+        // A passport claimed or already deleted since the table was loaded is
+        // skipped rather than failing the call, so the toast reports what actually
+        // went instead of implying the whole selection did.
+        const skipped = result.claimed.length + result.missing.length;
+        if (result.deleted.length === 0) {
+            showToast(isEnglish
+                ? 'Nothing was deleted — those passports have changed since this list was loaded.'
+                : '未删除任何通行证 — 自本列表加载以来，这些通行证已发生变化。', 'error');
+        } else {
+            showToast(isEnglish
+                ? `Deleted ${result.deleted.length} ${result.deleted.length === 1 ? 'passport' : 'passports'}.${skipped > 0 ? ` ${skipped} skipped.` : ''}`
+                : `已删除 ${result.deleted.length} 本通行证。${skipped > 0 ? `已跳过 ${skipped} 本。` : ''}`, 'warning');
+        }
+        onDeleted(result.deleted);
+    };
+
     const setFilter = (filter: StatusFilter) => onViewChange({...view, filter, page: 0});
     const setPage = (next: number) => onViewChange({...view, page: next});
     const sortBy = (column: Column) => onViewChange({
@@ -195,38 +294,13 @@ export const PassportStock = ({
         page: 0,
     });
 
-    // Exports cover the filter, not the page — the print shop wants every
-    // unclaimed sticker, not the fifty currently on screen.
-    const exportBase = `passports-${year ?? ''}-${view.filter}-${fileStamp()}`;
+    // An export covers what was ticked and nothing else, so no filter describes
+    // it and the time it was taken is what tells two downloads apart.
+    const selectionBase = `passports-${year ?? ''}-selected-${fileStamp()}`;
 
     return (
         <div className="admin-field-section">
-            <div className="admin-passport-stock-head">
-                <span className="admin-field-label">{isEnglish ? 'Stock' : '库存'}</span>
-                <div className="admin-tag-actions">
-                    <button
-                        className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
-                        onClick={() => downloadBlob(
-                            buildPassportIdCsv(sorted.map(p => p.id), origin),
-                            `${exportBase}-ids.csv`,
-                        )}
-                        disabled={sorted.length === 0}
-                        type="button"
-                    >
-                        {isEnglish ? 'Codes CSV' : '编号 CSV'}
-                    </button>
-                    <button
-                        className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
-                        onClick={() => requestPngs(sorted.map(p => p.id), exportBase)}
-                        disabled={!!progress || sorted.length === 0}
-                        type="button"
-                    >
-                        {progress
-                            ? (isEnglish ? `Rendering ${progress.done}/${progress.total}…` : `生成中 ${progress.done}/${progress.total}…`)
-                            : (isEnglish ? 'Stickers ZIP' : '贴纸 ZIP')}
-                    </button>
-                </div>
-            </div>
+            <span className="admin-field-label">{isEnglish ? 'Stock' : '库存'}</span>
 
             <div className="admin-passport-tabs" role="tablist">
                 {STATUS_FILTERS.map(filter => (
@@ -244,10 +318,61 @@ export const PassportStock = ({
                 ))}
             </div>
 
+            {selectedPassports.length > 0 && (
+                <div className="admin-passport-selection">
+                    <span className="admin-passport-selection-count">
+                        {isEnglish
+                            ? `${selectedPassports.length} selected`
+                            : `已选择 ${selectedPassports.length} 本`}
+                    </span>
+                    <div className="admin-tag-actions">
+                        <button
+                            className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                            onClick={() => downloadBlob(
+                                buildPassportIdCsv(selectedPassports.map(p => p.id), origin),
+                                `${selectionBase}-ids.csv`,
+                            )}
+                            type="button"
+                        >
+                            {isEnglish ? 'Codes CSV' : '编号 CSV'}
+                        </button>
+                        <button
+                            className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                            onClick={() => requestPngs(selectedPassports.map(p => p.id), selectionBase)}
+                            disabled={!!progress}
+                            type="button"
+                        >
+                            {progress
+                                ? (isEnglish ? `Rendering ${progress.done}/${progress.total}…` : `生成中 ${progress.done}/${progress.total}…`)
+                                : (isEnglish ? 'Stickers ZIP' : '贴纸 ZIP')}
+                        </button>
+                        {!readOnly && (
+                            <button
+                                className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
+                                onClick={() => void deleteSelected()}
+                                disabled={deleting || deletable.length === 0}
+                                title={deletable.length === 0
+                                    ? (isEnglish
+                                        ? 'Only unclaimed passports can be deleted'
+                                        : '只能删除未激活的通行证')
+                                    : undefined}
+                                type="button"
+                            >
+                                {deleting
+                                    ? (isEnglish ? 'Deleting…' : '删除中…')
+                                    : (isEnglish
+                                        ? `Delete ${deletable.length}`
+                                        : `删除 ${deletable.length} 本`)}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             <p className="admin-helper-text admin-field-hint">
                 {isEnglish
-                    ? `Both exports cover all ${sorted.length} passports in this view, not just the page shown, and carry public codes only — open a passport to view its activation key.`
-                    : `两项导出均包含当前视图下的全部 ${sorted.length} 本通行证（不限于本页），且仅含公开编号 — 打开单本通行证即可查看其激活码。`}
+                    ? `Tick rows to export or delete them; the box in the header takes all ${sorted.length} passports in this view, not just the page shown. Exports carry public codes only — open a passport to view its activation key.`
+                    : `勾选行即可导出或删除；表头的复选框会选中当前视图下的全部 ${sorted.length} 本通行证（不限于本页）。导出内容仅含公开编号 — 打开单本通行证即可查看其激活码。`}
             </p>
 
             {sorted.length === 0 ? (
@@ -260,6 +385,21 @@ export const PassportStock = ({
                         <table className="admin-data-table admin-passport-table">
                             <thead>
                             <tr>
+                                <th className="admin-passport-cell-tick">
+                                    <input
+                                        type="checkbox"
+                                        checked={allInViewSelected}
+                                        // Partly ticked whenever the view holds
+                                        // some of the selection but not all of it.
+                                        ref={el => {
+                                            if (el) el.indeterminate = viewSelectedCount > 0 && !allInViewSelected;
+                                        }}
+                                        onChange={toggleView}
+                                        aria-label={isEnglish
+                                            ? `Select all ${sorted.length} passports in this view`
+                                            : `选择当前视图下的全部 ${sorted.length} 本通行证`}
+                                    />
+                                </th>
                                 {COLUMNS.map(column => (
                                     <th
                                         key={column.key}
@@ -293,12 +433,28 @@ export const PassportStock = ({
                                     role="button"
                                     onClick={() => onOpen(passport.id)}
                                     onKeyDown={e => {
+                                        // Only the row's own keys open it: space on
+                                        // the tick box below ticks the box.
+                                        if (e.target !== e.currentTarget) return;
                                         if (e.key === 'Enter' || e.key === ' ') {
                                             e.preventDefault();
                                             onOpen(passport.id);
                                         }
                                     }}
                                 >
+                                    <td
+                                        className="admin-passport-cell-tick"
+                                        onClick={e => e.stopPropagation()}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedSet.has(passport.id)}
+                                            onChange={() => toggleOne(passport.id)}
+                                            aria-label={isEnglish
+                                                ? `Select passport ${passport.id}`
+                                                : `选择通行证 ${passport.id}`}
+                                        />
+                                    </td>
                                     <td className="admin-passport-cell-code">{passport.id}</td>
                                     <td>
                                         <span

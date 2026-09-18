@@ -505,8 +505,15 @@ export const callClaimPassport = (data: {passportId: string; activationCode: str
 export const callGetPassportPublicProfile = (data: {passportId: string}) =>
     httpsCallable<typeof data, PassportPublicProfile>(getFunctions(), 'getPassportPublicProfile')(data);
 
-export const callDeletePassport = (data: {passportId: string}) =>
-    httpsCallable<typeof data, {passportId: string; deleted: boolean}>(getFunctions(), 'deletePassport')(data);
+// One code or a whole selection; the answer says which ones went and which were
+// left alone, since a claimed or already-deleted passport is skipped rather than
+// failing the call.
+export const callDeletePassports = (data: {passportIds: string[]}) =>
+    httpsCallable<typeof data, {
+        deleted: string[];
+        claimed: string[];
+        missing: string[];
+    }>(getFunctions(), 'deletePassports')(data);
 
 export const callSetPassportPrivacy = (data: {hide: boolean}) =>
     httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);

@@ -59,9 +59,11 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
     const [loadError, setLoadError] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     // Held here rather than in the table, which is unmounted whenever a passport
-    // is open — see StockView. Switching designs starts it over, since a page
-    // number into one design's stock means nothing in another's.
+    // is open — see StockView. Switching designs starts both over, since a page
+    // number into one design's stock means nothing in another's, and neither does
+    // a selection of another design's codes.
     const [stockView, setStockView] = useState<StockView>(INITIAL_STOCK_VIEW);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
     // Default to the newest design, follow it if the design list arrives late, and
     // fall back to it if the selected design is deleted — the `<select>` would
@@ -91,6 +93,7 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
     useEffect(() => {
         if (designId === null) return;
         setStockView(INITIAL_STOCK_VIEW);
+        setSelectedIds([]);
         void loadDesign(designId);
     }, [designId, loadDesign]);
 
@@ -105,11 +108,20 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
         setPassports(list => list?.map(p => p.id === fresh.id ? fresh : p) ?? list);
     }, []);
 
+    /** Rows for passports that no longer exist, gone from the list and from the
+     * selection that was acting on them. */
+    const dropPassports = useCallback((deletedIds: string[]) => {
+        if (deletedIds.length === 0) return;
+        const gone = new Set(deletedIds);
+        setPassports(list => list?.filter(p => !gone.has(p.id)) ?? list);
+        setSelectedIds(list => list.filter(id => !gone.has(id)));
+    }, []);
+
     const applyDelete = useCallback((deletedId: string) => {
-        setPassports(list => list?.filter(p => p.id !== deletedId) ?? list);
+        dropPassports([deletedId]);
         setSelectedId(null);
         setView('dashboard');
-    }, []);
+    }, [dropPassports]);
 
     const selected = passports?.find(p => p.id === selectedId) ?? null;
 
@@ -166,6 +178,9 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
             onRefresh={refresh}
             stockView={stockView}
             onStockViewChange={setStockView}
+            selected={selectedIds}
+            onSelectedChange={setSelectedIds}
+            onBulkDeleted={dropPassports}
             onOpen={id => {
                 setSelectedId(id);
                 setView('detail');
@@ -188,6 +203,9 @@ interface DashboardProps {
     onRefresh: () => Promise<void>;
     stockView: StockView;
     onStockViewChange: (view: StockView) => void;
+    selected: string[];
+    onSelectedChange: (selected: string[]) => void;
+    onBulkDeleted: (passportIds: string[]) => void;
     onOpen: (id: string) => void;
     onGenerate: () => void;
     onDesigns: () => void;
@@ -205,6 +223,9 @@ const Dashboard = ({
                        onRefresh,
                        stockView,
                        onStockViewChange,
+                       selected,
+                       onSelectedChange,
+                       onBulkDeleted,
                        onOpen,
                        onGenerate,
                        onDesigns,
@@ -302,8 +323,12 @@ const Dashboard = ({
                             year={year}
                             view={stockView}
                             onViewChange={onStockViewChange}
+                            selected={selected}
+                            onSelectedChange={onSelectedChange}
+                            onDeleted={onBulkDeleted}
                             onOpen={onOpen}
                             showToast={showToast}
+                            readOnly={readOnly}
                         />
                     )}
                 </>

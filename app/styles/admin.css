@@ -4370,16 +4370,6 @@ select.admin-tickets-tag:focus {
    doesn't: the stock grid, the one-time key table, and the audit trail.
    ========================================================================== */
 
-/* The stock table's heading and its export buttons, which sit on one line until
-   the buttons need a line of their own. */
-.admin-passport-stock-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-}
-
 /* Which slice of the stock the table is showing. Underlined rather than boxed,
    so the counts read as one row of figures instead of four buttons. */
 .admin-passport-tabs {
@@ -4426,6 +4416,46 @@ select.admin-tickets-tag:focus {
 
 .admin-passport-tab--on .admin-passport-tab-count {
     background: rgba(255, 107, 157, 0.16);
+}
+
+/* What is ticked, and what can be done with it. Sits between the status tabs and
+   the table so it reads as a bar over the rows it is about, and is only in the
+   document while something is selected. */
+.admin-passport-selection {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 10px 0 4px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 107, 157, 0.24);
+    border-radius: 10px;
+    background: rgba(255, 107, 157, 0.07);
+}
+
+.admin-passport-selection-count {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Narrow enough to read as a gutter rather than a column, and the box inside it
+   keeps the pointer it would have anywhere else — the row around it is clickable,
+   and the tick has to look like it isn't part of that. */
+.admin-passport-cell-tick {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.admin-passport-cell-tick input[type="checkbox"] {
+    display: block;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--color-primary);
+    cursor: pointer;
 }
 
 /* The printed code, in the same mono it is printed in. */
