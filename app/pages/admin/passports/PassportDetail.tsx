@@ -519,79 +519,72 @@ export const PassportDetail = ({
                 </div>
             )}
             {!readOnly && passport.status === 'claimed' && (
-                <>
-                    <p className="admin-helper-text admin-passport-bound-note">
-                        {isEnglish
-                            ? 'A claimed passport is permanently bound to its holder — it can’t be rebound to another account, and no bulk delete will touch it. Deleting it below is the only way out of that binding: the passport goes for good rather than returning to stock, and you choose there whether the days it granted go with it. Any other membership change belongs in Users Management.'
-                            : '已激活的通行证与持有者永久绑定 — 无法转绑到其他账号，也不会被批量删除影响。下方的删除是解除绑定的唯一方式：通行证将被彻底移除，而非退回库存，并可在删除时选择是否一并收回其授予的天数。其他会员资格调整请前往用户管理。'}
-                    </p>
-                    {!confirmingDelete ? (
-                        <div className="admin-qr-danger-row">
+                !confirmingDelete ? (
+                    <div className="admin-qr-danger-row">
+                        <button
+                            className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
+                            onClick={() => {
+                                // Off every time it opens: taking days back is
+                                // its own decision, not the one carried over
+                                // from the last passport.
+                                setSubtractDays(false);
+                                setConfirmingDelete(true);
+                            }}
+                        >
+                            {isEnglish ? 'Delete passport' : '删除通行证'}
+                        </button>
+                    </div>
+                ) : (
+                    <div
+                        className="admin-passport-warning admin-passport-warning--urgent admin-passport-delete-panel">
+                        <strong>
+                            {isEnglish
+                                ? `Delete passport ${passport.id}?`
+                                : `删除通行证 ${passport.id}？`}
+                        </strong>
+                        <p>
+                            {isEnglish
+                                ? `It leaves ${owner?.displayName || 'the holder'}’s shelf, its sticker stops working, and its activation key goes with it. This can’t be undone.`
+                                : `该通行证将从${owner?.displayName || '持有者'}的书架上消失，贴纸随之失效，激活码一并移除。此操作无法撤销。`}
+                        </p>
+
+                        <label className="admin-checkbox-label admin-passport-delete-choice">
+                            <input
+                                type="checkbox"
+                                checked={subtractDays}
+                                onChange={e => setSubtractDays(e.target.checked)}
+                                disabled={busy || !reduction}
+                            />
+                            <span>
+                                {isEnglish
+                                    ? `Also take back the ${passport.termDays} days it granted`
+                                    : `同时收回其授予的 ${passport.termDays} 天会员资格`}
+                            </span>
+                        </label>
+                        <p className="admin-passport-delete-effect">{deleteEffect()}</p>
+
+                        <div className="admin-btn-row">
                             <button
                                 className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                                onClick={() => {
-                                    // Off every time it opens: taking days back is
-                                    // its own decision, not the one carried over
-                                    // from the last passport.
-                                    setSubtractDays(false);
-                                    setConfirmingDelete(true);
-                                }}
+                                onClick={() => void deleteClaimed()}
+                                disabled={busy}
+                                type="button"
                             >
-                                {isEnglish ? 'Delete passport' : '删除通行证'}
+                                {busy
+                                    ? (isEnglish ? 'Deleting…' : '删除中…')
+                                    : (isEnglish ? 'Delete passport' : '删除通行证')}
+                            </button>
+                            <button
+                                className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
+                                onClick={() => setConfirmingDelete(false)}
+                                disabled={busy}
+                                type="button"
+                            >
+                                {isEnglish ? 'Cancel' : '取消'}
                             </button>
                         </div>
-                    ) : (
-                        <div
-                            className="admin-passport-warning admin-passport-warning--urgent admin-passport-delete-panel">
-                            <strong>
-                                {isEnglish
-                                    ? `Delete passport ${passport.id}?`
-                                    : `删除通行证 ${passport.id}？`}
-                            </strong>
-                            <p>
-                                {isEnglish
-                                    ? `It leaves ${owner?.displayName || 'the holder'}’s shelf, its sticker stops working, and its activation key goes with it. This can’t be undone.`
-                                    : `该通行证将从${owner?.displayName || '持有者'}的书架上消失，贴纸随之失效，激活码一并移除。此操作无法撤销。`}
-                            </p>
-
-                            <label className="admin-checkbox-label admin-passport-delete-choice">
-                                <input
-                                    type="checkbox"
-                                    checked={subtractDays}
-                                    onChange={e => setSubtractDays(e.target.checked)}
-                                    disabled={busy || !reduction}
-                                />
-                                <span>
-                                    {isEnglish
-                                        ? `Also take back the ${passport.termDays} days it granted`
-                                        : `同时收回其授予的 ${passport.termDays} 天会员资格`}
-                                </span>
-                            </label>
-                            <p className="admin-passport-delete-effect">{deleteEffect()}</p>
-
-                            <div className="admin-btn-row">
-                                <button
-                                    className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                                    onClick={() => void deleteClaimed()}
-                                    disabled={busy}
-                                    type="button"
-                                >
-                                    {busy
-                                        ? (isEnglish ? 'Deleting…' : '删除中…')
-                                        : (isEnglish ? 'Delete passport' : '删除通行证')}
-                                </button>
-                                <button
-                                    className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
-                                    onClick={() => setConfirmingDelete(false)}
-                                    disabled={busy}
-                                    type="button"
-                                >
-                                    {isEnglish ? 'Cancel' : '取消'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </>
+                    </div>
+                )
             )}
             {pngNode}
         </div>

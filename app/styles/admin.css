@@ -4641,12 +4641,6 @@ select.admin-tickets-tag:focus {
     color: #000;
 }
 
-/* Sits above the delete on a claimed passport and explains it, so it takes the
-   action row's top margin and the row keeps its own below. */
-.admin-passport-bound-note {
-    margin: 20px 0 0;
-}
-
 /* The claimed passport's delete, opened. It borrows the urgent warning's red
    panel, since it is the same kind of thing said at the same volume, and adds
    the room its choice and its buttons need. */
