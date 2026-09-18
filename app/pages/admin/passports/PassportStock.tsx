@@ -325,20 +325,75 @@ export const PassportStock = ({
                 ))}
             </div>
 
-            {selectedPassports.length > 0 && (
-                <div className="admin-passport-selection">
-                    <span className="admin-passport-selection-count">
-                        {isEnglish
-                            ? `${selectedPassports.length} selected`
-                            : `已选择 ${selectedPassports.length} 本`}
-                    </span>
-                    <div className="admin-tag-actions">
+            {/* Always on screen, and the same height whether or not anything is
+                ticked, so the table doesn't jump the first time a row is. The
+                select-all lives here rather than in the table header because a
+                box in a header can't say that it takes the whole view and not
+                the page — which is the whole of what the paragraph that used to
+                sit here was explaining.
+
+                A view with no rows still gets the bar while something is ticked,
+                since a selection is built across tabs and its actions have to
+                stay reachable from whichever one is open. */}
+            {(sorted.length > 0 || selectedPassports.length > 0) && (
+                <div className="admin-passport-bar">
+                    <label className={`admin-passport-bar-all${
+                        selectableInView.length === 0 ? ' admin-passport-bar-all--off' : ''}`}>
+                        <input
+                            type="checkbox"
+                            checked={allInViewSelected}
+                            // Partly ticked whenever the view holds some of the
+                            // selection but not all of it.
+                            ref={el => {
+                                if (el) el.indeterminate = viewSelectedCount > 0 && !allInViewSelected;
+                            }}
+                            onChange={toggleView}
+                            // Nothing to take on the Claimed tab.
+                            disabled={selectableInView.length === 0}
+                            aria-label={selectableInView.length === 0
+                                ? (isEnglish
+                                    ? 'Nothing in this view can be selected'
+                                    : '当前视图下没有可选择的通行证')
+                                : (isEnglish
+                                    ? `Select all ${selectableInView.length} unclaimed passports in this view`
+                                    : `选择当前视图下的全部 ${selectableInView.length} 本未激活通行证`)}
+                        />
+                        <span>
+                            {selectableInView.length === 0
+                                ? (isEnglish
+                                    ? 'Claimed passports aren’t part of bulk actions — open one to delete it'
+                                    : '已激活的通行证不参与批量操作 — 如需删除请打开该通行证')
+                                : selectedPassports.length > 0
+                                    ? (isEnglish
+                                        ? `${selectedPassports.length} selected`
+                                        : `已选择 ${selectedPassports.length} 本`)
+                                    : (isEnglish
+                                        ? `Select all ${selectableInView.length} unclaimed in this view`
+                                        : `选择当前视图下的全部 ${selectableInView.length} 本未激活通行证`)}
+                        </span>
+                    </label>
+                    {selectedPassports.length > 0 && (
+                        <button
+                            className="admin-passport-bar-clear"
+                            onClick={() => onSelectedChange([])}
+                            type="button"
+                        >
+                            {isEnglish ? 'Clear' : '清除'}
+                        </button>
+                    )}
+                    {/* Present and disabled rather than absent: what a tick is for is
+                        then readable before anything has been ticked. */}
+                    <div className="admin-passport-bar-actions">
                         <button
                             className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
                             onClick={() => downloadBlob(
                                 buildPassportIdCsv(selectedPassports.map(p => p.id), origin),
                                 `${selectionBase}-ids.csv`,
                             )}
+                            disabled={selectedPassports.length === 0}
+                            title={isEnglish
+                                ? 'Public codes only — open a passport to view its activation key'
+                                : '仅含公开编号 — 打开单本通行证即可查看其激活码'}
                             type="button"
                         >
                             {isEnglish ? 'Codes CSV' : '编号 CSV'}
@@ -346,7 +401,10 @@ export const PassportStock = ({
                         <button
                             className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
                             onClick={() => requestPngs(selectedPassports.map(p => p.id), selectionBase)}
-                            disabled={!!progress}
+                            disabled={selectedPassports.length === 0 || !!progress}
+                            title={isEnglish
+                                ? 'Public codes only — open a passport to view its activation key'
+                                : '仅含公开编号 — 打开单本通行证即可查看其激活码'}
                             type="button"
                         >
                             {progress
@@ -357,29 +415,21 @@ export const PassportStock = ({
                             <button
                                 className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
                                 onClick={() => void deleteSelected()}
-                                disabled={deleting}
+                                disabled={deleting || selectedPassports.length === 0}
                                 type="button"
                             >
                                 {deleting
                                     ? (isEnglish ? 'Deleting…' : '删除中…')
-                                    : (isEnglish
-                                        ? `Delete ${selectedPassports.length}`
-                                        : `删除 ${selectedPassports.length} 本`)}
+                                    : selectedPassports.length > 0
+                                        ? (isEnglish
+                                            ? `Delete ${selectedPassports.length}`
+                                            : `删除 ${selectedPassports.length} 本`)
+                                        : (isEnglish ? 'Delete' : '删除')}
                             </button>
                         )}
                     </div>
                 </div>
             )}
-
-            <p className="admin-helper-text admin-field-hint">
-                {selectableInView.length === 0
-                    ? (isEnglish
-                        ? 'Nothing in this view can be ticked: claimed passports aren’t part of bulk actions. Open one to download its sticker or delete it.'
-                        : '当前视图下没有可勾选的通行证：已激活的通行证不参与批量操作。如需下载贴纸或删除，请打开该通行证。')
-                    : (isEnglish
-                        ? `Tick rows to export or delete them; the box in the header takes all ${selectableInView.length} unclaimed passports in this view, not just the page shown. Claimed passports can’t be ticked — open one to delete it. Exports carry public codes only, so open a passport to view its activation key.`
-                        : `勾选行即可导出或删除；表头的复选框会选中当前视图下的全部 ${selectableInView.length} 本未激活通行证（不限于本页）。已激活的通行证无法勾选 — 如需删除请打开该通行证。导出内容仅含公开编号 — 打开单本通行证即可查看其激活码。`)}
-            </p>
 
             {sorted.length === 0 ? (
                 <p className="admin-no-results">
@@ -392,25 +442,9 @@ export const PassportStock = ({
                             <thead>
                             <tr>
                                 <th className="admin-passport-cell-tick">
-                                    <input
-                                        type="checkbox"
-                                        checked={allInViewSelected}
-                                        // Partly ticked whenever the view holds
-                                        // some of the selection but not all of it.
-                                        ref={el => {
-                                            if (el) el.indeterminate = viewSelectedCount > 0 && !allInViewSelected;
-                                        }}
-                                        onChange={toggleView}
-                                        // Nothing to take on the Claimed tab.
-                                        disabled={selectableInView.length === 0}
-                                        aria-label={selectableInView.length === 0
-                                            ? (isEnglish
-                                                ? 'Nothing in this view can be selected'
-                                                : '当前视图下没有可选择的通行证')
-                                            : (isEnglish
-                                                ? `Select all ${selectableInView.length} unclaimed passports in this view`
-                                                : `选择当前视图下的全部 ${selectableInView.length} 本未激活通行证`)}
-                                    />
+                                    <span className="admin-sr-only">
+                                        {isEnglish ? 'Selected' : '已选择'}
+                                    </span>
                                 </th>
                                 {COLUMNS.map(column => (
                                     <th
@@ -440,7 +474,7 @@ export const PassportStock = ({
                             {rows.map(passport => (
                                 <tr
                                     key={passport.id}
-                                    className="admin-data-table-row--clickable"
+                                    className={`admin-data-table-row--clickable admin-passport-row admin-passport-row--${passport.status}`}
                                     tabIndex={0}
                                     role="button"
                                     onClick={() => onOpen(passport.id)}
@@ -489,14 +523,19 @@ export const PassportStock = ({
                                         />
                                     </td>
                                     <td className="admin-passport-cell-code">{passport.id}</td>
-                                    <td>
+                                    <td className="admin-passport-cell-status">
                                         <span
                                             className={`admin-passport-status admin-passport-status--${passport.status}`}>
                                             <span className="admin-passport-status-dot" aria-hidden="true"/>
                                             {passportStatusLabel(passport.status, isEnglish)}
                                         </span>
                                     </td>
-                                    <td className="admin-passport-cell-holder">
+                                    {/* Flagged when there is no holder to
+                                        name, so the stacked layout can drop the
+                                        line rather than stack a lone dash. */}
+                                    <td className={`admin-passport-cell-holder${
+                                        passport.status === 'claimed' && passport.ownerUid
+                                            ? '' : ' admin-passport-cell-holder--none'}`}>
                                         <Holder passport={passport} owners={owners} isEnglish={isEnglish}/>
                                     </td>
                                     <td
@@ -516,7 +555,7 @@ export const PassportStock = ({
 
                     <div className="admin-passport-pager">
                         <button
-                            className="admin-btn admin-btn--outline admin-btn-sm"
+                            className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
                             onClick={() => setPage(page - 1)}
                             disabled={page === 0}
                             type="button"
@@ -529,7 +568,7 @@ export const PassportStock = ({
                                 : `第 ${from + 1}–${from + rows.length} 本，共 ${sorted.length} 本`}
                         </span>
                         <button
-                            className="admin-btn admin-btn--outline admin-btn-sm"
+                            className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
                             onClick={() => setPage(page + 1)}
                             disabled={page >= pageCount - 1}
                             type="button"
@@ -568,9 +607,21 @@ const Holder = ({passport, owners, isEnglish}: {
         );
     }
     return (
-        <>
-            <span className="admin-passport-holder-name">{owner.displayName}</span>
-            <span className="admin-passport-holder-email">{owner.email}</span>
-        </>
+        <span className="admin-passport-holder">
+            {owner.photoURL ? (
+                <img src={owner.photoURL} alt="" className="admin-passport-holder-face"
+                     referrerPolicy="no-referrer"/>
+            ) : (
+                // An account with no photo, rather than the broken image an
+                // empty src would paint in every row that has one.
+                <span className="admin-passport-holder-face admin-passport-holder-face--blank">
+                    {Array.from(owner.displayName.trim())[0]?.toUpperCase() ?? '?'}
+                </span>
+            )}
+            <span className="admin-passport-holder-text">
+                <span className="admin-passport-holder-name">{owner.displayName}</span>
+                <span className="admin-passport-holder-email">{owner.email}</span>
+            </span>
+        </span>
     );
 };

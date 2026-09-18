@@ -1372,6 +1372,19 @@
     padding: 5px 14px;
 }
 
+/* Read aloud, never drawn — for a control or a header whose meaning is carried
+   by its position rather than by any text beside it. */
+.admin-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 .admin-section-mb {
     margin-bottom: 20px;
 }
@@ -4420,27 +4433,81 @@ select.admin-tickets-tag:focus {
     background: rgba(255, 107, 157, 0.16);
 }
 
-/* What is ticked, and what can be done with it. Sits between the status tabs and
-   the table so it reads as a bar over the rows it is about, and is only in the
-   document while something is selected. */
-.admin-passport-selection {
+/* What is ticked and what can be done with it, over the rows it is about. It is
+   in the document whether or not anything is ticked and keeps the same height
+   either way, so the table doesn't jump the first time a row is — and the
+   select-all sits here, where its label has room to say that it takes the whole
+   view rather than the page on screen. */
+.admin-passport-bar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
-    margin: 10px 0 4px;
+    margin: 10px 0 8px;
     padding: 8px 12px;
     border: 1px solid rgba(255, 107, 157, 0.24);
     border-radius: 10px;
     background: rgba(255, 107, 157, 0.07);
 }
 
-.admin-passport-selection-count {
+.admin-passport-bar-all {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
     font-size: 13px;
     font-weight: 700;
     color: var(--color-text);
     font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+
+.admin-passport-bar-all input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+/* The Claimed tab, where there is nothing to take: the label carries the reason
+   in place of a count, so it reads as an explanation rather than a dead box. */
+.admin-passport-bar-all--off {
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: default;
+}
+
+.admin-passport-bar-all input[type="checkbox"]:disabled {
+    cursor: default;
+}
+
+.admin-passport-bar-clear {
+    padding: 3px 10px;
+    border: none;
+    border-radius: 999px;
+    background: none;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.admin-passport-bar-clear:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--color-text);
+}
+
+/* Pushed to the far edge, and always present: what a tick is for is readable
+   before anything has been ticked. */
+.admin-passport-bar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
 }
 
 /* Narrow enough to read as a gutter rather than a column, and the box inside it
@@ -4499,9 +4566,48 @@ select.admin-tickets-tag:focus {
     background: #2f9e57;
 }
 
+/* A claimed row reads apart from the stock around it on the All tab, where the
+   two kinds are interleaved — quieter than a badge in every row, and doing the
+   work the status dot alone was too small to do. */
+.admin-passport-row--claimed {
+    background: rgba(78, 203, 113, 0.05);
+}
+
 /* Name over email, so a long address never widens the column. */
 .admin-passport-cell-holder {
-    max-width: 260px;
+    max-width: 280px;
+}
+
+/* A face beside the name: this is a table of people, and a column of them is
+   scanned far faster than a column of names. */
+.admin-passport-holder {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.admin-passport-holder-face {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(255, 107, 157, 0.25);
+}
+
+.admin-passport-holder-face--blank {
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--color-primary);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.admin-passport-holder-text {
+    min-width: 0;
 }
 
 .admin-passport-holder-name,
@@ -4529,16 +4635,106 @@ select.admin-tickets-tag:focus {
 
 .admin-passport-pager {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: 14px;
-    margin-top: 12px;
+    margin-top: 14px;
 }
 
 .admin-passport-pager-range {
     font-size: 12px;
     color: var(--color-text-muted);
     font-variant-numeric: tabular-nums;
+}
+
+/* Too narrow for five columns, so each passport becomes a stacked card: the
+   code and its status on the first line, the holder and the generation under
+   them, and the tick down the left where it is in the table. A horizontal
+   scrollbar would hide the tick column or the date, whichever end it was at. */
+@media (max-width: 720px) {
+    .admin-passport-table thead {
+        display: none;
+    }
+
+    .admin-passport-table,
+    .admin-passport-table tbody,
+    .admin-passport-table tr,
+    .admin-passport-table td {
+        display: block;
+    }
+
+    .admin-passport-table tr {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-areas:
+            'tick code   status'
+            'tick holder holder'
+            'tick date   date';
+        align-items: center;
+        gap: 3px 11px;
+        padding: 11px 12px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .admin-passport-table td {
+        padding: 0;
+        border: none;
+    }
+
+    .admin-passport-table .admin-passport-cell-tick {
+        grid-area: tick;
+        /* The table's 1% gutter width means nothing to a grid column. */
+        width: auto;
+    }
+
+    .admin-passport-table .admin-passport-cell-code {
+        grid-area: code;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .admin-passport-table .admin-passport-cell-status {
+        grid-area: status;
+    }
+
+    .admin-passport-table .admin-passport-cell-holder {
+        grid-area: holder;
+        max-width: none;
+    }
+
+    /* Nobody holds it, so the line goes rather than stacking a lone dash. */
+    .admin-passport-table .admin-passport-cell-holder--none {
+        display: none;
+    }
+
+    .admin-passport-table .admin-passport-cell-date {
+        grid-area: date;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+
+    /* The generator's name is the least of what a card carries; it shares the
+       date's line instead of taking one of its own. */
+    .admin-passport-table .admin-passport-cell-by {
+        display: inline;
+        font-size: 12px;
+    }
+
+    .admin-passport-table .admin-passport-cell-by::before {
+        content: ' · ';
+    }
+
+    /* Each action wide enough to hit, once the bar has stopped being a row. */
+    .admin-passport-bar-actions {
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .admin-passport-bar-actions .admin-toggle-btn {
+        flex: 1;
+        min-width: 96px;
+    }
 }
 
 /* Status badge colors, matched to the dots in the stock table. */
