@@ -17,6 +17,7 @@ import {
     isPassportCodeShape,
     normalizePassportCode,
     PASSPORT_ID_LENGTH,
+    type PassportDesign,
     passportName,
     type PassportPublicProfile,
     usePassportDesigns,
@@ -426,15 +427,8 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
             <ToastContainer toasts={toasts}/>
             <article className="passport-book">
                 <div className="passport-book-cover">
-                    {design?.coverImageUrl ? (
-                        <>
-                            <img src={design.coverImageUrl} alt="" aria-hidden="true"
-                                 className="passport-book-cover-wash"/>
-                            <img src={design.coverImageUrl} alt={name} className="passport-book-cover-art"/>
-                        </>
-                    ) : (
-                        <span className="passport-book-cover-blank">{isEnglish ? 'Sekai Beyond' : '彼世界动漫社'}</span>
-                    )}
+                    <CoverFace design={design} name={name}/>
+                    <CoverFace design={design} name={name} back/>
                 </div>
 
                 <div className="passport-book-page">
@@ -500,6 +494,41 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
                 </div>
             </article>
         </PassportShell>
+    );
+};
+
+/**
+ * One side of the passport's cover, which is a two-faced card so that it can be
+ * flipped open on load. The back face is the shut passport lying over the data
+ * page, so it takes the design's outside art if it has any; the front face is
+ * the page the cover comes to rest on, which is always the cover art. A design
+ * without its own outside uses the cover art for both, the way every design did
+ * before the two could differ. Only one face ever faces the viewer, so the back
+ * is kept out of the accessibility tree.
+ */
+const CoverFace = ({design, name, back = false}: {
+    design: PassportDesign | undefined;
+    name: string;
+    back?: boolean;
+}) => {
+    const {isEnglish} = useLanguage();
+    const src = back
+        ? (design?.outerCoverImageUrl || design?.coverImageUrl)
+        : design?.coverImageUrl;
+    return (
+        <div
+            className={`passport-book-cover-face${back ? ' passport-book-cover-face--back' : ''}`}
+            aria-hidden={back || undefined}
+        >
+            {src ? (
+                <>
+                    <img src={src} alt="" aria-hidden="true" className="passport-book-cover-wash"/>
+                    <img src={src} alt={back ? '' : name} className="passport-book-cover-art"/>
+                </>
+            ) : (
+                <span className="passport-book-cover-blank">{isEnglish ? 'Sekai Beyond' : '彼世界动漫社'}</span>
+            )}
+        </div>
     );
 };
 

@@ -49,6 +49,11 @@ export interface PassportDesign {
     /** Optional; the English name stands in when it's blank. */
     nameCn: string;
     coverImageUrl: string;
+    /** Optional art for the outside of the passport — what the public page shows
+     * while it is shut, before the cover flips open. The cover art above stands
+     * in when this is blank, which is what every design did before there were
+     * two of them. */
+    outerCoverImageUrl: string;
     /** Days of membership its passports grant. Copied onto each passport at
      * generation, so an edit only reaches batches generated afterwards. */
     termDays: number;
@@ -130,6 +135,7 @@ const designCache = createCollectionCache<PassportDesign>('passportDesigns', doc
         name: data.name ?? '',
         nameCn: data.nameCn ?? '',
         coverImageUrl: data.coverImageUrl ?? '',
+        outerCoverImageUrl: data.outerCoverImageUrl ?? '',
         termDays: typeof data.termDays === 'number' ? data.termDays : 0,
     };
 });

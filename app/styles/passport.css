@@ -151,34 +151,57 @@
    page on security-printed paper, stamped with their membership. Side by side
    on wide screens; on a phone the cover sits above the data page instead.
 
-   The spread is sized to fill the screen: --passport-height is the window less
-   the page's top and bottom padding, and the cover column is 3:4 of that, so the
-   cover sets the spread's height. The cover gives way to the data page on
-   narrow windows, and everything on the data page scales with that page's
-   width (cqi), so the text grows with the passport rather than the window.
-   The data page runs about as tall as it is wide, so the spread's width is
-   capped by the height too — any wider and the page would outgrow the cover,
-   stretching it and pushing the spread off the bottom of the screen. */
+   The two halves are the same width, so the spine falls down the middle. The
+   spread is sized to fill the screen: --passport-height is the window less the
+   page's top and bottom padding, and the cover holds 3:4, so half the spread
+   is three quarters of its height and the whole of it is one and a half times
+   as wide as it is tall. That is what caps the width — any wider and the cover
+   would set a height taller than the screen it has to fit in. Everything on
+   the data page scales with that page's width (cqi), so the text grows with
+   the passport rather than the window. */
 
 .passport-book {
     --passport-paper: #fffaf4;
+    /* The block of pages inside the spread — the same paper in shadow. */
+    --passport-block: #f3e7db;
     --passport-ink: #e8457f;
     --passport-rule: rgba(255, 107, 157, 0.28);
     --passport-height: clamp(520px, calc(100svh - 132px), 1120px);
 
+    position: relative;
     display: grid;
-    grid-template-columns: min(calc(var(--passport-height) * 0.75), 46%) minmax(0, 1fr);
-    width: min(100%, calc(var(--passport-height) * 1.68));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(100%, calc(var(--passport-height) * 1.5));
     margin: 0 auto;
     border-radius: 22px;
-    overflow: hidden;
+    /* Depth for the opening further down. The book can't clip its halves to
+       its own radius either — that would cut the cover off as it swings up out
+       of the spread — so each half rounds its outer corners itself. */
+    perspective: 3200px;
+}
+
+/* The block of pages the cover lifts off, and the spread's own shadow. They
+   belong to the open passport, so they are a layer of their own that arrives
+   with the opening rather than sitting under the closed cover. */
+.passport-book::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: repeating-radial-gradient(circle at 105% -5%, transparent 0 11px, rgba(255, 107, 157, 0.07) 11px 12px),
+    var(--passport-block);
     box-shadow: var(--shadow-card), 0 1px 0 rgba(255, 107, 157, 0.2);
 }
 
+/* Hinged at the spine and carrying a face on each side, so it can be flipped
+   open. It can't clip or round anything itself — either would flatten the card
+   and take the back face with it — so the faces do both. It lies over the data
+   page while shut, so it also has to paint above it. */
 .passport-book-cover {
     position: relative;
-    overflow: hidden;
-    background: var(--gradient-primary);
+    z-index: 2;
+    transform-style: preserve-3d;
+    transform-origin: right center;
 }
 
 /* Holds the cover at least 3:4 while still letting it stretch to a taller data
@@ -190,13 +213,36 @@
     padding-top: 133.33%;
 }
 
+.passport-book-cover-face {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: 22px 0 0 22px;
+    backface-visibility: hidden;
+    background: var(--gradient-primary);
+}
+
+/* Turned to face the other way, so that the art reads the right way round on
+   both sides rather than mirrored on one. Turning it about its own centre
+   inside a card hinged at its edge lands it across the spine still the right
+   way round, so its edges aren't mirrored either — they are the shut
+   passport's, where the spine is on the left and the outer edge on the right. */
+.passport-book-cover-face--back {
+    border-radius: 0 22px 22px 0;
+    transform: rotateY(180deg);
+}
+
 /* The spine's shadow, falling on both pages from the fold between them. */
-.passport-book-cover::after {
+.passport-book-cover-face::after {
     content: "";
     position: absolute;
     inset: 0;
     background: linear-gradient(90deg, transparent calc(100% - 22px), rgba(74, 81, 96, 0.18));
     pointer-events: none;
+}
+
+.passport-book-cover-face--back::after {
+    background: linear-gradient(270deg, transparent calc(100% - 22px), rgba(74, 81, 96, 0.18));
 }
 
 /* The art is contained so no design is cropped; a blurred copy of it fills
@@ -235,6 +281,9 @@
 
 .passport-book-page {
     container-type: inline-size;
+    position: relative;
+    z-index: 1;
+    border-radius: 0 22px 22px 0;
     display: flex;
     flex-direction: column;
     /* When the cover makes the page taller than its contents, share the extra
@@ -250,6 +299,119 @@
     var(--passport-paper);
 }
 
+/* --- Opening the passport --------------------------------------------------
+   The passport arrives shut and opens once, on load. Only the cover is on
+   screen to begin with, lying over the data page; it then swings a half turn
+   about the spine and comes to rest on the left, the way a front cover does.
+   Its back face leads, its front face lands, and `backface-visibility` hands
+   over between the two as the card passes edge-on.
+
+   What the cover uncovers arrives behind it: the spread's frame, then the data
+   page under the cover's shadow, then the page's contents rising in, and last
+   of all the stamp (further down), once there is a page to stamp. */
+
+/* The cover's shadow lying across the data page while the cover is still over
+   it, sweeping off as the cover clears. */
+.passport-book-page::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(74, 81, 96, 0.5), rgba(74, 81, 96, 0) 62%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .passport-book-cover {
+        animation: passport-cover-flip 1.25s cubic-bezier(0.34, 0.72, 0.28, 1) 0.15s both;
+    }
+
+    /* The frame comes in a third of the way through the turn, and the page
+       just past halfway — by which point the cover is off it. Both are timed
+       off the flip, so they follow it if its duration changes. */
+    .passport-book::before {
+        animation: passport-frame-in 0.55s ease-out 0.5s both;
+    }
+
+    .passport-book-page {
+        animation: passport-frame-in 0.45s ease-out 0.6s both;
+    }
+
+    .passport-book-page::after {
+        animation: passport-page-shade 0.55s ease-out 0.6s both;
+    }
+
+    .passport-book-head,
+    .passport-holder,
+    .passport-fields,
+    .passport-book-foot {
+        animation: passport-page-rise 0.45s ease-out both;
+    }
+
+    .passport-book-head {
+        animation-delay: 1.05s;
+    }
+
+    .passport-holder {
+        animation-delay: 1.13s;
+    }
+
+    .passport-fields {
+        animation-delay: 1.21s;
+    }
+
+    .passport-book-foot {
+        animation-delay: 1.29s;
+    }
+}
+
+/* A half turn, passing through edge-on toward the viewer rather than away —
+   which is the way a cover comes up off the page it is lying on.
+
+   Flipped about the spine the shut passport covers the spread's right half,
+   over a frame that isn't on screen yet, so it starts nudged back by the half
+   of its own width that centres it and slides into true as it opens. That is
+   exactly half because the two halves are the same width. The frame stays put
+   throughout, so the cover still lands exactly. */
+@keyframes passport-cover-flip {
+    from {
+        transform: translateX(-50%) rotateY(180deg);
+    }
+    to {
+        transform: translateX(0) rotateY(0);
+    }
+}
+
+@keyframes passport-frame-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes passport-page-shade {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes passport-page-rise {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
 .passport-book-head {
     display: flex;
     align-items: center;
@@ -259,7 +421,7 @@
 
 .passport-book-title {
     font-family: var(--font-display);
-    font-size: clamp(20px, 4.4cqi, 34px);
+    font-size: clamp(20px, 5.5cqi, 34px);
     font-weight: 400;
     color: var(--color-primary);
 }
@@ -267,18 +429,18 @@
 .passport-holder {
     display: flex;
     align-items: center;
-    gap: clamp(16px, 4.5cqi, 32px);
+    gap: clamp(16px, 5.625cqi, 32px);
 }
 
 /* A passport photo is a square, not a profile circle. */
 .passport-holder-photo {
-    width: clamp(76px, 24cqi, 170px);
+    width: clamp(76px, 30cqi, 170px);
     aspect-ratio: 1;
     height: auto;
     flex-shrink: 0;
     object-fit: cover;
-    border-radius: clamp(10px, 2cqi, 16px);
-    border: clamp(3px, 0.7cqi, 5px) solid white;
+    border-radius: clamp(10px, 2.5cqi, 16px);
+    border: clamp(3px, 0.875cqi, 5px) solid white;
     box-shadow: 0 4px 14px rgba(255, 107, 157, 0.2);
 }
 
@@ -288,7 +450,7 @@
     justify-content: center;
     background: var(--gradient-primary);
     color: white;
-    font-size: clamp(32px, 10cqi, 72px);
+    font-size: clamp(32px, 12.5cqi, 72px);
     font-weight: 700;
 }
 
@@ -296,13 +458,13 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: clamp(4px, 1.2cqi, 10px);
+    gap: clamp(4px, 1.5cqi, 10px);
     min-width: 0;
 }
 
 .passport-holder-name {
     font-family: var(--font-display);
-    font-size: clamp(28px, 8cqi, 58px);
+    font-size: clamp(28px, 10cqi, 58px);
     font-weight: 400;
     line-height: 1.1;
     color: var(--color-text);
@@ -310,7 +472,7 @@
 }
 
 .passport-holder-id .profile-group-tag {
-    font-size: clamp(13px, 2.5cqi, 17px);
+    font-size: clamp(13px, 3.125cqi, 17px);
     padding: 0.3em 1.1em;
     margin-top: 0;
 }
@@ -318,7 +480,7 @@
 .passport-fields {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: clamp(12px, 3.6cqi, 28px) clamp(16px, 5cqi, 40px);
+    gap: clamp(12px, 4.5cqi, 28px) clamp(16px, 6.25cqi, 40px);
 }
 
 /* Each field is a label over a value written on a dashed line, like a form. */
@@ -326,7 +488,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding-bottom: clamp(6px, 1.4cqi, 10px);
+    padding-bottom: clamp(6px, 1.75cqi, 10px);
     border-bottom: 1px dashed var(--passport-rule);
 }
 
@@ -335,13 +497,13 @@
 }
 
 .passport-field dt {
-    font-size: clamp(12px, 2.4cqi, 16px);
+    font-size: clamp(12px, 3cqi, 16px);
     font-weight: 600;
     color: var(--color-text-muted);
 }
 
 .passport-field dd {
-    font-size: clamp(16px, 3.6cqi, 24px);
+    font-size: clamp(16px, 4.5cqi, 24px);
     font-weight: 700;
     color: var(--color-text);
 }
@@ -365,7 +527,7 @@
     border: 2px solid var(--passport-rule);
     background: white;
     color: var(--color-primary);
-    font-size: clamp(14px, 2.7cqi, 18px);
+    font-size: clamp(14px, 3.375cqi, 18px);
     font-weight: 700;
     text-decoration: none;
     transition: border-color 0.15s, background 0.15s;
@@ -387,17 +549,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: clamp(80px, 22cqi, 150px);
+    width: clamp(80px, 27.5cqi, 150px);
     aspect-ratio: 1;
     flex-shrink: 0;
     margin-left: auto;
     border-radius: 50%;
-    border: clamp(3px, 0.6cqi, 4px) solid var(--passport-ink);
-    box-shadow: inset 0 0 0 clamp(3px, 0.6cqi, 4px) var(--passport-paper),
-    inset 0 0 0 clamp(4.5px, 0.9cqi, 6px) var(--passport-ink);
+    border: clamp(3px, 0.75cqi, 4px) solid var(--passport-ink);
+    box-shadow: inset 0 0 0 clamp(3px, 0.75cqi, 4px) var(--passport-paper),
+    inset 0 0 0 clamp(4.5px, 1.125cqi, 6px) var(--passport-ink);
     color: var(--passport-ink);
     font-family: var(--font-display);
-    font-size: clamp(19px, 5.2cqi, 36px);
+    font-size: clamp(19px, 6.5cqi, 36px);
     line-height: 1;
     opacity: 0.85;
     transform: rotate(-14deg);
@@ -406,7 +568,7 @@
 /* "Officer" is a longer word than "Member" and needs the smaller size to stay
    inside the ring. */
 .passport-stamp--role {
-    font-size: clamp(17px, 4.4cqi, 30px);
+    font-size: clamp(17px, 5.5cqi, 30px);
 }
 
 .passport-stamp-context {
@@ -420,7 +582,7 @@
 
 @media (prefers-reduced-motion: no-preference) {
     .passport-stamp {
-        animation: passport-stamp-down 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) 0.35s both;
+        animation: passport-stamp-down 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) 1.45s both;
     }
 }
 
@@ -442,14 +604,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: clamp(38px, 7.5cqi, 52px);
+    width: clamp(38px, 9.375cqi, 52px);
     aspect-ratio: 1;
     flex-shrink: 0;
     border-radius: 50%;
     border: 2px solid var(--passport-rule);
     background: white;
     color: var(--color-text-muted);
-    font-size: clamp(17px, 3.4cqi, 24px);
+    font-size: clamp(17px, 4.25cqi, 24px);
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
@@ -600,19 +762,62 @@ a.passport-shelf-card:hover {
         border-radius: 20px;
     }
 
+    .passport-book-cover {
+        transform-origin: center bottom;
+    }
+
+    .passport-book-cover-face {
+        border-radius: 20px 20px 0 0;
+    }
+
+    /* Turned about the hinge's axis, like the card it is on, so that it still
+       lands the right way up rather than upside down. */
+    .passport-book-cover-face--back {
+        border-radius: 0 0 20px 20px;
+        transform: rotateX(180deg);
+    }
+
     .passport-book-cover::before {
         padding-top: 75%;
     }
 
-    .passport-book-cover::after {
+    .passport-book-cover-face::after {
         background: linear-gradient(180deg, transparent calc(100% - 18px), rgba(74, 81, 96, 0.16));
     }
 
+    .passport-book-cover-face--back::after {
+        background: linear-gradient(0deg, transparent calc(100% - 18px), rgba(74, 81, 96, 0.16));
+    }
+
     .passport-book-page {
+        border-radius: 0 0 20px 20px;
         padding: 20px 18px 18px;
         gap: 18px;
         background: linear-gradient(180deg, rgba(74, 81, 96, 0.08), transparent 20px),
         repeating-radial-gradient(circle at 105% -5%, transparent 0 11px, rgba(255, 107, 157, 0.07) 11px 12px),
         var(--passport-paper);
+    }
+
+    .passport-book-page::after {
+        background: linear-gradient(180deg, rgba(74, 81, 96, 0.5), rgba(74, 81, 96, 0) 62%);
+    }
+}
+
+/* The stacked spread is hinged across the cover's bottom edge, not down its
+   side, so the cover opens about the other axis — downward over the data page
+   and back up again. Only the hinge and the keyframes change; the timing above
+   is the same opening. */
+@media (max-width: 700px) and (prefers-reduced-motion: no-preference) {
+    .passport-book-cover {
+        animation-name: passport-cover-flip-stacked;
+    }
+}
+
+@keyframes passport-cover-flip-stacked {
+    from {
+        transform: translateY(-30%) rotateX(-180deg);
+    }
+    to {
+        transform: translateY(0) rotateX(0);
     }
 }

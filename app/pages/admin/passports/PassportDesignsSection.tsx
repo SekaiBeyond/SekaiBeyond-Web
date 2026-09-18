@@ -175,6 +175,11 @@ const DesignCard = ({design, readOnly, deleting, onEdit, onDelete}: {
                 <span className="admin-passport-design-term">
                     {isEnglish ? `${design.termDays} days of membership` : `${design.termDays} 天会员资格`}
                 </span>
+                {design.outerCoverImageUrl && (
+                    <span className="admin-passport-design-term">
+                        {isEnglish ? 'Separate outer cover' : '含独立外观封面'}
+                    </span>
+                )}
                 {!readOnly && <CardEditDeleteActions onEdit={onEdit} onDelete={onDelete} deleting={deleting}/>}
             </div>
         </div>
@@ -207,13 +212,19 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
     const [termInput, setTermInput] = useState(String(initial?.termDays ?? DEFAULT_PASSPORT_TERM_DAYS));
     const [coverFile, setCoverFile] = useState<File | null>(null);
     const [coverPreview, setCoverPreview] = useState<string | null>(null);
+    const [outerFile, setOuterFile] = useState<File | null>(null);
+    const [outerPreview, setOuterPreview] = useState<string | null>(null);
+    // The outer cover already saved, blanked when the admin removes it so that
+    // the save writes it away rather than leaving the old one in place.
+    const [outerUrl, setOuterUrl] = useState(initial?.outerCoverImageUrl ?? '');
     const [saving, setSaving] = useState(false);
 
-    // ImageUploadField revokes a preview it replaces; the last one picked is this
-    // editor's to revoke when it closes, saved or not.
-    const previewUrl = useRef<string | null>(null);
+    // ImageUploadField revokes a preview it replaces; the ones picked here are
+    // this editor's to revoke when it closes, saved or not. Revoking a url the
+    // field has already let go of does nothing, so every one picked can go in.
+    const previewUrls = useRef<string[]>([]);
     useEffect(() => () => {
-        if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+        for (const url of previewUrls.current) URL.revokeObjectURL(url);
     }, []);
 
     const termDays = Number(termInput);
@@ -237,11 +248,19 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
                     `passports/design-${year}-${Date.now().toString(36)}.webp`,
                 );
             }
+            let outerCoverImageUrl = outerUrl;
+            if (outerFile) {
+                outerCoverImageUrl = await callUploadAdminImage(
+                    outerFile,
+                    `passports/design-${year}-outer-${Date.now().toString(36)}.webp`,
+                );
+            }
             await callSavePassportDesign({
                 ...(initial ? {designId: initial.id} : {year}),
                 name: name.trim(),
                 nameCn: nameCn.trim(),
                 coverImageUrl,
+                outerCoverImageUrl,
                 termDays,
             });
             showToast(isEnglish ? 'Design saved.' : '设计已保存。', 'success');
@@ -262,18 +281,70 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
             </h4>
 
             <div className="admin-passport-design-editor-body">
-                <ImageUploadField
-                    variant="cover"
-                    preview={coverPreview ?? (initial?.coverImageUrl || null)}
-                    onFileChange={(file, url) => {
-                        setCoverFile(file);
-                        setCoverPreview(url);
-                        previewUrl.current = url;
-                    }}
-                    onCleanupPreview={url => URL.revokeObjectURL(url)}
-                    convertToWebp
-                    showToast={showToast}
-                />
+                <div className="admin-passport-design-covers">
+                    <div className="admin-passport-cover-slot">
+                        <span className="admin-passport-cover-label">
+                            {isEnglish ? 'Cover art' : '封面图'}
+                        </span>
+                        <ImageUploadField
+                            variant="cover"
+                            preview={coverPreview ?? (initial?.coverImageUrl || null)}
+                            onFileChange={(file, url) => {
+                                setCoverFile(file);
+                                setCoverPreview(url);
+                                previewUrls.current.push(url);
+                            }}
+                            onCleanupPreview={url => URL.revokeObjectURL(url)}
+                            convertToWebp
+                            showToast={showToast}
+                        />
+                        <p className="admin-passport-design-hint">
+                            {isEnglish
+                                ? 'The page inside the open passport, and the thumbnail on the shelf and the activation page.'
+                                : '打开后通行证的内页，以及收藏架与激活页面上的缩略图。'}
+                        </p>
+                    </div>
+
+                    <div className="admin-passport-cover-slot">
+                        <span className="admin-passport-cover-label">
+                            {isEnglish ? 'Outer cover' : '外观封面'}
+                            <span className="admin-passport-cover-optional">
+                                {isEnglish ? 'Optional' : '选填'}
+                            </span>
+                        </span>
+                        <ImageUploadField
+                            variant="cover"
+                            preview={outerPreview ?? (outerUrl || null)}
+                            onFileChange={(file, url) => {
+                                setOuterFile(file);
+                                setOuterPreview(url);
+                                previewUrls.current.push(url);
+                            }}
+                            onCleanupPreview={url => URL.revokeObjectURL(url)}
+                            convertToWebp
+                            showToast={showToast}
+                        />
+                        {(outerPreview || outerUrl) && (
+                            <button
+                                type="button"
+                                className="admin-btn admin-btn--link admin-passport-cover-clear"
+                                onClick={() => {
+                                    if (outerPreview) URL.revokeObjectURL(outerPreview);
+                                    setOuterFile(null);
+                                    setOuterPreview(null);
+                                    setOuterUrl('');
+                                }}
+                            >
+                                {isEnglish ? 'Remove' : '移除'}
+                            </button>
+                        )}
+                        <p className="admin-passport-design-hint">
+                            {isEnglish
+                                ? 'What the public page shows while the passport is shut, before it flips open. Leave it empty and the cover art is used for both.'
+                                : '公开页面上通行证合上时显示的图片，随后翻开。留空则内外均使用封面图。'}
+                        </p>
+                    </div>
+                </div>
 
                 <div className="admin-form-grid">
                     <BilingualFormField

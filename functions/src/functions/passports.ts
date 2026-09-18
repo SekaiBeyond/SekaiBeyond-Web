@@ -608,6 +608,10 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
     if (!name) throw new HttpsError("invalid-argument", "name is required.");
     const coverImageUrl = validateStr(input.coverImageUrl, "coverImageUrl", 2000, true);
     validateStorageImageUrl(coverImageUrl, "coverImageUrl");
+    // Optional, and blank on purpose when cleared: the cover art stands in for
+    // the shut passport, which is what it did before this was a separate image.
+    const outerCoverImageUrl = validateStr(input.outerCoverImageUrl, "outerCoverImageUrl", 2000);
+    validateStorageImageUrl(outerCoverImageUrl, "outerCoverImageUrl");
     const termDays = input.termDays;
     if (typeof termDays !== "number" || !Number.isInteger(termDays) || termDays < 1 || termDays > MAX_GRANT_DAYS) {
         throw new HttpsError("invalid-argument", `termDays must be an integer between 1 and ${MAX_GRANT_DAYS}.`);
@@ -637,6 +641,7 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
             name,
             nameCn,
             coverImageUrl,
+            outerCoverImageUrl,
             termDays,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: uid,

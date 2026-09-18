@@ -525,6 +525,8 @@ export const callSavePassportDesign = (data: {
     name: string;
     nameCn: string;
     coverImageUrl: string;
+    /** Blank to fall back to `coverImageUrl` for the shut passport. */
+    outerCoverImageUrl: string;
     termDays: number;
 }) => httpsCallable<typeof data, {designId: string}>(getFunctions(), 'savePassportDesign')(data);
 

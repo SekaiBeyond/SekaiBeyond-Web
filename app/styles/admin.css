@@ -4688,6 +4688,47 @@ select.admin-tickets-tag:focus {
     margin-bottom: 0;
 }
 
+/* A design carries two images: the page inside the open passport, and the
+   optional outside it is shut on. They stack in the editor's first column, each
+   under its own caption, so it is clear which one is being replaced. */
+.admin-passport-design-covers {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.admin-passport-cover-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-passport-cover-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-passport-cover-optional {
+    padding: 0.15em 0.6em;
+    border-radius: 999px;
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--color-primary);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* Only there once an outside has been picked — it puts the design back on one
+   image for both, which nothing else in the field can do. */
+.admin-passport-cover-clear {
+    align-self: flex-start;
+    padding: 0;
+    font-size: 12px;
+}
+
 .admin-avatar-field--cover {
     flex-direction: column;
     align-items: stretch;
