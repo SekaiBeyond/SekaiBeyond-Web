@@ -4,7 +4,7 @@ import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../
 import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks, generateSecureCode } from "../utils/helpers";
-import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
+import { extendedExpiry, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { recordScan, SCAN_QUOTA_PERSONAL, scanClientKey } from "../utils/scans";
 import {
     activationKeyMatches,
@@ -493,8 +493,6 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
             photoURL: owner.photoURL ?? "",
             joinedAt: (owner.joinedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
             group: normalizeGroup(owner.group),
-            // Only whether membership is live is public; the date is the owner's business.
-            isMember: isMembershipActive(owner),
             title: owner.title ?? "",
             titleCn: owner.titleCn ?? "",
         },

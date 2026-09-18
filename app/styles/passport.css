@@ -403,11 +403,10 @@
     transform: rotate(-14deg);
 }
 
-.passport-stamp--lapsed {
-    --passport-ink: #a0a8b8;
-    border-style: dashed;
+/* "Officer" is a longer word than "Member" and needs the smaller size to stay
+   inside the ring. */
+.passport-stamp--role {
     font-size: clamp(17px, 4.4cqi, 30px);
-    opacity: 0.75;
 }
 
 .passport-stamp-context {
@@ -420,7 +419,7 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-    .passport-stamp:not(.passport-stamp--lapsed) {
+    .passport-stamp {
         animation: passport-stamp-down 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) 0.35s both;
     }
 }

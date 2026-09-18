@@ -406,6 +406,21 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
     const joinedOn = fmtDate(owner.joinedAt);
     const group = normalizeGroup(owner.group);
 
+    // Officers are stamped with the role they hold; everyone else is a member.
+    // Whether a membership is still running is never stamped — the page won't
+    // announce someone's expiry to whoever just scanned their passport.
+    const stamp = group !== 'user'
+        ? {
+            modifier: ' passport-stamp--role',
+            context: isEnglish ? 'Role: ' : '身份：',
+            word: isEnglish ? 'Officer' : '干部',
+        }
+        : {
+            modifier: '',
+            context: isEnglish ? 'Membership: ' : '会员状态：',
+            word: isEnglish ? 'Member' : '会员',
+        };
+
     return (
         <PassportShell wide>
             <ToastContainer toasts={toasts}/>
@@ -476,14 +491,10 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
                                 {isEnglish ? 'View profile' : '查看个人主页'}
                             </Link>
                         )}
-                        <span className={`passport-stamp${owner.isMember ? '' : ' passport-stamp--lapsed'}`}>
+                        <span className={`passport-stamp${stamp.modifier}`}>
                             {/* The stamp's word alone doesn't say what it is stamping. */}
-                            <span className="passport-stamp-context">
-                                {isEnglish ? 'Membership: ' : '会员状态：'}
-                            </span>
-                            {owner.isMember
-                                ? (isEnglish ? 'Member' : '会员')
-                                : (isEnglish ? 'Lapsed' : '已过期')}
+                            <span className="passport-stamp-context">{stamp.context}</span>
+                            {stamp.word}
                         </span>
                     </div>
                 </div>

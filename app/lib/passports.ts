@@ -80,7 +80,6 @@ export type PassportPublicProfile =
         photoURL: string;
         joinedAt: string | null;
         group: string;
-        isMember: boolean;
         title: string;
         titleCn: string;
     };
