@@ -240,8 +240,8 @@ export function AttendeesSection({
                                         </button>
                                     </div>
                                 )}
-                                <div className="admin-tickets-table-wrap">
-                                    <table className="admin-tickets-table">
+                                <div className="admin-data-table-wrap">
+                                    <table className="admin-data-table">
                                         <thead>
                                         <tr>
                                             <th>#</th>

@@ -421,8 +421,8 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
                                 ? 'Granted when a passport is activated, on top of any membership the holder already has.'
                                 : '通行证激活时授予，并在持有者现有会员期限上累加。'}
                             {initial && (isEnglish
-                                ? ` Changes only reach batches generated after you save — passports already generated keep the term they were made with.`
-                                : ` 修改仅对保存后生成的批次生效 — 已生成的通行证保留生成时的期限。`)}
+                                ? ` Changes only reach passports generated after you save — those already generated keep the term they were made with.`
+                                : ` 修改仅对保存后生成的通行证生效 — 已生成的通行证保留生成时的期限。`)}
                         </p>
                     </div>
                 </div>

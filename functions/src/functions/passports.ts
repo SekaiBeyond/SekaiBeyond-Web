@@ -13,8 +13,8 @@ import {
     isPassportYear,
     lockedUntilMillis,
     LOCKOUT_MS,
-    MAX_BATCH_COUNT,
     MAX_FAILED_ATTEMPTS,
+    MAX_GENERATE_COUNT,
     newActivationKey,
     normalizeActivationKey,
     normalizePassportId,
@@ -44,21 +44,23 @@ const DESIGNS = "passportDesigns";
 const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap.data()?.displayName ?? "";
 
 /**
- * Generate a batch of passports from one design.
+ * Mint passports from one design — one, or as many as MAX_GENERATE_COUNT at a
+ * time. Each one is an independent document: how many were made in the same call
+ * is not recorded, and nothing downstream groups them.
  *
  * The keys come back in bulk only in this response. If the export is lost before
  * the slips are printed, revealPassportKey serves them again one passport at a
  * time.
  */
-export const generatePassportBatch = onCall({maxInstances: 5}, async (request) => {
+export const generatePassports = onCall({maxInstances: 5}, async (request) => {
     const uid = await requireAuth(request);
     const callerSnap = await requireAdmin(uid);
 
     const input = request.data as {designId?: unknown; count?: unknown};
     const designId = validateDocId(input.designId, "designId");
     const count = input.count;
-    if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > MAX_BATCH_COUNT) {
-        throw new HttpsError("invalid-argument", `count must be an integer between 1 and ${MAX_BATCH_COUNT}.`);
+    if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > MAX_GENERATE_COUNT) {
+        throw new HttpsError("invalid-argument", `count must be an integer between 1 and ${MAX_GENERATE_COUNT}.`);
     }
 
     // A passport without a design has nothing to render on the profile shelf or
@@ -76,16 +78,15 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
     // by the time it's activated.
     const termDays: number = designSnap.data()!.termDays;
 
-    const batchId = db.collection(PASSPORTS).doc().id;
     const issued: {passportId: string; activationCode: string}[] = [];
     const ops: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
     const seen = new Set<string>();
 
     for (let i = 0; i < count; i++) {
         let passportId = generateSecureCode(PASSPORT_ID_LENGTH);
-        // Only guards against a collision inside this batch; a collision with an
+        // Only guards against a collision within this call; a collision with an
         // existing document is caught by batch.create() below, which fails the
-        // whole batch rather than overwriting a passport someone already owns.
+        // write rather than overwriting a passport someone already owns.
         while (seen.has(passportId)) passportId = generateSecureCode(PASSPORT_ID_LENGTH);
         seen.add(passportId);
 
@@ -100,7 +101,6 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
                 ownerUid: null,
                 claimedAt: null,
                 termDays,
-                batchId,
                 createdAt: FieldValue.serverTimestamp(),
                 createdBy: uid,
                 createdByName: performerName(callerSnap),
@@ -118,10 +118,9 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
     await commitInChunks(ops);
 
     await db.collection("records").add({
-        type: "passport-batch-generate",
+        type: "passport-generate",
         performedBy: uid,
         performedByName: performerName(callerSnap),
-        batchId,
         passportDesignId: designId,
         passportDesignName: designName,
         passportYear: year,
@@ -130,7 +129,7 @@ export const generatePassportBatch = onCall({maxInstances: 5}, async (request) =
         expiresAt: recordExpiresAt(),
     });
 
-    return {batchId, designId, year, passports: issued};
+    return {designId, year, passports: issued};
 });
 
 /**
@@ -591,7 +590,7 @@ const shownNames = (design: {name?: unknown; nameCn?: unknown}): string[] => {
  *
  * A year can have any number of designs, told apart by name, so a name may not
  * repeat within its year in either language. The year is set on creation and
- * never changes after. The term can change, but only for batches generated
+ * never changes after. The term can change, but only for passports generated
  * afterwards: every passport keeps the term it was generated with.
  */
 export const savePassportDesign = onCall({maxInstances: 10}, async (request) => {

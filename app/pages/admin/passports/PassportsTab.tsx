@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGeneratePassportBatch } from '~/lib/firebase';
+import { callGeneratePassports } from '~/lib/firebase';
 import {
     fetchPassport,
     fetchPassportsByDesign,
     fetchPassportsByOwner,
     isPassportCodeShape,
-    MAX_PASSPORT_BATCH,
+    MAX_PASSPORT_GENERATE,
     type Passport,
     PASSPORT_ID_LENGTH,
-    passportDateTime,
     type PassportDesign,
     passportName,
     passportStatusLabel,
@@ -22,7 +21,8 @@ import { searchUsers, type ShowToast } from '../utils';
 import type { UserRecord } from '../types';
 import { PassportDesignsSection } from './PassportDesignsSection';
 import { PassportDetail } from './PassportDetail';
-import { buildPassportCsv, buildPassportIdCsv, usePassportPngExport } from './passportExport';
+import { buildPassportCsv, fileStamp, usePassportPngExport } from './passportExport';
+import { INITIAL_STOCK_VIEW, PassportStock, type StockView } from './PassportStock';
 
 type View = 'dashboard' | 'generate' | 'detail' | 'designs';
 
@@ -39,8 +39,12 @@ const designLabel = (design: PassportDesign, isEnglish: boolean): string =>
     `${design.year} · ${passportName(design, isEnglish)}`;
 
 /**
- * Passports tab: one design's stock at a time, with batch generation, per-batch
- * exports, a code/owner lookup, and the design editor.
+ * Passports tab: one design's stock at a time — generating passports, the stock
+ * table and its exports, a code/owner lookup, and the design editor.
+ *
+ * Every passport is its own document and nothing records which ones were minted
+ * together, so the stock is one sortable table narrowed by status rather than
+ * anything grouped by print run.
  *
  * Queries are equality-only (`designId`, `ownerUid`, or a document id) and
  * sorting happens here, so no composite index is needed — a design is a few
@@ -54,6 +58,10 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
     const [passports, setPassports] = useState<Passport[] | null>(null);
     const [loadError, setLoadError] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    // Held here rather than in the table, which is unmounted whenever a passport
+    // is open — see StockView. Switching designs starts it over, since a page
+    // number into one design's stock means nothing in another's.
+    const [stockView, setStockView] = useState<StockView>(INITIAL_STOCK_VIEW);
 
     // Default to the newest design, follow it if the design list arrives late, and
     // fall back to it if the selected design is deleted — the `<select>` would
@@ -61,6 +69,7 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
     useEffect(() => {
         if (designs.length === 0) return;
         if (designId === null || !designs.some(d => d.id === designId)) setDesignId(designs[0].id);
+
     }, [designs, designId]);
 
     // The design can be switched again while a load is in flight, and the second
@@ -81,6 +90,7 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
 
     useEffect(() => {
         if (designId === null) return;
+        setStockView(INITIAL_STOCK_VIEW);
         void loadDesign(designId);
     }, [designId, loadDesign]);
 
@@ -126,7 +136,7 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
 
     if (view === 'generate' && !readOnly) {
         return (
-            <BatchGenerator
+            <PassportGenerator
                 designs={designs}
                 defaultDesignId={designId}
                 onBack={() => {
@@ -147,6 +157,8 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
             passports={passports}
             loadError={loadError}
             onRefresh={refresh}
+            stockView={stockView}
+            onStockViewChange={setStockView}
             onOpen={id => {
                 setSelectedId(id);
                 setView('detail');
@@ -167,6 +179,8 @@ interface DashboardProps {
     passports: Passport[] | null;
     loadError: boolean;
     onRefresh: () => Promise<void>;
+    stockView: StockView;
+    onStockViewChange: (view: StockView) => void;
     onOpen: (id: string) => void;
     onGenerate: () => void;
     onDesigns: () => void;
@@ -182,6 +196,8 @@ const Dashboard = ({
                        passports,
                        loadError,
                        onRefresh,
+                       stockView,
+                       onStockViewChange,
                        onOpen,
                        onGenerate,
                        onDesigns,
@@ -190,44 +206,17 @@ const Dashboard = ({
                    }: DashboardProps) => {
     const {isEnglish} = useLanguage();
     const [refreshing, setRefreshing] = useState(false);
-    const {request: requestPngs, progress, node: pngNode} = usePassportPngExport(
-        () => showToast(isEnglish ? 'Failed to render the QR codes.' : '生成二维码失败。', 'error'),
-    );
 
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const year = designs.find(d => d.id === designId)?.year;
 
+    // The per-status counts live on the table's own tabs; what is worth a tile up
+    // here is the pair they don't carry.
     const stats = useMemo(() => {
         const list = passports ?? [];
         return {
             total: list.length,
-            unclaimed: list.filter(p => p.status === 'unclaimed').length,
-            claimed: list.filter(p => p.status === 'claimed').length,
-            voided: list.filter(p => p.status === 'void').length,
             scans: list.reduce((sum, p) => sum + p.scanCount, 0),
         };
-    }, [passports]);
-
-    // Batches are derived from the passports themselves rather than stored: every
-    // passport already carries its batchId, creator, and creation time.
-    const batches = useMemo(() => {
-        const grouped = new Map<string, Passport[]>();
-        for (const passport of passports ?? []) {
-            const list = grouped.get(passport.batchId) ?? [];
-            list.push(passport);
-            grouped.set(passport.batchId, list);
-        }
-        return [...grouped.entries()]
-            .map(([batchId, list]) => ({
-                batchId,
-                list,
-                createdAt: list.reduce<Date | null>((newest, p) =>
-                    !newest || (p.createdAt && p.createdAt > newest) ? (p.createdAt ?? newest) : newest, null),
-                createdByName: list.find(p => p.createdByName)?.createdByName ?? '',
-                claimed: list.filter(p => p.status === 'claimed').length,
-                voided: list.filter(p => p.status === 'void').length,
-            }))
-            .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
     }, [passports]);
 
     const doRefresh = async () => {
@@ -238,8 +227,6 @@ const Dashboard = ({
             setRefreshing(false);
         }
     };
-
-    const fmtDate = (date: Date | null): string => passportDateTime(date, isEnglish, '—');
 
     return (
         <div className="admin-section">
@@ -261,7 +248,7 @@ const Dashboard = ({
                                 ? (isEnglish ? 'Create a design first' : '请先创建设计')
                                 : undefined}
                         >
-                            {isEnglish ? '+ Generate Batch' : '+ 生成批次'}
+                            {isEnglish ? '+ Generate Passports' : '+ 生成通行证'}
                         </button>
                     )}
                 </div>
@@ -294,9 +281,6 @@ const Dashboard = ({
 
                     <div className="admin-stats-tiles admin-section-mb">
                         <StatTile label={isEnglish ? 'Generated' : '已生成'} value={stats.total}/>
-                        <StatTile label={isEnglish ? 'Unclaimed' : '未激活'} value={stats.unclaimed}/>
-                        <StatTile label={isEnglish ? 'Claimed' : '已激活'} value={stats.claimed}/>
-                        <StatTile label={isEnglish ? 'Void' : '已作废'} value={stats.voided}/>
                         <StatTile label={isEnglish ? 'Scans' : '扫描数'} value={stats.scans}/>
                     </div>
 
@@ -308,85 +292,24 @@ const Dashboard = ({
                         </p>
                     ) : passports === null ? (
                         <div className="spinner spinner-centered"/>
-                    ) : batches.length === 0 ? (
+                    ) : passports.length === 0 ? (
                         <p className="admin-no-results">
                             {isEnglish
                                 ? 'No passports generated from this design yet.'
                                 : '此设计尚未生成通行证。'}
                         </p>
                     ) : (
-                        <div className="admin-field-section">
-                            <span className="admin-field-label">{isEnglish ? 'Batches' : '批次'}</span>
-                            {progress && (
-                                <p className="admin-helper-text">
-                                    {isEnglish
-                                        ? `Rendering QR codes… ${progress.done}/${progress.total}`
-                                        : `正在生成二维码… ${progress.done}/${progress.total}`}
-                                </p>
-                            )}
-                            <div className="admin-passport-batches">
-                                {batches.map(batch => (
-                                    <div key={batch.batchId} className="admin-passport-batch">
-                                        <div className="admin-passport-batch-head">
-                                            <span className="admin-passport-batch-title">
-                                                {fmtDate(batch.createdAt)}
-                                                {batch.createdByName && ` · ${batch.createdByName}`}
-                                            </span>
-                                            <span className="admin-passport-batch-counts">
-                                                {isEnglish
-                                                    ? `${batch.list.length} generated · ${batch.claimed} claimed · ${batch.voided} void`
-                                                    : `已生成 ${batch.list.length} · 已激活 ${batch.claimed} · 已作废 ${batch.voided}`}
-                                            </span>
-                                        </div>
-                                        <div className="admin-tag-actions">
-                                            <button
-                                                className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
-                                                onClick={() => downloadBlob(
-                                                    buildPassportIdCsv(batch.list.map(p => p.id), origin),
-                                                    `passports-${year}-${batch.batchId.slice(0, 6)}-ids.csv`,
-                                                )}
-                                                type="button"
-                                            >
-                                                {isEnglish ? 'Codes CSV' : '编号 CSV'}
-                                            </button>
-                                            <button
-                                                className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
-                                                onClick={() => requestPngs(
-                                                    batch.list.map(p => p.id),
-                                                    `passports-${year}-${batch.batchId.slice(0, 6)}`,
-                                                )}
-                                                disabled={!!progress}
-                                                type="button"
-                                            >
-                                                {isEnglish ? 'Stickers ZIP' : '贴纸 ZIP'}
-                                            </button>
-                                        </div>
-                                        <p className="admin-helper-text admin-field-hint">
-                                            {isEnglish
-                                                ? 'Re-exports carry public codes only — open a passport to view its activation key.'
-                                                : '重新导出仅包含公开编号 — 打开单本通行证即可查看其激活码。'}
-                                        </p>
-                                        <div className="admin-passport-codes">
-                                            {batch.list.map(passport => (
-                                                <button
-                                                    key={passport.id}
-                                                    className={`admin-passport-code admin-passport-code--${passport.status}`}
-                                                    onClick={() => onOpen(passport.id)}
-                                                    type="button"
-                                                    title={passportStatusLabel(passport.status, isEnglish)}
-                                                >
-                                                    {passport.id}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        <PassportStock
+                            passports={passports}
+                            year={year}
+                            view={stockView}
+                            onViewChange={onStockViewChange}
+                            onOpen={onOpen}
+                            showToast={showToast}
+                        />
                     )}
                 </>
             )}
-            {pngNode}
         </div>
     );
 };
@@ -488,29 +411,35 @@ const PassportSearch = ({designs, onOpen, showToast}: {
     );
 };
 
-interface BatchGeneratorProps {
+interface PassportGeneratorProps {
     designs: PassportDesign[];
     defaultDesignId: string | null;
     onBack: () => void;
     showToast: ShowToast;
 }
 
+/** What one generate call handed back, plus the stamp its files are named with. */
+interface GeneratedRun {
+    designId: string;
+    year: number;
+    passports: {passportId: string; activationCode: string}[];
+    /** Fixed when the call landed, so downloading a second time writes the same
+     * filename rather than the current minute's. */
+    stamp: string;
+}
+
 /**
- * Generate a batch and hand over the print files. This is the only place the
- * activation keys come back in bulk — leaving this screen without exporting means
- * looking each passport's key up one at a time.
+ * Mint passports and hand over the print files. Nothing ties the passports from
+ * one call together afterwards — this screen is the only place their activation
+ * keys come back in bulk, and leaving it without exporting means looking each
+ * key up one passport at a time.
  */
-const BatchGenerator = ({designs, defaultDesignId, onBack, showToast}: BatchGeneratorProps) => {
+const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: PassportGeneratorProps) => {
     const {isEnglish} = useLanguage();
     const [designId, setDesignId] = useState(defaultDesignId ?? designs[0]?.id ?? '');
     const [count, setCount] = useState(50);
     const [busy, setBusy] = useState(false);
-    const [issued, setIssued] = useState<{
-        batchId: string;
-        designId: string;
-        year: number;
-        passports: {passportId: string; activationCode: string}[];
-    } | null>(null);
+    const [issued, setIssued] = useState<GeneratedRun | null>(null);
     const [exported, setExported] = useState(false);
     const {request: requestPngs, progress, node: pngNode} = usePassportPngExport(
         () => showToast(isEnglish ? 'Failed to render the QR codes.' : '生成二维码失败。', 'error'),
@@ -527,10 +456,10 @@ const BatchGenerator = ({designs, defaultDesignId, onBack, showToast}: BatchGene
         ? 'You haven’t downloaded the activation keys. After leaving this screen they can only be viewed one passport at a time. Leave anyway?'
         : '你还没有下载激活码。离开此页面后只能逐本查看。仍要离开吗？');
 
-    const exportCsv = (batch: NonNullable<typeof issued>) => {
+    const exportCsv = (run: GeneratedRun) => {
         downloadBlob(
-            buildPassportCsv(batch.passports, origin),
-            `passports-${batch.year}-${batch.batchId.slice(0, 6)}-keys.csv`,
+            buildPassportCsv(run.passports, origin),
+            `passports-${run.year}-${run.stamp}-keys.csv`,
         );
         setExported(true);
     };
@@ -538,17 +467,18 @@ const BatchGenerator = ({designs, defaultDesignId, onBack, showToast}: BatchGene
     const generate = async () => {
         setBusy(true);
         try {
-            const res = await callGeneratePassportBatch({designId, count});
-            setIssued(res.data);
+            const res = await callGeneratePassports({designId, count});
+            const run: GeneratedRun = {...res.data, stamp: fileStamp()};
+            setIssued(run);
             // Save them without being asked. Every way off this screen leaves the
             // keys retrievable only one passport at a time, so the file is written
-            // first and the screen becomes a confirmation rather than the only
-            // batch copy. Only a throw re-arms the warning — a download the browser
+            // first and the screen becomes a confirmation rather than the only copy
+            // of the lot. Only a throw re-arms the warning — a download the browser
             // silently blocks still reads as exported, which is why the banner
             // tells the admin to go and look for the file.
             setExported(false);
             try {
-                exportCsv(res.data);
+                exportCsv(run);
             } catch {
                 showToast(isEnglish
                     ? 'Passports generated, but the keys CSV didn’t download. Use the button below before leaving.'
@@ -604,14 +534,14 @@ const BatchGenerator = ({designs, defaultDesignId, onBack, showToast}: BatchGene
                             )}
                         </label>
                         <label>
-                            <span>{isEnglish ? `Count (1–${MAX_PASSPORT_BATCH})` : `数量（1–${MAX_PASSPORT_BATCH}）`}</span>
+                            <span>{isEnglish ? `Count (1–${MAX_PASSPORT_GENERATE})` : `数量（1–${MAX_PASSPORT_GENERATE}）`}</span>
                             <input
                                 type="number"
                                 className="admin-input"
                                 min={1}
-                                max={MAX_PASSPORT_BATCH}
+                                max={MAX_PASSPORT_GENERATE}
                                 value={count}
-                                onChange={e => setCount(Math.max(1, Math.min(MAX_PASSPORT_BATCH, Number(e.target.value) || 1)))}
+                                onChange={e => setCount(Math.max(1, Math.min(MAX_PASSPORT_GENERATE, Number(e.target.value) || 1)))}
                             />
                         </label>
                     </div>
@@ -644,11 +574,11 @@ const BatchGenerator = ({designs, defaultDesignId, onBack, showToast}: BatchGene
                                 : `已根据 ${issued.year} · ${issuedDesign} 生成 ${issued.passports.length} 本通行证。`}
                             {exported
                                 ? (isEnglish
-                                    ? 'The keys CSV has been downloaded to this device — check your downloads folder before packing. Once you leave, it is the only list of the whole batch.'
-                                    : '激活码 CSV 已下载到此设备 — 请在装袋前确认下载文件夹。离开此页面后，它将是整批激活码的唯一清单。')
+                                    ? 'The keys CSV has been downloaded to this device — check your downloads folder before packing. Once you leave, it is the only list of these passports’ keys.'
+                                    : '激活码 CSV 已下载到此设备 — 请在装袋前确认下载文件夹。离开此页面后，它将是这批激活码的唯一清单。')
                                 : (isEnglish
-                                    ? 'This is the only screen that lists the whole batch’s keys.'
-                                    : '只有此页面会列出整批激活码。')}
+                                    ? 'This is the only screen that lists all of these keys together.'
+                                    : '只有此页面会集中列出这些激活码。')}
                         </p>
                     </div>
                     <div className="admin-btn-row admin-section-mb">
@@ -665,7 +595,7 @@ const BatchGenerator = ({designs, defaultDesignId, onBack, showToast}: BatchGene
                             className="admin-toggle-btn admin-toggle-edit"
                             onClick={() => requestPngs(
                                 issued.passports.map(p => p.passportId),
-                                `passports-${issued.year}-${issued.batchId.slice(0, 6)}`,
+                                `passports-${issued.year}-${issued.stamp}`,
                             )}
                             disabled={!!progress}
                             type="button"

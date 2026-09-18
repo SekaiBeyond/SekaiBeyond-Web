@@ -4,7 +4,7 @@ import { buildZip, downloadBlob, type ZipEntry } from '~/lib/zip';
 import { canvasToPng, useQrCanvasBatch } from '../tools/qr/qrExport';
 
 /**
- * Print-shop exports for a batch of passports: the CSV pairing each sticker with
+ * Print-shop exports for a set of passports: the CSV pairing each sticker with
  * its key slip, and the sticker artwork itself.
  *
  * Every PNG carries the human-readable passportId under the QR, so a sticker
@@ -13,9 +13,9 @@ import { canvasToPng, useQrCanvasBatch } from '../tools/qr/qrExport';
 
 /**
  * Half the QR tool's export size, deliberately. A sticker is printed at a couple
- * of centimetres, a batch is up to 200 of them in one ZIP, and this is also the
- * width {@link LABEL_HEIGHT} is proportioned against — so it is the resolution
- * the sticker layout is defined at, not just a buffer size.
+ * of centimetres, an export can be hundreds of them in one ZIP, and this is also
+ * the width {@link LABEL_HEIGHT} is proportioned against — so it is the
+ * resolution the sticker layout is defined at, not just a buffer size.
  */
 const QR_SIZE = 512;
 const LABEL_HEIGHT = 96;
@@ -47,7 +47,7 @@ async function composePassportPng(source: HTMLCanvasElement, passportId: string)
 
 /**
  * Sticker-PNG export. Render {@link node} in the tree, call {@link request} with
- * the ids to export, and watch {@link progress} for a long batch.
+ * the ids to export, and watch {@link progress} for a long run.
  *
  * A single id downloads as one PNG; anything longer is zipped. The off-screen
  * rendering and its one-canvas-at-a-time discipline belong to
@@ -85,6 +85,18 @@ export const usePassportPngExport = (onFailure: () => void): {
     };
 };
 
+/**
+ * `YYYYMMDD-HHMM` in the admin's own timezone, for naming an export file. An
+ * export covers whatever the screen is showing rather than some fixed group of
+ * passports, so what tells two downloads apart is when each was taken.
+ */
+export const fileStamp = (): string => {
+    const now = new Date();
+    const pad = (value: number): string => String(value).padStart(2, '0');
+    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+        + `-${pad(now.getHours())}${pad(now.getMinutes())}`;
+};
+
 const csvCell = (value: string): string =>
     /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 
@@ -97,8 +109,8 @@ const buildCsv = (header: string[], rows: string[][]): Blob =>
     );
 
 /**
- * The print shop's pairing list. Once the generator screen is left, this is the
- * only place a batch's keys are together — the server serves them back one
+ * The print shop's pairing list. Once the generator screen is left, this file is
+ * the only place those keys are together — the server serves them back one
  * passport at a time.
  */
 export function buildPassportCsv(

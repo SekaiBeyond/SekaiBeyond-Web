@@ -2378,13 +2378,16 @@ select.admin-tickets-tag:focus {
     border-color: rgba(0, 0, 0, 0.2);
 }
 
-.admin-tickets-table-wrap {
+/* The admin panel's one table look, shared by the ticket lists and the passport
+   stock table. Anything a single table needs on top of it (a sortable header, a
+   clickable row) is added below rather than forked from here. */
+.admin-data-table-wrap {
     width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
 
-.admin-tickets-table {
+.admin-data-table {
     width: 100%;
     border-collapse: collapse;
     background: rgba(255, 255, 255, 0.7);
@@ -2393,11 +2396,11 @@ select.admin-tickets-tag:focus {
     font-size: 13px;
 }
 
-.admin-tickets-table thead {
+.admin-data-table thead {
     background: rgba(255, 107, 157, 0.08);
 }
 
-.admin-tickets-table th {
+.admin-data-table th {
     text-align: left;
     padding: 10px 12px;
     font-size: 12px;
@@ -2408,19 +2411,71 @@ select.admin-tickets-tag:focus {
     border-bottom: 1px solid rgba(255, 107, 157, 0.14);
 }
 
-.admin-tickets-table td {
+.admin-data-table td {
     padding: 10px 12px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.04);
     color: var(--color-text);
     vertical-align: middle;
 }
 
-.admin-tickets-table tbody tr:last-child td {
+.admin-data-table tbody tr:last-child td {
     border-bottom: none;
 }
 
-.admin-tickets-table tbody tr:hover {
+.admin-data-table tbody tr:hover {
     background: rgba(255, 107, 157, 0.04);
+}
+
+/* Counts and other figures read down the column, not across it. Qualified by the
+   element so it outweighs the `th`/`td` rules above without reaching for
+   !important. */
+.admin-data-table th.admin-data-table-num,
+.admin-data-table td.admin-data-table-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* A header that sorts. The caret is the only thing that moves, so the heading
+   stays where the eye left it when the column is clicked. */
+.admin-data-table-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+}
+
+.admin-data-table-num .admin-data-table-sort {
+    flex-direction: row-reverse;
+}
+
+.admin-data-table-sort:hover,
+.admin-data-table-sort--on {
+    color: var(--color-primary);
+}
+
+.admin-data-table-caret {
+    font-size: 9px;
+    opacity: 0.45;
+}
+
+.admin-data-table-sort--on .admin-data-table-caret {
+    opacity: 1;
+}
+
+.admin-data-table-row--clickable {
+    cursor: pointer;
+}
+
+.admin-data-table-row--clickable:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
 }
 
 .admin-tickets-ticket-id {
@@ -3044,12 +3099,12 @@ select.admin-tickets-tag:focus {
         width: 100%;
     }
 
-    .admin-tickets-table {
+    .admin-data-table {
         font-size: 12px;
     }
 
-    .admin-tickets-table th,
-    .admin-tickets-table td {
+    .admin-data-table th,
+    .admin-data-table td {
         padding: 8px 8px;
     }
 
@@ -4325,82 +4380,145 @@ select.admin-tickets-tag:focus {
 
    Reuses the QR tool's detail chrome (admin-qr-paper, admin-qr-detail-*,
    admin-stats-tile) — these are the pieces a passport needs that a QR code
-   doesn't: batch grouping, the one-time key table, and the audit trail.
+   doesn't: the stock grid, the one-time key table, and the audit trail.
    ========================================================================== */
 
-.admin-passport-batches {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-}
-
-.admin-passport-batch {
-    padding: 14px 16px;
-    background: rgba(255, 255, 255, 0.85);
-    border: 1px solid rgba(255, 107, 157, 0.12);
-    border-radius: 14px;
-    box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
-}
-
-.admin-passport-batch-head {
+/* The stock table's heading and its export buttons, which sit on one line until
+   the buttons need a line of their own. */
+.admin-passport-stock-head {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 8px;
+    gap: 10px;
 }
 
-.admin-passport-batch-title {
-    font-weight: 700;
-    font-size: 14px;
+/* Which slice of the stock the table is showing. Underlined rather than boxed,
+   so the counts read as one row of figures instead of four buttons. */
+.admin-passport-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 12px 0 4px;
+    border-bottom: 1px solid rgba(255, 107, 157, 0.16);
+}
+
+.admin-passport-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    background: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.admin-passport-tab:hover {
     color: var(--color-text);
 }
 
-.admin-passport-batch-counts {
-    font-size: 12px;
-    color: var(--color-text-muted);
+.admin-passport-tab--on {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
 }
 
-/* Every code in a batch, dense enough to scan a few hundred at a glance. */
-.admin-passport-codes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 10px;
+.admin-passport-tab-count {
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.06);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
 }
 
-.admin-passport-code {
+.admin-passport-tab--on .admin-passport-tab-count {
+    background: rgba(255, 107, 157, 0.16);
+}
+
+/* The printed code, in the same mono it is printed in. */
+.admin-passport-cell-code {
     font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: 0.06em;
-    padding: 4px 8px;
-    border-radius: 8px;
-    border: 1px solid transparent;
-    cursor: pointer;
+    white-space: nowrap;
 }
 
-.admin-passport-code--unclaimed {
-    background: rgba(122, 129, 144, 0.1);
+.admin-passport-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.admin-passport-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+}
+
+.admin-passport-status--unclaimed .admin-passport-status-dot {
+    background: var(--color-text-muted);
+    opacity: 0.5;
+}
+
+.admin-passport-status--claimed .admin-passport-status-dot {
+    background: #2f9e57;
+}
+
+.admin-passport-status--void .admin-passport-status-dot {
+    background: var(--color-error);
+}
+
+/* Name over email, so a long address never widens the column. */
+.admin-passport-cell-holder {
+    max-width: 260px;
+}
+
+.admin-passport-holder-name,
+.admin-passport-holder-email,
+.admin-passport-cell-by {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-passport-holder-email,
+.admin-passport-cell-by {
+    font-size: 11px;
     color: var(--color-text-muted);
 }
 
-.admin-passport-code--claimed {
-    background: rgba(78, 203, 113, 0.16);
-    color: #2f9e57;
+.admin-passport-cell-date {
+    white-space: nowrap;
 }
 
-.admin-passport-code--void {
-    background: rgba(224, 85, 85, 0.12);
-    color: var(--color-error);
-    text-decoration: line-through;
+.admin-passport-cell-blank {
+    color: var(--color-text-muted);
 }
 
-.admin-passport-code:hover {
-    border-color: var(--color-primary);
+.admin-passport-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 12px;
 }
 
-/* Status badge colors, matched to the code chips above. */
+.admin-passport-pager-range {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Status badge colors, matched to the dots in the stock table. */
 .admin-passport-badge--unclaimed {
     background: rgba(122, 129, 144, 0.12);
     color: var(--color-text-muted);

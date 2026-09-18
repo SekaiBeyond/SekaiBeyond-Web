@@ -26,10 +26,10 @@ export const PASSPORT_TERM_DAYS = 365;
 export const MAX_FAILED_ATTEMPTS = 5;
 export const LOCKOUT_MS = 15 * 60 * 1000;
 
-// Per-call ceiling on batch generation. Each passport writes two documents
-// (the passport and its secret), so this must stay at or under half of
-// BATCH_LIMIT for a batch to commit in one chunk.
-export const MAX_BATCH_COUNT = Math.min(200, Math.floor(BATCH_LIMIT / 2));
+// Per-call ceiling on how many passports one generate request may mint. Each
+// passport writes two documents (the passport and its secret), so this must stay
+// at or under half of BATCH_LIMIT for one call to commit in a single chunk.
+export const MAX_GENERATE_COUNT = Math.min(200, Math.floor(BATCH_LIMIT / 2));
 
 // Codes are printed and read back by hand, so input is normalized before it is
 // compared: lowercase is folded, and the dashes we print for legibility (plus

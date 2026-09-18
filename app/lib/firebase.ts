@@ -478,15 +478,14 @@ export const callSeedSocialPlatforms = () =>
     httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
 
 // Physical passports. The activation keys come back in bulk from
-// callGeneratePassportBatch only — export the CSV before leaving the screen, or
-// they have to be looked up one passport at a time with callRevealPassportKey.
-export const callGeneratePassportBatch = (data: {designId: string; count: number}) =>
+// callGeneratePassports only — export the CSV before leaving the screen, or they
+// have to be looked up one passport at a time with callRevealPassportKey.
+export const callGeneratePassports = (data: {designId: string; count: number}) =>
     httpsCallable<typeof data, {
-        batchId: string;
         designId: string;
         year: number;
         passports: Array<{passportId: string; activationCode: string}>;
-    }>(getFunctions(), 'generatePassportBatch')(data);
+    }>(getFunctions(), 'generatePassports')(data);
 
 export const callReissuePassportKey = (data: {passportId: string}) =>
     httpsCallable<typeof data, {passportId: string; activationCode: string}>(

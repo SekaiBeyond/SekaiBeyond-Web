@@ -47,7 +47,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     location: ['venue-create', 'venue-edit', 'venue-delete',
         'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
         'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
-    passport: ['passport-batch-generate', 'passport-claim', 'passport-void', 'passport-key-reissue',
+    passport: ['passport-generate', 'passport-claim', 'passport-void', 'passport-key-reissue',
         'passport-key-view', 'passport-design-create', 'passport-design-edit', 'passport-design-delete'],
     qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
         'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
@@ -122,7 +122,6 @@ export const RecordsTab = ({
                 passportYear: data.passportYear,
                 passportDesignName: data.passportDesignName,
                 passportCount: data.passportCount,
-                batchId: data.batchId,
                 platformLabel: data.platformLabel,
                 conSection: data.conSection,
                 unlinkedFrom: data.unlinkedFrom,
@@ -721,7 +720,7 @@ export const RecordsTab = ({
                     ? <>revoked {target}'s event-staff access to {event}</>
                     : <>撤销了 {target} 对 {event} 的活动工作人员权限</>;
             }
-            case 'passport-batch-generate':
+            case 'passport-generate':
                 return isEnglish
                     ? <>generated {r.passportCount ?? 0} passports from the {r.passportYear ?? ''} design
                         “{r.passportDesignName ?? ''}”</>
@@ -879,7 +878,7 @@ export const RecordsTab = ({
             case 'parkingrate-edit':
             case 'parkingrate-delete':
                 return isEnglish ? 'Location' : '场地';
-            case 'passport-batch-generate':
+            case 'passport-generate':
             case 'passport-claim':
             case 'passport-void':
             case 'passport-key-reissue':

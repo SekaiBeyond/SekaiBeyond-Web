@@ -127,7 +127,7 @@ export type RecordType =
     | 'parkingrate-create'
     | 'parkingrate-edit'
     | 'parkingrate-delete'
-    | 'passport-batch-generate'
+    | 'passport-generate'
     | 'passport-claim'
     | 'passport-void'
     | 'passport-key-reissue'
@@ -163,12 +163,12 @@ export interface ActivityRecord {
     lotName?: string;
     rateLabel?: string;
     qrLabel?: string;
-    /** Passport records: the printed code, its design's year and name, and batch details. */
+    /** Passport records: the printed code, and its design's year and name. */
     passportId?: string;
     passportYear?: number | null;
     passportDesignName?: string;
+    /** How many passports one generate call minted. */
     passportCount?: number;
-    batchId?: string;
     platformLabel?: string;
     /** Comma-separated con page sections touched by a con-content-update. */
     conSection?: string;

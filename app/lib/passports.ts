@@ -24,7 +24,6 @@ export interface Passport {
     claimedAt: Date | null;
     /** Days of membership this passport grants on claim (365 at generation). */
     termDays: number;
-    batchId: string;
     createdAt: Date | null;
     createdByName: string;
     /** When the current activation key was minted — bumped by a key reissue. */
@@ -37,9 +36,9 @@ export interface Passport {
 }
 
 /**
- * What a batch of passports is printed from: the name they go by and their cover
- * art. A year can have several designs, and no two in the same year share a name
- * in either language.
+ * What a passport is printed from: the name it goes by and its cover art. A year
+ * can have several designs, and no two in the same year share a name in either
+ * language.
  */
 export interface PassportDesign {
     id: string;
@@ -55,7 +54,7 @@ export interface PassportDesign {
      * two of them. */
     outerCoverImageUrl: string;
     /** Days of membership its passports grant. Copied onto each passport at
-     * generation, so an edit only reaches batches generated afterwards. */
+     * generation, so an edit only reaches passports generated afterwards. */
     termDays: number;
 }
 
@@ -112,7 +111,6 @@ const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Pas
         ownerUid: typeof data.ownerUid === 'string' ? data.ownerUid : null,
         claimedAt: toDate(data.claimedAt),
         termDays: typeof data.termDays === 'number' ? data.termDays : 0,
-        batchId: data.batchId ?? '',
         createdAt: toDate(data.createdAt),
         createdByName: data.createdByName ?? '',
         keyIssuedAt: toDate(data.keyIssuedAt),
@@ -180,9 +178,9 @@ export const passportScanUrl = (id: string, origin: string): string =>
     `${origin}/p/${encodeURIComponent(id)}`;
 
 /**
- * All passports generated from one design, for the admin dashboard. Filtering
- * and per-batch counts are done on the result: a design is hundreds of
- * documents, and equality on one field needs no composite index.
+ * All passports generated from one design, newest first, for the admin
+ * dashboard. Filtering and counting are done on the result: a design is hundreds
+ * of documents, and equality on one field needs no composite index.
  */
 export async function fetchPassportsByDesign(designId: string): Promise<Passport[]> {
     const snap = await getDocs(query(collection(getFirebaseDb(), 'passports'), where('designId', '==', designId)));
@@ -239,8 +237,9 @@ export const normalizePassportCode = (raw: string): string =>
 
 export const PASSPORT_ID_LENGTH = 10;
 export const ACTIVATION_KEY_LENGTH = 12;
-/** Mirrors MAX_BATCH_COUNT in functions/src/utils/passports.ts, which enforces it. */
-export const MAX_PASSPORT_BATCH = 200;
+/** How many passports one generate call may mint. Mirrors MAX_GENERATE_COUNT in
+ * functions/src/utils/passports.ts, which enforces it. */
+export const MAX_PASSPORT_GENERATE = 200;
 /** What a new design's term starts at. */
 export const DEFAULT_PASSPORT_TERM_DAYS = 365;
 /** Mirrors MAX_GRANT_DAYS in functions/src/utils/membership.ts, which enforces it. */

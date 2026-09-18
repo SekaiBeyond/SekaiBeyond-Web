@@ -1,6 +1,7 @@
 import {
     collection,
     type DocumentData,
+    documentId,
     endAt,
     getDocs,
     limit,
@@ -56,6 +57,26 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
         titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],
     };
+};
+
+/**
+ * Users by uid, for a screen holding a list of uids rather than a query — the
+ * passport stock table resolving its holders, for instance.
+ *
+ * Firestore takes at most 30 ids per `in`, so the ids are chunked and the chunks
+ * run together. A uid with no document (a deleted account) is simply missing from
+ * the result, which callers read as "deleted" rather than as a failure.
+ */
+export const fetchUsersByUids = async (uids: string[]): Promise<Map<string, UserRecord>> => {
+    const unique = [...new Set(uids)];
+    if (unique.length === 0) return new Map();
+    const users = collection(getFirebaseDb(), 'users');
+    const chunks: string[][] = [];
+    for (let i = 0; i < unique.length; i += 30) chunks.push(unique.slice(i, i + 30));
+    const snapshots = await Promise.all(
+        chunks.map(chunk => getDocs(query(users, where(documentId(), 'in', chunk)))),
+    );
+    return new Map(snapshots.flatMap(snap => snap.docs.map(d => [d.id, docToUserRecord(d)] as const)));
 };
 
 // The browsable user list, filtered by role and/or active membership. Members-only
