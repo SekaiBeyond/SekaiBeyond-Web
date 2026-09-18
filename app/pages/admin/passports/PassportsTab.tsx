@@ -441,6 +441,10 @@ interface PassportGeneratorProps {
     showToast: ShowToast;
 }
 
+/** The run sizes stock is actually printed in, biggest last so it lands on the
+ * ceiling the server enforces. */
+const COUNT_PRESETS = [25, 50, 100, MAX_PASSPORT_GENERATE];
+
 /** What one generate call handed back, plus the stamp its files are named with. */
 interface GeneratedRun {
     designId: string;
@@ -531,43 +535,75 @@ const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: Passpo
 
             {!issued ? (
                 <>
-                    <div className="admin-passport-warning">
-                        <strong>{isEnglish ? 'Read before generating' : '生成前请阅读'}</strong>
-                        <p>
-                            {isEnglish
-                                ? 'Each passport gets a public code for its sticker and a secret activation key for the slip packed beside it. The keys are listed together only on the next screen — download the CSV before you leave it. After that, each passport’s key can be viewed from its own page.'
-                                : '每本通行证都会生成一个用于贴纸的公开编号，以及一个印在同装纸条上的秘密激活码。激活码仅在下一屏集中列出 — 请在离开前下载 CSV。之后只能在每本通行证的页面中单独查看。'}
-                        </p>
+                    {/* What the run is going to be, shown as the thing it makes:
+                        the cover it prints, the term it grants, and how many. */}
+                    <div className="admin-passport-run">
+                        <div className="admin-passport-run-cover">
+                            {selectedDesign?.coverImageUrl
+                                ? <img src={selectedDesign.coverImageUrl} alt=""/>
+                                : <span>{selectedDesign?.year || '—'}</span>}
+                        </div>
+                        <div className="admin-passport-run-fields">
+                            <label className="admin-passport-run-field">
+                                <span className="admin-passport-run-label">
+                                    {isEnglish ? 'Design' : '设计'}
+                                </span>
+                                <select className="admin-input" value={designId}
+                                        onChange={e => setDesignId(e.target.value)}>
+                                    {designs.map(design => (
+                                        <option key={design.id}
+                                                value={design.id}>{designLabel(design, isEnglish)}</option>
+                                    ))}
+                                </select>
+                                {selectedDesign && (
+                                    <small className="admin-title-hint">
+                                        {isEnglish
+                                            ? `Each passport grants ${selectedDesign.termDays} days of membership.`
+                                            : `每本通行证授予 ${selectedDesign.termDays} 天会员资格。`}
+                                    </small>
+                                )}
+                            </label>
+
+                            <div className="admin-passport-run-field">
+                                <span className="admin-passport-run-label">
+                                    {isEnglish ? 'How many' : '数量'}
+                                </span>
+                                {/* Stock is printed in round runs, so the sizes
+                                    that are actually asked for are one click
+                                    rather than a number typed into a box. */}
+                                <div className="admin-passport-count">
+                                    {COUNT_PRESETS.map(preset => (
+                                        <button
+                                            key={preset}
+                                            type="button"
+                                            className={`admin-passport-count-chip${
+                                                count === preset ? ' admin-passport-count-chip--on' : ''}`}
+                                            onClick={() => setCount(preset)}
+                                        >
+                                            {preset}
+                                        </button>
+                                    ))}
+                                    <input
+                                        type="number"
+                                        className="admin-input admin-input--sm admin-passport-count-input"
+                                        min={1}
+                                        max={MAX_PASSPORT_GENERATE}
+                                        value={count}
+                                        aria-label={isEnglish
+                                            ? `How many passports, 1 to ${MAX_PASSPORT_GENERATE}`
+                                            : `生成数量，1 至 ${MAX_PASSPORT_GENERATE}`}
+                                        onChange={e => setCount(Math.max(1, Math.min(MAX_PASSPORT_GENERATE, Number(e.target.value) || 1)))}
+                                    />
+                                    <span className="admin-passport-count-max">
+                                        {isEnglish
+                                            ? `of ${MAX_PASSPORT_GENERATE} max`
+                                            : `上限 ${MAX_PASSPORT_GENERATE}`}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div className="admin-form-grid admin-section-mb">
-                        <label>
-                            <span>{isEnglish ? 'Design' : '设计'}</span>
-                            <select className="admin-input" value={designId}
-                                    onChange={e => setDesignId(e.target.value)}>
-                                {designs.map(design => (
-                                    <option key={design.id} value={design.id}>{designLabel(design, isEnglish)}</option>
-                                ))}
-                            </select>
-                            {selectedDesign && (
-                                <small className="admin-title-hint">
-                                    {isEnglish
-                                        ? `Each passport grants ${selectedDesign.termDays} days of membership.`
-                                        : `每本通行证授予 ${selectedDesign.termDays} 天会员资格。`}
-                                </small>
-                            )}
-                        </label>
-                        <label>
-                            <span>{isEnglish ? `Count (1–${MAX_PASSPORT_GENERATE})` : `数量（1–${MAX_PASSPORT_GENERATE}）`}</span>
-                            <input
-                                type="number"
-                                className="admin-input"
-                                min={1}
-                                max={MAX_PASSPORT_GENERATE}
-                                value={count}
-                                onChange={e => setCount(Math.max(1, Math.min(MAX_PASSPORT_GENERATE, Number(e.target.value) || 1)))}
-                            />
-                        </label>
-                    </div>
+
                     <div className="admin-btn-row">
                         <button
                             className="admin-toggle-btn admin-toggle-save"
@@ -582,29 +618,44 @@ const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: Passpo
                             {isEnglish ? 'Cancel' : '取消'}
                         </button>
                     </div>
+                    {/* The one fact that changes what to do next, beside the
+                        button that makes it true. What a code is and what a key
+                        is, the next screen shows in two labelled columns. */}
+                    <p className="admin-passport-gen-note">
+                        {isEnglish
+                            ? 'The keys CSV downloads as soon as the passports exist — the next screen is the only one that lists them together. After it, a key is viewed one passport at a time.'
+                            : '通行证生成后将立即下载激活码 CSV — 只有下一屏会集中列出这些激活码。此后只能逐本查看。'}
+                    </p>
                 </>
             ) : (
                 <>
-                    <div className={`admin-passport-warning${exported ? '' : ' admin-passport-warning--urgent'}`}>
-                        <strong>
+                    {/* Saved is an outcome, not a warning, so it stops being
+                        yellow the moment the file is on disk. Unsaved keeps the
+                        red it has earned. */}
+                    <div className={`admin-passport-result admin-passport-result--${
+                        exported ? 'saved' : 'unsaved'}`}>
+                        <strong className="admin-passport-result-title">
                             {exported
-                                ? (isEnglish ? 'Keys saved' : '激活码已保存')
+                                ? (isEnglish ? '✓ Keys saved' : '✓ 激活码已保存')
                                 : (isEnglish ? 'Download the keys now' : '请立即下载激活码')}
                         </strong>
-                        <p>
+                        <p className="admin-passport-result-meta">
                             {isEnglish
-                                ? `${issued.passports.length} passports generated from ${issued.year} · ${issuedDesign}. `
-                                : `已根据 ${issued.year} · ${issuedDesign} 生成 ${issued.passports.length} 本通行证。`}
+                                ? `${issued.passports.length} passports · ${issued.year} · ${issuedDesign}`
+                                : `${issued.passports.length} 本通行证 · ${issued.year} · ${issuedDesign}`}
+                        </p>
+                        <p>
                             {exported
                                 ? (isEnglish
-                                    ? 'The keys CSV has been downloaded to this device — check your downloads folder before packing. Once you leave, it is the only list of these passports’ keys.'
-                                    : '激活码 CSV 已下载到此设备 — 请在装袋前确认下载文件夹。离开此页面后，它将是这批激活码的唯一清单。')
+                                    ? 'The keys CSV is in this device’s downloads folder — check it before packing. Once you leave this screen it is the only list of these passports’ keys.'
+                                    : '激活码 CSV 已保存至此设备的下载文件夹 — 请在装袋前确认。离开此页面后，它将是这批激活码的唯一清单。')
                                 : (isEnglish
                                     ? 'This is the only screen that lists all of these keys together.'
                                     : '只有此页面会集中列出这些激活码。')}
                         </p>
                     </div>
-                    <div className="admin-btn-row admin-section-mb">
+
+                    <div className="admin-passport-result-actions">
                         <button
                             className="admin-toggle-btn admin-toggle-save"
                             onClick={() => exportCsv(issued)}
@@ -627,11 +678,37 @@ const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: Passpo
                                 ? (isEnglish ? `Rendering ${progress.done}/${progress.total}…` : `生成中 ${progress.done}/${progress.total}…`)
                                 : (isEnglish ? 'Download stickers ZIP' : '下载贴纸 ZIP')}
                         </button>
-                        <button className="admin-toggle-btn admin-toggle-cancel" onClick={leave} type="button">
+                        {/* Away from the two downloads: it is the way off the
+                            screen, not a third thing to fetch. */}
+                        <button
+                            className="admin-toggle-btn admin-toggle-cancel admin-passport-result-done"
+                            onClick={leave}
+                            type="button"
+                        >
                             {isEnglish ? 'Done' : '完成'}
                         </button>
                     </div>
-                    <div className="admin-passport-key-table">
+
+                    {/* Two labelled columns, which is the whole of what a public
+                        code and a secret key are — said by showing them rather
+                        than in a paragraph on the screen before. */}
+                    <div className="admin-passport-keys">
+                        <div className="admin-passport-key-row admin-passport-keys-head">
+                            <span className="admin-passport-key-code">
+                                {isEnglish ? 'Code' : '编号'}
+                                {/* Dropped on a phone, where the two labels
+                                    together are wider than the row they head. */}
+                                <span className="admin-passport-keys-head-where">
+                                    {isEnglish ? ' · on the sticker' : ' · 印于贴纸'}
+                                </span>
+                            </span>
+                            <span className="admin-passport-key-secret">
+                                {isEnglish ? 'Activation key' : '激活码'}
+                                <span className="admin-passport-keys-head-where">
+                                    {isEnglish ? ' · on the slip' : ' · 印于纸条'}
+                                </span>
+                            </span>
+                        </div>
                         {issued.passports.map(row => (
                             <div key={row.passportId} className="admin-passport-key-row">
                                 <span className="admin-passport-key-code">{row.passportId}</span>
