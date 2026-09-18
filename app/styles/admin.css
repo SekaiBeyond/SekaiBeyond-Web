@@ -4458,6 +4458,14 @@ select.admin-tickets-tag:focus {
     cursor: pointer;
 }
 
+/* A claimed row: faded so the column reads as unavailable rather than unticked,
+   and taking the row's own cursor, since the click opens the passport — which is
+   where a claimed one is deleted. */
+.admin-passport-cell-tick input[type="checkbox"]:disabled {
+    opacity: 0.35;
+    cursor: inherit;
+}
+
 /* The printed code, in the same mono it is printed in. */
 .admin-passport-cell-code {
     font-family: var(--font-mono);
@@ -4679,7 +4687,8 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-muted);
 }
 
-/* Stands in for the action row on a claimed passport, so it gets the same room. */
+/* Sits above the delete on a claimed passport and explains it, so it takes the
+   action row's top margin and the row keeps its own below. */
 .admin-passport-bound-note {
     margin: 20px 0 0;
 }

@@ -515,6 +515,17 @@ export const callDeletePassports = (data: {passportIds: string[]}) =>
         missing: string[];
     }>(getFunctions(), 'deletePassports')(data);
 
+// Claimed passports only, one at a time, and deliberately not part of
+// callDeletePassports: unbinding a member's passport is done from its own page
+// after reading who holds it, never from a ticked selection. What the claim
+// granted stays on the holder's membership.
+export const callDeleteClaimedPassport = (data: {passportId: string}) =>
+    httpsCallable<typeof data, {
+        deleted: boolean;
+        ownerUid: string | null;
+        ownerName: string;
+    }>(getFunctions(), 'deleteClaimedPassport')(data);
+
 export const callSetPassportPrivacy = (data: {hide: boolean}) =>
     httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);
 

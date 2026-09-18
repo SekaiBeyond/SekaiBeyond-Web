@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeletePassports, callReissuePassportKey, callRevealPassportKey, getFirebaseDb } from '~/lib/firebase';
+import {
+    callDeleteClaimedPassport,
+    callDeletePassports,
+    callReissuePassportKey,
+    callRevealPassportKey,
+    getFirebaseDb,
+} from '~/lib/firebase';
 import {
     fetchPassport,
     fetchPassportClaims,
@@ -39,11 +45,14 @@ interface PassportDetailProps {
  * One passport's page: who holds it, its sticker, and its permanent audit
  * trail.
  *
- * Any passport's key slip can be viewed. The only other actions are for stock
- * that has never been sold — reissue the slip, or delete the passport outright. A
- * claimed passport has no controls beyond viewing its key: the binding is
- * permanent by design, and membership it granted is adjusted through the user's
- * membership row, not from here.
+ * Any passport's key slip can be viewed. Stock that has never been sold can have
+ * its slip reissued or be deleted outright.
+ *
+ * A claimed passport can only be deleted here, one at a time — the stock table's
+ * bulk delete refuses claimed rows, so unbinding one is always a deliberate act
+ * taken with the holder named on the screen. Deleting it doesn't take back the
+ * membership the claim granted; that is adjusted through the user's membership
+ * row, as it always was.
  */
 export const PassportDetail = ({
                                    passportId,
@@ -155,7 +164,7 @@ export const PassportDetail = ({
             .catch(() => showToast(isEnglish ? 'Failed to copy.' : '复制失败。', 'error'));
     };
 
-    const deleteIt = async () => {
+    const deleteStock = async () => {
         if (!window.confirm(isEnglish
             ? `Delete passport ${passportId}? The passport, its activation key and its history are all removed, and its sticker stops working. This can't be undone. Use it for stock that was destroyed or mispacked.`
             : `删除通行证 ${passportId}？该通行证及其激活码、历史记录都将被移除，贴纸随之失效。此操作无法撤销。请仅对已损毁或错误包装的库存使用。`)) return;
@@ -186,6 +195,39 @@ export const PassportDetail = ({
         }
         // Nothing left to refetch: the page goes back to the list, which drops the
         // row rather than re-reading the design.
+        showToast(isEnglish ? 'Passport deleted.' : '通行证已删除。', 'warning');
+        onDeleted(passportId);
+    };
+
+    /**
+     * Break a permanent binding and remove the passport with it — a passport
+     * activated by mistake, or onto the wrong account, which no membership edit
+     * can put right.
+     *
+     * Reached from this page only. The bulk delete in the stock table skips
+     * claimed rows entirely, so this is never something a ticked selection can do
+     * by accident: whoever deletes a member's passport has opened it and read the
+     * Holder above the button first, which is why the name goes in the question.
+     *
+     * The server answers not-found or a failed precondition rather than reporting
+     * a skip — one passport, one outcome — so unlike the stock delete there is no
+     * "nothing went" case to explain here.
+     */
+    const deleteClaimed = async () => {
+        const holder = owner?.displayName
+            || (ownerMissing ? (isEnglish ? 'a deleted account' : '一个已删除的账号') : '');
+        const held = holder ? (isEnglish ? `, held by ${holder}` : `（持有者：${holder}）`) : '';
+        if (!window.confirm(isEnglish
+            ? `Delete passport ${passportId}${held}? It leaves the holder's shelf, its sticker stops working, and its activation key and history go with it. This can't be undone. The membership the activation granted is not taken back — adjust that in Users Management.`
+            : `删除通行证 ${passportId}${held}？该通行证将从持有者的书架上消失，贴纸随之失效，激活码与历史记录一并移除。此操作无法撤销。激活时授予的会员资格不会被收回 — 如需调整请前往用户管理。`)) return;
+        setBusy(true);
+        try {
+            await callDeleteClaimedPassport({passportId});
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to delete passport.' : '删除通行证失败。'), 'error');
+            setBusy(false);
+            return;
+        }
         showToast(isEnglish ? 'Passport deleted.' : '通行证已删除。', 'warning');
         onDeleted(passportId);
     };
@@ -442,7 +484,7 @@ export const PassportDetail = ({
                     </button>
                     <button
                         className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                        onClick={() => void deleteIt()}
+                        onClick={() => void deleteStock()}
                         disabled={busy}
                     >
                         {isEnglish ? 'Delete passport' : '删除通行证'}
@@ -450,11 +492,22 @@ export const PassportDetail = ({
                 </div>
             )}
             {!readOnly && passport.status === 'claimed' && (
-                <p className="admin-helper-text admin-passport-bound-note">
-                    {isEnglish
-                        ? 'A claimed passport is permanently bound to its holder: it can’t be unbound, rebound, or deleted. To adjust what it granted, edit the holder’s membership in Users Management.'
-                        : '已激活的通行证与持有者永久绑定：无法解绑、转绑或删除。若需调整其授予的会员资格，请在用户管理中修改该用户的会员期限。'}
-                </p>
+                <>
+                    <p className="admin-helper-text admin-passport-bound-note">
+                        {isEnglish
+                            ? 'A claimed passport is permanently bound to its holder — it can’t be rebound to another account, and no bulk delete will touch it. Deleting it below is the only way out of that binding: the passport goes for good rather than returning to stock, and the membership it granted stays as it is. Adjust that membership in Users Management.'
+                            : '已激活的通行证与持有者永久绑定 — 无法转绑到其他账号，也不会被批量删除影响。下方的删除是解除绑定的唯一方式：通行证将被彻底移除，而非退回库存，且其授予的会员资格保持不变。如需调整该会员资格，请前往用户管理。'}
+                    </p>
+                    <div className="admin-qr-danger-row">
+                        <button
+                            className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
+                            onClick={() => void deleteClaimed()}
+                            disabled={busy}
+                        >
+                            {isEnglish ? 'Delete passport' : '删除通行证'}
+                        </button>
+                    </div>
+                </>
             )}
             {pngNode}
         </div>

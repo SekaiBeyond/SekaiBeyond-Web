@@ -482,9 +482,12 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 /**
  * Delete unclaimed passports — a sticker destroyed in packing, a pack whose slip
  * and sticker were mismatched, stock written off. Each one's document, key and
- * trail all go, so the code stops resolving and is free to be minted again. A
- * claimed passport can never be deleted: the binding is permanent and its page
- * belongs to its owner.
+ * trail all go, so the code stops resolving and is free to be minted again.
+ *
+ * Claimed passports are never deleted here, however the selection was built:
+ * the binding is permanent and the page belongs to its owner, so unbinding one
+ * is a deliberate act on a single passport and goes through
+ * deleteClaimedPassport instead.
  *
  * One passport or a whole selection comes through here, because the guard is the
  * same either way. Nothing is refused for the sake of the rest: a claimed or
@@ -580,6 +583,93 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
     }
 
     return {deleted, claimed, missing};
+});
+
+/**
+ * Delete one claimed passport, by hand, from its own page.
+ *
+ * The binding a claim makes is permanent, so this is the only way out of it — a
+ * passport activated in error, or onto the wrong account, that no membership
+ * edit can put right. It takes one passport and lives apart from
+ * `deletePassports` on purpose: the bulk path still refuses claimed stock, so a
+ * ticked selection can never sweep up a member's passport and staff have to open
+ * the passport and read who holds it before they can remove it.
+ *
+ * What the claim granted is not taken back. Membership sits on the user, stacks
+ * from several sources and has been running since the claim, so days subtracted
+ * here would be a guess; adjust it in Users Management, where the change is
+ * recorded under the holder's name.
+ *
+ * Nothing about the passport survives: its document, its key and its trail all
+ * go, /p/<code> stops resolving, the holder's shelf loses it, and the code is
+ * free to be minted again. The one `records` entry this writes — naming the
+ * holder, since nothing else will afterwards — is what is left.
+ */
+export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+    const callerSnap = await requireAdmin(uid);
+
+    const passportId = normalizePassportId((request.data as {passportId?: unknown})?.passportId);
+    if (!passportId) throw new HttpsError("invalid-argument", "Invalid passportId.");
+
+    const ref = db.collection(PASSPORTS).doc(passportId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
+
+    const passport = snap.data()!;
+    // Unclaimed stock has its own path, and taking it here would let this handler
+    // stand in for the bulk delete one call at a time.
+    if (passport.status !== "claimed") {
+        throw new HttpsError(
+            "failed-precondition",
+            "This passport hasn't been claimed. Delete it as stock instead.",
+            {code: "not-claimed"},
+        );
+    }
+
+    const ownerUid: string | null = typeof passport.ownerUid === "string" ? passport.ownerUid : null;
+    // Copied into the record rather than resolved when the record is read: the
+    // passport is about to stop pointing at anyone, and the account itself may be
+    // deleted later.
+    const ownerName = ownerUid
+        ? ((await db.collection("users").doc(ownerUid).get()).data()?.displayName ?? "")
+        : "";
+
+    // The passport and its key go together, under the version the status above was
+    // read at — a write landing in between fails this delete rather than being
+    // swallowed by it.
+    const batch = db.batch();
+    batch.delete(ref, {lastUpdateTime: snap.updateTime});
+    batch.delete(db.collection(SECRETS).doc(passportId));
+    await batch.commit();
+
+    await db.collection("records").add({
+        type: "passport-delete",
+        performedBy: uid,
+        performedByName: performerName(callerSnap),
+        // The holder, so the entry still says whose passport this was.
+        targetUid: ownerUid,
+        targetName: ownerName,
+        passportId,
+        passportCount: 1,
+        passportYear: typeof passport.year === "number" ? passport.year : null,
+        timestamp: FieldValue.serverTimestamp(),
+        expiresAt: recordExpiresAt(),
+    });
+
+    // Swept after the fact for the same reason as the bulk delete: a subcollection
+    // outlives its parent, nothing can reach this one now that the passport is
+    // gone, and a failure here is orphaned data to log rather than a failed delete.
+    try {
+        const trail = await ref.collection("claims").get();
+        if (!trail.empty) {
+            await commitInChunks(trail.docs.map(entry => (b: FirebaseFirestore.WriteBatch) => b.delete(entry.ref)));
+        }
+    } catch (err) {
+        console.error(`deleteClaimedPassport: trail cleanup failed for ${passportId}`, err);
+    }
+
+    return {deleted: true, ownerUid, ownerName};
 });
 
 /** Hide or show the caller's own passport page. Self only, no admin path. */

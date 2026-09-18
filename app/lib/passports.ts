@@ -12,7 +12,8 @@ export type PassportStatus = 'unclaimed' | 'claimed';
  * Binding is permanent — `ownerUid` and `claimedAt` are written once, by the
  * claim, and never cleared. There is no unbind and no rebind, which is what lets
  * the scan URL be treated as a stable address for a person. Unclaimed stock can
- * be deleted outright; a claimed passport can't.
+ * be deleted in bulk; a claimed passport can only be deleted from its own admin
+ * page, one at a time, which removes it rather than returning it to stock.
  */
 export interface Passport {
     id: string;

@@ -24,8 +24,15 @@ import { buildPassportIdCsv, fileStamp, usePassportPngExport } from './passportE
  *
  * Every action hangs off ticked rows, which is how a set of passports that share
  * nothing in the data — the ones in one envelope, the ones that came back damaged
- * — is acted on at all. A selection exports its codes and its stickers, and can
- * be deleted in one call.
+ * — is acted on at all. A selection exports its codes and its stickers, and is
+ * deleted in one call.
+ *
+ * Only unclaimed stock can be ticked. Everything a selection does is a
+ * print-and-pack job on passports that haven't been sold — the codes CSV carries
+ * no holder, and a claimed passport's sticker is already in someone's hands — so
+ * a claimed row has nothing to gain from being in one, and leaving it out is what
+ * makes the selection and the delete the same set. Deleting a claimed passport is
+ * done on its own page, where the holder is on the screen.
  */
 
 /** About a screenful, and few enough rows that a re-sort is instant. */
@@ -211,20 +218,20 @@ export const PassportStock = ({
     const selectedSet = useMemo(() => new Set(selected), [selected]);
     // Resolved against the whole design rather than the current filter, so a
     // selection survives switching tabs to look at something else, and so an id
-    // left over from a row someone else deleted drops out on its own.
+    // left over from a row someone else deleted drops out on its own. A passport
+    // claimed under the open table drops out the same way: it was ticked as stock
+    // and has stopped being stock, and nothing here acts on a claimed passport.
     const selectedPassports = useMemo(
-        () => passports.filter(p => selectedSet.has(p.id)),
+        () => passports.filter(p => selectedSet.has(p.id) && p.status === 'unclaimed'),
         [passports, selectedSet],
     );
-    // Only unclaimed stock can be deleted; claimed passports in a selection are
-    // exported with the rest and left alone by the delete.
-    const deletable = useMemo(
-        () => selectedPassports.filter(p => p.status === 'unclaimed'),
-        [selectedPassports],
-    );
 
-    const viewSelectedCount = sorted.reduce((n, p) => n + (selectedSet.has(p.id) ? 1 : 0), 0);
-    const allInViewSelected = sorted.length > 0 && viewSelectedCount === sorted.length;
+    // What the header box and its partial state are measured against: ticking
+    // "all" can only mean all of the rows that can be ticked, which on the Claimed
+    // tab is none of them.
+    const selectableInView = useMemo(() => sorted.filter(p => p.status === 'unclaimed'), [sorted]);
+    const viewSelectedCount = selectableInView.reduce((n, p) => n + (selectedSet.has(p.id) ? 1 : 0), 0);
+    const allInViewSelected = selectableInView.length > 0 && viewSelectedCount === selectableInView.length;
 
     const toggleOne = (id: string) => onSelectedChange(
         selectedSet.has(id) ? selected.filter(s => s !== id) : [...selected, id]);
@@ -232,32 +239,32 @@ export const PassportStock = ({
     // The header box takes the whole filtered view, not the page on screen — the
     // same set the exports below cover, so "all" means one thing on this screen.
     const toggleView = () => {
-        const inView = new Set(sorted.map(p => p.id));
+        const inView = new Set(selectableInView.map(p => p.id));
         onSelectedChange(allInViewSelected
             ? selected.filter(id => !inView.has(id))
             : [...new Set([...selected, ...inView])]);
     };
 
+    // Everything ticked is deletable — claimed rows can't be ticked — so this
+    // deletes the selection, with no subset to explain and no count that disagrees
+    // with the one beside it.
     const deleteSelected = async () => {
-        if (deletable.length === 0) return;
-        if (deletable.length > MAX_PASSPORT_DELETE) {
+        const count = selectedPassports.length;
+        if (count === 0) return;
+        if (count > MAX_PASSPORT_DELETE) {
             showToast(isEnglish
                 ? `Select at most ${MAX_PASSPORT_DELETE} passports to delete at once.`
                 : `一次最多只能删除 ${MAX_PASSPORT_DELETE} 本通行证。`, 'error');
             return;
         }
-        const kept = selectedPassports.length - deletable.length;
-        const keptNote = kept === 0 ? '' : isEnglish
-            ? ` ${kept} claimed ${kept === 1 ? 'passport is' : 'passports are'} in the selection and will be kept.`
-            : ` 所选内容中有 ${kept} 本已激活的通行证，将予以保留。`;
         if (!window.confirm(isEnglish
-            ? `Delete ${deletable.length} ${deletable.length === 1 ? 'passport' : 'passports'}? Their activation keys and history go with them, and their stickers stop working. This can't be undone.${keptNote}`
-            : `删除 ${deletable.length} 本通行证？其激活码与历史记录将一并移除，贴纸随之失效。此操作无法撤销。${keptNote}`)) return;
+            ? `Delete ${count} ${count === 1 ? 'passport' : 'passports'}? Their activation keys and history go with them, and their stickers stop working. This can't be undone.`
+            : `删除 ${count} 本通行证？其激活码与历史记录将一并移除，贴纸随之失效。此操作无法撤销。`)) return;
 
         setDeleting(true);
         let result;
         try {
-            result = (await callDeletePassports({passportIds: deletable.map(p => p.id)})).data;
+            result = (await callDeletePassports({passportIds: selectedPassports.map(p => p.id)})).data;
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to delete passports.' : '删除通行证失败。'), 'error');
             setDeleting(false);
@@ -350,19 +357,14 @@ export const PassportStock = ({
                             <button
                                 className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
                                 onClick={() => void deleteSelected()}
-                                disabled={deleting || deletable.length === 0}
-                                title={deletable.length === 0
-                                    ? (isEnglish
-                                        ? 'Only unclaimed passports can be deleted'
-                                        : '只能删除未激活的通行证')
-                                    : undefined}
+                                disabled={deleting}
                                 type="button"
                             >
                                 {deleting
                                     ? (isEnglish ? 'Deleting…' : '删除中…')
                                     : (isEnglish
-                                        ? `Delete ${deletable.length}`
-                                        : `删除 ${deletable.length} 本`)}
+                                        ? `Delete ${selectedPassports.length}`
+                                        : `删除 ${selectedPassports.length} 本`)}
                             </button>
                         )}
                     </div>
@@ -370,9 +372,13 @@ export const PassportStock = ({
             )}
 
             <p className="admin-helper-text admin-field-hint">
-                {isEnglish
-                    ? `Tick rows to export or delete them; the box in the header takes all ${sorted.length} passports in this view, not just the page shown. Exports carry public codes only — open a passport to view its activation key.`
-                    : `勾选行即可导出或删除；表头的复选框会选中当前视图下的全部 ${sorted.length} 本通行证（不限于本页）。导出内容仅含公开编号 — 打开单本通行证即可查看其激活码。`}
+                {selectableInView.length === 0
+                    ? (isEnglish
+                        ? 'Nothing in this view can be ticked: claimed passports aren’t part of bulk actions. Open one to download its sticker or delete it.'
+                        : '当前视图下没有可勾选的通行证：已激活的通行证不参与批量操作。如需下载贴纸或删除，请打开该通行证。')
+                    : (isEnglish
+                        ? `Tick rows to export or delete them; the box in the header takes all ${selectableInView.length} unclaimed passports in this view, not just the page shown. Claimed passports can’t be ticked — open one to delete it. Exports carry public codes only, so open a passport to view its activation key.`
+                        : `勾选行即可导出或删除；表头的复选框会选中当前视图下的全部 ${selectableInView.length} 本未激活通行证（不限于本页）。已激活的通行证无法勾选 — 如需删除请打开该通行证。导出内容仅含公开编号 — 打开单本通行证即可查看其激活码。`)}
             </p>
 
             {sorted.length === 0 ? (
@@ -395,9 +401,15 @@ export const PassportStock = ({
                                             if (el) el.indeterminate = viewSelectedCount > 0 && !allInViewSelected;
                                         }}
                                         onChange={toggleView}
-                                        aria-label={isEnglish
-                                            ? `Select all ${sorted.length} passports in this view`
-                                            : `选择当前视图下的全部 ${sorted.length} 本通行证`}
+                                        // Nothing to take on the Claimed tab.
+                                        disabled={selectableInView.length === 0}
+                                        aria-label={selectableInView.length === 0
+                                            ? (isEnglish
+                                                ? 'Nothing in this view can be selected'
+                                                : '当前视图下没有可选择的通行证')
+                                            : (isEnglish
+                                                ? `Select all ${selectableInView.length} unclaimed passports in this view`
+                                                : `选择当前视图下的全部 ${selectableInView.length} 本未激活通行证`)}
                                     />
                                 </th>
                                 {COLUMNS.map(column => (
@@ -444,15 +456,36 @@ export const PassportStock = ({
                                 >
                                     <td
                                         className="admin-passport-cell-tick"
-                                        onClick={e => e.stopPropagation()}
+                                        // The tick cell swallows the click that
+                                        // would open the row — except on a claimed
+                                        // one, where there is no box to hit and
+                                        // opening the passport is exactly where
+                                        // whoever clicked it needs to go.
+                                        onClick={e => {
+                                            if (passport.status !== 'claimed') e.stopPropagation();
+                                        }}
                                     >
                                         <input
                                             type="checkbox"
-                                            checked={selectedSet.has(passport.id)}
+                                            // A row ticked as stock and claimed
+                                            // since shows unticked, because it has
+                                            // already dropped out of the selection
+                                            // everything below acts on.
+                                            checked={passport.status !== 'claimed' && selectedSet.has(passport.id)}
                                             onChange={() => toggleOne(passport.id)}
-                                            aria-label={isEnglish
-                                                ? `Select passport ${passport.id}`
-                                                : `选择通行证 ${passport.id}`}
+                                            disabled={passport.status === 'claimed'}
+                                            title={passport.status === 'claimed'
+                                                ? (isEnglish
+                                                    ? 'Claimed passports aren’t part of bulk actions — open this one to delete it'
+                                                    : '已激活的通行证不参与批量操作 — 如需删除请打开该通行证')
+                                                : undefined}
+                                            aria-label={passport.status === 'claimed'
+                                                ? (isEnglish
+                                                    ? `Passport ${passport.id} is claimed and can’t be selected`
+                                                    : `通行证 ${passport.id} 已激活，无法选择`)
+                                                : (isEnglish
+                                                    ? `Select passport ${passport.id}`
+                                                    : `选择通行证 ${passport.id}`)}
                                         />
                                     </td>
                                     <td className="admin-passport-cell-code">{passport.id}</td>

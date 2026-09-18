@@ -733,7 +733,17 @@ export const RecordsTab = ({
             case 'passport-delete':
                 // One deletion names its passport; a bulk one only counts them,
                 // since the codes it removed no longer resolve to anything.
+                // A claimed one also names who held it — nothing else can say so
+                // once the passport is gone.
                 if (r.passportId) {
+                    // Only when the holder has a name to show: an account
+                    // deleted before its passport was leaves none behind, and a
+                    // blank one would read as "deleted 's passport".
+                    if (r.targetName) {
+                        return isEnglish
+                            ? <>deleted {target}'s passport {r.passportId}</>
+                            : <>删除了 {target} 的通行证 {r.passportId}</>;
+                    }
                     return isEnglish
                         ? <>deleted passport {r.passportId}</>
                         : <>删除了通行证 {r.passportId}</>;
