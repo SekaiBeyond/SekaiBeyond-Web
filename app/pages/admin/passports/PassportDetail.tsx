@@ -26,6 +26,28 @@ import { usePassportPngExport } from './passportExport';
 
 const QR_SIZE = 200;
 const MASKED_KEY = '••••-••••-••••';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * What subtracting a passport's term would leave of a membership, for the line
+ * under the checkbox. Mirrors reducedExpiry in
+ * functions/src/utils/membership.ts, which is the one that decides: this only has
+ * to be right enough to answer "what am I about to do", and the toast afterwards
+ * reports what the server actually took.
+ *
+ * Null means there is nothing to take — no membership on file, or one that has
+ * already run out.
+ */
+const previewReduced = (current: Date | null, days: number): {expiresAt: Date; daysRemoved: number} | null => {
+    if (!current) return null;
+    const now = Date.now();
+    if (current.getTime() <= now) return null;
+    const floored = Math.max(now, current.getTime() - days * DAY_MS);
+    return {
+        expiresAt: new Date(floored),
+        daysRemoved: Math.round((current.getTime() - floored) / DAY_MS),
+    };
+};
 
 interface PassportDetailProps {
     passportId: string;
@@ -48,11 +70,13 @@ interface PassportDetailProps {
  * Any passport's key slip can be viewed. Stock that has never been sold can have
  * its slip reissued or be deleted outright.
  *
- * A claimed passport can only be deleted here, one at a time — the stock table's
- * bulk delete refuses claimed rows, so unbinding one is always a deliberate act
- * taken with the holder named on the screen. Deleting it doesn't take back the
- * membership the claim granted; that is adjusted through the user's membership
- * row, as it always was.
+ * A claimed passport can only be deleted here, one at a time — the stock table
+ * won't even let a claimed row be ticked, so unbinding one is always a deliberate
+ * act taken with the holder on the screen. The delete panel carries the one
+ * choice that goes with it: whether the days the claim granted come back off the
+ * holder's membership, floored at today so it can never go negative. Left off,
+ * the membership isn't touched, and any other change to it belongs in Users
+ * Management.
  */
 export const PassportDetail = ({
                                    passportId,
@@ -77,6 +101,11 @@ export const PassportDetail = ({
     // trail. Hide only masks it, so showing it again isn't a second look.
     const [key, setKey] = useState<string | null>(null);
     const [keyShown, setKeyShown] = useState(false);
+    // The claimed passport's delete is a panel rather than a window.confirm,
+    // because it carries a choice — and the membership it would leave behind —
+    // which a confirm can't show. Kept shut until asked for.
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [subtractDays, setSubtractDays] = useState(false);
 
     const {request: requestPng, node: pngNode} = usePassportPngExport(
         () => showToast(isEnglish ? 'Failed to render the QR code.' : '生成二维码失败。', 'error'),
@@ -204,31 +233,44 @@ export const PassportDetail = ({
      * activated by mistake, or onto the wrong account, which no membership edit
      * can put right.
      *
-     * Reached from this page only. The bulk delete in the stock table skips
-     * claimed rows entirely, so this is never something a ticked selection can do
-     * by accident: whoever deletes a member's passport has opened it and read the
-     * Holder above the button first, which is why the name goes in the question.
+     * Reached from this page only. The bulk delete in the stock table can't even
+     * tick a claimed row, so this is never something a selection can do by
+     * accident: whoever deletes a member's passport has opened it and read the
+     * Holder above the button first.
+     *
+     * The panel that calls this is the confirmation — it states the consequences,
+     * carries the membership choice, and shows what that choice would leave — so
+     * there is no window.confirm on top of it.
      *
      * The server answers not-found or a failed precondition rather than reporting
      * a skip — one passport, one outcome — so unlike the stock delete there is no
      * "nothing went" case to explain here.
      */
     const deleteClaimed = async () => {
-        const holder = owner?.displayName
-            || (ownerMissing ? (isEnglish ? 'a deleted account' : '一个已删除的账号') : '');
-        const held = holder ? (isEnglish ? `, held by ${holder}` : `（持有者：${holder}）`) : '';
-        if (!window.confirm(isEnglish
-            ? `Delete passport ${passportId}${held}? It leaves the holder's shelf, its sticker stops working, and its activation key and history go with it. This can't be undone. The membership the activation granted is not taken back — adjust that in Users Management.`
-            : `删除通行证 ${passportId}${held}？该通行证将从持有者的书架上消失，贴纸随之失效，激活码与历史记录一并移除。此操作无法撤销。激活时授予的会员资格不会被收回 — 如需调整请前往用户管理。`)) return;
         setBusy(true);
+        let result;
         try {
-            await callDeleteClaimedPassport({passportId});
+            result = (await callDeleteClaimedPassport({passportId, subtractDays})).data;
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to delete passport.' : '删除通行证失败。'), 'error');
             setBusy(false);
             return;
         }
-        showToast(isEnglish ? 'Passport deleted.' : '通行证已删除。', 'warning');
+        // What the server actually took, not what the panel predicted: the
+        // membership may have moved under the open page, and days asked for can
+        // come back as none.
+        showToast(
+            result.daysRemoved > 0
+                ? (isEnglish
+                    ? `Passport deleted and ${result.daysRemoved} ${result.daysRemoved === 1 ? 'day' : 'days'} taken off the membership.`
+                    : `通行证已删除，并从会员期限中收回 ${result.daysRemoved} 天。`)
+                : result.nothingToSubtract
+                    ? (isEnglish
+                        ? 'Passport deleted. There were no membership days left to take back.'
+                        : '通行证已删除。没有可收回的会员天数。')
+                    : (isEnglish ? 'Passport deleted.' : '通行证已删除。'),
+            'warning',
+        );
         onDeleted(passportId);
     };
 
@@ -302,6 +344,40 @@ export const PassportDetail = ({
     const locked = !!passport.lockedUntil && passport.lockedUntil.getTime() > Date.now();
     const unclaimed = passport.status === 'unclaimed';
     const keyViewable = !readOnly;
+    // What ticking the box would do. Null while the holder is still loading, for
+    // an account that is gone, and for a membership that has already run out —
+    // none of the three has days to give back, so the box stays off for all of
+    // them, and the line below says which it is.
+    const reduction = previewReduced(owner?.membershipExpiresAt ?? null, passport.termDays);
+    const ownerLoading = !owner && !ownerMissing;
+
+    /** The line under the checkbox: what the box as it stands would leave behind. */
+    const deleteEffect = (): string => {
+        if (ownerLoading) {
+            return isEnglish ? 'Checking the holder’s membership…' : '正在读取持有者的会员资格…';
+        }
+        if (!reduction) {
+            return isEnglish
+                ? 'There are no membership days left to take back — the holder’s membership has already run out, or their account is gone.'
+                : '没有可收回的会员天数 — 持有者的会员资格已到期，或其账号已删除。';
+        }
+        const from = fmtDate(owner?.membershipExpiresAt ?? null);
+        if (!subtractDays) {
+            return isEnglish
+                ? `Left off, the membership keeps its current expiry of ${from}.`
+                : `不勾选时，会员资格保持当前到期日 ${from}。`;
+        }
+        // Fewer days left than the passport gave: the floor is doing the work, and
+        // saying so is the difference between a clamp and a silent wrong answer.
+        if (reduction.daysRemoved < passport.termDays) {
+            return isEnglish
+                ? `Only ${reduction.daysRemoved} ${reduction.daysRemoved === 1 ? 'day is' : 'days are'} left to take, so the membership ends today rather than going negative.`
+                : `仅剩 ${reduction.daysRemoved} 天可收回，因此会员资格将于今日结束，而不会变为负数。`;
+        }
+        return isEnglish
+            ? `Membership expiry moves from ${from} to ${fmtDate(reduction.expiresAt)}.`
+            : `会员到期日将从 ${from} 变更为 ${fmtDate(reduction.expiresAt)}。`;
+    };
 
     return (
         <div className="admin-section">
@@ -392,8 +468,15 @@ export const PassportDetail = ({
                             </div>
                         )}
                         <div>
-                            <dt>{isEnglish ? 'Term' : '有效期'}</dt>
-                            <dd>{isEnglish ? `${passport.termDays} days` : `${passport.termDays} 天`}</dd>
+                            {/* Not a lifetime: a passport never expires. This
+                                is what activating it awarded, fixed when the
+                                passport was generated. */}
+                            <dt>{isEnglish ? 'Grants' : '授予'}</dt>
+                            <dd>
+                                {isEnglish
+                                    ? `${passport.termDays} days of membership`
+                                    : `${passport.termDays} 天会员资格`}
+                            </dd>
                         </div>
                         <div>
                             <dt>{isEnglish ? 'Generated' : '生成时间'}</dt>
@@ -495,18 +578,75 @@ export const PassportDetail = ({
                 <>
                     <p className="admin-helper-text admin-passport-bound-note">
                         {isEnglish
-                            ? 'A claimed passport is permanently bound to its holder — it can’t be rebound to another account, and no bulk delete will touch it. Deleting it below is the only way out of that binding: the passport goes for good rather than returning to stock, and the membership it granted stays as it is. Adjust that membership in Users Management.'
-                            : '已激活的通行证与持有者永久绑定 — 无法转绑到其他账号，也不会被批量删除影响。下方的删除是解除绑定的唯一方式：通行证将被彻底移除，而非退回库存，且其授予的会员资格保持不变。如需调整该会员资格，请前往用户管理。'}
+                            ? 'A claimed passport is permanently bound to its holder — it can’t be rebound to another account, and no bulk delete will touch it. Deleting it below is the only way out of that binding: the passport goes for good rather than returning to stock, and you choose there whether the days it granted go with it. Any other membership change belongs in Users Management.'
+                            : '已激活的通行证与持有者永久绑定 — 无法转绑到其他账号，也不会被批量删除影响。下方的删除是解除绑定的唯一方式：通行证将被彻底移除，而非退回库存，并可在删除时选择是否一并收回其授予的天数。其他会员资格调整请前往用户管理。'}
                     </p>
-                    <div className="admin-qr-danger-row">
-                        <button
-                            className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                            onClick={() => void deleteClaimed()}
-                            disabled={busy}
-                        >
-                            {isEnglish ? 'Delete passport' : '删除通行证'}
-                        </button>
-                    </div>
+                    {!confirmingDelete ? (
+                        <div className="admin-qr-danger-row">
+                            <button
+                                className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
+                                onClick={() => {
+                                    // Off every time it opens: taking days back is
+                                    // its own decision, not the one carried over
+                                    // from the last passport.
+                                    setSubtractDays(false);
+                                    setConfirmingDelete(true);
+                                }}
+                            >
+                                {isEnglish ? 'Delete passport' : '删除通行证'}
+                            </button>
+                        </div>
+                    ) : (
+                        <div
+                            className="admin-passport-warning admin-passport-warning--urgent admin-passport-delete-panel">
+                            <strong>
+                                {isEnglish
+                                    ? `Delete passport ${passport.id}?`
+                                    : `删除通行证 ${passport.id}？`}
+                            </strong>
+                            <p>
+                                {isEnglish
+                                    ? `It leaves ${owner?.displayName || 'the holder'}’s shelf, its sticker stops working, and its activation key and history go with it. This can’t be undone.`
+                                    : `该通行证将从${owner?.displayName || '持有者'}的书架上消失，贴纸随之失效，激活码与历史记录一并移除。此操作无法撤销。`}
+                            </p>
+
+                            <label className="admin-checkbox-label admin-passport-delete-choice">
+                                <input
+                                    type="checkbox"
+                                    checked={subtractDays}
+                                    onChange={e => setSubtractDays(e.target.checked)}
+                                    disabled={busy || !reduction}
+                                />
+                                <span>
+                                    {isEnglish
+                                        ? `Also take back the ${passport.termDays} days it granted`
+                                        : `同时收回其授予的 ${passport.termDays} 天会员资格`}
+                                </span>
+                            </label>
+                            <p className="admin-passport-delete-effect">{deleteEffect()}</p>
+
+                            <div className="admin-btn-row">
+                                <button
+                                    className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
+                                    onClick={() => void deleteClaimed()}
+                                    disabled={busy}
+                                    type="button"
+                                >
+                                    {busy
+                                        ? (isEnglish ? 'Deleting…' : '删除中…')
+                                        : (isEnglish ? 'Delete passport' : '删除通行证')}
+                                </button>
+                                <button
+                                    className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
+                                    onClick={() => setConfirmingDelete(false)}
+                                    disabled={busy}
+                                    type="button"
+                                >
+                                    {isEnglish ? 'Cancel' : '取消'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
             {pngNode}

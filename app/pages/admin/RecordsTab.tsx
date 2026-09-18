@@ -730,27 +730,33 @@ export const RecordsTab = ({
                     ? <>activated passport {r.passportId ?? ''} (+{r.extendDays ?? 0} days,
                         now {fmtExpiry(r.newExpiresAt)})</>
                     : <>激活了通行证 {r.passportId ?? ''}（+{r.extendDays ?? 0} 天，现到期于 {fmtExpiry(r.newExpiresAt)}）</>;
-            case 'passport-delete':
+            case 'passport-delete': {
                 // One deletion names its passport; a bulk one only counts them,
                 // since the codes it removed no longer resolve to anything.
                 // A claimed one also names who held it — nothing else can say so
                 // once the passport is gone.
                 if (r.passportId) {
+                    // Negative days, mirroring what passport-claim records as
+                    // given; absent whenever the membership was left alone.
+                    const taken = r.extendDays ? (isEnglish
+                        ? <>, taking back {Math.abs(r.extendDays)} days (now {fmtExpiry(r.newExpiresAt)})</>
+                        : <>，并收回 {Math.abs(r.extendDays)} 天（现到期于 {fmtExpiry(r.newExpiresAt)}）</>) : null;
                     // Only when the holder has a name to show: an account
                     // deleted before its passport was leaves none behind, and a
                     // blank one would read as "deleted 's passport".
                     if (r.targetName) {
                         return isEnglish
-                            ? <>deleted {target}'s passport {r.passportId}</>
-                            : <>删除了 {target} 的通行证 {r.passportId}</>;
+                            ? <>deleted {target}'s passport {r.passportId}{taken}</>
+                            : <>删除了 {target} 的通行证 {r.passportId}{taken}</>;
                     }
                     return isEnglish
-                        ? <>deleted passport {r.passportId}</>
-                        : <>删除了通行证 {r.passportId}</>;
+                        ? <>deleted passport {r.passportId}{taken}</>
+                        : <>删除了通行证 {r.passportId}{taken}</>;
                 }
                 return isEnglish
                     ? <>deleted {r.passportCount ?? 0} {r.passportYear ?? ''} passports</>
                     : <>删除了 {r.passportCount ?? 0} 本 {r.passportYear ?? ''} 年通行证</>;
+            }
             case 'passport-key-reissue':
                 return isEnglish
                     ? <>issued a new activation key for passport {r.passportId ?? ''}</>

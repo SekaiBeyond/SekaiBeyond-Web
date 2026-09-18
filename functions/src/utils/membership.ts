@@ -20,6 +20,32 @@ export function extendedExpiry(current: unknown, days: number): Timestamp {
     return Timestamp.fromMillis(base + days * DAY_MS);
 }
 
+/**
+ * Take days back off a membership, never past today.
+ *
+ * The mirror of extendedExpiry, and deliberately not symmetric with it: a grant
+ * stacks onto whatever is already there, but taking one back stops at zero —
+ * nobody is left owing membership, and a day taken here can't eat a day some
+ * other grant paid for. A membership that has already lapsed has nothing left to
+ * take and comes back untouched.
+ *
+ * `daysRemoved` is what was actually taken, which is less than asked for whenever
+ * the floor is reached, and 0 when there was nothing to take. Callers write
+ * nothing in that case, so an expired or absent membership isn't rewritten with
+ * the same value it already had.
+ */
+export function reducedExpiry(current: unknown, days: number): {expiresAt: Timestamp; daysRemoved: number} | null {
+    if (!(current instanceof Timestamp)) return null;
+    const now = Date.now();
+    if (current.toMillis() <= now) return null;
+    const floored = Math.max(now, current.toMillis() - days * DAY_MS);
+    return {
+        expiresAt: Timestamp.fromMillis(floored),
+        // Whole days, for the record and the toast. The expiry itself is exact.
+        daysRemoved: Math.round((current.toMillis() - floored) / DAY_MS),
+    };
+}
+
 // When the membership running to `next` began, for `membershipStartedAt`. A change
 // to one that is still running keeps its start, one that begins a membership
 // starts it today, and null — written as a delete — means none is left running.

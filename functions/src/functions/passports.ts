@@ -4,7 +4,7 @@ import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../
 import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks, generateSecureCode } from "../utils/helpers";
-import { extendedExpiry, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
+import { extendedExpiry, MAX_GRANT_DAYS, reducedExpiry, startedAtAfter } from "../utils/membership";
 import {
     activationKeyMatches,
     formatActivationKey,
@@ -586,7 +586,8 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * Delete one claimed passport, by hand, from its own page.
+ * Delete one claimed passport, by hand, from its own page, and optionally take
+ * back the membership it granted.
  *
  * The binding a claim makes is permanent, so this is the only way out of it — a
  * passport activated in error, or onto the wrong account, that no membership
@@ -595,66 +596,114 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
  * ticked selection can never sweep up a member's passport and staff have to open
  * the passport and read who holds it before they can remove it.
  *
- * What the claim granted is not taken back. Membership sits on the user, stacks
- * from several sources and has been running since the claim, so days subtracted
- * here would be a guess; adjust it in Users Management, where the change is
- * recorded under the holder's name.
+ * `subtractDays` is the admin's call, made per deletion, because the two cases
+ * pull opposite ways: a passport activated by the wrong account should take its
+ * days back with it, while one deleted for a reason the holder had nothing to do
+ * with shouldn't cost them membership they were sold. Left off, this touches the
+ * user document not at all.
+ *
+ * What it takes back is the term the passport itself carried, not whatever the
+ * design says today — the same number the claim granted, since claimPassport
+ * reads the same field. Taking it back can only ever reach zero (reducedExpiry):
+ * days stack from several sources, so a passport can never pull a membership
+ * below the day it is taken back on, and a lapsed one has nothing left to take.
  *
  * Nothing about the passport survives: its document, its key and its trail all
  * go, /p/<code> stops resolving, the holder's shelf loses it, and the code is
  * free to be minted again. The one `records` entry this writes — naming the
- * holder, since nothing else will afterwards — is what is left.
+ * holder, since nothing else will afterwards, and carrying the days taken the way
+ * passport-claim carries the days given — is what is left.
  */
 export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
-    const callerSnap = await requireAdmin(uid);
 
-    const passportId = normalizePassportId((request.data as {passportId?: unknown})?.passportId);
+    const input = request.data as {passportId?: unknown; subtractDays?: unknown};
+    const passportId = normalizePassportId(input.passportId);
     if (!passportId) throw new HttpsError("invalid-argument", "Invalid passportId.");
+    if (input.subtractDays !== undefined && typeof input.subtractDays !== "boolean") {
+        throw new HttpsError("invalid-argument", "subtractDays must be a boolean.");
+    }
+    const subtractDays = input.subtractDays === true;
 
     const ref = db.collection(PASSPORTS).doc(passportId);
-    const snap = await ref.get();
-    if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
 
-    const passport = snap.data()!;
-    // Unclaimed stock has its own path, and taking it here would let this handler
-    // stand in for the bulk delete one call at a time.
-    if (passport.status !== "claimed") {
-        throw new HttpsError(
-            "failed-precondition",
-            "This passport hasn't been claimed. Delete it as stock instead.",
-            {code: "not-claimed"},
-        );
-    }
+    // One transaction, because the membership edit and the delete have to agree:
+    // the days are taken back on the strength of a claim that this same commit
+    // erases, and a passport read as claimed here can't be deleted twice.
+    const outcome = await adminTransaction(uid, async (txn, callerSnap) => {
+        const snap = await txn.get(ref);
+        if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
 
-    const ownerUid: string | null = typeof passport.ownerUid === "string" ? passport.ownerUid : null;
-    // Copied into the record rather than resolved when the record is read: the
-    // passport is about to stop pointing at anyone, and the account itself may be
-    // deleted later.
-    const ownerName = ownerUid
-        ? ((await db.collection("users").doc(ownerUid).get()).data()?.displayName ?? "")
-        : "";
+        const passport = snap.data()!;
+        // Unclaimed stock has its own path, and taking it here would let this
+        // handler stand in for the bulk delete one call at a time.
+        if (passport.status !== "claimed") {
+            throw new HttpsError(
+                "failed-precondition",
+                "This passport hasn't been claimed. Delete it as stock instead.",
+                {code: "not-claimed"},
+            );
+        }
 
-    // The passport and its key go together, under the version the status above was
-    // read at — a write landing in between fails this delete rather than being
-    // swallowed by it.
-    const batch = db.batch();
-    batch.delete(ref, {lastUpdateTime: snap.updateTime});
-    batch.delete(db.collection(SECRETS).doc(passportId));
-    await batch.commit();
+        const ownerUid: string | null = typeof passport.ownerUid === "string" ? passport.ownerUid : null;
+        // Read before any write, as a transaction requires, and only when it is
+        // going to be used for something.
+        const ownerRef = ownerUid ? db.collection("users").doc(ownerUid) : null;
+        const ownerSnap = ownerRef ? await txn.get(ownerRef) : null;
+        const ownerData = ownerSnap?.exists ? ownerSnap.data()! : null;
+        // Copied into the record rather than resolved when the record is read: the
+        // passport is about to stop pointing at anyone, and the account itself may
+        // be deleted later.
+        const ownerName: string = ownerData?.displayName ?? "";
 
-    await db.collection("records").add({
-        type: "passport-delete",
-        performedBy: uid,
-        performedByName: performerName(callerSnap),
-        // The holder, so the entry still says whose passport this was.
-        targetUid: ownerUid,
-        targetName: ownerName,
-        passportId,
-        passportCount: 1,
-        passportYear: typeof passport.year === "number" ? passport.year : null,
-        timestamp: FieldValue.serverTimestamp(),
-        expiresAt: recordExpiresAt(),
+        // What the claim granted, read the way claimPassport read it so the two
+        // numbers agree by construction.
+        const granted = typeof passport.termDays === "number" ? passport.termDays : PASSPORT_TERM_DAYS;
+        const reduced = subtractDays && ownerData
+            ? reducedExpiry(ownerData.membershipExpiresAt, granted)
+            : null;
+        if (reduced && ownerRef && ownerData) {
+            txn.update(ownerRef, {
+                membershipExpiresAt: reduced.expiresAt,
+                // Trimmed to today, the membership is over, and startedAtAfter
+                // answers null for that — the same delete an expiry reaching the
+                // past has always written.
+                membershipStartedAt: startedAtAfter(ownerData, reduced.expiresAt) ?? FieldValue.delete(),
+            });
+        }
+
+        txn.delete(ref);
+        txn.delete(db.collection(SECRETS).doc(passportId));
+
+        txn.set(db.collection("records").doc(), {
+            type: "passport-delete",
+            performedBy: uid,
+            performedByName: performerName(callerSnap),
+            // The holder, so the entry still says whose passport this was.
+            targetUid: ownerUid,
+            targetName: ownerName,
+            passportId,
+            passportCount: 1,
+            passportYear: typeof passport.year === "number" ? passport.year : null,
+            // Negative, mirroring the days passport-claim records as given. Null
+            // when the membership was left alone, whether the admin chose that or
+            // there was nothing left to take.
+            extendDays: reduced ? -reduced.daysRemoved : null,
+            newExpiresAt: reduced ? reduced.expiresAt.toDate().toISOString() : "",
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+
+        return {
+            ownerUid,
+            ownerName,
+            daysRemoved: reduced?.daysRemoved ?? 0,
+            membershipExpiresAt: reduced?.expiresAt.toDate().toISOString() ?? null,
+            // The admin asked for days back and got none: the holder's membership
+            // had already run out, or their account is gone. The screen says so
+            // rather than reporting a subtraction that didn't happen.
+            nothingToSubtract: subtractDays && !reduced,
+        };
     });
 
     // Swept after the fact for the same reason as the bulk delete: a subcollection
@@ -669,7 +718,7 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
         console.error(`deleteClaimedPassport: trail cleanup failed for ${passportId}`, err);
     }
 
-    return {deleted: true, ownerUid, ownerName};
+    return {deleted: true, ...outcome};
 });
 
 /** Hide or show the caller's own passport page. Self only, no admin path. */

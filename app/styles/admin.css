@@ -4693,6 +4693,47 @@ select.admin-tickets-tag:focus {
     margin: 20px 0 0;
 }
 
+/* The claimed passport's delete, opened. It borrows the urgent warning's red
+   panel, since it is the same kind of thing said at the same volume, and adds
+   the room its choice and its buttons need. */
+.admin-passport-delete-panel {
+    margin: 20px 0 0;
+}
+
+.admin-passport-delete-panel p {
+    margin: 0;
+}
+
+.admin-passport-delete-choice {
+    margin-top: 12px;
+    /* Inherits the panel's red; the tick itself stays the accent colour so it
+       reads as a control rather than part of the warning. */
+    font-weight: 700;
+}
+
+.admin-passport-delete-choice input[type="checkbox"] {
+    accent-color: var(--color-primary);
+}
+
+.admin-passport-delete-choice input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+}
+
+/* What the tick above would leave behind — the quiet line under a loud panel.
+   Scoped to the panel so it outranks the paragraph reset above rather than
+   fighting it with !important. */
+.admin-passport-delete-panel .admin-passport-delete-effect {
+    margin-top: 6px;
+    /* Lines up under the checkbox label's text, not its box. */
+    padding-left: 26px;
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+.admin-passport-delete-panel .admin-btn-row {
+    margin-top: 14px;
+}
+
 /* Designs, listed under their year — a year can have several. */
 .admin-passport-design-years {
     display: flex;

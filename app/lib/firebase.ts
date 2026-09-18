@@ -515,15 +515,25 @@ export const callDeletePassports = (data: {passportIds: string[]}) =>
         missing: string[];
     }>(getFunctions(), 'deletePassports')(data);
 
-// Claimed passports only, one at a time, and deliberately not part of
-// callDeletePassports: unbinding a member's passport is done from its own page
-// after reading who holds it, never from a ticked selection. What the claim
-// granted stays on the holder's membership.
-export const callDeleteClaimedPassport = (data: {passportId: string}) =>
+/**
+ * Claimed passports only, one at a time, and deliberately not part of
+ * callDeletePassports: unbinding a member's passport is done from its own page
+ * after reading who holds it, never from a ticked selection.
+ *
+ * `subtractDays` takes the term the passport granted back off the holder's
+ * membership, floored at today — `daysRemoved` is what was actually taken, which
+ * is less whenever the floor is reached and 0 when their membership had already
+ * run out. Left off, the membership isn't touched at all.
+ */
+export const callDeleteClaimedPassport = (data: {passportId: string; subtractDays: boolean}) =>
     httpsCallable<typeof data, {
         deleted: boolean;
         ownerUid: string | null;
         ownerName: string;
+        daysRemoved: number;
+        membershipExpiresAt: string | null;
+        /** Days were asked for and none could be taken: already lapsed, or no account. */
+        nothingToSubtract: boolean;
     }>(getFunctions(), 'deleteClaimedPassport')(data);
 
 export const callSetPassportPrivacy = (data: {hide: boolean}) =>
