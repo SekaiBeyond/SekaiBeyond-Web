@@ -148,14 +148,11 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
     await db.runTransaction(async (txn) => {
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
-        const status = snap.data()?.status;
-        if (status !== "unclaimed") {
+        if (snap.data()?.status === "claimed") {
             throw new HttpsError(
                 "failed-precondition",
-                status === "claimed"
-                    ? "This passport has already been claimed; its key is spent."
-                    : "This passport is void.",
-                {code: status === "claimed" ? "already-claimed" : "void"},
+                "This passport has already been claimed; its key is spent.",
+                {code: "already-claimed"},
             );
         }
 
@@ -191,10 +188,9 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
 
 /**
  * Serve a passport's current key: an unclaimed one's to reprint its slip, a
- * claimed one's to check the key it was activated with. A void passport's key is
- * discarded with it. Every call is written to the passport's trail and to
- * records: the key is what makes an unsold passport worth stealing, so who has
- * looked at it is part of its history.
+ * claimed one's to check the key it was activated with. Every call is written to
+ * the passport's trail and to records: the key is what makes an unsold passport
+ * worth stealing, so who has looked at it is part of its history.
  */
 export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -210,9 +206,6 @@ export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
         const [snap, secretSnap] = await Promise.all([txn.get(ref), txn.get(secretRef)]);
         if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
         const status = snap.data()?.status;
-        if (status === "void") {
-            throw new HttpsError("failed-precondition", "This passport is void.", {code: "void"});
-        }
         const stored = secretSnap.data()?.key;
         if (typeof stored !== "string") {
             throw new HttpsError(
@@ -251,7 +244,6 @@ export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
 type ClaimFailure =
     | {code: "invalid"}
     | {code: "no-profile"}
-    | {code: "void"}
     | {code: "already-claimed"}
     | {code: "no-key"}
     | {code: "locked"; retryAfterMs: number}
@@ -291,7 +283,6 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
 
         if (!passportSnap.exists) return {ok: false, failure: {code: "invalid"}};
         const passport = passportSnap.data()!;
-        if (passport.status === "void") return {ok: false, failure: {code: "void"}};
         if (passport.status === "claimed") return {ok: false, failure: {code: "already-claimed"}};
         if (isLockedOut(passport)) {
             return {ok: false, failure: {code: "locked", retryAfterMs: lockedUntilMillis(passport) - Date.now()}};
@@ -385,8 +376,6 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
                 "Your account isn't set up yet. Sign out and back in, then try again.",
                 failure,
             );
-        case "void":
-            throw new HttpsError("failed-precondition", "This passport has been voided.", failure);
         case "already-claimed":
             throw new HttpsError("already-exists", "This passport has already been activated.", failure);
         case "no-key":
@@ -424,9 +413,9 @@ export const claimPassport = onCall({maxInstances: 20}, async (request) => {
  * are not part of it: the page doesn't show them, so a scanner isn't handed them
  * either.
  *
- * Unknown ids, void passports, and passports whose owner deleted their account
- * all answer identically ("invalid"), so a valid id can't be told from a
- * fabricated one. A private passport is distinguishable, deliberately: whoever
+ * Unknown ids — including deleted passports — and passports whose owner deleted
+ * their account all answer identically ("invalid"), so a valid id can't be told
+ * from a fabricated one. A private passport is distinguishable, deliberately: whoever
  * is holding that sticker deserves to know it works.
  */
 export const getPassportPublicProfile = onCall({maxInstances: 20}, async (request) => {
@@ -437,7 +426,6 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
     if (!passportSnap.exists) return {status: "invalid" as const};
 
     const passport = passportSnap.data()!;
-    if (passport.status === "void") return {status: "invalid" as const};
 
     // The page reads the design itself (passportDesigns is public), for its name
     // and cover art.
@@ -485,13 +473,16 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 });
 
 /**
- * Void an unclaimed passport — a sticker destroyed in packing, a pack whose
- * slip and sticker were mismatched, stock written off. A claimed passport can
- * never be voided: the binding is permanent and its page belongs to its owner.
- * Membership a passport already granted is unaffected; use setMembership to
- * adjust that.
+ * Delete an unclaimed passport — a sticker destroyed in packing, a pack whose
+ * slip and sticker were mismatched, stock written off. The document, its key and
+ * its trail all go, so the code stops resolving and is free to be minted again.
+ * A claimed passport can never be deleted: the binding is permanent and its page
+ * belongs to its owner.
+ *
+ * Nothing about the passport survives except the `records` entry this writes,
+ * which is what an admin looking for where a code went is left with.
  */
-export const voidPassport = onCall({maxInstances: 10}, async (request) => {
+export const deletePassport = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     const callerSnap = await requireAdmin(uid);
 
@@ -500,32 +491,24 @@ export const voidPassport = onCall({maxInstances: 10}, async (request) => {
 
     const ref = db.collection(PASSPORTS).doc(passportId);
 
+    // The guard and the delete are one transaction: a claim landing between them
+    // would otherwise bind a passport that is already on its way out, spending a
+    // key and granting membership against a document about to disappear.
     await db.runTransaction(async (txn) => {
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
-        const status = snap.data()?.status;
-        if (status === "void") {
-            throw new HttpsError("failed-precondition", "This passport is already void.", {code: "void"});
-        }
-        if (status === "claimed") {
+        if (snap.data()?.status === "claimed") {
             throw new HttpsError(
                 "failed-precondition",
-                "A claimed passport can't be voided — it is permanently bound to its owner.",
+                "A claimed passport can't be deleted — it is permanently bound to its owner.",
                 {code: "already-claimed"},
             );
         }
 
-        txn.update(ref, {status: "void", failedAttempts: 0, lockedUntil: null});
+        txn.delete(ref);
         txn.delete(db.collection(SECRETS).doc(passportId));
-        txn.set(ref.collection("claims").doc(), {
-            action: "void",
-            uid: null,
-            at: FieldValue.serverTimestamp(),
-            performedBy: uid,
-            performedByName: performerName(callerSnap),
-        });
         txn.set(db.collection("records").doc(), {
-            type: "passport-void",
+            type: "passport-delete",
             performedBy: uid,
             performedByName: performerName(callerSnap),
             passportId,
@@ -535,7 +518,19 @@ export const voidPassport = onCall({maxInstances: 10}, async (request) => {
         });
     });
 
-    return {passportId, status: "void" as const};
+    // A subcollection outlives its parent's delete, so the trail is swept after
+    // the fact. It is a handful of key reissues and key views — an unclaimed
+    // passport has no claim on it — and nothing can reach it once the passport is
+    // gone, so a failure here is orphaned data to log, never a failed delete.
+    try {
+        const claims = await ref.collection("claims").get();
+        const ops = claims.docs.map(d => (batch: FirebaseFirestore.WriteBatch) => batch.delete(d.ref));
+        if (ops.length > 0) await commitInChunks(ops);
+    } catch (err) {
+        console.error(`deletePassport: trail cleanup failed for ${passportId}`, err);
+    }
+
+    return {passportId, deleted: true};
 });
 
 /** Hide or show the caller's own passport page. Self only, no admin path. */

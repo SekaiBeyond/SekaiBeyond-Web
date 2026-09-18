@@ -98,11 +98,17 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
         if (designId !== null) await loadDesign(designId);
     }, [designId, loadDesign]);
 
-    // A void or a reissue changes exactly one passport, and the detail page has
-    // already refetched it — patching it in beats re-reading the design, which is
-    // every document the tab is holding.
+    // A key reissue changes exactly one passport, and the detail page has already
+    // refetched it — patching it in beats re-reading the design, which is every
+    // document the tab is holding. A delete drops the row the same way.
     const applyChange = useCallback((fresh: Passport) => {
         setPassports(list => list?.map(p => p.id === fresh.id ? fresh : p) ?? list);
+    }, []);
+
+    const applyDelete = useCallback((deletedId: string) => {
+        setPassports(list => list?.filter(p => p.id !== deletedId) ?? list);
+        setSelectedId(null);
+        setView('dashboard');
     }, []);
 
     const selected = passports?.find(p => p.id === selectedId) ?? null;
@@ -127,6 +133,7 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
                 initial={selected}
                 onBack={() => setView('dashboard')}
                 onChanged={applyChange}
+                onDeleted={applyDelete}
                 onLookupUser={onLookupUser}
                 showToast={showToast}
                 readOnly={readOnly}

@@ -20,7 +20,7 @@ import { buildPassportIdCsv, fileStamp, usePassportPngExport } from './passportE
 const PAGE_SIZE = 50;
 
 type StatusFilter = 'all' | PassportStatus;
-const STATUS_FILTERS: StatusFilter[] = ['all', 'unclaimed', 'claimed', 'void'];
+const STATUS_FILTERS: StatusFilter[] = ['all', 'unclaimed', 'claimed'];
 
 type SortKey = 'code' | 'status' | 'holder' | 'generated';
 type SortDir = 'asc' | 'desc';
@@ -63,7 +63,7 @@ const COLUMNS: Column[] = [
 ];
 
 /** Sorting by status walks the lifecycle rather than the alphabet. */
-const STATUS_ORDER: Record<PassportStatus, number> = {unclaimed: 0, claimed: 1, void: 2};
+const STATUS_ORDER: Record<PassportStatus, number> = {unclaimed: 0, claimed: 1};
 
 const statusFilterLabel = (filter: StatusFilter, isEnglish: boolean): string =>
     filter === 'all' ? (isEnglish ? 'All' : '全部') : passportStatusLabel(filter, isEnglish);
@@ -107,7 +107,6 @@ export const PassportStock = ({
         all: passports.length,
         unclaimed: passports.filter(p => p.status === 'unclaimed').length,
         claimed: passports.filter(p => p.status === 'claimed').length,
-        void: passports.filter(p => p.status === 'void').length,
     }), [passports]);
 
     // Holders are resolved for the whole design rather than a page at a time,
@@ -118,9 +117,9 @@ export const PassportStock = ({
         () => [...new Set(passports.flatMap(p => p.ownerUid ? [p.ownerUid] : []))],
         [passports],
     );
-    // Keyed on the uids themselves: patching one passport in the list (a void, a
-    // key reissue) hands back a new array every time, and who holds what hasn't
-    // changed unless a uid has.
+    // Keyed on the uids themselves: patching the list (a key reissue, a deleted
+    // passport dropping out) hands back a new array every time, and who holds
+    // what hasn't changed unless a uid has.
     const ownerKey = ownerUids.join(',');
     useEffect(() => {
         if (ownerUids.length === 0) {
@@ -177,7 +176,7 @@ export const PassportStock = ({
     }, [filtered, view.sortKey, view.sortDir, owners]);
 
     const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-    // Clamped rather than reset: voiding the last passport on the final page
+    // Clamped rather than reset: deleting the last passport on the final page
     // shouldn't throw the admin back to the top of the list.
     const page = Math.min(view.page, pageCount - 1);
     const from = page * PAGE_SIZE;

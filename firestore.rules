@@ -202,7 +202,9 @@ service cloud.firestore {
             allow read: if request.auth != null
                 && (isStaffOrAbove() || resource.data.ownerUid == request.auth.uid);
 
-            // Permanent bind/void/key audit trail — no TTL, core-staff+ only.
+            // Permanent bind/key audit trail — no TTL, core-staff+ only. It
+            // is swept when an unclaimed passport is deleted; a claimed one's
+            // never goes away.
             match /claims/{claimId} {
                 allow read: if request.auth != null && isCoreStaffOrAbove();
             }

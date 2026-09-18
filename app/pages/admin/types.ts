@@ -129,7 +129,7 @@ export type RecordType =
     | 'parkingrate-delete'
     | 'passport-generate'
     | 'passport-claim'
-    | 'passport-void'
+    | 'passport-delete'
     | 'passport-key-reissue'
     | 'passport-key-view'
     | 'passport-design-create'

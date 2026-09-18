@@ -47,7 +47,7 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
     location: ['venue-create', 'venue-edit', 'venue-delete',
         'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
         'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
-    passport: ['passport-generate', 'passport-claim', 'passport-void', 'passport-key-reissue',
+    passport: ['passport-generate', 'passport-claim', 'passport-delete', 'passport-key-reissue',
         'passport-key-view', 'passport-design-create', 'passport-design-edit', 'passport-design-delete'],
     qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
         'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
@@ -730,10 +730,10 @@ export const RecordsTab = ({
                     ? <>activated passport {r.passportId ?? ''} (+{r.extendDays ?? 0} days,
                         now {fmtExpiry(r.newExpiresAt)})</>
                     : <>激活了通行证 {r.passportId ?? ''}（+{r.extendDays ?? 0} 天，现到期于 {fmtExpiry(r.newExpiresAt)}）</>;
-            case 'passport-void':
+            case 'passport-delete':
                 return isEnglish
-                    ? <>voided passport {r.passportId ?? ''}</>
-                    : <>作废了通行证 {r.passportId ?? ''}</>;
+                    ? <>deleted passport {r.passportId ?? ''}</>
+                    : <>删除了通行证 {r.passportId ?? ''}</>;
             case 'passport-key-reissue':
                 return isEnglish
                     ? <>issued a new activation key for passport {r.passportId ?? ''}</>
@@ -880,7 +880,7 @@ export const RecordsTab = ({
                 return isEnglish ? 'Location' : '场地';
             case 'passport-generate':
             case 'passport-claim':
-            case 'passport-void':
+            case 'passport-delete':
             case 'passport-key-reissue':
             case 'passport-key-view':
             case 'passport-design-create':

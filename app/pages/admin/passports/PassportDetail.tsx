@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callReissuePassportKey, callRevealPassportKey, callVoidPassport, getFirebaseDb } from '~/lib/firebase';
+import { callDeletePassport, callReissuePassportKey, callRevealPassportKey, getFirebaseDb } from '~/lib/firebase';
 import {
     fetchPassport,
     fetchPassportClaims,
@@ -28,6 +28,8 @@ interface PassportDetailProps {
     onBack: () => void;
     /** Hands the refetched passport back so the list can patch it in place. */
     onChanged: (fresh: Passport) => void;
+    /** The passport is gone: the list drops the row and the dashboard comes back. */
+    onDeleted: (passportId: string) => void;
     onLookupUser: (uid: string) => void;
     showToast: ShowToast;
     readOnly: boolean;
@@ -37,17 +39,18 @@ interface PassportDetailProps {
  * One passport's page: who holds it, its sticker, and its permanent audit
  * trail.
  *
- * Any passport that isn't void can have its key slip viewed. The only other
- * actions are for stock that has never been sold — reissue the slip, or void the
- * passport. A claimed passport has no controls beyond viewing its key: the
- * binding is permanent by design, and membership it granted is adjusted through
- * the user's membership row, not from here.
+ * Any passport's key slip can be viewed. The only other actions are for stock
+ * that has never been sold — reissue the slip, or delete the passport outright. A
+ * claimed passport has no controls beyond viewing its key: the binding is
+ * permanent by design, and membership it granted is adjusted through the user's
+ * membership row, not from here.
  */
 export const PassportDetail = ({
                                    passportId,
                                    initial,
                                    onBack,
                                    onChanged,
+                                   onDeleted,
                                    onLookupUser,
                                    showToast,
                                    readOnly,
@@ -88,8 +91,8 @@ export const PassportDetail = ({
     }, [reload]);
 
     // Staff (read-only) can't read the claims subcollection — core-staff+ only —
-    // so the request isn't made rather than failing visibly. Void and reissue
-    // both write to this trail, and call it again once they land.
+    // so the request isn't made rather than failing visibly. A reissue and a key
+    // view both write to this trail, and call it again once they land.
     const claimsToken = useRef(0);
     const loadClaims = useCallback(() => {
         if (readOnly) return;
@@ -128,7 +131,7 @@ export const PassportDetail = ({
     }, [ownerUid]);
 
     /**
-     * What void and reissue both leave behind: a changed passport the list is
+     * What a reissue or a key view leaves behind: a changed passport the list is
      * still holding the old copy of, and a new entry in the audit trail the
      * History section exists to show. Failing here is a stale screen, never a
      * failed action — the write it follows has already committed.
@@ -152,24 +155,22 @@ export const PassportDetail = ({
             .catch(() => showToast(isEnglish ? 'Failed to copy.' : '复制失败。', 'error'));
     };
 
-    const voidIt = async () => {
+    const deleteIt = async () => {
         if (!window.confirm(isEnglish
-            ? `Void passport ${passportId}? Its sticker stops working for good and it can never be activated. Use this for stock that was destroyed or mispacked.`
-            : `作废通行证 ${passportId}？其贴纸将永久失效且无法再被激活。请仅对已损毁或错误包装的库存使用。`)) return;
+            ? `Delete passport ${passportId}? The passport, its activation key and its history are all removed, and its sticker stops working. This can't be undone. Use it for stock that was destroyed or mispacked.`
+            : `删除通行证 ${passportId}？该通行证及其激活码、历史记录都将被移除，贴纸随之失效。此操作无法撤销。请仅对已损毁或错误包装的库存使用。`)) return;
         setBusy(true);
         try {
-            await callVoidPassport({passportId});
+            await callDeletePassport({passportId});
         } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to void passport.' : '作废通行证失败。'), 'error');
+            showToast(e?.message ?? (isEnglish ? 'Failed to delete passport.' : '删除通行证失败。'), 'error');
             setBusy(false);
             return;
         }
-        // The void has landed. Refreshing what it changed is a separate concern —
-        // a blip here must not report the action itself as failed, or the admin
-        // retries and is told the passport is already void.
-        showToast(isEnglish ? 'Passport voided.' : '通行证已作废。', 'warning');
-        await refreshAfterWrite();
-        setBusy(false);
+        // Nothing left to refetch: the page goes back to the list, which drops the
+        // row rather than re-reading the design.
+        showToast(isEnglish ? 'Passport deleted.' : '通行证已删除。', 'warning');
+        onDeleted(passportId);
     };
 
     const toggleKey = async () => {
@@ -241,7 +242,7 @@ export const PassportDetail = ({
 
     const locked = !!passport.lockedUntil && passport.lockedUntil.getTime() > Date.now();
     const unclaimed = passport.status === 'unclaimed';
-    const keyViewable = !readOnly && passport.status !== 'void';
+    const keyViewable = !readOnly;
 
     return (
         <div className="admin-section">
@@ -361,11 +362,9 @@ export const PassportDetail = ({
                             <dd>
                                 {passport.status === 'claimed'
                                     ? (isEnglish ? 'Spent on activation' : '已在激活时使用')
-                                    : passport.status === 'void'
-                                        ? (isEnglish ? 'Discarded with the void' : '已随作废一并废除')
-                                        : (isEnglish
-                                            ? `Issued ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · reissued ${passport.keyReissueCount}×` : ''}`
-                                            : `签发于 ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · 已重新签发 ${passport.keyReissueCount} 次` : ''}`)}
+                                    : (isEnglish
+                                        ? `Issued ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · reissued ${passport.keyReissueCount}×` : ''}`
+                                        : `签发于 ${fmtDate(passport.keyIssuedAt)}${passport.keyReissueCount > 0 ? ` · 已重新签发 ${passport.keyReissueCount} 次` : ''}`)}
                                 {keyViewable && (keyShown && key ? (
                                     <div className="admin-passport-key-secret">{key}</div>
                                 ) : (
@@ -426,18 +425,18 @@ export const PassportDetail = ({
                     </button>
                     <button
                         className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
-                        onClick={() => void voidIt()}
+                        onClick={() => void deleteIt()}
                         disabled={busy}
                     >
-                        {isEnglish ? 'Void passport' : '作废通行证'}
+                        {isEnglish ? 'Delete passport' : '删除通行证'}
                     </button>
                 </div>
             )}
             {!readOnly && passport.status === 'claimed' && (
                 <p className="admin-helper-text admin-passport-bound-note">
                     {isEnglish
-                        ? 'A claimed passport is permanently bound to its holder: it can’t be unbound, rebound, or voided. To adjust what it granted, edit the holder’s membership in Users Management.'
-                        : '已激活的通行证与持有者永久绑定：无法解绑、转绑或作废。若需调整其授予的会员资格，请在用户管理中修改该用户的会员期限。'}
+                        ? 'A claimed passport is permanently bound to its holder: it can’t be unbound, rebound, or deleted. To adjust what it granted, edit the holder’s membership in Users Management.'
+                        : '已激活的通行证与持有者永久绑定：无法解绑、转绑或删除。若需调整其授予的会员资格，请在用户管理中修改该用户的会员期限。'}
                 </p>
             )}
             {pngNode}
@@ -446,7 +445,6 @@ export const PassportDetail = ({
 };
 
 const actionLabel = (action: PassportClaimEvent['action'], isEnglish: boolean): string => {
-    if (action === 'void') return isEnglish ? 'Void' : '作废';
     if (action === 'key-reissue') return isEnglish ? 'Key' : '激活码';
     if (action === 'key-view') return isEnglish ? 'Viewed' : '查看';
     return isEnglish ? 'Claim' : '激活';

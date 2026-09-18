@@ -4459,10 +4459,6 @@ select.admin-tickets-tag:focus {
     background: #2f9e57;
 }
 
-.admin-passport-status--void .admin-passport-status-dot {
-    background: var(--color-error);
-}
-
 /* Name over email, so a long address never widens the column. */
 .admin-passport-cell-holder {
     max-width: 260px;
@@ -4514,11 +4510,6 @@ select.admin-tickets-tag:focus {
 .admin-passport-badge--claimed {
     background: rgba(78, 203, 113, 0.16);
     color: #2f9e57;
-}
-
-.admin-passport-badge--void {
-    background: rgba(224, 85, 85, 0.14);
-    color: var(--color-error);
 }
 
 .admin-passport-results {
@@ -4646,11 +4637,6 @@ select.admin-tickets-tag:focus {
 .admin-passport-action--claim {
     background: rgba(78, 203, 113, 0.16);
     color: #2f9e57;
-}
-
-.admin-passport-action--void {
-    background: rgba(224, 85, 85, 0.14);
-    color: var(--color-error);
 }
 
 .admin-passport-action--key-reissue {

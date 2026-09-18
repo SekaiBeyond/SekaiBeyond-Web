@@ -3,7 +3,7 @@ import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firesto
 import { createCollectionCache, toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
-export type PassportStatus = 'unclaimed' | 'claimed' | 'void';
+export type PassportStatus = 'unclaimed' | 'claimed';
 
 /**
  * A physical passport. The document id is the public code printed on the
@@ -11,7 +11,8 @@ export type PassportStatus = 'unclaimed' | 'claimed' | 'void';
  *
  * Binding is permanent — `ownerUid` and `claimedAt` are written once, by the
  * claim, and never cleared. There is no unbind and no rebind, which is what lets
- * the scan URL be treated as a stable address for a person.
+ * the scan URL be treated as a stable address for a person. Unclaimed stock can
+ * be deleted outright; a claimed passport can't.
  */
 export interface Passport {
     id: string;
@@ -89,7 +90,7 @@ export type PassportPublicProfile =
 /** An entry in a passport's permanent audit trail. */
 export interface PassportClaimEvent {
     id: string;
-    action: 'claim' | 'void' | 'key-reissue' | 'key-view';
+    action: 'claim' | 'key-reissue' | 'key-view';
     uid: string | null;
     at: Date | null;
     performedBy: string;
@@ -99,12 +100,11 @@ export interface PassportClaimEvent {
 
 const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Passport => {
     const data = docSnap.data();
-    const status = data.status;
     return {
         id: docSnap.id,
         designId: data.designId ?? '',
         year: typeof data.year === 'number' ? data.year : 0,
-        status: (status === 'claimed' || status === 'void') ? status : 'unclaimed',
+        status: data.status === 'claimed' ? 'claimed' : 'unclaimed',
         ownerUid: typeof data.ownerUid === 'string' ? data.ownerUid : null,
         claimedAt: toDate(data.claimedAt),
         termDays: typeof data.termDays === 'number' ? data.termDays : 0,
@@ -151,7 +151,6 @@ export function usePassportDesigns(): {
 
 export const passportStatusLabel = (status: PassportStatus, isEnglish: boolean): string => {
     if (status === 'claimed') return isEnglish ? 'Claimed' : '已激活';
-    if (status === 'void') return isEnglish ? 'Void' : '已作废';
     return isEnglish ? 'Unclaimed' : '未激活';
 };
 
@@ -199,7 +198,8 @@ export async function fetchPassportsByOwner(uid: string): Promise<Passport[]> {
         b.year - a.year || (b.claimedAt?.getTime() ?? 0) - (a.claimedAt?.getTime() ?? 0));
 }
 
-/** The bind/void/key trail for one passport (newest first). Core-staff+. */
+/** The bind/key trail for one passport (newest first). Core-staff+. It is
+ * deleted with its passport, so it only ever covers one that still exists. */
 export async function fetchPassportClaims(id: string): Promise<PassportClaimEvent[]> {
     const snap = await getDocs(collection(getFirebaseDb(), 'passports', id, 'claims'));
     return snap.docs
@@ -208,9 +208,7 @@ export async function fetchPassportClaims(id: string): Promise<PassportClaimEven
             const action = data.action;
             return {
                 id: d.id,
-                action: (action === 'void' || action === 'key-reissue' || action === 'key-view')
-                    ? action
-                    : 'claim' as const,
+                action: (action === 'key-reissue' || action === 'key-view') ? action : 'claim' as const,
                 uid: typeof data.uid === 'string' ? data.uid : null,
                 at: toDate(data.at),
                 performedBy: data.performedBy ?? '',

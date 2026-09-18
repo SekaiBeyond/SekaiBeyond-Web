@@ -505,8 +505,8 @@ export const callClaimPassport = (data: {passportId: string; activationCode: str
 export const callGetPassportPublicProfile = (data: {passportId: string}) =>
     httpsCallable<typeof data, PassportPublicProfile>(getFunctions(), 'getPassportPublicProfile')(data);
 
-export const callVoidPassport = (data: {passportId: string}) =>
-    httpsCallable<typeof data, {passportId: string; status: 'void'}>(getFunctions(), 'voidPassport')(data);
+export const callDeletePassport = (data: {passportId: string}) =>
+    httpsCallable<typeof data, {passportId: string; deleted: boolean}>(getFunctions(), 'deletePassport')(data);
 
 export const callSetPassportPrivacy = (data: {hide: boolean}) =>
     httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);

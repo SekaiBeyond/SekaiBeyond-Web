@@ -28,14 +28,13 @@ function isUnmatchedCode(err: unknown): boolean {
     return details?.code === "invalid" || details?.code === "inactive";
 }
 
-/** The sticker `code` names, if it is a live passport. Void ones read as unknown,
- * exactly as they do at /p/:id. */
+/** The sticker `code` names, if there is such a passport. A deleted one reads as
+ * unknown, exactly as it does at /p/:id. */
 async function resolvePassportId(code: string): Promise<string | null> {
     const passportId = normalizePassportId(code);
     if (!passportId) return null;
     const snap = await db.collection("passports").doc(passportId).get();
-    if (!snap.exists || snap.data()?.status === "void") return null;
-    return passportId;
+    return snap.exists ? passportId : null;
 }
 
 /**

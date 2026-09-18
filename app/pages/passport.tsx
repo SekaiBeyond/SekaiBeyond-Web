@@ -137,7 +137,7 @@ const PassportShell = ({children, wide = false}: {children: ReactNode; wide?: bo
     );
 };
 
-/** Unknown, malformed, void, and orphaned all land here — deliberately. */
+/** Unknown, malformed, deleted, and orphaned all land here — deliberately. */
 const InvalidPassportCard = ({isError}: {isError: boolean}) => {
     const {isEnglish} = useLanguage();
     return (
@@ -335,10 +335,6 @@ function activationError(err: unknown, isEnglish: boolean): string {
             return isEnglish
                 ? 'This passport has already been activated. Reload the page to see whose it is.'
                 : '此通行证已被激活。请刷新页面查看其归属。';
-        case 'void':
-            return isEnglish
-                ? 'This passport has been voided and can’t be activated.'
-                : '此通行证已作废，无法激活。';
         case 'no-key':
             return isEnglish
                 ? 'This passport has no activation key on file. Please get in touch so we can reissue it.'
