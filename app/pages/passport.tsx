@@ -67,15 +67,7 @@ export const PassportPage = () => {
     if (!wellFormed) return <InvalidPassportCard isError={false}/>;
     if (failed) return <InvalidPassportCard isError={true}/>;
 
-    if (!result) {
-        return (
-            <PassportShell>
-                <div className="passport-loading">
-                    <div className="spinner"/>
-                </div>
-            </PassportShell>
-        );
-    }
+    if (!result) return <PassportLoading/>;
 
     if (result.status === 'invalid') return <InvalidPassportCard isError={false}/>;
 
@@ -136,6 +128,20 @@ const PassportShell = ({children, wide = false}: {children: ReactNode; wide?: bo
         </>
     );
 };
+
+/**
+ * The page's one spinner, in the one place: while the sticker is being resolved,
+ * and again while the cover art loads before the passport opens. The frame is
+ * the same either way, so crossing from the first wait to the second changes
+ * nothing on screen.
+ */
+const PassportLoading = () => (
+    <PassportShell>
+        <div className="passport-loading">
+            <div className="spinner"/>
+        </div>
+    </PassportShell>
+);
 
 /** Unknown, malformed, deleted, and orphaned all land here — deliberately. */
 const InvalidPassportCard = ({isError}: {isError: boolean}) => {
@@ -434,6 +440,54 @@ function activationError(err: unknown, isEnglish: boolean): string {
     }
 }
 
+/** How long a slow image may hold the passport shut before it opens anyway. */
+const COVER_LOAD_TIMEOUT_MS = 8000;
+
+/**
+ * Both faces of the cover are painted at once by the opening, so the passport
+ * has to be held shut until they can be. This loads them off-screen and reports
+ * when every one is decoded and ready for the copies in the DOM to paint from.
+ *
+ * A face that fails to load counts as settled — it falls back to its own
+ * gradient, and a broken url shouldn't hold the passport shut forever. Neither
+ * should a request that never answers, which is what the cap above is for.
+ */
+const useImagesReady = (urls: (string | undefined)[]): boolean => {
+    // One string rather than the array, which is rebuilt every render: the
+    // effect should re-run when the images change, not when React re-renders.
+    const key = [...new Set(urls.filter((url): url is string => !!url))].join('\n');
+    const [loadedKey, setLoadedKey] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!key) return;
+        const srcs = key.split('\n');
+        let left = srcs.length;
+        let stale = false;
+        const settle = () => {
+            if (!stale && --left === 0) setLoadedKey(key);
+        };
+        for (const src of srcs) {
+            const img = new Image();
+            img.src = src;
+            // decode() waits for the bitmap and not just the bytes, which is
+            // what the copy in the DOM needs to paint in the flip's first
+            // frame. It rejects on an image that can't be decoded, and that
+            // settles it the same way a load error does.
+            img.decode().then(settle, settle);
+        }
+        const cap = window.setTimeout(() => {
+            if (!stale) setLoadedKey(key);
+        }, COVER_LOAD_TIMEOUT_MS);
+        return () => {
+            stale = true;
+            window.clearTimeout(cap);
+        };
+    }, [key]);
+
+    // A design with no art of its own has nothing to wait for.
+    return !key || loadedKey === key;
+};
+
 interface ClaimedPassportProps {
     passportId: string;
     data: Extract<PassportPublicProfile, {status: 'claimed'}>;
@@ -448,12 +502,17 @@ interface ClaimedPassportProps {
  */
 const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
     const {isEnglish} = useLanguage();
-    const {designs} = usePassportDesigns();
+    const {designs, loading: designsLoading} = usePassportDesigns();
     const {toasts, showToast} = useToasts();
 
     const {owner} = data;
     const design = designs.find(d => d.id === data.designId);
     const name = passportName(design, isEnglish);
+    // What the two faces of the cover will ask for — see CoverFace.
+    const coverReady = useImagesReady([
+        design?.coverImageUrl,
+        design?.outerCoverImageUrl || design?.coverImageUrl,
+    ]);
 
     useEffect(() => {
         if (!owner.displayName) return;
@@ -462,6 +521,13 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
             document.title = 'Passport | Sekai Beyond';
         };
     }, [owner.displayName]);
+
+    // The passport opens once, on load, and the opening is the whole of the
+    // first second on this page — art that arrives part-way through it appears
+    // out of a cover already in mid-air, or after it has landed. So the spread
+    // isn't mounted, and the animation doesn't start, until the designs have
+    // been read and their art is loaded.
+    if (designsLoading || !coverReady) return <PassportLoading/>;
 
     const fmtDate = (iso: string | null): string => {
         if (!iso) return '';

@@ -313,6 +313,18 @@
     --passport-ink: #e8457f;
     --passport-rule: rgba(255, 107, 157, 0.28);
     --passport-height: clamp(520px, calc(100svh - 132px), 1120px);
+    /* The turn, as one timing shared by everything that happens during it: the
+       cover's own swing and the light falling on either face of it. They have
+       to agree to the frame — the faces hand over at the moment the card is
+       edge-on — so they are given the same duration, easing and delay rather
+       than three that happen to match.
+
+       The curve is the weight of the thing. A cover doesn't move at its
+       quickest the instant it is touched: it tips up slowly against its own
+       hinge, goes over, falls through the middle of the turn, and comes down
+       about six degrees past flat before settling back — which is why the
+       curve leaves 1 on its way to it. */
+    --passport-open: 1.25s cubic-bezier(0.45, 0.05, 0.3, 1.25) 0.15s;
 
     position: relative;
     display: grid;
@@ -326,9 +338,7 @@
     perspective: 3200px;
 }
 
-/* The block of pages the cover lifts off, and the spread's own shadow. They
-   belong to the open passport, so they are a layer of their own that arrives
-   with the opening rather than sitting under the closed cover. */
+/* The block of pages the cover lifts off, and the spread's own shadow. */
 .passport-book::before {
     content: "";
     position: absolute;
@@ -378,17 +388,33 @@
     transform: rotateY(180deg);
 }
 
-/* The spine's shadow, falling on both pages from the fold between them. */
+/* Two things over the face's art: the spine's shadow, falling on both pages
+   from the fold between them, and the light on the leaf, which the opening
+   animates. They share one pseudo-element out of necessity.
+
+   The light wants to be a layer of its own, and as one it has to be raised
+   with z-index, since a pseudo-element that isn't paints under its element's
+   own children — here, the art. Raise it and Firefox stops culling it with the
+   face: `backface-visibility` hides the face that is turned away but paints
+   its promoted layer anyway, so whichever face you are looking at carries both
+   layers' shading at once. That reads as a cover that starts half dark and
+   lightens — the opposite of the turn.
+
+   So the light goes where it needs no raising. `::after` is the last child of
+   the face and paints over the art already, and it can hold both: the shadow
+   as a background image, the light as the background colour under it, which
+   is what the keyframes below move. Nothing is promoted, and both browsers
+   cull the hidden face whole. */
 .passport-book-cover-face::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, transparent calc(100% - 22px), rgba(74, 81, 96, 0.18));
+    background-image: linear-gradient(90deg, transparent calc(100% - 22px), rgba(74, 81, 96, 0.18));
     pointer-events: none;
 }
 
 .passport-book-cover-face--back::after {
-    background: linear-gradient(270deg, transparent calc(100% - 22px), rgba(74, 81, 96, 0.18));
+    background-image: linear-gradient(270deg, transparent calc(100% - 22px), rgba(74, 81, 96, 0.18));
 }
 
 /* The art is contained so no design is cropped; a blurred copy of it fills
@@ -446,15 +472,21 @@
 }
 
 /* --- Opening the passport --------------------------------------------------
-   The passport arrives shut and opens once, on load. Only the cover is on
-   screen to begin with, lying over the data page; it then swings a half turn
-   about the spine and comes to rest on the left, the way a front cover does.
-   Its back face leads, its front face lands, and `backface-visibility` hands
-   over between the two as the card passes edge-on.
+   The passport arrives shut and opens once, on load: the cover swings a half
+   turn about the spine and comes to rest on the left, the way a front cover
+   does. Its back face leads, its front face lands, and `backface-visibility`
+   hands over between the two as the card passes edge-on.
 
-   What the cover uncovers arrives behind it: the spread's frame, then the data
-   page under the cover's shadow, then the page's contents rising in, and last
-   of all the stamp (further down), once there is a page to stamp. */
+   The page it opens on is already there: the data page is painted from the
+   first frame, so the cover lifts off a page rather than off one still
+   arriving, and what the turn reveals is that page in the cover's shadow,
+   which sweeps away as the cover clears. The left half is not, because there
+   is nothing there yet — a shut passport lying on a page is the whole of what
+   the spread is until the cover comes down and makes the other half of it.
+
+   What arrives with the turn, then: the block of pages under the falling
+   cover, the page's contents rising in beside it, and last of all the stamp
+   (further down), once there is a page to stamp. */
 
 /* The cover's shadow lying across the data page while the cover is still over
    it, sweeping off as the cover clears. */
@@ -470,20 +502,39 @@
 
 @media (prefers-reduced-motion: no-preference) {
     .passport-book-cover {
-        animation: passport-cover-flip 1.25s cubic-bezier(0.34, 0.72, 0.28, 1) 0.15s both;
+        animation: passport-cover-flip var(--passport-open) both;
     }
 
-    /* The frame comes in a third of the way through the turn, and the page
-       just past halfway — by which point the cover is off it. Both are timed
-       off the flip, so they follow it if its duration changes. */
+    /* The block of pages, and with it the spread's shadow. Neither has any
+       business on screen before the book does: until the cover comes down,
+       the left half is not a page of anything — it is what the passport is
+       lying on. So the block arrives in the last of the turn, by which point
+       the cover has swept all but a sliver of that half and is about to
+       finish it. The fade happens behind the cover, which is the only reason
+       it can be a fade at all. */
     .passport-book::before {
-        animation: passport-frame-in 0.55s ease-out 0.5s both;
+        animation: passport-block-in 0.25s ease-out 0.82s both;
     }
 
-    .passport-book-page {
-        animation: passport-frame-in 0.45s ease-out 0.6s both;
+    /* Out of the dark and into the light: the inside face, which is the one on
+       show from the moment the card passes edge-on, at the value the outside
+       face had reached, lightening the rest of the way down.
+
+       The modifier below is one class like this one, not two, so it does not
+       outrank it — it has to follow it to win. */
+    .passport-book-cover-face::after {
+        animation: passport-leaf-lighten var(--passport-open) both;
     }
 
+    /* And into it: flat and lit, up onto its edge and dark. The outside face
+       is the one on show until then. */
+    .passport-book-cover-face--back::after {
+        animation-name: passport-leaf-darken;
+    }
+
+    /* The shadow holds until the turn is just past halfway — by which point
+       the cover is off the page — and then sweeps away. It is timed off the
+       flip, so it follows if the flip's duration changes. */
     .passport-book-page::after {
         animation: passport-page-shade 0.55s ease-out 0.6s both;
     }
@@ -512,29 +563,47 @@
     }
 }
 
-/* A half turn, passing through edge-on toward the viewer rather than away —
-   which is the way a cover comes up off the page it is lying on.
+/* A half turn about the spine, passing through edge-on toward the viewer
+   rather than away — which is the way a cover comes up off the page it is
+   lying on.
 
-   Flipped about the spine the shut passport covers the spread's right half,
-   over a frame that isn't on screen yet, so it starts nudged back by the half
-   of its own width that centres it and slides into true as it opens. That is
-   exactly half because the two halves are the same width. The frame stays put
-   throughout, so the cover still lands exactly. */
+   Rotation is the whole of it. The cover starts shut over the right-hand page,
+   exactly where the two halves being the same width puts it, and the hinge
+   holds it there: the spine is the one part of an opening book that doesn't
+   move, so nothing here may travel across the paper either. */
 @keyframes passport-cover-flip {
     from {
-        transform: translateX(-50%) rotateY(180deg);
+        transform: rotateY(180deg);
     }
     to {
-        transform: translateX(0) rotateY(0);
+        transform: rotateY(0);
     }
 }
 
-@keyframes passport-frame-in {
+@keyframes passport-block-in {
     from {
         opacity: 0;
     }
     to {
         opacity: 1;
+    }
+}
+
+@keyframes passport-leaf-darken {
+    from {
+        background-color: rgba(42, 27, 36, 0);
+    }
+    to {
+        background-color: rgba(42, 27, 36, 0.5);
+    }
+}
+
+@keyframes passport-leaf-lighten {
+    from {
+        background-color: rgba(42, 27, 36, 0.5);
+    }
+    to {
+        background-color: rgba(42, 27, 36, 0);
     }
 }
 
@@ -948,11 +1017,11 @@ a.passport-shelf-card:hover {
     }
 
     .passport-book-cover-face::after {
-        background: linear-gradient(180deg, transparent calc(100% - 18px), rgba(74, 81, 96, 0.16));
+        background-image: linear-gradient(180deg, transparent calc(100% - 18px), rgba(74, 81, 96, 0.16));
     }
 
     .passport-book-cover-face--back::after {
-        background: linear-gradient(0deg, transparent calc(100% - 18px), rgba(74, 81, 96, 0.16));
+        background-image: linear-gradient(0deg, transparent calc(100% - 18px), rgba(74, 81, 96, 0.16));
     }
 
     /* Held to the cover's own height, so the shut passport reads as two equal
@@ -1056,9 +1125,9 @@ a.passport-shelf-card:hover {
 
 @keyframes passport-cover-flip-stacked {
     from {
-        transform: translateY(-30%) rotateX(-180deg);
+        transform: rotateX(-180deg);
     }
     to {
-        transform: translateY(0) rotateX(0);
+        transform: rotateX(0);
     }
 }
