@@ -197,12 +197,12 @@ export function AttendeesSection({
                                     </span>
                                 )}
                                 <span className={
-                                    a.emailScheduled
-                                        ? 'admin-tickets-tag admin-tickets-tag-queued'
-                                        : a.emailSent
-                                            ? 'admin-tickets-tag admin-tickets-tag-sent'
-                                            : 'admin-tickets-tag admin-tickets-tag-unsent'
-                                }>
+                                          a.emailScheduled
+                                              ? 'admin-tickets-tag admin-tickets-tag-queued'
+                                              : a.emailSent
+                                                  ? 'admin-tickets-tag admin-tickets-tag-sent'
+                                                  : 'admin-tickets-tag admin-tickets-tag-unsent'
+                                      }>
                                     {a.emailScheduled
                                         ? (isEnglish ? 'Queued' : '待发送')
                                         : a.emailSent

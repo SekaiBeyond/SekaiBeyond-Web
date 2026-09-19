@@ -14,6 +14,15 @@ import type { ShowToast } from '../utils';
 
 const TERM_PRESETS = [30, 90, 180, 365, 730];
 
+/* The shape every frame on the site shows a cover in, from the 72px thumbnail
+   beside an activation to the open passport on a desktop screen. The phone lays
+   the art on its side rather than asking for a second shape of its own, so this
+   is the only one a design is ever drawn at. */
+const COVER_ASPECT = 3 / 4;
+/* Written at twice the widest the cover is ever painted — 840px on the largest
+   screen the spread is capped at — so it still holds up on a 2x display. */
+const COVER_WIDTH = 1680;
+
 /** Mirrors shownNames in functions/src/functions/passports.ts, which enforces it. */
 const shownNames = (design: {name: string; nameCn: string}): string[] => {
     const name = design.name.trim();
@@ -295,7 +304,8 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
                                 previewUrls.current.push(url);
                             }}
                             onCleanupPreview={url => URL.revokeObjectURL(url)}
-                            convertToWebp
+                            cropAspect={COVER_ASPECT}
+                            cropWidth={COVER_WIDTH}
                             showToast={showToast}
                         />
                         <p className="admin-passport-design-hint">
@@ -321,7 +331,8 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
                                 previewUrls.current.push(url);
                             }}
                             onCleanupPreview={url => URL.revokeObjectURL(url)}
-                            convertToWebp
+                            cropAspect={COVER_ASPECT}
+                            cropWidth={COVER_WIDTH}
                             showToast={showToast}
                         />
                         {(outerPreview || outerUrl) && (

@@ -12,6 +12,9 @@ interface ImageUploadFieldProps {
     onFileChange: (file: File, previewUrl: string) => void;
     onCleanupPreview?: (url: string) => void;
     cropAspect?: number;
+    /** Width the crop is written at; its height follows from `cropAspect`. The
+     *  default suits a thumbnail, not art the site gives a whole screen to. */
+    cropWidth?: number;
     convertToWebp?: boolean;
     showToast: ShowToast;
     // 'avatar' swaps the labelled file input for a round preview beside a styled button,
@@ -32,6 +35,7 @@ export const ImageUploadField = ({
                                      onFileChange,
                                      onCleanupPreview,
                                      cropAspect,
+                                     cropWidth,
                                      convertToWebp,
                                      showToast,
                                      variant = 'field',
@@ -92,6 +96,7 @@ export const ImageUploadField = ({
         <ImageCropModal
             imageSource={pendingFile}
             aspect={cropAspect}
+            outputWidth={cropWidth}
             onConfirm={handleCropConfirm}
             onCancel={() => setPendingFile(null)}
             showToast={showToast}
@@ -100,6 +105,17 @@ export const ImageUploadField = ({
 
     if (variant === 'avatar' || variant === 'cover') {
         const cover = variant === 'cover';
+        // A cover is cropped to the shape the site shows it in, so the crop is
+        // the whole story; without one it is only trimmed to fit at display
+        // time, which is a different promise and worth saying differently.
+        const hint = {
+            en: `Any image up to ${MAX_IMAGE_SIZE_MB} MB.` + (cropAspect
+                ? cover ? " You'll crop it to 3:4 before it's saved." : " You'll crop it before it's saved."
+                : cover ? ' Shown at 3:4, trimmed to fill.' : ''),
+            zh: `任意图片，最大 ${MAX_IMAGE_SIZE_MB} MB。` + (cropAspect
+                ? cover ? '保存前需裁剪为 3:4。' : '保存前需先裁剪。'
+                : cover ? '按 3:4 显示，超出部分会被裁切。' : ''),
+        };
         return (
             <>
                 <div className={`admin-avatar-field${cover ? ' admin-avatar-field--cover' : ''}`}>
@@ -136,9 +152,7 @@ export const ImageUploadField = ({
                                         : (isEnglish ? 'Choose photo' : '选择照片')}
                         </label>
                         <p className="admin-helper-text admin-avatar-helper">
-                            {isEnglish
-                                ? `Any image up to ${MAX_IMAGE_SIZE_MB} MB.${cropAspect ? " You'll crop it before it's saved." : ''}${cover ? ' Shown at 3:4, trimmed to fill.' : ''}`
-                                : `任意图片，最大 ${MAX_IMAGE_SIZE_MB} MB。${cropAspect ? '保存前需先裁剪。' : ''}${cover ? '按 3:4 显示，超出部分会被裁切。' : ''}`}
+                            {isEnglish ? hint.en : hint.zh}
                         </p>
                     </div>
                 </div>

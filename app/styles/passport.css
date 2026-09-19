@@ -904,7 +904,11 @@ a.passport-shelf-card:hover {
 
 /* The spread folds shut into a stack: cover above, spine across the top of the
    data page. The cover goes landscape so the holder's name isn't pushed below
-   the fold of a phone screen; the art is contained, so none of it is cropped. */
+   the fold of a phone screen, and the art is laid on its side to meet it: a
+   3:4 design standing upright in a 4:3 frame reaches a little over half way
+   across it, leaving the rest to the blurred wash. Turned, it lands on the
+   frame exactly — filling it without giving up the contain that keeps every
+   design whole. What it costs is that the cover reads sideways here. */
 @media (max-width: 700px) {
     .passport-book {
         grid-template-columns: minmax(0, 1fr);
@@ -931,6 +935,18 @@ a.passport-shelf-card:hover {
         padding-top: 75%;
     }
 
+    /* Laid along the frame, and given the footprint to match in the frame's own
+       terms: 75% of its width is its height, 133.33% of its height is its width,
+       so the turned art comes to rest on it. Both faces take the same turn —
+       the back face's flip is undone by the cover's own at the point it is the
+       one facing us, so the art reads alike on either side. */
+    .passport-book-cover-art {
+        inset: 50% auto auto 50%;
+        width: 75%;
+        height: 133.3333%;
+        transform: translate(-50%, -50%) rotate(90deg);
+    }
+
     .passport-book-cover-face::after {
         background: linear-gradient(180deg, transparent calc(100% - 18px), rgba(74, 81, 96, 0.16));
     }
@@ -939,10 +955,22 @@ a.passport-shelf-card:hover {
         background: linear-gradient(0deg, transparent calc(100% - 18px), rgba(74, 81, 96, 0.16));
     }
 
+    /* Held to the cover's own height, so the shut passport reads as two equal
+       halves rather than a lid on a long page. The page is the same width as
+       the cover, so asking it for the cover's shape asks for the cover's
+       height exactly, at every screen width — where matching the two by
+       sizing the contents could only ever hold at one, the cover growing with
+       the width while type has floors it won't scale below. The contents are
+       pared back to fit inside it; should they ever not, this is a grid item
+       and its automatic minimum size wins, so the page grows rather than
+       spilling. */
     .passport-book-page {
+        aspect-ratio: 4 / 3;
         border-radius: 0 0 20px 20px;
-        padding: 20px 18px 18px;
-        gap: 18px;
+        padding: 12px;
+        /* A floor, not the spacing: space-between shares out what the cover's
+           height leaves over, and only the narrowest screens run short. */
+        gap: 6px;
         background: linear-gradient(180deg, rgba(74, 81, 96, 0.08), transparent 20px),
         repeating-radial-gradient(circle at 105% -5%, transparent 0 11px, rgba(255, 107, 157, 0.07) 11px 12px),
         var(--passport-paper);
@@ -950,6 +978,69 @@ a.passport-shelf-card:hover {
 
     .passport-book-page::after {
         background: linear-gradient(180deg, rgba(74, 81, 96, 0.5), rgba(74, 81, 96, 0) 62%);
+    }
+
+    .passport-holder {
+        gap: clamp(10px, 3.5cqi, 20px);
+    }
+
+    .passport-holder-photo {
+        width: clamp(48px, 16cqi, 96px);
+        border-width: 2px;
+        border-radius: clamp(8px, 2cqi, 12px);
+    }
+
+    .passport-holder-photo--initials {
+        font-size: clamp(22px, 7cqi, 44px);
+    }
+
+    .passport-holder-name {
+        font-size: clamp(20px, 7cqi, 40px);
+    }
+
+    .passport-holder-id .profile-group-tag {
+        font-size: clamp(11px, 2.6cqi, 14px);
+    }
+
+    .passport-fields {
+        gap: 8px clamp(12px, 4cqi, 24px);
+    }
+
+    .passport-field {
+        padding-bottom: 3px;
+    }
+
+    .passport-field dt {
+        font-size: clamp(10px, 2.6cqi, 13px);
+    }
+
+    .passport-field dd {
+        font-size: clamp(13px, 3.6cqi, 18px);
+    }
+
+    .passport-profile-link {
+        padding: 0.45em 1em;
+        font-size: clamp(12px, 3cqi, 15px);
+    }
+
+    /* The ring comes down with everything else, and its word with it — the two
+       are a fixed proportion, and letting the type stay behind at its own floor
+       is what pushes the word out through the ring. The ink is drawn finer for
+       the same reason: at this size the doubled border is most of the radius. */
+    .passport-stamp {
+        width: clamp(56px, 18cqi, 96px);
+        border-width: 2px;
+        box-shadow: inset 0 0 0 2px var(--passport-paper),
+        inset 0 0 0 3px var(--passport-ink);
+        font-size: clamp(13px, 4.2cqi, 22px);
+    }
+
+    .passport-stamp--role {
+        font-size: clamp(11px, 3.5cqi, 18px);
+    }
+
+    .passport-book-title {
+        font-size: clamp(18px, 5cqi, 30px);
     }
 }
 
