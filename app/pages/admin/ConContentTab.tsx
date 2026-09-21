@@ -149,12 +149,18 @@ interface SectionShellProps<K extends ConContentSection> {
      */
     busy?: boolean;
     busyLabel?: Localized;
+    /**
+     * Blocks Save while the draft is in a state the server would refuse, and says
+     * why. Catching it here costs a round trip less, and lets the message name the
+     * rows an admin has to go and fix rather than the id the server sees.
+     */
+    blocked?: Localized;
     readOnly?: boolean;
     children: ReactNode;
 }
 
 const SectionShell = <K extends ConContentSection, >(
-    {section, helper, editor, busy, busyLabel, readOnly, children}: SectionShellProps<K>,
+    {section, helper, editor, busy, busyLabel, blocked, readOnly, children}: SectionShellProps<K>,
 ) => {
     const {isEnglish} = useLanguage();
     const label = SECTION_LABELS[section];
@@ -173,12 +179,18 @@ const SectionShell = <K extends ConContentSection, >(
 
             <div className="admin-mt-12">{children}</div>
 
+            {blocked && !readOnly && (
+                <p className="admin-title-hint admin-warning-hint">
+                    {isEnglish ? blocked.en : blocked.zh}
+                </p>
+            )}
+
             {!readOnly && (
                 <div className="admin-btn-row admin-mt-12">
                     <button
                         className="admin-toggle-btn admin-toggle-save"
                         onClick={editor.save}
-                        disabled={editor.saving || busy || !editor.dirty}
+                        disabled={editor.saving || busy || !!blocked || !editor.dirty}
                     >
                         {editor.saving
                             ? (isEnglish ? 'Saving...' : '保存中...')
@@ -547,21 +559,44 @@ const RoomsSection = ({content, loading, showToast, readOnly}: SectionProps) => 
     const update = (index: number, next: ConContent['rooms'][number]) =>
         setDraft(prev => replaceAt(prev, index, next));
 
-    /** How many saved schedule items point at a room — deleting one is not free. */
+    /** How many schedule items point at a room — deleting one is not free. */
     const usageOf = (id: string) =>
         content.schedule.reduce(
             (total, block) => total + block.items.filter(item => item.room === id).length,
             0,
         );
 
+    /**
+     * Rooms the schedule still uses that this edit would take away. The server
+     * refuses the same thing, but only against a schedule it has stored: a con
+     * still running on the built-in schedule reads as an empty one there, so
+     * removing a room it uses saves cleanly and leaves the Schedule section unable
+     * to save at all. `content.schedule` is the merged value, so this check sees
+     * the built-in schedule the server cannot.
+     *
+     * Only rooms this edit removes, never one already missing when the form loaded.
+     * A strand that is nobody's fault here has to be repaired in Schedule, and
+     * holding Rooms hostage to it would block a room rename that is unrelated to it
+     * and that the server would have accepted.
+     */
+    const stranded = [...new Set(
+        content.schedule.flatMap(block => block.items.map(item => item.room)).filter(Boolean),
+    )].filter(id => !draft.some(room => room.id === id) && content.rooms.some(room => room.id === id));
+
     return (
         <SectionShell
             section="rooms"
             helper={{
-                en: 'The rooms and stages your programming runs in. Each schedule item picks one, and its colour is the chip shown on the timeline. Removing a room that the schedule still uses is refused — reassign those items first.',
-                zh: '活动所使用的房间与舞台。每个日程条目需选择其一，颜色即时间轴上显示的标签配色。若日程仍在使用某房间，删除将被拒绝——请先重新指派这些条目。',
+                en: 'The rooms and stages your programming runs in. Each schedule item picks one, and its colour is the chip shown on the schedule. Renaming a room is safe — items track the room itself, not what it is called. Removing one the schedule still uses is refused; reassign those items first.',
+                zh: '活动所使用的房间与舞台。每个日程条目需选择其一，颜色即日程表上显示的标签配色。重命名房间是安全的——条目关联的是房间本身，而非名称。若日程仍在使用某房间，删除将被拒绝，请先重新指派这些条目。',
             }}
             editor={editor}
+            blocked={stranded.length === 0 ? undefined : {
+                en: `The schedule still uses ${stranded.length === 1 ? 'a room' : 'rooms'} this would remove: `
+                    + `${stranded.join(', ')}. Reassign those items in Schedule first, or put the ${
+                        stranded.length === 1 ? 'room' : 'rooms'} back.`,
+                zh: `日程仍在使用将被删除的房间：${stranded.join('、')}。请先在「活动日程」中重新指派这些条目，或恢复这些房间。`,
+            }}
             readOnly={readOnly}
         >
             <div className="admin-con-list">
@@ -598,21 +633,6 @@ const RoomsSection = ({content, loading, showToast, readOnly}: SectionProps) => 
                                     onChange={next => update(index, {...room, name: next})}
                                     readOnly={readOnly}
                                 />
-                                <label>
-                                    <span>{isEnglish ? 'Id' : '标识 (id)'}</span>
-                                    <input
-                                        className="admin-input"
-                                        value={room.id}
-                                        onChange={e => !readOnly && update(index, {...room, id: e.target.value})}
-                                        readOnly={readOnly}
-                                        placeholder="main-stage"
-                                    />
-                                    <span className="admin-helper-text admin-mt-4">
-                                        {isEnglish
-                                            ? 'Lowercase, numbers, hyphens. Schedule items refer to this — renaming it breaks them.'
-                                            : '仅限小写字母、数字与连字符。日程条目通过它引用房间，重命名会导致引用失效。'}
-                                    </span>
-                                </label>
                                 <label>
                                     <span>{isEnglish ? 'Chip colour' : '标签配色'}</span>
                                     <select
@@ -692,6 +712,25 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
         }))
         .filter(({items}) => !filtering || items.length > 0);
 
+    /**
+     * Items pointing at a room the Rooms section no longer lists. The server refuses
+     * the whole save for these, naming the room id — which says nothing about where
+     * to go and look, and arrives after an admin has already edited something else.
+     * The room filter above cannot reach them either: a missing room gets no chip.
+     * So they are named here, by title, before Save is available.
+     */
+    const orphaned = draft.flatMap(block =>
+        block.items.filter(item => !content.rooms.some(room => room.id === item.room)));
+    const orphanedNames = (lang: 'en' | 'zh') => {
+        const titles = orphaned.map(item =>
+            item.title[lang] || item.title[lang === 'en' ? 'zh' : 'en']
+            || (lang === 'en' ? 'an untitled item' : '无标题条目'));
+        const shown = titles.slice(0, 3).map(title => `“${title}”`).join(lang === 'en' ? ', ' : '、');
+        const rest = titles.length - 3;
+        if (rest <= 0) return shown;
+        return lang === 'en' ? `${shown} and ${rest} more` : `${shown} 等 ${titles.length} 项`;
+    };
+
     return (
         <SectionShell
             section="schedule"
@@ -700,6 +739,12 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                 zh: '时段按此顺序在页面中排列，每个时段内的条目也按下方顺序展示。时间为当地时间；尚未确定时间的条目显示为「待定」。房间选项来自上方的板块。',
             }}
             editor={editor}
+            blocked={orphaned.length === 0 ? undefined : {
+                en: `${orphanedNames('en')} ${orphaned.length === 1 ? 'is in a room' : 'are in rooms'} the Rooms `
+                    + 'section no longer lists. Pick a room for each — they are marked “(missing)” below — or add '
+                    + 'the room back above.',
+                zh: `${orphanedNames('zh')}所在的房间已不在「场地房间」中。请为其重新选择房间（下方标记为「（不存在）」），或在上方恢复该房间。`,
+            }}
             readOnly={readOnly}
         >
             {filterableRooms.length > 1 && (
