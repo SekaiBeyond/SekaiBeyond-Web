@@ -731,77 +731,154 @@
     color: var(--color-text-body);
 }
 
+/*
+ * Schedule. Six rooms run at once, so the readable shape is the run-of-show grid
+ * this is transcribed from: one column per room, one clock down the side, and each
+ * item drawn as tall as it actually runs. A single chronological list answered
+ * "what is on at 2pm" only by making you read every room's rows in turn.
+ *
+ * It is one CSS grid rather than a table: rows are five-minute slots, and an item
+ * spans from its start slot to its end slot. The row tracks are `minmax(slot, auto)`,
+ * so an item carrying more copy than its duration has room for stretches its rows
+ * instead of clipping — and because every column shares those rows, the clock stays
+ * true for the rest of them.
+ */
 .sbc-schedule {
-    display: grid;
-    gap: 34px;
-}
-
-.sbc-schedule-block {
-    padding: 34px 38px;
+    padding: 30px 26px;
     background: #fff;
     border-radius: var(--sbc-radius-panel);
     box-shadow: var(--sbc-shadow-panel);
 }
 
-.sbc-schedule-block-label {
+/* The columns keep a readable width and scroll sideways rather than squeezing six
+   rooms onto a phone. The room filter above is the way out of the scroll: one room
+   picked is one column, which fits anywhere. */
+.sbc-grid-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+}
+
+.sbc-grid-scroll:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 4px;
+}
+
+.sbc-grid {
+    --sbc-grid-gutter: 76px;
+    --sbc-grid-column: 170px;
+    --sbc-grid-slot: 7px;
+
+    display: grid;
+    /* Track counts come from the data, so the template itself is set inline;
+       these three widths stay here so the breakpoints can still reach them. */
+    min-width: min-content;
+}
+
+.sbc-grid-head {
+    padding: 0 8px 10px;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--sbc-accent-ink);
+    border-bottom: 2px solid var(--sbc-accent-ink);
+}
+
+/* The clock stays put while the rooms scroll under it, so you never lose track of
+   which hour a column is showing. */
+.sbc-grid-corner,
+.sbc-grid-time {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #fff;
+}
+
+.sbc-grid-time {
+    padding-right: 14px;
+    text-align: right;
     font-family: var(--font-display);
-    font-size: 1.7rem;
-    color: var(--color-accent);
-    margin-bottom: 22px;
-}
-
-.sbc-timeline {
-    list-style: none;
-    display: grid;
-    gap: 4px;
-}
-
-/* The time column is wide enough for a locale-formatted "12:00 PM" in the display
-   font — English times carry a meridiem, so sizing it to a bare "12:00" would clip
-   every row on the page. */
-.sbc-timeline-item {
-    display: grid;
-    grid-template-columns: 112px 1fr;
-    gap: 24px;
-    padding: 20px 0;
-    border-top: 1px solid rgba(255, 182, 193, 0.3);
-}
-
-.sbc-timeline-item:first-child {
-    border-top: none;
-    padding-top: 4px;
-}
-
-.sbc-timeline-time {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    padding-top: 2px;
+    font-size: 0.95rem;
+    color: var(--color-text-light);
     font-variant-numeric: tabular-nums;
 }
 
-.sbc-timeline-start {
-    font-family: var(--font-display);
-    font-size: 1.3rem;
-    color: var(--color-primary);
-    line-height: 1.1;
+/* Lifted half a line so the label reads as sitting on its hour rule rather than
+   hanging below it. */
+.sbc-grid-time > span {
+    display: block;
+    margin-top: -0.6em;
+    white-space: nowrap;
 }
 
-.sbc-timeline-end {
-    font-size: 0.78rem;
+/* Hour rules stop at the gutter: the clock reads cleanly without them running
+   through it. */
+.sbc-grid-hour {
+    grid-column: 2 / -1;
+    border-top: 1px dashed rgba(255, 182, 193, 0.5);
+}
+
+.sbc-grid-event {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 2px 3px;
+    padding: 9px 13px 11px;
+    border-radius: 14px;
+    border-left: 3px solid var(--sbc-accent-ink);
+    background: var(--sbc-accent-tint);
+    overflow: hidden;
+}
+
+.sbc-grid-event-time {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    color: var(--sbc-accent-ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.sbc-grid-event-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--sbc-heading);
+}
+
+.sbc-grid-event-location {
+    font-size: 0.8rem;
     font-weight: 600;
-    color: var(--color-text-light);
+    color: var(--color-text-secondary);
 }
 
-.sbc-timeline-body {
-    min-width: 0;
+.sbc-grid-event-detail {
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.55;
+    color: var(--color-text-body);
+}
+
+/* Read aloud, never drawn. The column header is what says which room an item is
+   in, and a header three screens up carries nothing to a screen reader. */
+.sbc-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 /* Room accents. Which room wears which one is admin-editable data; the palette
    itself is fixed here, so a room can only ever pick a colour that is legible
-   against the timeline card. The timeline chips and the room filter above them both
-   read these two variables, so each colour is written down once. Keep the class list
-   in sync with ROOM_ACCENTS in con/content.ts. */
+   against the schedule card. The grid columns, the room chips and the room filter
+   above them all read these two variables, so each colour is written down once. Keep
+   the class list in sync with ROOM_ACCENTS in con/content.ts. */
 .sbc-accent--pink {
     --sbc-accent-tint: rgba(255, 107, 157, 0.16);
     --sbc-accent-ink: #d94a7c;
@@ -845,9 +922,9 @@
     color: var(--sbc-accent-ink);
 }
 
-/* Room filter. Six tracks run at once, so a flat chronological list answers "what
-   is on at 2pm" well and "what is on in 334" badly — this narrows the timeline to
-   one room without giving up the single-column layout that works on a phone.
+/* Room filter. Six columns need a sideways scroll on anything narrower than a
+   laptop, so picking one room narrows the grid to a single column — and to that
+   room's own hours — which fits a phone without a second layout to maintain.
    `aria-pressed` carries the selected state, so the styling hook and the state a
    screen reader announces cannot drift apart. */
 .sbc-schedule-filter {
@@ -884,35 +961,41 @@
     outline-offset: 2px;
 }
 
-/* Announced but unscheduled: keeps the item in the timeline instead of hiding it. */
-.sbc-timeline-tba {
+/* Announced but unscheduled. There is no hour to hang these on, so they sit under
+   the grid rather than being dropped from the page. */
+.sbc-schedule-tba {
+    margin-top: 30px;
+    padding-top: 26px;
+    border-top: 1px solid rgba(255, 182, 193, 0.45);
+}
+
+.sbc-schedule-tba + .sbc-schedule-tba {
+    margin-top: 22px;
+}
+
+.sbc-schedule-tba-label {
     font-family: var(--font-display);
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--color-text-light);
-    letter-spacing: 1px;
+    font-size: 1.3rem;
+    color: var(--color-accent);
+    margin-bottom: 16px;
 }
 
-.sbc-timeline-title {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--sbc-heading);
-    line-height: 1.35;
+.sbc-tba-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 14px;
 }
 
-.sbc-timeline-location {
-    margin-top: 5px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--color-text-secondary);
+.sbc-tba-card {
+    padding: 16px 18px;
+    border-radius: var(--sbc-radius-card);
+    border-left: 3px solid var(--sbc-accent-ink);
+    background: var(--sbc-accent-tint);
 }
 
-.sbc-timeline-detail {
-    margin-top: 8px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    line-height: 1.65;
-    color: var(--color-text-body);
+.sbc-tba-card > .sbc-grid-event-location,
+.sbc-tba-card > .sbc-grid-event-detail {
+    margin-top: 7px;
 }
 
 .sbc-guest-grid {
@@ -1729,24 +1812,25 @@
         padding: 20px;
     }
 
-    .sbc-schedule-block {
-        padding: 26px 22px;
+    .sbc-schedule {
+        padding: 22px 16px;
     }
 
-    .sbc-timeline-item {
+    /* Tighter columns and a shorter hour, so a phone showing one or two rooms shows
+       them whole and the sideways scroll is only ever a short one. */
+    .sbc-grid {
+        --sbc-grid-gutter: 72px;
+        --sbc-grid-column: 148px;
+        --sbc-grid-slot: 6px;
+    }
+
+    .sbc-grid-time {
+        padding-right: 10px;
+        font-size: 0.8rem;
+    }
+
+    .sbc-tba-grid {
         grid-template-columns: 1fr;
-        gap: 8px;
-        padding: 18px 0;
-    }
-
-    .sbc-timeline-time {
-        flex-direction: row;
-        align-items: baseline;
-        gap: 8px;
-    }
-
-    .sbc-timeline-end::before {
-        content: '– ';
     }
 
     .sbc-guest-grid {
