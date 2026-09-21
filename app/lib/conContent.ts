@@ -143,12 +143,7 @@ const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({
     detail: item.detail ? loc(item.detail) : undefined,
 });
 
-/**
- * An item with neither title reads as a leftover rather than as programming, and
- * would render as an empty card on a page nobody can edit it from.
- */
-const readSchedule = (raw: unknown): ScheduleItem[] =>
-    list(raw, SCHEDULE, readScheduleItem).filter(item => item.title.en || item.title.zh);
+const readSchedule = (raw: unknown): ScheduleItem[] => list(raw, SCHEDULE, readScheduleItem);
 
 const readGuests = (raw: unknown): Guest[] =>
     list(raw, GUESTS, guest => ({

@@ -58,9 +58,6 @@ const packLanes = (items: Placed[]) => {
     return Math.max(laneEnds.length, 1);
 };
 
-/** A room id in the schedule that no room in the room list claims. */
-const STRAY = {en: 'Elsewhere', zh: '其他场地'};
-
 export const Schedule = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
@@ -102,10 +99,11 @@ export const Schedule = () => {
             const end = stop !== null && stop > start ? stop : start + OPEN_ENDED_MINUTES;
             const placed: Placed = {item, start, end, lane: 0};
 
-            const roomId = item.room ?? '';
-            const existing = byRoom.get(roomId);
+            // Grouped under the id as stored. One that matches no room has no column
+            // to be drawn in, so it falls out of the grid here.
+            const existing = byRoom.get(item.room ?? '');
             if (existing) existing.push(placed);
-            else byRoom.set(roomId, [placed]);
+            else byRoom.set(item.room ?? '', [placed]);
         }
 
         const tracks: Track[] = [];
@@ -121,14 +119,6 @@ export const Schedule = () => {
             const items = byRoom.get(room.id);
             if (items) addTrack(room.name, room.accent, items);
         }
-
-        // An item whose room id matches no room still happened, so it gets a column
-        // of its own rather than being dropped off the page.
-        const known = new Set(content.rooms.map(room => room.id));
-        const stray = [...byRoom]
-            .filter(([id]) => !known.has(id))
-            .flatMap(([, items]) => items);
-        if (stray.length > 0) addTrack(STRAY, 'slate', stray);
 
         if (tracks.length === 0) return null;
 

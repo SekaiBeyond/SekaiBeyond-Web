@@ -243,8 +243,9 @@ export interface ScheduleItem {
     /**
      * A `Room.id`, and absent on a slot with no time. A con books the room and the
      * hour in one go, so an item waiting on the hour is waiting on the room too —
-     * and a room guessed at now is one the page would show as settled. An id with
-     * no matching room renders in a column of its own.
+     * and a room guessed at now is one the page would show as settled. The grid has
+     * a column per room, so an id matching none of them falls out of it; the server
+     * refuses to store one either way.
      */
     room?: string
     title: Localized
