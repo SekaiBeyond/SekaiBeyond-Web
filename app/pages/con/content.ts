@@ -248,127 +248,102 @@ export interface ScheduleItem {
     detail?: Localized
 }
 
-export interface ScheduleBlock {
-    id: string
-    label: Localized
-    items: ScheduleItem[]
-}
-
-export const SCHEDULE: ScheduleBlock[] = [
+/**
+ * One flat run of the day, kept in start order — an item with no time sorts last,
+ * since there is nowhere on the clock to put it. The page reads the times, not this
+ * order, so it exists for the admin list rather than for the grid.
+ */
+export const SCHEDULE: ScheduleItem[] = [
     {
-        id: 'morning',
-        label: {en: 'Morning', zh: '上午'},
-        items: [
-            {
-                start: '11:00',
-                end: '18:00',
-                room: 'main-hall',
-                title: {en: 'Marketplace', zh: '市集'},
-                detail: {
-                    en: 'Doors open and the tables go live. The marketplace runs straight through to 18:00 — come early for the best pick.',
-                    zh: '开场，摊位同时开放。市集一直营业至 18:00，建议早到，好货先得。',
-                },
-            },
-        ],
+        start: '11:00',
+        end: '18:00',
+        room: 'main-hall',
+        title: {en: 'Marketplace', zh: '市集'},
+        detail: {
+            en: 'Doors open and the tables go live. The marketplace runs straight through to 18:00 — come early for the best pick.',
+            zh: '开场，摊位同时开放。市集一直营业至 18:00，建议早到，好货先得。',
+        },
     },
     {
-        id: 'afternoon',
-        label: {en: 'Afternoon', zh: '下午'},
-        items: [
-            {
-                start: '12:00',
-                end: '13:30',
-                room: 'main-stage',
-                title: {en: 'Live Band Set', zh: '乐队演出'},
-            },
-            {
-                start: '12:00',
-                end: '13:30',
-                room: 'hub-334',
-                title: {en: 'Sakurakaa', zh: 'Sakurakaa'},
-            },
-            {
-                start: '12:00',
-                end: '13:30',
-                room: 'hub-337',
-                title: {en: 'To be announced', zh: '待公布'},
-            },
-            {
-                start: '12:30',
-                end: '16:30',
-                room: 'hub-214',
-                title: {en: 'Maid Café', zh: '女仆咖啡'},
-                detail: {en: 'Hosted by ACGNUW.', zh: '由 ACGNUW 呈现。'},
-            },
-            {
-                start: '13:30',
-                end: '15:00',
-                room: 'hub-334',
-                title: {en: 'I Can Fly! Idolfest', zh: 'I Can Fly! 偶像祭'},
-            },
-            {
-                start: '13:30',
-                end: '15:00',
-                room: 'hub-337',
-                title: {en: 'Beisong · Call & Mix', zh: '北宋 Call & Mix'},
-            },
-            {
-                start: '14:00',
-                end: '15:00',
-                room: 'main-stage',
-                title: {en: 'Cosplay Contest', zh: 'Cosplay 大赛'},
-            },
-            {
-                start: '15:00',
-                end: '17:30',
-                room: 'hub-334',
-                title: {en: 'Hancheng', zh: '汉承'},
-            },
-            {
-                start: '15:30',
-                end: '18:00',
-                room: 'main-stage',
-                title: {en: 'Idol Fest', zh: '偶像祭'},
-            },
-        ],
+        start: '12:00',
+        end: '13:30',
+        room: 'main-stage',
+        title: {en: 'Live Band Set', zh: '乐队演出'},
     },
     {
-        id: 'evening',
-        label: {en: 'Evening', zh: '晚间'},
-        items: [
-            {
-                start: '17:00',
-                end: '19:30',
-                room: 'hub-214',
-                title: {en: 'Kawalloween', zh: 'Kawalloween'},
-            },
-            {
-                start: '17:30',
-                end: '19:00',
-                room: 'hub-334',
-                title: {en: 'To be announced', zh: '待公布'},
-            },
-            {
-                start: '18:30',
-                end: '19:45',
-                room: 'main-stage',
-                title: {en: 'DJ Set', zh: 'DJ 现场'},
-            },
-        ],
+        start: '12:00',
+        end: '13:30',
+        room: 'hub-334',
+        title: {en: 'Sakurakaa', zh: 'Sakurakaa'},
     },
     {
-        id: 'tba',
-        label: {en: 'Time to be confirmed', zh: '时间待定'},
-        items: [
-            {
-                room: 'panel-tba',
-                title: {en: 'TWIG VTuber Concert', zh: 'TWIG VTuber 演唱会'},
-                detail: {
-                    en: 'A one-hour set. Room and start time are still being confirmed.',
-                    zh: '演出时长约一小时，场地与开始时间仍在确认中。',
-                },
-            },
-        ],
+        start: '12:00',
+        end: '13:30',
+        room: 'hub-337',
+        title: {en: 'To be announced', zh: '待公布'},
+    },
+    {
+        start: '12:30',
+        end: '16:30',
+        room: 'hub-214',
+        title: {en: 'Maid Café', zh: '女仆咖啡'},
+        detail: {en: 'Hosted by ACGNUW.', zh: '由 ACGNUW 呈现。'},
+    },
+    {
+        start: '13:30',
+        end: '15:00',
+        room: 'hub-334',
+        title: {en: 'I Can Fly! Idolfest', zh: 'I Can Fly! 偶像祭'},
+    },
+    {
+        start: '13:30',
+        end: '15:00',
+        room: 'hub-337',
+        title: {en: 'Beisong · Call & Mix', zh: '北宋 Call & Mix'},
+    },
+    {
+        start: '14:00',
+        end: '15:00',
+        room: 'main-stage',
+        title: {en: 'Cosplay Contest', zh: 'Cosplay 大赛'},
+    },
+    {
+        start: '15:00',
+        end: '17:30',
+        room: 'hub-334',
+        title: {en: 'Hancheng', zh: '汉承'},
+    },
+    {
+        start: '15:30',
+        end: '18:00',
+        room: 'main-stage',
+        title: {en: 'Idol Fest', zh: '偶像祭'},
+    },
+    {
+        start: '17:00',
+        end: '19:30',
+        room: 'hub-214',
+        title: {en: 'Kawalloween', zh: 'Kawalloween'},
+    },
+    {
+        start: '17:30',
+        end: '19:00',
+        room: 'hub-334',
+        title: {en: 'To be announced', zh: '待公布'},
+    },
+    {
+        start: '18:30',
+        end: '19:45',
+        room: 'main-stage',
+        title: {en: 'DJ Set', zh: 'DJ 现场'},
+    },
+    {
+        room: 'panel-tba',
+        title: {en: 'TWIG VTuber Concert', zh: 'TWIG VTuber 演唱会'},
+        detail: {
+            en: 'A one-hour set. Room and start time are still being confirmed.',
+            zh: '演出时长约一小时，场地与开始时间仍在确认中。',
+        },
     },
 ];
 

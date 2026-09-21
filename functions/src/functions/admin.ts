@@ -305,8 +305,7 @@ type ConSection = typeof CON_SECTIONS[number];
 // enough that a runaway client cannot grow the public document without bound.
 const CON_LIMITS = {
     rooms: 24,
-    scheduleBlocks: 12,
-    scheduleItems: 60,
+    scheduleItems: 120,
     guests: 60,
     vendors: 120,
     tickets: 8,
@@ -427,7 +426,7 @@ function buildConEvent(raw: unknown) {
 }
 
 /**
- * Ids for rows the admin never sees or types (schedule blocks, ticket tiers).
+ * Ids for rows the admin never sees or types (ticket tiers).
  * The fallback is index-derived, which collides on its own: deleting `tier-2` from
  * [tier-1, tier-2, tier-3] and adding a row hands the new one index 2, i.e. the
  * `tier-3` that already exists. Renaming rather than rejecting is deliberate — the
@@ -473,50 +472,49 @@ function buildConRooms(raw: unknown) {
 }
 
 function buildConSchedule(raw: unknown) {
-    const seenBlocks = new Set<string>();
-    return validateConArray(raw, "schedule", CON_LIMITS.scheduleBlocks).map((block, i) => ({
-        id: uniqueConId(block.id, `block-${i + 1}`, seenBlocks, "block id"),
-        label: validateLocalized(block.label, "block label", 120, true),
-        items: validateConArray(block.items, "schedule items", CON_LIMITS.scheduleItems).map(item => {
-            const room = sanitizeDisplayText(validateStr(item.room, "item room", 60, true));
+    return validateConArray(raw, "schedule", CON_LIMITS.scheduleItems).map(item => {
+        const room = sanitizeDisplayText(validateStr(item.room, "item room", 60, true));
 
-            // A slot can be announced before it is scheduled. Both times absent
-            // means TBA; exactly one is a half-filled form, not an intent.
-            const hasStart = item.start !== undefined && item.start !== null && item.start !== "";
-            const hasEnd = item.end !== undefined && item.end !== null && item.end !== "";
-            if (hasStart !== hasEnd) {
-                throw new HttpsError(
-                    "invalid-argument",
-                    "An item needs both a start and an end time, or neither (TBA).",
-                );
-            }
-            const times = hasStart
-                ? {start: validateConTime(item.start, "item start"), end: validateConTime(item.end, "item end")}
-                : {};
-            // HH:MM sorts chronologically, so this is a plain string compare. It also
-            // means an item that runs past midnight cannot be expressed — acceptable
-            // for a single-day con, and the alternative is silently accepting the far
-            // more common "17:30–15:30" typo.
-            if (times.start && times.end && times.end <= times.start) {
-                throw new HttpsError(
-                    "invalid-argument",
-                    `A schedule item ends at ${times.end}, which is not after its ${times.start} start.`,
-                );
-            }
+        // A slot can be announced before it is scheduled. Both times absent
+        // means TBA; exactly one is a half-filled form, not an intent.
+        const hasStart = item.start !== undefined && item.start !== null && item.start !== "";
+        const hasEnd = item.end !== undefined && item.end !== null && item.end !== "";
+        if (hasStart !== hasEnd) {
+            throw new HttpsError(
+                "invalid-argument",
+                "An item needs both a start and an end time, or neither (TBA).",
+            );
+        }
+        const times = hasStart
+            ? {start: validateConTime(item.start, "item start"), end: validateConTime(item.end, "item end")}
+            : {};
+        // HH:MM sorts chronologically, so this is a plain string compare. It also
+        // means an item that runs past midnight cannot be expressed — acceptable
+        // for a single-day con, and the alternative is silently accepting the far
+        // more common "17:30–15:30" typo.
+        if (times.start && times.end && times.end <= times.start) {
+            throw new HttpsError(
+                "invalid-argument",
+                `A schedule item ends at ${times.end}, which is not after its ${times.start} start.`,
+            );
+        }
 
-            const detail = validateLocalized(item.detail, "item detail", 1000);
-            const location = validateLocalized(item.location, "item location", 200);
-            return {
-                ...times,
-                room,
-                title: validateLocalized(item.title, "item title", 200, true),
-                // Stored only when written, so the page's `item.detail &&` check
-                // keeps meaning "there is a detail line" rather than "the key exists".
-                ...(location.en || location.zh ? {location} : {}),
-                ...(detail.en || detail.zh ? {detail} : {}),
-            };
-        }),
-    }));
+        const detail = validateLocalized(item.detail, "item detail", 1000);
+        const location = validateLocalized(item.location, "item location", 200);
+        return {
+            ...times,
+            room,
+            title: validateLocalized(item.title, "item title", 200, true),
+            // Stored only when written, so the page's `item.detail &&` check
+            // keeps meaning "there is a detail line" rather than "the key exists".
+            ...(location.en || location.zh ? {location} : {}),
+            ...(detail.en || detail.zh ? {detail} : {}),
+        };
+    })
+        // Stored in start order, so the editor has no reorder buttons to keep in
+        // step. An item with no time yet has nowhere on the clock to go, so it
+        // sorts last rather than to the top on an empty string.
+        .sort((a, b) => (a.start ?? "99:99").localeCompare(b.start ?? "99:99"));
 }
 
 function buildConGuests(raw: unknown) {
@@ -714,11 +712,10 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             // Rooms never saved means the page is still on the code defaults, which
             // the server cannot see — nothing to check against yet.
             if (rooms !== undefined) {
-                const schedule = (updateData.schedule ?? stored.schedule ?? []) as {items?: {room?: string}[]}[];
+                const schedule = (updateData.schedule ?? stored.schedule ?? []) as {room?: string}[];
                 const ids = new Set((rooms as {id?: string}[]).map(r => r?.id));
                 const missing = [...new Set(
-                    schedule.flatMap(block => (block?.items ?? []).map(item => item?.room ?? ""))
-                        .filter(room => room && !ids.has(room)),
+                    schedule.map(item => item?.room ?? "").filter(room => room && !ids.has(room)),
                 )];
                 if (missing.length > 0) {
                     throw new HttpsError(

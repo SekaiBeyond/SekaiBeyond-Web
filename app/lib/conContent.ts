@@ -20,7 +20,6 @@ import {
     type RoomAccent,
     ROOMS,
     SCHEDULE,
-    type ScheduleBlock,
     type ScheduleItem,
     TICKET_FEE,
     type TicketFee,
@@ -42,7 +41,7 @@ export interface ConContent {
     settings: ConSettings;
     event: ConEvent;
     rooms: Room[];
-    schedule: ScheduleBlock[];
+    schedule: ScheduleItem[];
     guests: Guest[];
     vendors: {list: Vendor[]; cta: VendorCta};
     tickets: TicketTier[];
@@ -144,12 +143,12 @@ const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({
     detail: item.detail ? loc(item.detail) : undefined,
 });
 
-const readSchedule = (raw: unknown): ScheduleBlock[] =>
-    list(raw, SCHEDULE, block => ({
-        id: str(block.id),
-        label: loc(block.label),
-        items: list(block.items, [], readScheduleItem),
-    }));
+/**
+ * An item with neither title reads as a leftover rather than as programming, and
+ * would render as an empty card on a page nobody can edit it from.
+ */
+const readSchedule = (raw: unknown): ScheduleItem[] =>
+    list(raw, SCHEDULE, readScheduleItem).filter(item => item.title.en || item.title.zh);
 
 const readGuests = (raw: unknown): Guest[] =>
     list(raw, GUESTS, guest => ({

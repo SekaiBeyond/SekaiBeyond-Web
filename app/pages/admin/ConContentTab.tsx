@@ -309,43 +309,46 @@ const AmountField = (
 };
 
 interface RowActionsProps {
-    index: number;
-    count: number;
-    onMove: (delta: number) => void;
     onRemove: () => void;
     readOnly?: boolean;
     /**
-     * Cleared while the schedule is filtered to one room. "Up" would then mean
-     * swapping with a neighbour the filter is hiding, which moves the row somewhere
-     * the admin cannot see and reorders the day behind their back.
+     * Reordering, for a section that keeps an order of its own. A section put in
+     * order as it saves — the schedule, by start time — passes none of these and
+     * gets the delete on its own, rather than arrows the next save would overrule.
      */
-    canMove?: boolean;
+    index?: number;
+    count?: number;
+    onMove?: (delta: number) => void;
 }
 
-const RowActions = ({index, count, onMove, onRemove, readOnly, canMove = true}: RowActionsProps) => {
+const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly}: RowActionsProps) => {
     const {isEnglish} = useLanguage();
     if (readOnly) return null;
 
     return (
         <div className="admin-con-actions">
-            <button
-                type="button"
-                className="admin-con-icon-btn"
-                onClick={() => onMove(-1)}
-                disabled={!canMove || index === 0}
-                aria-label={isEnglish ? 'Move up' : '上移'}
-            >
-                ↑
-            </button>
-            <button
-                type="button"
-                className="admin-con-icon-btn"
-                onClick={() => onMove(1)}
-                disabled={!canMove || index === count - 1}
-                aria-label={isEnglish ? 'Move down' : '下移'}
-            >
-                ↓
-            </button>
+            {onMove && (
+                <>
+                    <button
+                        type="button"
+                        className="admin-con-icon-btn"
+                        onClick={() => onMove(-1)}
+                        disabled={index === 0}
+                        aria-label={isEnglish ? 'Move up' : '上移'}
+                    >
+                        ↑
+                    </button>
+                    <button
+                        type="button"
+                        className="admin-con-icon-btn"
+                        onClick={() => onMove(1)}
+                        disabled={index === count - 1}
+                        aria-label={isEnglish ? 'Move down' : '下移'}
+                    >
+                        ↓
+                    </button>
+                </>
+            )}
             <button
                 type="button"
                 className="admin-con-icon-btn admin-con-icon-btn--danger"
@@ -561,10 +564,7 @@ const RoomsSection = ({content, loading, showToast, readOnly}: SectionProps) => 
 
     /** How many schedule items point at a room — deleting one is not free. */
     const usageOf = (id: string) =>
-        content.schedule.reduce(
-            (total, block) => total + block.items.filter(item => item.room === id).length,
-            0,
-        );
+        content.schedule.filter(item => item.room === id).length;
 
     /**
      * Rooms the schedule still uses that this edit would take away. The server
@@ -579,9 +579,8 @@ const RoomsSection = ({content, loading, showToast, readOnly}: SectionProps) => 
      * holding Rooms hostage to it would block a room rename that is unrelated to it
      * and that the server would have accepted.
      */
-    const stranded = [...new Set(
-        content.schedule.flatMap(block => block.items.map(item => item.room)).filter(Boolean),
-    )].filter(id => !draft.some(room => room.id === id) && content.rooms.some(room => room.id === id));
+    const stranded = [...new Set(content.schedule.map(item => item.room).filter(Boolean))]
+        .filter(id => !draft.some(room => room.id === id) && content.rooms.some(room => room.id === id));
 
     return (
         <SectionShell
@@ -676,7 +675,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
     const {draft, setDraft} = editor;
     const [roomFilter, setRoomFilter] = useState<string | null>(null);
 
-    const updateBlock = (index: number, next: ConContent['schedule'][number]) =>
+    const update = (index: number, next: ConContent['schedule'][number]) =>
         setDraft(prev => replaceAt(prev, index, next));
 
     /**
@@ -684,7 +683,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
      * puts them. A room nothing is booked in gets no chip: its only possible result
      * is an empty section, which reads like the schedule was lost.
      */
-    const booked = new Set(draft.flatMap(block => block.items.map(item => item.room)));
+    const booked = new Set(draft.map(item => item.room));
     const filterableRooms = content.rooms.filter(room => booked.has(room.id));
 
     // Derived, not stored: deleting the last item in a room, or reassigning it,
@@ -694,23 +693,14 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
     const filtering = activeRoom !== null;
 
     /**
-     * Blocks and items paired with their real index in the draft. Every edit, move,
-     * and delete below addresses that index — filtering changes what is on screen,
-     * never what a row points at, so an edit made under a filter cannot land on the
-     * neighbour that happened to take its place in the visible list.
-     *
-     * A block with nothing in the chosen room drops out whole, rather than leaving a
-     * run of headings with no rows under them.
+     * Items paired with their real index in the draft. Every edit and delete below
+     * addresses that index — filtering changes what is on screen, never what a row
+     * points at, so an edit made under a filter cannot land on the neighbour that
+     * happened to take its place in the visible list.
      */
-    const visibleBlocks = draft
-        .map((block, index) => ({
-            block,
-            index,
-            items: block.items
-                .map((item, itemIndex) => ({item, itemIndex}))
-                .filter(({item}) => !filtering || item.room === activeRoom),
-        }))
-        .filter(({items}) => !filtering || items.length > 0);
+    const visible = draft
+        .map((item, index) => ({item, index}))
+        .filter(({item}) => !filtering || item.room === activeRoom);
 
     /**
      * Items pointing at a room the Rooms section no longer lists. The server refuses
@@ -719,8 +709,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
      * The room filter above cannot reach them either: a missing room gets no chip.
      * So they are named here, by title, before Save is available.
      */
-    const orphaned = draft.flatMap(block =>
-        block.items.filter(item => !content.rooms.some(room => room.id === item.room)));
+    const orphaned = draft.filter(item => !content.rooms.some(room => room.id === item.room));
     const orphanedNames = (lang: 'en' | 'zh') => {
         const titles = orphaned.map(item =>
             item.title[lang] || item.title[lang === 'en' ? 'zh' : 'en']
@@ -731,12 +720,18 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
         return lang === 'en' ? `${shown} and ${rest} more` : `${shown} 等 ${titles.length} 项`;
     };
 
+    /** "12:00 – 13:30", or the TBA marker for an item with no time yet. */
+    const timeLabel = (item: ConContent['schedule'][number]) => {
+        if (item.start === undefined) return isEnglish ? 'TBA' : '待定';
+        return `${item.start || '--:--'} – ${item.end || '--:--'}`;
+    };
+
     return (
         <SectionShell
             section="schedule"
             helper={{
-                en: 'Blocks run down the page in this order, and each block’s items run in the order below. Times are the local clock; an item with no time yet shows as TBA. Rooms come from the section above.',
-                zh: '时段按此顺序在页面中排列，每个时段内的条目也按下方顺序展示。时间为当地时间；尚未确定时间的条目显示为「待定」。房间选项来自上方的板块。',
+                en: 'Everything running on the day, in one list. Times are the local clock, and the list is put in start order when you save — an item with no time yet shows as TBA and sorts to the end. Rooms come from the section above.',
+                zh: '当天的全部安排，集中在一个列表中。时间为当地时间；保存时会按开始时间排序——尚未确定时间的条目显示为「待定」，并排在最后。房间选项来自上方的板块。',
             }}
             editor={editor}
             blocked={orphaned.length === 0 ? undefined : {
@@ -753,7 +748,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                     <button
                         type="button"
                         className="admin-con-filter-chip"
-                        aria-pressed={!filtering}
+                        aria-pressed={activeRoom === null}
                         onClick={() => setRoomFilter(null)}
                     >
                         {isEnglish ? 'All rooms' : '全部房间'}
@@ -770,229 +765,137 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                             {isEnglish ? room.name.en : room.name.zh}
                         </button>
                     ))}
-
-                    {filtering && (
-                        <span className="admin-con-filter-note">
-                            {isEnglish
-                                ? 'Showing one room. Editing and deleting work as usual; clear the filter to reorder rows or add a block.'
-                                : '当前仅显示一个房间。编辑与删除照常可用；如需调整顺序或添加时段，请先清除筛选。'}
-                        </span>
-                    )}
                 </div>
             )}
 
             <div className="admin-con-list">
-                {draft.length === 0 && <EmptyRow label={{en: 'No schedule blocks yet.', zh: '暂无时段。'}}/>}
+                {draft.length === 0 && <EmptyRow label={{en: 'Nothing scheduled yet.', zh: '暂无日程。'}}/>}
 
-                {visibleBlocks.map(({block, index: blockIndex, items}) => (
-                    <div key={blockIndex} className="admin-con-card">
+                {visible.map(({item, index}) => (
+                    <div key={index} className="admin-con-card">
                         <div className="admin-con-card-head">
                             <span className="admin-con-card-title">
-                                {isEnglish ? `Block ${blockIndex + 1}` : `时段 ${blockIndex + 1}`}
+                                {item.title.en || item.title.zh
+                                    || (isEnglish ? `Item ${index + 1}` : `条目 ${index + 1}`)}
+                                <span className="admin-con-dirty">{timeLabel(item)}</span>
                             </span>
                             <RowActions
-                                index={blockIndex}
-                                count={draft.length}
-                                onMove={delta => setDraft(prev => moveAt(prev, blockIndex, delta))}
-                                onRemove={() => setDraft(prev => removeAt(prev, blockIndex))}
+                                onRemove={() => setDraft(prev => removeAt(prev, index))}
                                 readOnly={readOnly}
-                                canMove={!filtering}
                             />
                         </div>
 
                         <div className="admin-form-grid">
+                            <label className="admin-checkbox-label admin-form-grid-full">
+                                <input
+                                    type="checkbox"
+                                    checked={item.start === undefined}
+                                    onChange={e => !readOnly && update(index, {
+                                        ...item,
+                                        start: e.target.checked ? undefined : '',
+                                        end: e.target.checked ? undefined : '',
+                                    })}
+                                    disabled={readOnly}
+                                />
+                                <span>{isEnglish ? 'Time to be announced' : '时间待定'}</span>
+                            </label>
+
+                            {item.start !== undefined && (
+                                <>
+                                    <label>
+                                        <span>{isEnglish ? 'Start' : '开始'}</span>
+                                        <input
+                                            className="admin-input"
+                                            type="time"
+                                            value={item.start}
+                                            onChange={e => !readOnly
+                                                && update(index, {...item, start: e.target.value})}
+                                            readOnly={readOnly}
+                                        />
+                                    </label>
+                                    <label>
+                                        <span>{isEnglish ? 'End' : '结束'}</span>
+                                        <input
+                                            className="admin-input"
+                                            type="time"
+                                            value={item.end ?? ''}
+                                            onChange={e => !readOnly
+                                                && update(index, {...item, end: e.target.value})}
+                                            readOnly={readOnly}
+                                        />
+                                    </label>
+                                </>
+                            )}
+
+                            <label className={item.start === undefined ? 'admin-form-grid-full' : undefined}>
+                                <span>{isEnglish ? 'Room' : '房间'}</span>
+                                <select
+                                    className="admin-input"
+                                    value={item.room}
+                                    onChange={e => !readOnly && update(index, {...item, room: e.target.value})}
+                                    disabled={readOnly}
+                                >
+                                    {/* A saved item can point at a room that has since been
+                                        removed; keep it selectable so the mismatch is visible
+                                        rather than silently reassigned by the dropdown. */}
+                                    {!content.rooms.some(room => room.id === item.room) && (
+                                        <option value={item.room}>
+                                            {item.room
+                                                ? (isEnglish ? `${item.room} (missing)` : `${item.room}（不存在）`)
+                                                : (isEnglish ? 'Pick a room' : '请选择房间')}
+                                        </option>
+                                    )}
+                                    {content.rooms.map(room => (
+                                        <option key={room.id} value={room.id}>
+                                            {isEnglish ? room.name.en : room.name.zh}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            {item.start !== undefined && <div/>}
+
                             <LocalizedField
-                                label={{en: 'Block label', zh: '时段名称'}}
-                                value={block.label}
-                                onChange={next => updateBlock(blockIndex, {...block, label: next})}
+                                label={{en: 'Title', zh: '标题'}}
+                                value={item.title}
+                                onChange={next => update(index, {...item, title: next})}
                                 readOnly={readOnly}
                             />
-                        </div>
-
-                        <div className="admin-con-list">
-                            {items.map(({item, itemIndex}) => (
-                                <div key={itemIndex} className="admin-con-item">
-                                    <div className="admin-con-card-head">
-                                        <span className="admin-con-card-title">
-                                            {isEnglish ? `Item ${itemIndex + 1}` : `条目 ${itemIndex + 1}`}
-                                        </span>
-                                        <RowActions
-                                            index={itemIndex}
-                                            count={block.items.length}
-                                            onMove={delta => updateBlock(blockIndex, {
-                                                ...block,
-                                                items: moveAt(block.items, itemIndex, delta),
-                                            })}
-                                            onRemove={() => updateBlock(blockIndex, {
-                                                ...block,
-                                                items: removeAt(block.items, itemIndex),
-                                            })}
-                                            readOnly={readOnly}
-                                            canMove={!filtering}
-                                        />
-                                    </div>
-
-                                    <div className="admin-form-grid">
-                                        <label className="admin-checkbox-label admin-form-grid-full">
-                                            <input
-                                                type="checkbox"
-                                                checked={item.start === undefined}
-                                                onChange={e => !readOnly && updateBlock(blockIndex, {
-                                                    ...block,
-                                                    items: replaceAt(block.items, itemIndex, {
-                                                        ...item,
-                                                        start: e.target.checked ? undefined : '',
-                                                        end: e.target.checked ? undefined : '',
-                                                    }),
-                                                })}
-                                                disabled={readOnly}
-                                            />
-                                            <span>
-                                                {isEnglish
-                                                    ? 'Time to be announced'
-                                                    : '时间待定'}
-                                            </span>
-                                        </label>
-
-                                        {item.start !== undefined && (
-                                            <>
-                                                <label>
-                                                    <span>{isEnglish ? 'Start' : '开始'}</span>
-                                                    <input
-                                                        className="admin-input"
-                                                        type="time"
-                                                        value={item.start}
-                                                        onChange={e => !readOnly && updateBlock(blockIndex, {
-                                                            ...block,
-                                                            items: replaceAt(block.items, itemIndex, {
-                                                                ...item,
-                                                                start: e.target.value,
-                                                            }),
-                                                        })}
-                                                        readOnly={readOnly}
-                                                    />
-                                                </label>
-                                                <label>
-                                                    <span>{isEnglish ? 'End' : '结束'}</span>
-                                                    <input
-                                                        className="admin-input"
-                                                        type="time"
-                                                        value={item.end ?? ''}
-                                                        onChange={e => !readOnly && updateBlock(blockIndex, {
-                                                            ...block,
-                                                            items: replaceAt(block.items, itemIndex, {
-                                                                ...item,
-                                                                end: e.target.value,
-                                                            }),
-                                                        })}
-                                                        readOnly={readOnly}
-                                                    />
-                                                </label>
-                                            </>
-                                        )}
-
-                                        <label
-                                            className={item.start === undefined ? 'admin-form-grid-full' : undefined}>
-                                            <span>{isEnglish ? 'Room' : '房间'}</span>
-                                            <select
-                                                className="admin-input"
-                                                value={item.room}
-                                                onChange={e => !readOnly && updateBlock(blockIndex, {
-                                                    ...block,
-                                                    items: replaceAt(block.items, itemIndex, {
-                                                        ...item,
-                                                        room: e.target.value,
-                                                    }),
-                                                })}
-                                                disabled={readOnly}
-                                            >
-                                                {/* A saved item can point at a room that has since been
-                                                    renamed; keep it selectable so the mismatch is visible
-                                                    rather than silently reassigned by the dropdown. */}
-                                                {!content.rooms.some(room => room.id === item.room) && (
-                                                    <option value={item.room}>
-                                                        {item.room
-                                                            ? (isEnglish ? `${item.room} (missing)` : `${item.room}（不存在）`)
-                                                            : (isEnglish ? 'Pick a room' : '请选择房间')}
-                                                    </option>
-                                                )}
-                                                {content.rooms.map(room => (
-                                                    <option key={room.id} value={room.id}>
-                                                        {isEnglish ? room.name.en : room.name.zh}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </label>
-                                        {item.start !== undefined && <div/>}
-
-                                        <LocalizedField
-                                            label={{en: 'Title', zh: '标题'}}
-                                            value={item.title}
-                                            onChange={next => updateBlock(blockIndex, {
-                                                ...block,
-                                                items: replaceAt(block.items, itemIndex, {...item, title: next}),
-                                            })}
-                                            readOnly={readOnly}
-                                        />
-                                        <LocalizedField
-                                            label={{en: 'Location note (optional)', zh: '地点补充（可选）'}}
-                                            value={item.location ?? BLANK}
-                                            onChange={next => updateBlock(blockIndex, {
-                                                ...block,
-                                                items: replaceAt(block.items, itemIndex, {...item, location: next}),
-                                            })}
-                                            readOnly={readOnly}
-                                        />
-                                        <LocalizedField
-                                            label={{en: 'Detail (optional)', zh: '详情（可选）'}}
-                                            value={item.detail ?? BLANK}
-                                            onChange={next => updateBlock(blockIndex, {
-                                                ...block,
-                                                items: replaceAt(block.items, itemIndex, {...item, detail: next}),
-                                            })}
-                                            readOnly={readOnly}
-                                            multiline
-                                        />
-                                    </div>
-                                </div>
-                            ))}
-
-                            <AddButton
-                                label={{en: 'item', zh: '条目'}}
-                                onClick={() => updateBlock(blockIndex, {
-                                    ...block,
-                                    items: [...block.items, {
-                                        start: '',
-                                        end: '',
-                                        // Defaults to the room being filtered on, so a
-                                        // row added here is a row that stays on screen.
-                                        room: activeRoom ?? content.rooms[0]?.id ?? '',
-                                        title: BLANK,
-                                    }],
-                                })}
-                                // Every item must name a room server-side, so with no
-                                // rooms to pick from the whole section would be
-                                // rejected on Save.
-                                blocked={content.rooms.length === 0}
-                                blockedHint={{
-                                    en: 'Add and save a room above before adding schedule items.',
-                                    zh: '请先在上方添加并保存房间，然后再添加日程条目。',
-                                }}
+                            <LocalizedField
+                                label={{en: 'Location note (optional)', zh: '地点补充（可选）'}}
+                                value={item.location ?? BLANK}
+                                onChange={next => update(index, {...item, location: next})}
                                 readOnly={readOnly}
+                            />
+                            <LocalizedField
+                                label={{en: 'Detail (optional)', zh: '详情（可选）'}}
+                                value={item.detail ?? BLANK}
+                                onChange={next => update(index, {...item, detail: next})}
+                                readOnly={readOnly}
+                                multiline
                             />
                         </div>
                     </div>
                 ))}
 
-                {/* Hidden while filtering: a new block starts empty, so it would match
-                    no room and land off screen, reading as a button that does nothing. */}
-                {!filtering && (
-                    <AddButton
-                        label={{en: 'block', zh: '时段'}}
-                        onClick={() => setDraft(prev => [...prev, {id: newRowId('block'), label: BLANK, items: []}])}
-                        readOnly={readOnly}
-                    />
-                )}
+                <AddButton
+                    label={{en: 'item', zh: '条目'}}
+                    onClick={() => setDraft(prev => [...prev, {
+                        start: '',
+                        end: '',
+                        // Defaults to the room being filtered on, so a row added here
+                        // is a row that stays on screen.
+                        room: activeRoom ?? content.rooms[0]?.id ?? '',
+                        title: BLANK,
+                    }])}
+                    // Every item must name a room server-side, so with no rooms to pick
+                    // from the whole section would be rejected on Save.
+                    blocked={content.rooms.length === 0}
+                    blockedHint={{
+                        en: 'Add and save a room above before adding schedule items.',
+                        zh: '请先在上方添加并保存房间，然后再添加日程条目。',
+                    }}
+                    readOnly={readOnly}
+                />
             </div>
         </SectionShell>
     );

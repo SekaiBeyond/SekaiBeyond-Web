@@ -75,9 +75,7 @@ export const Schedule = () => {
      * the order an admin arranged them.
      */
     const filterableRooms = useMemo(() => {
-        const booked = new Set(
-            content.schedule.flatMap(block => block.items.map(item => item.room)),
-        );
+        const booked = new Set(content.schedule.map(item => item.room));
         return content.rooms.filter(room => booked.has(room.id));
     }, [content.rooms, content.schedule]);
 
@@ -94,21 +92,19 @@ export const Schedule = () => {
      */
     const grid = useMemo(() => {
         const byRoom = new Map<string, Placed[]>();
-        for (const block of content.schedule) {
-            for (const item of block.items) {
-                if (activeRoom !== null && item.room !== activeRoom) continue;
+        for (const item of content.schedule) {
+            if (activeRoom !== null && item.room !== activeRoom) continue;
 
-                const start = minutesOf(item.start);
-                if (start === null) continue;
+            const start = minutesOf(item.start);
+            if (start === null) continue;
 
-                const stop = minutesOf(item.end);
-                const end = stop !== null && stop > start ? stop : start + OPEN_ENDED_MINUTES;
-                const placed: Placed = {item, start, end, lane: 0};
+            const stop = minutesOf(item.end);
+            const end = stop !== null && stop > start ? stop : start + OPEN_ENDED_MINUTES;
+            const placed: Placed = {item, start, end, lane: 0};
 
-                const existing = byRoom.get(item.room);
-                if (existing) existing.push(placed);
-                else byRoom.set(item.room, [placed]);
-            }
+            const existing = byRoom.get(item.room);
+            if (existing) existing.push(placed);
+            else byRoom.set(item.room, [placed]);
         }
 
         const tracks: Track[] = [];
@@ -144,17 +140,11 @@ export const Schedule = () => {
 
     /**
      * Announced but unscheduled. There is no hour to hang these on, so they sit
-     * under the grid, still carrying the label of the block they were filed in.
+     * under the grid rather than being dropped from the page.
      */
     const unscheduled = useMemo(
-        () => content.schedule
-            .map(block => ({
-                label: block.label,
-                items: block.items.filter(item =>
-                    minutesOf(item.start) === null
-                    && (activeRoom === null || item.room === activeRoom)),
-            }))
-            .filter(block => block.items.length > 0),
+        () => content.schedule.filter(item =>
+            minutesOf(item.start) === null && (activeRoom === null || item.room === activeRoom)),
         [content.schedule, activeRoom],
     );
 
@@ -306,13 +296,14 @@ export const Schedule = () => {
                     </div>
                 )}
 
-                {unscheduled.map((block, blockIndex) => (
-                    // Keyed by position: block ids are generated and not guaranteed unique.
-                    <div key={blockIndex} className="sbc-schedule-tba">
-                        <h3 className="sbc-schedule-tba-label">{t(block.label)}</h3>
+                {unscheduled.length > 0 && (
+                    <div className="sbc-schedule-tba">
+                        <h3 className="sbc-schedule-tba-label">
+                            {t({en: 'Time to be confirmed', zh: '时间待定'})}
+                        </h3>
 
                         <div className="sbc-tba-grid">
-                            {block.items.map((item, i) => {
+                            {unscheduled.map((item, i) => {
                                 const room = accentOf(item.room);
                                 return (
                                     <article
@@ -339,7 +330,7 @@ export const Schedule = () => {
                             })}
                         </div>
                     </div>
-                ))}
+                )}
             </div>
         </section>
     );
