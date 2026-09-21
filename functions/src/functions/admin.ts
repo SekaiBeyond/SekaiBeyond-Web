@@ -473,8 +473,6 @@ function buildConRooms(raw: unknown) {
 
 function buildConSchedule(raw: unknown) {
     return validateConArray(raw, "schedule", CON_LIMITS.scheduleItems).map(item => {
-        const room = sanitizeDisplayText(validateStr(item.room, "item room", 60, true));
-
         // A slot can be announced before it is scheduled. Both times absent
         // means TBA; exactly one is a half-filled form, not an intent.
         const hasStart = item.start !== undefined && item.start !== null && item.start !== "";
@@ -499,11 +497,19 @@ function buildConSchedule(raw: unknown) {
             );
         }
 
+        // Required of a scheduled item, which has to be drawn in some column, and
+        // dropped from a TBA one: a con books the hour and the room together, so a
+        // slot still waiting on the hour has no room to name yet. Stored only when
+        // there is one, like location and detail below.
+        const room = hasStart
+            ? sanitizeDisplayText(validateStr(item.room, "item room", 60, true))
+            : "";
+
         const detail = validateLocalized(item.detail, "item detail", 1000);
         const location = validateLocalized(item.location, "item location", 200);
         return {
             ...times,
-            room,
+            ...(room ? {room} : {}),
             title: validateLocalized(item.title, "item title", 200, true),
             // Stored only when written, so the page's `item.detail &&` check
             // keeps meaning "there is a detail line" rather than "the key exists".

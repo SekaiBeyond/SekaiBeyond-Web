@@ -75,7 +75,7 @@ export const Schedule = () => {
      * the order an admin arranged them.
      */
     const filterableRooms = useMemo(() => {
-        const booked = new Set(content.schedule.map(item => item.room));
+        const booked = new Set(content.schedule.flatMap(item => item.room ? [item.room] : []));
         return content.rooms.filter(room => booked.has(room.id));
     }, [content.rooms, content.schedule]);
 
@@ -102,9 +102,10 @@ export const Schedule = () => {
             const end = stop !== null && stop > start ? stop : start + OPEN_ENDED_MINUTES;
             const placed: Placed = {item, start, end, lane: 0};
 
-            const existing = byRoom.get(item.room);
+            const roomId = item.room ?? '';
+            const existing = byRoom.get(roomId);
             if (existing) existing.push(placed);
-            else byRoom.set(item.room, [placed]);
+            else byRoom.set(roomId, [placed]);
         }
 
         const tracks: Track[] = [];
@@ -147,11 +148,6 @@ export const Schedule = () => {
             minutesOf(item.start) === null && (activeRoom === null || item.room === activeRoom)),
         [content.schedule, activeRoom],
     );
-
-    const accentOf = useMemo(() => {
-        const accents = new Map(content.rooms.map(room => [room.id, room] as const));
-        return (id: string) => accents.get(id);
-    }, [content.rooms]);
 
     // Counted rather than written down, so editing the rooms in the admin panel
     // cannot leave the subtitle claiming a number of tracks that no longer exists.
@@ -303,31 +299,22 @@ export const Schedule = () => {
                         </h3>
 
                         <div className="sbc-tba-grid">
-                            {unscheduled.map((item, i) => {
-                                const room = accentOf(item.room);
-                                return (
-                                    <article
-                                        key={i}
-                                        className={`sbc-tba-card sbc-accent--${room?.accent ?? 'slate'}`}
-                                    >
-                                        {room && (
-                                            <span className={`sbc-room-chip sbc-accent--${room.accent}`}>
-                                                {t(room.name)}
-                                            </span>
-                                        )}
-                                        <h4 className="sbc-grid-event-title">{t(item.title)}</h4>
-                                        {item.location && (
-                                            <p className="sbc-grid-event-location">
-                                                <span aria-hidden="true">📍 </span>
-                                                {t(item.location)}
-                                            </p>
-                                        )}
-                                        {item.detail && (
-                                            <p className="sbc-grid-event-detail">{t(item.detail)}</p>
-                                        )}
-                                    </article>
-                                );
-                            })}
+                            {/* No room chip: an item with no hour has no room either,
+                                so these are neutral until both are settled. */}
+                            {unscheduled.map((item, i) => (
+                                <article key={i} className="sbc-tba-card sbc-accent--slate">
+                                    <h4 className="sbc-grid-event-title">{t(item.title)}</h4>
+                                    {item.location && (
+                                        <p className="sbc-grid-event-location">
+                                            <span aria-hidden="true">📍 </span>
+                                            {t(item.location)}
+                                        </p>
+                                    )}
+                                    {item.detail && (
+                                        <p className="sbc-grid-event-detail">{t(item.detail)}</p>
+                                    )}
+                                </article>
+                            ))}
                         </div>
                     </div>
                 )}

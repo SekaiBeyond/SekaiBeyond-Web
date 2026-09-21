@@ -579,7 +579,7 @@ const RoomsSection = ({content, loading, showToast, readOnly}: SectionProps) => 
      * holding Rooms hostage to it would block a room rename that is unrelated to it
      * and that the server would have accepted.
      */
-    const stranded = [...new Set(content.schedule.map(item => item.room).filter(Boolean))]
+    const stranded = [...new Set(content.schedule.flatMap(item => item.room ? [item.room] : []))]
         .filter(id => !draft.some(room => room.id === id) && content.rooms.some(room => room.id === id));
 
     return (
@@ -683,7 +683,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
      * puts them. A room nothing is booked in gets no chip: its only possible result
      * is an empty section, which reads like the schedule was lost.
      */
-    const booked = new Set(draft.map(item => item.room));
+    const booked = new Set(draft.flatMap(item => item.room ? [item.room] : []));
     const filterableRooms = content.rooms.filter(room => booked.has(room.id));
 
     // Derived, not stored: deleting the last item in a room, or reassigning it,
@@ -709,7 +709,8 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
      * The room filter above cannot reach them either: a missing room gets no chip.
      * So they are named here, by title, before Save is available.
      */
-    const orphaned = draft.filter(item => !content.rooms.some(room => room.id === item.room));
+    const orphaned = draft.filter(item =>
+        item.room !== undefined && !content.rooms.some(room => room.id === item.room));
     const orphanedNames = (lang: 'en' | 'zh') => {
         const titles = orphaned.map(item =>
             item.title[lang] || item.title[lang === 'en' ? 'zh' : 'en']
@@ -730,8 +731,8 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
         <SectionShell
             section="schedule"
             helper={{
-                en: 'Everything running on the day, in one list. Times are the local clock, and the list is put in start order when you save — an item with no time yet shows as TBA and sorts to the end. Rooms come from the section above.',
-                zh: '当天的全部安排，集中在一个列表中。时间为当地时间；保存时会按开始时间排序——尚未确定时间的条目显示为「待定」，并排在最后。房间选项来自上方的板块。',
+                en: 'Everything running on the day, in one list. Times are the local clock, and the list is put in start order when you save. Rooms come from the section above, and are asked for once an item has a time — until then it shows as TBA, in no room, and sorts to the end.',
+                zh: '当天的全部安排，集中在一个列表中。时间为当地时间，保存时会按开始时间排序。房间选项来自上方的板块，并在条目确定时间后才需填写——在此之前显示为「待定」，不归属任何房间，并排在最后。',
             }}
             editor={editor}
             blocked={orphaned.length === 0 ? undefined : {
@@ -794,6 +795,11 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                                         ...item,
                                         start: e.target.checked ? undefined : '',
                                         end: e.target.checked ? undefined : '',
+                                        // The room goes with the hour, and comes back
+                                        // with it rather than as an empty picker.
+                                        room: e.target.checked
+                                            ? undefined
+                                            : (item.room ?? activeRoom ?? content.rooms[0]?.id ?? ''),
                                     })}
                                     disabled={readOnly}
                                 />
@@ -827,32 +833,40 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                                 </>
                             )}
 
-                            <label className={item.start === undefined ? 'admin-form-grid-full' : undefined}>
-                                <span>{isEnglish ? 'Room' : '房间'}</span>
-                                <select
-                                    className="admin-input"
-                                    value={item.room}
-                                    onChange={e => !readOnly && update(index, {...item, room: e.target.value})}
-                                    disabled={readOnly}
-                                >
-                                    {/* A saved item can point at a room that has since been
-                                        removed; keep it selectable so the mismatch is visible
-                                        rather than silently reassigned by the dropdown. */}
-                                    {!content.rooms.some(room => room.id === item.room) && (
-                                        <option value={item.room}>
-                                            {item.room
-                                                ? (isEnglish ? `${item.room} (missing)` : `${item.room}（不存在）`)
-                                                : (isEnglish ? 'Pick a room' : '请选择房间')}
-                                        </option>
-                                    )}
-                                    {content.rooms.map(room => (
-                                        <option key={room.id} value={room.id}>
-                                            {isEnglish ? room.name.en : room.name.zh}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            {item.start !== undefined && <div/>}
+                            {/* Only a scheduled item picks a room. A con books the hour
+                                and the room together, so asking for one while the hour is
+                                open invites a guess the page would then show as settled. */}
+                            {item.start !== undefined && (
+                                <>
+                                    <label>
+                                        <span>{isEnglish ? 'Room' : '房间'}</span>
+                                        <select
+                                            className="admin-input"
+                                            value={item.room ?? ''}
+                                            onChange={e => !readOnly
+                                                && update(index, {...item, room: e.target.value})}
+                                            disabled={readOnly}
+                                        >
+                                            {/* A saved item can point at a room that has since
+                                                been removed; keep it selectable so the mismatch
+                                                is visible rather than silently reassigned. */}
+                                            {!content.rooms.some(room => room.id === item.room) && (
+                                                <option value={item.room ?? ''}>
+                                                    {item.room
+                                                        ? (isEnglish ? `${item.room} (missing)` : `${item.room}（不存在）`)
+                                                        : (isEnglish ? 'Pick a room' : '请选择房间')}
+                                                </option>
+                                            )}
+                                            {content.rooms.map(room => (
+                                                <option key={room.id} value={room.id}>
+                                                    {isEnglish ? room.name.en : room.name.zh}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <div/>
+                                </>
+                            )}
 
                             <LocalizedField
                                 label={{en: 'Title', zh: '标题'}}

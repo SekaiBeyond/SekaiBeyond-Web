@@ -231,7 +231,6 @@ export const ROOMS: Room[] = [
     {id: 'hub-214', name: {en: 'HUB 214', zh: 'HUB 214'}, accent: 'mint'},
     {id: 'hub-334', name: {en: 'HUB 334', zh: 'HUB 334'}, accent: 'violet'},
     {id: 'hub-337', name: {en: 'HUB 337', zh: 'HUB 337'}, accent: 'sky'},
-    {id: 'panel-tba', name: {en: 'Panel Room (TBA)', zh: '座谈厅（待定）'}, accent: 'slate'},
 ];
 
 export interface ScheduleItem {
@@ -241,8 +240,13 @@ export interface ScheduleItem {
      */
     start?: string
     end?: string
-    /** A `Room.id`. An id with no matching room renders without a chip. */
-    room: string
+    /**
+     * A `Room.id`, and absent on a slot with no time. A con books the room and the
+     * hour in one go, so an item waiting on the hour is waiting on the room too —
+     * and a room guessed at now is one the page would show as settled. An id with
+     * no matching room renders in a column of its own.
+     */
+    room?: string
     title: Localized
     location?: Localized
     detail?: Localized
@@ -338,7 +342,6 @@ export const SCHEDULE: ScheduleItem[] = [
         title: {en: 'DJ Set', zh: 'DJ 现场'},
     },
     {
-        room: 'panel-tba',
         title: {en: 'TWIG VTuber Concert', zh: 'TWIG VTuber 演唱会'},
         detail: {
             en: 'A one-hour set. Room and start time are still being confirmed.',

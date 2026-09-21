@@ -137,7 +137,7 @@ const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({
     // rather than collapsing to '' and reading as a real, empty time.
     start: optStr(item.start),
     end: optStr(item.end),
-    room: str(item.room),
+    room: optStr(item.room),
     title: loc(item.title),
     location: item.location ? loc(item.location) : undefined,
     detail: item.detail ? loc(item.detail) : undefined,
