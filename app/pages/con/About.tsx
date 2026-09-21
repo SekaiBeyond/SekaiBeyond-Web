@@ -42,11 +42,6 @@ export const About = () => {
                 }).join(' · ')
                 : t({en: 'See the tickets section below', zh: '详见下方门票板块'}),
         },
-        {
-            icon: '💬',
-            label: {en: 'Languages', zh: '语言'},
-            value: t({en: 'English & 中文', zh: '中文与英文'}),
-        },
     ];
 
     return (
