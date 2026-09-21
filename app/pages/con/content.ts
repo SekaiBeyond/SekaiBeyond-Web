@@ -249,7 +249,6 @@ export interface ScheduleItem {
      */
     room?: string
     title: Localized
-    location?: Localized
     detail?: Localized
 }
 

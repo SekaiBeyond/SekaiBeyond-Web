@@ -806,12 +806,6 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                                 readOnly={readOnly}
                             />
                             <LocalizedField
-                                label={{en: 'Location note (optional)', zh: '地点补充（可选）'}}
-                                value={item.location ?? BLANK}
-                                onChange={next => update(index, {...item, location: next})}
-                                readOnly={readOnly}
-                            />
-                            <LocalizedField
                                 label={{en: 'Detail (optional)', zh: '详情（可选）'}}
                                 value={item.detail ?? BLANK}
                                 onChange={next => update(index, {...item, detail: next})}

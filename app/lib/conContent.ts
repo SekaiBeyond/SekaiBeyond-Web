@@ -139,7 +139,6 @@ const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({
     end: optStr(item.end),
     room: optStr(item.room),
     title: loc(item.title),
-    location: item.location ? loc(item.location) : undefined,
     detail: item.detail ? loc(item.detail) : undefined,
 });
 

@@ -266,12 +266,6 @@ export const Schedule = () => {
                                             <span className="sbc-sr-only">{t(track.name)}: </span>
                                             {t(placed.item.title)}
                                         </h4>
-                                        {placed.item.location && (
-                                            <p className="sbc-grid-event-location">
-                                                <span aria-hidden="true">📍 </span>
-                                                {t(placed.item.location)}
-                                            </p>
-                                        )}
                                         {placed.item.detail && (
                                             <p className="sbc-grid-event-detail">{t(placed.item.detail)}</p>
                                         )}
@@ -294,12 +288,6 @@ export const Schedule = () => {
                             {unscheduled.map((item, i) => (
                                 <article key={i} className="sbc-tba-card sbc-accent--slate">
                                     <h4 className="sbc-grid-event-title">{t(item.title)}</h4>
-                                    {item.location && (
-                                        <p className="sbc-grid-event-location">
-                                            <span aria-hidden="true">📍 </span>
-                                            {t(item.location)}
-                                        </p>
-                                    )}
                                     {item.detail && (
                                         <p className="sbc-grid-event-detail">{t(item.detail)}</p>
                                     )}
