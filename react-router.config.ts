@@ -1,7 +1,7 @@
 import type { Config } from "@react-router/dev/config";
 
 export default {
-    // Config options...
-    // Server-side render by default, to enable SPA mode set this to `false`
+    // No server: this ships as a static SPA on Firebase Hosting, with every
+    // route rewritten to /index.html (see firebase.json).
     ssr: false,
 } satisfies Config;

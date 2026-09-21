@@ -5,6 +5,11 @@
     "**/.client/**/*",
     ".react-router/types/**/*"
   ],
+  "exclude": [
+    "node_modules",
+    "functions",
+    "build"
+  ],
   "compilerOptions": {
     "lib": [
       "DOM",
