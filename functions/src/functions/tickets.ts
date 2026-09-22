@@ -404,6 +404,117 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
 
     return {added: addedCount, replaced: replacedCount, skipped: skippedCount, total: normalized.size};
 });
+
+/** One ticket as its holder sees it: enough to show a QR and say where it stands. */
+interface HeldTicket {
+    ticketId: string;
+    type: string;
+    redeemed: boolean;
+    redeemedAt: string | null;
+    voided: boolean;
+}
+
+/**
+ * Every ticket the caller holds for an event that hasn't ended yet.
+ *
+ * Attendee docs are keyed by the email the ticket was bought with, and the
+ * `attendees` subcollection is closed to everyone but staff (see
+ * firestore.rules), so this call is the only way a holder reaches their own
+ * tickets. The email comes off the ID token rather than the users doc: the token
+ * is what Auth actually verified, so nobody reads someone else's tickets by
+ * having a profile field say so.
+ *
+ * The cut is the event's end, never the scan. A ticket already through the door
+ * stays visible for the length of the event — people re-open their own ticket to
+ * settle what they paid for or which of a batch was used — and once `endAt`
+ * passes nothing comes back at all, scanned or not, so the card leaves the
+ * profile on its own. The event's attendance then shows up under Events Attended
+ * once it is archived.
+ *
+ * Only paid, published events are searched: a free event has no tickets, and an
+ * unpublished event's title is withheld by those same rules.
+ *
+ * A redeemed ticket also backfills attendance. The scanner credits the holder's
+ * account as it scans, but only if an account already carried the ticket's
+ * email; someone who signed up afterwards would otherwise never be credited for
+ * the event they were scanned into.
+ */
+export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
+    const uid = await requireAuth(request);
+    const email = (request.auth?.token.email ?? "").trim().toLowerCase();
+    if (!email) return {events: []};
+
+    // Filtering on endAt alone keeps this on the automatic single-field index —
+    // there are only ever a handful of live events to sift in memory.
+    const liveSnap = await db.collection("upcomingEvents")
+        .where("endAt", ">", Timestamp.now()).get();
+    const liveEvents = liveSnap.docs.filter(doc => {
+        const data = doc.data();
+        return data.paid === true && data.published === true;
+    });
+
+    const found = await Promise.all(liveEvents.map(async (eventDoc) => {
+        const attendeeSnap = await eventDoc.ref.collection("attendees")
+            .where("email", "==", email).get();
+        if (attendeeSnap.empty) return null;
+
+        // Import dedupes by email, so this is one doc in practice; taking every
+        // match means a hand-edited duplicate still shows all of its tickets.
+        const tickets: HeldTicket[] = [];
+        for (const doc of attendeeSnap.docs) {
+            const rawTickets: unknown[] = Array.isArray(doc.data().tickets) ? doc.data().tickets : [];
+            for (const raw of rawTickets) {
+                const ticket = raw as Partial<NewTicket>;
+                if (typeof ticket.ticketId !== "string" || !ticket.ticketId) continue;
+                tickets.push({
+                    ticketId: ticket.ticketId,
+                    type: ticket.type || "normal",
+                    redeemed: ticket.redeemed === true,
+                    redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
+                    voided: ticket.voided === true,
+                });
+            }
+        }
+        if (tickets.length === 0) return null;
+
+        const eventData = eventDoc.data();
+        return {
+            eventId: eventDoc.id,
+            title: (eventData.title as string) ?? "",
+            titleCn: (eventData.titleCn as string) ?? "",
+            location: (eventData.location as string) ?? "",
+            locationCn: (eventData.locationCn as string) ?? "",
+            venueId: (eventData.venueId as string) ?? "",
+            poster: (eventData.poster as string) ?? "",
+            startAt: eventData.startAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
+            tickets,
+        };
+    }));
+
+    const events = found.filter((e): e is NonNullable<typeof e> => e !== null);
+    // ISO strings sort as dates do: the next door to walk through comes first.
+    events.sort((a, b) => a.startAt.localeCompare(b.startAt));
+
+    const scannedInto = events
+        .filter(e => e.tickets.some(t => t.redeemed && !t.voided))
+        .map(e => e.eventId);
+    if (scannedInto.length > 0) {
+        try {
+            const userRef = db.collection("users").doc(uid);
+            const attended: string[] = (await userRef.get()).data()?.attendedEvents ?? [];
+            const missing = scannedInto.filter(id => !attended.includes(id));
+            if (missing.length > 0) {
+                await userRef.update({attendedEvents: FieldValue.arrayUnion(...missing)});
+            }
+        } catch (err) {
+            // A profile that couldn't be credited must not cost the caller the
+            // sight of their tickets — the scanner is the primary writer anyway.
+            console.error(`getMyTickets: attendance backfill failed for ${uid}`, err);
+        }
+    }
+
+    return {events};
+});
 export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
 
@@ -649,6 +760,26 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
             return {redeemed: false, alreadyRedeemed: true};
         }
 
+        // A check-in by hand is still a check-in, so it credits the holder's
+        // account exactly as the scanner does (see redeemTicket) — otherwise
+        // whether the event reaches their profile would come down to which
+        // button the door staff pressed.
+        const attendeeEmail: string = data.email ?? "";
+        let userCheckedIn = false;
+        if (attendeeEmail) {
+            const matchingUserSnap = await txn.get(
+                db.collection("users").where("email", "==", attendeeEmail).limit(1)
+            );
+            if (!matchingUserSnap.empty) {
+                const userDoc = matchingUserSnap.docs[0];
+                const attended: string[] = userDoc.data().attendedEvents ?? [];
+                if (!attended.includes(eventId)) {
+                    txn.update(userDoc.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
+                }
+                userCheckedIn = true;
+            }
+        }
+
         const now = Timestamp.now();
         const callerName: string = callerSnap.data()?.displayName ?? "";
         tickets[idx] = {
@@ -657,6 +788,8 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
             redeemedAt: now,
             redeemedBy: uid,
             redeemedByName: callerName,
+            checkedIn: userCheckedIn,
+            checkedInAt: userCheckedIn ? now : null,
         };
 
         const eventTitle: string = eventSnap.exists

@@ -1,7 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { FaStar } from 'react-icons/fa';
-import { FiAward, FiCalendar, FiClock, FiImage, FiLock, FiMail, FiPlayCircle, FiStar, FiTrash2, } from 'react-icons/fi';
+import {
+    FiAlertCircle,
+    FiAward,
+    FiCalendar,
+    FiClock,
+    FiImage,
+    FiLock,
+    FiMail,
+    FiPlayCircle,
+    FiStar,
+    FiTrash2,
+} from 'react-icons/fi';
 import {
     formatGroupWithTitle,
     hasPermission,
@@ -21,6 +32,7 @@ import { isValidHttpUrl } from '~/lib/urls';
 import { PassportShelf, usePassportsByOwner } from '~/pages/PassportShelf';
 import { ProfileCard, ProfileCardNote, ProfileSection, ProfileWelcome, type SectionState, } from '~/pages/ProfileCards';
 import { ProfileSettingsTab } from '~/pages/ProfileSettingsTab';
+import { ProfileTickets, useHeldTickets } from '~/pages/ProfileTickets';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 import { validateImageFile } from "~/pages/admin/utils";
 import { ToastContainer, useToasts } from '~/lib/useToasts';
@@ -187,6 +199,7 @@ export const ProfilePage = () => {
     const {toasts, showToast} = useToasts();
     const [selectedBadge, setSelectedBadge] = useState<BadgeDef | null>(null);
     const {passports, failed: passportsFailed} = usePassportsByOwner(isViewingOther ? null : user?.uid ?? null);
+    const {ticketEvents, failed: ticketsFailed} = useHeldTickets(isViewingOther ? null : user?.uid ?? null);
 
     useEffect(() => {
         if (loading || isViewingOther) return;
@@ -621,6 +634,27 @@ export const ProfilePage = () => {
     // membership is running, and isMember means there is an end.
     const memberSince = isOwnProfile && isMember ? profile!.membershipStartedAt : null;
 
+    // Tickets sit above the collections rather than among them: a ticket is a
+    // live thing to carry to a door, not something collected, and it is the one
+    // card a brand-new account may have before it has anything else.
+    //
+    // There is no empty state. The card is absent by default, appears once the
+    // server finds a ticket for an event still to come, and goes away when that
+    // event ends — most people hold none, and an "in flight" or "no tickets"
+    // line on every profile would be pure noise.
+    const ticketsCard = !isOwnProfile ? null
+        : ticketsFailed ? (
+            <ProfileCard compact>
+                <ProfileCardNote icon={FiAlertCircle} muted>
+                    {isEnglish
+                        ? 'Couldn’t check for your tickets just now. Try reloading the page.'
+                        : '暂时无法查询你的门票，请刷新页面重试。'}
+                </ProfileCardNote>
+            </ProfileCard>
+        ) : ticketEvents && ticketEvents.length > 0 ? (
+            <ProfileTickets ticketEvents={ticketEvents}/>
+        ) : null;
+
     return (
         <>
             <ToastContainer toasts={toasts}/>
@@ -910,6 +944,7 @@ export const ProfilePage = () => {
                 </div>
 
                 <div className="profile-tab-body">
+                    {!settingsTab && ticketsCard}
                     {settingsTab ? (
                         <ProfileSettingsTab showToast={showToast}/>
                     ) : settling ? (

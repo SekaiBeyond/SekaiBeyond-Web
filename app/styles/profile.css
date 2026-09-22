@@ -509,7 +509,11 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
 
 /* --- Collections ----------------------------------------------------------- */
 
+/* The tickets card and the collections stack here as siblings. */
 .profile-tab-body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
     margin-top: 24px;
 }
 
@@ -1091,6 +1095,173 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: var(--color-text-light);
 }
 
+/* --- Tickets ---------------------------------------------------------------- */
+
+.profile-ticket-events {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+/* One event's worth of stubs, ruled off from the next. */
+.profile-ticket-event + .profile-ticket-event {
+    padding-top: 22px;
+    border-top: 1px dashed var(--profile-rule-strong);
+}
+
+.profile-ticket-event-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.profile-ticket-poster {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    object-fit: cover;
+}
+
+.profile-ticket-event-meta {
+    min-width: 0;
+}
+
+.profile-ticket-event-title {
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.3;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+}
+
+.profile-ticket-event-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    font-size: 12.5px;
+    color: var(--color-text-muted);
+}
+
+.profile-ticket-event-line svg {
+    flex-shrink: 0;
+    color: var(--color-primary);
+}
+
+.profile-ticket-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+    gap: 14px;
+}
+
+/* A stub of its own: the type it admits, its code, and where it stands. Pale
+   paper on the pink card, so a ticket reads as something handed over. */
+.profile-ticket {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 12px;
+    border: 1px solid var(--profile-rule);
+    border-radius: 16px;
+    background: var(--profile-paper);
+    text-align: center;
+}
+
+.profile-ticket-type {
+    padding: 3px 12px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(255, 107, 157, 0.16), rgba(254, 202, 87, 0.22));
+    color: var(--color-primary);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.profile-ticket-qr {
+    position: relative;
+    display: flex;
+    padding: 8px;
+    border-radius: 12px;
+    background: white;
+}
+
+/* The QR itself, not the stamp's icon sitting over it. */
+.profile-ticket-qr > svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* A spent code stays on screen — the id under it is what door staff read out
+   when a scan won't take — but it is stamped and faded so it can't be mistaken
+   for one that still works. */
+.profile-ticket--used .profile-ticket-qr > svg,
+.profile-ticket--void .profile-ticket-qr > svg {
+    opacity: 0.18;
+    filter: grayscale(1);
+}
+
+/* A mark pressed onto the stub, solid enough to read at a glance across a
+   crowded doorway rather than a tint lost in the code behind it. */
+.profile-ticket-stamp {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 66px;
+    height: 66px;
+    border: 3px solid currentColor;
+    border-radius: 50%;
+    background: white;
+    font-size: 34px;
+    color: var(--color-success);
+    transform: translate(-50%, -50%) rotate(-12deg);
+}
+
+.profile-ticket--void .profile-ticket-stamp {
+    color: var(--color-error);
+}
+
+.profile-ticket-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.profile-ticket-status {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-primary);
+}
+
+.profile-ticket--used .profile-ticket-status {
+    color: var(--color-success);
+}
+
+.profile-ticket--void {
+    border-style: dashed;
+}
+
+.profile-ticket--void .profile-ticket-status {
+    color: var(--color-error);
+}
+
+.profile-ticket-note {
+    margin-top: 18px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--color-text-light);
+}
+
 /* --- Group chip and membership --------------------------------------------- */
 
 .profile-group-tag {
@@ -1452,11 +1623,33 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     }
 
     .profile-tab-body {
+        gap: 16px;
         margin-top: 16px;
     }
 
     .profile-collections {
         gap: 16px;
+    }
+
+    /* Two stubs across rather than one stretched one — a QR any wider than this
+       is no easier to scan. */
+    .profile-ticket-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 10px;
+    }
+
+    .profile-ticket {
+        padding: 12px 8px;
+        gap: 8px;
+    }
+
+    .profile-ticket-poster {
+        width: 46px;
+        height: 46px;
+    }
+
+    .profile-ticket-stamp {
+        font-size: 44px;
     }
 
     .profile-card {

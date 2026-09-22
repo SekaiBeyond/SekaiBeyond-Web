@@ -228,6 +228,38 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
         redeemedAt?: string | null;
     }>(getFunctions(), 'redeemTicket')(data);
 
+/** One of the caller's own tickets, as /profile shows it. */
+export interface HeldTicket {
+    ticketId: string;
+    type: string;
+    redeemed: boolean;
+    redeemedAt: string | null;
+    voided: boolean;
+}
+
+/** An event the caller holds tickets for, with the tickets they hold. */
+export interface HeldTicketEvent {
+    eventId: string;
+    title: string;
+    titleCn: string;
+    location: string;
+    locationCn: string;
+    venueId: string;
+    poster: string;
+    startAt: string;
+    tickets: HeldTicket[];
+}
+
+/**
+ * The caller's own tickets for events still to finish, matched on the email the
+ * ticket was bought with — spent ones included, since a ticket stays viewable
+ * for the length of its event. Nothing comes back once the event has ended.
+ * Attendee docs are staff-only in Firestore, so this is the only way to them —
+ * see getMyTickets in functions.
+ */
+export const callGetMyTickets = () =>
+    httpsCallable<Record<string, never>, {events: HeldTicketEvent[]}>(getFunctions(), 'getMyTickets')({});
+
 export const callVoidTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
     httpsCallable<typeof data, {voided: boolean}>(getFunctions(), 'voidTicket')(data);
 
