@@ -66,11 +66,30 @@ export const Hero = () => {
     return (
         <section id="con-home" className="sbc-hero">
             <div className="sbc-hero-media" aria-hidden="true">
+                {/*
+                 * The floor every other layer is laid on, rather than the branch
+                 * taken when there is nothing to lay: whatever the clip or the
+                 * embed above fails to do — a codec the browser will not decode,
+                 * a request that never answers, the seconds before the first frame
+                 * — ends on the poster instead of on nothing. A <source> carrying
+                 * a `type` the browser cannot play is skipped without being
+                 * fetched, so a WebM-only hero costs Safari no bandwidth and
+                 * simply stays on this image.
+                 *
+                 * Both layers are inset-0 absolutes with no z-index, so the order
+                 * they are written in is the order they paint.
+                 */}
+                <div className="sbc-hero-poster" style={posterStyle}/>
+
                 {showClip && (
                     // Keyed on the sources so swapping the clip in the admin panel
                     // remounts the element; React alone would leave <video> playing
                     // the file it already loaded, since changing a <source> child
                     // does nothing without a .load() call.
+                    //
+                    // No `poster` of its own: the layer underneath is that image
+                    // already, and an empty one there would leave a clip that is
+                    // still buffering painting over the gradient with nothing.
                     <video
                         key={`${heroVideo.webm}|${heroVideo.mp4}`}
                         className="sbc-hero-clip"
@@ -79,7 +98,6 @@ export const Hero = () => {
                         loop
                         playsInline
                         preload="auto"
-                        poster={heroVideo.poster || undefined}
                         tabIndex={-1}
                     >
                         {heroVideo.webm && <source src={heroVideo.webm} type="video/webm"/>}
@@ -98,8 +116,6 @@ export const Hero = () => {
                         sandbox="allow-scripts allow-same-origin allow-presentation"
                     />
                 )}
-
-                {!showClip && !showEmbed && <div className="sbc-hero-poster" style={posterStyle}/>}
             </div>
 
             <div className="sbc-hero-scrim" aria-hidden="true"/>
