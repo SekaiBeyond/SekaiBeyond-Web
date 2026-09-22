@@ -1,9 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportEventAttendees, callUpdateEventAttendee, functionsErrorCode } from '~/lib/firebase';
 import { ModalShell } from './ModalShell';
 import { type AttendeeData, TICKET_TYPES, type TicketType } from './tickets/types';
+import { useAccountLinks } from './tickets/useAccountLinks';
 import type { ShowToast } from './utils';
+
+/**
+ * How long typing has to settle before the address is looked up. Every callable
+ * shares one rate-limit budget, so a lookup per keystroke would spend an admin's
+ * whole allowance on a single email field.
+ */
+const LOOKUP_DEBOUNCE_MS = 600;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -54,6 +62,27 @@ export function AttendeeModal({
     const nameChanged = !!attendee && nameValid && trimmedName !== attendee.name;
     const countChanged = !!attendee && countValid && parsedCount !== attendee.ticketCount;
     const typeChanged = !!attendee && type !== originalType;
+
+    // Which address the account lookup is currently asking about. Editing can
+    // ask at once — the address is fixed and read-only — while adding waits for
+    // the typing to settle.
+    const [lookupEmail, setLookupEmail] = useState(attendee?.email.trim().toLowerCase() ?? '');
+    useEffect(() => {
+        if (attendee) return;
+        if (!emailValid) {
+            setLookupEmail('');
+            return;
+        }
+        const timer = setTimeout(() => setLookupEmail(trimmedEmail), LOOKUP_DEBOUNCE_MS);
+        return () => clearTimeout(timer);
+    }, [attendee, emailValid, trimmedEmail]);
+
+    const lookupEmails = useMemo(() => lookupEmail ? [lookupEmail] : [], [lookupEmail]);
+    const {links: accountLinks, failed: accountLookupFailed} = useAccountLinks(eventId, lookupEmails);
+    // undefined while the lookup is out or nothing has been asked; null once it
+    // has come back with no account.
+    const account = lookupEmail ? accountLinks.get(lookupEmail) : undefined;
+    const checkingAccount = !!lookupEmail && account === undefined && !accountLookupFailed;
 
     // Add mode: warn when the email already has an attendee record.
     const duplicate = useMemo(() => {
@@ -179,6 +208,28 @@ export function AttendeeModal({
                         disabled={!attendee && saving}
                         autoFocus={!attendee}
                     />
+                    {/* Whether this address reaches somebody's profile. A ticket
+                        sold to an address with no account still works — it is
+                        credited if they sign up with it later — so this is a
+                        note, never a reason not to save. */}
+                    {emailValid && (
+                        <span className={`admin-helper-text admin-tickets-account-note${
+                            account ? ' admin-tickets-account-note--linked' : ''}`}>
+                            {accountLookupFailed
+                                ? (isEnglish
+                                    ? 'Could not check whether this email has an account.'
+                                    : '无法查询该邮箱是否已注册。')
+                                : checkingAccount
+                                    ? (isEnglish ? 'Checking for an account…' : '正在查询账户…')
+                                    : account
+                                        ? (isEnglish
+                                            ? `Registered account: ${account.displayName || account.email}. Their tickets will show on their profile.`
+                                            : `已注册账户：${account.displayName || account.email}。门票会显示在其个人主页。`)
+                                        : (isEnglish
+                                            ? 'No account uses this email yet — the ticket still works, and counts once they sign up with it.'
+                                            : '暂无账户使用该邮箱 — 门票照常可用，其以该邮箱注册后即会计入。')}
+                        </span>
+                    )}
                 </label>
 
                 <label className="admin-tickets-template-field">

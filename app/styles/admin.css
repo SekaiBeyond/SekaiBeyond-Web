@@ -2333,6 +2333,18 @@
     color: var(--color-purple);
 }
 
+/* Whether the address on a ticket reaches a registered account — which is what
+   decides, at the scanner, whether the event lands on anybody's profile. */
+.admin-tickets-tag-linked {
+    background: rgba(78, 203, 113, 0.18);
+    color: #2e7d4f;
+}
+
+.admin-tickets-tag-unlinked {
+    background: rgba(160, 168, 184, 0.18);
+    color: var(--color-text-muted);
+}
+
 .admin-tickets-tag-queued {
     background: rgba(52, 152, 219, 0.16);
     color: #1f6dad;
@@ -2341,6 +2353,30 @@
 .admin-tickets-tag-unsent {
     background: rgba(254, 202, 87, 0.22);
     color: #a15c00;
+}
+
+/* The same answer in words, under the email field and inside an opened row. */
+.admin-tickets-account-note {
+    display: block;
+    margin-top: 6px;
+}
+
+.admin-tickets-account-note--linked {
+    color: #2e7d4f;
+}
+
+.admin-tickets-attendee-account {
+    margin-bottom: 12px;
+}
+
+.admin-tickets-attendee-account-link {
+    color: var(--color-link);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.admin-tickets-attendee-account-link:hover {
+    text-decoration: underline;
 }
 
 .admin-tickets-tag-type-normal {

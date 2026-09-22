@@ -2,12 +2,19 @@ import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { ticketStatusCounts } from './helpers';
 import { type AttendeeData, type AttendeeTotals, TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
+import type { AccountLink } from './useAccountLinks';
 
 interface AttendeesSectionProps {
     loading: boolean;
     error: string | null;
     totals: AttendeeTotals;
     attendees: AttendeeData[];
+    /**
+     * Lowercased email -> the account behind it, or null for none. An address
+     * missing from the map has not been looked up yet, which is why the tag
+     * waits rather than claiming there is no account.
+     */
+    accountLinks: Map<string, AccountLink>;
     search: string;
     onSearchChange: (v: string) => void;
     filterUnsent: boolean;
@@ -37,6 +44,7 @@ export function AttendeesSection({
                                      error,
                                      totals,
                                      attendees,
+                                     accountLinks,
                                      search,
                                      onSearchChange,
                                      filterUnsent,
@@ -163,6 +171,9 @@ export function AttendeesSection({
                 const {used, voided, remaining} = ticketStatusCounts(a);
                 const isExpanded = expanded.has(a.id);
                 const ticketType = a.tickets[0]?.type || 'normal';
+                // undefined while the lookup is still out; null once it has come
+                // back with nothing.
+                const account = accountLinks.get(a.email.toLowerCase());
                 return (
                     <div key={a.id} className="admin-tickets-attendee-row">
                         <div
@@ -209,6 +220,15 @@ export function AttendeesSection({
                                             ? (isEnglish ? 'Sent' : '已发送')
                                             : (isEnglish ? 'Unsent' : '未发送')}
                                 </span>
+                                {account !== undefined && (
+                                    <span className={account
+                                        ? 'admin-tickets-tag admin-tickets-tag-linked'
+                                        : 'admin-tickets-tag admin-tickets-tag-unlinked'}>
+                                        {account
+                                            ? (isEnglish ? 'Account' : '已注册')
+                                            : (isEnglish ? 'No account' : '未注册')}
+                                    </span>
+                                )}
                             </div>
                             <div className="admin-tickets-attendee-expand">
                                 {isExpanded ? '▾' : '▸'}
@@ -217,6 +237,29 @@ export function AttendeesSection({
 
                         {isExpanded && (
                             <div className="admin-tickets-attendee-detail">
+                                <p className="admin-helper-text admin-tickets-attendee-account">
+                                    {account === undefined
+                                        ? (isEnglish ? 'Checking for an account…' : '正在查询账户…')
+                                        : account
+                                            ? (isEnglish
+                                                ? 'Scanning a ticket will mark this event attended on '
+                                                : '扫描门票时，将在以下账户标记参加本活动：')
+                                            : (isEnglish
+                                                ? 'No account uses this email yet. Tickets still work — attendance is credited if they sign up with it later.'
+                                                : '暂无账户使用该邮箱。门票照常可用 — 若其日后以该邮箱注册，参加记录会被补上。')}
+                                    {account && (account.uid
+                                        ? (
+                                            <a
+                                                href={`/profile?uid=${account.uid}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="admin-tickets-attendee-account-link"
+                                            >
+                                                {account.displayName || a.email}
+                                            </a>
+                                        )
+                                        : (isEnglish ? 'their profile.' : '该用户主页。'))}
+                                </p>
                                 {!readOnly && (
                                     <div className="admin-tickets-attendee-actions">
                                         <button

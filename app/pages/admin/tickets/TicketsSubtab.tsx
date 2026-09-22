@@ -23,6 +23,7 @@ import { SendSection } from './SendSection';
 import { StatsSection } from './StatsSection';
 import { TemplateSection } from './TemplateSection';
 import { mapAttendeeDoc } from './helpers';
+import { useAccountLinks } from './useAccountLinks';
 import { type AttendeeData, type TicketsSection, type TicketType } from './types';
 
 interface TicketsSubtabProps {
@@ -145,6 +146,13 @@ export function TicketsSubtab({
     const visibleAttendees = useMemo(() => {
         return filteredAttendees.slice(0, displayCount);
     }, [filteredAttendees, displayCount]);
+
+    // Whether each attendee's address has an account behind it — which is what
+    // decides, when their ticket is scanned, whether the event reaches anybody's
+    // profile. Asked for the whole list rather than the page on show, so the
+    // answer is already there as more rows are revealed.
+    const attendeeEmails = useMemo(() => attendees.map(a => a.email), [attendees]);
+    const {links: accountLinks} = useAccountLinks(eventId, attendeeEmails);
 
     const onAttendeeUpdated = (updated: AttendeeData) => {
         setAttendees(prev => prev.map(a => a.id === updated.id ? updated : a));
@@ -380,6 +388,7 @@ export function TicketsSubtab({
                     error={attendeesError}
                     totals={totals}
                     attendees={visibleAttendees}
+                    accountLinks={accountLinks}
                     search={search}
                     onSearchChange={setSearch}
                     filterUnsent={filterUnsent}

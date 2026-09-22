@@ -515,6 +515,87 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
 
     return {events};
 });
+/**
+ * How many emails one lookup may ask about. Firestore's `in` takes 30 at a time,
+ * so this is 17 queries fired together — comfortably inside a call, and enough
+ * that a 500-strong attendee list is answered in one round trip rather than
+ * spending a caller's rate-limit budget on a dozen.
+ */
+const ACCOUNT_LOOKUP_MAX = 500;
+
+/**
+ * Which of these ticket emails belong to a registered account.
+ *
+ * Staff need this in two places: adding an attendee, where it says whether the
+ * address they just typed will reach somebody's profile, and reading the list
+ * afterwards, where it says which tickets will credit an account when scanned.
+ *
+ * It answers with the same query the scanner uses — an exact match on the
+ * lowercased address (see redeemTicket) — so what staff are shown is a preview
+ * of what check-in will actually find, rather than a friendlier lookup that
+ * would promise a link the scanner then misses.
+ *
+ * Who the account belongs to is core-staff's business. Event staff get the fact
+ * of a link and nothing else: they can read this event's attendees, which is not
+ * the same as being able to put a name to every address in the club.
+ */
+export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; emails?: unknown};
+    const eventId = validateDocId(input.eventId, "eventId");
+    if (!Array.isArray(input.emails) || input.emails.length === 0) {
+        throw new HttpsError("invalid-argument", "emails must be a non-empty array.");
+    }
+    if (input.emails.length > ACCOUNT_LOOKUP_MAX) {
+        throw new HttpsError("invalid-argument",
+            `Too many emails in a single lookup (max ${ACCOUNT_LOOKUP_MAX}).`);
+    }
+
+    // The same gate as the scanner: core staff anywhere, event staff on their
+    // own event.
+    const callerSnap = await db.collection("users").doc(uid).get();
+    const callerData = callerSnap.data() ?? {};
+    const isCoreStaffOrAbove = ADMIN_GROUPS.includes(normalizeGroup(callerData.group));
+    const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
+    if (!isCoreStaffOrAbove && !callerEventStaff.includes(eventId)) {
+        throw new HttpsError("permission-denied", "Not authorized to read this event's attendees.");
+    }
+
+    // A malformed address is dropped rather than rejected. This is a read on
+    // behalf of a preview that may well be showing a row someone typed wrong,
+    // and no address matches an account anyway — losing the whole lookup over
+    // one bad row would be the worse answer.
+    const emails = Array.from(new Set(
+        input.emails
+            .map(raw => (typeof raw === "string" ? raw.trim().toLowerCase() : ""))
+            .filter(email => email.length > 0 && email.length <= 320 && EMAIL_RE.test(email))
+    ));
+    if (emails.length === 0) return {accounts: []};
+
+    const chunks: string[][] = [];
+    for (let i = 0; i < emails.length; i += 30) {
+        chunks.push(emails.slice(i, i + 30));
+    }
+
+    const snaps = await Promise.all(chunks.map(chunk =>
+        db.collection("users").where("email", "in", chunk).get()
+    ));
+
+    const accounts: {email: string; uid?: string; displayName?: string}[] = [];
+    for (const snap of snaps) {
+        for (const doc of snap.docs) {
+            const data = doc.data();
+            if (typeof data.email !== "string") continue;
+            const email = data.email.trim().toLowerCase();
+            accounts.push(isCoreStaffOrAbove
+                ? {email, uid: doc.id, displayName: data.displayName ?? ""}
+                : {email});
+        }
+    }
+
+    return {accounts};
+});
 export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
 

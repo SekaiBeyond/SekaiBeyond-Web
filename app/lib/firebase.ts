@@ -260,6 +260,25 @@ export interface HeldTicketEvent {
 export const callGetMyTickets = () =>
     httpsCallable<Record<string, never>, {events: HeldTicketEvent[]}>(getFunctions(), 'getMyTickets')({});
 
+/**
+ * A ticket email that turned out to belong to a registered account. `uid` and
+ * `displayName` come back for core staff only — event staff are told that a link
+ * exists, not whose it is.
+ */
+export interface AttendeeAccount {
+    email: string;
+    uid?: string;
+    displayName?: string;
+}
+
+/**
+ * Which of these ticket emails have an account behind them. Only the matches
+ * come back, so an email missing from the result is one with no account — see
+ * getAttendeeAccounts in functions.
+ */
+export const callGetAttendeeAccounts = (data: {eventId: string; emails: string[]}) =>
+    httpsCallable<typeof data, {accounts: AttendeeAccount[]}>(getFunctions(), 'getAttendeeAccounts')(data);
+
 export const callVoidTicket = (data: {eventId: string; attendeeId: string; ticketId: string}) =>
     httpsCallable<typeof data, {voided: boolean}>(getFunctions(), 'voidTicket')(data);
 

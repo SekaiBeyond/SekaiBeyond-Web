@@ -1,9 +1,10 @@
-import { type ChangeEvent, useRef, useState } from 'react';
+import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportEventAttendees, functionsErrorCode } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 import { EMAIL_RE } from './helpers';
 import type { AttendeeData, ParsedRow, ParseError, TicketType } from './types';
+import { useAccountLinks } from './useAccountLinks';
 
 const MAX_PREVIEW = 50;
 const MAX_IMPORT_ROWS = 1000;
@@ -24,6 +25,14 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
     const [fileName, setFileName] = useState<string>('');
     const [importing, setImporting] = useState(false);
     const [busy, setBusy] = useState(false);
+
+    // Only the rows on show are looked up: a thousand-row paste would otherwise
+    // spend a lookup on addresses nobody is reading.
+    const previewEmails = useMemo(
+        () => rows.slice(0, MAX_PREVIEW).map(r => r.email),
+        [rows],
+    );
+    const {links: accountLinks} = useAccountLinks(eventId, previewEmails);
 
     const [rawFields, setRawFields] = useState<string[]>([]);
     const [rawRecords, setRawRecords] = useState<Record<string, string>[]>([]);
@@ -598,6 +607,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                     <th>{isEnglish ? 'Name' : '姓名'}</th>
                                     <th>{isEnglish ? 'Tickets' : '门票数'}</th>
                                     <th>{isEnglish ? 'Type' : '类型'}</th>
+                                    <th>{isEnglish ? 'Account' : '账户'}</th>
                                     {timestampCol && <th>{isEnglish ? 'Time' : '时间'}</th>}
                                     <th>{isEnglish ? 'Action' : '操作'}</th>
                                 </tr>
@@ -608,6 +618,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                     const countChanged = r.existingTicketCount !== undefined && r.existingTicketCount !== r.ticketCount;
                                     const typeChanged = r.existingType !== undefined && r.existingType !== r.type;
                                     const isNew = r.action === 'add';
+                                    const account = accountLinks.get(r.email.toLowerCase());
                                     const isChanged = !isNew && (nameChanged || countChanged || typeChanged);
                                     const rowClass = isChanged
                                         ? 'admin-tickets-import-row-changed'
@@ -645,6 +656,22 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                                         <span className="admin-tickets-import-diff-new">{r.type}</span>
                                                     </>
                                                 ) : r.type}
+                                            </td>
+                                            <td>
+                                                {account === undefined ? (
+                                                    <span className="admin-helper-text">…</span>
+                                                ) : account ? (
+                                                    <span
+                                                        className="admin-tickets-tag admin-tickets-tag-linked"
+                                                        title={account.displayName || account.email}
+                                                    >
+                                                        {isEnglish ? 'Account' : '已注册'}
+                                                    </span>
+                                                ) : (
+                                                    <span className="admin-tickets-tag admin-tickets-tag-unlinked">
+                                                        {isEnglish ? 'No account' : '未注册'}
+                                                    </span>
+                                                )}
                                             </td>
                                             {timestampCol && (
                                                 <td>{r.timestamp ? new Date(r.timestamp).toLocaleString(isEnglish ? 'en-US' : 'zh-CN') : '-'}</td>
