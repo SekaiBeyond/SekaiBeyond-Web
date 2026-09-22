@@ -1,5 +1,8 @@
 export const MAX_IMAGE_SIZE_MB = Number(import.meta.env.VITE_MAX_IMAGE_SIZE_MB ?? 10);
 
+/** Mirrors MAX_VIDEO_UPLOAD_SIZE_MB in functions/src/utils/storage.ts. */
+export const MAX_VIDEO_SIZE_MB = Number(import.meta.env.VITE_MAX_VIDEO_SIZE_MB ?? 20);
+
 export const FOUNDED_DATE = new Date('2024-12-05T00:00:00Z');
 
 const RSO_EMAIL: string = "sekaibeyond@outlook.com"

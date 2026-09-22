@@ -1,12 +1,13 @@
 import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSaveConContent, callUploadAdminImage } from '~/lib/firebase';
+import { MAX_IMAGE_SIZE_MB, MAX_VIDEO_SIZE_MB } from '~/constants';
+import { callSaveConContent, callUploadAdminImage, callUploadConVideo } from '~/lib/firebase';
 import { type ConContent, type ConContentSection, refreshConContent, useConDraft, } from '~/lib/conContent';
 import { useVenues } from '~/lib/venues';
 import { type EarlyBird, type InPersonSession, ROOM_ACCENTS, type RoomAccent } from '~/pages/con/content';
 import type { Localized } from '~/pages/con/i18n';
 import { formatPrice, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/con/utils';
-import type { ShowToast } from './utils';
+import { type ShowToast, validateVideoFile } from './utils';
 import { ImageUploadField } from './ImageUploadField';
 import { SectionNav } from './SectionNav';
 
@@ -16,9 +17,9 @@ import { SectionNav } from './SectionNav';
  *
  * Each section owns its own Save button and writes only its own field, so two
  * people editing different parts of the page cannot clobber each other. The
- * parts of the con page that are not editable here — the hero video, the nav
- * links, the track names, the about copy, the venue travel notes — are tied to
- * files in public/, to section anchors, or to CSS class names, and stay in code.
+ * parts of the con page that are not editable here — the nav links, the track
+ * names, the about copy, the venue travel notes — are tied to section anchors or
+ * to CSS class names, and stay in code.
  */
 
 interface ConContentTabProps {
@@ -29,6 +30,7 @@ interface ConContentTabProps {
 const SECTION_LABELS: Record<ConContentSection, Localized> = {
     settings: {en: 'Page Visibility', zh: '页面可见性'},
     event: {en: 'Event Details', zh: '活动信息'},
+    heroVideo: {en: 'Hero Video', zh: '首屏视频'},
     rooms: {en: 'Rooms', zh: '场地房间'},
     schedule: {en: 'Schedule', zh: '活动日程'},
     guests: {en: 'Guests & Performers', zh: '嘉宾与演出者'},
@@ -41,7 +43,8 @@ const SECTION_LABELS: Record<ConContentSection, Localized> = {
 
 /** The section navigator's order — keep it matching the order ConContentTab renders them in. */
 const SECTION_ORDER: ConContentSection[] = [
-    'settings', 'event', 'rooms', 'schedule', 'guests', 'vendors', 'tickets', 'ticketFee', 'inPersonSales', 'faq',
+    'settings', 'event', 'heroVideo', 'rooms', 'schedule', 'guests', 'vendors', 'tickets', 'ticketFee',
+    'inPersonSales', 'faq',
 ];
 
 const conSectionId = (section: ConContentSection) => `admin-sec-con-${section}`;
@@ -489,6 +492,274 @@ const EventSection = ({content, loading, showToast, readOnly}: SectionProps) => 
                     </span>
                 </label>
             </div>
+        </SectionShell>
+    );
+};
+
+/** The two containers the hero's <video> lists, in the order it lists them. */
+type ClipSlot = 'webm' | 'mp4';
+
+const CLIP_SLOTS: {slot: ClipSlot; type: 'video/webm' | 'video/mp4'; label: Localized; serves: Localized}[] = [
+    {
+        slot: 'webm',
+        type: 'video/webm',
+        label: {en: 'WebM clip', zh: 'WebM 视频'},
+        serves: {en: 'Chrome, Firefox, Edge', zh: 'Chrome、Firefox、Edge'},
+    },
+    {
+        slot: 'mp4',
+        type: 'video/mp4',
+        label: {en: 'MP4 clip', zh: 'MP4 视频'},
+        serves: {en: 'Safari, iPhone, iPad', zh: 'Safari、iPhone、iPad'},
+    },
+];
+
+interface ClipFieldProps {
+    label: Localized;
+    serves: Localized;
+    accept: string;
+    url: string;
+    uploading: boolean;
+    disabled: boolean;
+    onPick: (file: File) => void;
+    onClear: () => void;
+    readOnly?: boolean;
+}
+
+const ClipField = (
+    {label, serves, accept, url, uploading, disabled, onPick, onClear, readOnly}: ClipFieldProps,
+) => {
+    const {isEnglish} = useLanguage();
+
+    return (
+        <div className="admin-con-item">
+            <div className="admin-con-card-head">
+                <span className="admin-con-card-title">
+                    {isEnglish ? label.en : label.zh}
+                    {uploading && (
+                        <span className="admin-con-dirty">{isEnglish ? 'Uploading...' : '上传中...'}</span>
+                    )}
+                </span>
+            </div>
+
+            <p className="admin-helper-text">
+                {isEnglish ? `Served to ${serves.en}.` : `用于 ${serves.zh}。`}
+            </p>
+
+            {url ? (
+                // Muted and looping like the hero itself, so the preview shows the
+                // loop point — the one thing about a background clip that is easy
+                // to get wrong and impossible to see in a still.
+                <video className="admin-video-cover-preview" src={url} muted loop autoPlay playsInline/>
+            ) : (
+                <p className="admin-helper-text admin-mt-4">
+                    {isEnglish ? 'Nothing uploaded yet.' : '尚未上传。'}
+                </p>
+            )}
+
+            {!readOnly && (
+                <div className="admin-btn-row admin-mt-12">
+                    <label className={`admin-btn admin-btn--chip admin-avatar-choose${
+                        disabled ? ' admin-avatar-choose-busy' : ''}`}>
+                        <input
+                            type="file"
+                            accept={accept}
+                            disabled={disabled}
+                            onChange={e => {
+                                const file = e.target.files?.[0];
+                                // Cleared right away so picking the same file twice
+                                // after a failed upload still fires a change event.
+                                e.target.value = '';
+                                if (file) onPick(file);
+                            }}
+                        />
+                        {url
+                            ? (isEnglish ? 'Replace clip' : '更换视频')
+                            : (isEnglish ? 'Choose clip' : '选择视频')}
+                    </label>
+                    {url && (
+                        <button
+                            className="admin-btn admin-btn--chip admin-btn-sm"
+                            onClick={onClear}
+                            disabled={disabled}
+                        >
+                            {isEnglish ? 'Remove' : '移除'}
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps) => {
+    const {isEnglish} = useLanguage();
+    const editor = useSectionEditor('heroVideo', content.heroVideo, loading, showToast);
+    const {draft, setDraft} = editor;
+    /**
+     * Which upload is in flight, or null. Held beside the draft for the same
+     * reason the guest avatar's preview is: a `blob:` URL is not something the
+     * server will accept, and Save is blocked until it resolves either way.
+     */
+    const [busy, setBusy] = useState<ClipSlot | 'poster' | null>(null);
+    const [posterPreview, setPosterPreview] = useState<string | null>(null);
+
+    const uploadClip = async (slot: ClipSlot, type: 'video/webm' | 'video/mp4', file: File) => {
+        if (!validateVideoFile(file, type, isEnglish, showToast)) return;
+        setBusy(slot);
+        try {
+            showToast(isEnglish ? 'Uploading clip...' : '正在上传视频...', 'warning');
+            // Time-stamped so a replacement lands on a new object: the old URL is
+            // still what the published page is serving until this section is saved,
+            // and overwriting it in place would swap the live clip early.
+            const url = await callUploadConVideo(file, `con/hero-${Date.now().toString(36)}.${slot}`);
+            setDraft(prev => ({...prev, [slot]: url}));
+            showToast(isEnglish ? 'Clip uploaded.' : '视频已上传。', 'success');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Clip upload failed.' : '视频上传失败。'), 'error');
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const uploadPoster = async (file: File, previewUrl: string) => {
+        setPosterPreview(previewUrl);
+        setBusy('poster');
+        try {
+            showToast(isEnglish ? 'Uploading poster...' : '正在上传封面图...', 'warning');
+            const url = await callUploadAdminImage(file, `con/hero-poster-${Date.now().toString(36)}.webp`);
+            setDraft(prev => ({...prev, poster: url}));
+            showToast(isEnglish ? 'Poster uploaded.' : '封面图已上传。', 'success');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Poster upload failed.' : '封面图上传失败。'), 'error');
+        } finally {
+            URL.revokeObjectURL(previewUrl);
+            setPosterPreview(null);
+            setBusy(null);
+        }
+    };
+
+    const hasClip = Boolean(draft.webm || draft.mp4);
+
+    return (
+        <SectionShell
+            section="heroVideo"
+            helper={{
+                en: 'The looping backdrop behind the hero. Upload both formats so every browser gets one — '
+                    + 'without a clip the hero falls back to the Bilibili reel, which plays once and is skipped '
+                    + 'on phones entirely.',
+                zh: '首屏背后循环播放的背景视频。请同时上传两种格式，以覆盖所有浏览器——未上传时首屏将回退到 B 站视频，'
+                    + '该视频只播放一次，且在手机上不会显示。',
+            }}
+            editor={editor}
+            busy={busy !== null}
+            busyLabel={{en: 'Waiting for the upload...', zh: '正在等待上传...'}}
+            readOnly={readOnly}
+        >
+            <p className="admin-helper-text">
+                {isEnglish
+                    ? `Export a 10–20 second silent cut, 720p is plenty (a dark scrim and blurred highlights sit `
+                      + `over it, so detail is not visible). H.264 for the MP4, VP9 for the WebM. Aim for a couple `
+                      + `of MB each; ${MAX_VIDEO_SIZE_MB} MB is the hard limit. Make the first and last frames `
+                      + `match, or the loop point will read as a jump.`
+                    : `请导出 10–20 秒的无声片段，720p 已足够（视频上方覆盖有深色遮罩与模糊光晕，细节不可见）。`
+                      + `MP4 使用 H.264 编码，WebM 使用 VP9 编码。建议每个文件控制在几 MB 以内，`
+                      + `上限为 ${MAX_VIDEO_SIZE_MB} MB。请让首尾画面衔接一致，否则循环处会出现明显跳帧。`}
+            </p>
+
+            <div className="admin-con-list admin-mt-12">
+                {CLIP_SLOTS.map(({slot, type, label, serves}) => (
+                    <ClipField
+                        key={slot}
+                        label={label}
+                        serves={serves}
+                        accept={`${type},.${slot}`}
+                        url={draft[slot]}
+                        uploading={busy === slot}
+                        disabled={busy !== null}
+                        onPick={file => uploadClip(slot, type, file)}
+                        onClear={() => setDraft(prev => ({...prev, [slot]: ''}))}
+                        readOnly={readOnly}
+                    />
+                ))}
+
+                <div className="admin-con-item">
+                    <div className="admin-con-card-head">
+                        <span className="admin-con-card-title">
+                            {isEnglish ? 'Poster image' : '封面图'}
+                            {busy === 'poster' && (
+                                <span className="admin-con-dirty">{isEnglish ? 'Uploading...' : '上传中...'}</span>
+                            )}
+                        </span>
+                    </div>
+                    <p className="admin-helper-text">
+                        {isEnglish
+                            ? 'Shown while the clip buffers, and instead of it to visitors who have asked their '
+                              + 'device to reduce motion. With no poster those visitors get a gradient.'
+                            : '视频缓冲期间显示；对于在系统中开启了「减少动态效果」的访客，则完全以此图代替视频。'
+                              + '未上传时显示渐变背景。'}
+                    </p>
+
+                    {draft.poster && !posterPreview && (
+                        <img className="admin-video-cover-preview" src={draft.poster} alt=""/>
+                    )}
+
+                    {!readOnly && (
+                        <div className="admin-mt-12">
+                            <ImageUploadField
+                                label="Poster"
+                                labelCn="封面图"
+                                preview={posterPreview}
+                                onFileChange={uploadPoster}
+                                onCleanupPreview={url => URL.revokeObjectURL(url)}
+                                convertToWebp
+                                showToast={showToast}
+                            />
+                            <p className="admin-helper-text">
+                                {isEnglish
+                                    ? `Any image up to ${MAX_IMAGE_SIZE_MB} MB; it is converted to WebP for you. `
+                                      + 'A frame from the clip itself works best.'
+                                    : `任意图片，最大 ${MAX_IMAGE_SIZE_MB} MB，将自动转换为 WebP 格式。`
+                                      + '建议直接使用视频中的某一帧。'}
+                            </p>
+                        </div>
+                    )}
+
+                    {draft.poster && !readOnly && (
+                        <div className="admin-btn-row admin-mt-12">
+                            <button
+                                className="admin-btn admin-btn--chip admin-btn-sm"
+                                onClick={() => setDraft(prev => ({...prev, poster: ''}))}
+                                disabled={busy !== null}
+                            >
+                                {isEnglish ? 'Remove poster' : '移除封面图'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {draft.webm !== '' && draft.mp4 === '' && (
+                <p className="admin-helper-text admin-mt-12">
+                    {isEnglish
+                        ? '⚠️ No MP4 uploaded — Safari and iOS will fall back to the poster or gradient.'
+                        : '⚠️ 未上传 MP4——Safari 与 iOS 将回退到封面图或渐变背景。'}
+                </p>
+            )}
+            {draft.mp4 !== '' && draft.webm === '' && (
+                <p className="admin-helper-text admin-mt-12">
+                    {isEnglish
+                        ? 'The MP4 alone plays everywhere; a WebM is usually a third smaller, so add one if you can.'
+                        : '仅 MP4 也可在所有浏览器播放；但 WebM 通常能小三分之一，建议一并上传。'}
+                </p>
+            )}
+            {!hasClip && (
+                <p className="admin-helper-text admin-mt-12">
+                    {isEnglish
+                        ? 'No clip uploaded — the hero is currently showing the Bilibili reel, which does not loop.'
+                        : '尚未上传视频——首屏当前显示的是 B 站视频，该视频不会循环播放。'}
+                </p>
+            )}
         </SectionShell>
     );
 };
@@ -1607,6 +1878,8 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
             <SettingsSection {...sectionProps}/>
             <div className="admin-divider"/>
             <EventSection {...sectionProps}/>
+            <div className="admin-divider"/>
+            <HeroVideoSection {...sectionProps}/>
             <div className="admin-divider"/>
             <RoomsSection {...sectionProps}/>
             <div className="admin-divider"/>

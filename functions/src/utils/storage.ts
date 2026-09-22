@@ -1,9 +1,19 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { getStorage } from "firebase-admin/storage";
 
-export const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "upcoming-events/headers/", "badges/", "team/", "config/", "passports/"];
+export const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "upcoming-events/headers/", "badges/", "team/", "config/", "passports/", "con/"];
 export const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
 export const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+
+/**
+ * Videos get their own, larger cap: the con hero loop is a 10-20s clip, which is
+ * a few MB even after the encode, where every image on the site is a thumbnail.
+ * Well under the 32MiB a Cloud Run request may carry, because the file travels
+ * as base64 and so weighs 4/3 its own size on the wire — 20MB of video is a
+ * ~27MB request, which leaves room for the JSON around it.
+ */
+export const MAX_VIDEO_UPLOAD_SIZE_MB = Number(process.env.MAX_VIDEO_UPLOAD_SIZE_MB ?? 20);
+export const MAX_VIDEO_UPLOAD_SIZE = MAX_VIDEO_UPLOAD_SIZE_MB * 1024 * 1024;
 
 export function validateStoragePath(path: string): void {
     if (path.includes("..") || path.includes("\0") || path.includes("//")) {
@@ -19,6 +29,24 @@ export const IMAGE_SIGNATURES: {mime: string; magic: Buffer}[] = [
     {mime: "image/png", magic: Buffer.from([0x89, 0x50, 0x4E, 0x47])},
     {mime: "image/gif", magic: Buffer.from([0x47, 0x49, 0x46, 0x38])},
 ];
+
+/**
+ * The two formats the hero's <video> lists. Neither is identified by a magic
+ * number at offset 0 the way an image is: an MP4 opens with the length of its
+ * first box and only then the "ftyp" tag, and a WebM is a Matroska stream whose
+ * EBML header says nothing about the codecs inside. This is a container check,
+ * not a codec one — enough to know the bytes are not something else wearing a
+ * video content type.
+ */
+export function detectVideoMime(buffer: Buffer): string | null {
+    if (buffer.length >= 12 && buffer.subarray(4, 8).equals(Buffer.from("ftyp"))) {
+        return "video/mp4";
+    }
+    if (buffer.length >= 4 && buffer.subarray(0, 4).equals(Buffer.from([0x1A, 0x45, 0xDF, 0xA3]))) {
+        return "video/webm";
+    }
+    return null;
+}
 
 export function detectImageMime(buffer: Buffer): string | null {
     // WebP uses a RIFF container — check bytes 0-3 for "RIFF" and bytes 8-11 for "WEBP"

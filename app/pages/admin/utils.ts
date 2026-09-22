@@ -18,11 +18,12 @@ import { getFirebaseDb } from '~/lib/firebase';
 import { normalizeGroup, type UserGroup } from '~/components/AuthProvider';
 import type { UserRecord } from './types';
 import type { ShowToast } from '~/lib/useToasts';
-import { MAX_IMAGE_SIZE_MB } from '~/constants';
+import { MAX_IMAGE_SIZE_MB, MAX_VIDEO_SIZE_MB } from '~/constants';
 
 export const WEBP_QUALITY = 0.95;
 
 const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
 
 // Re-exported so the admin panel keeps importing its toaster type from here,
 // while there is only one definition of it (in ~/lib/useToasts).
@@ -196,6 +197,43 @@ export function validateImageFile(f: File, isEnglish: boolean, showToast: ShowTo
     }
     if (f.size > MAX_IMAGE_SIZE_BYTES) {
         showToast(isEnglish ? `Image must be under ${MAX_IMAGE_SIZE_MB} MB.` : `图片大小不能超过 ${MAX_IMAGE_SIZE_MB} MB。`, 'error');
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Each slot takes one container, not either of them: the stored filename's
+ * extension is minted from the slot, and the `<source type>` the hero renders
+ * comes from the same place. A WebM dropped into the MP4 slot would be served to
+ * Safari as an .mp4 it cannot decode, and the hero would vanish for iOS alone.
+ *
+ * The browser reports the container, not the codecs, so this only rules out the
+ * wrong kind of file. A .webm holding AV1, or an .mp4 holding HEVC, passes here
+ * and then fails to decode in some browsers — which is why the hero lists both
+ * sources and why the helper text names H.264 and VP9.
+ */
+export function validateVideoFile(
+    f: File,
+    expected: 'video/mp4' | 'video/webm',
+    isEnglish: boolean,
+    showToast: ShowToast,
+): boolean {
+    if (f.type !== expected) {
+        const name = expected === 'video/mp4' ? 'MP4' : 'WebM';
+        showToast(
+            isEnglish ? `Please upload a ${name} video.` : `请上传 ${name} 格式的视频。`,
+            'error',
+        );
+        return false;
+    }
+    if (f.size > MAX_VIDEO_SIZE_BYTES) {
+        showToast(
+            isEnglish
+                ? `Video must be under ${MAX_VIDEO_SIZE_MB} MB.`
+                : `视频大小不能超过 ${MAX_VIDEO_SIZE_MB} MB。`,
+            'error',
+        );
         return false;
     }
     return true;

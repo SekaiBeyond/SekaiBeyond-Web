@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent, useConVenue } from '~/lib/conContent';
-import { CON_NAME, HERO_VIDEO, VENUE_TBA } from '~/pages/con/content';
+import { CON_NAME, HERO_EMBED, VENUE_TBA } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { useMediaQuery } from '~/pages/con/hooks';
 import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/con/utils';
@@ -10,15 +10,15 @@ import { Countdown } from '~/pages/con/Countdown';
 /**
  * Bilibili's embed player only autoplays when it is muted, ignores autoplay
  * entirely on mobile browsers, and has no loop parameter — it plays once and
- * stops. A self-hosted clip (`HERO_VIDEO.loopMp4`) is preferred for exactly
- * those reasons; this is the fallback when none is configured.
+ * stops. A clip uploaded in Admin → Con Content → Hero Video is preferred for
+ * exactly those reasons; this is the fallback when none is configured.
  */
 const buildPlayerUrl = () => {
     const params = new URLSearchParams({
         isOutside: 'true',
-        aid: HERO_VIDEO.aid,
-        bvid: HERO_VIDEO.bvid,
-        cid: HERO_VIDEO.cid,
+        aid: HERO_EMBED.aid,
+        bvid: HERO_EMBED.bvid,
+        cid: HERO_EMBED.cid,
         p: '1',
         autoplay: '1',
         muted: '1',
@@ -42,9 +42,9 @@ const generateSparkStyles = () =>
 export const Hero = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
-    const {content} = useConContent();
+    const {content, loading} = useConContent();
     const venue = useConVenue();
-    const {event} = content;
+    const {event, heroVideo} = content;
     const sparks = useMemo(generateSparkStyles, []);
 
     const isWide = useMediaQuery('(min-width: 769px)');
@@ -52,30 +52,38 @@ export const Hero = () => {
 
     // A local clip is muted + playsinline, so phones autoplay it happily; the
     // Bilibili iframe they refuse outright, hence the width gate on that path.
-    const hasClip = Boolean(HERO_VIDEO.loopMp4 || HERO_VIDEO.loopWebm);
+    const hasClip = Boolean(heroVideo.mp4 || heroVideo.webm);
     const showClip = hasClip && allowsMotion;
-    const showEmbed = !hasClip && isWide && allowsMotion;
+    // Which clip is configured is not known until the content lands, so the embed
+    // waits for it. Starting the iframe on the defaults would fetch a player we
+    // then tear down a moment later, and the swap is visible.
+    const showEmbed = !hasClip && !loading && isWide && allowsMotion;
 
-    const posterStyle = HERO_VIDEO.poster
-        ? {backgroundImage: `url('${HERO_VIDEO.poster}')`}
+    const posterStyle = heroVideo.poster
+        ? {backgroundImage: `url('${heroVideo.poster}')`}
         : undefined;
 
     return (
         <section id="con-home" className="sbc-hero">
             <div className="sbc-hero-media" aria-hidden="true">
                 {showClip && (
+                    // Keyed on the sources so swapping the clip in the admin panel
+                    // remounts the element; React alone would leave <video> playing
+                    // the file it already loaded, since changing a <source> child
+                    // does nothing without a .load() call.
                     <video
+                        key={`${heroVideo.webm}|${heroVideo.mp4}`}
                         className="sbc-hero-clip"
                         autoPlay
                         muted
                         loop
                         playsInline
                         preload="auto"
-                        poster={HERO_VIDEO.poster || undefined}
+                        poster={heroVideo.poster || undefined}
                         tabIndex={-1}
                     >
-                        {HERO_VIDEO.loopWebm && <source src={HERO_VIDEO.loopWebm} type="video/webm"/>}
-                        {HERO_VIDEO.loopMp4 && <source src={HERO_VIDEO.loopMp4} type="video/mp4"/>}
+                        {heroVideo.webm && <source src={heroVideo.webm} type="video/webm"/>}
+                        {heroVideo.mp4 && <source src={heroVideo.mp4} type="video/mp4"/>}
                     </video>
                 )}
 

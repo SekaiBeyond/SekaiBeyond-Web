@@ -11,9 +11,12 @@ import { DRAIN_INTERVAL_MINUTES, getScheduledMailQueueStatus } from "./scheduled
 import {
     deleteStorageFile,
     detectImageMime,
+    detectVideoMime,
     logStorageCleanupError,
     MAX_UPLOAD_SIZE,
     MAX_UPLOAD_SIZE_MB,
+    MAX_VIDEO_UPLOAD_SIZE,
+    MAX_VIDEO_UPLOAD_SIZE_MB,
     validateStoragePath
 } from "../utils/storage";
 import {
@@ -68,6 +71,60 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
     const downloadUrl = await getDownloadURL(file);
     return {url: downloadUrl};
 });
+
+/**
+ * The con hero's background loop. Kept apart from `uploadAdminImage` rather than
+ * folded into it: the two differ in every check that matters — allowed content
+ * types, magic bytes, size cap, and destination prefix. Teaching the image path
+ * to carry video would mean every badge and avatar upload inherits the video
+ * ceiling as well, which is the one thing that path is careful about.
+ */
+export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async (request) => {
+    const uid = await requireAuth(request);
+    await requireAdmin(uid);
+
+    const input = request.data as {
+        path?: string;
+        data?: string;
+        contentType?: string;
+    };
+
+    const path = input.path;
+    const dataBase64 = input.data;
+    const contentType = input.contentType;
+
+    if (!path || !dataBase64 || !contentType) {
+        throw new HttpsError("invalid-argument", "Missing path, data, or contentType.");
+    }
+    validateStoragePath(path);
+    if (!path.startsWith("con/")) {
+        throw new HttpsError("invalid-argument", "Con videos must be stored under con/.");
+    }
+
+    if (contentType !== "video/mp4" && contentType !== "video/webm") {
+        throw new HttpsError("invalid-argument", "Only video/mp4 and video/webm are allowed.");
+    }
+
+    const buffer = Buffer.from(dataBase64, "base64");
+    if (buffer.length > MAX_VIDEO_UPLOAD_SIZE) {
+        throw new HttpsError("invalid-argument", `Video exceeds ${MAX_VIDEO_UPLOAD_SIZE_MB}MB limit.`);
+    }
+
+    const detectedMime = detectVideoMime(buffer);
+    if (!detectedMime || detectedMime !== contentType) {
+        throw new HttpsError("invalid-argument", "File content does not match claimed content type.");
+    }
+
+    const bucket = getStorage().bucket();
+    const file = bucket.file(path);
+    await file.save(buffer, {
+        metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
+    });
+
+    const downloadUrl = await getDownloadURL(file);
+    return {url: downloadUrl};
+});
+
 export const saveTag = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
@@ -297,7 +354,8 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
 const CON_ROOM_ACCENTS = ["pink", "violet", "amber", "sky", "mint", "slate"] as const;
 
 const CON_SECTIONS = [
-    "settings", "event", "rooms", "schedule", "guests", "vendors", "tickets", "ticketFee", "inPersonSales", "faq",
+    "settings", "event", "heroVideo", "rooms", "schedule", "guests", "vendors", "tickets", "ticketFee",
+    "inPersonSales", "faq",
 ] as const;
 type ConSection = typeof CON_SECTIONS[number];
 
@@ -358,11 +416,12 @@ function requireISODate(raw: unknown, name: string): string {
 }
 
 /**
- * Guest photos come from two places: an admin upload (a Storage download URL) or
- * a file committed under public/ (a root-relative path). Anything else — an
- * off-site URL, a traversal attempt — is rejected.
+ * Con assets — guest photos, the hero clip and its poster — come from two places:
+ * an admin upload (a Storage download URL) or a file committed under public/ (a
+ * root-relative path). Anything else — an off-site URL, a traversal attempt — is
+ * rejected, so nothing the page loads is served from a host we do not control.
  */
-function validateConImage(raw: unknown, name: string): string {
+function validateConAsset(raw: unknown, name: string): string {
     const value = validateStr(raw, name, 500).trim();
     if (!value) return "";
     if (value.startsWith("/")) {
@@ -423,6 +482,29 @@ function buildConEvent(raw: unknown) {
         venueId,
         ticketUrl,
     };
+}
+
+/**
+ * The hero's background loop. All three fields are optional: with none of them
+ * set the hero falls back to the Bilibili embed, which is what the page did
+ * before this section existed.
+ *
+ * The extensions are pinned to the container each source element claims. A webm
+ * URL serving an MP4 is not a security problem, but it is an invisible one — the
+ * browsers that take the first source they can play would silently skip the clip
+ * and the hero would look broken for exactly half the audience.
+ */
+function buildConHeroVideo(raw: unknown) {
+    const v = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const webm = validateConAsset(v.webm, "hero webm");
+    const mp4 = validateConAsset(v.mp4, "hero mp4");
+    if (webm && !/\.webm(\?|$)/i.test(webm)) {
+        throw new HttpsError("invalid-argument", "The WebM source must be a .webm file.");
+    }
+    if (mp4 && !/\.mp4(\?|$)/i.test(mp4)) {
+        throw new HttpsError("invalid-argument", "The MP4 source must be an .mp4 file.");
+    }
+    return {webm, mp4, poster: validateConAsset(v.poster, "hero poster")};
 }
 
 /**
@@ -526,7 +608,7 @@ function buildConGuests(raw: unknown) {
         name: sanitizeDisplayText(validateStr(guest.name, "guest name", 120, true)),
         role: validateLocalized(guest.role, "guest role", 120),
         blurb: validateLocalized(guest.blurb, "guest blurb", 1000),
-        avatar: validateConImage(guest.avatar, "guest avatar"),
+        avatar: validateConAsset(guest.avatar, "guest avatar"),
         link: validateConLink(guest.link, "guest link"),
     }));
 }
@@ -654,6 +736,7 @@ function buildConFaq(raw: unknown) {
 const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
     settings: buildConSettings,
     event: buildConEvent,
+    heroVideo: buildConHeroVideo,
     rooms: buildConRooms,
     schedule: buildConSchedule,
     guests: buildConGuests,

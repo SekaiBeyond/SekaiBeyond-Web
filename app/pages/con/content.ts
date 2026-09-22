@@ -1,20 +1,21 @@
 /**
  * Every piece of copy on the con page lives here, in both languages.
  *
- * Nine of these exports are also editable from the admin panel's Con Content tab,
- * which stores overrides in Firestore (`conContent/main`): CON, ROOMS, SCHEDULE,
- * GUESTS, VENDORS + VENDOR_CTA, TICKETS, TICKET_FEE, IN_PERSON_SALES, and FAQ.
- * What is written below stays the shipped default — `app/lib/conContent.ts`
+ * Ten of these exports are also editable from the admin panel's Con Content tab,
+ * which stores overrides in Firestore (`conContent/main`): CON, HERO_VIDEO, ROOMS,
+ * SCHEDULE, GUESTS, VENDORS + VENDOR_CTA, TICKETS, TICKET_FEE, IN_PERSON_SALES,
+ * and FAQ. What is written below stays the shipped default — `app/lib/conContent.ts`
  * overlays the stored value section by section, so an empty or unreachable
  * document falls back to this file rather than to a blank page. Editing here
  * still works; it sets what a visitor sees before the fetch lands, and what they
  * keep seeing for any section an admin has never touched.
  *
- * The rest — HERO_VIDEO, NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS, VENUE_NOTES —
- * is code-only, because it is tied to files in public/ or to section anchors that
- * an admin cannot add. ROOM_ACCENTS is code-only for the same reason (each value
- * is a CSS class), but which rooms exist and which accent each wears is data.
- * CON_NAME is code-only because the con's name does not change between editions.
+ * The rest — HERO_EMBED, NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS, VENUE_NOTES —
+ * is code-only, because it is tied to section anchors an admin cannot add or to
+ * the reel the main site already points at. ROOM_ACCENTS is code-only for the
+ * same reason (each value is a CSS class), but which rooms exist and which accent
+ * each wears is data. CON_NAME is code-only because the con's name does not
+ * change between editions.
  */
 
 import { BILIBILI_VIDEO } from '~/constants';
@@ -91,28 +92,36 @@ export const CON: ConEvent = {
     ticketUrl: '',
 };
 
-/**
- * The hero backdrop, in order of preference:
- *
- *   1. `loopMp4` / `loopWebm` — a short silent clip served from public/. This is
- *      the only option that actually loops, and it autoplays on phones too.
- *   2. The Bilibili embed below — plays once, desktop only. Bilibili's iframe has
- *      no loop parameter and is cross-origin, so we cannot restart it ourselves.
- *   3. `poster`, or a gradient if that is empty too.
- *
- * To turn on looping: export a 10–20s cut of the reel (silent, ~1080p, under a
- * few MB), drop it in public/, and set the paths here.
- */
-export const HERO_VIDEO = {
-    loopMp4: '',
-    loopWebm: '',
-
-    /** The featured reel, shared with the main site's video section. */
+/** The featured reel, shared with the main site's video section. */
+export const HERO_EMBED = {
     aid: BILIBILI_VIDEO.aid,
     bvid: BILIBILI_VIDEO.bvid,
     cid: BILIBILI_VIDEO.cid,
+};
 
+/**
+ * The hero backdrop, in order of preference:
+ *
+ *   1. `webm` / `mp4` — a short silent clip uploaded in Admin → Con Content →
+ *      Hero Video. This is the only option that actually loops, and it autoplays
+ *      on phones too.
+ *   2. The `HERO_EMBED` reel above — plays once, desktop only. Bilibili's iframe
+ *      has no loop parameter and is cross-origin, so we cannot restart it ourselves.
+ *   3. `poster`, or a gradient if that is empty too.
+ *
+ * Listed in source order: browsers take the first one they can play, so the webm
+ * serves Chrome, Firefox and Edge while the mp4 is what Safari and iOS fall to.
+ */
+export interface ConHeroVideo {
+    webm: string;
+    mp4: string;
     /** Still frame for reduced-motion visitors, and the clip's own poster while it buffers. */
+    poster: string;
+}
+
+export const HERO_VIDEO: ConHeroVideo = {
+    webm: '',
+    mp4: '',
     poster: '',
 };
 

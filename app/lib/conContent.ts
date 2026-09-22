@@ -7,12 +7,14 @@ import {
     CON,
     CON_SETTINGS,
     type ConEvent,
+    type ConHeroVideo,
     type ConSettings,
     type EarlyBird,
     FAQ,
     type FaqEntry,
     type Guest,
     GUESTS,
+    HERO_VIDEO,
     IN_PERSON_SALES,
     type InPersonSales,
     type Room,
@@ -40,6 +42,7 @@ import type { Localized } from '~/pages/con/i18n';
 export interface ConContent {
     settings: ConSettings;
     event: ConEvent;
+    heroVideo: ConHeroVideo;
     rooms: Room[];
     schedule: ScheduleItem[];
     guests: Guest[];
@@ -54,6 +57,7 @@ export interface ConContent {
 export const DEFAULT_CON_CONTENT: ConContent = {
     settings: CON_SETTINGS,
     event: CON,
+    heroVideo: HERO_VIDEO,
     rooms: ROOMS,
     schedule: SCHEDULE,
     guests: GUESTS,
@@ -130,6 +134,16 @@ const readEvent = (raw: unknown): ConEvent => {
         venueId: str(e.venueId, CON.venueId),
         ticketUrl: str(e.ticketUrl, CON.ticketUrl),
     };
+};
+
+/**
+ * Every field is optional — a con with no clip uploaded yet stores three empty
+ * strings, and the hero falls through to the Bilibili embed on its own.
+ */
+const readHeroVideo = (raw: unknown): ConHeroVideo => {
+    if (!raw || typeof raw !== 'object') return HERO_VIDEO;
+    const v = obj(raw);
+    return {webm: str(v.webm), mp4: str(v.mp4), poster: str(v.poster)};
 };
 
 const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({
@@ -221,6 +235,7 @@ const readFaq = (raw: unknown): FaqEntry[] =>
 
 const readSections = (data: Record<string, unknown>): Omit<ConContent, 'settings'> => ({
     event: readEvent(data.event),
+    heroVideo: readHeroVideo(data.heroVideo),
     rooms: readRooms(data.rooms),
     schedule: readSchedule(data.schedule),
     guests: readGuests(data.guests),

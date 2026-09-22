@@ -599,6 +599,20 @@ export const callUploadAdminImage = async (file: File, storagePath: string): Pro
     return result.data.url;
 };
 
+/** The con hero's background loop. `storagePath` must sit under `con/`. */
+export const callUploadConVideo = async (file: File, storagePath: string): Promise<string> => {
+    const base64 = await readFileAsBase64(file);
+    const result = await httpsCallable<
+        {path: string; data: string; contentType: string},
+        {url: string}
+    >(getFunctions(), 'uploadConVideo')({
+        path: storagePath,
+        data: base64,
+        contentType: file.type,
+    });
+    return result.data.url;
+};
+
 export const callUpdateDisplayName = (data: {displayName: string; targetUid?: string}) =>
     httpsCallable<{displayName: string; targetUid?: string}, {displayName: string}>(
         getFunctions(), 'updateDisplayName'
