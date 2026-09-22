@@ -1152,25 +1152,52 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
 
 .profile-ticket-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+    gap: 10px;
 }
 
-/* A stub of its own: the type it admits, its code, and where it stands. Pale
-   paper on the pink card, so a ticket reads as something handed over. */
+/* A row rather than a card: with the code behind a tap there is only a line of
+   text to show. The row itself is inert — a scanned ticket has no code left to
+   open and is drawn as a plain row, so what makes one look pressable lives on
+   the modifier below rather than here. */
 .profile-ticket {
     display: flex;
-    flex-direction: column;
     align-items: center;
     gap: 10px;
-    padding: 14px 12px;
+    width: 100%;
+    padding: 12px 14px;
     border: 1px solid var(--profile-rule);
-    border-radius: 16px;
+    border-radius: 14px;
     background: var(--profile-paper);
-    text-align: center;
+    font: inherit;
+    text-align: left;
 }
 
+/* Carries a code worth opening. */
+.profile-ticket--tappable {
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.profile-ticket--tappable:hover {
+    transform: translateY(-1px);
+    border-color: var(--profile-rule-strong);
+    box-shadow: 0 6px 18px rgba(255, 150, 200, 0.14);
+}
+
+.profile-ticket--tappable:focus-visible {
+    outline: 3px solid rgba(255, 107, 157, 0.45);
+    outline-offset: 2px;
+}
+
+.profile-ticket--void {
+    border-style: dashed;
+}
+
+/* The one piece the row and the opened ticket share; everything else differs
+   between a line in a list and a panel built around a code. */
 .profile-ticket-type {
+    flex-shrink: 0;
     padding: 3px 12px;
     border-radius: 999px;
     background: linear-gradient(135deg, rgba(255, 107, 157, 0.16), rgba(254, 202, 87, 0.22));
@@ -1181,63 +1208,9 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     letter-spacing: 0.6px;
 }
 
-.profile-ticket-qr {
-    position: relative;
-    display: flex;
-    padding: 8px;
-    border-radius: 12px;
-    background: white;
-}
-
-/* The QR itself, not the stamp's icon sitting over it. */
-.profile-ticket-qr > svg {
-    display: block;
-    width: 100%;
-    height: auto;
-}
-
-/* A spent code stays on screen — the id under it is what door staff read out
-   when a scan won't take — but it is stamped and faded so it can't be mistaken
-   for one that still works. */
-.profile-ticket--used .profile-ticket-qr > svg,
-.profile-ticket--void .profile-ticket-qr > svg {
-    opacity: 0.18;
-    filter: grayscale(1);
-}
-
-/* A mark pressed onto the stub, solid enough to read at a glance across a
-   crowded doorway rather than a tint lost in the code behind it. */
-.profile-ticket-stamp {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 66px;
-    height: 66px;
-    border: 3px solid currentColor;
-    border-radius: 50%;
-    background: white;
-    font-size: 34px;
-    color: var(--color-success);
-    transform: translate(-50%, -50%) rotate(-12deg);
-}
-
-.profile-ticket--void .profile-ticket-stamp {
-    color: var(--color-error);
-}
-
-.profile-ticket-id {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    line-height: 1.45;
-    color: var(--color-text-muted);
-    overflow-wrap: anywhere;
-    user-select: all;
-}
-
 .profile-ticket-status {
+    flex: 1;
+    min-width: 0;
     font-size: 12px;
     font-weight: 700;
     color: var(--color-primary);
@@ -1247,11 +1220,28 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: var(--color-success);
 }
 
-.profile-ticket--void {
-    border-style: dashed;
+.profile-ticket--void .profile-ticket-status {
+    color: var(--color-error);
 }
 
-.profile-ticket--void .profile-ticket-status {
+/* Either the affordance for "there is a code behind this", or — on a row with
+   no code left to open — the mark of what became of it. */
+.profile-ticket-open {
+    display: flex;
+    flex-shrink: 0;
+    font-size: 15px;
+    color: var(--color-text-light);
+}
+
+.profile-ticket--tappable:hover .profile-ticket-open {
+    color: var(--color-primary);
+}
+
+.profile-ticket--used .profile-ticket-open {
+    color: var(--color-success);
+}
+
+.profile-ticket--void .profile-ticket-open {
     color: var(--color-error);
 }
 
@@ -1260,6 +1250,106 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     font-size: 12.5px;
     line-height: 1.55;
     color: var(--color-text-light);
+}
+
+/* --- One ticket, opened to be scanned -------------------------------------- */
+
+/* Sits on the shared .modal-overlay. White rather than the usual gradient: the
+   panel is the code's quiet zone, and a reader wants nothing else around it. */
+.profile-ticket-modal {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: min(92vw, 420px);
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 30px 24px 26px;
+    border-radius: 22px;
+    background: white;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.3s ease;
+    text-align: center;
+}
+
+/* The ring the rest of the page uses, rather than the browser's own — this is
+   the first thing focused when the ticket opens, so it is always on show. */
+.profile-ticket-modal .modal-close:focus-visible {
+    outline: 3px solid rgba(255, 107, 157, 0.45);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
+/* Clear of the close button in the corner. */
+.profile-ticket-modal-event {
+    max-width: 100%;
+    padding: 0 26px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+}
+
+/* As large as the screen allows — the point of opening it at all. The code
+   carries its own 4-module quiet zone, so this width covers both. */
+.profile-ticket-modal-qr {
+    position: relative;
+    width: min(84vw, 366px);
+    margin: -6px 0;
+}
+
+.profile-ticket-modal-qr > svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* A voided code stays on screen — the id under it is what door staff read out
+   when a scan won't take — but it is stamped and faded so it can't be mistaken
+   for one that still works. */
+.profile-ticket-modal--void .profile-ticket-modal-qr > svg {
+    opacity: 0.18;
+    filter: grayscale(1);
+}
+
+/* A mark pressed onto the code, solid enough to read at a glance across a
+   crowded doorway rather than a tint lost in the code behind it. */
+.profile-ticket-stamp {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 96px;
+    height: 96px;
+    border: 4px solid currentColor;
+    border-radius: 50%;
+    background: white;
+    font-size: 50px;
+    color: var(--color-error);
+    transform: translate(-50%, -50%) rotate(-12deg);
+}
+
+.profile-ticket-id {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.profile-ticket-modal-status {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-primary);
+}
+
+.profile-ticket-modal--void .profile-ticket-modal-status {
+    color: var(--color-error);
 }
 
 /* --- Group chip and membership --------------------------------------------- */
@@ -1631,16 +1721,10 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         gap: 16px;
     }
 
-    /* Two stubs across rather than one stretched one — a QR any wider than this
-       is no easier to scan. */
+    /* One ticket per row: the rows are a line of text each, and a phone is
+       where someone actually opens one. */
     .profile-ticket-grid {
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-        gap: 10px;
-    }
-
-    .profile-ticket {
-        padding: 12px 8px;
-        gap: 8px;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .profile-ticket-poster {
@@ -1648,8 +1732,14 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         height: 46px;
     }
 
+    .profile-ticket-modal {
+        padding: 26px 18px 22px;
+    }
+
     .profile-ticket-stamp {
-        font-size: 44px;
+        width: 80px;
+        height: 80px;
+        font-size: 42px;
     }
 
     .profile-card {
