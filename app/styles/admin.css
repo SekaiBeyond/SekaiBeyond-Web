@@ -2353,6 +2353,16 @@
     color: #856404;
 }
 
+.admin-tickets-tag-type-student {
+    background: rgba(111, 66, 193, 0.15);
+    color: #5a32a3;
+}
+
+.admin-tickets-tag-type-early-bird-student {
+    background: rgba(76, 110, 245, 0.15);
+    color: #364fc7;
+}
+
 .admin-tickets-tag-type-vip {
     background: rgba(233, 30, 99, 0.15);
     color: #c2185b;

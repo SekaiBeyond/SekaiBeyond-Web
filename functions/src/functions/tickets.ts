@@ -37,7 +37,16 @@ function validateTicketCount(value: unknown): number {
     return value;
 }
 
-const VALID_TICKET_TYPES = ["normal", "early-bird", "vip", "Comp Ticket", "guest", "vendor"];
+const VALID_TICKET_TYPES = [
+    "normal",
+    "early-bird",
+    "student",
+    "early-bird-student",
+    "vip",
+    "Comp Ticket",
+    "guest",
+    "vendor",
+];
 
 function validateTicketType(value: unknown): string {
     if (typeof value !== "string" || !VALID_TICKET_TYPES.includes(value)) {
@@ -135,9 +144,15 @@ function renderTicketQrBlock(tickets: any[], eventId: string): string {
         let bgColor = "#ff6b9d"; // brand pink
         let textColor = "#ffffff";
 
-        if (typeRaw === "early-bird" || typeRaw === "earlybird") {
+        if (typeRaw === "early-bird-student" || typeRaw === "earlybirdstudent") {
+            typeLabel = "Early Bird Student";
+            bgColor = "#8e44ad"; // deep purple
+        } else if (typeRaw === "early-bird" || typeRaw === "earlybird") {
             typeLabel = "Early Bird";
             bgColor = "#1abc9c"; // teal
+        } else if (typeRaw === "student" || typeRaw === "学生") {
+            typeLabel = "Student";
+            bgColor = "#9b59b6"; // purple
         } else if (typeRaw === "vip") {
             typeLabel = "VIP";
             bgColor = "#f39c12"; // gold
@@ -147,6 +162,9 @@ function renderTicketQrBlock(tickets: any[], eventId: string): string {
         } else if (typeRaw === "Comp Ticket" || typeRaw === "comp" || typeRaw === "赠票") {
             typeLabel = "Comp Ticket";
             bgColor = "#95a5a6"; // gray
+        } else if (typeRaw === "vendor" || typeRaw === "商摊") {
+            typeLabel = "Vendor";
+            bgColor = "#d35400"; // burnt orange
         }
 
         const qrUrl = `${origin}/api/ticket-qr?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;

@@ -149,7 +149,10 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
             }
 
             let type: TicketType = 'normal';
-            if (typeRaw === 'early-bird' || typeRaw === 'earlybird') type = 'early-bird';
+            if (typeRaw === 'early-bird-student' || typeRaw === 'earlybirdstudent'
+                || typeRaw === 'early bird student' || typeRaw === '早鸟学生') type = 'early-bird-student';
+            else if (typeRaw === 'early-bird' || typeRaw === 'earlybird') type = 'early-bird';
+            else if (typeRaw === 'student' || typeRaw === '学生') type = 'student';
             else if (typeRaw === 'vip') type = 'vip';
             else if (typeRaw === 'comp ticket' || typeRaw === 'comp' || typeRaw === '赠票') type = 'Comp Ticket';
             else if (typeRaw === 'guest' || typeRaw === '嘉宾') type = 'guest';

@@ -29,6 +29,8 @@ interface StatsSectionProps {
 const TYPE_COLORS: Record<TicketType, string> = {
     normal: '#6c757d',
     'early-bird': '#ffc107',
+    student: '#6f42c1',
+    'early-bird-student': '#4c6ef5',
     vip: '#e91e63',
     'Comp Ticket': '#28a745',
     guest: '#17a2b8',
