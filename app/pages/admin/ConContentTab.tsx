@@ -496,28 +496,7 @@ const EventSection = ({content, loading, showToast, readOnly}: SectionProps) => 
     );
 };
 
-/** The two containers the hero's <video> lists, in the order it lists them. */
-type ClipSlot = 'webm' | 'mp4';
-
-const CLIP_SLOTS: {slot: ClipSlot; type: 'video/webm' | 'video/mp4'; label: Localized; serves: Localized}[] = [
-    {
-        slot: 'webm',
-        type: 'video/webm',
-        label: {en: 'WebM clip', zh: 'WebM 视频'},
-        serves: {en: 'Chrome, Firefox, Edge', zh: 'Chrome、Firefox、Edge'},
-    },
-    {
-        slot: 'mp4',
-        type: 'video/mp4',
-        label: {en: 'MP4 clip', zh: 'MP4 视频'},
-        serves: {en: 'Safari, iPhone, iPad', zh: 'Safari、iPhone、iPad'},
-    },
-];
-
 interface ClipFieldProps {
-    label: Localized;
-    serves: Localized;
-    accept: string;
     url: string;
     uploading: boolean;
     disabled: boolean;
@@ -526,16 +505,14 @@ interface ClipFieldProps {
     readOnly?: boolean;
 }
 
-const ClipField = (
-    {label, serves, accept, url, uploading, disabled, onPick, onClear, readOnly}: ClipFieldProps,
-) => {
+const ClipField = ({url, uploading, disabled, onPick, onClear, readOnly}: ClipFieldProps) => {
     const {isEnglish} = useLanguage();
 
     return (
         <div className="admin-con-item">
             <div className="admin-con-card-head">
                 <span className="admin-con-card-title">
-                    {isEnglish ? label.en : label.zh}
+                    {isEnglish ? 'Looping clip (WebM)' : '循环视频（WebM）'}
                     {uploading && (
                         <span className="admin-con-dirty">{isEnglish ? 'Uploading...' : '上传中...'}</span>
                     )}
@@ -543,7 +520,11 @@ const ClipField = (
             </div>
 
             <p className="admin-helper-text">
-                {isEnglish ? `Served to ${serves.en}.` : `用于 ${serves.zh}。`}
+                {isEnglish
+                    ? 'Plays on Chrome, Firefox and Edge. Safari, iPhone and iPad get the poster below instead — '
+                    + 'they do not download the clip at all.'
+                    : '在 Chrome、Firefox 与 Edge 中播放。Safari、iPhone 与 iPad 将改为显示下方的封面图——'
+                    + '这些设备完全不会下载该视频。'}
             </p>
 
             {url ? (
@@ -563,7 +544,7 @@ const ClipField = (
                         disabled ? ' admin-avatar-choose-busy' : ''}`}>
                         <input
                             type="file"
-                            accept={accept}
+                            accept="video/webm,.webm"
                             disabled={disabled}
                             onChange={e => {
                                 const file = e.target.files?.[0];
@@ -601,19 +582,19 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
      * reason the guest avatar's preview is: a `blob:` URL is not something the
      * server will accept, and Save is blocked until it resolves either way.
      */
-    const [busy, setBusy] = useState<ClipSlot | 'poster' | null>(null);
+    const [busy, setBusy] = useState<'clip' | 'poster' | null>(null);
     const [posterPreview, setPosterPreview] = useState<string | null>(null);
 
-    const uploadClip = async (slot: ClipSlot, type: 'video/webm' | 'video/mp4', file: File) => {
-        if (!validateVideoFile(file, type, isEnglish, showToast)) return;
-        setBusy(slot);
+    const uploadClip = async (file: File) => {
+        if (!validateVideoFile(file, isEnglish, showToast)) return;
+        setBusy('clip');
         try {
             showToast(isEnglish ? 'Uploading clip...' : '正在上传视频...', 'warning');
             // Time-stamped so a replacement lands on a new object: the old URL is
             // still what the published page is serving until this section is saved,
             // and overwriting it in place would swap the live clip early.
-            const url = await callUploadConVideo(file, `con/hero-${Date.now().toString(36)}.${slot}`);
-            setDraft(prev => ({...prev, [slot]: url}));
+            const url = await callUploadConVideo(file, `con/hero-${Date.now().toString(36)}.webm`);
+            setDraft(prev => ({...prev, webm: url}));
             showToast(isEnglish ? 'Clip uploaded.' : '视频已上传。', 'success');
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Clip upload failed.' : '视频上传失败。'), 'error');
@@ -639,17 +620,17 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
         }
     };
 
-    const hasClip = Boolean(draft.webm || draft.mp4);
+    const hasClip = Boolean(draft.webm);
 
     return (
         <SectionShell
             section="heroVideo"
             helper={{
-                en: 'The looping backdrop behind the hero. Upload both formats so every browser gets one — '
-                    + 'without a clip the hero falls back to the Bilibili reel, which plays once and is skipped '
-                    + 'on phones entirely.',
-                zh: '首屏背后循环播放的背景视频。请同时上传两种格式，以覆盖所有浏览器——未上传时首屏将回退到 B 站视频，'
-                    + '该视频只播放一次，且在手机上不会显示。',
+                en: 'The looping backdrop behind the hero: a WebM clip for the browsers that play one, and a '
+                    + 'poster image for the rest. Upload both — with no clip the hero falls back to the Bilibili '
+                    + 'reel, which plays once and is skipped on phones entirely.',
+                zh: '首屏背后的背景：为支持的浏览器提供 WebM 循环视频，其余设备显示封面图。请两者都上传——'
+                    + '未上传视频时，首屏将回退到 B 站视频，该视频只播放一次，且在手机上不会显示。',
             }}
             editor={editor}
             busy={busy !== null}
@@ -658,30 +639,24 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
         >
             <p className="admin-helper-text">
                 {isEnglish
-                    ? `Export a 10–20 second silent cut, 720p is plenty (a dark scrim and blurred highlights sit `
-                      + `over it, so detail is not visible). H.264 for the MP4, VP9 for the WebM. Aim for a couple `
-                      + `of MB each; ${MAX_VIDEO_SIZE_MB} MB is the hard limit. Make the first and last frames `
-                      + `match, or the loop point will read as a jump.`
-                    : `请导出 10–20 秒的无声片段，720p 已足够（视频上方覆盖有深色遮罩与模糊光晕，细节不可见）。`
-                      + `MP4 使用 H.264 编码，WebM 使用 VP9 编码。建议每个文件控制在几 MB 以内，`
-                      + `上限为 ${MAX_VIDEO_SIZE_MB} MB。请让首尾画面衔接一致，否则循环处会出现明显跳帧。`}
+                    ? `Export a 10–20 second silent cut as WebM/VP9. 720p is plenty — a dark scrim and blurred `
+                    + `highlights sit over it, so detail is not visible. Aim for a couple of MB; `
+                    + `${MAX_VIDEO_SIZE_MB} MB is the hard limit. Make the first and last frames match, or the `
+                    + `loop point will read as a jump.`
+                    : `请导出 10–20 秒的无声片段，格式为 WebM/VP9。720p 已足够——视频上方覆盖有深色遮罩与模糊光晕，`
+                    + `细节不可见。建议控制在几 MB 以内，上限为 ${MAX_VIDEO_SIZE_MB} MB。`
+                    + `请让首尾画面衔接一致，否则循环处会出现明显跳帧。`}
             </p>
 
             <div className="admin-con-list admin-mt-12">
-                {CLIP_SLOTS.map(({slot, type, label, serves}) => (
-                    <ClipField
-                        key={slot}
-                        label={label}
-                        serves={serves}
-                        accept={`${type},.${slot}`}
-                        url={draft[slot]}
-                        uploading={busy === slot}
-                        disabled={busy !== null}
-                        onPick={file => uploadClip(slot, type, file)}
-                        onClear={() => setDraft(prev => ({...prev, [slot]: ''}))}
-                        readOnly={readOnly}
-                    />
-                ))}
+                <ClipField
+                    url={draft.webm}
+                    uploading={busy === 'clip'}
+                    disabled={busy !== null}
+                    onPick={uploadClip}
+                    onClear={() => setDraft(prev => ({...prev, webm: ''}))}
+                    readOnly={readOnly}
+                />
 
                 <div className="admin-con-item">
                     <div className="admin-con-card-head">
@@ -694,10 +669,12 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
                     </div>
                     <p className="admin-helper-text">
                         {isEnglish
-                            ? 'Shown while the clip buffers, and instead of it to visitors who have asked their '
-                              + 'device to reduce motion. With no poster those visitors get a gradient.'
-                            : '视频缓冲期间显示；对于在系统中开启了「减少动态效果」的访客，则完全以此图代替视频。'
-                              + '未上传时显示渐变背景。'}
+                            ? 'Not optional in practice: it is the whole hero for Safari, iPhone and iPad, which '
+                            + 'never play the clip. Also shown while the clip buffers, and to visitors who have '
+                            + 'asked their device to reduce motion. With no poster, all of them get a gradient.'
+                            : '实际上并非可选项：对于不会播放该视频的 Safari、iPhone 与 iPad，封面图就是整个首屏。'
+                            + '此外，视频缓冲期间以及访客开启「减少动态效果」时也会显示。未上传时，'
+                            + '上述所有情况均显示渐变背景。'}
                     </p>
 
                     {draft.poster && !posterPreview && (
@@ -718,9 +695,9 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
                             <p className="admin-helper-text">
                                 {isEnglish
                                     ? `Any image up to ${MAX_IMAGE_SIZE_MB} MB; it is converted to WebP for you. `
-                                      + 'A frame from the clip itself works best.'
+                                    + 'A frame from the clip itself works best.'
                                     : `任意图片，最大 ${MAX_IMAGE_SIZE_MB} MB，将自动转换为 WebP 格式。`
-                                      + '建议直接使用视频中的某一帧。'}
+                                    + '建议直接使用视频中的某一帧。'}
                             </p>
                         </div>
                     )}
@@ -739,18 +716,19 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
                 </div>
             </div>
 
-            {draft.webm !== '' && draft.mp4 === '' && (
-                <p className="admin-helper-text admin-mt-12">
+            {/*
+              * A clip with no poster is the one arrangement that looks finished
+              * from the panel and is not: whoever uploaded it sees it playing,
+              * and every Safari, iPhone and iPad visitor gets the gradient.
+              *
+              * Not .admin-helper-text on the warning: it is defined after
+              * .admin-warning-hint and would take the colour back off it.
+              */}
+            {hasClip && !draft.poster && (
+                <p className="admin-title-hint admin-warning-hint">
                     {isEnglish
-                        ? '⚠️ No MP4 uploaded — Safari and iOS will fall back to the poster or gradient.'
-                        : '⚠️ 未上传 MP4——Safari 与 iOS 将回退到封面图或渐变背景。'}
-                </p>
-            )}
-            {draft.mp4 !== '' && draft.webm === '' && (
-                <p className="admin-helper-text admin-mt-12">
-                    {isEnglish
-                        ? 'The MP4 alone plays everywhere; a WebM is usually a third smaller, so add one if you can.'
-                        : '仅 MP4 也可在所有浏览器播放；但 WebM 通常能小三分之一，建议一并上传。'}
+                        ? '⚠️ No poster uploaded — Safari, iPhone and iPad will show the gradient, not the clip.'
+                        : '⚠️ 未上传封面图——Safari、iPhone 与 iPad 将显示渐变背景，而非该视频。'}
                 </p>
             )}
             {!hasClip && (

@@ -101,8 +101,11 @@ export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async 
         throw new HttpsError("invalid-argument", "Con videos must be stored under con/.");
     }
 
-    if (contentType !== "video/mp4" && contentType !== "video/webm") {
-        throw new HttpsError("invalid-argument", "Only video/mp4 and video/webm are allowed.");
+    // WebM alone, because the hero lists one source and it is a WebM. An MP4
+    // uploaded here would be stored, named .webm by the caller that minted the
+    // path, and then refused by every browser that opened it.
+    if (contentType !== "video/webm") {
+        throw new HttpsError("invalid-argument", "Only video/webm is allowed.");
     }
 
     const buffer = Buffer.from(dataBase64, "base64");
@@ -485,26 +488,22 @@ function buildConEvent(raw: unknown) {
 }
 
 /**
- * The hero's background loop. All three fields are optional: with none of them
- * set the hero falls back to the Bilibili embed, which is what the page did
- * before this section existed.
+ * The hero's background loop. Both fields are optional: with neither set the hero
+ * falls back to the Bilibili embed, which is what the page did before this
+ * section existed.
  *
- * The extensions are pinned to the container each source element claims. A webm
- * URL serving an MP4 is not a security problem, but it is an invisible one — the
- * browsers that take the first source they can play would silently skip the clip
- * and the hero would look broken for exactly half the audience.
+ * The extension is pinned to the container the source element claims. A .webm url
+ * holding something else is not a security problem, but it is an invisible one —
+ * a browser that cannot decode what it finds drops the source silently, and the
+ * hero would sit on the poster with nothing to say why.
  */
 function buildConHeroVideo(raw: unknown) {
     const v = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
     const webm = validateConAsset(v.webm, "hero webm");
-    const mp4 = validateConAsset(v.mp4, "hero mp4");
     if (webm && !/\.webm(\?|$)/i.test(webm)) {
-        throw new HttpsError("invalid-argument", "The WebM source must be a .webm file.");
+        throw new HttpsError("invalid-argument", "The clip must be a .webm file.");
     }
-    if (mp4 && !/\.mp4(\?|$)/i.test(mp4)) {
-        throw new HttpsError("invalid-argument", "The MP4 source must be an .mp4 file.");
-    }
-    return {webm, mp4, poster: validateConAsset(v.poster, "hero poster")};
+    return {webm, poster: validateConAsset(v.poster, "hero poster")};
 }
 
 /**

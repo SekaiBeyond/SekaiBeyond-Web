@@ -137,13 +137,13 @@ const readEvent = (raw: unknown): ConEvent => {
 };
 
 /**
- * Every field is optional — a con with no clip uploaded yet stores three empty
+ * Both fields are optional — a con with no clip uploaded yet stores two empty
  * strings, and the hero falls through to the Bilibili embed on its own.
  */
 const readHeroVideo = (raw: unknown): ConHeroVideo => {
     if (!raw || typeof raw !== 'object') return HERO_VIDEO;
     const v = obj(raw);
-    return {webm: str(v.webm), mp4: str(v.mp4), poster: str(v.poster)};
+    return {webm: str(v.webm), poster: str(v.poster)};
 };
 
 const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({

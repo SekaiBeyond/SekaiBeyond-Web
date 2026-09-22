@@ -52,7 +52,7 @@ export const Hero = () => {
 
     // A local clip is muted + playsinline, so phones autoplay it happily; the
     // Bilibili iframe they refuse outright, hence the width gate on that path.
-    const hasClip = Boolean(heroVideo.mp4 || heroVideo.webm);
+    const hasClip = Boolean(heroVideo.webm);
     const showClip = hasClip && allowsMotion;
     // Which clip is configured is not known until the content lands, so the embed
     // waits for it. Starting the iframe on the defaults would fetch a player we
@@ -71,10 +71,10 @@ export const Hero = () => {
                  * taken when there is nothing to lay: whatever the clip or the
                  * embed above fails to do — a codec the browser will not decode,
                  * a request that never answers, the seconds before the first frame
-                 * — ends on the poster instead of on nothing. A <source> carrying
-                 * a `type` the browser cannot play is skipped without being
-                 * fetched, so a WebM-only hero costs Safari no bandwidth and
-                 * simply stays on this image.
+                 * — ends on the poster instead of on nothing. The clip is a WebM
+                 * and nothing else, so this is not a rare path: Safari, iPhone and
+                 * iPad skip a `<source>` whose `type` they cannot decode, without
+                 * fetching it, and stay on this image for good.
                  *
                  * Both layers are inset-0 absolutes with no z-index, so the order
                  * they are written in is the order they paint.
@@ -82,7 +82,7 @@ export const Hero = () => {
                 <div className="sbc-hero-poster" style={posterStyle}/>
 
                 {showClip && (
-                    // Keyed on the sources so swapping the clip in the admin panel
+                    // Keyed on the source so swapping the clip in the admin panel
                     // remounts the element; React alone would leave <video> playing
                     // the file it already loaded, since changing a <source> child
                     // does nothing without a .load() call.
@@ -91,7 +91,7 @@ export const Hero = () => {
                     // already, and an empty one there would leave a clip that is
                     // still buffering painting over the gradient with nothing.
                     <video
-                        key={`${heroVideo.webm}|${heroVideo.mp4}`}
+                        key={heroVideo.webm}
                         className="sbc-hero-clip"
                         autoPlay
                         muted
@@ -100,8 +100,7 @@ export const Hero = () => {
                         preload="auto"
                         tabIndex={-1}
                     >
-                        {heroVideo.webm && <source src={heroVideo.webm} type="video/webm"/>}
-                        {heroVideo.mp4 && <source src={heroVideo.mp4} type="video/mp4"/>}
+                        <source src={heroVideo.webm} type="video/webm"/>
                     </video>
                 )}
 

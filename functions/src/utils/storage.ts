@@ -31,12 +31,15 @@ export const IMAGE_SIGNATURES: {mime: string; magic: Buffer}[] = [
 ];
 
 /**
- * The two formats the hero's <video> lists. Neither is identified by a magic
- * number at offset 0 the way an image is: an MP4 opens with the length of its
- * first box and only then the "ftyp" tag, and a WebM is a Matroska stream whose
- * EBML header says nothing about the codecs inside. This is a container check,
- * not a codec one — enough to know the bytes are not something else wearing a
- * video content type.
+ * Only WebM is uploadable, but MP4 is recognised too so that the one file likely
+ * to be sent by mistake is named rather than reported as "not a video" — the
+ * callers compare this against the content type they were handed.
+ *
+ * Neither is identified by a magic number at offset 0 the way an image is: an MP4
+ * opens with the length of its first box and only then the "ftyp" tag, and a WebM
+ * is a Matroska stream whose EBML header says nothing about the codecs inside.
+ * This is a container check, not a codec one — enough to know the bytes are not
+ * something else wearing a video content type.
  */
 export function detectVideoMime(buffer: Buffer): string | null {
     if (buffer.length >= 12 && buffer.subarray(4, 8).equals(Buffer.from("ftyp"))) {

@@ -102,26 +102,28 @@ export const HERO_EMBED = {
 /**
  * The hero backdrop, in order of preference:
  *
- *   1. `webm` / `mp4` — a short silent clip uploaded in Admin → Con Content →
- *      Hero Video. This is the only option that actually loops, and it autoplays
- *      on phones too.
+ *   1. `webm` — a short silent clip uploaded in Admin → Con Content → Hero Video.
+ *      This is the only option that actually loops, and it autoplays on phones too.
  *   2. The `HERO_EMBED` reel above — plays once, desktop only. Bilibili's iframe
  *      has no loop parameter and is cross-origin, so we cannot restart it ourselves.
  *   3. `poster`, or a gradient if that is empty too.
  *
- * Listed in source order: browsers take the first one they can play, so the webm
- * serves Chrome, Firefox and Edge while the mp4 is what Safari and iOS fall to.
+ * One format on purpose, and not the universal one. An MP4 would play everywhere
+ * a WebM does and in Safari besides, but the point of a background plate is that
+ * it costs little: a browser skips a `<source>` whose `type` it cannot decode
+ * without fetching it, so Safari, iPhone and iPad spend nothing here and rest on
+ * `poster` — which is what they would see under a reduced-motion setting anyway.
+ * That makes the poster the picture half the audience actually gets, rather than
+ * a frame shown while the clip buffers.
  */
 export interface ConHeroVideo {
     webm: string;
-    mp4: string;
-    /** Still frame for reduced-motion visitors, and the clip's own poster while it buffers. */
+    /** The still Safari, iOS and reduced-motion visitors see in place of the clip. */
     poster: string;
 }
 
 export const HERO_VIDEO: ConHeroVideo = {
     webm: '',
-    mp4: '',
     poster: '',
 };
 
