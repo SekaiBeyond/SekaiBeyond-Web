@@ -222,9 +222,28 @@ export function AttendeeModal({
                                 : checkingAccount
                                     ? (isEnglish ? 'Checking for an account…' : '正在查询账户…')
                                     : account
-                                        ? (isEnglish
-                                            ? `Registered account: ${account.displayName || account.email}. Their tickets will show on their profile.`
-                                            : `已注册账户：${account.displayName || account.email}。门票会显示在其个人主页。`)
+                                        ? (
+                                            <>
+                                                {isEnglish ? 'Registered account: ' : '已注册账户：'}
+                                                {/* uid only comes back for core staff, the
+                                                    same people the attendee row links for. */}
+                                                {account.uid
+                                                    ? (
+                                                        <a
+                                                            href={`/profile?uid=${account.uid}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="admin-tickets-attendee-account-link"
+                                                        >
+                                                            {account.displayName || account.email}
+                                                        </a>
+                                                    )
+                                                    : account.displayName || account.email}
+                                                {isEnglish
+                                                    ? '. Their tickets will show on their profile.'
+                                                    : '。门票会显示在其个人主页。'}
+                                            </>
+                                        )
                                         : (isEnglish
                                             ? 'No account uses this email yet — the ticket still works, and counts once they sign up with it.'
                                             : '暂无账户使用该邮箱 — 门票照常可用，其以该邮箱注册后即会计入。')}
