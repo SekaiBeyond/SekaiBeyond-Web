@@ -136,7 +136,7 @@ const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
 function renderTicketQrBlock(tickets: any[], eventId: string): string {
     // One <div> per ticket. Images reference the serverless QR generation endpoint.
     const origin = PUBLIC_ORIGIN;
-    return tickets.map(ticket => {
+    return tickets.map((ticket, i) => {
         const id = typeof ticket === "string" ? ticket : (ticket.ticketId ?? "");
         const typeRaw = typeof ticket === "string" ? "normal" : (ticket.type ?? "normal");
 
@@ -168,9 +168,11 @@ function renderTicketQrBlock(tickets: any[], eventId: string): string {
         }
 
         const qrUrl = `${origin}/api/ticket-qr?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
-        return `<div style="margin:16px 0;text-align:center;">` +
+        // A wide gap between tickets so a reader framing one code doesn't
+        // also catch its neighbour and scan the wrong ticket.
+        return `<div style="margin:${i === 0 ? 16 : 72}px 0 16px;text-align:center;">` +
             `<div style="display:inline-block;background-color:${bgColor};color:${textColor};font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">${typeLabel}</div><br/>` +
-            `<img src="${qrUrl}" alt="Ticket ${id}" style="width:200px;height:200px;display:inline-block;"/>` +
+            `<img src="${qrUrl}" alt="Ticket ${id}" width="300" height="300" style="width:300px;max-width:100%;height:auto;display:inline-block;"/>` +
             `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
             `</div>`;
     }).join("\n");
@@ -205,9 +207,9 @@ export const serveTicketQr = onRequest({maxInstances: 10, memory: "256MiB"}, asy
         const url = `${origin}/claim?ticket=${encodeURIComponent(ticketId)}&event=${encodeURIComponent(eventId)}`;
         const QRCode = (await import("qrcode")).default;
 
-        // 256 px keeps each ticket's QR comfortably small. Error correction "M"
-        // scans reliably at this size.
-        const buf = await QRCode.toBuffer(url, {errorCorrectionLevel: "M", width: 256, margin: 1});
+        // Twice the 300px the email shows it at, so it stays sharp on a
+        // high-density screen. Error correction "M" scans reliably at this size.
+        const buf = await QRCode.toBuffer(url, {errorCorrectionLevel: "M", width: 600, margin: 1});
 
         res.set("Content-Type", "image/png");
         // Cache aggressively since ticket UUIDs are immutable and unique

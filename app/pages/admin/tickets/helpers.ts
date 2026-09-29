@@ -126,12 +126,19 @@ export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEven
             ? `<img src="${event.emailHeaderBg}" alt="${event.title}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
             : `<div style="background-color:#ff6b9d;height:120px;"></div>`,
     };
-    const ticketBlock = `<div style="padding:16px;border:1px dashed #aaa;text-align:center;margin:12px 0;">` +
-        `<strong>[QR for each ticket rendered here at send time]</strong><br/><br/>` +
-        `<div style="display:inline-block;background-color:#ff6b9d;color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">General Admission</div><br/>` +
-        `<code>ticket-uuid-1</code><br/><br/>` +
-        `<div style="display:inline-block;background-color:#f39c12;color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">VIP</div><br/>` +
-        `<code>ticket-uuid-2</code></div>`;
+    // Mirrors renderTicketQrBlock on the server — same spacing, same code size —
+    // with a placeholder where each QR goes, since a sample has no ticket to draw.
+    const sampleTickets = [
+        {label: 'General Admission', color: '#ff6b9d', id: 'ticket-uuid-1'},
+        {label: 'VIP', color: '#f39c12', id: 'ticket-uuid-2'},
+    ];
+    const ticketBlock = sampleTickets.map(({label, color, id}, i) =>
+        `<div style="margin:${i === 0 ? 16 : 72}px 0 16px;text-align:center;">` +
+        `<div style="display:inline-block;background-color:${color};color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">${label}</div><br/>` +
+        `<div style="display:inline-block;width:300px;max-width:100%;height:300px;line-height:300px;border:1px dashed #aaa;box-sizing:border-box;color:#999;font-size:13px;">QR code, drawn at send time</div>` +
+        `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
+        `</div>`,
+    ).join('\n');
     const body = template.bodyHtml
         .replace(/{{\s*attendeeEmail\s*}}/g, sampleData.attendeeEmail)
         .replace(/{{\s*attendeeName\s*}}/g, sampleData.attendeeName)
