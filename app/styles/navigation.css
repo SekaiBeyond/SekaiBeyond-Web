@@ -24,6 +24,7 @@
 }
 
 .logo {
+    white-space: nowrap;
     font-family: var(--font-display);
     font-size: 32px;
     font-weight: 700;
@@ -52,6 +53,7 @@
 }
 
 .nav-link {
+    white-space: nowrap;
     color: #676b73;
     text-decoration: none;
     font-size: 16px;
@@ -215,4 +217,99 @@
 
 .nav-toggle:hover {
     transform: scale(1.1);
+}
+
+/* Between the full desktop nav and the menu button, tighten the link row so it fits */
+@media (max-width: 1500px) {
+    .navbar {
+        padding: 15px 24px;
+    }
+
+    .nav-container {
+        grid-template-columns: auto 1fr auto;
+        column-gap: 16px;
+    }
+
+    .nav-links {
+        justify-self: center;
+        gap: 4px;
+    }
+
+    .nav-link {
+        font-size: 15px;
+        padding: 8px 10px;
+    }
+
+    .logo {
+        font-size: 26px;
+        gap: 8px;
+    }
+
+    .nav-actions {
+        gap: 8px;
+    }
+
+    .language-switcher {
+        padding: 4px 8px;
+        min-width: 0;
+    }
+
+    .login-btn {
+        padding: 6px 14px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+
+    .login-avatar {
+        width: 32px;
+        height: 32px;
+    }
+
+    .user-dropdown {
+        min-width: 200px;
+    }
+}
+
+/* Collapse to the menu button (covers iPad Pro 11" in portrait and landscape) */
+@media (max-width: 1200px) {
+    .navbar {
+        padding: 12px 16px;
+    }
+
+    .logo {
+        font-size: 22px;
+        gap: 8px;
+    }
+
+    .nav-container {
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .nav-toggle {
+        display: flex;
+        padding: 8px; /* Larger tap target */
+    }
+
+    .nav-links {
+        position: absolute; /* Anchored to the fixed navbar so it sits flush under it */
+        top: 100%;
+        left: -100vw;
+        width: 100vw;
+        height: calc(100dvh - 100%); /* Fill the viewport below the navbar */
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(10px);
+        flex-direction: column;
+        padding: 32px;
+        gap: 20px;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 5px 20px rgba(255, 150, 200, 0.2);
+        z-index: 1100;
+        overflow-y: auto;
+        transform: translateX(0);
+    }
+
+    .nav-links.active {
+        transform: translateX(100vw);
+    }
 }

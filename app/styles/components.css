@@ -218,6 +218,8 @@
     backdrop-filter: blur(10px);
     min-width: 70px;
     justify-content: center;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .language-switcher:hover {

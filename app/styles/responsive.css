@@ -3,47 +3,6 @@
         padding: 60px 16px;
     }
 
-    .navbar {
-        padding: 12px 16px;
-    }
-
-    .logo {
-        font-size: 22px;
-        gap: 8px;
-    }
-
-    .nav-container {
-        display: flex;
-        justify-content: space-between;
-    }
-
-    .nav-toggle {
-        display: flex;
-        padding: 8px; /* Larger tap target */
-    }
-
-    .nav-links {
-        position: absolute; /* Anchored to the fixed navbar so it sits flush under it */
-        top: 100%;
-        left: -100vw;
-        width: 100vw;
-        height: calc(100dvh - 100%); /* Fill the viewport below the navbar */
-        background: rgba(255, 255, 255, 0.98);
-        backdrop-filter: blur(10px);
-        flex-direction: column;
-        padding: 32px;
-        gap: 20px;
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 5px 20px rgba(255, 150, 200, 0.2);
-        z-index: 1100;
-        overflow-y: auto;
-        transform: translateX(0);
-    }
-
-    .nav-links.active {
-        transform: translateX(100vw);
-    }
-
     .hero-title {
         font-size: clamp(2.5rem, 10vw, 3.5rem);
         line-height: 1.1;
