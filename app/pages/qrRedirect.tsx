@@ -63,27 +63,19 @@ const ManagedQrRedirect = ({id, platform}: {id: string; platform: string}) => {
     return <ExpiredCard isError={status === 'error'}/>;
 };
 
-/**
- * The dead-end card for a scan that resolved to nothing. Shared with the
- * passport page (/p/:passportId), which passes its own copy for a void or
- * unknown sticker but keeps the layout and the "explore events" way out.
- */
-export const ExpiredCard = ({isError, title: titleOverride, message: messageOverride}: {
-    isError: boolean;
-    title?: string;
-    message?: string;
-}) => {
+/** The dead-end card for a scan that resolved to nothing. */
+export const ExpiredCard = ({isError}: {isError: boolean}) => {
     const {isEnglish} = useLanguage();
-    const title = titleOverride ?? (isError
+    const title = isError
         ? (isEnglish ? 'Something Went Wrong' : '出错了')
-        : (isEnglish ? 'QR Code Expired or Invalid' : '二维码已过期或无效'));
-    const message = messageOverride ?? (isError
+        : (isEnglish ? 'QR Code Expired or Invalid' : '二维码已过期或无效');
+    const message = isError
         ? (isEnglish
             ? 'We couldn’t open this QR code. Please try again.'
             : '无法打开此二维码，请重试。')
         : (isEnglish
             ? 'The QR code you scanned has expired or the link is invalid.'
-            : '您扫描的二维码已过期或链接无效。'));
+            : '您扫描的二维码已过期或链接无效。');
     return (
         <div className="qr-redirect-page">
             <Navigation/>

@@ -3,9 +3,8 @@
    controls that page shares with /profile.
 
    Everything here is prefixed `passport-`. Chrome that already exists is reused
-   rather than restyled: the nav is `profile-nav`, badges are `badge-circle`,
-   attended events are `profile-event-card`, and the dead-end card is the QR
-   page's `qr-redirect-card`.
+   rather than restyled: the nav is `profile-nav`, badges are `badge-circle`, and
+   attended events are `profile-event-card`.
    ========================================================================== */
 
 .passport-page {
@@ -25,7 +24,7 @@
     padding: 60px 0;
 }
 
-/* --- Standalone message cards (private, not yet activated) ----------------- */
+/* --- Standalone message card (private) ------------------------------------ */
 
 .passport-notice {
     background: rgba(255, 255, 255, 0.92);
@@ -61,6 +60,217 @@
 
 .passport-notice-cta {
     margin-top: 4px;
+}
+
+/* --- A passport that can't be opened here ----------------------------------
+   Not activated yet, or not found. Each shows the passport as an object — shut
+   by its outside art, or as a blank page stamped as having no record — beside
+   what to do about it. The object is the same 3:4 as the open passport's cover,
+   and the paper and ink are the open page's own. */
+
+.passport-state {
+    --passport-paper: #fffaf4;
+    --passport-edge: #ead9cb;
+    --passport-rule: rgba(255, 107, 157, 0.28);
+    /* A clerk's ink rather than the membership stamp's pink: "no record" is a
+       finding, not a celebration and not an alarm. */
+    --passport-void-ink: #5f6b8a;
+
+    display: grid;
+    /* The text column is capped as a whole, so the lines in it share a measure. */
+    grid-template-columns: clamp(200px, 26vw, 290px) minmax(0, 23rem);
+    justify-content: center;
+    align-items: center;
+    gap: clamp(40px, 6vw, 84px);
+    /* Centred in the window under the nav rather than hung from the top of it. */
+    min-height: calc(100svh - 180px);
+}
+
+.passport-state-object {
+    /* Room for the tilt and the page edges, so neither touches the text. */
+    padding: 12px 14px 18px 4px;
+}
+
+.passport-state-title {
+    font-family: var(--font-display);
+    font-size: clamp(34px, 4.2vw, 50px);
+    font-weight: 400;
+    line-height: 1.05;
+    color: var(--color-text);
+}
+
+/* The site's darker text rather than its muted grey, which is under 4:1 on this
+   paper at these sizes. */
+.passport-state-text {
+    margin-top: 16px;
+    font-size: 17px;
+    line-height: 1.65;
+    color: var(--color-text);
+}
+
+/* The number in the sentence, set the way it is printed on the sticker. */
+.passport-state-code {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--color-text);
+    white-space: nowrap;
+}
+
+.passport-state-aside {
+    margin-top: 10px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--color-text);
+}
+
+.passport-state-aside a {
+    color: var(--color-primary);
+    font-weight: 700;
+    text-underline-offset: 3px;
+    white-space: nowrap;
+}
+
+/* A <button> doesn't inherit the page's font the way the <a> version does. */
+.passport-state-cta {
+    margin-top: 28px;
+    font-family: inherit;
+}
+
+/* The shut passport: its outside art, spine on the left, and the edges of the
+   pages showing along the right and bottom. Lying a little askew, as a thing
+   set down on a table does. */
+.passport-shut {
+    position: relative;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    border-radius: 6px 20px 20px 6px;
+    background: var(--gradient-primary);
+    box-shadow: 3px 3px 0 -1px var(--passport-paper),
+    4px 4px 0 -1px var(--passport-edge),
+    7px 7px 0 -2px var(--passport-paper),
+    8px 8px 0 -2px var(--passport-edge),
+    18px 24px 44px rgba(74, 81, 96, 0.22);
+    transform: rotate(-3deg);
+}
+
+/* The spine: shadow where the cover folds round, and the pressed line of the
+   hinge beside it. Last child and positioned, so it paints over the art. */
+.passport-shut::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(74, 81, 96, 0.3), transparent 16px),
+    linear-gradient(90deg, transparent 20px, rgba(255, 255, 255, 0.35) 21px, transparent 23px);
+    pointer-events: none;
+}
+
+/* A blank data page: the open passport's paper and spine shadow, with nothing
+   written on it but the number that was looked up. Everything on it scales with
+   its width — but its own padding can't, since cqi on the container measures the
+   one above it, so the lines get a box of their own to be padded in. */
+.passport-blank {
+    container-type: inline-size;
+    position: relative;
+    aspect-ratio: 3 / 4;
+    /* Written like a form, whichever way the text beside it is set. */
+    text-align: left;
+    border: 1px solid rgba(255, 107, 157, 0.16);
+    border-radius: 6px 20px 20px 6px;
+    background: linear-gradient(90deg, rgba(74, 81, 96, 0.1), transparent 26px),
+    repeating-radial-gradient(circle at 105% -5%, transparent 0 11px, rgba(255, 107, 157, 0.07) 11px 12px),
+    var(--passport-paper);
+    box-shadow: var(--shadow-card), 18px 24px 44px rgba(74, 81, 96, 0.12);
+    transform: rotate(2deg);
+}
+
+.passport-blank-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 9cqi;
+    padding: 13cqi 11cqi;
+}
+
+/* Lines to be written on, like the open page's fields. */
+.passport-blank-line {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 1cqi;
+    min-height: 11cqi;
+    padding-bottom: 2.5cqi;
+    border-bottom: 1px dashed var(--passport-rule);
+}
+
+.passport-blank-label {
+    font-size: 5.2cqi;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.passport-blank-code {
+    font-family: var(--font-mono);
+    font-size: 7.4cqi;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+}
+
+/* A rectangular clerk's stamp, double-ruled, pressed across the empty lines. */
+.passport-blank-stamp {
+    position: absolute;
+    left: 50%;
+    bottom: 17%;
+    padding: 2.6cqi 6cqi 3cqi;
+    border: 1cqi solid var(--passport-void-ink);
+    border-radius: 3cqi;
+    box-shadow: inset 0 0 0 0.9cqi var(--passport-paper),
+    inset 0 0 0 1.5cqi var(--passport-void-ink);
+    color: var(--passport-void-ink);
+    font-family: var(--font-display);
+    font-size: 11.5cqi;
+    line-height: 1;
+    white-space: nowrap;
+    opacity: 0.85;
+    transform: translateX(-50%) rotate(-12deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .passport-blank-stamp {
+        animation: passport-blank-stamp-down 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) 0.35s both;
+    }
+}
+
+@keyframes passport-blank-stamp-down {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) rotate(-12deg) scale(1.9);
+    }
+    to {
+        opacity: 0.85;
+        transform: translateX(-50%) rotate(-12deg) scale(1);
+    }
+}
+
+/* Stacked on a phone, passport first, and centred as one column. */
+@media (max-width: 700px) {
+    .passport-state {
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+        gap: 30px;
+        min-height: 0;
+        padding-top: 8px;
+        text-align: center;
+    }
+
+    .passport-state-object {
+        width: min(58vw, 230px);
+    }
+
+    .passport-state-body {
+        max-width: 23rem;
+    }
 }
 
 /* --- The claimed page: an open passport ------------------------------------

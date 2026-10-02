@@ -311,13 +311,11 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 
     const passport = passportSnap.data()!;
 
-    // Nothing to show before it's activated, and activating happens in Redeem
-    // Code, so the page only needs to know which this is.
-    if (passport.status !== "claimed" || !passport.ownerUid) return {status: "unclaimed" as const};
-
     // The page reads the design itself (passportDesigns is public), for its name
-    // and cover art.
+    // and cover art — shut on an unclaimed passport, open on a claimed one.
     const designId: string = passport.designId ?? "";
+
+    if (passport.status !== "claimed" || !passport.ownerUid) return {status: "unclaimed" as const, designId};
 
     const ownerUid: string = passport.ownerUid;
     const ownerSnap = await db.collection("users").doc(ownerUid).get();

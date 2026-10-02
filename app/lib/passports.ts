@@ -67,7 +67,8 @@ export interface PassportDesign {
 export type PassportPublicProfile =
     | {status: 'invalid'}
     | {status: 'private'}
-    | {status: 'unclaimed'}
+    /** designId is absent from a server that predates it. */
+    | {status: 'unclaimed'; designId?: string}
     | {
     status: 'claimed';
     designId: string;
