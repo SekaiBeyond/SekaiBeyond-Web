@@ -109,9 +109,8 @@ const buildCsv = (header: string[], rows: string[][]): Blob =>
     );
 
 /**
- * The print shop's pairing list. Once the generator screen is left, this file is
- * the only place those keys are together — the server serves them back one
- * passport at a time.
+ * The print shop's pairing list, from the generator screen or from a selection's
+ * Keys CSV in the stock table.
  */
 export function buildPassportCsv(
     rows: {passportId: string; activationCode: string}[],

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeletePassports } from '~/lib/firebase';
+import { callDeletePassports, callExportPassportKeys } from '~/lib/firebase';
 import {
     MAX_PASSPORT_DELETE,
+    MAX_PASSPORT_KEY_EXPORT,
     type Passport,
     passportDateTime,
     type PassportStatus,
@@ -11,7 +12,7 @@ import {
 import { downloadBlob } from '~/lib/zip';
 import { fetchUsersByUids, type ShowToast } from '../utils';
 import type { UserRecord } from '../types';
-import { buildPassportIdCsv, fileStamp, usePassportPngExport } from './passportExport';
+import { buildPassportCsv, buildPassportIdCsv, fileStamp, usePassportPngExport } from './passportExport';
 
 /**
  * One design's passports, as a sortable table.
@@ -24,8 +25,8 @@ import { buildPassportIdCsv, fileStamp, usePassportPngExport } from './passportE
  *
  * Every action hangs off ticked rows, which is how a set of passports that share
  * nothing in the data — the ones in one envelope, the ones that came back damaged
- * — is acted on at all. A selection exports its codes and its stickers, and is
- * deleted in one call.
+ * — is acted on at all. A selection exports its codes, its keys and its
+ * stickers, and is deleted in one call.
  *
  * Only unclaimed stock can be ticked. Everything a selection does is a
  * print-and-pack job on passports that haven't been sold — the codes CSV carries
@@ -111,7 +112,8 @@ interface PassportStockProps {
     onDeleted: (passportIds: string[]) => void;
     onOpen: (id: string) => void;
     showToast: ShowToast;
-    /** Staff (read-only) still export; only deleting is theirs to lose. */
+    /** Staff (read-only) still export codes and stickers; keys and deleting are
+     * theirs to lose. */
     readOnly: boolean;
 }
 
@@ -130,6 +132,7 @@ export const PassportStock = ({
     const {isEnglish} = useLanguage();
     const [owners, setOwners] = useState<Map<string, UserRecord> | null>(null);
     const [deleting, setDeleting] = useState(false);
+    const [exportingKeys, setExportingKeys] = useState(false);
     const {request: requestPngs, progress, node: pngNode} = usePassportPngExport(
         () => showToast(isEnglish ? 'Failed to render the QR codes.' : '生成二维码失败。', 'error'),
     );
@@ -288,6 +291,41 @@ export const PassportStock = ({
         onDeleted(result.deleted);
     };
 
+    // The keys come from the server, a call per MAX_PASSPORT_KEY_EXPORT, and each
+    // call is logged in Records. A passport with no key on file (minted before
+    // keys were kept) is left out of the file and counted in the toast.
+    const exportKeys = async () => {
+        const ids = selectedPassports.map(p => p.id);
+        if (ids.length === 0) return;
+        setExportingKeys(true);
+        const rows: {passportId: string; activationCode: string}[] = [];
+        let missing = 0;
+        try {
+            for (let i = 0; i < ids.length; i += MAX_PASSPORT_KEY_EXPORT) {
+                const {data} = await callExportPassportKeys({passportIds: ids.slice(i, i + MAX_PASSPORT_KEY_EXPORT)});
+                rows.push(...data.passports);
+                missing += data.missing.length;
+            }
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to export the keys.' : '导出激活码失败。'), 'error');
+            return;
+        } finally {
+            setExportingKeys(false);
+        }
+        if (rows.length === 0) {
+            showToast(isEnglish
+                ? 'None of these passports has a key on file.'
+                : '这些通行证都没有激活码记录。', 'error');
+            return;
+        }
+        downloadBlob(buildPassportCsv(rows, origin), `${selectionBase}-keys.csv`);
+        if (missing > 0) {
+            showToast(isEnglish
+                ? `${missing} ${missing === 1 ? 'passport has' : 'passports have'} no key on file and ${missing === 1 ? 'was' : 'were'} left out.`
+                : `${missing} 本通行证没有激活码记录，已略过。`, 'warning');
+        }
+    };
+
     const setFilter = (filter: StatusFilter) => onViewChange({...view, filter, page: 0});
     const setPage = (next: number) => onViewChange({...view, page: next});
     const sortBy = (column: Column) => onViewChange({
@@ -398,6 +436,21 @@ export const PassportStock = ({
                         >
                             {isEnglish ? 'Codes CSV' : '编号 CSV'}
                         </button>
+                        {!readOnly && (
+                            <button
+                                className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                                onClick={() => void exportKeys()}
+                                disabled={exportingKeys || selectedPassports.length === 0}
+                                title={isEnglish
+                                    ? 'Codes with their activation keys — each download is logged in Records'
+                                    : '编号及其激活码 — 每次下载都会记录在操作记录中'}
+                                type="button"
+                            >
+                                {exportingKeys
+                                    ? (isEnglish ? 'Fetching keys…' : '获取激活码中…')
+                                    : (isEnglish ? 'Keys CSV' : '激活码 CSV')}
+                            </button>
+                        )}
                         <button
                             className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
                             onClick={() => requestPngs(selectedPassports.map(p => p.id), selectionBase)}

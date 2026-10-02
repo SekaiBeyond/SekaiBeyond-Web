@@ -35,6 +35,11 @@ export const MAX_GENERATE_COUNT = Math.min(200, Math.floor(BATCH_LIMIT / 2));
 // arithmetic: a deleted passport erases the passport and its secret.
 export const MAX_DELETE_COUNT = MAX_GENERATE_COUNT;
 
+// Per-call ceiling on a keys export. Reads only, two documents a passport, so it
+// is held by the size of one getAll rather than a batch; the client splits a
+// bigger selection into calls of this size.
+export const MAX_KEY_EXPORT_COUNT = 500;
+
 // Codes are printed and read back by hand, so input is normalized before it is
 // compared: lowercase is folded, and the dashes we print for legibility (plus
 // any spaces the reader adds) are dropped.

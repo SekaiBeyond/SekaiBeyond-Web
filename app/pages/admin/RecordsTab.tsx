@@ -48,7 +48,8 @@ const TYPE_CATEGORIES: Record<string, RecordType[]> = {
         'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
         'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
     passport: ['passport-generate', 'passport-claim', 'passport-delete', 'passport-key-reissue',
-        'passport-key-view', 'passport-design-create', 'passport-design-edit', 'passport-design-delete'],
+        'passport-key-view', 'passport-key-export', 'passport-design-create', 'passport-design-edit',
+        'passport-design-delete'],
     qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
         'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
     account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
@@ -765,6 +766,15 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>viewed the activation key for passport {r.passportId ?? ''}</>
                     : <>查看了通行证 {r.passportId ?? ''} 的激活码</>;
+            case 'passport-key-export':
+                if (r.passportId) {
+                    return isEnglish
+                        ? <>downloaded the activation key for passport {r.passportId}</>
+                        : <>下载了通行证 {r.passportId} 的激活码</>;
+                }
+                return isEnglish
+                    ? <>downloaded the activation keys for {r.passportCount ?? 0} {r.passportYear ?? ''} passports</>
+                    : <>下载了 {r.passportCount ?? 0} 本 {r.passportYear ?? ''} 年通行证的激活码</>;
             case 'passport-design-create':
                 return isEnglish
                     ? <>created the {r.passportYear ?? ''} passport design “{r.passportDesignName ?? ''}”</>
@@ -906,6 +916,7 @@ export const RecordsTab = ({
             case 'passport-delete':
             case 'passport-key-reissue':
             case 'passport-key-view':
+            case 'passport-key-export':
             case 'passport-design-create':
             case 'passport-design-edit':
             case 'passport-design-delete':

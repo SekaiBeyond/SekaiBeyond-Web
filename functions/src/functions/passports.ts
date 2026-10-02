@@ -10,6 +10,7 @@ import {
     isPassportYear,
     MAX_DELETE_COUNT,
     MAX_GENERATE_COUNT,
+    MAX_KEY_EXPORT_COUNT,
     newActivationKey,
     normalizePassportId,
     PASSPORT_ID_LENGTH,
@@ -212,6 +213,70 @@ export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
     });
 
     return {passportId, activationCode: formatActivationKey(key)};
+});
+
+/**
+ * Serve the current keys of a set of passports at once, for the stock table's
+ * Keys CSV: reprinting a run of slips, or a pairing list for a pack. The bulk
+ * form of revealPassportKey, and logged the same way, as one record per call
+ * that names the passport when there is one and counts them otherwise.
+ *
+ * A passport that is gone, or has no viewable key on file (minted before keys
+ * were kept), comes back in `missing` rather than failing the rest. The record
+ * is written before anything is returned, so no key leaves without one.
+ */
+export const exportPassportKeys = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+    const callerSnap = await requireAdmin(uid);
+
+    const input = (request.data as {passportIds?: unknown})?.passportIds;
+    if (!Array.isArray(input) || input.length < 1 || input.length > MAX_KEY_EXPORT_COUNT) {
+        throw new HttpsError(
+            "invalid-argument",
+            `passportIds must hold between 1 and ${MAX_KEY_EXPORT_COUNT} passport codes.`,
+        );
+    }
+    const normalized = [...new Set(input.map(normalizePassportId))];
+    if (normalized.some(id => id === null)) {
+        throw new HttpsError("invalid-argument", "Invalid passportId.");
+    }
+    const passportIds = normalized as string[];
+
+    // getAll answers in the order it was asked, so index i is the same passport
+    // in both lists.
+    const [passportSnaps, secretSnaps] = await Promise.all([
+        db.getAll(...passportIds.map(id => db.collection(PASSPORTS).doc(id))),
+        db.getAll(...passportIds.map(id => db.collection(SECRETS).doc(id))),
+    ]);
+
+    const passports: {passportId: string; activationCode: string}[] = [];
+    const missing: string[] = [];
+    let year: number | null = null;
+    passportIds.forEach((passportId, i) => {
+        const key = passportSnaps[i].exists ? secretSnaps[i].data()?.key : undefined;
+        if (typeof key !== "string") {
+            missing.push(passportId);
+            return;
+        }
+        passports.push({passportId, activationCode: formatActivationKey(key)});
+        const passportYear = passportSnaps[i].data()?.year;
+        if (year === null && typeof passportYear === "number") year = passportYear;
+    });
+
+    if (passports.length > 0) {
+        await db.collection("records").add({
+            type: "passport-key-export",
+            performedBy: uid,
+            performedByName: performerName(callerSnap),
+            passportId: passports.length === 1 ? passports[0].passportId : null,
+            passportCount: passports.length,
+            passportYear: year,
+            timestamp: FieldValue.serverTimestamp(),
+            expiresAt: recordExpiresAt(),
+        });
+    }
+
+    return {passports, missing};
 });
 
 /**

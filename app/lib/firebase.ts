@@ -551,6 +551,14 @@ export const callRevealPassportKey = (data: {passportId: string}) =>
     httpsCallable<typeof data, {passportId: string; activationCode: string}>(
         getFunctions(), 'revealPassportKey')(data);
 
+// Admin only, and logged as one record per call. Up to MAX_PASSPORT_KEY_EXPORT
+// ids a call; a passport with no key on file comes back in `missing`.
+export const callExportPassportKeys = (data: {passportIds: string[]}) =>
+    httpsCallable<typeof data, {
+        passports: Array<{passportId: string; activationCode: string}>;
+        missing: string[];
+    }>(getFunctions(), 'exportPassportKeys')(data);
+
 export const callGetPassportPublicProfile = (data: {passportId: string}) =>
     httpsCallable<typeof data, PassportPublicProfile>(getFunctions(), 'getPassportPublicProfile')(data);
 

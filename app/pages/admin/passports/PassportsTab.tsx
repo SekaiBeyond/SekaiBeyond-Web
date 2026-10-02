@@ -457,9 +457,9 @@ interface GeneratedRun {
 
 /**
  * Mint passports and hand over the print files. Nothing ties the passports from
- * one call together afterwards — this screen is the only place their activation
- * keys come back in bulk, and leaving it without exporting means looking each
- * key up one passport at a time.
+ * one call together afterwards, so leaving without exporting means finding them
+ * again in the stock table — newest first, so at the top — and selecting them for
+ * a Keys CSV.
  */
 const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: PassportGeneratorProps) => {
     const {isEnglish} = useLanguage();
@@ -480,8 +480,8 @@ const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: Passpo
     // tab, reloading, and switching admin tabs — none of which the Back button's
     // confirm ever saw.
     useExitGuard(!!issued && !exported, isEnglish
-        ? 'You haven’t downloaded the activation keys. After leaving this screen they can only be viewed one passport at a time. Leave anyway?'
-        : '你还没有下载激活码。离开此页面后只能逐本查看。仍要离开吗？');
+        ? 'You haven’t downloaded the activation keys. After leaving, select these passports in the stock table to download them. Leave anyway?'
+        : '你还没有下载激活码。离开后，需在库存表中选中这些通行证才能下载。仍要离开吗？');
 
     const exportCsv = (run: GeneratedRun) => {
         downloadBlob(
@@ -497,10 +497,9 @@ const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: Passpo
             const res = await callGeneratePassports({designId, count});
             const run: GeneratedRun = {...res.data, stamp: fileStamp()};
             setIssued(run);
-            // Save them without being asked. Every way off this screen leaves the
-            // keys retrievable only one passport at a time, so the file is written
-            // first and the screen becomes a confirmation rather than the only copy
-            // of the lot. Only a throw re-arms the warning — a download the browser
+            // Save them without being asked. Off this screen they have to be picked
+            // out of the stock table again, so the file is written first and the
+            // screen becomes a confirmation rather than the only copy of the lot. Only a throw re-arms the warning — a download the browser
             // silently blocks still reads as exported, which is why the banner
             // tells the admin to go and look for the file.
             setExported(false);
@@ -623,8 +622,8 @@ const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: Passpo
                         is, the next screen shows in two labelled columns. */}
                     <p className="admin-passport-gen-note">
                         {isEnglish
-                            ? 'The keys CSV downloads as soon as the passports exist — the next screen is the only one that lists them together. After it, a key is viewed one passport at a time.'
-                            : '通行证生成后将立即下载激活码 CSV — 只有下一屏会集中列出这些激活码。此后只能逐本查看。'}
+                            ? 'The keys CSV downloads as soon as the passports exist. To download it again later, select the passports in the stock table and use Keys CSV.'
+                            : '通行证生成后将立即下载激活码 CSV。之后如需重新下载，请在库存表中选中这些通行证并使用「激活码 CSV」。'}
                     </p>
                 </>
             ) : (
@@ -647,11 +646,11 @@ const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: Passpo
                         <p>
                             {exported
                                 ? (isEnglish
-                                    ? 'The keys CSV is in this device’s downloads folder — check it before packing. Once you leave this screen it is the only list of these passports’ keys.'
-                                    : '激活码 CSV 已保存至此设备的下载文件夹 — 请在装袋前确认。离开此页面后，它将是这批激活码的唯一清单。')
+                                    ? 'The keys CSV is in this device’s downloads folder — check it before packing. It can be downloaded again from the stock table’s Keys CSV.'
+                                    : '激活码 CSV 已保存至此设备的下载文件夹 — 请在装袋前确认。之后也可在库存表中通过「激活码 CSV」重新下载。')
                                 : (isEnglish
-                                    ? 'This is the only screen that lists all of these keys together.'
-                                    : '只有此页面会集中列出这些激活码。')}
+                                    ? 'This is the only screen that lists this run’s keys on its own.'
+                                    : '只有此页面会单独列出这一批的激活码。')}
                         </p>
                     </div>
 

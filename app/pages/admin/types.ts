@@ -132,6 +132,7 @@ export type RecordType =
     | 'passport-delete'
     | 'passport-key-reissue'
     | 'passport-key-view'
+    | 'passport-key-export'
     | 'passport-design-create'
     | 'passport-design-edit'
     | 'passport-design-delete'
