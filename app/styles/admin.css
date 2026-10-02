@@ -1160,6 +1160,26 @@
     color: var(--color-text);
 }
 
+/* Mirrors the `label` field above, around a rendered policy preview. */
+.admin-policy-preview-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.admin-policy-preview-field > span {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+/* Same height as the editor's textarea, so toggling doesn't jump the page. */
+.admin-policy-preview {
+    min-height: 360px;
+    margin-bottom: 0;
+}
+
 .admin-tag-field {
     grid-column: 1 / -1;
     display: flex;

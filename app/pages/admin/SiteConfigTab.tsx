@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSavePolicy, callSaveSiteConfig } from '~/lib/firebase';
 import { useSiteConfig } from '~/lib/siteConfig';
-import { usePolicy } from '~/lib/policy';
+import { renderPolicyMarkdown, usePolicy } from '~/lib/policy';
 import { BILIBILI_VIDEO } from '~/constants';
 import { TeamSection } from './TeamSection';
 import { ConEditionSection } from './ConEditionSection';
@@ -18,6 +18,25 @@ function parseBvid(input: string): string {
     return match ? match[0] : '';
 }
 
+// A <div> rather than the editor's <label>: `.admin-form-grid label span`
+// would restyle any <span> in the rendered policy.
+const PolicyPreview = ({label, content}: {label: string; content: string}) => {
+    const {isEnglish} = useLanguage();
+    return (
+        <div className="admin-policy-preview-field">
+            <span>{label}</span>
+            {content.trim() ? (
+                <div className="policy-text admin-policy-preview"
+                     dangerouslySetInnerHTML={{__html: renderPolicyMarkdown(content)}}/>
+            ) : (
+                <p className="policy-empty">
+                    {isEnglish ? 'No policy content available.' : '暂无政策内容。'}
+                </p>
+            )}
+        </div>
+    );
+};
+
 export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps) => {
     const {isEnglish} = useLanguage();
 
@@ -31,6 +50,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     const [contentCn, setContentCn] = useState('');
     const [savingPolicy, setSavingPolicy] = useState(false);
     const [policyInitialized, setPolicyInitialized] = useState(false);
+    const [previewingPolicy, setPreviewingPolicy] = useState(false);
 
     useEffect(() => {
         if (!configLoading && !videoInitialized) {
@@ -172,33 +192,42 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                 </h3>
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? 'This content is displayed on the public Policy page.'
-                        : '此内容显示在公开政策页面上。'}
+                        ? 'This content is displayed on the public Policy page. Write it in Markdown.'
+                        : '此内容显示在公开政策页面上，请使用 Markdown 编写。'}
                 </p>
                 <div className="admin-form-grid admin-mt-12">
-                    <label>
-                        <span>{isEnglish ? 'Content (English)' : '内容（英文）'}</span>
-                        <textarea
-                            className="admin-input policy-textarea"
-                            value={contentEn}
-                            onChange={e => !readOnly && setContentEn(e.target.value)}
-                            readOnly={readOnly}
-                            placeholder={isEnglish ? 'Enter policy content in English...' : '请输入英文政策内容...'}
-                        />
-                    </label>
-                    <label>
-                        <span>{isEnglish ? 'Content (Chinese)' : '内容（中文）'}</span>
-                        <textarea
-                            className="admin-input policy-textarea"
-                            value={contentCn}
-                            onChange={e => !readOnly && setContentCn(e.target.value)}
-                            readOnly={readOnly}
-                            placeholder={isEnglish ? 'Enter policy content in Chinese...' : '请输入中文政策内容...'}
-                        />
-                    </label>
+                    {previewingPolicy ? (
+                        <>
+                            <PolicyPreview label={isEnglish ? 'Content (English)' : '内容（英文）'} content={contentEn}/>
+                            <PolicyPreview label={isEnglish ? 'Content (Chinese)' : '内容（中文）'} content={contentCn}/>
+                        </>
+                    ) : (
+                        <>
+                            <label>
+                                <span>{isEnglish ? 'Content (English)' : '内容（英文）'}</span>
+                                <textarea
+                                    className="admin-input policy-textarea"
+                                    value={contentEn}
+                                    onChange={e => !readOnly && setContentEn(e.target.value)}
+                                    readOnly={readOnly}
+                                    placeholder={isEnglish ? 'Enter policy content in English (Markdown)...' : '请输入英文政策内容（Markdown）...'}
+                                />
+                            </label>
+                            <label>
+                                <span>{isEnglish ? 'Content (Chinese)' : '内容（中文）'}</span>
+                                <textarea
+                                    className="admin-input policy-textarea"
+                                    value={contentCn}
+                                    onChange={e => !readOnly && setContentCn(e.target.value)}
+                                    readOnly={readOnly}
+                                    placeholder={isEnglish ? 'Enter policy content in Chinese (Markdown)...' : '请输入中文政策内容（Markdown）...'}
+                                />
+                            </label>
+                        </>
+                    )}
                 </div>
-                {!readOnly && (
-                    <div className="admin-btn-row admin-mt-12">
+                <div className="admin-btn-row admin-mt-12">
+                    {!readOnly && (
                         <button
                             className="admin-toggle-btn admin-toggle-save"
                             onClick={savePolicy}
@@ -208,8 +237,17 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                                 ? (isEnglish ? 'Saving...' : '保存中...')
                                 : (isEnglish ? 'Save Policy' : '保存政策')}
                         </button>
-                    </div>
-                )}
+                    )}
+                    <button
+                        className="admin-toggle-btn admin-toggle-edit"
+                        onClick={() => setPreviewingPolicy(p => !p)}
+                        aria-pressed={previewingPolicy}
+                    >
+                        {previewingPolicy
+                            ? (isEnglish ? 'Show Markdown' : '显示 Markdown')
+                            : (isEnglish ? 'Preview' : '预览')}
+                    </button>
+                </div>
             </div>
 
             <SectionNav

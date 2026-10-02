@@ -1,13 +1,15 @@
+import { useMemo } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { GoToTop } from '~/components/GoToTop';
-import { usePolicy } from '~/lib/policy';
+import { renderPolicyMarkdown, usePolicy } from '~/lib/policy';
 
 export const PolicyPage = () => {
     const {isEnglish} = useLanguage();
     const {policy, loading} = usePolicy();
 
     const content = isEnglish ? policy.contentEn : policy.contentCn;
+    const contentHtml = useMemo(() => renderPolicyMarkdown(content), [content]);
 
     return (
         <>
@@ -30,7 +32,7 @@ export const PolicyPage = () => {
                             <div className="spinner"/>
                         </div>
                     ) : content ? (
-                        <pre className="policy-text">{content}</pre>
+                        <div className="policy-text" dangerouslySetInnerHTML={{__html: contentHtml}}/>
                     ) : (
                         <p className="policy-empty">
                             {isEnglish ? 'No policy content available.' : '暂无政策内容。'}
