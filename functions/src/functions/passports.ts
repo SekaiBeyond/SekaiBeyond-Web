@@ -4,19 +4,13 @@ import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../
 import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks, generateSecureCode } from "../utils/helpers";
-import { extendedExpiry, MAX_GRANT_DAYS, reducedExpiry, startedAtAfter } from "../utils/membership";
+import { MAX_GRANT_DAYS, reducedExpiry, startedAtAfter } from "../utils/membership";
 import {
-    activationKeyMatches,
     formatActivationKey,
-    isLockedOut,
     isPassportYear,
-    lockedUntilMillis,
-    LOCKOUT_MS,
     MAX_DELETE_COUNT,
-    MAX_FAILED_ATTEMPTS,
     MAX_GENERATE_COUNT,
     newActivationKey,
-    normalizeActivationKey,
     normalizePassportId,
     PASSPORT_ID_LENGTH,
     PASSPORT_TERM_DAYS,
@@ -106,8 +100,6 @@ export const generatePassports = onCall({maxInstances: 5}, async (request) => {
                 createdByName: performerName(callerSnap),
                 keyIssuedAt: FieldValue.serverTimestamp(),
                 keyReissueCount: 0,
-                failedAttempts: 0,
-                lockedUntil: null,
             });
             batch.create(db.collection(SECRETS).doc(passportId), {salt, secretHash, key});
         });
@@ -161,10 +153,6 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
         txn.update(ref, {
             keyIssuedAt: FieldValue.serverTimestamp(),
             keyReissueCount: FieldValue.increment(1),
-            // A reissue also clears a lockout: the code an attacker was guessing
-            // no longer exists, and the buyer shouldn't inherit the penalty.
-            failedAttempts: 0,
-            lockedUntil: null,
         });
         txn.set(db.collection("records").doc(), {
             type: "passport-key-reissue",
@@ -226,154 +214,6 @@ export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
     return {passportId, activationCode: formatActivationKey(key)};
 });
 
-/** Why a claim attempt didn't go through. Kept out of the exception path so the
- * failed-attempt counter is committed rather than rolled back with it. */
-type ClaimFailure =
-    | {code: "invalid"}
-    | {code: "no-profile"}
-    | {code: "already-claimed"}
-    | {code: "no-key"}
-    | {code: "locked"; retryAfterMs: number}
-    | {code: "bad-key"; attemptsLeft: number};
-
-/**
- * Claim a passport with the key from its slip. Grants the passport's term (set
- * by its design), stacked onto any membership the caller already has, and binds the
- * passport permanently.
- */
-export const claimPassport = onCall({maxInstances: 20}, async (request) => {
-    const uid = await requireAuth(request);
-
-    const input = request.data as {passportId?: unknown; activationCode?: unknown};
-    const passportId = normalizePassportId(input.passportId);
-    const activationCode = normalizeActivationKey(input.activationCode);
-    if (!passportId) {
-        throw new HttpsError("not-found", "This passport code is not valid.", {code: "invalid"});
-    }
-    if (!activationCode) {
-        throw new HttpsError("permission-denied", "That activation key is not correct.", {code: "bad-key"});
-    }
-
-    const passportRef = db.collection(PASSPORTS).doc(passportId);
-    const secretRef = db.collection(SECRETS).doc(passportId);
-    const userRef = db.collection("users").doc(uid);
-
-    const outcome = await db.runTransaction(async (txn): Promise<
-        {ok: true; membershipExpiresAt: Timestamp; daysGranted: number; year: number}
-        | {ok: false; failure: ClaimFailure}
-    > => {
-        const [passportSnap, secretSnap, userSnap] = await Promise.all([
-            txn.get(passportRef),
-            txn.get(secretRef),
-            txn.get(userRef),
-        ]);
-
-        if (!passportSnap.exists) return {ok: false, failure: {code: "invalid"}};
-        const passport = passportSnap.data()!;
-        if (passport.status === "claimed") return {ok: false, failure: {code: "already-claimed"}};
-        if (isLockedOut(passport)) {
-            return {ok: false, failure: {code: "locked", retryAfterMs: lockedUntilMillis(passport) - Date.now()}};
-        }
-        if (!secretSnap.exists) return {ok: false, failure: {code: "no-key"}};
-        // Distinct from "invalid": the sticker is fine, the account is the problem
-        // (profile creation failed on first sign-in, or the doc was deleted under
-        // an open tab). Answering "invalid" here sends the holder off to retype a
-        // code that was never wrong.
-        if (!userSnap.exists) return {ok: false, failure: {code: "no-profile"}};
-
-        if (!activationKeyMatches(activationCode, secretSnap.data()!)) {
-            const attempts = (typeof passport.failedAttempts === "number" ? passport.failedAttempts : 0) + 1;
-            const locked = attempts >= MAX_FAILED_ATTEMPTS;
-            txn.update(passportRef, {
-                failedAttempts: locked ? 0 : attempts,
-                lockedUntil: locked ? Timestamp.fromMillis(Date.now() + LOCKOUT_MS) : null,
-            });
-            return {
-                ok: false,
-                failure: {code: "bad-key", attemptsLeft: locked ? 0 : MAX_FAILED_ATTEMPTS - attempts},
-            };
-        }
-
-        const userData = userSnap.data()!;
-        const daysGranted = typeof passport.termDays === "number" ? passport.termDays : PASSPORT_TERM_DAYS;
-        const membershipExpiresAt = extendedExpiry(userData.membershipExpiresAt ?? null, daysGranted);
-        const membershipStartedAt = startedAtAfter(userData, membershipExpiresAt);
-
-        txn.update(passportRef, {
-            status: "claimed",
-            ownerUid: uid,
-            claimedAt: FieldValue.serverTimestamp(),
-            failedAttempts: 0,
-            lockedUntil: null,
-        });
-        // Membership only. `group` is never touched here — see the file comment.
-        txn.update(userRef, {
-            membershipExpiresAt,
-            membershipStartedAt: membershipStartedAt ?? FieldValue.delete(),
-        });
-        // The binding is permanent, so the hash has done its one job and is
-        // dropped. The key stays so an admin can still look up what was on the
-        // slip (revealPassportKey).
-        txn.update(secretRef, {salt: FieldValue.delete(), secretHash: FieldValue.delete()});
-        txn.set(db.collection("records").doc(), {
-            type: "passport-claim",
-            performedBy: uid,
-            performedByName: userData.displayName ?? "",
-            targetUid: uid,
-            targetName: userData.displayName ?? "",
-            passportId,
-            passportYear: passport.year ?? null,
-            newExpiresAt: membershipExpiresAt.toDate().toISOString(),
-            extendDays: daysGranted,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
-
-        return {
-            ok: true,
-            membershipExpiresAt,
-            daysGranted,
-            year: typeof passport.year === "number" ? passport.year : 0,
-        };
-    });
-
-    if (outcome.ok) {
-        return {
-            membershipExpiresAt: outcome.membershipExpiresAt.toDate().toISOString(),
-            daysGranted: outcome.daysGranted,
-            year: outcome.year,
-        };
-    }
-
-    const failure = outcome.failure;
-    switch (failure.code) {
-        case "invalid":
-            throw new HttpsError("not-found", "This passport code is not valid.", failure);
-        case "no-profile":
-            throw new HttpsError(
-                "failed-precondition",
-                "Your account isn't set up yet. Sign out and back in, then try again.",
-                failure,
-            );
-        case "already-claimed":
-            throw new HttpsError("already-exists", "This passport has already been activated.", failure);
-        case "no-key":
-            throw new HttpsError(
-                "failed-precondition",
-                "This passport has no activation key on file. Please contact us.",
-                failure,
-            );
-        case "locked":
-            throw new HttpsError(
-                "resource-exhausted",
-                "Too many incorrect keys. Please try again later.",
-                failure,
-            );
-        case "bad-key":
-            throw new HttpsError("permission-denied", "That activation key is not correct.", failure);
-    }
-});
-
 /**
  * Resolve a scanned sticker, for anyone — no sign-in.
  *
@@ -406,19 +246,13 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 
     const passport = passportSnap.data()!;
 
+    // Nothing to show before it's activated, and activating happens in Redeem
+    // Code, so the page only needs to know which this is.
+    if (passport.status !== "claimed" || !passport.ownerUid) return {status: "unclaimed" as const};
+
     // The page reads the design itself (passportDesigns is public), for its name
     // and cover art.
     const designId: string = passport.designId ?? "";
-
-    if (passport.status !== "claimed" || !passport.ownerUid) {
-        // The term is per-passport data, not a constant: the activation screen
-        // quotes what this sticker actually grants rather than today's default.
-        return {
-            status: "unclaimed" as const,
-            designId,
-            termDays: typeof passport.termDays === "number" ? passport.termDays : PASSPORT_TERM_DAYS,
-        };
-    }
 
     const ownerUid: string = passport.ownerUid;
     const ownerSnap = await db.collection("users").doc(ownerUid).get();
@@ -554,10 +388,11 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
  * user document not at all.
  *
  * What it takes back is the term the passport itself carried, not whatever the
- * design says today — the same number the claim granted, since claimPassport
- * reads the same field. Taking it back can only ever reach zero (reducedExpiry):
- * days stack from several sources, so a passport can never pull a membership
- * below the day it is taken back on, and a lapsed one has nothing left to take.
+ * design says today — the same number the claim granted, since
+ * claimPassportWithKey reads the same field. Taking it back can only ever reach
+ * zero (reducedExpiry): days stack from several sources, so a passport can never
+ * pull a membership below the day it is taken back on, and a lapsed one has
+ * nothing left to take.
  *
  * Nothing about the passport survives: its document and its key both go,
  * /p/<code> stops resolving, the holder's shelf loses it, and the code is free to
@@ -607,8 +442,8 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
         // be deleted later.
         const ownerName: string = ownerData?.displayName ?? "";
 
-        // What the claim granted, read the way claimPassport read it so the two
-        // numbers agree by construction.
+        // What the claim granted, read the way claimPassportWithKey read it so the
+        // two numbers agree by construction.
         const granted = typeof passport.termDays === "number" ? passport.termDays : PASSPORT_TERM_DAYS;
         const reduced = subtractDays && ownerData
             ? reducedExpiry(ownerData.membershipExpiresAt, granted)

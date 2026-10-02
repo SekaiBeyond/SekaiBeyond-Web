@@ -30,8 +30,6 @@ export interface Passport {
     /** When the current activation key was minted — bumped by a key reissue. */
     keyIssuedAt: Date | null;
     keyReissueCount: number;
-    failedAttempts: number;
-    lockedUntil: Date | null;
 }
 
 /**
@@ -69,7 +67,7 @@ export interface PassportDesign {
 export type PassportPublicProfile =
     | {status: 'invalid'}
     | {status: 'private'}
-    | {status: 'unclaimed'; designId: string; termDays: number}
+    | {status: 'unclaimed'}
     | {
     status: 'claimed';
     designId: string;
@@ -102,8 +100,6 @@ const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Pas
         createdByName: data.createdByName ?? '',
         keyIssuedAt: toDate(data.keyIssuedAt),
         keyReissueCount: typeof data.keyReissueCount === 'number' ? data.keyReissueCount : 0,
-        failedAttempts: typeof data.failedAttempts === 'number' ? data.failedAttempts : 0,
-        lockedUntil: toDate(data.lockedUntil),
     };
 };
 
@@ -195,7 +191,6 @@ export const normalizePassportCode = (raw: string): string =>
     raw.replace(/[\s-]+/g, '').toUpperCase();
 
 export const PASSPORT_ID_LENGTH = 10;
-export const ACTIVATION_KEY_LENGTH = 12;
 /** How many passports one generate call may mint. Mirrors MAX_GENERATE_COUNT in
  * functions/src/utils/passports.ts, which enforces it. */
 export const MAX_PASSPORT_GENERATE = 200;

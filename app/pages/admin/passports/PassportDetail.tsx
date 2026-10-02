@@ -315,7 +315,6 @@ export const PassportDetail = ({
         );
     }
 
-    const locked = !!passport.lockedUntil && passport.lockedUntil.getTime() > Date.now();
     const unclaimed = passport.status === 'unclaimed';
     const keyViewable = !readOnly;
     // What ticking the box would do. Null while the holder is still loading, for
@@ -463,11 +462,6 @@ export const PassportDetail = ({
                     <span className={`admin-qr-badge admin-qr-badge-lg admin-passport-badge--${passport.status}`}>
                         {passportStatusLabel(passport.status, isEnglish)}
                     </span>
-                    {locked && (
-                        <span className="admin-qr-badge admin-qr-badge-lg admin-qr-badge-expired">
-                            {isEnglish ? 'Locked' : '已锁定'}
-                        </span>
-                    )}
                 </div>
             </header>
 
@@ -576,21 +570,6 @@ export const PassportDetail = ({
                                     )}
                                 </dd>
                             </div>
-                            {locked && passport.lockedUntil && (
-                                <div>
-                                    <dt>{isEnglish ? 'Locked until' : '锁定至'}</dt>
-                                    <dd>
-                                        {fmtDate(passport.lockedUntil)}
-                                        {passport.failedAttempts > 0 && (
-                                            <span className="admin-passport-fact-by">
-                                                {isEnglish
-                                                    ? `after ${passport.failedAttempts} failed activation ${passport.failedAttempts === 1 ? 'attempt' : 'attempts'}`
-                                                    : `已有 ${passport.failedAttempts} 次激活失败`}
-                                            </span>
-                                        )}
-                                    </dd>
-                                </div>
-                            )}
                         </dl>
                     </section>
                 </div>

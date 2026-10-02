@@ -5,7 +5,7 @@ import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { codeKind, issueCode, normalizeCode } from "../utils/codes";
 import { validateCodeInTransaction } from "../utils/helpers";
-import { normalizePassportId } from "../utils/passports";
+import { claimPassportWithKey, findPassportByKey, normalizeActivationKey } from "../utils/passports";
 import { validateDocId, validateISODate, validateMaxUses } from "../utils/validation";
 
 const INVALID = "Invalid or deactivated code.";
@@ -28,18 +28,28 @@ function isUnmatchedCode(err: unknown): boolean {
     return details?.code === "invalid" || details?.code === "inactive";
 }
 
-/** The sticker `code` names, if there is such a passport. A deleted one reads as
- * unknown, exactly as it does at /p/:id. */
-async function resolvePassportId(code: string): Promise<string | null> {
-    const passportId = normalizePassportId(code);
+/** Claims the passport whose slip carries `key`. Null when no passport has it. */
+async function redeemPassportKey(uid: string, key: string) {
+    const passportId = await findPassportByKey(key);
     if (!passportId) return null;
-    const snap = await db.collection("passports").doc(passportId).get();
-    return snap.exists ? passportId : null;
+    const grant = await claimPassportWithKey(uid, passportId, key);
+    // Named and pictured on the screen that confirms it, the way a badge is.
+    const design = grant.designId
+        ? (await db.collection("passportDesigns").doc(grant.designId).get()).data()
+        : undefined;
+    return {
+        passportId,
+        daysGranted: grant.daysGranted,
+        membershipExpiresAt: grant.membershipExpiresAt,
+        designName: design?.name ?? "",
+        designNameCn: design?.nameCn ?? "",
+        coverImageUrl: design?.coverImageUrl ?? "",
+    };
 }
 
 /**
- * One door for every code a member can type: badge codes and staff codes are
- * redeemed here, and a passport id is answered with the id to go activate.
+ * One door for every code a member can type: badge codes, staff codes, and the
+ * key on a passport's slip are all redeemed here.
  *
  * The client used to do this dispatch itself by calling each claim function in
  * turn, which spent a rate-limit slot per guess (requireAuth charges one each
@@ -64,9 +74,9 @@ export const redeemCode = onCall({maxInstances: 20}, async (request) => {
             });
     }
 
-    // No prefix: either a code issued before they existed or a passport id.
-    // Badge first, then staff, then the sticker — the order the client used to
-    // walk, so a bare code still redeems as whatever it redeemed as yesterday.
+    // No prefix: a code issued before they existed, or a passport key. Badge
+    // first, then staff — the order the client used to walk, so a bare code still
+    // redeems as whatever it redeemed as yesterday — then the slip.
     try {
         return {kind: "badge" as const, ...await redeemBadgeCode(uid, code)};
     } catch (err) {
@@ -78,8 +88,11 @@ export const redeemCode = onCall({maxInstances: 20}, async (request) => {
         if (!isUnmatchedCode(err)) throw err;
     }
 
-    const passportId = await resolvePassportId(code);
-    if (passportId) return {kind: "passport" as const, passportId};
+    const passportKey = normalizeActivationKey(code);
+    if (passportKey) {
+        const claimed = await redeemPassportKey(uid, passportKey);
+        if (claimed) return {kind: "passport-claim" as const, ...claimed};
+    }
 
     throw new HttpsError("not-found", INVALID, {code: "invalid"});
 });

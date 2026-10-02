@@ -7,14 +7,31 @@ import type { BadgeDef } from '~/lib/types';
 import { useModalEffects } from '~/lib/useModalEffects';
 
 const OPEN_EVENT = 'open-redeem-modal';
+const PASSPORT_CLAIMED_EVENT = 'passport-claimed';
 
 /** Opens the Redeem Code modal, which root mounts once for every page. */
 export const openRedeemModal = () => window.dispatchEvent(new CustomEvent(OPEN_EVENT));
+
+/** Calls `handler` with the id of each passport the modal activates, so a page
+ * showing that passport can re-read it. Returns the unsubscribe. */
+export const onPassportClaimed = (handler: (passportId: string) => void) => {
+    const listener = (e: Event) => handler((e as CustomEvent<string>).detail);
+    window.addEventListener(PASSPORT_CLAIMED_EVENT, listener);
+    return () => window.removeEventListener(PASSPORT_CLAIMED_EVENT, listener);
+};
 
 interface EventInfo {
     eventTitle: string;
     eventTitleCn: string;
     eventPoster: string;
+}
+
+interface PassportGrant {
+    passportId: string;
+    name: string;
+    coverImageUrl: string;
+    daysGranted: number;
+    membershipExpiresAt: string;
 }
 
 export const RedeemModal = () => {
@@ -23,9 +40,12 @@ export const RedeemModal = () => {
     const navigate = useNavigate();
     const [show, setShow] = useState(false);
     const [input, setInput] = useState('');
-    const [state, setState] = useState<'idle' | 'claiming' | 'badge-success' | 'staff-success' | 'error'>('idle');
+    const [state, setState] = useState<
+        'idle' | 'claiming' | 'badge-success' | 'staff-success' | 'passport-success' | 'error'
+    >('idle');
     const [badge, setBadge] = useState<BadgeDef | null>(null);
     const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
+    const [passport, setPassport] = useState<PassportGrant | null>(null);
     const [error, setError] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
@@ -40,6 +60,7 @@ export const RedeemModal = () => {
             setState('idle');
             setBadge(null);
             setEventInfo(null);
+            setPassport(null);
             setError('');
             submittingRef.current = false;
             setTimeout(() => inputRef.current?.focus(), 50);
@@ -77,16 +98,17 @@ export const RedeemModal = () => {
         try {
             const {data} = await callRedeemCode({code: trimmed});
 
-            if (data.kind === 'passport') {
-                // Not something this modal can finish — binding a passport also
-                // needs the activation key hidden under the sticker, and /p/:id
-                // is the screen that asks for it.
-                close();
-                navigate(`/p/${data.passportId}`);
-                return;
-            }
-
-            if (data.kind === 'badge') {
+            if (data.kind === 'passport-claim') {
+                setPassport({
+                    passportId: data.passportId,
+                    name: isEnglish ? data.designName : (data.designNameCn || data.designName),
+                    coverImageUrl: data.coverImageUrl,
+                    daysGranted: data.daysGranted,
+                    membershipExpiresAt: data.membershipExpiresAt,
+                });
+                setState('passport-success');
+                window.dispatchEvent(new CustomEvent(PASSPORT_CLAIMED_EVENT, {detail: data.passportId}));
+            } else if (data.kind === 'badge') {
                 setBadge({
                     id: data.badgeId,
                     name: data.badgeName,
@@ -122,6 +144,19 @@ export const RedeemModal = () => {
                 case 'max-uses':
                     setError(isEnglish ? 'This code has reached its maximum uses.' : '此兑换码已达到最大使用次数。');
                     break;
+                // Only a passport key reaches these two: its passport was found,
+                // so "invalid" would send the holder off to retype a key that
+                // was never wrong.
+                case 'already-claimed':
+                    setError(isEnglish
+                        ? 'This passport has already been activated.'
+                        : '此通行证已被激活。');
+                    break;
+                case 'no-profile':
+                    setError(isEnglish
+                        ? 'Your account isn’t set up yet. Please sign out and back in, then try again.'
+                        : '您的账号尚未完成设置。请退出登录后重新登录，然后再试。');
+                    break;
                 case 'already-have':
                     setError(functionsErrorDetails<{kind?: string}>(err)?.kind === 'staff'
                         ? (isEnglish ? 'You are already staff for this event.' : '您已是此活动的工作人员。')
@@ -144,6 +179,12 @@ export const RedeemModal = () => {
 
     if (!show) return null;
 
+    const memberUntil = passport
+        ? new Date(passport.membershipExpiresAt).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+            year: 'numeric', month: 'long', day: 'numeric',
+        })
+        : '';
+
     return (
         <div ref={overlayRef} className="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
             <div className="modal-content">
@@ -156,8 +197,8 @@ export const RedeemModal = () => {
                         </h2>
                         <p className="redeem-subtitle">
                             {isEnglish
-                                ? 'Enter your code to redeem a reward or activate a passport.'
-                                : '输入兑换码以领取奖励或激活通行证。'}
+                                ? 'Enter a code to redeem a reward, or the key from a passport’s slip to activate it.'
+                                : '输入兑换码以领取奖励，或输入通行证纸条上的激活码以激活通行证。'}
                         </p>
                         <form onSubmit={handleSubmit}>
                             <input
@@ -240,6 +281,47 @@ export const RedeemModal = () => {
                     </>
                 )}
 
+                {state === 'passport-success' && passport && (
+                    <>
+                        {passport.coverImageUrl && (
+                            <div className="redeem-passport-cover">
+                                <img src={passport.coverImageUrl} alt=""/>
+                            </div>
+                        )}
+                        <h2 className="redeem-heading">
+                            {isEnglish ? 'Passport Activated!' : '通行证已激活！'}
+                        </h2>
+                        {passport.name && (
+                            <p className="claim-event-title redeem-centered-text">{passport.name}</p>
+                        )}
+                        <p className="redeem-grant">
+                            <span className="redeem-grant-number">+{passport.daysGranted}</span>
+                            <span className="redeem-grant-unit">
+                                {isEnglish
+                                    ? `${passport.daysGranted === 1 ? 'day' : 'days'} of membership`
+                                    : '天会员资格'}
+                            </span>
+                        </p>
+                        <p className="redeem-subtitle redeem-passport-until">
+                            {isEnglish
+                                ? `Your membership now runs to ${memberUntil}. This passport is yours from here on.`
+                                : `您的会员资格现有效期至 ${memberUntil}。此通行证从此归您所有。`}
+                        </p>
+                        <button
+                            className="admin-btn admin-btn--cta redeem-done-btn"
+                            onClick={() => {
+                                close();
+                                navigate(`/p/${passport.passportId}`);
+                            }}
+                        >
+                            {isEnglish ? 'View My Passport' : '查看我的通行证'}
+                        </button>
+                        <button className="admin-btn admin-btn--dashed redeem-submit-btn" onClick={close}>
+                            {isEnglish ? 'Done' : '完成'}
+                        </button>
+                    </>
+                )}
+
                 {state === 'error' && (
                     <>
                         <h2 className="redeem-heading redeem-heading--error">
@@ -254,6 +336,7 @@ export const RedeemModal = () => {
                                 setError('');
                                 setBadge(null);
                                 setEventInfo(null);
+                                setPassport(null);
                                 setTimeout(() => inputRef.current?.focus(), 50);
                             }}
                         >

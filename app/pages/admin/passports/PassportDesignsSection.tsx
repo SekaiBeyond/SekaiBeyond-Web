@@ -14,8 +14,8 @@ import type { ShowToast } from '../utils';
 
 const TERM_PRESETS = [30, 90, 180, 365, 730];
 
-/* The shape every frame on the site shows a cover in, from the 72px thumbnail
-   beside an activation to the open passport on a desktop screen. The phone lays
+/* The shape every frame on the site shows a cover in, from the thumbnail that
+   confirms an activation to the open passport on a desktop screen. The phone lays
    the art on its side rather than asking for a second shape of its own, so this
    is the only one a design is ever drawn at. */
 const COVER_ASPECT = 3 / 4;
@@ -310,8 +310,8 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
                         />
                         <p className="admin-passport-design-hint">
                             {isEnglish
-                                ? 'The page inside the open passport, and the thumbnail on the shelf and the activation page.'
-                                : '打开后通行证的内页，以及收藏架与激活页面上的缩略图。'}
+                                ? 'The page inside the open passport, and the thumbnail on the shelf and on the screen that confirms an activation.'
+                                : '打开后通行证的内页，以及收藏架与激活成功界面上的缩略图。'}
                         </p>
                     </div>
 

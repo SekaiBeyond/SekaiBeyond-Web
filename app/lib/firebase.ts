@@ -97,11 +97,8 @@ export const callClaimEventCode = (data: {code: string}) =>
         eventPoster: string;
     }>(getFunctions(), 'claimEventCode')(data);
 
-/**
- * What one typed code turned out to be. A passport comes back as an id to go
- * activate rather than something redeemed here: binding one needs the key under
- * the sticker, which /p/:id asks for.
- */
+/** What one typed code turned out to be. A passport is claimed by its slip's key
+ * alone. */
 export type RedeemResult =
     | {
     kind: 'badge';
@@ -113,7 +110,15 @@ export type RedeemResult =
     badgeImageUrl: string;
 }
     | {kind: 'staff'; eventId: string; eventTitle: string; eventTitleCn: string; eventPoster: string}
-    | {kind: 'passport'; passportId: string};
+    | {
+    kind: 'passport-claim';
+    passportId: string;
+    daysGranted: number;
+    membershipExpiresAt: string;
+    designName: string;
+    designNameCn: string;
+    coverImageUrl: string;
+};
 
 /** One call for any code a member can type — see redeemCode in functions. */
 export const callRedeemCode = (data: {code: string}) =>
@@ -545,13 +550,6 @@ export const callReissuePassportKey = (data: {passportId: string}) =>
 export const callRevealPassportKey = (data: {passportId: string}) =>
     httpsCallable<typeof data, {passportId: string; activationCode: string}>(
         getFunctions(), 'revealPassportKey')(data);
-
-export const callClaimPassport = (data: {passportId: string; activationCode: string}) =>
-    httpsCallable<typeof data, {
-        membershipExpiresAt: string;
-        daysGranted: number;
-        year: number;
-    }>(getFunctions(), 'claimPassport')(data);
 
 export const callGetPassportPublicProfile = (data: {passportId: string}) =>
     httpsCallable<typeof data, PassportPublicProfile>(getFunctions(), 'getPassportPublicProfile')(data);

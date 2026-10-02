@@ -5,15 +5,9 @@ import { formatGroupWithTitle, normalizeGroup, useAuth } from '~/components/Auth
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { onPassportClaimed, openRedeemModal } from '~/components/RedeemModal';
+import { callGetPassportPublicProfile, callSetPassportPrivacy } from '~/lib/firebase';
 import {
-    callClaimPassport,
-    callGetPassportPublicProfile,
-    callSetPassportPrivacy,
-    functionsErrorCode,
-    functionsErrorDetails,
-} from '~/lib/firebase';
-import {
-    ACTIVATION_KEY_LENGTH,
     isPassportCodeShape,
     normalizePassportCode,
     PASSPORT_ID_LENGTH,
@@ -30,9 +24,9 @@ import { ExpiredCard } from './qrRedirect';
  * /p/:passportId — the one URL on every passport sticker.
  *
  * What it renders depends on the passport, not on who is looking: an unclaimed
- * sticker is an activation form, a claimed one is its owner's public page (no
- * sign-in required), and a void or unknown code is a dead end. The owner also
- * gets a privacy toggle on their own passport.
+ * sticker points to Redeem Code, a claimed one is its owner's public page (no
+ * sign-in required), and an unknown code is a dead end. The owner also gets a
+ * privacy toggle on their own passport.
  */
 export const PassportPage = () => {
     const {passportId: raw} = useParams();
@@ -42,8 +36,12 @@ export const PassportPage = () => {
 
     const [result, setResult] = useState<PassportPublicProfile | null>(null);
     const [failed, setFailed] = useState(false);
-    // Bumped to re-resolve the sticker after the owner activates it.
+    // Bumped to re-resolve the sticker once Redeem Code activates it.
     const [nonce, setNonce] = useState(0);
+
+    useEffect(() => onPassportClaimed(id => {
+        if (id === passportId) setNonce(n => n + 1);
+    }), [passportId]);
 
     useEffect(() => {
         if (!wellFormed) return;
@@ -93,16 +91,7 @@ export const PassportPage = () => {
         );
     }
 
-    if (result.status === 'unclaimed') {
-        return (
-            <ActivationCard
-                passportId={passportId}
-                designId={result.designId}
-                termDays={result.termDays}
-                onActivated={() => setNonce(n => n + 1)}
-            />
-        );
-    }
+    if (result.status === 'unclaimed') return <UnclaimedPassportCard/>;
 
     return <ClaimedPassport passportId={passportId} data={result}/>;
 };
@@ -161,284 +150,41 @@ const InvalidPassportCard = ({isError}: {isError: boolean}) => {
     );
 };
 
-interface ActivationCardProps {
-    passportId: string;
-    designId: string;
-    /** What this particular sticker grants — per-passport data, not a constant. */
-    termDays: number;
-    onActivated: () => void;
-}
-
 /**
- * The unclaimed state: sign in, then type the key from the slip packed with the
- * passport. Claiming is one-way — the passport binds to this account for good.
+ * The unclaimed state. There is nothing to do with a passport here before it is
+ * activated — activating is done from Redeem Code with the key from the slip — so
+ * this says so and opens the box. Once a key claims this passport, the page
+ * re-resolves behind the box and shows the holder's page instead.
  */
-const ActivationCard = ({passportId, designId, termDays, onActivated}: ActivationCardProps) => {
+const UnclaimedPassportCard = () => {
     const {isEnglish} = useLanguage();
-    const {user, loading: authLoading, signIn, refreshProfile} = useAuth();
-    const {designs} = usePassportDesigns();
-    const design = designs.find(d => d.id === designId);
-    const name = passportName(design, isEnglish);
-
-    const [key, setKey] = useState('');
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [granted, setGranted] = useState<{days: number; expiresAt: string} | null>(null);
-
-    const keyReady = isPassportCodeShape(key, ACTIVATION_KEY_LENGTH);
-
-    const activate = async () => {
-        setBusy(true);
-        setError(null);
-        try {
-            const res = await callClaimPassport({passportId, activationCode: key});
-            setGranted({days: res.data.daysGranted, expiresAt: res.data.membershipExpiresAt});
-            // The profile's member chip and passport shelf both read the auth
-            // profile, so pull the new expiry in straight away.
-            refreshProfile().catch(() => {
-            });
-        } catch (err) {
-            setError(activationError(err, isEnglish));
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    if (granted) {
-        const on = new Date(granted.expiresAt).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
-            year: 'numeric', month: 'long', day: 'numeric',
-        });
-        return (
-            <PassportShell>
-                <div className="passport-notice passport-notice--success">
-                    <div className="passport-notice-icon" aria-hidden="true">🎉</div>
-                    <h1 className="passport-notice-title">
-                        {isEnglish ? 'Passport Activated!' : '通行证已激活！'}
-                    </h1>
-                    {/* The payoff, at the size of a payoff: what the slip was
-                        worth, rather than a sentence mentioning it. */}
-                    <p className="passport-grant">
-                        <span className="passport-grant-number">+{granted.days}</span>
-                        <span className="passport-grant-unit">
-                            {isEnglish
-                                ? `${granted.days === 1 ? 'day' : 'days'} of membership`
-                                : '天会员资格'}
-                        </span>
-                    </p>
-                    {/* What was just bound is a thing in the holder's hands, so
-                        the screen that confirms it shows the thing. */}
-                    <PassportIdent
-                        design={design}
-                        name={name}
-                        passportId={passportId}
-                        termDays={termDays}
-                        isEnglish={isEnglish}
-                    />
-                    <p className="passport-notice-text">
-                        {isEnglish
-                            ? `Your membership now runs to ${on}. This passport is yours from here on — anyone who scans it lands on your page.`
-                            : `您的会员资格现有效期至 ${on}。此通行证从此归您所有 — 任何人扫描它都会看到您的页面。`}
-                    </p>
-                    <div className="passport-notice-actions">
-                        <button className="btn btn-primary" onClick={onActivated} type="button">
-                            <span>{isEnglish ? 'View My Passport Page' : '查看我的通行证页面'}</span>
-                            <span>✨</span>
-                        </button>
-                        {/* The site's own pairing for two actions of equal
-                            weight — a back link beside a primary read as a
-                            footnote next to it. */}
-                        <a href="/profile" className="btn btn-secondary">
-                            {isEnglish ? 'Go to My Profile' : '前往个人主页'}
-                        </a>
-                    </div>
-                </div>
-            </PassportShell>
-        );
-    }
-
+    const {user, loading: authLoading, signIn} = useAuth();
     return (
         <PassportShell>
-            <div className="passport-activate">
-                <PassportIdent
-                    design={design}
-                    name={name}
-                    passportId={passportId}
-                    termDays={termDays}
-                    isEnglish={isEnglish}
-                />
-
-                <div className="passport-activate-body">
-                    <h1 className="passport-activate-title">
-                        {isEnglish ? 'Activate Your Passport' : '激活您的通行证'}
-                    </h1>
-
-                    {authLoading ? (
-                        <div className="spinner spinner-centered"/>
-                    ) : !user ? (
-                        <>
-                            <p className="passport-activate-lead">
-                                {isEnglish
-                                    ? 'Sign in to activate it. The key is printed on the slip of paper packed with your passport.'
-                                    : '请登录后激活。激活码印在通行证包装内附的纸条上。'}
-                            </p>
-                            <button onClick={() => void signIn()} className="profile-sign-in-btn">
-                                {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
-                            </button>
-                        </>
-                    ) : (
-                        <>
-                            <p className="passport-activate-lead">
-                                {isEnglish
-                                    ? `Enter the key printed on the slip of paper packed with your passport. It adds ${termDays} days of membership on top of any you already have.`
-                                    : `请输入通行证包装内附纸条上的激活码。它将在您现有会员期限上增加 ${termDays} 天。`}
-                            </p>
-                            {/* The field takes the width it has, and the advice
-                                that is needed while typing sits under it rather
-                                than below the button. */}
-                            <div className="passport-key-field">
-                                <input
-                                    className="passport-key-input"
-                                    value={key}
-                                    onChange={e => setKey(e.target.value.toUpperCase())}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter' && keyReady && !busy) void activate();
-                                    }}
-                                    placeholder="XXXX-XXXX-XXXX"
-                                    autoComplete="off"
-                                    autoCapitalize="characters"
-                                    spellCheck={false}
-                                    maxLength={ACTIVATION_KEY_LENGTH + 4}
-                                    disabled={busy}
-                                    aria-label={isEnglish ? 'Activation key' : '激活码'}
-                                />
-                                <p className="passport-key-hint">
-                                    {isEnglish
-                                        ? 'Dashes and capitalisation don’t matter. A key has no letter O or I — those are the digits 0 and 1.'
-                                        : '横线和大小写无需在意。激活码中不含字母 O 和 I — 相似字符为数字 0 和 1。'}
-                                </p>
-                            </div>
-                            {error && <p className="passport-error">{error}</p>}
-                            <button
-                                className="btn btn-primary passport-activate-go"
-                                onClick={() => void activate()}
-                                disabled={busy || !keyReady}
-                                type="button"
-                            >
-                                {busy
-                                    ? (isEnglish ? 'Activating…' : '激活中…')
-                                    : (isEnglish ? 'Activate' : '激活')}
-                            </button>
-                        </>
-                    )}
-
-                    {/* Said to everyone, signed in or not. It is the one thing
-                        about activating that can't be taken back, and before
-                        this only someone who arrived signed out was told. */}
-                    <p className="passport-activate-bind">
-                        {isEnglish
-                            ? 'Activating binds this passport to your account permanently — it can’t be moved to another one later.'
-                            : '激活后，此通行证将永久绑定到您的账号 — 之后无法转移到其他账号。'}
-                    </p>
-                </div>
-
-                <a href="/" className="profile-back-link">
-                    {isEnglish ? 'Back to Home' : '返回首页'}
-                </a>
+            <div className="passport-notice">
+                <div className="passport-notice-icon" aria-hidden="true">📘</div>
+                <h1 className="passport-notice-title">
+                    {isEnglish ? 'Not Activated Yet' : '尚未激活'}
+                </h1>
+                <p className="passport-notice-text">
+                    {isEnglish
+                        ? 'If this passport is yours, activate it by entering the key from the slip packed with it under Redeem Code.'
+                        : '如果这是您的通行证，请在「兑换码」中输入随附纸条上的激活码来激活它。'}
+                </p>
+                {!authLoading && (user ? (
+                    <button className="btn btn-primary passport-notice-cta" onClick={openRedeemModal} type="button">
+                        <span>{isEnglish ? 'Redeem Code' : '兑换码'}</span>
+                        <span>✨</span>
+                    </button>
+                ) : (
+                    <button className="btn btn-primary passport-notice-cta" onClick={() => void signIn()} type="button">
+                        {isEnglish ? 'Sign in to Activate' : '登录以激活'}
+                    </button>
+                ))}
             </div>
         </PassportShell>
     );
 };
-
-/**
- * The passport itself: its cover, what it grants, and the code printed on the
- * sticker.
- *
- * The code is labelled because this sits on a screen asking for a key — an
- * unlabelled code beside that field is one a holder can reasonably try to type
- * into it. It is shown again after activating, since what was just bound is a
- * thing in their hands and the screen confirming it should hold the thing.
- */
-const PassportIdent = ({design, name, passportId, termDays, isEnglish}: {
-    design: PassportDesign | undefined;
-    name: string;
-    passportId: string;
-    termDays: number;
-    isEnglish: boolean;
-}) => (
-    <div className="passport-ident">
-        <div className="passport-ident-cover">
-            {design?.coverImageUrl
-                ? <img src={design.coverImageUrl} alt=""/>
-                : <span>{design?.year || ''}</span>}
-        </div>
-        <div className="passport-ident-lines">
-            <p className="passport-ident-name">
-                {name || (isEnglish ? 'Passport' : '通行证')}
-            </p>
-            <p className="passport-ident-meta">
-                {design?.year ? `${design.year} · ` : ''}
-                {isEnglish
-                    ? `${termDays} days of membership`
-                    : `${termDays} 天会员资格`}
-            </p>
-            <p className="passport-ident-code">
-                <span className="passport-ident-code-label">
-                    {isEnglish ? 'Code on the sticker' : '贴纸上的编号'}
-                </span>
-                {passportId}
-            </p>
-        </div>
-    </div>
-);
-
-/** Server rejection → something the holder can act on. */
-function activationError(err: unknown, isEnglish: boolean): string {
-    const code = functionsErrorCode(err);
-    switch (code) {
-        case 'bad-key': {
-            const details = functionsErrorDetails<{attemptsLeft?: number}>(err);
-            const left = details?.attemptsLeft ?? 0;
-            if (left <= 0) {
-                return isEnglish
-                    ? 'That key is not correct. This passport is now locked for a while — please try again later.'
-                    : '激活码不正确。此通行证已暂时锁定，请稍后再试。';
-            }
-            return isEnglish
-                ? `That key is not correct. ${left} ${left === 1 ? 'try' : 'tries'} left before this passport locks for a while.`
-                : `激活码不正确。还可尝试 ${left} 次，之后通行证将被暂时锁定。`;
-        }
-        case 'locked':
-            return isEnglish
-                ? 'Too many incorrect keys. Please wait a few minutes and try again.'
-                : '错误次数过多。请等待几分钟后再试。';
-        case 'already-claimed':
-            return isEnglish
-                ? 'This passport has already been activated. Reload the page to see whose it is.'
-                : '此通行证已被激活。请刷新页面查看其归属。';
-        case 'no-key':
-            return isEnglish
-                ? 'This passport has no activation key on file. Please get in touch so we can reissue it.'
-                : '此通行证没有对应的激活码记录。请联系我们重新签发。';
-        case 'invalid':
-            return isEnglish
-                ? 'This passport code is not valid.'
-                : '此通行证编号无效。';
-        case 'no-profile':
-            // The sticker is fine — point at the account rather than sending the
-            // holder off to retype a code that was never wrong.
-            return isEnglish
-                ? 'Your account isn’t set up yet. Please sign out and back in, then try again.'
-                : '您的账号尚未完成设置。请退出登录后重新登录，然后再试。';
-        case 'rate-limited':
-            return isEnglish
-                ? 'Too many requests. Please wait a moment and try again.'
-                : '请求过于频繁，请稍后再试。';
-        default:
-            return isEnglish
-                ? 'Could not activate this passport. Please try again.'
-                : '无法激活此通行证，请重试。';
-    }
-}
 
 /** How long a slow image may hold the passport shut before it opens anyway. */
 const COVER_LOAD_TIMEOUT_MS = 8000;
