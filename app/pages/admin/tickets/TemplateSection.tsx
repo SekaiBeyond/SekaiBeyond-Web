@@ -2,10 +2,17 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUpdateEventEmailTemplate, getFirebaseDb } from '~/lib/firebase';
+import { useSiteConfig } from '~/lib/siteConfig';
 import { ModalShell } from '../ModalShell';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { ShowToast } from '../utils';
-import { DEFAULT_TEMPLATE_BODY_EN, DEFAULT_TEMPLATE_SUBJECT, renderSamplePreview, tsToDate, } from './helpers';
+import {
+    DEFAULT_TEMPLATE_BODY_EN,
+    DEFAULT_TEMPLATE_SUBJECT,
+    renderSamplePreview,
+    tsToDate,
+    usesContactEmail,
+} from './helpers';
 import type { EmailTemplate } from './types';
 
 interface TemplateSectionProps {
@@ -16,6 +23,7 @@ interface TemplateSectionProps {
 
 export function TemplateSection({event, readOnly, showToast}: TemplateSectionProps) {
     const {isEnglish} = useLanguage();
+    const {config} = useSiteConfig();
     const [template, setTemplate] = useState<EmailTemplate>({
         subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
     });
@@ -126,9 +134,17 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         <div className="admin-tickets-template">
             <p className="admin-helper-text">
                 {isEnglish
-                    ? 'Supported placeholders: {{ attendeeName }}, {{ attendeeEmail }}, {{ eventTitle }}, {{ eventDate }}, {{ eventHeader }} (renders cropped header image as <img>), {{ ticketCount }}, {{ ticketIds[] }} (renders one QR per ticket).'
-                    : '可用占位符：{{ attendeeName }}、{{ attendeeEmail }}、{{ eventTitle }}、{{ eventDate }}、{{ eventHeader }}（将裁剪的页眉图作为 <img> 渲染）、{{ ticketCount }}、{{ ticketIds[] }}（为每张门票渲染一个二维码）。'}
+                    ? 'Supported placeholders: {{ attendeeName }}, {{ attendeeEmail }}, {{ eventTitle }}, {{ eventDate }}, {{ eventHeader }} (renders cropped header image as <img>), {{ ticketCount }}, {{ ticketIds[] }} (renders one QR per ticket), {{ contactEmail }} (the Contact Email in Site Config; also works in mailto: links).'
+                    : '可用占位符：{{ attendeeName }}、{{ attendeeEmail }}、{{ eventTitle }}、{{ eventDate }}、{{ eventHeader }}（将裁剪的页眉图作为 <img> 渲染）、{{ ticketCount }}、{{ ticketIds[] }}（为每张门票渲染一个二维码）、{{ contactEmail }}（网站设置中的联系邮箱，也可用于 mailto: 链接）。'}
             </p>
+
+            {!config.contactEmail && usesContactEmail(template) && (
+                <p className="admin-helper-text admin-tickets-edit-warning">
+                    {isEnglish
+                        ? 'This template uses {{ contactEmail }}, but Site Config has no Contact Email. Sending is refused until one is set.'
+                        : '此模板使用了 {{ contactEmail }}，但网站设置中尚未填写联系邮箱。填写之前将无法发送。'}
+                </p>
+            )}
 
             <label className="admin-tickets-template-field">
                 <span>{isEnglish ? 'Subject' : '邮件主题'}</span>
@@ -203,7 +219,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                     </div>
                     <div
                         className="admin-tickets-preview-body"
-                        dangerouslySetInnerHTML={{__html: renderSamplePreview(template, event)}}
+                        dangerouslySetInnerHTML={{__html: renderSamplePreview(template, event, config.contactEmail)}}
                     />
                 </ModalShell>
             )}

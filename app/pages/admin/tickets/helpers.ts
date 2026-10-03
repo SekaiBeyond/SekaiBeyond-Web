@@ -38,7 +38,7 @@ export const DEFAULT_TEMPLATE_BODY_EN = `<div style="font-family:-apple-system,B
         <hr style="border:none;border-top:1px solid #eaeaea;margin:32px 0;"/>
 
         <div style="background-color:#fff0f6;border-radius:8px;padding:20px;">
-            <p style="margin:0 0 12px;color:#ff6b9d;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Important
+            <p style="margin:0 0 12px;color:#ff6b9d;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Important
                 Reminders</p>
             <ul style="margin:0;padding-left:20px;color:#4a4a4a;font-size:14px;line-height:1.6;">
                 <li style="margin-bottom:8px;">Each QR code is valid for <strong>one entry only</strong>. Please do
@@ -48,8 +48,8 @@ export const DEFAULT_TEMPLATE_BODY_EN = `<div style="font-family:-apple-system,B
                     charged.
                 </li>
                 <li>Having trouble at the door? Simply contact us at <strong><a
-                    href="mailto:sekaibeyond@outlook.com"
-                    style="color:#ff6b9d;text-decoration:none;">sekaibeyond@outlook.com</a></strong> and we'll sort
+                    href="mailto:{{ contactEmail }}"
+                    style="color:#ff6b9d;text-decoration:none;">{{ contactEmail }}</a></strong> and we'll sort
                     it out.
                 </li>
             </ul>
@@ -112,7 +112,14 @@ export const ticketStatusCounts = (a: AttendeeData) => {
     return {used, voided, remaining: a.ticketCount - used - voided};
 };
 
-export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEvent): string => {
+export const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
+
+export const usesContactEmail = (template: Pick<EmailTemplate, 'subject' | 'bodyHtml'>): boolean =>
+    [template.subject, template.bodyHtml].some(t => t.search(CONTACT_EMAIL_PLACEHOLDER) !== -1);
+
+// contactEmail is Site Config's. While it is blank the placeholder is left in
+// place, so the preview shows what is missing instead of an empty gap.
+export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEvent, contactEmail: string): string => {
     const sampleData = {
         attendeeEmail: 'sample@example.com',
         attendeeName: 'Sample Attendee',
@@ -146,6 +153,7 @@ export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEven
         .replace(/{{\s*eventTitleCn\s*}}/g, sampleData.eventTitleCn)
         .replace(/{{\s*eventDate\s*}}/g, sampleData.eventDate)
         .replace(/{{\s*ticketCount\s*}}/g, String(sampleData.ticketCount))
+        .replace(CONTACT_EMAIL_PLACEHOLDER, contactEmail || '$&')
         .replace(/{{\s*eventHeader\s*}}/g, sampleData.headerImage)
         .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, ticketBlock);
     // Sanitize with the same allowlist the server applies at save time so the

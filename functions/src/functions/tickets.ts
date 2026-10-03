@@ -214,6 +214,10 @@ const escapeHtml = (s: string): string => s
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+// Site Config's Contact Email. Usable in an href too (mailto:{{ contactEmail }}),
+// since the address is escaped like every other substituted value.
+const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
+
 function renderTemplate(
     template: string,
     data: {
@@ -225,6 +229,7 @@ function renderTemplate(
         emailHeaderBg: string;
         ticketCount: number;
         ticketBlock: string;
+        contactEmail: string;
     },
     // True when rendering into HTML (body). False for plain-text contexts
     // (subject line) — entity-encoding subject text would surface literally
@@ -248,6 +253,7 @@ function renderTemplate(
         .replace(/{{\s*eventDate\s*}}/g, sub(data.eventDate))
         .replace(/{{\s*eventHeader\s*}}/g, headerImage)
         .replace(/{{\s*ticketCount\s*}}/g, String(data.ticketCount))
+        .replace(CONTACT_EMAIL_PLACEHOLDER, sub(data.contactEmail))
         // {{ ticketIds[] }} — with optional surrounding <p>/<div> tags collapsed.
         // ticketBlock is server-built HTML, never escaped.
         .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[]\s*}}(\s*<\/p>|\s*<\/div>)?/g, data.ticketBlock);
@@ -1175,6 +1181,19 @@ export const sendTicketEmails = onCall(
                 "Email template is empty.", {code: "no-template"});
         }
 
+        // Refuse rather than send "contact us at  and we'll sort it out" with
+        // a mailto: to no one. Read per call, so a fix in Site Config applies
+        // to the next send.
+        const contactEmail = ((await db.collection("config").doc("main").get())
+            .get("contactEmail") as string | undefined) ?? "";
+        const usesContactEmail = [template.subject, template.bodyHtml]
+            .some(t => t.search(CONTACT_EMAIL_PLACEHOLDER) !== -1);
+        if (usesContactEmail && !contactEmail) {
+            throw new HttpsError("failed-precondition",
+                "The template uses {{ contactEmail }}, but Site Config has no Contact Email.",
+                {code: "no-contact-email"});
+        }
+
         // Target attendees — capped at chunkSize.
         const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
         let targets: FirebaseFirestore.QueryDocumentSnapshot[];
@@ -1370,6 +1389,7 @@ export const sendTicketEmails = onCall(
                 emailHeaderBg,
                 ticketCount: tickets.length,
                 ticketBlock: "",
+                contactEmail,
             }, false).replace(/[\x00-\x1F\x7F]+/g, " ").trim();
             const html = renderTemplate(template.bodyHtml, {
                 attendeeEmail: data.email ?? "",
@@ -1379,6 +1399,7 @@ export const sendTicketEmails = onCall(
                 emailHeaderBg,
                 ticketCount: tickets.length,
                 ticketBlock,
+                contactEmail,
             }, true);
 
             const envelope: ResendEnvelope = {

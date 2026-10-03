@@ -313,6 +313,13 @@ export function TicketsSubtab({
                         : '请先保存邮件模板再发送。',
                     'warning',
                 );
+            } else if (code === 'no-contact-email') {
+                showToast(
+                    isEnglish
+                        ? 'The template uses {{ contactEmail }}. Set a Contact Email in Site Config before sending.'
+                        : '模板使用了 {{ contactEmail }}，请先在网站设置中填写联系邮箱再发送。',
+                    'warning',
+                );
             } else {
                 showToast(isEnglish ? 'Failed to send email.' : '发送邮件失败。', 'error');
             }
