@@ -74,14 +74,8 @@ export const redeemCode = onCall({maxInstances: 20}, async (request) => {
             });
     }
 
-    // No prefix: a code issued before they existed, or a passport key. Badge
-    // first, then staff — the order the client used to walk, so a bare code still
-    // redeems as whatever it redeemed as yesterday — then the slip.
-    try {
-        return {kind: "badge" as const, ...await redeemBadgeCode(uid, code)};
-    } catch (err) {
-        if (!isUnmatchedCode(err)) throw err;
-    }
+    // No prefix: a staff code issued before prefixes existed, or a passport key.
+    // Every bare badge code is gone, so only staff codes still need the guess.
     try {
         return {kind: "staff" as const, ...await redeemStaffCode(uid, code)};
     } catch (err) {

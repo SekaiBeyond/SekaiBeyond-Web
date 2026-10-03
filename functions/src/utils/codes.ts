@@ -6,8 +6,9 @@ import { generateSecureCode } from "./helpers";
  * single-letter prefix names the collection the code lives in.
  *
  * Codes issued before the prefix are bare CODE_BODY_LENGTH characters and name
- * nothing, so redeemCode still has to try them against each collection in turn.
- * Nothing is reissued — a code already printed on a flyer has to keep working.
+ * nothing. Only staff codes still have bare ones live, so redeemCode tries a
+ * bare code as a staff code. Nothing is reissued — a code already printed on a
+ * flyer has to keep working.
  */
 
 export const CODE_BODY_LENGTH = 12;
