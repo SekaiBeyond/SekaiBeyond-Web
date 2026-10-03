@@ -704,7 +704,6 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         const isPastEvent = !upcomingSnap.exists;
 
         const targetData = targetSnap.data()!;
-        const targetEmail: string = targetData.email ?? "";
         const existing: string[] = targetData.eventStaffEvents ?? [];
         const alreadyStaff = existing.includes(eventId);
 
@@ -755,7 +754,6 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
                 performedByName: callerName,
                 targetUid,
                 targetName,
-                targetEmail,
                 eventId,
                 eventTitle,
                 reason: "staff-assignment",
@@ -769,7 +767,6 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
                 performedByName: callerName,
                 targetUid,
                 targetName,
-                targetEmail,
                 eventId,
                 eventTitle,
                 reason: "staff-assignment",

@@ -130,7 +130,6 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             qrLabel: label,
-            qrId: docId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -165,7 +164,6 @@ export const setQrSpot = onCall({maxInstances: 10}, async (request) => {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             qrLabel: snap.data()?.label ?? qrId,
-            qrId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -194,7 +192,6 @@ export const deleteQrCode = onCall({maxInstances: 10}, async (request) => {
         performedBy: uid,
         performedByName: callerSnap.data()?.displayName ?? "",
         qrLabel: snap.data()?.label ?? qrId,
-        qrId,
         timestamp: FieldValue.serverTimestamp(),
         expiresAt: recordExpiresAt(),
     });

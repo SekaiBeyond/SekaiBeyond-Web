@@ -50,107 +50,96 @@ export interface UserRecord {
 
 export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'passports' | 'records' | 'tools' | 'config' | 'con';
 
-export type RecordType =
-    'group-assign'
-    | 'membership-grant'
-    | 'membership-extend'
-    | 'membership-revoke'
-    | 'code-create'
-    | 'badge-code-activate'
-    | 'badge-code-deactivate'
-    | 'code-delete'
-    | 'event-attend'
-    | 'event-unattend'
-    | 'event-claim'
-    | 'badge-claim'
-    | 'achievement-grant'
-    | 'achievement-revoke'
-    | 'badge-create'
-    | 'badge-edit'
-    | 'badge-deletion-requested'
-    | 'badge-deletion-cancelled'
-    | 'badge-deleted'
-    | 'event-create'
-    | 'event-edit'
-    | 'event-deletion-requested'
-    | 'event-deletion-cancelled'
-    | 'event-deleted'
-    | 'past-event-publish'
-    | 'past-event-unpublish'
-    | 'upcoming-event-create'
-    | 'upcoming-event-edit'
-    | 'upcoming-event-deletion-requested'
-    | 'upcoming-event-deletion-cancelled'
-    | 'upcoming-event-deleted'
-    | 'upcoming-event-archive'
-    | 'upcoming-event-publish'
-    | 'upcoming-event-unpublish'
-    | 'event-code-activate'
-    | 'event-code-deactivate'
-    | 'event-code-time-window'
-    | 'staff-code-create'
-    | 'staff-code-activate'
-    | 'staff-code-deactivate'
-    | 'staff-code-time-window'
-    | 'tag-create'
-    | 'tag-edit'
-    | 'tag-delete'
-    | 'account-deletion-requested'
-    | 'account-deletion-cancelled'
-    | 'account-deleted'
-    | 'name-set'
-    | 'avatar-set'
-    | 'avatar-remove'
-    | 'banner-remove'
-    | 'title-set'
-    | 'ticket-import'
-    | 'ticket-redeem'
-    | 'ticket-void'
-    | 'ticket-unvoid'
-    | 'ticket-reset'
-    | 'ticket-type-edit'
-    | 'ticket-attendee-delete'
-    | 'ticket-attendee-edit'
-    | 'ticket-regenerate'
-    | 'ticket-email-send'
-    | 'ticket-email-queue'
-    | 'scheduled-mail-drain'
-    | 'event-staff-assign'
-    | 'event-staff-remove'
-    | 'upcoming-event-email-template-update'
-    | 'venue-create'
-    | 'venue-edit'
-    | 'venue-delete'
-    | 'parkinglot-create'
-    | 'parkinglot-edit'
-    | 'parkinglot-delete'
-    | 'parkingrate-create'
-    | 'parkingrate-edit'
-    | 'parkingrate-delete'
-    | 'passport-generate'
-    | 'passport-claim'
-    | 'passport-delete'
-    | 'passport-key-reissue'
-    | 'passport-key-view'
-    | 'passport-key-export'
-    | 'passport-design-create'
-    | 'passport-design-edit'
-    | 'passport-design-delete'
-    | 'qrcode-create'
-    | 'qrcode-edit'
-    | 'qrcode-delete'
-    | 'qrcode-spot-set'
-    | 'social-platform-create'
-    | 'social-platform-edit'
-    | 'social-platform-delete'
-    | 'policy-update'
-    | 'config-update'
-    | 'con-content-update';
+/**
+ * Every record type the Cloud Functions write, under the category the Records
+ * tab files it in. The one list behind RecordType, the type filter and each
+ * row's tag and colour. A category is a single `in` query, so keep each one
+ * within Firestore's 30-value cap.
+ */
+export const RECORD_CATEGORIES = {
+    role: {
+        en: 'Role', zh: '角色',
+        types: ['group-assign', 'title-set', 'event-staff-assign', 'event-staff-remove'],
+    },
+    membership: {
+        en: 'Membership', zh: '会员',
+        types: ['membership-grant', 'membership-extend', 'membership-revoke'],
+    },
+    code: {
+        en: 'Code', zh: '兑换码',
+        types: ['code-create', 'badge-code-activate', 'badge-code-deactivate', 'code-delete',
+            'event-code-activate', 'event-code-deactivate', 'event-code-time-window',
+            'staff-code-create', 'staff-code-activate', 'staff-code-deactivate', 'staff-code-time-window'],
+    },
+    attend: {
+        en: 'Attend', zh: '签到',
+        types: ['event-attend', 'event-unattend', 'event-claim'],
+    },
+    badge: {
+        en: 'Badge', zh: '徽章',
+        types: ['achievement-grant', 'achievement-revoke', 'badge-claim', 'badge-create', 'badge-edit',
+            'badge-deletion-requested', 'badge-deletion-cancelled', 'badge-deleted'],
+    },
+    event: {
+        en: 'Event', zh: '活动',
+        types: ['event-create', 'event-edit',
+            'event-deletion-requested', 'event-deletion-cancelled', 'event-deleted',
+            'past-event-publish', 'past-event-unpublish',
+            'upcoming-event-create', 'upcoming-event-edit',
+            'upcoming-event-deletion-requested', 'upcoming-event-deletion-cancelled', 'upcoming-event-deleted',
+            'upcoming-event-archive', 'upcoming-event-publish', 'upcoming-event-unpublish',
+            'upcoming-event-email-template-update'],
+    },
+    ticket: {
+        en: 'Ticket', zh: '门票',
+        types: ['ticket-import', 'ticket-redeem', 'ticket-void', 'ticket-unvoid', 'ticket-reset',
+            'ticket-type-edit', 'ticket-attendee-delete', 'ticket-attendee-edit', 'ticket-regenerate',
+            'ticket-email-send', 'ticket-email-queue'],
+    },
+    tag: {
+        en: 'Tag', zh: '标签',
+        types: ['tag-create', 'tag-edit', 'tag-delete'],
+    },
+    location: {
+        en: 'Location', zh: '场地',
+        types: ['venue-create', 'venue-edit', 'venue-delete',
+            'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
+            'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
+    },
+    passport: {
+        en: 'Passport', zh: '通行证',
+        types: ['passport-generate', 'passport-claim', 'passport-delete', 'passport-key-reissue',
+            'passport-key-view', 'passport-key-export', 'passport-design-create', 'passport-design-edit',
+            'passport-design-delete'],
+    },
+    qr: {
+        en: 'QR', zh: '二维码',
+        types: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
+            'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
+    },
+    account: {
+        en: 'Account', zh: '账号',
+        types: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
+            'name-set', 'avatar-set', 'avatar-remove', 'banner-remove'],
+    },
+    config: {
+        en: 'Config', zh: '配置',
+        types: ['policy-update', 'config-update', 'con-content-update'],
+    },
+    email: {
+        en: 'Email', zh: '邮件',
+        types: ['scheduled-mail-drain'],
+    },
+} as const satisfies Record<string, {en: string; zh: string; types: readonly string[]}>;
+
+export type RecordCategory = keyof typeof RECORD_CATEGORIES;
+export type RecordType = (typeof RECORD_CATEGORIES)[RecordCategory]['types'][number];
 
 export interface ActivityRecord {
     id: string;
     type: RecordType;
-    performedBy: string;
+    /** Absent on records the system writes: TTL deletions and the mail drain. */
+    performedBy?: string;
     performedByName: string;
     targetUid?: string;
     targetName?: string;
@@ -160,8 +149,12 @@ export interface ActivityRecord {
     badgeId?: string;
     badgeName?: string;
     tagName?: string;
+    /** Location records: the item's ID (to link it) and its English name when written. */
+    venueId?: string;
     venueName?: string;
+    lotId?: string;
     lotName?: string;
+    rateId?: string;
     rateLabel?: string;
     qrLabel?: string;
     /** Passport records: the printed code, and its design's year and name. */
@@ -173,7 +166,10 @@ export interface ActivityRecord {
     platformLabel?: string;
     /** Comma-separated con page sections touched by a con-content-update. */
     conSection?: string;
+    /** Site Config sections a config-update saved, by the keys in CONFIG_SECTION_LABELS. */
+    configSections?: string[];
     unlinkedFrom?: number;
+    /** Event check-in codes only; badge and staff codes are core-staff+ and stay out of records. */
     code?: string;
     oldGroup?: UserGroup;
     newGroup?: UserGroup;
@@ -188,6 +184,9 @@ export interface ActivityRecord {
     newName?: string;
     oldType?: string;
     newType?: string;
+    /** How a staff grant, or the attendance change that comes with one, came about:
+     *  'staff-assignment' (an admin made them event staff) or 'staff-code' (they
+     *  redeemed a staff code). */
     reason?: string;
     addedCount?: number;
     replacedCount?: number;

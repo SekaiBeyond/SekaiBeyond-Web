@@ -748,7 +748,6 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
-            code: ticketId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -796,7 +795,6 @@ export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
-            code: ticketId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -882,7 +880,6 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
-            code: ticketId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -942,7 +939,6 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
-            code: ticketId,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -1082,7 +1078,6 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
-            code: ticketId,
             oldType,
             newType: type,
             timestamp: FieldValue.serverTimestamp(),

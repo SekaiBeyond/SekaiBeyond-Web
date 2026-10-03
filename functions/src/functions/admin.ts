@@ -344,18 +344,24 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
             updatedByName: callerSnap.data()?.displayName ?? "",
             updatedAt: FieldValue.serverTimestamp(),
         };
+        // Each Site Config section saves on its own; the record names which.
+        const configSections: string[] = [];
         if (bvid !== undefined) {
             updateData.bilibiliVideoBvid = bvid;
             updateData.bilibiliVideoCoverUrl = coverUrl;
+            configSections.push("video");
         }
         if (contactEmail !== undefined) {
             updateData.contactEmail = contactEmail;
+            configSections.push("contact");
         }
         if (senderPrefix !== undefined) {
             updateData.senderPrefix = senderPrefix;
+            configSections.push("sender");
         }
         if (conEdition !== undefined) {
             updateData.conEdition = conEdition;
+            configSections.push("con-edition");
         }
 
         txn.set(db.collection("config").doc("main"), updateData, {merge: true});
@@ -363,6 +369,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
             type: "config-update",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
+            configSections,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -913,6 +920,7 @@ export const saveParkingLot = onCall({maxInstances: 10}, async (request) => {
             type: lotId ? "parkinglot-edit" : "parkinglot-create",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
+            lotId: docId,
             lotName: name,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -992,6 +1000,7 @@ export const saveParkingRate = onCall({maxInstances: 10}, async (request) => {
             type: rateId ? "parkingrate-edit" : "parkingrate-create",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
+            rateId: docId,
             rateLabel: labelEn,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -1086,6 +1095,7 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
             type: venueId ? "venue-edit" : "venue-create",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
+            venueId: docId,
             venueName: nameEn,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
@@ -1201,6 +1211,7 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
             type: "config-update",
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
+            configSections: ["team"],
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });

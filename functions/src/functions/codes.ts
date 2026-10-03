@@ -192,7 +192,6 @@ async function redeemBadgeCode(uid: string, code: string) {
             performedByName: userSnap.data()?.displayName ?? "",
             badgeId,
             badgeName: badgeData.name ?? badgeId,
-            code,
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -263,13 +262,15 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
                     ...(activeUntil ? {activeUntil} : {}),
                     ...(expiresAt ? {expiresAt} : {}),
                 });
+                // No code on badge-code records: activation codes are
+                // core-staff+ only, and every staff member can read records.
+                // Check-in codes, which all staff can read anyway, keep theirs.
                 txn.set(db.collection("records").doc(), {
                     type: "code-create",
                     performedBy: uid,
                     performedByName: callerSnap.data()?.displayName ?? "",
                     badgeId,
                     badgeName: badgeSnap.data()!.name ?? badgeId,
-                    code,
                     timestamp: FieldValue.serverTimestamp(),
                     expiresAt: recordExpiresAt(),
                 });
@@ -483,7 +484,6 @@ export const toggleBadgeCodeActive = onCall({maxInstances: 10}, async (request) 
             performedByName: callerSnap.data()?.displayName ?? "",
             badgeId: codeData.badgeId ?? "",
             badgeName: badgeSnap?.data()?.name ?? codeData.badgeId ?? "",
-            code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -513,7 +513,6 @@ export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (reque
             performedByName: callerSnap.data()?.displayName ?? "",
             badgeId: codeData.badgeId ?? "",
             badgeName: badgeSnap?.data()?.name ?? codeData.badgeId ?? "",
-            code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -574,7 +573,6 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
                         performedByName: callerSnap.data()?.displayName ?? "",
                         eventTitle: eventSnap.data()?.title ?? eventId,
                         eventId,
-                        code: oldDoc.data().code ?? oldDoc.id,
                         timestamp: FieldValue.serverTimestamp(),
                         expiresAt: recordExpiresAt(),
                     });
@@ -597,7 +595,6 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
                     performedByName: callerSnap.data()?.displayName ?? "",
                     eventTitle: eventSnap.data()?.title ?? eventId,
                     eventId,
-                    code,
                     timestamp: FieldValue.serverTimestamp(),
                     expiresAt: recordExpiresAt(),
                 });
@@ -653,6 +650,9 @@ async function redeemStaffCode(uid: string, code: string) {
             });
         }
 
+        const alreadyAttended = (userSnap.data()!.attendedEvents ?? []).includes(eventId);
+        const userName: string = userSnap.data()!.displayName ?? "";
+
         txn.update(codeRef, {usedCount: FieldValue.increment(1)});
         txn.update(userRef, {
             eventStaffEvents: FieldValue.arrayUnion(eventId),
@@ -662,18 +662,34 @@ async function redeemStaffCode(uid: string, code: string) {
                 ? FieldValue.arrayRemove(eventId)
                 : FieldValue.arrayUnion(eventId),
         });
-        txn.set(db.collection("records").doc(), {
-            type: "event-staff-assign",
+        // The code itself stays out of the record: staff codes are core-staff+
+        // only, and every staff member can read records.
+        const record = {
             performedBy: uid,
-            performedByName: userSnap.data()?.displayName ?? "",
+            performedByName: userName,
             targetUid: uid,
-            targetName: userSnap.data()?.displayName ?? "",
+            targetName: userName,
             eventId,
             eventTitle: eventTitle || eventId,
-            code,
+            reason: "staff-code",
+        };
+        txn.set(db.collection("records").doc(), {
+            ...record,
+            type: "event-staff-assign",
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
+        // As assignEventStaff does, say when joining moved them onto or off the
+        // attendee list, so the change doesn't go unexplained.
+        const attendanceChanged = isPastEvent ? alreadyAttended : !alreadyAttended;
+        if (attendanceChanged) {
+            txn.set(db.collection("records").doc(), {
+                ...record,
+                type: isPastEvent ? "event-unattend" : "event-attend",
+                timestamp: FieldValue.serverTimestamp(),
+                expiresAt: recordExpiresAt(),
+            });
+        }
         return {eventId, eventTitle, eventTitleCn, eventPoster};
     });
 }
@@ -705,7 +721,6 @@ export const toggleStaffCodeActive = onCall({maxInstances: 10}, async (request) 
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
-            code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });
@@ -747,7 +762,6 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
-            code: codeData.code ?? "",
             timestamp: FieldValue.serverTimestamp(),
             expiresAt: recordExpiresAt(),
         });

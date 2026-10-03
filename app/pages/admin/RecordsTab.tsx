@@ -17,45 +17,52 @@ import type { PastEvent } from '~/lib/pastEvents';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Venue } from '~/lib/venues';
 import type { ParkingLot } from '~/lib/parkingLots';
-import type { ParkingRate } from '~/lib/parkingRates';
+import { type ParkingRate, rateLabel } from '~/lib/parkingRates';
 import { ticketTypeLabel } from './tickets/types';
-import type { ActivityRecord, BadgeDef, RecordType } from './types';
+import { type ActivityRecord, type BadgeDef, RECORD_CATEGORIES, type RecordCategory } from './types';
 
 const PAGE_SIZE = 20;
 
-// Requires composite Firestore indexes: (type, timestamp) and (performedBy, timestamp)
-const TYPE_CATEGORIES: Record<string, RecordType[]> = {
-    role: ['group-assign', 'title-set', 'event-staff-assign', 'event-staff-remove'],
-    membership: ['membership-grant', 'membership-extend', 'membership-revoke'],
-    code: ['code-create', 'badge-code-activate', 'badge-code-deactivate', 'code-delete',
-        'event-code-activate', 'event-code-deactivate', 'event-code-time-window',
-        'staff-code-create', 'staff-code-activate', 'staff-code-deactivate', 'staff-code-time-window'],
-    attend: ['event-attend', 'event-unattend', 'event-claim'],
-    badge: ['achievement-grant', 'achievement-revoke', 'badge-claim', 'badge-create', 'badge-edit',
-        'badge-deletion-requested', 'badge-deletion-cancelled', 'badge-deleted'],
-    event: ['event-create', 'event-edit',
-        'event-deletion-requested', 'event-deletion-cancelled', 'event-deleted',
-        'past-event-publish', 'past-event-unpublish',
-        'upcoming-event-create', 'upcoming-event-edit',
-        'upcoming-event-deletion-requested', 'upcoming-event-deletion-cancelled', 'upcoming-event-deleted',
-        'upcoming-event-archive', 'upcoming-event-publish', 'upcoming-event-unpublish',
-        'upcoming-event-email-template-update'],
-    ticket: ['ticket-import', 'ticket-redeem', 'ticket-void', 'ticket-unvoid', 'ticket-reset',
-        'ticket-type-edit', 'ticket-attendee-delete', 'ticket-attendee-edit', 'ticket-regenerate',
-        'ticket-email-send', 'ticket-email-queue'],
-    tag: ['tag-create', 'tag-edit', 'tag-delete'],
-    location: ['venue-create', 'venue-edit', 'venue-delete',
-        'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
-        'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
-    passport: ['passport-generate', 'passport-claim', 'passport-delete', 'passport-key-reissue',
-        'passport-key-view', 'passport-key-export', 'passport-design-create', 'passport-design-edit',
-        'passport-design-delete'],
-    qr: ['qrcode-create', 'qrcode-edit', 'qrcode-delete', 'qrcode-spot-set',
-        'social-platform-create', 'social-platform-edit', 'social-platform-delete'],
-    account: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
-        'name-set', 'avatar-set', 'avatar-remove', 'banner-remove'],
-    config: ['policy-update', 'config-update', 'con-content-update'],
-    email: ['scheduled-mail-drain'],
+const CATEGORY_BY_TYPE = new Map<string, RecordCategory>();
+for (const [category, {types}] of Object.entries(RECORD_CATEGORIES)) {
+    for (const type of types) CATEGORY_BY_TYPE.set(type, category as RecordCategory);
+}
+
+// The Site Config sections a config-update can name, labelled as that tab's
+// own section navigator labels them.
+const CONFIG_SECTION_LABELS: Record<string, {en: string; zh: string}> = {
+    video: {en: 'Featured Video', zh: '精选视频'},
+    contact: {en: 'Contact Email', zh: '联系邮箱'},
+    sender: {en: 'Sender Email', zh: '发件邮箱'},
+    team: {en: 'Our Team', zh: '我们的团队'},
+    'con-edition': {en: 'Sekai Beyond Con', zh: '彼世界动漫游戏展'},
+};
+
+const parseRecordDocs = (snapshot: {docs: DocumentSnapshot[]}): ActivityRecord[] =>
+    snapshot.docs.map(docSnap => {
+        const data = docSnap.data()!;
+        return {
+            ...data,
+            id: docSnap.id,
+            performedByName: data.performedByName ?? '',
+            timestamp: data.timestamp?.toDate() ?? new Date(),
+        } as ActivityRecord;
+    });
+
+// Requires composite Firestore indexes: (type, timestamp), (performedBy, timestamp)
+// and (type, performedBy, timestamp)
+const buildRecordsQuery = (category: RecordCategory | '', actorFilter: string, after?: DocumentSnapshot) => {
+    const constraints: QueryConstraint[] = [];
+    if (category) {
+        constraints.push(where('type', 'in', RECORD_CATEGORIES[category].types));
+    }
+    if (actorFilter) {
+        constraints.push(where('performedBy', '==', actorFilter));
+    }
+    constraints.push(orderBy('timestamp', 'desc'));
+    if (after) constraints.push(startAfter(after));
+    constraints.push(limit(PAGE_SIZE));
+    return query(collection(getFirebaseDb(), 'records'), ...constraints);
 };
 
 interface RecordsTabProps {
@@ -94,78 +101,21 @@ export const RecordsTab = ({
     const [loadingRecords, setLoadingRecords] = useState(false);
     const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
     const [hasMore, setHasMore] = useState(true);
-    const [recordFilterType, setRecordFilterType] = useState<string>('');
+    const [recordFilterType, setRecordFilterType] = useState<RecordCategory | ''>('');
     const [recordFilterActor, setRecordFilterActor] = useState('');
     const [knownActors, setKnownActors] = useState<{uid: string; name: string}[]>([]);
-    const activeFilterRef = useRef({type: '', actor: ''});
+    const activeFilterRef = useRef<{type: RecordCategory | ''; actor: string}>({type: '', actor: ''});
+    // Bumped by every load. A response that lands after a newer load began —
+    // the filter changed while a page was in flight — is dropped rather than
+    // overwriting the newer list.
+    const loadSeqRef = useRef(0);
 
-    const parseRecordDocs = (snapshot: {docs: DocumentSnapshot[]}): ActivityRecord[] =>
-        snapshot.docs.map(docSnap => {
-            const data = docSnap.data()!;
-            return {
-                id: docSnap.id,
-                type: data.type,
-                performedBy: data.performedBy,
-                performedByName: data.performedByName ?? '',
-                targetUid: data.targetUid,
-                targetName: data.targetName,
-                targetEmail: data.targetEmail,
-                eventTitle: data.eventTitle,
-                eventId: data.eventId,
-                badgeId: data.badgeId,
-                badgeName: data.badgeName,
-                tagName: data.tagName,
-                venueName: data.venueName,
-                lotName: data.lotName,
-                rateLabel: data.rateLabel,
-                qrLabel: data.qrLabel,
-                passportId: data.passportId,
-                passportYear: data.passportYear,
-                passportDesignName: data.passportDesignName,
-                passportCount: data.passportCount,
-                platformLabel: data.platformLabel,
-                conSection: data.conSection,
-                unlinkedFrom: data.unlinkedFrom,
-                code: data.code,
-                oldGroup: data.oldGroup,
-                newGroup: data.newGroup,
-                oldExpiresAt: data.oldExpiresAt,
-                newExpiresAt: data.newExpiresAt,
-                extendDays: data.extendDays,
-                oldTitle: data.oldTitle,
-                newTitle: data.newTitle,
-                oldTitleCn: data.oldTitleCn,
-                newTitleCn: data.newTitleCn,
-                oldName: data.oldName,
-                newName: data.newName,
-                oldType: data.oldType,
-                newType: data.newType,
-                reason: data.reason,
-                addedCount: data.addedCount,
-                replacedCount: data.replacedCount,
-                sentCount: data.sentCount,
-                timestamp: data.timestamp?.toDate() ?? new Date(),
-            };
-        });
-
-    const buildRecordsQuery = (typeFilter: string, actorFilter: string, after?: DocumentSnapshot) => {
-        const constraints: QueryConstraint[] = [];
-        if (typeFilter && TYPE_CATEGORIES[typeFilter]) {
-            constraints.push(where('type', 'in', TYPE_CATEGORIES[typeFilter]));
-        }
-        if (actorFilter) {
-            constraints.push(where('performedBy', '==', actorFilter));
-        }
-        constraints.push(orderBy('timestamp', 'desc'));
-        if (after) constraints.push(startAfter(after));
-        constraints.push(limit(PAGE_SIZE));
-        return query(collection(getFirebaseDb(), 'records'), ...constraints);
-    };
-
-    const loadRecords = useCallback(async (typeFilter: string, actorFilter: string, after?: DocumentSnapshot) => {
+    const loadRecords = useCallback(async (typeFilter: RecordCategory | '', actorFilter: string, after?: DocumentSnapshot) => {
+        const seq = ++loadSeqRef.current;
         setLoadingRecords(true);
         try {
             const snapshot = await getDocs(buildRecordsQuery(typeFilter, actorFilter, after));
+            if (seq !== loadSeqRef.current) return;
             const items = parseRecordDocs(snapshot);
 
             if (after) {
@@ -176,9 +126,9 @@ export const RecordsTab = ({
             setLastDoc(snapshot.docs[snapshot.docs.length - 1] ?? null);
             setHasMore(snapshot.docs.length === PAGE_SIZE);
 
-            // Track unique actors for the dropdown. System-written records (the
-            // scheduled mail drain) carry no performedBy, so skip them rather than
-            // adding a blank option that filters to nothing.
+            // Track unique actors for the dropdown. System-written records (TTL
+            // deletions and the scheduled mail drain) carry no performedBy, so
+            // skip them rather than adding a blank option that filters to nothing.
             setKnownActors(prev => {
                 const merged = [...prev];
                 for (const item of items) {
@@ -190,7 +140,7 @@ export const RecordsTab = ({
                 return merged;
             });
         } finally {
-            setLoadingRecords(false);
+            if (seq === loadSeqRef.current) setLoadingRecords(false);
         }
     }, []);
 
@@ -198,7 +148,7 @@ export const RecordsTab = ({
         loadRecords('', '').catch(console.error);
     }, [loadRecords]);
 
-    const applyFilters = (type: string, actor: string) => {
+    const applyFilters = (type: RecordCategory | '', actor: string) => {
         activeFilterRef.current = {type, actor};
         setRecords([]);
         setLastDoc(null);
@@ -211,59 +161,51 @@ export const RecordsTab = ({
         if (lastDoc && hasMore) loadRecords(type, actor, lastDoc).catch(console.error);
     };
 
-    const clickableName = (uid: string, name: string): ReactNode => (
-        <span className="record-clickable-name" onClick={() => onLookupUser(uid)}>{name}</span>
-    );
+    const clickable = (label: ReactNode, onClick?: () => void): ReactNode => onClick
+        ? <span className="record-clickable-name" onClick={onClick}>{label}</span>
+        : <span>{label}</span>;
 
-    const clickableBadge = (badgeId: string, badgeName?: string): ReactNode => {
+    const clickableName = (uid: string, name: string) => clickable(name, () => onLookupUser(uid));
+
+    // A record links to the live item by ID and names it as it is now, in the
+    // viewer's language. Once the item is deleted (or for a record written
+    // before it carried the ID) it falls back to the name it was written with.
+    const localized = (en: string, zh: string) => (isEnglish ? en : zh) || en;
+
+    // Upcoming and past events share IDs (archiving keeps it), so one lookup
+    // across both covers check-in codes, attendance and archived events alike.
+    const clickableEvent = (eventId?: string, storedTitle?: string): ReactNode => {
+        const upcoming = upcomingEvents.find(e => e.id === eventId);
+        if (upcoming) {
+            return clickable(localized(upcoming.title, upcoming.titleCn), () => onSelectUpcomingEvent(upcoming.id));
+        }
+        const past = pastEvents.find(e => e.id === eventId);
+        if (past) return clickable(localized(past.title, past.titleCn), () => onSelectEvent(past.id));
+        return clickable(storedTitle ?? eventId ?? '');
+    };
+
+    const clickableBadge = (badgeId?: string, storedName?: string): ReactNode => {
         const bd = badgeDefs.find(d => d.id === badgeId);
-        const name = badgeName ?? (bd ? (isEnglish ? bd.name : bd.nameCn) : badgeId);
-        if (!bd) return <span>{name}</span>;
-        return <span className="record-clickable-name" onClick={() => onSelectBadge(bd.id)}>{name}</span>;
+        if (bd) return clickable(localized(bd.name, bd.nameCn), () => onSelectBadge(bd.id));
+        return clickable(storedName ?? badgeId ?? '');
     };
 
-    const clickableEvent = (eventId: string, eventTitle?: string): ReactNode => {
-        const evt = pastEvents.find(e => e.id === eventId);
-        const title = evt ? (isEnglish ? evt.title : evt.titleCn) : (eventTitle ?? eventId);
-        if (!evt) return <span>{title}</span>;
-        return <span className="record-clickable-name" onClick={() => onSelectEvent(evt.id)}>{title}</span>;
+    const clickableVenue = (venueId?: string, storedName?: string): ReactNode => {
+        const venue = venues.find(v => v.id === venueId);
+        if (venue) return clickable(localized(venue.nameEn, venue.nameCn), () => onSelectVenue(venue.id));
+        return clickable(storedName ?? '');
     };
 
-    const clickableUpcomingEvent = (eventId: string | undefined, eventTitle?: string): ReactNode => {
-        const title = eventTitle ?? eventId ?? '';
-        if (!eventId) return <span>{title}</span>;
-        if (upcomingEvents.some(e => e.id === eventId)) {
-            return <span className="record-clickable-name"
-                         onClick={() => onSelectUpcomingEvent(eventId)}>{title}</span>;
-        }
-        if (pastEvents.some(e => e.id === eventId)) {
-            return <span className="record-clickable-name" onClick={() => onSelectEvent(eventId)}>{title}</span>;
-        }
-        return <span>{title}</span>;
+    const clickableLot = (lotId?: string, storedName?: string): ReactNode => {
+        const lot = parkingLots.find(l => l.id === lotId);
+        if (lot) return clickable(localized(lot.name, lot.nameCn), () => onSelectParkingLot(lot.id));
+        return clickable(storedName ?? '');
     };
 
-    // Location records store only the display name, so match it back to a live
-    // venue/lot/rate to make the name jump to it. Deleted items no longer match
-    // and fall back to plain text.
-    const clickableVenue = (name?: string): ReactNode => {
-        const label = name ?? '';
-        const venue = venues.find(v => v.nameEn === name || v.nameCn === name);
-        if (!venue) return <span>{label}</span>;
-        return <span className="record-clickable-name" onClick={() => onSelectVenue(venue.id)}>{label}</span>;
-    };
-
-    const clickableLot = (name?: string): ReactNode => {
-        const label = name ?? '';
-        const lot = parkingLots.find(l => l.name === name || l.nameCn === name);
-        if (!lot) return <span>{label}</span>;
-        return <span className="record-clickable-name" onClick={() => onSelectParkingLot(lot.id)}>{label}</span>;
-    };
-
-    const clickableRate = (label?: string): ReactNode => {
-        const text = label ?? '';
-        const rate = parkingRates.find(r => r.labelEn === label || r.labelCn === label);
-        if (!rate) return <span>{text}</span>;
-        return <span className="record-clickable-name" onClick={() => onSelectParkingRate(rate.id)}>{text}</span>;
+    const clickableRate = (rateId?: string, storedLabel?: string): ReactNode => {
+        const rate = parkingRates.find(r => r.id === rateId);
+        if (rate) return clickable(rateLabel(rate, isEnglish), () => onSelectParkingRate(rate.id));
+        return clickable(storedLabel ?? '');
     };
 
     // Records outlive a group rename by up to RECORD_RETENTION_DAYS, so a stored
@@ -287,24 +229,39 @@ export const RecordsTab = ({
 
     const getRecordLabel = (r: ActivityRecord): ReactNode => {
         const target = r.targetUid ? clickableName(r.targetUid, r.targetName ?? '') : r.targetName;
+        const event = clickableEvent(r.eventId, r.eventTitle);
+        const badge = clickableBadge(r.badgeId, r.badgeName);
+        // Ticket holders are attendees rather than accounts, so they carry an
+        // email to fall back on instead of a UID.
+        const attendee = r.targetName || r.targetEmail || '';
+        const code = r.code ? <> <span className="record-code">{r.code}</span></> : null;
         switch (r.type) {
             case 'group-assign':
                 return isEnglish
                     ? <>assigned {target} from {groupLabel(r.oldGroup)} to {groupLabel(r.newGroup)}</>
                     : <>将 {target} 从 {groupLabel(r.oldGroup)} 改为 {groupLabel(r.newGroup)}</>;
-            case 'membership-grant':
+            case 'membership-grant': {
+                // No old expiry means they held no membership before this.
+                const was = r.oldExpiresAt
+                    ? (isEnglish ? ` (was ${fmtExpiry(r.oldExpiresAt)})` : `（原为 ${fmtExpiry(r.oldExpiresAt)}）`)
+                    : '';
                 return isEnglish
-                    ? <>set {target}'s membership to expire {fmtExpiry(r.newExpiresAt)}</>
-                    : <>将 {target} 的会员到期日设为 {fmtExpiry(r.newExpiresAt)}</>;
+                    ? <>set {target}'s membership to expire {fmtExpiry(r.newExpiresAt)}{was}</>
+                    : <>将 {target} 的会员到期日设为 {fmtExpiry(r.newExpiresAt)}{was}</>;
+            }
             case 'membership-extend':
                 return isEnglish
                     ? <>extended {target}'s membership by {r.extendDays} days
                         (now {fmtExpiry(r.newExpiresAt)})</>
                     : <>将 {target} 的会员资格延长了 {r.extendDays} 天（现到期于 {fmtExpiry(r.newExpiresAt)}）</>;
-            case 'membership-revoke':
+            case 'membership-revoke': {
+                const was = r.oldExpiresAt
+                    ? (isEnglish ? ` (was until ${fmtExpiry(r.oldExpiresAt)})` : `（原到期于 ${fmtExpiry(r.oldExpiresAt)}）`)
+                    : '';
                 return isEnglish
-                    ? <>revoked {target}'s membership</>
-                    : <>撤销了 {target} 的会员资格</>;
+                    ? <>revoked {target}'s membership{was}</>
+                    : <>撤销了 {target} 的会员资格{was}</>;
+            }
             case 'title-set': {
                 const fmtTitle = (en?: string, zh?: string) =>
                     [en, zh].map(s => (s ?? '').trim()).filter(Boolean).join(' / ');
@@ -343,193 +300,136 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>removed {target}'s profile banner</>
                     : <>删除了 {target} 的主页横幅</>;
-            case 'code-create': {
+            case 'code-create':
                 if (r.eventId) {
-                    const isPast = pastEvents.some(e => e.id === r.eventId);
-                    const event = isPast
-                        ? clickableEvent(r.eventId, r.eventTitle)
-                        : clickableUpcomingEvent(r.eventId, r.eventTitle);
-                    return isEnglish ? <>created check-in code for {event}</> : <>为 {event} 创建了签到码</>;
+                    return isEnglish
+                        ? <>created check-in code{code} for {event}</>
+                        : <>为 {event} 创建了签到码{code}</>;
                 }
-                const badge = r.badgeId ? clickableBadge(r.badgeId) : r.badgeName;
                 return isEnglish ? <>created claim code for {badge}</> : <>为 {badge} 创建了兑换码</>;
-            }
-            case 'event-attend': {
-                // Attendance changed as a side effect of an event-staff assignment
+            case 'event-attend':
+                // Attendance changed as a side effect of becoming event staff
                 // rather than by hand — say so, or the row reads as a manual edit.
-                const viaStaff = r.reason === 'staff-assignment'
-                    ? (isEnglish ? ' (event-staff assignment)' : '（因指派为活动工作人员）')
-                    : '';
+                if (r.reason === 'staff-code') {
+                    return isEnglish
+                        ? <>was marked as attending {event} on joining its staff with a code</>
+                        : <>使用工作人员码成为 {event} 的活动工作人员，并被标记为已参加</>;
+                }
                 return isEnglish
-                    ? <>marked {target} as
-                        attended {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}{viaStaff}</>
-                    : <>标记 {target} 参加了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}{viaStaff}</>;
-            }
-            case 'event-unattend': {
-                const viaStaff = r.reason === 'staff-assignment'
-                    ? (isEnglish ? ' (event-staff assignment)' : '（因指派为活动工作人员）')
-                    : '';
+                    ? <>marked {target} as attended {event}{r.reason === 'staff-assignment' ? ' (event-staff assignment)' : ''}</>
+                    : <>标记 {target} 参加了 {event}{r.reason === 'staff-assignment' ? '（因指派为活动工作人员）' : ''}</>;
+            case 'event-unattend':
+                if (r.reason === 'staff-code') {
+                    return isEnglish
+                        ? <>was taken off {event}'s attendees on joining its staff with a code</>
+                        : <>使用工作人员码成为 {event} 的活动工作人员，并被移出参加者名单</>;
+                }
                 return isEnglish
                     ? <>revoked {target}'s attendance
-                        for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}{viaStaff}</>
-                    : <>撤销了 {target} 的 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')} 签到{viaStaff}</>;
-            }
+                        for {event}{r.reason === 'staff-assignment' ? ' (event-staff assignment)' : ''}</>
+                    : <>撤销了 {target} 的 {event} 签到{r.reason === 'staff-assignment' ? '（因指派为活动工作人员）' : ''}</>;
             case 'event-claim':
                 return isEnglish
-                    ? <>checked in to {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} with
-                        code</>
-                    : <>使用兑换码签到 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>;
-            case 'badge-claim': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+                    ? <>checked in to {event} with code{code}</>
+                    : <>使用兑换码{code} 签到 {event}</>;
+            case 'badge-claim':
                 return isEnglish ? <>claimed {badge} badge with code</> : <>使用兑换码获得 {badge} 徽章</>;
-            }
-            case 'badge-code-activate': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+            case 'badge-code-activate':
                 return isEnglish ? <>activated code for {badge}</> : <>激活了 {badge} 的兑换码</>;
-            }
-            case 'badge-code-deactivate': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+            case 'badge-code-deactivate':
                 return isEnglish ? <>deactivated code for {badge}</> : <>停用了 {badge} 的兑换码</>;
-            }
-            case 'code-delete': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+            case 'code-delete':
                 return isEnglish ? <>deleted code for {badge}</> : <>删除了 {badge} 的兑换码</>;
-            }
-            case 'achievement-grant': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+            case 'achievement-grant':
                 return isEnglish ? <>granted {badge} badge to {target}</> : <>授予 {target} {badge} 徽章</>;
-            }
-            case 'achievement-revoke': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+            case 'achievement-revoke':
                 return isEnglish ? <>revoked {badge} badge from {target}</> : <>撤销了 {target} 的 {badge} 徽章</>;
-            }
-            case 'badge-create': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+            case 'badge-create':
                 return isEnglish ? <>created badge {badge}</> : <>创建了徽章 {badge}</>;
-            }
-            case 'badge-edit': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+            case 'badge-edit':
                 return isEnglish ? <>edited badge {badge}</> : <>编辑了徽章 {badge}</>;
-            }
-            case 'badge-deletion-requested': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+            case 'badge-deletion-requested':
                 return isEnglish
                     ? <>requested deletion of badge {badge}</>
                     : <>申请删除徽章 {badge}</>;
-            }
-            case 'badge-deletion-cancelled': {
-                const badge = r.badgeId ? clickableBadge(r.badgeId, r.badgeName ?? undefined) : r.badgeName;
+            case 'badge-deletion-cancelled':
                 return isEnglish
                     ? <>cancelled deletion of badge {badge}</>
                     : <>取消了徽章 {badge} 的删除</>;
-            }
             case 'badge-deleted':
                 return isEnglish ? <>deleted badge {r.badgeName ?? ''}</> : <>删除了徽章 {r.badgeName ?? ''}</>;
             case 'event-create':
-                return isEnglish
-                    ? <>created
-                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
-                    : <>创建了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
+                return isEnglish ? <>created event {event}</> : <>创建了活动 {event}</>;
             case 'event-edit':
-                return isEnglish
-                    ? <>edited
-                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>
-                    : <>编辑了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ? clickableEvent(r.eventTitle) : '')}</>;
+                return isEnglish ? <>edited event {event}</> : <>编辑了活动 {event}</>;
             case 'event-deletion-requested':
                 return isEnglish
-                    ? <>requested deletion of
-                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
-                    : <>申请删除活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>;
+                    ? <>requested deletion of event {event}</>
+                    : <>申请删除活动 {event}</>;
             case 'event-deletion-cancelled':
                 return isEnglish
-                    ? <>cancelled deletion of
-                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
-                    : <>取消了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} 的删除</>;
+                    ? <>cancelled deletion of event {event}</>
+                    : <>取消了活动 {event} 的删除</>;
             case 'event-deleted':
                 return isEnglish
                     ? <>deleted event {r.eventTitle ?? r.eventId ?? ''}</>
                     : <>删除了活动 {r.eventTitle ?? r.eventId ?? ''}</>;
             case 'past-event-publish':
-                return isEnglish
-                    ? <>published
-                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
-                    : <>发布了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>;
+                return isEnglish ? <>published event {event}</> : <>发布了活动 {event}</>;
             case 'past-event-unpublish':
-                return isEnglish
-                    ? <>unpublished
-                        event {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
-                    : <>取消发布了活动 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>;
+                return isEnglish ? <>unpublished event {event}</> : <>取消发布了活动 {event}</>;
             case 'upcoming-event-create':
-                return isEnglish
-                    ? <>created upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
-                    : <>创建了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
+                return isEnglish ? <>created upcoming event {event}</> : <>创建了活动预告 {event}</>;
             case 'upcoming-event-edit':
-                return isEnglish
-                    ? <>edited upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
-                    : <>编辑了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
+                return isEnglish ? <>edited upcoming event {event}</> : <>编辑了活动预告 {event}</>;
             case 'upcoming-event-deletion-requested':
                 return isEnglish
-                    ? <>requested deletion of upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
-                    : <>申请删除活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
+                    ? <>requested deletion of upcoming event {event}</>
+                    : <>申请删除活动预告 {event}</>;
             case 'upcoming-event-deletion-cancelled':
                 return isEnglish
-                    ? <>cancelled deletion of upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
-                    : <>取消了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)} 的删除</>;
+                    ? <>cancelled deletion of upcoming event {event}</>
+                    : <>取消了活动预告 {event} 的删除</>;
             case 'upcoming-event-deleted':
                 return isEnglish
                     ? <>deleted upcoming event {r.eventTitle ?? ''}</>
                     : <>删除了活动预告 {r.eventTitle ?? ''}</>;
             case 'upcoming-event-archive':
                 return isEnglish
-                    ? <>archived {r.eventTitle ?? ''} to past events</>
-                    : <>将 {r.eventTitle ?? ''} 归档到往期活动</>;
+                    ? <>archived {event} to past events</>
+                    : <>将 {event} 归档到往期活动</>;
             case 'upcoming-event-publish':
-                return isEnglish
-                    ? <>published upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
-                    : <>发布了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
+                return isEnglish ? <>published upcoming event {event}</> : <>发布了活动预告 {event}</>;
             case 'upcoming-event-unpublish':
-                return isEnglish
-                    ? <>unpublished upcoming event {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
-                    : <>取消发布了活动预告 {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>;
+                return isEnglish ? <>unpublished upcoming event {event}</> : <>取消发布了活动预告 {event}</>;
             case 'event-code-activate':
                 return isEnglish
-                    ? <>activated check-in code
-                        for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
-                    : <>激活了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} 的签到码</>;
+                    ? <>activated check-in code{code} for {event}</>
+                    : <>激活了 {event} 的签到码{code}</>;
             case 'event-code-deactivate':
                 return isEnglish
-                    ? <>deactivated check-in code
-                        for {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
-                    : <>停用了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} 的签到码</>;
+                    ? <>deactivated check-in code{code} for {event}</>
+                    : <>停用了 {event} 的签到码{code}</>;
             case 'event-code-time-window':
                 return isEnglish
-                    ? <>updated time window for check-in code
-                        of {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')}</>
-                    : <>更新了 {r.eventId ? clickableEvent(r.eventId, r.eventTitle) : (r.eventTitle ?? '')} 签到码的时间窗口</>;
-            case 'staff-code-create': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                    ? <>updated the time window of check-in code{code} for {event}</>
+                    : <>更新了 {event} 签到码{code} 的时间窗口</>;
+            case 'staff-code-create':
                 return isEnglish
                     ? <>created staff code for {event}</>
                     : <>为 {event} 创建了工作人员码</>;
-            }
-            case 'staff-code-activate': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+            case 'staff-code-activate':
                 return isEnglish
                     ? <>activated staff code for {event}</>
                     : <>激活了 {event} 的工作人员码</>;
-            }
-            case 'staff-code-deactivate': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+            case 'staff-code-deactivate':
                 return isEnglish
                     ? <>deactivated staff code for {event}</>
                     : <>停用了 {event} 的工作人员码</>;
-            }
-            case 'staff-code-time-window': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+            case 'staff-code-time-window':
                 return isEnglish
                     ? <>updated time window for staff code of {event}</>
                     : <>更新了 {event} 工作人员码的时间窗口</>;
-            }
             case 'tag-create':
                 return isEnglish
                     ? <>created tag {r.tagName ?? ''}</>
@@ -544,24 +444,24 @@ export const RecordsTab = ({
                     : <>删除了标签 {r.tagName ?? ''}</>;
             case 'venue-create':
                 return isEnglish
-                    ? <>created venue {clickableVenue(r.venueName)}</>
-                    : <>创建了场地 {clickableVenue(r.venueName)}</>;
+                    ? <>created venue {clickableVenue(r.venueId, r.venueName)}</>
+                    : <>创建了场地 {clickableVenue(r.venueId, r.venueName)}</>;
             case 'venue-edit':
                 return isEnglish
-                    ? <>edited venue {clickableVenue(r.venueName)}</>
-                    : <>编辑了场地 {clickableVenue(r.venueName)}</>;
+                    ? <>edited venue {clickableVenue(r.venueId, r.venueName)}</>
+                    : <>编辑了场地 {clickableVenue(r.venueId, r.venueName)}</>;
             case 'venue-delete':
                 return isEnglish
                     ? <>deleted venue {r.venueName ?? ''}</>
                     : <>删除了场地 {r.venueName ?? ''}</>;
             case 'parkinglot-create':
                 return isEnglish
-                    ? <>created parking lot {clickableLot(r.lotName)}</>
-                    : <>创建了停车场 {clickableLot(r.lotName)}</>;
+                    ? <>created parking lot {clickableLot(r.lotId, r.lotName)}</>
+                    : <>创建了停车场 {clickableLot(r.lotId, r.lotName)}</>;
             case 'parkinglot-edit':
                 return isEnglish
-                    ? <>edited parking lot {clickableLot(r.lotName)}</>
-                    : <>编辑了停车场 {clickableLot(r.lotName)}</>;
+                    ? <>edited parking lot {clickableLot(r.lotId, r.lotName)}</>
+                    : <>编辑了停车场 {clickableLot(r.lotId, r.lotName)}</>;
             case 'parkinglot-delete': {
                 const unlinked = r.unlinkedFrom ?? 0;
                 if (unlinked > 0) {
@@ -576,12 +476,12 @@ export const RecordsTab = ({
             }
             case 'parkingrate-create':
                 return isEnglish
-                    ? <>created parking rate {clickableRate(r.rateLabel)}</>
-                    : <>创建了停车费率 {clickableRate(r.rateLabel)}</>;
+                    ? <>created parking rate {clickableRate(r.rateId, r.rateLabel)}</>
+                    : <>创建了停车费率 {clickableRate(r.rateId, r.rateLabel)}</>;
             case 'parkingrate-edit':
                 return isEnglish
-                    ? <>edited parking rate {clickableRate(r.rateLabel)}</>
-                    : <>编辑了停车费率 {clickableRate(r.rateLabel)}</>;
+                    ? <>edited parking rate {clickableRate(r.rateId, r.rateLabel)}</>
+                    : <>编辑了停车费率 {clickableRate(r.rateId, r.rateLabel)}</>;
             case 'parkingrate-delete': {
                 const unlinked = r.unlinkedFrom ?? 0;
                 if (unlinked > 0) {
@@ -623,76 +523,57 @@ export const RecordsTab = ({
                     : <>删除了账号 {name}</>;
             }
             case 'ticket-import': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
                 const added = r.addedCount ?? 0;
                 const replaced = r.replacedCount ?? 0;
                 return isEnglish
                     ? <>imported attendees for {event} ({added} added, {replaced} replaced)</>
                     : <>导入了 {event} 的参加者（新增 {added}，替换 {replaced}）</>;
             }
-            case 'ticket-redeem': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+            case 'ticket-redeem':
                 return isEnglish
-                    ? <>redeemed a ticket for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
-                    : <>为 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 验证了门票</>;
-            }
-            case 'ticket-void': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                    ? <>redeemed a ticket for {attendee} at {event}</>
+                    : <>为 {attendee} 在 {event} 验证了门票</>;
+            case 'ticket-void':
                 return isEnglish
-                    ? <>voided a ticket for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
-                    : <>作废了 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 的一张门票</>;
-            }
-            case 'ticket-unvoid': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                    ? <>voided a ticket for {attendee} at {event}</>
+                    : <>作废了 {attendee} 在 {event} 的一张门票</>;
+            case 'ticket-unvoid':
                 return isEnglish
-                    ? <>restored a voided ticket for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
-                    : <>恢复了 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 的一张作废门票</>;
-            }
-            case 'ticket-reset': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                    ? <>restored a voided ticket for {attendee} at {event}</>
+                    : <>恢复了 {attendee} 在 {event} 的一张作废门票</>;
+            case 'ticket-reset':
                 return isEnglish
-                    ? <>reset the check-in state of a ticket for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
-                    : <>重置了 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 的门票签到状态</>;
-            }
+                    ? <>reset the check-in state of a ticket for {attendee} at {event}</>
+                    : <>重置了 {attendee} 在 {event} 的门票签到状态</>;
             case 'ticket-type-edit': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
-                const who = r.targetName ?? r.targetEmail ?? '';
                 const from = ticketTypeLabel(r.oldType ?? '', isEnglish);
                 const to = ticketTypeLabel(r.newType ?? '', isEnglish);
                 return isEnglish
-                    ? <>changed {who}'s ticket type from {from} to {to} at {event}</>
-                    : <>将 {who} 在 {event} 的门票类型从 {from} 改为 {to}</>;
+                    ? <>changed {attendee}'s ticket type from {from} to {to} at {event}</>
+                    : <>将 {attendee} 在 {event} 的门票类型从 {from} 改为 {to}</>;
             }
-            case 'ticket-attendee-delete': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+            case 'ticket-attendee-delete':
                 return isEnglish
-                    ? <>removed attendee {r.targetName ?? r.targetEmail ?? ''} from {event}</>
-                    : <>将 {r.targetName ?? r.targetEmail ?? ''} 从 {event} 的名单中移除</>;
-            }
+                    ? <>removed attendee {attendee} from {event}</>
+                    : <>将 {attendee} 从 {event} 的名单中移除</>;
             case 'ticket-attendee-edit': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
-                const oldName = r.oldName ?? '';
+                const oldName = r.oldName || r.targetEmail || '';
                 const newName = r.newName ?? '';
-                const email = r.targetEmail ?? '';
                 return isEnglish
-                    ? <>renamed attendee {oldName || email} to {newName} at {event}</>
-                    : <>将 {event} 的参加者 {oldName || email} 改名为 {newName}</>;
+                    ? <>renamed attendee {oldName} to {newName} at {event}</>
+                    : <>将 {event} 的参加者 {oldName} 改名为 {newName}</>;
             }
-            case 'ticket-regenerate': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+            case 'ticket-regenerate':
                 return isEnglish
-                    ? <>re-issued tickets for {r.targetName ?? r.targetEmail ?? ''} at {event}</>
-                    : <>为 {r.targetName ?? r.targetEmail ?? ''} 在 {event} 重新签发门票</>;
-            }
+                    ? <>re-issued tickets for {attendee} at {event}</>
+                    : <>为 {attendee} 在 {event} 重新签发门票</>;
             case 'ticket-email-send': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
                 const sent = r.sentCount ?? 0;
                 return isEnglish
                     ? <>sent {sent} ticket email{sent === 1 ? '' : 's'} for {event}</>
                     : <>为 {event} 发送了 {sent} 封门票邮件</>;
             }
             case 'ticket-email-queue': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
                 const queued = r.sentCount ?? 0;
                 return isEnglish
                     ? <>queued {queued} ticket email{queued === 1 ? '' : 's'} for {event} past the daily cap</>
@@ -706,21 +587,21 @@ export const RecordsTab = ({
             }
             case 'upcoming-event-email-template-update':
                 return isEnglish
-                    ? <>updated the ticket email template
-                        for {clickableUpcomingEvent(r.eventId, r.eventTitle)}</>
-                    : <>更新了 {clickableUpcomingEvent(r.eventId, r.eventTitle)} 的门票邮件模板</>;
-            case 'event-staff-assign': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+                    ? <>updated the ticket email template for {event}</>
+                    : <>更新了 {event} 的门票邮件模板</>;
+            case 'event-staff-assign':
+                if (r.reason === 'staff-code') {
+                    return isEnglish
+                        ? <>joined {event}'s event staff with a code</>
+                        : <>使用工作人员码成为 {event} 的活动工作人员</>;
+                }
                 return isEnglish
                     ? <>granted {target} event-staff access to {event}</>
                     : <>授予 {target} {event} 的活动工作人员权限</>;
-            }
-            case 'event-staff-remove': {
-                const event = clickableUpcomingEvent(r.eventId, r.eventTitle);
+            case 'event-staff-remove':
                 return isEnglish
                     ? <>revoked {target}'s event-staff access to {event}</>
                     : <>撤销了 {target} 对 {event} 的活动工作人员权限</>;
-            }
             case 'passport-generate':
                 return isEnglish
                     ? <>generated {r.passportCount ?? 0} passports from the {r.passportYear ?? ''} design
@@ -817,8 +698,15 @@ export const RecordsTab = ({
                     : <>删除了社交平台 {r.platformLabel ?? ''}</>;
             case 'policy-update':
                 return isEnglish ? <>updated policy content</> : <>更新了政策内容</>;
-            case 'config-update':
-                return isEnglish ? <>updated site config</> : <>更新了网站配置</>;
+            case 'config-update': {
+                const sections = (r.configSections ?? [])
+                    .map(s => CONFIG_SECTION_LABELS[s] ? localized(CONFIG_SECTION_LABELS[s].en, CONFIG_SECTION_LABELS[s].zh) : s)
+                    .join(isEnglish ? ', ' : '、');
+                if (!sections) return isEnglish ? <>updated site config</> : <>更新了网站配置</>;
+                return isEnglish
+                    ? <>updated site config ({sections})</>
+                    : <>更新了网站配置（{sections}）</>;
+            }
             case 'con-content-update':
                 return isEnglish
                     ? <>updated con page content {r.conSection ? `(${r.conSection})` : ''}</>
@@ -830,122 +718,6 @@ export const RecordsTab = ({
         }
     };
 
-    const getRecordTypeTag = (type: RecordType) => {
-        switch (type) {
-            case 'group-assign':
-            case 'title-set':
-            case 'event-staff-assign':
-            case 'event-staff-remove':
-                return isEnglish ? 'Role' : '角色';
-            case 'membership-grant':
-            case 'membership-extend':
-            case 'membership-revoke':
-                return isEnglish ? 'Membership' : '会员';
-            case 'code-create':
-            case 'badge-code-activate':
-            case 'badge-code-deactivate':
-            case 'code-delete':
-            case 'event-code-activate':
-            case 'event-code-deactivate':
-            case 'event-code-time-window':
-            case 'staff-code-create':
-            case 'staff-code-activate':
-            case 'staff-code-deactivate':
-            case 'staff-code-time-window':
-                return isEnglish ? 'Code' : '兑换码';
-            case 'event-attend':
-            case 'event-unattend':
-            case 'event-claim':
-                return isEnglish ? 'Attend' : '签到';
-            case 'achievement-grant':
-            case 'achievement-revoke':
-            case 'badge-claim':
-            case 'badge-create':
-            case 'badge-edit':
-            case 'badge-deletion-requested':
-            case 'badge-deletion-cancelled':
-            case 'badge-deleted':
-                return isEnglish ? 'Badge' : '徽章';
-            case 'event-create':
-            case 'event-edit':
-            case 'event-deletion-requested':
-            case 'event-deletion-cancelled':
-            case 'event-deleted':
-            case 'past-event-publish':
-            case 'past-event-unpublish':
-            case 'upcoming-event-create':
-            case 'upcoming-event-edit':
-            case 'upcoming-event-deletion-requested':
-            case 'upcoming-event-deletion-cancelled':
-            case 'upcoming-event-deleted':
-            case 'upcoming-event-archive':
-            case 'upcoming-event-publish':
-            case 'upcoming-event-unpublish':
-            case 'upcoming-event-email-template-update':
-                return isEnglish ? 'Event' : '活动';
-            case 'ticket-import':
-            case 'ticket-redeem':
-            case 'ticket-void':
-            case 'ticket-unvoid':
-            case 'ticket-reset':
-            case 'ticket-type-edit':
-            case 'ticket-attendee-delete':
-            case 'ticket-attendee-edit':
-            case 'ticket-regenerate':
-            case 'ticket-email-send':
-            case 'ticket-email-queue':
-                return isEnglish ? 'Ticket' : '门票';
-            case 'scheduled-mail-drain':
-                return isEnglish ? 'Email' : '邮件';
-            case 'tag-create':
-            case 'tag-edit':
-            case 'tag-delete':
-                return isEnglish ? 'Tag' : '标签';
-            case 'venue-create':
-            case 'venue-edit':
-            case 'venue-delete':
-            case 'parkinglot-create':
-            case 'parkinglot-edit':
-            case 'parkinglot-delete':
-            case 'parkingrate-create':
-            case 'parkingrate-edit':
-            case 'parkingrate-delete':
-                return isEnglish ? 'Location' : '场地';
-            case 'passport-generate':
-            case 'passport-claim':
-            case 'passport-delete':
-            case 'passport-key-reissue':
-            case 'passport-key-view':
-            case 'passport-key-export':
-            case 'passport-design-create':
-            case 'passport-design-edit':
-            case 'passport-design-delete':
-                return isEnglish ? 'Passport' : '通行证';
-            case 'qrcode-create':
-            case 'qrcode-edit':
-            case 'qrcode-delete':
-            case 'qrcode-spot-set':
-            case 'social-platform-create':
-            case 'social-platform-edit':
-            case 'social-platform-delete':
-                return isEnglish ? 'QR' : '二维码';
-            case 'account-deletion-requested':
-            case 'account-deletion-cancelled':
-            case 'account-deleted':
-            case 'name-set':
-            case 'avatar-set':
-            case 'avatar-remove':
-            case 'banner-remove':
-                return isEnglish ? 'Account' : '账号';
-            case 'policy-update':
-            case 'config-update':
-            case 'con-content-update':
-                return isEnglish ? 'Config' : '配置';
-            default:
-                return type;
-        }
-    };
-
     return (
         <div className="admin-section">
             <div className="record-filter-bar">
@@ -954,26 +726,15 @@ export const RecordsTab = ({
                     className="record-filter-select"
                     value={recordFilterType}
                     onChange={e => {
-                        const val = e.target.value;
+                        const val = e.target.value as RecordCategory | '';
                         setRecordFilterType(val);
                         applyFilters(val, recordFilterActor);
                     }}
                 >
                     <option value="">{isEnglish ? 'All Types' : '所有类型'}</option>
-                    <option value="role">{isEnglish ? 'Role' : '角色'}</option>
-                    <option value="membership">{isEnglish ? 'Membership' : '会员'}</option>
-                    <option value="code">{isEnglish ? 'Code' : '兑换码'}</option>
-                    <option value="attend">{isEnglish ? 'Attend' : '签到'}</option>
-                    <option value="badge">{isEnglish ? 'Badge' : '徽章'}</option>
-                    <option value="event">{isEnglish ? 'Event' : '活动'}</option>
-                    <option value="ticket">{isEnglish ? 'Ticket' : '门票'}</option>
-                    <option value="tag">{isEnglish ? 'Tag' : '标签'}</option>
-                    <option value="location">{isEnglish ? 'Location' : '场地'}</option>
-                    <option value="passport">{isEnglish ? 'Passport' : '通行证'}</option>
-                    <option value="qr">{isEnglish ? 'QR' : '二维码'}</option>
-                    <option value="account">{isEnglish ? 'Account' : '账号'}</option>
-                    <option value="config">{isEnglish ? 'Config' : '配置'}</option>
-                    <option value="email">{isEnglish ? 'Email' : '邮件'}</option>
+                    {Object.entries(RECORD_CATEGORIES).map(([category, {en, zh}]) => (
+                        <option key={category} value={category}>{isEnglish ? en : zh}</option>
+                    ))}
                 </select>
                 <select
                     className="record-filter-select"
@@ -1011,28 +772,31 @@ export const RecordsTab = ({
                 <p className="admin-no-results">{isEnglish ? 'No records yet.' : '暂无记录。'}</p>
             )}
 
-            {records.map(r => (
-                <div key={r.id} className="record-row">
-                    <span className={`record-type-tag record-type-${r.type}`}>
-                        {getRecordTypeTag(r.type)}
-                    </span>
-                    <div className="record-content">
-                        <span className="record-actor">
-                            {r.performedBy
-                                ? clickableName(r.performedBy, r.performedByName)
-                                : (isEnglish ? 'System' : '系统')}
+            {records.map(r => {
+                const category = CATEGORY_BY_TYPE.get(r.type);
+                return (
+                    <div key={r.id} className="record-row">
+                        <span className={`record-type-tag record-cat-${category ?? 'unknown'} record-type-${r.type}`}>
+                            {category ? (isEnglish ? RECORD_CATEGORIES[category].en : RECORD_CATEGORIES[category].zh) : r.type}
                         </span>
-                        {' '}
-                        <span className="record-description">{getRecordLabel(r)}</span>
+                        <div className="record-content">
+                            <span className="record-actor">
+                                {r.performedBy
+                                    ? clickableName(r.performedBy, r.performedByName)
+                                    : (isEnglish ? 'System' : '系统')}
+                            </span>
+                            {' '}
+                            <span className="record-description">{getRecordLabel(r)}</span>
+                        </div>
+                        <span className="record-time">
+                            {r.timestamp.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                                month: 'short', day: 'numeric',
+                                hour: '2-digit', minute: '2-digit',
+                            })}
+                        </span>
                     </div>
-                    <span className="record-time">
-                        {r.timestamp.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
-                            month: 'short', day: 'numeric',
-                            hour: '2-digit', minute: '2-digit',
-                        })}
-                    </span>
-                </div>
-            ))}
+                );
+            })}
 
             {hasMore && records.length > 0 && (
                 <button
