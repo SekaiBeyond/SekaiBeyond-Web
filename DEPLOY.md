@@ -62,8 +62,8 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
     **Step A — Set up Resend and verify `sekaibeyond.com`**
 
     1. Sign up at [resend.com](https://resend.com) and confirm your account email.
-    2. Go to **Domains** > **Add Domain**, enter `sekaibeyond.com`, and follow Resend's on-screen DNS setup instructions — it auto-detects Cloudflare and can provision the MX/SPF/DKIM/DMARC records for you via OAuth. Click **Verify DNS Records** once the dashboard shows everything green.
-    3. Go to **API Keys** > **Create API Key**, name it `sekaibeyond-functions`, scope it to **Sending access** only, and copy the key (starts with `re_`). You won't be able to view it again.
+    2. Go to **Domains** > **Add Domain**, enter your site's domain (`sekaibeyond.com` here), and follow Resend's on-screen DNS setup instructions — it auto-detects Cloudflare and can provision the MX/SPF/DKIM/DMARC records for you via OAuth. Click **Verify DNS Records** once the dashboard shows everything green. It must be the host of `PUBLIC_ORIGIN` (see Step 12), since every email is sent from that domain.
+    3. Go to **API Keys** > **Create API Key**, name it `sekaibeyond-functions`, give it **Full access**, and copy the key (starts with `re_`). You won't be able to view it again. *Sending access* isn't enough: the admin **Email Quota** tool and the send path's daily-cap check count usage by reading Resend's sent-email log (`GET /emails`), which a sending-only key is refused. With one, the tool shows usage as unavailable and the cap check falls back to its cached count. A full-access key can manage the whole Resend account, so guard it like the account password.
 
     **Step B — Store the API key as a Functions secret**
 
@@ -80,9 +80,13 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     The **From address** is `<prefix>@<your site's domain>`. The domain is the host of `PUBLIC_ORIGIN` (see Step 12) with any leading `www.` dropped, so it must be the domain you verified in Resend. Admins set the prefix under **Site Config > Sender Email**, and it takes effect on the next email with no deploy. While it is blank, mail goes out from `no-reply@` that domain.
 
+    Ticket emails set no reply-to, so a reply goes to the From address. If Cloudflare Email Routing handles the domain's inbound mail, replies to `no-reply@` bounce unless a routing rule (or the catch-all) forwards that address somewhere.
+
     **Step C — Send a test**
 
-    After deploying Functions, send a real ticket email from the **Admin Panel**. Cross-check Resend's **Logs** tab in the dashboard, which surfaces bounces, suppressions, and DKIM failures. As a second signal, the functions cache Resend's daily usage in the `system/resendQuota` Firestore doc — a populated `confirmed` count there after a send shows the functions are reading usage back from Resend.
+    First set **Site Config > Contact Email**. The default ticket template fills `{{ contactEmail }}` from it, for the "contact us" line and its `mailto:` link, and a send is refused while the template uses it and it is blank.
+
+    Then, after deploying Functions, send a real ticket email from the **Admin Panel**. Cross-check Resend's **Logs** tab in the dashboard, which surfaces bounces, suppressions, and DKIM failures. As a second signal, the functions cache Resend's daily usage in the `system/resendQuota` Firestore doc — a populated `confirmed` count there after a send shows the functions are reading usage back from Resend.
 
     > If Cloudflare Email Routing is also handling inbound mail for `sekaibeyond.com`, leave its existing MX records on the apex (`sekaibeyond.com`) untouched — Resend's MX is on the `send.` subdomain and won't conflict.
 
