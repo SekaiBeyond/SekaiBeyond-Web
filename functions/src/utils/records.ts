@@ -3,26 +3,19 @@ import { recordExpiresAt } from "./config";
 import { db } from "./firebase";
 
 /**
- * Every type of activity record the functions write. Mirrors RECORD_CATEGORIES
- * in app/pages/admin/types.ts, which files each one under a Records tab
- * category: a type missing there still shows, but as its raw slug, in no
- * filter and with no colour.
+ * Every type of record the functions write, grouped as the Records tab's
+ * categories are. Mirrors RECORD_CATEGORIES in app/pages/admin/types.ts; a type
+ * missing there shows as its raw slug, in no filter and with no colour.
  */
 export type RecordType =
-// Role
     | "group-assign" | "title-set" | "event-staff-assign" | "event-staff-remove"
-    // Membership
     | "membership-grant" | "membership-extend" | "membership-revoke"
-    // Code
     | "code-create" | "badge-code-activate" | "badge-code-deactivate" | "code-delete"
     | "event-code-activate" | "event-code-deactivate" | "event-code-time-window"
     | "staff-code-create" | "staff-code-activate" | "staff-code-deactivate" | "staff-code-time-window"
-    // Attend
     | "event-attend" | "event-unattend" | "event-claim"
-    // Badge
     | "achievement-grant" | "achievement-revoke" | "badge-claim" | "badge-create" | "badge-edit"
     | "badge-deletion-requested" | "badge-deletion-cancelled" | "badge-deleted"
-    // Event
     | "event-create" | "event-edit"
     | "event-deletion-requested" | "event-deletion-cancelled" | "event-deleted"
     | "past-event-publish" | "past-event-unpublish"
@@ -30,35 +23,24 @@ export type RecordType =
     | "upcoming-event-deletion-requested" | "upcoming-event-deletion-cancelled" | "upcoming-event-deleted"
     | "upcoming-event-archive" | "upcoming-event-publish" | "upcoming-event-unpublish"
     | "upcoming-event-email-template-update"
-    // Ticket
     | "ticket-import" | "ticket-redeem" | "ticket-void" | "ticket-unvoid" | "ticket-reset"
     | "ticket-type-edit" | "ticket-attendee-delete" | "ticket-attendee-edit" | "ticket-regenerate"
     | "ticket-email-send" | "ticket-email-queue"
-    // Tag
     | "tag-create" | "tag-edit" | "tag-delete"
-    // Location
     | "venue-create" | "venue-edit" | "venue-delete"
     | "parkinglot-create" | "parkinglot-edit" | "parkinglot-delete"
     | "parkingrate-create" | "parkingrate-edit" | "parkingrate-delete"
-    // Passport
     | "passport-generate" | "passport-claim" | "passport-delete" | "passport-key-reissue"
     | "passport-key-view" | "passport-key-export"
     | "passport-design-create" | "passport-design-edit" | "passport-design-delete"
-    // QR
     | "qrcode-create" | "qrcode-edit" | "qrcode-delete" | "qrcode-spot-set"
     | "social-platform-create" | "social-platform-edit" | "social-platform-delete"
-    // Account
     | "account-deletion-requested" | "account-deletion-cancelled" | "account-deleted"
     | "name-set" | "avatar-set" | "avatar-remove" | "banner-remove"
-    // Config
     | "policy-update" | "config-update" | "con-content-update"
-    // Email
     | "scheduled-mail-drain";
 
-/**
- * What a record says besides its type. Mirrors ActivityRecord in
- * app/pages/admin/types.ts, which is where each field is read back.
- */
+/** What a record says besides its type. Mirrors ActivityRecord in app/pages/admin/types.ts. */
 export interface RecordFields {
     /** Left out when the system acts: TTL deletions and the mail drain. */
     performedBy?: string;
@@ -88,10 +70,7 @@ export interface RecordFields {
     conSection?: string;
     configSections?: string[];
     unlinkedFrom?: number;
-    /**
-     * Event check-in codes only. Badge activation and staff codes are
-     * core-staff+, but every staff member can read records.
-     */
+    /** Event check-in codes only: badge and staff codes are core-staff+, and all staff read records. */
     code?: string;
     oldGroup?: string;
     newGroup?: string;
@@ -106,7 +85,7 @@ export interface RecordFields {
     newName?: string;
     oldType?: string;
     newType?: string;
-    /** How a staff grant, or the attendance change that came with one, came about. */
+    /** Why a staff grant or its attendance change happened. */
     reason?: "staff-assignment" | "staff-code";
     addedCount?: number;
     replacedCount?: number;
@@ -119,7 +98,7 @@ export function recordRef(id?: string): FirebaseFirestore.DocumentReference {
     return id ? records.doc(id) : records.doc();
 }
 
-/** A record's data: its type and fields, stamped with when it was written and when it expires. */
+/** A record's data, stamped with when it was written and when it expires. */
 export function recordDoc(type: RecordType, fields: RecordFields) {
     return {
         type,

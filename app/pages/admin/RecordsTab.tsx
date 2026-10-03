@@ -28,8 +28,7 @@ for (const [category, {types}] of Object.entries(RECORD_CATEGORIES)) {
     for (const type of types) CATEGORY_BY_TYPE.set(type, category as RecordCategory);
 }
 
-// The Site Config sections a config-update can name, labelled as that tab's
-// own section navigator labels them.
+// A config-update's sections, labelled as the Site Config tab's navigator labels them.
 const CONFIG_SECTION_LABELS: Record<string, {en: string; zh: string}> = {
     video: {en: 'Featured Video', zh: '精选视频'},
     contact: {en: 'Contact Email', zh: '联系邮箱'},
@@ -49,8 +48,8 @@ const parseRecordDocs = (snapshot: {docs: DocumentSnapshot[]}): ActivityRecord[]
         } as ActivityRecord;
     });
 
-// Requires composite Firestore indexes: (type, timestamp), (performedBy, timestamp)
-// and (type, performedBy, timestamp)
+// Needs composite indexes (type, timestamp), (performedBy, timestamp) and
+// (type, performedBy, timestamp).
 const buildRecordsQuery = (category: RecordCategory | '', actorFilter: string, after?: DocumentSnapshot) => {
     const constraints: QueryConstraint[] = [];
     if (category) {
@@ -105,9 +104,8 @@ export const RecordsTab = ({
     const [recordFilterActor, setRecordFilterActor] = useState('');
     const [knownActors, setKnownActors] = useState<{uid: string; name: string}[]>([]);
     const activeFilterRef = useRef<{type: RecordCategory | ''; actor: string}>({type: '', actor: ''});
-    // Bumped by every load. A response that lands after a newer load began —
-    // the filter changed while a page was in flight — is dropped rather than
-    // overwriting the newer list.
+    // Bumped by every load, so a page that lands after the filter changed is
+    // dropped instead of overwriting the newer list.
     const loadSeqRef = useRef(0);
 
     const loadRecords = useCallback(async (typeFilter: RecordCategory | '', actorFilter: string, after?: DocumentSnapshot) => {
@@ -126,9 +124,8 @@ export const RecordsTab = ({
             setLastDoc(snapshot.docs[snapshot.docs.length - 1] ?? null);
             setHasMore(snapshot.docs.length === PAGE_SIZE);
 
-            // Track unique actors for the dropdown. System-written records (TTL
-            // deletions and the scheduled mail drain) carry no performedBy, so
-            // skip them rather than adding a blank option that filters to nothing.
+            // System records (TTL deletions, the mail drain) have no actor; skip
+            // them rather than add a blank option that filters to nothing.
             setKnownActors(prev => {
                 const merged = [...prev];
                 for (const item of items) {
@@ -167,13 +164,11 @@ export const RecordsTab = ({
 
     const clickableName = (uid: string, name: string) => clickable(name, () => onLookupUser(uid));
 
-    // A record links to the live item by ID and names it as it is now, in the
-    // viewer's language. Once the item is deleted (or for a record written
-    // before it carried the ID) it falls back to the name it was written with.
+    // A live item is linked by ID and named as it is now, in the viewer's
+    // language; a deleted one falls back to the name the record was written with.
     const localized = (en: string, zh: string) => (isEnglish ? en : zh) || en;
 
-    // Upcoming and past events share IDs (archiving keeps it), so one lookup
-    // across both covers check-in codes, attendance and archived events alike.
+    // Archiving keeps an event's ID, so looking in both lists finds it either way.
     const clickableEvent = (eventId?: string, storedTitle?: string): ReactNode => {
         const upcoming = upcomingEvents.find(e => e.id === eventId);
         if (upcoming) {
@@ -208,9 +203,7 @@ export const RecordsTab = ({
         return clickable(storedLabel ?? '');
     };
 
-    // Records outlive a group rename by up to RECORD_RETENTION_DAYS, so a stored
-    // value may name a group that no longer has a label. Show the raw value rather
-    // than crashing on an undefined lookup.
+    // A record can outlive a group's rename, so its group may have no label left.
     const groupLabel = (g?: UserGroup) => {
         const labels = g ? GROUP_LABELS[g] : undefined;
         if (!labels) return g ?? '';
@@ -231,8 +224,7 @@ export const RecordsTab = ({
         const target = r.targetUid ? clickableName(r.targetUid, r.targetName ?? '') : r.targetName;
         const event = clickableEvent(r.eventId, r.eventTitle);
         const badge = clickableBadge(r.badgeId, r.badgeName);
-        // Ticket holders are attendees rather than accounts, so they carry an
-        // email to fall back on instead of a UID.
+        // Ticket holders are attendees, not accounts: an email instead of a UID.
         const attendee = r.targetName || r.targetEmail || '';
         const code = r.code ? <> <span className="record-code">{r.code}</span></> : null;
         switch (r.type) {
@@ -308,8 +300,8 @@ export const RecordsTab = ({
                 }
                 return isEnglish ? <>created claim code for {badge}</> : <>为 {badge} 创建了兑换码</>;
             case 'event-attend':
-                // Attendance changed as a side effect of becoming event staff
-                // rather than by hand — say so, or the row reads as a manual edit.
+                // Say when attendance changed because they became event staff, or
+                // the row reads as a manual edit.
                 if (r.reason === 'staff-code') {
                     return isEnglish
                         ? <>was marked as attending {event} on joining its staff with a code</>
@@ -614,19 +606,16 @@ export const RecordsTab = ({
                         now {fmtExpiry(r.newExpiresAt)})</>
                     : <>激活了通行证 {r.passportId ?? ''}（+{r.extendDays ?? 0} 天，现到期于 {fmtExpiry(r.newExpiresAt)}）</>;
             case 'passport-delete': {
-                // One deletion names its passport; a bulk one only counts them,
-                // since the codes it removed no longer resolve to anything.
-                // A claimed one also names who held it — nothing else can say so
-                // once the passport is gone.
+                // A single deletion names its passport, and its holder if it had
+                // one; a bulk one only counts them.
                 if (r.passportId) {
-                    // Negative days, mirroring what passport-claim records as
-                    // given; absent whenever the membership was left alone.
+                    // Negative, as passport-claim's are positive; absent when the
+                    // membership was left alone.
                     const taken = r.extendDays ? (isEnglish
                         ? <>, taking back {Math.abs(r.extendDays)} days (now {fmtExpiry(r.newExpiresAt)})</>
                         : <>，并收回 {Math.abs(r.extendDays)} 天（现到期于 {fmtExpiry(r.newExpiresAt)}）</>) : null;
-                    // Only when the holder has a name to show: an account
-                    // deleted before its passport was leaves none behind, and a
-                    // blank one would read as "deleted 's passport".
+                    // A holder deleted before the passport leaves no name, and a
+                    // blank one would read "deleted 's passport".
                     if (r.targetName) {
                         return isEnglish
                             ? <>deleted {target}'s passport {r.passportId}{taken}</>
@@ -713,8 +702,7 @@ export const RecordsTab = ({
                     ? <>updated con page content {r.conSection ? `(${r.conSection})` : ''}</>
                     : <>更新了漫展页面内容 {r.conSection ? `(${r.conSection})` : ''}</>;
             default:
-                // A record type written by a newer Cloud Function than this build
-                // knows about. Show the raw type instead of an empty row.
+                // A type from a newer function than this build: show the raw slug.
                 return <>{r.type}</>;
         }
     };

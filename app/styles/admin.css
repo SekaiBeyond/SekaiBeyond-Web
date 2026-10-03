@@ -1753,14 +1753,12 @@
     font-weight: 700;
     letter-spacing: 0.3px;
     white-space: nowrap;
-    /* Neutral fallback so a record type with no colour rule below still reads
-       as a pill instead of bare text. */
+    /* The neutral pill: Config's colour, and any type no category claims. */
     background: rgba(122, 129, 144, 0.12);
     color: #4a5160;
 }
 
-/* Tags take their category's colour, so a type is coloured as soon as
-   RECORD_CATEGORIES files it. Config needs no rule: it is the neutral pill. */
+/* Tags take their category's colour, so a type is coloured once RECORD_CATEGORIES files it. */
 .record-cat-role {
     background: rgba(255, 152, 0, 0.12);
     color: #e65100;

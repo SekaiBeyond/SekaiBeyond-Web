@@ -51,10 +51,10 @@ export interface UserRecord {
 export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'passports' | 'records' | 'tools' | 'config' | 'con';
 
 /**
- * Every record type the Cloud Functions write, under the category the Records
- * tab files it in. Mirrors RecordType in functions/src/utils/records.ts. The one
- * list behind RecordType, the type filter and each row's tag and colour. A
- * category is a single `in` query, so keep each one within Firestore's 30-value cap.
+ * Every record type, by Records tab category: the one list behind RecordType,
+ * the type filter, and each row's tag and colour. Mirrors RecordType in
+ * functions/src/utils/records.ts. A category is one `in` query, so keep each
+ * within Firestore's 30-value cap.
  */
 export const RECORD_CATEGORIES = {
     role: {
@@ -150,7 +150,7 @@ export interface ActivityRecord {
     badgeId?: string;
     badgeName?: string;
     tagName?: string;
-    /** Location records: the item's ID (to link it) and its English name when written. */
+    /** Location records: the item's ID, for the link, and its English name at the time. */
     venueId?: string;
     venueName?: string;
     lotId?: string;
@@ -162,15 +162,15 @@ export interface ActivityRecord {
     passportId?: string;
     passportYear?: number | null;
     passportDesignName?: string;
-    /** How many passports one generate call minted. */
+    /** How many passports a generate, delete or key export covered. */
     passportCount?: number;
     platformLabel?: string;
     /** Comma-separated con page sections touched by a con-content-update. */
     conSection?: string;
-    /** Site Config sections a config-update saved, by the keys in CONFIG_SECTION_LABELS. */
+    /** The Site Config sections a config-update saved (keys of CONFIG_SECTION_LABELS). */
     configSections?: string[];
     unlinkedFrom?: number;
-    /** Event check-in codes only; badge and staff codes are core-staff+ and stay out of records. */
+    /** Event check-in codes only; see RecordFields.code. */
     code?: string;
     oldGroup?: UserGroup;
     newGroup?: UserGroup;
@@ -185,9 +185,8 @@ export interface ActivityRecord {
     newName?: string;
     oldType?: string;
     newType?: string;
-    /** How a staff grant, or the attendance change that comes with one, came about:
-     *  'staff-assignment' (an admin made them event staff) or 'staff-code' (they
-     *  redeemed a staff code). */
+    /** Why a staff grant or its attendance change happened: 'staff-assignment'
+     *  (an admin made them staff) or 'staff-code' (they redeemed a staff code). */
     reason?: string;
     addedCount?: number;
     replacedCount?: number;

@@ -256,9 +256,6 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
                     ...(activeUntil ? {activeUntil} : {}),
                     ...(expiresAt ? {expiresAt} : {}),
                 });
-                // No code on badge-code records: activation codes are
-                // core-staff+ only, and every staff member can read records.
-                // Check-in codes, which all staff can read anyway, keep theirs.
                 txn.set(recordRef(), recordDoc("code-create", {
                     performedBy: uid,
                     performedByName: callerSnap.data()?.displayName ?? "",
@@ -629,8 +626,6 @@ async function redeemStaffCode(uid: string, code: string) {
                 ? FieldValue.arrayRemove(eventId)
                 : FieldValue.arrayUnion(eventId),
         });
-        // The code itself stays out of the record: staff codes are core-staff+
-        // only, and every staff member can read records.
         const fields: RecordFields = {
             performedBy: uid,
             performedByName: userName,
@@ -641,8 +636,7 @@ async function redeemStaffCode(uid: string, code: string) {
             reason: "staff-code",
         };
         txn.set(recordRef(), recordDoc("event-staff-assign", fields));
-        // As assignEventStaff does, say when joining moved them onto or off the
-        // attendee list, so the change doesn't go unexplained.
+        // Record the attendance change that comes with joining, as assignEventStaff does.
         const attendanceChanged = isPastEvent ? alreadyAttended : !alreadyAttended;
         if (attendanceChanged) {
             txn.set(recordRef(), recordDoc(isPastEvent ? "event-unattend" : "event-attend", fields));
