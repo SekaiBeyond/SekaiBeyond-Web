@@ -721,6 +721,8 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
             txn.get(eventRef),
             txn.get(attendeeRef),
         ]);
+        // An archived event's tickets are read-only; see archiveUpcomingEvent.
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         if (!attendeeSnap.exists) {
             throw new HttpsError("not-found", "Attendee not found.");
         }
@@ -733,9 +735,7 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
 
         tickets[idx] = {...tickets[idx], voided: true};
 
-        const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventId)
-            : eventId;
+        const eventTitle: string = eventSnap.data()?.title ?? eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
         txn.set(recordRef(), recordDoc("ticket-void", {
@@ -765,6 +765,8 @@ export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
             txn.get(eventRef),
             txn.get(attendeeRef),
         ]);
+        // An archived event's tickets are read-only; see archiveUpcomingEvent.
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         if (!attendeeSnap.exists) {
             throw new HttpsError("not-found", "Attendee not found.");
         }
@@ -777,9 +779,7 @@ export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
 
         tickets[idx] = {...tickets[idx], voided: false};
 
-        const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventId)
-            : eventId;
+        const eventTitle: string = eventSnap.data()?.title ?? eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
         txn.set(recordRef(), recordDoc("ticket-unvoid", {
@@ -809,6 +809,8 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
             txn.get(eventRef),
             txn.get(attendeeRef),
         ]);
+        // An archived event's tickets are read-only; see archiveUpcomingEvent.
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         if (!attendeeSnap.exists) {
             throw new HttpsError("not-found", "Attendee not found.");
         }
@@ -859,9 +861,7 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
             checkedInAt: userCheckedIn ? now : null,
         };
 
-        const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventId)
-            : eventId;
+        const eventTitle: string = eventSnap.data()?.title ?? eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
         txn.set(recordRef(), recordDoc("ticket-redeem", {
@@ -891,6 +891,8 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
             txn.get(eventRef),
             txn.get(attendeeRef),
         ]);
+        // An archived event's tickets are read-only; see archiveUpcomingEvent.
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         if (!attendeeSnap.exists) {
             throw new HttpsError("not-found", "Attendee not found.");
         }
@@ -915,9 +917,7 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
             checkedInAt: null,
         };
 
-        const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventId)
-            : eventId;
+        const eventTitle: string = eventSnap.data()?.title ?? eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
         txn.set(recordRef(), recordDoc("ticket-reset", {
@@ -956,6 +956,8 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             txn.get(eventRef),
             txn.get(attendeeRef),
         ]);
+        // An archived event's tickets are read-only; see archiveUpcomingEvent.
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         if (!attendeeSnap.exists) {
             throw new HttpsError("not-found", "Attendee not found.");
         }
@@ -964,9 +966,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
         const prevTickets: NewTicket[] = (data.tickets ?? []) as NewTicket[];
         const prevType = prevTickets[0]?.type ?? "normal";
 
-        const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventId)
-            : eventId;
+        const eventTitle: string = eventSnap.data()?.title ?? eventId;
 
         const countChanged = ticketCount !== prevTicketCount;
         const typeChanged = type !== prevType;
@@ -1030,6 +1030,8 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
             txn.get(eventRef),
             txn.get(attendeeRef),
         ]);
+        // An archived event's tickets are read-only; see archiveUpcomingEvent.
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         if (!attendeeSnap.exists) {
             throw new HttpsError("not-found", "Attendee not found.");
         }
@@ -1045,9 +1047,7 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
 
         tickets[idx] = {...tickets[idx], type};
 
-        const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventId)
-            : eventId;
+        const eventTitle: string = eventSnap.data()?.title ?? eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
         txn.set(recordRef(), recordDoc("ticket-type-edit", {
@@ -1078,6 +1078,8 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             txn.get(eventRef),
             txn.get(attendeeRef),
         ]);
+        // An archived event's tickets are read-only; see archiveUpcomingEvent.
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
         if (!attendeeSnap.exists) {
             throw new HttpsError("not-found", "Attendee not found.");
         }
@@ -1085,9 +1087,7 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
         const tickets: NewTicket[] = (data.tickets ?? []).map(
             (t: Record<string, unknown>) => t as unknown as NewTicket
         );
-        const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventId)
-            : eventId;
+        const eventTitle: string = eventSnap.data()?.title ?? eventId;
         txn.delete(attendeeRef);
         txn.set(recordRef(), recordDoc("ticket-attendee-delete", {
             performedBy: uid,

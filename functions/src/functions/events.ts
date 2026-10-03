@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminTransaction, checkRateLimit, MANAGEABLE_GROUPS, normalizeGroup, requireAuth } from "../utils/auth";
+import { adminTransaction, checkRateLimit, MANAGEABLE_GROUPS, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
 import { deletionExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
@@ -467,6 +467,32 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         }
     }
 );
+/**
+ * Writes that bring `dest` from the `copied` snapshot up to `live`, then empty
+ * `live`'s collection. A doc whose update time hasn't moved was copied as it
+ * stands, so only changed and new docs are written again. Each copy is queued
+ * ahead of its original's delete, and commitInChunks stops at the first failed
+ * chunk, so no original is deleted before its copy lands.
+ */
+function reconcileCopy(
+    copied: FirebaseFirestore.QuerySnapshot,
+    live: FirebaseFirestore.QuerySnapshot,
+    dest: FirebaseFirestore.CollectionReference,
+): ((b: FirebaseFirestore.WriteBatch) => void)[] {
+    const copiedAt = new Map(copied.docs.map(d => [d.id, d.updateTime]));
+    const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+    for (const doc of live.docs) {
+        if (!copiedAt.get(doc.id)?.isEqual(doc.updateTime)) {
+            ops.push(b => b.set(dest.doc(doc.id), doc.data()));
+        }
+        ops.push(b => b.delete(doc.ref));
+    }
+    const liveIds = new Set(live.docs.map(d => d.id));
+    for (const doc of copied.docs) {
+        if (!liveIds.has(doc.id)) ops.push(b => b.delete(dest.doc(doc.id)));
+    }
+    return ops;
+}
 export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
@@ -476,6 +502,11 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     const eventId = validateDocId(input.eventId, "eventId");
     const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128);
     const newDocRef = db.collection("pastEvents").doc(eventId);
+
+    // Phase A writes before Phase B's transaction checks the caller, so check
+    // first: otherwise anyone signed in could copy an event's attendees into a
+    // pastEvents path that nothing cleans up.
+    await requireAdmin(uid);
 
     // ---- Phase A: stream-copy subcollections to pastEvents ----
     const attendeesSrc = db.collection("upcomingEvents").doc(eventId).collection("attendees");
@@ -544,24 +575,24 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         return {pastEventId: newDocRef.id};
     });
 
-    // ---- Phase C: delete original subcollections in chunks ----
-    // Re-query the LIVE collections so any doc written between Phase A and
-    // Phase B (a concurrent attendee import / template edit) still gets wiped.
-    // Without this, late arrivals strand under upcomingEvents/{deletedId}/…
-    // and onUpcomingEventDeleted's fallback cleanup is skipped because the
-    // archive path wrote a pastEvents doc with the same id.
+    // ---- Phase C: carry over late changes, then delete the originals ----
+    // Tickets keep changing until Phase B deletes the event (a scan, a void, an
+    // import, a removed attendee), so Phase A's copy can be stale. After Phase B
+    // every transactional ticket and template writer refuses, so the LIVE
+    // collections read here are final but for a batch already past its event
+    // check (an import, an email send). Reconcile the copy against them before
+    // deleting: deleting alone would drop the late changes, and anything left
+    // would strand under upcomingEvents/{deletedId}/…, which
+    // onUpcomingEventDeleted skips because the archive wrote a pastEvents doc.
     const [liveAttendees, liveTemplate] = await Promise.all([
         attendeesSrc.get(),
         emailTemplateSrc.get(),
     ]);
-    const deleteOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
-    for (const doc of liveAttendees.docs) {
-        deleteOps.push(b => b.delete(doc.ref));
-    }
-    for (const doc of liveTemplate.docs) {
-        deleteOps.push(b => b.delete(doc.ref));
-    }
-    if (deleteOps.length > 0) await commitInChunks(deleteOps);
+    const moveOps = [
+        ...reconcileCopy(attendeesSnap, liveAttendees, pastAttendeesCol),
+        ...reconcileCopy(emailTemplateSnap, liveTemplate, pastEmailTemplateCol),
+    ];
+    if (moveOps.length > 0) await commitInChunks(moveOps);
 
     // Event staff are intentionally retained on archive. Past-event staff are
     // tracked via eventStaffEvents (the past-event id stays in the array) — that
