@@ -26,6 +26,9 @@ export interface SiteConfig {
     teamMembers: TeamMemberConfig[];
     conEdition: ConEdition | null;
     contactEmail: string;
+    // The part before the @ of the From address on outbound email; the domain
+    // is set on the server. Blank means the server's default prefix.
+    senderPrefix: string;
 }
 
 const DEFAULT_CONFIG: SiteConfig = {
@@ -34,6 +37,7 @@ const DEFAULT_CONFIG: SiteConfig = {
     teamMembers: [],
     conEdition: null,
     contactEmail: '',
+    senderPrefix: '',
 };
 
 const cache = createValueCache<SiteConfig>('site config', async () => {
@@ -46,6 +50,7 @@ const cache = createValueCache<SiteConfig>('site config', async () => {
         teamMembers: data?.teamMembers ?? [],
         conEdition: data?.conEdition ?? null,
         contactEmail: data?.contactEmail ?? '',
+        senderPrefix: data?.senderPrefix ?? '',
     };
 }, DEFAULT_CONFIG);
 

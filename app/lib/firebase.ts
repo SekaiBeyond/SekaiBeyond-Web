@@ -391,6 +391,7 @@ export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
 export const callSaveSiteConfig = (data: {
     bilibiliVideoBvid?: string,
     contactEmail?: string,
+    senderPrefix?: string,
     conEdition?: ConEdition | null
 }) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveSiteConfig')(data);
@@ -411,6 +412,12 @@ export const callGetPublicTeamMembers = () =>
 // Admin editor read: the full roster (incl. linked-account uid + follow flags) from
 // the server-only teamRoster doc. Staff+ only. Public config carries a display-only
 // projection, so the editor can't source uid/flags from there.
+export const callGetSenderSettings = () =>
+    httpsCallable<Record<string, never>, {
+        domain: string,
+        defaultPrefix: string
+    }>(getFunctions(), 'getSenderSettings')({});
+
 export const callGetTeamRoster = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getTeamRoster')({});
 

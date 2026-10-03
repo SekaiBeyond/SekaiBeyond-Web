@@ -1,4 +1,4 @@
-import { RESEND_DAILY_CAP, RESEND_FROM_ADDRESS } from "./config";
+import { RESEND_DAILY_CAP } from "./config";
 import { applyProviderUsage } from "./quota";
 import { RESEND_API_KEY } from "./resendClient";
 
@@ -17,7 +17,6 @@ export interface EmailProviderInfo {
     // a provider with different semantics only needs the right value here.
     // Also picks the window fetchProviderUsage counts over.
     windowKind: "rolling24h" | "calendarDay";
-    fromAddress: string;
 }
 
 export const EMAIL_PROVIDER: EmailProviderInfo = {
@@ -28,7 +27,6 @@ export const EMAIL_PROVIDER: EmailProviderInfo = {
     // day — their docs say to "wait until 24 hours have passed," so allowance
     // rolls off per-email rather than resetting in a block.
     windowKind: "rolling24h",
-    fromAddress: RESEND_FROM_ADDRESS,
 };
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;

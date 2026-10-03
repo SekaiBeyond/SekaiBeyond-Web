@@ -13,10 +13,21 @@ export const SEND_CHUNK_SIZE = Math.min(100, Number(process.env.SEND_CHUNK_SIZE)
 // rejected (callable throws resource-exhausted) rather than silently swallowed.
 // Drained every 30 min by the scheduledMailDrain function.
 export const RESEND_QUEUE_CAP = Number(process.env.RESEND_QUEUE_CAP) || 500;
-// Verified sender address on the Resend account. All outbound mail uses this
-// as the From header — direct API calls don't accept anything that isn't a
-// verified domain.
-export const RESEND_FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? "mika@sekaibeyond.com";
+// Outbound mail goes out from <prefix>@SENDER_DOMAIN (see getSenderAddress).
+// The domain is the site's own host from PUBLIC_ORIGIN, less a leading "www.",
+// and must be the one verified on the Resend account — direct API calls reject
+// a From on any other. The prefix is set in Site Config; DEFAULT_SENDER_PREFIX
+// is used while it is blank.
+export const SENDER_DOMAIN = (() => {
+    try {
+        return new URL(PUBLIC_ORIGIN).hostname.replace(/^www\./, "");
+    } catch {
+        // A blank or malformed PUBLIC_ORIGIN must not crash every function at
+        // load; sends fail at Resend instead, as ticket links already would.
+        return "";
+    }
+})();
+export const DEFAULT_SENDER_PREFIX = "no-reply";
 export const IMPORT_MAX_ROWS = Number(process.env.IMPORT_MAX_ROWS) || 1000;
 export const RECORD_RETENTION_DAYS = 30;
 

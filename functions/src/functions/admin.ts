@@ -2,11 +2,11 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminTransaction, checkRateLimit, normalizeGroup, requireAdmin, requireAuth, } from "../utils/auth";
-import { recordExpiresAt, RESEND_QUEUE_CAP } from "../utils/config";
+import { DEFAULT_SENDER_PREFIX, recordExpiresAt, RESEND_QUEUE_CAP, SENDER_DOMAIN } from "../utils/config";
 import { db } from "../utils/firebase";
 import { EMAIL_PROVIDER, syncProviderUsage } from "../utils/emailProvider";
 import { computeEmailQuotaDetail } from "../utils/quota";
-import { RESEND_API_KEY } from "../utils/resendClient";
+import { getSenderAddress, RESEND_API_KEY } from "../utils/resendClient";
 import { DRAIN_INTERVAL_MINUTES, getScheduledMailQueueStatus } from "./scheduledMail";
 import {
     deleteStorageFile,
@@ -25,6 +25,7 @@ import {
     validateDocId,
     validateEmail,
     validateISODate,
+    validateSenderPrefix,
     validateStorageImageUrl,
     validateStr,
     validateUrl
@@ -258,6 +259,12 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         : input.contactEmail === "" ? ""
             : validateEmail(input.contactEmail, "contactEmail");
 
+    // Only the part before the @ — the domain is always SENDER_DOMAIN, the one
+    // Resend accepts. "" clears it, which sends from DEFAULT_SENDER_PREFIX.
+    const senderPrefix = input.senderPrefix === undefined ? undefined
+        : input.senderPrefix === "" ? ""
+            : validateSenderPrefix(input.senderPrefix, "senderPrefix");
+
     const conEditionRaw = input.conEdition;
     let conEdition: any | undefined = undefined;
     if (conEditionRaw === null) {
@@ -343,6 +350,9 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         }
         if (contactEmail !== undefined) {
             updateData.contactEmail = contactEmail;
+        }
+        if (senderPrefix !== undefined) {
+            updateData.senderPrefix = senderPrefix;
         }
         if (conEdition !== undefined) {
             updateData.conEdition = conEdition;
@@ -1313,6 +1323,18 @@ export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
     return {teamMembers: rosterSnap.data()?.teamMembers ?? []};
 });
 
+// What Site Config's Sender Email section shows around the prefix field. The
+// domain comes from PUBLIC_ORIGIN on the server, which the client can't see.
+// Staff+ like getTeamRoster, since staff view Site Config read-only.
+export const getSenderSettings = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+    const callerSnap = await db.collection("users").doc(uid).get();
+    if (!["staff", "core-staff", "president"].includes(callerSnap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    return {domain: SENDER_DOMAIN, defaultPrefix: DEFAULT_SENDER_PREFIX};
+});
+
 // Outbound-email capacity for the admin panel's Email Quota tool. Core-staff+
 // only, like the sends it describes.
 //
@@ -1349,9 +1371,10 @@ export const getEmailQuotaStatus = onCall({
     // its reservation.
     const usage = await syncProviderUsage();
 
-    const [quota, queue] = await Promise.all([
+    const [quota, queue, fromAddress] = await Promise.all([
         computeEmailQuotaDetail(),
         getScheduledMailQueueStatus(),
+        getSenderAddress(),
     ]);
 
     // "cached" means the live read came back empty but a past send did record
@@ -1367,7 +1390,7 @@ export const getEmailQuotaStatus = onCall({
             id: EMAIL_PROVIDER.id,
             name: EMAIL_PROVIDER.name,
             windowKind: EMAIL_PROVIDER.windowKind,
-            fromAddress: EMAIL_PROVIDER.fromAddress,
+            fromAddress,
         },
         providerReported: readingSource === "unavailable" ? null : quota.confirmed,
         readingSource,

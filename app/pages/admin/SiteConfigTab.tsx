@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSavePolicy, callSaveSiteConfig } from '~/lib/firebase';
+import { callGetSenderSettings, callSavePolicy, callSaveSiteConfig } from '~/lib/firebase';
 import { useSiteConfig } from '~/lib/siteConfig';
 import { renderPolicyMarkdown, usePolicy } from '~/lib/policy';
 import { BILIBILI_VIDEO } from '~/constants';
@@ -13,6 +13,9 @@ interface SiteConfigTabProps {
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     readOnly?: boolean;
 }
+
+// Mirrors SENDER_PREFIX_RE in functions/src/utils/validation.ts.
+const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
 
 function parseBvid(input: string): string {
     const match = input.trim().match(/BV[a-zA-Z0-9]+/);
@@ -46,6 +49,11 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     const [savingVideo, setSavingVideo] = useState(false);
     const [emailInput, setEmailInput] = useState('');
     const [savingEmail, setSavingEmail] = useState(false);
+    const [senderInput, setSenderInput] = useState('');
+    const [savingSender, setSavingSender] = useState(false);
+    // The domain lives on the server (from PUBLIC_ORIGIN). Until it loads, or if
+    // it can't, the field still works and only the "@domain" hint is missing.
+    const [senderSettings, setSenderSettings] = useState<{domain: string, defaultPrefix: string} | null>(null);
     const [configInitialized, setConfigInitialized] = useState(false);
 
     const {policy, loading: policyLoading, refresh: refreshPolicy} = usePolicy();
@@ -59,9 +67,16 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         if (!configLoading && !configInitialized) {
             setBvidInput(config.bilibiliVideoBvid || BILIBILI_VIDEO.bvid);
             setEmailInput(config.contactEmail);
+            setSenderInput(config.senderPrefix);
             setConfigInitialized(true);
         }
     }, [configLoading, config, configInitialized]);
+
+    useEffect(() => {
+        callGetSenderSettings()
+            .then(res => setSenderSettings(res.data))
+            .catch(err => console.error('[SiteConfigTab] sender settings', err));
+    }, []);
 
     useEffect(() => {
         if (!policyLoading && !policyInitialized) {
@@ -111,6 +126,28 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         }
     };
 
+    const saveSender = async () => {
+        const prefix = senderInput.trim().toLowerCase();
+        if (prefix && (prefix.length > 64 || !SENDER_PREFIX_RE.test(prefix))) {
+            showToast(
+                isEnglish ? 'Use letters, digits, and . _ + - between them.' : '请只使用字母、数字，以及夹在其间的 . _ + -。',
+                'error'
+            );
+            return;
+        }
+        setSavingSender(true);
+        try {
+            await callSaveSiteConfig({senderPrefix: prefix});
+            await refreshConfig();
+            setSenderInput(prefix);
+            showToast(isEnglish ? 'Sender saved.' : '发件邮箱已保存。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to save sender.' : '保存发件邮箱失败。', 'error');
+        } finally {
+            setSavingSender(false);
+        }
+    };
+
     const savePolicy = async () => {
         setSavingPolicy(true);
         try {
@@ -135,6 +172,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     }
 
     const previewBvid = parseBvid(bvidInput) || BILIBILI_VIDEO.bvid;
+    const defaultSender = senderSettings && `${senderSettings.defaultPrefix}@${senderSettings.domain}`;
 
     return (
         <>
@@ -235,6 +273,48 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
             <div className="admin-divider"/>
 
+            <div id="admin-sec-sender" className="admin-section">
+                <h3 className="admin-badges-title">
+                    {isEnglish ? 'Sender Email' : '发件邮箱'}
+                </h3>
+                <p className="admin-helper-text">
+                    {isEnglish
+                        ? `The part before the @ in the From address on every email the site sends, such as tickets. Leave it blank to send from ${defaultSender ?? 'the default address'}.`
+                        : `网站发出的所有邮件（如门票）的发件地址中 @ 之前的部分。留空则使用 ${defaultSender ?? '默认地址'} 发送。`}
+                </p>
+                <div className="admin-form-grid admin-mt-12">
+                    <label>
+                        <span>{isEnglish ? 'Prefix' : '前缀'}</span>
+                        <div className="admin-input-affix">
+                            <input
+                                className="admin-input"
+                                type="text"
+                                value={senderInput}
+                                onChange={e => !readOnly && setSenderInput(e.target.value)}
+                                readOnly={readOnly}
+                                placeholder={senderSettings?.defaultPrefix}
+                            />
+                            {senderSettings && <span>@{senderSettings.domain}</span>}
+                        </div>
+                    </label>
+                </div>
+                {!readOnly && (
+                    <div className="admin-btn-row admin-mt-12">
+                        <button
+                            className="admin-toggle-btn admin-toggle-save"
+                            onClick={saveSender}
+                            disabled={savingSender || senderInput.trim().toLowerCase() === config.senderPrefix}
+                        >
+                            {savingSender
+                                ? (isEnglish ? 'Saving...' : '保存中...')
+                                : (isEnglish ? 'Save Sender' : '保存发件邮箱')}
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div className="admin-divider"/>
+
             <div id="admin-sec-team">
                 <TeamSection refreshConfig={refreshConfig} showToast={showToast} readOnly={readOnly}/>
             </div>
@@ -316,6 +396,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                 sections={[
                     {id: 'admin-sec-video', label: isEnglish ? 'Featured Video' : '精选视频'},
                     {id: 'admin-sec-contact', label: isEnglish ? 'Contact Email' : '联系邮箱'},
+                    {id: 'admin-sec-sender', label: isEnglish ? 'Sender Email' : '发件邮箱'},
                     {id: 'admin-sec-team', label: isEnglish ? 'Our Team' : '我们的团队'},
                     {id: 'admin-sec-con-edition', label: isEnglish ? 'Sekai Beyond Con' : '彼世界动漫游戏展'},
                     {id: 'admin-sec-policy', label: isEnglish ? 'Policy Content' : '政策内容'},

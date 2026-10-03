@@ -1,5 +1,6 @@
 import { defineSecret } from "firebase-functions/params";
-import { RESEND_FROM_ADDRESS } from "./config";
+import { DEFAULT_SENDER_PREFIX, SENDER_DOMAIN } from "./config";
+import { db } from "./firebase";
 import { applyProviderUsage, rollbackQuotaReservation } from "./quota";
 
 // Bind to functions that send mail. Without the binding, value() returns "".
@@ -59,11 +60,20 @@ const RESEND_SINGLE_URL = "https://api.resend.com/emails";
 const RESEND_BATCH_URL = "https://api.resend.com/emails/batch";
 const RESEND_BATCH_MAX = 100;
 
+// The From address for outbound mail: the prefix saved in Site Config, or
+// DEFAULT_SENDER_PREFIX while that is blank, at SENDER_DOMAIN. Read on every
+// send, so a change in Site Config applies to the next email without a deploy.
+export async function getSenderAddress(): Promise<string> {
+    const saved = (await db.collection("config").doc("main").get()).get("senderPrefix");
+    const prefix = typeof saved === "string" && saved ? saved : DEFAULT_SENDER_PREFIX;
+    return `${prefix}@${SENDER_DOMAIN}`;
+}
+
 // Build the Resend API JSON for one envelope. `reply_to` is snake_case —
 // the camelCase form is silently ignored by the REST API.
-function toPayload(e: ResendEnvelope): Record<string, unknown> {
+function toPayload(e: ResendEnvelope, from: string): Record<string, unknown> {
     const payload: Record<string, unknown> = {
-        from: RESEND_FROM_ADDRESS,
+        from,
         to: Array.isArray(e.to) ? e.to : [e.to],
         subject: e.subject,
         html: e.html,
@@ -117,10 +127,14 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
         }
     }
 
+    // A failed read throws before Resend is called, which callers already
+    // treat like a network error and roll back their pre-charge.
+    const from = await getSenderAddress();
+
     const single = envelopes.length === 1;
     const url = single ? RESEND_SINGLE_URL : RESEND_BATCH_URL;
     // Single endpoint takes one object; batch takes an array of them.
-    const body = single ? toPayload(envelopes[0]) : envelopes.map(toPayload);
+    const body = single ? toPayload(envelopes[0], from) : envelopes.map(e => toPayload(e, from));
 
     let resp: Response;
     try {

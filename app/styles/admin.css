@@ -1160,6 +1160,24 @@
     color: var(--color-text);
 }
 
+/* An input with fixed text after it, like the sender prefix and its "@domain". */
+.admin-input-affix {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-input-affix .admin-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-form-grid label .admin-input-affix span {
+    font-weight: 400;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+}
+
 /* Mirrors the `label` field above, around a rendered policy preview. */
 .admin-policy-preview-field {
     display: flex;

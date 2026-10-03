@@ -25,6 +25,24 @@ export function validateEmail(value: unknown, name: string): string {
     return normalized;
 }
 
+// The part before the @ of an address on our own domain. Deliberately
+// narrower than RFC 5322 allows: letters, digits and single . _ + - between
+// them, which every mail system accepts.
+export const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
+
+/** Trimmed and lowercased. */
+export function validateSenderPrefix(value: unknown, name: string): string {
+    if (typeof value !== "string") {
+        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized.length === 0 || normalized.length > 64 || !SENDER_PREFIX_RE.test(normalized)) {
+        throw new HttpsError("invalid-argument",
+            `Invalid ${name}: use letters, digits, and . _ + - between them.`);
+    }
+    return normalized;
+}
+
 export function validateCoordinate(value: unknown, name: string, min: number, max: number): number {
     if (typeof value !== "number" || !Number.isFinite(value)) {
         throw new HttpsError("invalid-argument", `Invalid ${name}: must be a number.`);

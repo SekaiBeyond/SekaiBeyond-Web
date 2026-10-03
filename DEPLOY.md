@@ -78,7 +78,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
     - **Manual deploy:** if the secret is missing, `firebase deploy --only functions` prompts to create it interactively.
     - **CI deploy:** the GitHub Actions workflow is non-interactive — run the command above *before* the first CI deploy of this code, or the deploy fails. CI reuses the stored secret automatically afterward; you only re-run the command to rotate the key. The deploy service account also needs the **Secret Manager Admin** role (`roles/secretmanager.admin`) — this is *not* included in **Firebase Admin** or **Cloud Functions Admin** and must be granted explicitly (see [Section 2](#2-github-repository-secrets)). Without it, the deploy fails with `403 Permission 'secretmanager.secrets.get' denied` when it reaches a secret-bound function. The deploy needs *Admin* (not just *Viewer*) because the CLI also sets an IAM binding granting the functions runtime service account access to the secret.
 
-    The **From address** defaults to `mika@sekaibeyond.com` (in `functions/src/utils/config.ts`). To use a different sender, set `RESEND_FROM_ADDRESS` via project-scoped dotenv (see Step 12) — it must be an address on the verified domain.
+    The **From address** is `<prefix>@<your site's domain>`. The domain is the host of `PUBLIC_ORIGIN` (see Step 12) with any leading `www.` dropped, so it must be the domain you verified in Resend. Admins set the prefix under **Site Config > Sender Email**, and it takes effect on the next email with no deploy. While it is blank, mail goes out from `no-reply@` that domain.
 
     **Step C — Send a test**
 
@@ -123,7 +123,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     For local dev (or staging hosts not registered with reCAPTCHA), set `VITE_APP_CHECK_DEBUG_TOKEN=true` in `.env`. The first page load logs a debug token to the browser console; copy it into Firebase Console > App Check > Apps > **Manage debug tokens** to allow that specific token through enforced services. Set `VITE_APP_CHECK_DEBUG_TOKEN=<token>` in `.env` to reuse the same token across sessions.
 
-12. Override `PUBLIC_ORIGIN` for forks — ticket emails from `sendTicketEmails` embed QR images served from `{PUBLIC_ORIGIN}/api/ticket-qr`, and `serveTicketQr` encodes a ticket-claim URL (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into each one. Without this, forks will send QR codes pointing at the original site (`https://sekaibeyond.com`, the in-source default — see `functions/src/utils/config.ts`) instead of their own deployment.
+12. Override `PUBLIC_ORIGIN` for forks — ticket emails from `sendTicketEmails` embed QR images served from `{PUBLIC_ORIGIN}/api/ticket-qr`, and `serveTicketQr` encodes a ticket-claim URL (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into each one. Its host is also the domain every email is sent from (see Step 10), less any leading `www.`. Without this, forks will send QR codes pointing at the original site (`https://sekaibeyond.com`, the in-source default — see `functions/src/utils/config.ts`) instead of their own deployment, from a sender Resend rejects.
 
     The functions read `process.env.PUBLIC_ORIGIN` at runtime. Set it in a dotenv file under `functions/`:
 
@@ -136,7 +136,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
     firebase deploy --only functions
     ```
 
-    The same mechanism applies to the optional settings `RESEND_FROM_ADDRESS` (default `mika@sekaibeyond.com`), `RESEND_DAILY_CAP` (default 100), `SEND_CHUNK_SIZE` (default 100), `RESEND_QUEUE_CAP` (default 500), `IMPORT_MAX_ROWS` (default 1000), `MAX_UPLOAD_SIZE_MB` (default 10), and `SCAN_CLIENT_SALT`. The salt has a fallback in source, so set your own to keep the hashed scan-client keys from being reversed by someone holding both the source and a database export. `functions/.env.example` describes each one. Note that `RESEND_API_KEY` is *not* one of these — it is a Secret Manager secret, set via `firebase functions:secrets:set` (see Step 10).
+    The same mechanism applies to the optional settings `RESEND_DAILY_CAP` (default 100), `SEND_CHUNK_SIZE` (default 100), `RESEND_QUEUE_CAP` (default 500), `IMPORT_MAX_ROWS` (default 1000), `MAX_UPLOAD_SIZE_MB` (default 10), and `SCAN_CLIENT_SALT`. The salt has a fallback in source, so set your own to keep the hashed scan-client keys from being reversed by someone holding both the source and a database export. `functions/.env.example` describes each one. Note that `RESEND_API_KEY` is *not* one of these — it is a Secret Manager secret, set via `firebase functions:secrets:set` (see Step 10).
 
 13. Configure **Google Maps Platform** — the **Parking Guide** page and the admin panel's maps (the Locations map, the **Map Picker** for venues and parking lots, and the QR spots map) render interactive maps via `@vis.gl/react-google-maps`, keyed by `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID`. Without these, the map silently fails to load (the script request goes out with an empty `key=`, and the Maps JS API logs `The Google Maps JavaScript API could not load`).
 
