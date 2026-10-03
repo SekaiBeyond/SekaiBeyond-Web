@@ -1,10 +1,11 @@
 import * as crypto from "crypto";
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
-import { BATCH_LIMIT, recordExpiresAt } from "./config";
+import { BATCH_LIMIT } from "./config";
 import { db } from "./firebase";
 import { CODE_ALPHABET, generateSecureCode } from "./helpers";
 import { extendedExpiry, startedAtAfter } from "./membership";
+import { recordDoc, recordRef } from "./records";
 
 /**
  * A physical passport is two pieces of paper: a sticker carrying the public
@@ -206,8 +207,7 @@ export async function claimPassportWithKey(
         // dropped. The key stays so an admin can still look up what was on the
         // slip (revealPassportKey).
         txn.update(secretRef, {salt: FieldValue.delete(), secretHash: FieldValue.delete()});
-        txn.set(db.collection("records").doc(), {
-            type: "passport-claim",
+        txn.set(recordRef(), recordDoc("passport-claim", {
             performedBy: uid,
             performedByName: userData.displayName ?? "",
             targetUid: uid,
@@ -216,9 +216,7 @@ export async function claimPassportWithKey(
             passportYear: passport.year ?? null,
             newExpiresAt: membershipExpiresAt.toDate().toISOString(),
             extendDays: daysGranted,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
 
         return {
             passportId,

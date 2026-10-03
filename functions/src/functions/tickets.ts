@@ -3,7 +3,7 @@ import sanitizeHtml from "sanitize-html";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { ADMIN_GROUPS, adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
-import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, recordExpiresAt, RESEND_QUEUE_CAP, SEND_CHUNK_SIZE, } from "../utils/config";
+import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, RESEND_QUEUE_CAP, SEND_CHUNK_SIZE } from "../utils/config";
 import { db } from "../utils/firebase";
 import { syncProviderUsage } from "../utils/emailProvider";
 import { commitInChunks } from "../utils/helpers";
@@ -16,6 +16,7 @@ import {
 import { RESEND_API_KEY, type ResendEnvelope, ResendSendError, sendEmails } from "../utils/resendClient";
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 import { EMAIL_RE, sanitizeDisplayText, validateDocId, validateEmail, validateStr } from "../utils/validation";
+import { recordDoc, recordRef } from "../utils/records";
 
 function validateTicketCount(value: unknown): number {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 50) {
@@ -383,17 +384,14 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         }
     }
 
-    ops.push(b => b.set(db.collection("records").doc(), {
-        type: "ticket-import",
+    ops.push(b => b.set(recordRef(), recordDoc("ticket-import", {
         performedBy: uid,
         performedByName: callerName,
         eventId,
         eventTitle,
         addedCount,
         replacedCount,
-        timestamp: FieldValue.serverTimestamp(),
-        expiresAt: recordExpiresAt(),
-    }));
+    })));
 
     await commitInChunks(ops);
 
@@ -740,17 +738,14 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
             : eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(db.collection("records").doc(), {
-            type: "ticket-void",
+        txn.set(recordRef(), recordDoc("ticket-void", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
 
         return {voided: true};
     });
@@ -787,17 +782,14 @@ export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
             : eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(db.collection("records").doc(), {
-            type: "ticket-unvoid",
+        txn.set(recordRef(), recordDoc("ticket-unvoid", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
 
         return {unvoided: true};
     });
@@ -872,17 +864,14 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
             : eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(db.collection("records").doc(), {
-            type: "ticket-redeem",
+        txn.set(recordRef(), recordDoc("ticket-redeem", {
             performedBy: uid,
             performedByName: callerName,
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
 
         return {redeemed: true};
     });
@@ -931,17 +920,14 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
             : eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(db.collection("records").doc(), {
-            type: "ticket-reset",
+        txn.set(recordRef(), recordDoc("ticket-reset", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
 
         return {reset: true};
     });
@@ -990,8 +976,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
                 return {updated: false, regenerated: false};
             }
             txn.update(attendeeRef, {name, updatedAt: FieldValue.serverTimestamp()});
-            txn.set(db.collection("records").doc(), {
-                type: "ticket-attendee-edit",
+            txn.set(recordRef(), recordDoc("ticket-attendee-edit", {
                 performedBy: uid,
                 performedByName: callerSnap.data()?.displayName ?? "",
                 eventId,
@@ -999,9 +984,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
                 targetEmail: data.email ?? "",
                 oldName: data.name ?? "",
                 newName: name,
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
             return {updated: true, regenerated: false};
         }
 
@@ -1015,17 +998,14 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             emailSentAt: null,
             updatedAt: FieldValue.serverTimestamp(),
         });
-        txn.set(db.collection("records").doc(), {
-            type: "ticket-regenerate",
+        txn.set(recordRef(), recordDoc("ticket-regenerate", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: name,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {updated: true, regenerated: true};
     });
 });
@@ -1070,8 +1050,7 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
             : eventId;
 
         txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(db.collection("records").doc(), {
-            type: "ticket-type-edit",
+        txn.set(recordRef(), recordDoc("ticket-type-edit", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
@@ -1080,9 +1059,7 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
             targetName: data.name ?? "",
             oldType,
             newType: type,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
 
         return {updated: true};
     });
@@ -1112,17 +1089,14 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             ? (eventSnap.data()?.title ?? eventId)
             : eventId;
         txn.delete(attendeeRef);
-        txn.set(db.collection("records").doc(), {
-            type: "ticket-attendee-delete",
+        txn.set(recordRef(), recordDoc("ticket-attendee-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: data.name ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {deleted: true, ticketCount: tickets.length};
     });
 });
@@ -1319,30 +1293,24 @@ export const sendTicketEmails = onCall(
                 let qRef: FirebaseFirestore.DocumentReference | null = null;
                 if (sendCount > 0) {
                     reserveQuotaInTxn(txn, sendCount, freshReserved);
-                    sRef = db.collection("records").doc();
-                    txn.set(sRef, {
-                        type: "ticket-email-send",
+                    sRef = recordRef();
+                    txn.set(sRef, recordDoc("ticket-email-send", {
                         performedBy: uid,
                         performedByName,
                         eventId,
                         eventTitle,
                         sentCount: sendCount,
-                        timestamp: FieldValue.serverTimestamp(),
-                        expiresAt: recordExpiresAt(),
-                    });
+                    }));
                 }
                 if (queueCount > 0) {
-                    qRef = db.collection("records").doc();
-                    txn.set(qRef, {
-                        type: "ticket-email-queue",
+                    qRef = recordRef();
+                    txn.set(qRef, recordDoc("ticket-email-queue", {
                         performedBy: uid,
                         performedByName,
                         eventId,
                         eventTitle,
                         sentCount: queueCount,
-                        timestamp: FieldValue.serverTimestamp(),
-                        expiresAt: recordExpiresAt(),
-                    });
+                    }));
                 }
                 return {
                     sendAuditRef: sRef,
@@ -1587,15 +1555,12 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: uid,
         }, {merge: true});
-        txn.set(db.collection("records").doc(), {
-            type: "upcoming-event-email-template-update",
+        txn.set(recordRef(), recordDoc("upcoming-event-email-template-update", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,
             eventTitle: eventSnap.data()?.title ?? eventId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {saved: true};
     });
 });

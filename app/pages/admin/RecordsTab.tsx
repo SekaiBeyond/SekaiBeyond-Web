@@ -316,7 +316,8 @@ export const RecordsTab = ({
                         : <>使用工作人员码成为 {event} 的活动工作人员，并被标记为已参加</>;
                 }
                 return isEnglish
-                    ? <>marked {target} as attended {event}{r.reason === 'staff-assignment' ? ' (event-staff assignment)' : ''}</>
+                    ? <>marked {target} as
+                        attended {event}{r.reason === 'staff-assignment' ? ' (event-staff assignment)' : ''}</>
                     : <>标记 {target} 参加了 {event}{r.reason === 'staff-assignment' ? '（因指派为活动工作人员）' : ''}</>;
             case 'event-unattend':
                 if (r.reason === 'staff-code') {

@@ -1,10 +1,10 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
-import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { recordScan, scanClientKey } from "../utils/scans";
+import { recordDoc, recordRef } from "../utils/records";
 import {
     sanitizeDisplayText,
     validateCoordinate,
@@ -125,14 +125,11 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
                 createdByName: callerSnap.data()?.displayName ?? "",
             });
         }
-        txn.set(db.collection("records").doc(), {
-            type: qrId ? "qrcode-edit" : "qrcode-create",
+        txn.set(recordRef(), recordDoc(qrId ? "qrcode-edit" : "qrcode-create", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             qrLabel: label,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {qrId: docId};
     });
 });
@@ -159,14 +156,11 @@ export const setQrSpot = onCall({maxInstances: 10}, async (request) => {
             throw new HttpsError("failed-precondition", "Social media codes can't be pinned to a map spot.");
         }
         txn.update(ref, {lat, lng});
-        txn.set(db.collection("records").doc(), {
-            type: "qrcode-spot-set",
+        txn.set(recordRef(), recordDoc("qrcode-spot-set", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             qrLabel: snap.data()?.label ?? qrId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {lat, lng};
     });
 });
@@ -187,14 +181,11 @@ export const deleteQrCode = onCall({maxInstances: 10}, async (request) => {
     if (ops.length > 0) await commitInChunks(ops);
 
     await ref.delete();
-    await db.collection("records").add({
-        type: "qrcode-delete",
+    await recordRef().set(recordDoc("qrcode-delete", {
         performedBy: uid,
         performedByName: callerSnap.data()?.displayName ?? "",
         qrLabel: snap.data()?.label ?? qrId,
-        timestamp: FieldValue.serverTimestamp(),
-        expiresAt: recordExpiresAt(),
-    });
+    }));
     return {deleted: true};
 });
 

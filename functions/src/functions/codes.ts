@@ -1,12 +1,12 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { ADMIN_GROUPS, adminTransaction, checkRateLimit, requireAuth } from "../utils/auth";
-import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { codeKind, issueCode, normalizeCode } from "../utils/codes";
 import { validateCodeInTransaction } from "../utils/helpers";
 import { claimPassportWithKey, findPassportByKey, normalizeActivationKey } from "../utils/passports";
 import { validateDocId, validateISODate, validateMaxUses } from "../utils/validation";
+import { recordDoc, type RecordFields, recordRef } from "../utils/records";
 
 const INVALID = "Invalid or deactivated code.";
 
@@ -137,16 +137,13 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
 
         txn.update(codeRef, {usedCount: FieldValue.increment(1)});
         txn.update(userRef, {attendedEvents: FieldValue.arrayUnion(eventId)});
-        txn.set(db.collection("records").doc(), {
-            type: "event-claim",
+        txn.set(recordRef(), recordDoc("event-claim", {
             performedBy: uid,
             performedByName: userSnap.data()?.displayName ?? "",
             eventId,
             eventTitle: eventTitle || eventId,
             code,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {eventId, eventTitle, eventTitleCn, eventPoster};
     });
 });
@@ -186,15 +183,12 @@ async function redeemBadgeCode(uid: string, code: string) {
             badges: FieldValue.arrayUnion(badgeId),
             [`badgeEarnedAt.${badgeId}`]: FieldValue.serverTimestamp(),
         });
-        txn.set(db.collection("records").doc(), {
-            type: "badge-claim",
+        txn.set(recordRef(), recordDoc("badge-claim", {
             performedBy: uid,
             performedByName: userSnap.data()?.displayName ?? "",
             badgeId,
             badgeName: badgeData.name ?? badgeId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
 
         return {
             badgeId,
@@ -265,15 +259,12 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
                 // No code on badge-code records: activation codes are
                 // core-staff+ only, and every staff member can read records.
                 // Check-in codes, which all staff can read anyway, keep theirs.
-                txn.set(db.collection("records").doc(), {
-                    type: "code-create",
+                txn.set(recordRef(), recordDoc("code-create", {
                     performedBy: uid,
                     performedByName: callerSnap.data()?.displayName ?? "",
                     badgeId,
                     badgeName: badgeSnap.data()!.name ?? badgeId,
-                    timestamp: FieldValue.serverTimestamp(),
-                    expiresAt: recordExpiresAt(),
-                });
+                }));
             });
             return {id: codeRef.id, code};
         } catch (err) {
@@ -341,16 +332,13 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                 }
                 for (const oldDoc of existingCodes.docs) {
                     txn.update(oldDoc.ref, {active: false});
-                    txn.set(db.collection("records").doc(), {
-                        type: "event-code-deactivate",
+                    txn.set(recordRef(), recordDoc("event-code-deactivate", {
                         performedBy: uid,
                         performedByName: callerSnap.data()?.displayName ?? "",
                         eventTitle: eventSnap.data()?.title ?? eventId,
                         eventId,
                         code: oldDoc.data().code ?? oldDoc.id,
-                        timestamp: FieldValue.serverTimestamp(),
-                        expiresAt: recordExpiresAt(),
-                    });
+                    }));
                 }
                 txn.set(codeRef, {
                     code,
@@ -363,16 +351,13 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
                     ...(activeUntil ? {activeUntil} : {}),
                     ...(expiresAt ? {expiresAt} : {}),
                 });
-                txn.set(db.collection("records").doc(), {
-                    type: "code-create",
+                txn.set(recordRef(), recordDoc("code-create", {
                     performedBy: uid,
                     performedByName: callerSnap.data()?.displayName ?? "",
                     eventTitle: eventSnap.data()?.title ?? eventId,
                     eventId,
                     code,
-                    timestamp: FieldValue.serverTimestamp(),
-                    expiresAt: recordExpiresAt(),
-                });
+                }));
             });
             return {id: codeRef.id, code};
         } catch (err) {
@@ -407,16 +392,13 @@ export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) 
             : null;
 
         txn.update(db.collection("claimCodes").doc(codeId), {active: input.active});
-        txn.set(db.collection("records").doc(), {
-            type: input.active ? "event-code-activate" : "event-code-deactivate",
+        txn.set(recordRef(), recordDoc(input.active ? "event-code-activate" : "event-code-deactivate", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
             code: codeData.code ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {active: input.active};
     });
 });
@@ -444,16 +426,13 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
             activeUntil: activeUntil ?? null,
             expiresAt: activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null,
         });
-        txn.set(db.collection("records").doc(), {
-            type: "event-code-time-window",
+        txn.set(recordRef(), recordDoc("event-code-time-window", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
             code: codeData.code ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {saved: true};
     });
 });
@@ -478,15 +457,12 @@ export const toggleBadgeCodeActive = onCall({maxInstances: 10}, async (request) 
             : null;
 
         txn.update(db.collection("badgeActivationCodes").doc(codeId), {active: input.active});
-        txn.set(db.collection("records").doc(), {
-            type: input.active ? "badge-code-activate" : "badge-code-deactivate",
+        txn.set(recordRef(), recordDoc(input.active ? "badge-code-activate" : "badge-code-deactivate", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             badgeId: codeData.badgeId ?? "",
             badgeName: badgeSnap?.data()?.name ?? codeData.badgeId ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {active: input.active};
     });
 });
@@ -507,15 +483,12 @@ export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (reque
             : null;
 
         txn.delete(db.collection("badgeActivationCodes").doc(codeId));
-        txn.set(db.collection("records").doc(), {
-            type: "code-delete",
+        txn.set(recordRef(), recordDoc("code-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             badgeId: codeData.badgeId ?? "",
             badgeName: badgeSnap?.data()?.name ?? codeData.badgeId ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {deleted: true};
     });
 });
@@ -567,15 +540,12 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
 
                 for (const oldDoc of existingCodes.docs) {
                     txn.update(oldDoc.ref, {active: false});
-                    txn.set(db.collection("records").doc(), {
-                        type: "staff-code-deactivate",
+                    txn.set(recordRef(), recordDoc("staff-code-deactivate", {
                         performedBy: uid,
                         performedByName: callerSnap.data()?.displayName ?? "",
                         eventTitle: eventSnap.data()?.title ?? eventId,
                         eventId,
-                        timestamp: FieldValue.serverTimestamp(),
-                        expiresAt: recordExpiresAt(),
-                    });
+                    }));
                 }
                 txn.set(codeRef, {
                     code,
@@ -589,15 +559,12 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
                     ...(activeUntil ? {activeUntil} : {}),
                     ...(expiresAt ? {expiresAt} : {}),
                 });
-                txn.set(db.collection("records").doc(), {
-                    type: "staff-code-create",
+                txn.set(recordRef(), recordDoc("staff-code-create", {
                     performedBy: uid,
                     performedByName: callerSnap.data()?.displayName ?? "",
                     eventTitle: eventSnap.data()?.title ?? eventId,
                     eventId,
-                    timestamp: FieldValue.serverTimestamp(),
-                    expiresAt: recordExpiresAt(),
-                });
+                }));
             });
             return {id: code, code};
         } catch (err) {
@@ -664,7 +631,7 @@ async function redeemStaffCode(uid: string, code: string) {
         });
         // The code itself stays out of the record: staff codes are core-staff+
         // only, and every staff member can read records.
-        const record = {
+        const fields: RecordFields = {
             performedBy: uid,
             performedByName: userName,
             targetUid: uid,
@@ -673,22 +640,12 @@ async function redeemStaffCode(uid: string, code: string) {
             eventTitle: eventTitle || eventId,
             reason: "staff-code",
         };
-        txn.set(db.collection("records").doc(), {
-            ...record,
-            type: "event-staff-assign",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        txn.set(recordRef(), recordDoc("event-staff-assign", fields));
         // As assignEventStaff does, say when joining moved them onto or off the
         // attendee list, so the change doesn't go unexplained.
         const attendanceChanged = isPastEvent ? alreadyAttended : !alreadyAttended;
         if (attendanceChanged) {
-            txn.set(db.collection("records").doc(), {
-                ...record,
-                type: isPastEvent ? "event-unattend" : "event-attend",
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            txn.set(recordRef(), recordDoc(isPastEvent ? "event-unattend" : "event-attend", fields));
         }
         return {eventId, eventTitle, eventTitleCn, eventPoster};
     });
@@ -715,15 +672,12 @@ export const toggleStaffCodeActive = onCall({maxInstances: 10}, async (request) 
             : null;
 
         txn.update(db.collection("staffClaimCodes").doc(codeId), {active: input.active});
-        txn.set(db.collection("records").doc(), {
-            type: input.active ? "staff-code-activate" : "staff-code-deactivate",
+        txn.set(recordRef(), recordDoc(input.active ? "staff-code-activate" : "staff-code-deactivate", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {active: input.active};
     });
 });
@@ -756,15 +710,12 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
             updates.maxUses = maxUses;
         }
         txn.update(db.collection("staffClaimCodes").doc(codeId), updates);
-        txn.set(db.collection("records").doc(), {
-            type: "staff-code-time-window",
+        txn.set(recordRef(), recordDoc("staff-code-time-window", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
             eventId: codeData.eventId ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {saved: true};
     });
 });

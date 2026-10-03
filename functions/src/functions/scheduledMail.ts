@@ -1,8 +1,8 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { FieldValue } from "firebase-admin/firestore";
-import { recordExpiresAt } from "../utils/config";
 import { syncProviderUsage } from "../utils/emailProvider";
 import { db } from "../utils/firebase";
+import { recordDoc, recordRef } from "../utils/records";
 import {
     computeEmailQuota,
     computeEmailQuotaInTxn,
@@ -181,12 +181,9 @@ export const scheduledMailDrain = onSchedule({
     }
 
     if (drained > 0) {
-        await db.collection("records").add({
-            type: "scheduled-mail-drain",
+        await recordRef().set(recordDoc("scheduled-mail-drain", {
             sentCount: drained,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        }).catch(err => {
+        })).catch(err => {
             console.error("scheduledMailDrain: failed to write audit record", err);
         });
     }

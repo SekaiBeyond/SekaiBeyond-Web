@@ -52,9 +52,9 @@ export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'passports' | 'r
 
 /**
  * Every record type the Cloud Functions write, under the category the Records
- * tab files it in. The one list behind RecordType, the type filter and each
- * row's tag and colour. A category is a single `in` query, so keep each one
- * within Firestore's 30-value cap.
+ * tab files it in. Mirrors RecordType in functions/src/utils/records.ts. The one
+ * list behind RecordType, the type filter and each row's tag and colour. A
+ * category is a single `in` query, so keep each one within Firestore's 30-value cap.
  */
 export const RECORD_CATEGORIES = {
     role: {
@@ -135,6 +135,7 @@ export const RECORD_CATEGORIES = {
 export type RecordCategory = keyof typeof RECORD_CATEGORIES;
 export type RecordType = (typeof RECORD_CATEGORIES)[RecordCategory]['types'][number];
 
+/** A record as the Records tab reads it. Mirrors RecordFields in functions/src/utils/records.ts. */
 export interface ActivityRecord {
     id: string;
     type: RecordType;

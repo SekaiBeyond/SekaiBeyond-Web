@@ -12,13 +12,14 @@ import {
     normalizeGroup,
     requireAuth,
 } from "../utils/auth";
-import { deletionExpiresAt, recordExpiresAt } from "../utils/config";
+import { deletionExpiresAt } from "../utils/config";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
 import { pastEventIds, toStringIds } from "../utils/publicProfile";
 import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB } from "../utils/storage";
 import { sanitizeDisplayText, validateDocId, validateISODate } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
+import { recordDoc, recordRef } from "../utils/records";
 
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     if (!request.auth) {
@@ -277,17 +278,14 @@ export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
     await db.collection("users").doc(targetUid).update({displayName: sanitized});
 
     if (!isSelf && oldName !== sanitized) {
-        await db.collection("records").add({
-            type: "name-set",
+        await recordRef().set(recordDoc("name-set", {
             performedBy: uid,
             performedByName: callerName,
             targetUid,
             targetName: sanitized,
             oldName,
             newName: sanitized,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     }
 
     return {displayName: sanitized};
@@ -316,15 +314,12 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     await db.collection("users").doc(targetUid).update({photoURL: downloadUrl});
 
     if (!isSelf) {
-        await db.collection("records").add({
-            type: "avatar-set",
+        await recordRef().set(recordDoc("avatar-set", {
             performedBy: uid,
             performedByName: callerName,
             targetUid,
             targetName: targetData.displayName ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     }
 
     return {url: downloadUrl};
@@ -362,15 +357,12 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     await db.collection("users").doc(targetUid).update({photoURL});
 
     if (!isSelf) {
-        await db.collection("records").add({
-            type: "avatar-remove",
+        await recordRef().set(recordDoc("avatar-remove", {
             performedBy: uid,
             performedByName: callerName,
             targetUid,
             targetName: targetData.displayName ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     }
 
     return {photoURL};
@@ -413,15 +405,12 @@ export const deleteBanner = onCall({maxInstances: 10}, async (request) => {
     await db.collection("users").doc(targetUid).update({bannerURL: FieldValue.delete()});
 
     if (!isSelf) {
-        await db.collection("records").add({
-            type: "banner-remove",
+        await recordRef().set(recordDoc("banner-remove", {
             performedBy: uid,
             performedByName: callerName,
             targetUid,
             targetName: targetData.displayName ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     }
 
     return {deleted: true};
@@ -505,21 +494,17 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
         }
 
         txn.update(db.collection("users").doc(targetUid), updateData);
-        txn.set(db.collection("records").doc(), {
-            type: "group-assign",
+        txn.set(recordRef(), recordDoc("group-assign", {
             performedBy: uid,
             performedByName: callerSnap.data()!.displayName ?? "",
             targetUid,
             targetName: targetSnap.data()!.displayName ?? "",
             oldGroup,
             newGroup,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
 
         if (oldTitle !== newTitle || oldTitleCn !== newTitleCn) {
-            txn.set(db.collection("records").doc(), {
-                type: "title-set",
+            txn.set(recordRef(), recordDoc("title-set", {
                 performedBy: uid,
                 performedByName: callerSnap.data()!.displayName ?? "",
                 targetUid,
@@ -528,9 +513,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
                 newTitle,
                 oldTitleCn,
                 newTitleCn,
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
         }
     });
 
@@ -607,10 +590,10 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
             membershipStartedAt: newStart ?? FieldValue.delete(),
         });
 
-        txn.set(db.collection("records").doc(), {
-            type: newExpiry === null
-                ? "membership-revoke"
-                : hasExtendDays ? "membership-extend" : "membership-grant",
+        const recordType = newExpiry === null
+            ? "membership-revoke"
+            : hasExtendDays ? "membership-extend" : "membership-grant";
+        txn.set(recordRef(), recordDoc(recordType, {
             performedBy: uid,
             performedByName: callerSnap.data()!.displayName ?? "",
             targetUid,
@@ -618,9 +601,7 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
             oldExpiresAt: oldExpiry?.toDate?.()?.toISOString() ?? "",
             newExpiresAt: newExpiry?.toDate?.()?.toISOString() ?? "",
             extendDays: hasExtendDays ? extendDays : null,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
 
         return {membershipExpiresAt: newExpiry?.toDate?.()?.toISOString() ?? null};
     });
@@ -673,8 +654,7 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
         updateData.titleCn = titleCn ? titleCn : FieldValue.delete();
 
         txn.update(db.collection("users").doc(targetUid), updateData);
-        txn.set(db.collection("records").doc(), {
-            type: "title-set",
+        txn.set(recordRef(), recordDoc("title-set", {
             performedBy: uid,
             performedByName: callerSnap.data()!.displayName ?? "",
             targetUid,
@@ -683,9 +663,7 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
             newTitle: title ?? "",
             oldTitleCn: targetSnap.data()!.titleCn ?? "",
             newTitleCn: titleCn ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {success: true};
@@ -719,17 +697,14 @@ export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
             badges: grant ? FieldValue.arrayUnion(badgeId) : FieldValue.arrayRemove(badgeId),
             [`badgeEarnedAt.${badgeId}`]: grant ? FieldValue.serverTimestamp() : FieldValue.delete(),
         });
-        txn.set(db.collection("records").doc(), {
-            type: grant ? "achievement-grant" : "achievement-revoke",
+        txn.set(recordRef(), recordDoc(grant ? "achievement-grant" : "achievement-revoke", {
             performedBy: uid,
             performedByName: callerSnap.data()!.displayName ?? "",
             targetUid,
             targetName: targetSnap.data()!.displayName ?? "",
             badgeId,
             badgeName: badgeSnap.data()?.name ?? badgeId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {granted: grant};
     });
 });
@@ -776,15 +751,12 @@ export const requestAccountDeletion = onCall({maxInstances: 10}, async (request)
             : (targetData.displayName ?? "");
 
         txn.update(db.collection("users").doc(targetUid), {deleteAt});
-        txn.set(db.collection("records").doc(), {
-            type: "account-deletion-requested",
+        txn.set(recordRef(), recordDoc("account-deletion-requested", {
             performedBy: callerUid,
             performedByName: callerName,
             targetUid,
             targetName: targetData.displayName ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {deleteAt: deleteAt.toDate().toISOString()};
@@ -824,15 +796,12 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
             : (targetData.displayName ?? "");
 
         txn.update(db.collection("users").doc(targetUid), {deleteAt: FieldValue.delete()});
-        txn.set(db.collection("records").doc(), {
-            type: "account-deletion-cancelled",
+        txn.set(recordRef(), recordDoc("account-deletion-cancelled", {
             performedBy: callerUid,
             performedByName: callerName,
             targetUid,
             targetName: targetData.displayName ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {cancelled: true};
@@ -876,14 +845,11 @@ export const onUserDeleted = onDocumentDeleted(
         try {
             // Fixed id: retries and the resurrected-doc re-fire overwrite the
             // same record instead of duplicating the audit entry.
-            await db.collection("records").doc(`account-deleted-${uid}`).set({
-                type: "account-deleted",
+            await recordRef(`account-deleted-${uid}`).set(recordDoc("account-deleted", {
                 targetUid: uid,
                 targetName: data?.displayName ?? "",
                 targetEmail: data?.email ?? "",
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
         } catch (err) {
             console.error(`onUserDeleted: record write failed for ${uid}`, err);
         }

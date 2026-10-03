@@ -2,10 +2,11 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminTransaction, checkRateLimit } from "../utils/auth";
-import { deletionExpiresAt, recordExpiresAt } from "../utils/config";
+import { deletionExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError } from "../utils/storage";
+import { recordDoc, recordRef } from "../utils/records";
 import {
     sanitizeDisplayText,
     validateDocId,
@@ -32,15 +33,12 @@ export const requestBadgeDeletion = onCall({maxInstances: 10}, async (request) =
         }
 
         txn.update(db.collection("badges").doc(badgeId), {deleteAt});
-        txn.set(db.collection("records").doc(), {
-            type: "badge-deletion-requested",
+        txn.set(recordRef(), recordDoc("badge-deletion-requested", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             badgeId,
             badgeName: data.name ?? badgeId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {deleteAt: deleteAt.toDate().toISOString()};
@@ -62,15 +60,12 @@ export const cancelBadgeDeletion = onCall({maxInstances: 10}, async (request) =>
         }
 
         txn.update(db.collection("badges").doc(badgeId), {deleteAt: FieldValue.delete()});
-        txn.set(db.collection("records").doc(), {
-            type: "badge-deletion-cancelled",
+        txn.set(recordRef(), recordDoc("badge-deletion-cancelled", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             badgeId,
             badgeName: data.name ?? badgeId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {cancelled: true};
@@ -102,13 +97,10 @@ export const onBadgeDeleted = onDocumentDeleted(
             .catch(logStorageCleanupError(`onBadgeDeleted ${badgeId}`));
 
         try {
-            await db.collection("records").add({
-                type: "badge-deleted",
+            await recordRef().set(recordDoc("badge-deleted", {
                 badgeId,
                 badgeName: data.name ?? "",
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
         } catch (err) {
             console.error(`onBadgeDeleted: record write failed for ${badgeId}`, err);
         }
@@ -153,15 +145,12 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
                 name, nameCn, description, descriptionCn, imageUrl,
                 createdByUid, createdByName, createdByLink,
             });
-            txn.set(db.collection("records").doc(), {
-                type: "badge-edit",
+            txn.set(recordRef(), recordDoc("badge-edit", {
                 performedBy: uid,
                 performedByName: callerSnap.data()?.displayName ?? "",
                 badgeId,
                 badgeName: name,
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
             return {result: {badgeId}, oldImageUrl: prevImageUrl};
         }
 
@@ -171,15 +160,12 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
             createdByUid, createdByName, createdByLink,
             createdAt: FieldValue.serverTimestamp(),
         });
-        txn.set(db.collection("records").doc(), {
-            type: "badge-create",
+        txn.set(recordRef(), recordDoc("badge-create", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             badgeId: newRef!.id,
             badgeName: name,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {result: {badgeId: newRef!.id}, oldImageUrl: ""};
     });
 

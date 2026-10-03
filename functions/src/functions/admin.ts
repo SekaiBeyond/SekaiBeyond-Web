@@ -2,12 +2,13 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminTransaction, checkRateLimit, normalizeGroup, requireAdmin, requireAuth, } from "../utils/auth";
-import { DEFAULT_SENDER_PREFIX, recordExpiresAt, RESEND_QUEUE_CAP, SENDER_DOMAIN } from "../utils/config";
+import { DEFAULT_SENDER_PREFIX, RESEND_QUEUE_CAP, SENDER_DOMAIN } from "../utils/config";
 import { db } from "../utils/firebase";
 import { EMAIL_PROVIDER, syncProviderUsage } from "../utils/emailProvider";
 import { computeEmailQuotaDetail } from "../utils/quota";
 import { getSenderAddress, RESEND_API_KEY } from "../utils/resendClient";
 import { DRAIN_INTERVAL_MINUTES, getScheduledMailQueueStatus } from "./scheduledMail";
+import { recordDoc, recordRef } from "../utils/records";
 import {
     deleteStorageFile,
     detectImageMime,
@@ -162,14 +163,11 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
         } else {
             txn.set(ref, {name, nameLower, nameCn});
         }
-        txn.set(db.collection("records").doc(), {
-            type: tagId ? "tag-edit" : "tag-create",
+        txn.set(recordRef(), recordDoc(tagId ? "tag-edit" : "tag-create", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             tagName: name,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {tagId: docId};
     });
 });
@@ -185,14 +183,11 @@ export const deleteTag = onCall({maxInstances: 10}, async (request) => {
         if (!tagSnap.exists) throw new HttpsError("not-found", "Tag not found.");
 
         txn.delete(db.collection("eventLabels").doc(tagId));
-        txn.set(db.collection("records").doc(), {
-            type: "tag-delete",
+        txn.set(recordRef(), recordDoc("tag-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             tagName: tagSnap.data()?.name ?? tagId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {deleted: true};
     });
 });
@@ -213,13 +208,10 @@ export const savePolicy = onCall({maxInstances: 10}, async (request) => {
             updatedByName: callerSnap.data()?.displayName ?? "",
             updatedAt: FieldValue.serverTimestamp(),
         });
-        txn.set(db.collection("records").doc(), {
-            type: "policy-update",
+        txn.set(recordRef(), recordDoc("policy-update", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {saved: true};
     });
 });
@@ -365,14 +357,11 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         }
 
         txn.set(db.collection("config").doc("main"), updateData, {merge: true});
-        txn.set(db.collection("records").doc(), {
-            type: "config-update",
+        txn.set(recordRef(), recordDoc("config-update", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             configSections,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {saved: true};
     });
 });
@@ -863,14 +852,11 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             txn.delete(publicRef);
         }
 
-        txn.set(db.collection("records").doc(), {
-            type: "con-content-update",
+        txn.set(recordRef(), recordDoc("con-content-update", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             conSection: sections.join(", "),
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {saved: true};
     });
 });
@@ -916,15 +902,12 @@ export const saveParkingLot = onCall({maxInstances: 10}, async (request) => {
         } else {
             txn.set(ref, data);
         }
-        txn.set(db.collection("records").doc(), {
-            type: lotId ? "parkinglot-edit" : "parkinglot-create",
+        txn.set(recordRef(), recordDoc(lotId ? "parkinglot-edit" : "parkinglot-create", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             lotId: docId,
             lotName: name,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {lotId: docId};
     });
 });
@@ -952,15 +935,12 @@ export const deleteParkingLot = onCall({maxInstances: 10}, async (request) => {
         }
 
         txn.delete(db.collection("parkingLots").doc(lotId));
-        txn.set(db.collection("records").doc(), {
-            type: "parkinglot-delete",
+        txn.set(recordRef(), recordDoc("parkinglot-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             lotName: lotSnap.data()?.name ?? lotId,
             unlinkedFrom,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {deleted: true, unlinkedFrom};
     });
 });
@@ -996,15 +976,12 @@ export const saveParkingRate = onCall({maxInstances: 10}, async (request) => {
         } else {
             txn.set(ref, {labelEn, labelCn, color, order: Date.now()});
         }
-        txn.set(db.collection("records").doc(), {
-            type: rateId ? "parkingrate-edit" : "parkingrate-create",
+        txn.set(recordRef(), recordDoc(rateId ? "parkingrate-edit" : "parkingrate-create", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             rateId: docId,
             rateLabel: labelEn,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {rateId: docId};
     });
 });
@@ -1029,15 +1006,12 @@ export const deleteParkingRate = onCall({maxInstances: 10}, async (request) => {
         }
 
         txn.delete(db.collection("parkingRates").doc(rateId));
-        txn.set(db.collection("records").doc(), {
-            type: "parkingrate-delete",
+        txn.set(recordRef(), recordDoc("parkingrate-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             rateLabel: rateSnap.data()?.labelEn ?? rateId,
             unlinkedFrom,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {deleted: true, unlinkedFrom};
     });
 });
@@ -1091,15 +1065,12 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
         } else {
             txn.set(ref, data);
         }
-        txn.set(db.collection("records").doc(), {
-            type: venueId ? "venue-edit" : "venue-create",
+        txn.set(recordRef(), recordDoc(venueId ? "venue-edit" : "venue-create", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             venueId: docId,
             venueName: nameEn,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {venueId: docId};
     });
 });
@@ -1115,14 +1086,11 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
         if (!venueSnap.exists) throw new HttpsError("not-found", "Venue not found.");
 
         txn.delete(db.collection("venues").doc(venueId));
-        txn.set(db.collection("records").doc(), {
-            type: "venue-delete",
+        txn.set(recordRef(), recordDoc("venue-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             venueName: venueSnap.data()?.nameEn ?? venueId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {deleted: true};
     });
 });
@@ -1207,14 +1175,11 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
             updatedByName: callerSnap.data()?.displayName ?? "",
             updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
-        txn.set(db.collection("records").doc(), {
-            type: "config-update",
+        txn.set(recordRef(), recordDoc("config-update", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             configSections: ["team"],
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return orphaned;
     });
 

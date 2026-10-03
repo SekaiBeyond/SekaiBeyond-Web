@@ -2,10 +2,11 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, checkRateLimit, MANAGEABLE_GROUPS, normalizeGroup, requireAuth } from "../utils/auth";
-import { deletionExpiresAt, recordExpiresAt } from "../utils/config";
+import { deletionExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError } from "../utils/storage";
+import { recordDoc, recordRef } from "../utils/records";
 import {
     validateDocId,
     validateISODate,
@@ -33,15 +34,12 @@ export const requestEventDeletion = onCall({maxInstances: 10}, async (request) =
         }
 
         txn.update(db.collection("pastEvents").doc(eventId), {deleteAt});
-        txn.set(db.collection("records").doc(), {
-            type: "event-deletion-requested",
+        txn.set(recordRef(), recordDoc("event-deletion-requested", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: data.title ?? eventId,
             eventId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {deleteAt: deleteAt.toDate().toISOString()};
@@ -63,15 +61,12 @@ export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) =>
         }
 
         txn.update(db.collection("pastEvents").doc(eventId), {deleteAt: FieldValue.delete()});
-        txn.set(db.collection("records").doc(), {
-            type: "event-deletion-cancelled",
+        txn.set(recordRef(), recordDoc("event-deletion-cancelled", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: data.title ?? eventId,
             eventId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {cancelled: true};
@@ -109,13 +104,10 @@ export const onPastEventDeleted = onDocumentDeleted(
             .catch(logStorageCleanupError(`onPastEventDeleted ${eventId}`));
 
         try {
-            await db.collection("records").add({
-                type: "event-deleted",
+            await recordRef().set(recordDoc("event-deleted", {
                 eventId,
                 eventTitle: data.title ?? "",
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
         } catch (err) {
             console.error(`onPastEventDeleted: record write failed for ${eventId}`, err);
         }
@@ -163,15 +155,12 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
         } else {
             txn.set(ref, {...data, published: false});
         }
-        txn.set(db.collection("records").doc(), {
-            type: eventId ? "event-edit" : "event-create",
+        txn.set(recordRef(), recordDoc(eventId ? "event-edit" : "event-create", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: title,
             eventId: docId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {result: {eventId: docId}, oldIcon: prevIcon};
     });
 
@@ -198,15 +187,12 @@ export const setPastEventPublished = onCall({maxInstances: 10}, async (request) 
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "Event not found.");
         txn.update(ref, {published: input.published});
-        txn.set(db.collection("records").doc(), {
-            type: input.published ? "past-event-publish" : "past-event-unpublish",
+        txn.set(recordRef(), recordDoc(input.published ? "past-event-publish" : "past-event-unpublish", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: snap.data()?.title ?? eventId,
             eventId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {published: input.published};
     });
 });
@@ -289,27 +275,21 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
 
         for (const codeDoc of codesToDelete) {
             txn.delete(codeDoc.ref);
-            txn.set(db.collection("records").doc(), {
-                type: "event-code-deactivate",
+            txn.set(recordRef(), recordDoc("event-code-deactivate", {
                 performedBy: uid,
                 performedByName: callerSnap.data()?.displayName ?? "",
                 eventTitle: title,
                 eventId: docId,
                 code: codeDoc.data().code ?? codeDoc.id,
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
         }
 
-        txn.set(db.collection("records").doc(), {
-            type: eventId ? "upcoming-event-edit" : "upcoming-event-create",
+        txn.set(recordRef(), recordDoc(eventId ? "upcoming-event-edit" : "upcoming-event-create", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: title,
             eventId: docId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {result: {eventId: docId}, oldPoster: prevPoster, oldEmailHeaderBg: prevEmailHeaderBg};
     });
 
@@ -340,15 +320,12 @@ export const setUpcomingEventPublished = onCall({maxInstances: 10}, async (reque
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "Event not found.");
         txn.update(ref, {published: input.published});
-        txn.set(db.collection("records").doc(), {
-            type: input.published ? "upcoming-event-publish" : "upcoming-event-unpublish",
+        txn.set(recordRef(), recordDoc(input.published ? "upcoming-event-publish" : "upcoming-event-unpublish", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: snap.data()?.title ?? eventId,
             eventId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {published: input.published};
     });
 });
@@ -370,15 +347,12 @@ export const requestUpcomingEventDeletion = onCall({maxInstances: 10}, async (re
         }
 
         txn.update(db.collection("upcomingEvents").doc(eventId), {deleteAt});
-        txn.set(db.collection("records").doc(), {
-            type: "upcoming-event-deletion-requested",
+        txn.set(recordRef(), recordDoc("upcoming-event-deletion-requested", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: data.title ?? eventId,
             eventId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {deleteAt: deleteAt.toDate().toISOString()};
@@ -400,15 +374,12 @@ export const cancelUpcomingEventDeletion = onCall({maxInstances: 10}, async (req
         }
 
         txn.update(db.collection("upcomingEvents").doc(eventId), {deleteAt: FieldValue.delete()});
-        txn.set(db.collection("records").doc(), {
-            type: "upcoming-event-deletion-cancelled",
+        txn.set(recordRef(), recordDoc("upcoming-event-deletion-cancelled", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: data.title ?? eventId,
             eventId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {cancelled: true};
@@ -487,13 +458,10 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         }
 
         try {
-            await db.collection("records").add({
-                type: "upcoming-event-deleted",
+            await recordRef().set(recordDoc("upcoming-event-deleted", {
                 eventId,
                 eventTitle: data.title ?? "",
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
         } catch (err) {
             console.error(`onUpcomingEventDeleted: record write failed for ${eventId}`, err);
         }
@@ -567,15 +535,12 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             paid: eventData.paid === true,
         });
         txn.delete(db.collection("upcomingEvents").doc(eventId));
-        txn.set(db.collection("records").doc(), {
-            type: "upcoming-event-archive",
+        txn.set(recordRef(), recordDoc("upcoming-event-archive", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: eventData.title ?? eventId,
             eventId: newDocRef.id,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {pastEventId: newDocRef.id};
     });
 
@@ -671,17 +636,14 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
         txn.update(db.collection("users").doc(targetUid), {
             attendedEvents: grant ? FieldValue.arrayUnion(eventId) : FieldValue.arrayRemove(eventId),
         });
-        txn.set(db.collection("records").doc(), {
-            type: grant ? "event-attend" : "event-unattend",
+        txn.set(recordRef(), recordDoc(grant ? "event-attend" : "event-unattend", {
             performedBy: uid,
             performedByName: callerSnap.data()!.displayName ?? "",
             targetUid,
             targetName: targetData.displayName ?? "",
             eventTitle: eventSnap.data()!.title ?? eventId,
             eventId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {granted: grant};
     });
 });
@@ -735,21 +697,17 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         }
 
         if (!alreadyStaff) {
-            txn.set(db.collection("records").doc(), {
-                type: "event-staff-assign",
+            txn.set(recordRef(), recordDoc("event-staff-assign", {
                 performedBy: uid,
                 performedByName: callerName,
                 targetUid,
                 targetName,
                 eventId,
                 eventTitle,
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
         }
         if (attendanceAction === "add") {
-            txn.set(db.collection("records").doc(), {
-                type: "event-attend",
+            txn.set(recordRef(), recordDoc("event-attend", {
                 performedBy: uid,
                 performedByName: callerName,
                 targetUid,
@@ -757,12 +715,9 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
                 eventId,
                 eventTitle,
                 reason: "staff-assignment",
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
         } else if (attendanceAction === "remove") {
-            txn.set(db.collection("records").doc(), {
-                type: "event-unattend",
+            txn.set(recordRef(), recordDoc("event-unattend", {
                 performedBy: uid,
                 performedByName: callerName,
                 targetUid,
@@ -770,9 +725,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
                 eventId,
                 eventTitle,
                 reason: "staff-assignment",
-                timestamp: FieldValue.serverTimestamp(),
-                expiresAt: recordExpiresAt(),
-            });
+            }));
         }
         return {
             added: !alreadyStaff,
@@ -808,17 +761,14 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
         txn.update(db.collection("users").doc(targetUid), {
             eventStaffEvents: FieldValue.arrayRemove(eventId),
         });
-        txn.set(db.collection("records").doc(), {
-            type: "event-staff-remove",
+        txn.set(recordRef(), recordDoc("event-staff-remove", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             targetUid,
             targetName: targetData.displayName ?? "",
             eventId,
             eventTitle,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {removed: true};
     });
 });

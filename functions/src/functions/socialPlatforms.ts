@@ -1,9 +1,8 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { FieldValue } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
-import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
+import { recordDoc, recordRef } from "../utils/records";
 
 // Server copy of the built-in platform list used by seedSocialPlatforms.
 // Kept in sync with DEFAULT_SOCIAL_PLATFORMS on the client (app/lib/socialPlatforms.ts).
@@ -55,14 +54,11 @@ export const saveSocialPlatform = onCall({maxInstances: 10}, async (request) => 
         } else {
             txn.set(ref, data);
         }
-        txn.set(db.collection("records").doc(), {
-            type: platformId ? "social-platform-edit" : "social-platform-create",
+        txn.set(recordRef(), recordDoc(platformId ? "social-platform-edit" : "social-platform-create", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             platformLabel: label,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {id: docId};
     });
 });
@@ -78,14 +74,11 @@ export const deleteSocialPlatform = onCall({maxInstances: 10}, async (request) =
         if (!snap.exists) throw new HttpsError("not-found", "Social platform not found.");
 
         txn.delete(ref);
-        txn.set(db.collection("records").doc(), {
-            type: "social-platform-delete",
+        txn.set(recordRef(), recordDoc("social-platform-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             platformLabel: snap.data()?.label ?? platformId,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return {deleted: true};
     });
 });

@@ -1,7 +1,6 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
-import { recordExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks, generateSecureCode } from "../utils/helpers";
 import { MAX_GRANT_DAYS, reducedExpiry, startedAtAfter } from "../utils/membership";
@@ -17,6 +16,7 @@ import {
     PASSPORT_TERM_DAYS,
 } from "../utils/passports";
 import { sanitizeDisplayText, validateDocId, validateStorageImageUrl, validateStr } from "../utils/validation";
+import { recordDoc, recordRef } from "../utils/records";
 
 /**
  * Physical passports.
@@ -108,16 +108,13 @@ export const generatePassports = onCall({maxInstances: 5}, async (request) => {
 
     await commitInChunks(ops);
 
-    await db.collection("records").add({
-        type: "passport-generate",
+    await recordRef().set(recordDoc("passport-generate", {
         performedBy: uid,
         performedByName: performerName(callerSnap),
         passportDesignName: designName,
         passportYear: year,
         passportCount: count,
-        timestamp: FieldValue.serverTimestamp(),
-        expiresAt: recordExpiresAt(),
-    });
+    }));
 
     return {designId, year, passports: issued};
 });
@@ -154,15 +151,12 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
             keyIssuedAt: FieldValue.serverTimestamp(),
             keyReissueCount: FieldValue.increment(1),
         });
-        txn.set(db.collection("records").doc(), {
-            type: "passport-key-reissue",
+        txn.set(recordRef(), recordDoc("passport-key-reissue", {
             performedBy: uid,
             performedByName: performerName(callerSnap),
             passportId,
             passportYear: snap.data()?.year ?? null,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {passportId, activationCode: formatActivationKey(key)};
@@ -199,15 +193,12 @@ export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
             );
         }
 
-        txn.set(db.collection("records").doc(), {
-            type: "passport-key-view",
+        txn.set(recordRef(), recordDoc("passport-key-view", {
             performedBy: uid,
             performedByName: performerName(callerSnap),
             passportId,
             passportYear: snap.data()?.year ?? null,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
         return stored;
     });
 
@@ -263,16 +254,13 @@ export const exportPassportKeys = onCall({maxInstances: 10}, async (request) => 
     });
 
     if (passports.length > 0) {
-        await db.collection("records").add({
-            type: "passport-key-export",
+        await recordRef().set(recordDoc("passport-key-export", {
             performedBy: uid,
             performedByName: performerName(callerSnap),
             passportId: passports.length === 1 ? passports[0].passportId : null,
             passportCount: passports.length,
             passportYear: year,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     }
 
     return {passports, missing};
@@ -416,17 +404,14 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
 
     if (ops.length > 0) {
         await commitInChunks(ops);
-        await db.collection("records").add({
-            type: "passport-delete",
+        await recordRef().set(recordDoc("passport-delete", {
             performedBy: uid,
             performedByName: performerName(callerSnap),
             // Named only when there is one to name; the count carries the rest.
             passportId: deleted.length === 1 ? deleted[0] : null,
             passportCount: deleted.length,
             passportYear: year,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     }
 
     return {deleted, claimed, missing};
@@ -523,8 +508,7 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
         txn.delete(ref);
         txn.delete(db.collection(SECRETS).doc(passportId));
 
-        txn.set(db.collection("records").doc(), {
-            type: "passport-delete",
+        txn.set(recordRef(), recordDoc("passport-delete", {
             performedBy: uid,
             performedByName: performerName(callerSnap),
             // The holder, so the entry still says whose passport this was.
@@ -538,9 +522,7 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
             // there was nothing left to take.
             extendDays: reduced ? -reduced.daysRemoved : null,
             newExpiresAt: reduced ? reduced.expiresAt.toDate().toISOString() : "",
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
 
         return {
             ownerUid,
@@ -645,15 +627,12 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
         } else {
             txn.create(ref, {...changes, year, createdAt: FieldValue.serverTimestamp()});
         }
-        txn.set(db.collection("records").doc(), {
-            type: designId ? "passport-design-edit" : "passport-design-create",
+        txn.set(recordRef(), recordDoc(designId ? "passport-design-edit" : "passport-design-create", {
             performedBy: uid,
             performedByName: performerName(callerSnap),
             passportDesignName: name,
             passportYear: year,
-            timestamp: FieldValue.serverTimestamp(),
-            expiresAt: recordExpiresAt(),
-        });
+        }));
     });
 
     return {designId: ref.id};
@@ -681,15 +660,12 @@ export const deletePassportDesign = onCall({maxInstances: 10}, async (request) =
     }
 
     await ref.delete();
-    await db.collection("records").add({
-        type: "passport-design-delete",
+    await recordRef().set(recordDoc("passport-design-delete", {
         performedBy: uid,
         performedByName: performerName(callerSnap),
         passportDesignName: snap.data()?.name ?? "",
         passportYear: snap.data()?.year ?? null,
-        timestamp: FieldValue.serverTimestamp(),
-        expiresAt: recordExpiresAt(),
-    });
+    }));
 
     return {deleted: true};
 });
