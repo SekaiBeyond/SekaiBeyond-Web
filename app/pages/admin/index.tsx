@@ -547,6 +547,7 @@ export const AdminPage = () => {
                             badgeDefs={badgeDefs}
                             setBadgeDefs={setBadgeDefs}
                             user={user}
+                            onLookupUser={handleLookupUser}
                             showToast={showToast}
                             readOnly={isStaffGroup}
                         />

@@ -38,6 +38,7 @@ interface BadgesTabProps {
     badgeDefs: BadgeDef[];
     setBadgeDefs: React.Dispatch<React.SetStateAction<BadgeDef[]>>;
     user: User;
+    onLookupUser: (uid: string) => void;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     readOnly?: boolean;
 }
@@ -68,6 +69,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                                                           badgeDefs,
                                                                           setBadgeDefs,
                                                                           user,
+                                                                          onLookupUser,
                                                                           showToast,
                                                                           readOnly = false,
                                                                       }, ref) => {
@@ -662,7 +664,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                     <p className="admin-no-results">{isEnglish ? 'No one has this badge yet.' : '暂无人持有此徽章。'}</p>
                 )}
                 {!loadingBadgeHolders && badgeHolders.map((u) => (
-                    <UserRow key={u.uid} user={u}>
+                    <UserRow key={u.uid} user={u} onClick={() => onLookupUser(u.uid)}>
                         <span className="admin-user-group-tag" data-group={u.group}>
                             {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
                         </span>
