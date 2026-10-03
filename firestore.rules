@@ -75,10 +75,12 @@ service cloud.firestore {
         match /pastEvents/{eventId} {
             allow read: if true;
 
-            // Paid event subcollections (migrated from upcomingEvents on archive)
+            // Paid event subcollections (migrated from upcomingEvents on archive).
+            // Staff+ read every event's attendees (staff read-only in the panel);
+            // event-staff read only their own events'.
             match /attendees/{attendeeId} {
                 allow read: if request.auth != null
-                    && (isCoreStaffOrAbove() || isEventStaffFor(eventId));
+                    && (isStaffOrAbove() || isEventStaffFor(eventId));
             }
             match /emailTemplate/{docId} {
                 allow read: if request.auth != null
@@ -115,10 +117,11 @@ service cloud.firestore {
                 || (request.auth != null && isStaffOrAbove())
                 || (request.auth != null && isEventStaffFor(eventId));
 
-            // Paid event subcollections
+            // Paid event subcollections. Staff+ read every event's attendees
+            // (staff read-only in the panel); event-staff read only their own events'.
             match /attendees/{attendeeId} {
                 allow read: if request.auth != null
-                    && (isCoreStaffOrAbove() || isEventStaffFor(eventId));
+                    && (isStaffOrAbove() || isEventStaffFor(eventId));
             }
             match /emailTemplate/{docId} {
                 allow read: if request.auth != null

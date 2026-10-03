@@ -524,9 +524,10 @@ const ACCOUNT_LOOKUP_MAX = 500;
  * of what check-in will actually find, rather than a friendlier lookup that
  * would promise a link the scanner then misses.
  *
- * Who the account belongs to is core-staff's business. Event staff get the fact
- * of a link and nothing else: they can read this event's attendees, which is not
- * the same as being able to put a name to every address in the club.
+ * Who the account belongs to is for staff and above, who can read every
+ * profile anyway. Event staff get the fact of a link and nothing else: they can
+ * read this event's attendees, which is not the same as being able to put a name
+ * to every address in the club.
  */
 export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -541,13 +542,13 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
             `Too many emails in a single lookup (max ${ACCOUNT_LOOKUP_MAX}).`);
     }
 
-    // The same gate as the scanner: core staff anywhere, event staff on their
-    // own event.
+    // The same gate as reading the attendees themselves: staff anywhere, event
+    // staff on their own event.
     const callerSnap = await db.collection("users").doc(uid).get();
     const callerData = callerSnap.data() ?? {};
-    const isCoreStaffOrAbove = ADMIN_GROUPS.includes(normalizeGroup(callerData.group));
+    const isStaffOrAbove = ["staff", ...ADMIN_GROUPS].includes(normalizeGroup(callerData.group));
     const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
-    if (!isCoreStaffOrAbove && !callerEventStaff.includes(eventId)) {
+    if (!isStaffOrAbove && !callerEventStaff.includes(eventId)) {
         throw new HttpsError("permission-denied", "Not authorized to read this event's attendees.");
     }
 
@@ -577,7 +578,7 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
             const data = doc.data();
             if (typeof data.email !== "string") continue;
             const email = data.email.trim().toLowerCase();
-            accounts.push(isCoreStaffOrAbove
+            accounts.push(isStaffOrAbove
                 ? {email, uid: doc.id, displayName: data.displayName ?? ""}
                 : {email});
         }
