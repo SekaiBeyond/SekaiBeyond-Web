@@ -388,7 +388,11 @@ export const callRemoveEventStaff = (data: {targetUid: string; eventId: string})
 export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'savePolicy')(data);
 
-export const callSaveSiteConfig = (data: {bilibiliVideoBvid?: string, conEdition?: ConEdition | null}) =>
+export const callSaveSiteConfig = (data: {
+    bilibiliVideoBvid?: string,
+    contactEmail?: string,
+    conEdition?: ConEdition | null
+}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveSiteConfig')(data);
 
 // Only the sections present in `data` are written, so each Save button in the

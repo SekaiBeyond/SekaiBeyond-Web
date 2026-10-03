@@ -1,11 +1,12 @@
-import { LINKS } from '~/constants';
 import { useConContent } from '~/lib/conContent';
+import { useSiteConfig } from '~/lib/siteConfig';
 import { useT } from '~/pages/con/i18n';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
 export const Vendors = () => {
     const t = useT();
     const {list, cta} = useConContent().content.vendors;
+    const {config} = useSiteConfig();
 
     return (
         <section id="vendors" className="sbc-section">
@@ -50,10 +51,12 @@ export const Vendors = () => {
                     <h3 className="sbc-callout-title">{t(cta.heading)}</h3>
                     <p className="sbc-callout-body">{t(cta.body)}</p>
                 </div>
-                <a className="btn btn-secondary" href={LINKS.email}>
-                    <span>{t(cta.label)}</span>
-                    <span aria-hidden="true">✉️</span>
-                </a>
+                {config.contactEmail && (
+                    <a className="btn btn-secondary" href={`mailto:${config.contactEmail}`}>
+                        <span>{t(cta.label)}</span>
+                        <span aria-hidden="true">✉️</span>
+                    </a>
+                )}
             </div>
         </section>
     );

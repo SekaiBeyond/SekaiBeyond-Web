@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from 'react-icons/si';
 import { LINKS } from '~/constants';
+import { useSiteConfig } from '~/lib/siteConfig';
 import { CON_NAME, NAV_LINKS } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { scrollToSection } from '~/pages/con/utils';
@@ -14,6 +15,7 @@ const SOCIALS = [
 
 export const Footer = () => {
     const t = useT();
+    const {config} = useSiteConfig();
 
     return (
         <footer className="sbc-footer">
@@ -59,9 +61,11 @@ export const Footer = () => {
                     <Link className="sbc-footer-link" to="/policy">
                         {t({en: 'Policy', zh: '政策'})}
                     </Link>
-                    <a className="sbc-footer-link" href={LINKS.email}>
-                        {t({en: 'Contact', zh: '联系我们'})}
-                    </a>
+                    {config.contactEmail && (
+                        <a className="sbc-footer-link" href={`mailto:${config.contactEmail}`}>
+                            {t({en: 'Contact', zh: '联系我们'})}
+                        </a>
+                    )}
                 </nav>
             </div>
 

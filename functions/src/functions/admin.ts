@@ -23,6 +23,7 @@ import {
     sanitizeDisplayText,
     validateCoordinate,
     validateDocId,
+    validateEmail,
     validateISODate,
     validateStorageImageUrl,
     validateStr,
@@ -252,6 +253,11 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("invalid-argument", "Invalid Bilibili BV ID format.");
     }
 
+    // "" clears it, which hides the site's contact links.
+    const contactEmail = input.contactEmail === undefined ? undefined
+        : input.contactEmail === "" ? ""
+            : validateEmail(input.contactEmail, "contactEmail");
+
     const conEditionRaw = input.conEdition;
     let conEdition: any | undefined = undefined;
     if (conEditionRaw === null) {
@@ -334,6 +340,9 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         if (bvid !== undefined) {
             updateData.bilibiliVideoBvid = bvid;
             updateData.bilibiliVideoCoverUrl = coverUrl;
+        }
+        if (contactEmail !== undefined) {
+            updateData.contactEmail = contactEmail;
         }
         if (conEdition !== undefined) {
             updateData.conEdition = conEdition;

@@ -25,6 +25,7 @@ export interface SiteConfig {
     bilibiliVideoCoverUrl: string;
     teamMembers: TeamMemberConfig[];
     conEdition: ConEdition | null;
+    contactEmail: string;
 }
 
 const DEFAULT_CONFIG: SiteConfig = {
@@ -32,6 +33,7 @@ const DEFAULT_CONFIG: SiteConfig = {
     bilibiliVideoCoverUrl: '',
     teamMembers: [],
     conEdition: null,
+    contactEmail: '',
 };
 
 const cache = createValueCache<SiteConfig>('site config', async () => {
@@ -43,6 +45,7 @@ const cache = createValueCache<SiteConfig>('site config', async () => {
         bilibiliVideoCoverUrl: data?.bilibiliVideoCoverUrl ?? '',
         teamMembers: data?.teamMembers ?? [],
         conEdition: data?.conEdition ?? null,
+        contactEmail: data?.contactEmail ?? '',
     };
 }, DEFAULT_CONFIG);
 

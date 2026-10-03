@@ -2,11 +2,16 @@ import { Fragment } from "react";
 import { FOOTER_LINKS, type NavLink } from "~/constants";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
+import { useSiteConfig } from "~/lib/siteConfig";
 
 export const Footer = () => {
     const {isEnglish} = useLanguage();
     const {hasActive, activeEvents} = useUpcomingEvents();
     const singleUpcoming = activeEvents.length === 1;
+    const {config} = useSiteConfig();
+
+    const hrefFor = (link: NavLink) =>
+        link.id === 'email' ? link.href + config.contactEmail : link.href;
 
     const labelFor = (link: NavLink) =>
         link.id === 'upcoming' && singleUpcoming && isEnglish
@@ -17,7 +22,8 @@ export const Footer = () => {
         <footer>
             <div className="footer-logo">{isEnglish ? "SEKAI BEYOND" : "彼世界动漫社"}</div>
             <div className="footer-links">
-                {FOOTER_LINKS.map((link: NavLink) => link.disabled || (link.id === 'upcoming' && !hasActive) ? null : (
+                {FOOTER_LINKS.map((link: NavLink) => link.disabled || (link.id === 'upcoming' && !hasActive)
+                || (link.id === 'email' && !config.contactEmail) ? null : (
                     <Fragment key={link.id}>
                         {link.href.startsWith("#") ? (
                             <a href={link.href} className="footer-link" onClick={(e) => {
@@ -31,7 +37,7 @@ export const Footer = () => {
                                 {labelFor(link)}
                             </a>
                         ) : (
-                            <a href={link.href} className="footer-link" target="_blank"
+                            <a href={hrefFor(link)} className="footer-link" target="_blank"
                                rel="noopener noreferrer">
                                 {labelFor(link)}
                             </a>

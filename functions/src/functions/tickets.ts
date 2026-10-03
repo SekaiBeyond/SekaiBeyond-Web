@@ -15,20 +15,7 @@ import {
 } from "../utils/quota";
 import { RESEND_API_KEY, type ResendEnvelope, ResendSendError, sendEmails } from "../utils/resendClient";
 import { getScheduledMailQueueDepth } from "./scheduledMail";
-import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validateEmail(value: unknown, name: string): string {
-    if (typeof value !== "string") {
-        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
-    }
-    const normalized = value.trim().toLowerCase();
-    if (normalized.length === 0 || normalized.length > 320 || !EMAIL_RE.test(normalized)) {
-        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
-    }
-    return normalized;
-}
+import { EMAIL_RE, sanitizeDisplayText, validateDocId, validateEmail, validateStr } from "../utils/validation";
 
 function validateTicketCount(value: unknown): number {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 50) {

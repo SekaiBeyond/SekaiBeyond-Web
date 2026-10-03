@@ -5,8 +5,6 @@ export const MAX_VIDEO_SIZE_MB = Number(import.meta.env.VITE_MAX_VIDEO_SIZE_MB ?
 
 export const FOUNDED_DATE = new Date('2024-12-05T00:00:00Z');
 
-const RSO_EMAIL: string = "sekaibeyond@outlook.com"
-
 export const BILIBILI_VIDEO = {
     aid: "116106639514970",
     bvid: "BV1GsfjB7E6J",
@@ -21,7 +19,6 @@ export const LINKS = {
     xiaohongshu: "https://www.xiaohongshu.com/user/profile/62d4eefd000000000e00ed42",
     linkedin: "https://www.linkedin.com/company/sekai-beyond/",
     github: "https://github.com/SekaiBeyond",
-    email: `mailto:${RSO_EMAIL}`
 }
 
 export interface ConEdition {
@@ -90,7 +87,7 @@ export const FOOTER_LINKS: NavLink[] = [
     },
     {
         id: 'email',
-        href: LINKS.email,
+        href: 'mailto:',
         labelEn: 'Contact Us',
         labelCn: '联系我们',
     },

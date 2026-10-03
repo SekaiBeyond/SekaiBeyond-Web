@@ -4,6 +4,7 @@ import { callSavePolicy, callSaveSiteConfig } from '~/lib/firebase';
 import { useSiteConfig } from '~/lib/siteConfig';
 import { renderPolicyMarkdown, usePolicy } from '~/lib/policy';
 import { BILIBILI_VIDEO } from '~/constants';
+import { EMAIL_RE } from './tickets/helpers';
 import { TeamSection } from './TeamSection';
 import { ConEditionSection } from './ConEditionSection';
 import { SectionNav } from './SectionNav';
@@ -43,7 +44,9 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     const {config, loading: configLoading, refresh: refreshConfig} = useSiteConfig();
     const [bvidInput, setBvidInput] = useState('');
     const [savingVideo, setSavingVideo] = useState(false);
-    const [videoInitialized, setVideoInitialized] = useState(false);
+    const [emailInput, setEmailInput] = useState('');
+    const [savingEmail, setSavingEmail] = useState(false);
+    const [configInitialized, setConfigInitialized] = useState(false);
 
     const {policy, loading: policyLoading, refresh: refreshPolicy} = usePolicy();
     const [contentEn, setContentEn] = useState('');
@@ -53,11 +56,12 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     const [previewingPolicy, setPreviewingPolicy] = useState(false);
 
     useEffect(() => {
-        if (!configLoading && !videoInitialized) {
+        if (!configLoading && !configInitialized) {
             setBvidInput(config.bilibiliVideoBvid || BILIBILI_VIDEO.bvid);
-            setVideoInitialized(true);
+            setEmailInput(config.contactEmail);
+            setConfigInitialized(true);
         }
-    }, [configLoading, config, videoInitialized]);
+    }, [configLoading, config, configInitialized]);
 
     useEffect(() => {
         if (!policyLoading && !policyInitialized) {
@@ -85,6 +89,25 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
             showToast(isEnglish ? 'Failed to save video.' : '保存视频失败。', 'error');
         } finally {
             setSavingVideo(false);
+        }
+    };
+
+    const saveEmail = async () => {
+        const email = emailInput.trim().toLowerCase();
+        if (email && !EMAIL_RE.test(email)) {
+            showToast(isEnglish ? 'Please enter a valid email address.' : '请输入有效的邮箱地址。', 'error');
+            return;
+        }
+        setSavingEmail(true);
+        try {
+            await callSaveSiteConfig({contactEmail: email});
+            await refreshConfig();
+            setEmailInput(email);
+            showToast(isEnglish ? 'Contact email saved.' : '联系邮箱已保存。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to save contact email.' : '保存联系邮箱失败。', 'error');
+        } finally {
+            setSavingEmail(false);
         }
     };
 
@@ -173,6 +196,45 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
             <div className="admin-divider"/>
 
+            <div id="admin-sec-contact" className="admin-section">
+                <h3 className="admin-badges-title">
+                    {isEnglish ? 'Contact Email' : '联系邮箱'}
+                </h3>
+                <p className="admin-helper-text">
+                    {isEnglish
+                        ? 'Where the site\'s "Contact Us" and "Email us" links send visitors, on the home page and the con page. Leave it blank to hide those links.'
+                        : '主页和漫展页面上「联系我们」「发邮件」等链接所使用的邮箱。留空则隐藏这些链接。'}
+                </p>
+                <div className="admin-form-grid admin-mt-12">
+                    <label>
+                        <span>{isEnglish ? 'Email' : '邮箱'}</span>
+                        <input
+                            className="admin-input"
+                            type="email"
+                            value={emailInput}
+                            onChange={e => !readOnly && setEmailInput(e.target.value)}
+                            readOnly={readOnly}
+                            placeholder="name@example.com"
+                        />
+                    </label>
+                </div>
+                {!readOnly && (
+                    <div className="admin-btn-row admin-mt-12">
+                        <button
+                            className="admin-toggle-btn admin-toggle-save"
+                            onClick={saveEmail}
+                            disabled={savingEmail || emailInput.trim().toLowerCase() === config.contactEmail}
+                        >
+                            {savingEmail
+                                ? (isEnglish ? 'Saving...' : '保存中...')
+                                : (isEnglish ? 'Save Email' : '保存邮箱')}
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div className="admin-divider"/>
+
             <div id="admin-sec-team">
                 <TeamSection refreshConfig={refreshConfig} showToast={showToast} readOnly={readOnly}/>
             </div>
@@ -253,6 +315,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
             <SectionNav
                 sections={[
                     {id: 'admin-sec-video', label: isEnglish ? 'Featured Video' : '精选视频'},
+                    {id: 'admin-sec-contact', label: isEnglish ? 'Contact Email' : '联系邮箱'},
                     {id: 'admin-sec-team', label: isEnglish ? 'Our Team' : '我们的团队'},
                     {id: 'admin-sec-con-edition', label: isEnglish ? 'Sekai Beyond Con' : '彼世界动漫游戏展'},
                     {id: 'admin-sec-policy', label: isEnglish ? 'Policy Content' : '政策内容'},

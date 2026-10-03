@@ -1,11 +1,13 @@
 import { LINKS } from '~/constants';
 import { useConContent } from '~/lib/conContent';
+import { useSiteConfig } from '~/lib/siteConfig';
 import { useT } from '~/pages/con/i18n';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
 export const Faq = () => {
     const t = useT();
     const {content} = useConContent();
+    const {config} = useSiteConfig();
 
     return (
         <section id="faq" className="sbc-section">
@@ -45,9 +47,11 @@ export const Faq = () => {
                     </p>
                 </div>
                 <div className="sbc-callout-actions">
-                    <a className="btn btn-secondary" href={LINKS.email}>
-                        <span>{t({en: 'Email us', zh: '发邮件'})}</span>
-                    </a>
+                    {config.contactEmail && (
+                        <a className="btn btn-secondary" href={`mailto:${config.contactEmail}`}>
+                            <span>{t({en: 'Email us', zh: '发邮件'})}</span>
+                        </a>
+                    )}
                     <a
                         className="btn btn-secondary"
                         href={LINKS.discord}

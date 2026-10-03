@@ -11,6 +11,20 @@ export function validateISODate(value: unknown, name: string): string | null {
     return value;
 }
 
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Trimmed and lowercased. */
+export function validateEmail(value: unknown, name: string): string {
+    if (typeof value !== "string") {
+        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized.length === 0 || normalized.length > 320 || !EMAIL_RE.test(normalized)) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}.`);
+    }
+    return normalized;
+}
+
 export function validateCoordinate(value: unknown, name: string, min: number, max: number): number {
     if (typeof value !== "number" || !Number.isFinite(value)) {
         throw new HttpsError("invalid-argument", `Invalid ${name}: must be a number.`);
