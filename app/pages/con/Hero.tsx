@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { LuArrowDown, LuArrowUpRight, LuCalendar, LuClock, LuMapPin } from 'react-icons/lu';
+import { Link } from 'react-router';
+import { LuArrowDown, LuArrowUpRight, LuCalendar, LuClock, LuMapPin, LuSquareParking } from 'react-icons/lu';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent, useConVenue } from '~/lib/conContent';
-import { CON_NAME, HERO_EMBED, VENUE_TBA } from '~/pages/con/content';
+import { CON_NAME, HERO_EMBED, VENUE_MAP_URL, VENUE_TBA } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { useMediaQuery } from '~/pages/con/hooks';
 import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/con/utils';
@@ -134,7 +135,9 @@ export const Hero = () => {
                 <h1 className="sbc-hero-title">{t(CON_NAME)}</h1>
                 <p className="sbc-hero-tagline">{t(event.tagline)}</p>
 
-                <ul className="sbc-hero-meta">
+                {/* Carries the `venue` id the old venue section had, so links to
+                    /con#venue still land on where the con is. */}
+                <ul id="venue" className="sbc-hero-meta">
                     <li>
                         <LuCalendar className="sbc-hero-meta-icon" aria-hidden="true"/>
                         <span>
@@ -147,8 +150,26 @@ export const Hero = () => {
                         <span>{formatTimeRange(event.date, event.endTime, currentLanguage)}</span>
                     </li>
                     <li>
-                        <LuMapPin className="sbc-hero-meta-icon" aria-hidden="true"/>
-                        <span>{t(venue?.name ?? VENUE_TBA)}</span>
+                        {venue ? (
+                            <a
+                                className="sbc-hero-meta-link"
+                                href={VENUE_MAP_URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <LuMapPin className="sbc-hero-meta-icon" aria-hidden="true"/>
+                                <span className="sbc-hero-meta-link-text">{t(venue.name)}</span>
+                                <span className="sbc-sr-only">
+                                    {t({en: ' (opens Google Maps)', zh: '（在 Google 地图中打开）'})}
+                                </span>
+                                <LuArrowUpRight className="sbc-hero-meta-link-arrow" aria-hidden="true"/>
+                            </a>
+                        ) : (
+                            <>
+                                <LuMapPin className="sbc-hero-meta-icon" aria-hidden="true"/>
+                                <span>{t(VENUE_TBA)}</span>
+                            </>
+                        )}
                     </li>
                 </ul>
 
@@ -172,6 +193,12 @@ export const Hero = () => {
                         <span>{t({en: 'See the Schedule', zh: '查看日程'})}</span>
                         <LuArrowDown aria-hidden="true"/>
                     </a>
+                    {venue && (
+                        <Link className="btn sbc-btn-ghost" to={venue.parkingUrl}>
+                            <span>{t({en: 'Parking Guide', zh: '停车指南'})}</span>
+                            <LuSquareParking aria-hidden="true"/>
+                        </Link>
+                    )}
                 </div>
             </div>
 

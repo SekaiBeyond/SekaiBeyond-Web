@@ -47,6 +47,13 @@ export const CON_NAME: Localized = {en: 'Sekai Beyond Con', zh: '彼世界动漫
 /** Shown wherever the venue name goes while no venue is picked in the event details. */
 export const VENUE_TBA: Localized = {en: 'Venue TBA', zh: '场地待定'};
 
+/**
+ * Where the hero's venue name links: the Husky Union Building's Google Maps page.
+ * Fixed here rather than read from the venue picked in Admin → Con Content, so if
+ * the con moves, change this too, or the new venue's name will open a map of HUB.
+ */
+export const VENUE_MAP_URL = 'https://maps.app.goo.gl/wVdWeZfELBYUEckx9';
+
 export interface ConEvent {
     edition: number
     tagline: Localized
@@ -130,12 +137,10 @@ export const HERO_VIDEO: ConHeroVideo = {
 export interface NavLink {
     id: string
     label: Localized
-    /** Left out of the header, whose Tickets button already covers it. */
-    footerOnly?: boolean
 }
 
 export const NAV_LINKS: NavLink[] = [
-    {id: 'tickets', label: {en: 'Tickets', zh: '门票'}, footerOnly: true},
+    {id: 'tickets', label: {en: 'Tickets', zh: '门票'}},
     {id: 'about', label: {en: 'About', zh: '关于漫展'}},
     {id: 'schedule', label: {en: 'Schedule', zh: '活动日程'}},
     {id: 'guests', label: {en: 'Guests', zh: '嘉宾'}},

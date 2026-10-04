@@ -159,7 +159,6 @@ export const Schedule = () => {
     return (
         <section id="schedule" className="sbc-section">
             <SectionHeader
-                eyebrow={{en: 'Programming', zh: '节目安排'}}
                 title={{en: 'Schedule', zh: '活动日程'}}
                 subtitle={{
                     en: `${trackLine.en}Times may shift slightly on the day — check the board at registration.`,

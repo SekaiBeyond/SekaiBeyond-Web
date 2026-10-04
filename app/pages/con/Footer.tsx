@@ -20,29 +20,13 @@ export const Footer = () => {
     return (
         <footer className="sbc-footer">
             <div className="sbc-footer-inner">
-                <div className="sbc-footer-brand">
-                    <span className="sbc-footer-logo">{t(CON_NAME)}</span>
-                    <p className="sbc-footer-org">
-                        {t({
-                            en: 'Hosted by Sekai Beyond, a registered student organization at the University of Washington.',
-                            zh: '由华盛顿大学注册学生社团 Sekai Beyond 主办。',
-                        })}
-                    </p>
-                    <div className="sbc-footer-socials">
-                        {SOCIALS.map(({id, label, href, Icon}) => (
-                            <a
-                                key={id}
-                                className="sbc-footer-social"
-                                href={href}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label={label}
-                            >
-                                <Icon/>
-                            </a>
-                        ))}
-                    </div>
-                </div>
+                <span className="sbc-footer-logo">{t(CON_NAME)}</span>
+                <p className="sbc-footer-org">
+                    {t({
+                        en: 'Hosted by Sekai Beyond, a registered student organization at the University of Washington.',
+                        zh: '由华盛顿大学注册学生社团 Sekai Beyond 主办。',
+                    })}
+                </p>
 
                 <nav className="sbc-footer-nav" aria-label={t({en: 'Footer', zh: '页脚导航'})}>
                     {NAV_LINKS.map(link => (
@@ -67,6 +51,21 @@ export const Footer = () => {
                         </a>
                     )}
                 </nav>
+
+                <div className="sbc-footer-socials">
+                    {SOCIALS.map(({id, label, href, Icon}) => (
+                        <a
+                            key={id}
+                            className="sbc-footer-social"
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={label}
+                        >
+                            <Icon/>
+                        </a>
+                    ))}
+                </div>
             </div>
 
             <p className="sbc-footer-text">

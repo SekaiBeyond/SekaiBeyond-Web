@@ -12,8 +12,7 @@ export const Vendors = () => {
     return (
         <section id="vendors" className="sbc-section">
             <SectionHeader
-                eyebrow={{en: 'Artist alley', zh: '创作者市集'}}
-                title={{en: 'Makers & Tables', zh: '摊主与摊位'}}
+                title={{en: 'Artist Alley', zh: '创作者市集'}}
                 subtitle={{
                     en: 'Prints, charms, plushes, and zines — bring cash, most tables also take cards.',
                     zh: '海报、挂件、毛绒与刊物——建议带现金，多数摊位也支持刷卡。',

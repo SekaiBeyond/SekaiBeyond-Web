@@ -8,8 +8,7 @@ import { useT } from '~/pages/con/i18n';
 import { useActiveSection, useScrolledPast } from '~/pages/con/hooks';
 import { scrollToSection } from '~/pages/con/utils';
 
-const HEADER_LINKS = NAV_LINKS.filter(link => !link.footerOnly);
-const HEADER_SECTION_IDS = HEADER_LINKS.map(link => link.id);
+const SECTION_IDS = NAV_LINKS.map(link => link.id);
 
 export const Navigation = () => {
     const t = useT();
@@ -17,7 +16,7 @@ export const Navigation = () => {
     const [menuOpen, setMenuOpen] = useState(false);
 
     const solid = useScrolledPast(80);
-    const activeSection = useActiveSection(HEADER_SECTION_IDS);
+    const activeSection = useActiveSection(SECTION_IDS);
 
     // Keep the page from scrolling behind the full-screen mobile menu.
     useEffect(() => {
@@ -60,7 +59,7 @@ export const Navigation = () => {
                 </div>
 
                 <ul className={`sbc-nav-links${menuOpen ? ' sbc-nav-links--open' : ''}`}>
-                    {HEADER_LINKS.map(link => (
+                    {NAV_LINKS.map(link => (
                         <li key={link.id}>
                             <a
                                 className={`sbc-nav-link${activeSection === link.id ? ' sbc-nav-link--active' : ''}`}
@@ -83,7 +82,7 @@ export const Navigation = () => {
                             target="_blank"
                             rel="noopener noreferrer"
                         >
-                            {t({en: 'Tickets', zh: '门票'})}
+                            {t({en: 'Get Tickets', zh: '获取门票'})}
                         </a>
                     </li>
                     <li className="sbc-nav-links-home">
@@ -103,7 +102,7 @@ export const Navigation = () => {
                         target="_blank"
                         rel="noopener noreferrer"
                     >
-                        {t({en: 'Tickets', zh: '门票'})}
+                        {t({en: 'Get Tickets', zh: '获取门票'})}
                     </a>
                     <button
                         type="button"

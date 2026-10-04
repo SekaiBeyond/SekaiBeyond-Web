@@ -15,11 +15,10 @@ export const Tickets = () => {
     return (
         <section id="tickets" className="sbc-section">
             <SectionHeader
-                eyebrow={{en: 'Admission', zh: '入场'}}
                 title={{en: 'Tickets', zh: '门票'}}
                 subtitle={{
-                    en: 'Every tier gets you the full day. Supporter tickets are what pay for the stage.',
-                    zh: '所有票种均可全天入场。支持者票的收入用于支撑舞台开销。',
+                    en: 'One ticket per person, good for the whole day.',
+                    zh: '每张门票限一人使用，全天有效。',
                 }}
             />
 
@@ -95,13 +94,6 @@ export const Tickets = () => {
             </div>
 
             <InPersonSales/>
-
-            <p className="sbc-ticket-footnote">
-                {t({
-                    en: 'Tickets are per person and cover the whole day. Bring your Husky Card if you are claiming the student rate.',
-                    zh: '门票按人计算，涵盖全天活动。如需享受学生票价，请携带 Husky Card。',
-                })}
-            </p>
         </section>
     );
 };

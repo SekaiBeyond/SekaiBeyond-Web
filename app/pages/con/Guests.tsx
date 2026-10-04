@@ -9,7 +9,6 @@ export const Guests = () => {
     return (
         <section id="guests" className="sbc-section">
             <SectionHeader
-                eyebrow={{en: 'Line-up', zh: '阵容'}}
                 title={{en: 'Guests & Performers', zh: '嘉宾与演出者'}}
                 subtitle={{
                     en: 'Illustrators, cosplayers, and performers joining us on the day.',
@@ -29,21 +28,23 @@ export const Guests = () => {
                             </div>
                         )}
 
-                        <h3 className="sbc-guest-name">{guest.name}</h3>
-                        <p className="sbc-guest-role">{t(guest.role)}</p>
-                        <p className="sbc-guest-blurb">{t(guest.blurb)}</p>
+                        <div>
+                            <h3 className="sbc-guest-name">{guest.name}</h3>
+                            <p className="sbc-guest-role">{t(guest.role)}</p>
+                            <p className="sbc-guest-blurb">{t(guest.blurb)}</p>
 
-                        {guest.link && (
-                            <a
-                                className="sbc-guest-link"
-                                href={guest.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                {t({en: 'See their work', zh: '查看作品'})}
-                                <span aria-hidden="true"> →</span>
-                            </a>
-                        )}
+                            {guest.link && (
+                                <a
+                                    className="sbc-guest-link"
+                                    href={guest.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    {t({en: 'See their work', zh: '查看作品'})}
+                                    <span aria-hidden="true"> →</span>
+                                </a>
+                            )}
+                        </div>
                     </article>
                 ))}
             </div>

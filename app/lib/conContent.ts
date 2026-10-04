@@ -2,7 +2,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { createValueCache } from './collectionCache';
 import { getFirebaseDb } from './firebase';
-import { hasCoordinates, resolveVenueById, useVenues } from './venues';
+import { resolveVenueById, useVenues } from './venues';
 import {
     CON,
     CON_SETTINGS,
@@ -315,8 +315,6 @@ export function useConContent(): ConContentRead {
 
 export interface ConVenue {
     name: Localized;
-    /** Empty when the venue has no coordinates to point a map at. */
-    mapUrl: string;
     parkingUrl: string;
 }
 
@@ -330,9 +328,6 @@ export function useConVenue(): ConVenue | null {
     if (!venue) return null;
     return {
         name: {en: venue.nameEn, zh: venue.nameCn || venue.nameEn},
-        mapUrl: hasCoordinates(venue.lat, venue.lng)
-            ? `https://www.google.com/maps/search/?api=1&query=${venue.lat},${venue.lng}`
-            : '',
         parkingUrl: `/parking?venue=${encodeURIComponent(venue.id)}`,
     };
 }
