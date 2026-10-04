@@ -10,7 +10,7 @@
  * still works; it sets what a visitor sees before the fetch lands, and what they
  * keep seeing for any section an admin has never touched.
  *
- * The rest — HERO_EMBED, NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS, VENUE_NOTES —
+ * The rest — HERO_EMBED, NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS —
  * is code-only, because it is tied to section anchors an admin cannot add or to
  * the reel the main site already points at. ROOM_ACCENTS is code-only for the
  * same reason (each value is a CSS class), but which rooms exist and which accent
@@ -130,15 +130,16 @@ export const HERO_VIDEO: ConHeroVideo = {
 export interface NavLink {
     id: string
     label: Localized
+    /** Left out of the header, whose Tickets button already covers it. */
+    footerOnly?: boolean
 }
 
 export const NAV_LINKS: NavLink[] = [
+    {id: 'tickets', label: {en: 'Tickets', zh: '门票'}, footerOnly: true},
     {id: 'about', label: {en: 'About', zh: '关于漫展'}},
     {id: 'schedule', label: {en: 'Schedule', zh: '活动日程'}},
     {id: 'guests', label: {en: 'Guests', zh: '嘉宾'}},
     {id: 'vendors', label: {en: 'Artist Alley', zh: '创作者市集'}},
-    {id: 'tickets', label: {en: 'Tickets', zh: '门票'}},
-    {id: 'venue', label: {en: 'Venue', zh: '场地'}},
     {id: 'faq', label: {en: 'FAQ', zh: '常见问题'}},
 ];
 
@@ -565,47 +566,6 @@ export const IN_PERSON_SALES: InPersonSales = {
     note: {en: '', zh: ''},
     sessions: [],
 };
-
-export interface VenueNote {
-    icon: string
-    label: Localized
-    body: Localized
-}
-
-export const VENUE_NOTES: VenueNote[] = [
-    {
-        icon: '🚈',
-        label: {en: 'Light Rail', zh: '轻轨'},
-        body: {
-            en: 'Take the 1 Line to U District Station, then walk about 10 minutes south into campus.',
-            zh: '乘坐 1 号线至 U District 站，向南步行约 10 分钟进入校园。',
-        },
-    },
-    {
-        icon: '🚌',
-        label: {en: 'Bus', zh: '公交'},
-        body: {
-            en: 'Routes along Stevens Way and NE Campus Parkway stop within a block of the HUB.',
-            zh: 'Stevens Way 与 NE Campus Parkway 沿线公交站距 HUB 仅一个街区。',
-        },
-    },
-    {
-        icon: '🅿️',
-        label: {en: 'Parking', zh: '停车'},
-        body: {
-            en: 'Central Plaza Garage is the closest paid garage. Weekend rates are lower — arrive early.',
-            zh: 'Central Plaza 停车楼为最近的收费车库，周末价格更低，建议早到。',
-        },
-    },
-    {
-        icon: '♿',
-        label: {en: 'Accessibility', zh: '无障碍'},
-        body: {
-            en: 'Step-free entry, elevators to every room, and reserved seating near the stage. Email us for specific needs.',
-            zh: '无台阶入口、各层电梯直达，舞台附近设预留座位。有特殊需求请邮件联系我们。',
-        },
-    },
-];
 
 export interface FaqEntry {
     q: Localized

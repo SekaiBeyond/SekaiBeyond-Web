@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { LuArrowDown, LuArrowUpRight, LuCalendar, LuClock, LuMapPin } from 'react-icons/lu';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent, useConVenue } from '~/lib/conContent';
 import { CON_NAME, HERO_EMBED, VENUE_TBA } from '~/pages/con/content';
@@ -135,18 +136,18 @@ export const Hero = () => {
 
                 <ul className="sbc-hero-meta">
                     <li>
-                        <span aria-hidden="true">📅</span>
+                        <LuCalendar className="sbc-hero-meta-icon" aria-hidden="true"/>
                         <span>
                             {formatEventDate(event.date, currentLanguage)}
                             <span className="sbc-hero-meta-dim"> · {formatWeekday(event.date, currentLanguage)}</span>
                         </span>
                     </li>
                     <li>
-                        <span aria-hidden="true">⏰</span>
+                        <LuClock className="sbc-hero-meta-icon" aria-hidden="true"/>
                         <span>{formatTimeRange(event.date, event.endTime, currentLanguage)}</span>
                     </li>
                     <li>
-                        <span aria-hidden="true">📍</span>
+                        <LuMapPin className="sbc-hero-meta-icon" aria-hidden="true"/>
                         <span>{t(venue?.name ?? VENUE_TBA)}</span>
                     </li>
                 </ul>
@@ -161,7 +162,7 @@ export const Hero = () => {
                         rel="noopener noreferrer"
                     >
                         <span>{t({en: 'Get Tickets', zh: '获取门票'})}</span>
-                        <span aria-hidden="true">🎟️</span>
+                        <LuArrowUpRight aria-hidden="true"/>
                     </a>
                     <a
                         className="btn sbc-btn-ghost"
@@ -169,16 +170,16 @@ export const Hero = () => {
                         onClick={scrollToSection('schedule')}
                     >
                         <span>{t({en: 'See the Schedule', zh: '查看日程'})}</span>
-                        <span aria-hidden="true">✨</span>
+                        <LuArrowDown aria-hidden="true"/>
                     </a>
                 </div>
             </div>
 
             <a
                 className="sbc-hero-scroll-cue"
-                href="#about"
-                onClick={scrollToSection('about')}
-                aria-label={t({en: 'Scroll to about section', zh: '滚动到关于漫展'})}
+                href="#tickets"
+                onClick={scrollToSection('tickets')}
+                aria-label={t({en: 'Scroll to tickets', zh: '滚动到门票'})}
             >
                 <span aria-hidden="true">↓</span>
             </a>

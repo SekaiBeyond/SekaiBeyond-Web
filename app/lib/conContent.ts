@@ -317,6 +317,7 @@ export interface ConVenue {
     name: Localized;
     /** Empty when the venue has no coordinates to point a map at. */
     mapUrl: string;
+    parkingUrl: string;
 }
 
 /**
@@ -332,6 +333,7 @@ export function useConVenue(): ConVenue | null {
         mapUrl: hasCoordinates(venue.lat, venue.lng)
             ? `https://www.google.com/maps/search/?api=1&query=${venue.lat},${venue.lng}`
             : '',
+        parkingUrl: `/parking?venue=${encodeURIComponent(venue.id)}`,
     };
 }
 

@@ -1,3 +1,4 @@
+import { LuMail } from 'react-icons/lu';
 import { useConContent } from '~/lib/conContent';
 import { useSiteConfig } from '~/lib/siteConfig';
 import { useT } from '~/pages/con/i18n';
@@ -54,7 +55,7 @@ export const Vendors = () => {
                 {config.contactEmail && (
                     <a className="btn btn-secondary" href={`mailto:${config.contactEmail}`}>
                         <span>{t(cta.label)}</span>
-                        <span aria-hidden="true">✉️</span>
+                        <LuMail aria-hidden="true"/>
                     </a>
                 )}
             </div>

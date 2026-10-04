@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '~/lib/firebase';
 import {
@@ -259,6 +259,10 @@ type EventSnapshot = Pick<UpcomingEvent, 'title' | 'titleCn' | 'location' | 'loc
 
 export const ParkingGuide = () => {
     const {eventId} = useParams<{eventId: string}>();
+    // The con page knows its venue but is not an upcoming event, so it links here
+    // by venue instead; with no event to look up, that venue is the default.
+    const [searchParams] = useSearchParams();
+    const venueParam = eventId ? '' : searchParams.get('venue') ?? '';
     const {isEnglish} = useLanguage();
     const {venues, loading: venuesLoading} = useVenues();
     const {parkingLots, loading: lotsLoading} = useParkingLots();
@@ -279,7 +283,8 @@ export const ParkingGuide = () => {
 
     useEffect(() => {
         if (!eventId) {
-            setError('No event ID');
+            if (venueParam) setSelectedVenueId(venueParam);
+            else setError('No event ID');
             setEventLoading(false);
             return;
         }
@@ -309,7 +314,7 @@ export const ParkingGuide = () => {
                 setEventLoading(false);
             }
         })();
-    }, [eventId]);
+    }, [eventId, venueParam]);
 
     // Default the displayed venue to the event's own venue once it loads.
     useEffect(() => {
@@ -427,7 +432,7 @@ export const ParkingGuide = () => {
         );
     }
 
-    if (error || !event) {
+    if (error || (!event && !venueParam)) {
         return (
             <div className="parking-page">
                 <div className="parking-topbar">

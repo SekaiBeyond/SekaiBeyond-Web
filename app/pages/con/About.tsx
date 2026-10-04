@@ -1,48 +1,10 @@
-import { useLanguage } from '~/components/LanguageContextProvider';
-import { useConContent, useConVenue } from '~/lib/conContent';
-import { ABOUT_PARAGRAPHS, HIGHLIGHTS, VENUE_TBA } from '~/pages/con/content';
+import { ABOUT_PARAGRAPHS, HIGHLIGHTS } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
-import { useNowAcross } from '~/pages/con/hooks';
-import { activeEarlyBird, formatEventDate, formatPrice, formatTimeRange } from '~/pages/con/utils';
 import { SectionHeader } from '~/pages/con/SectionHeader';
+import { Venue } from '~/pages/con/Venue';
 
 export const About = () => {
     const t = useT();
-    const {currentLanguage} = useLanguage();
-    const {event, tickets} = useConContent().content;
-    const venue = useConVenue();
-    const now = useNowAcross(tickets.flatMap(tier => tier.earlyBird ? [tier.earlyBird.endsAt] : []));
-
-    const facts = [
-        {
-            icon: '📅',
-            label: {en: 'When', zh: '时间'},
-            value: `${formatEventDate(event.date, currentLanguage)} · ${formatTimeRange(event.date, event.endTime, currentLanguage)}`,
-        },
-        {
-            icon: '📍',
-            label: {en: 'Where', zh: '地点'},
-            value: t(venue?.name ?? VENUE_TBA),
-        },
-        {
-            icon: '🎟️',
-            // Read off the ticket tiers rather than restated here, so editing prices
-            // in the admin panel cannot leave this card contradicting the Tickets
-            // section further down the same page.
-            label: {en: 'Admission', zh: '入场'},
-            value: tickets.length > 0
-                ? tickets.map(tier => {
-                    const earlyBird = activeEarlyBird(tier, now);
-                    return earlyBird
-                        ? `${t(tier.name)} ${formatPrice(earlyBird.price, currentLanguage)}${t({
-                            en: ' (early bird)',
-                            zh: '（早鸟）'
-                        })}`
-                        : `${t(tier.name)} ${formatPrice(tier.price, currentLanguage)}`;
-                }).join(' · ')
-                : t({en: 'See the tickets section below', zh: '详见下方门票板块'}),
-        },
-    ];
 
     return (
         <section id="about" className="sbc-section">
@@ -56,29 +18,10 @@ export const About = () => {
             />
 
             <div className="sbc-about-card">
-                <div className="sbc-about-grid">
-                    <div className="sbc-about-text">
-                        {ABOUT_PARAGRAPHS.map((paragraph, i) => (
-                            <p key={i}>{t(paragraph)}</p>
-                        ))}
-                    </div>
-
-                    <aside className="sbc-facts-card">
-                        <h3 className="sbc-facts-title">
-                            {t({en: 'Quick facts', zh: '速览'})}
-                        </h3>
-                        <dl className="sbc-facts-list">
-                            {facts.map(fact => (
-                                <div key={fact.label.en} className="sbc-fact-row">
-                                    <dt>
-                                        <span className="sbc-fact-icon" aria-hidden="true">{fact.icon}</span>
-                                        {t(fact.label)}
-                                    </dt>
-                                    <dd>{fact.value}</dd>
-                                </div>
-                            ))}
-                        </dl>
-                    </aside>
+                <div className="sbc-about-text">
+                    {ABOUT_PARAGRAPHS.map((paragraph, i) => (
+                        <p key={i}>{t(paragraph)}</p>
+                    ))}
                 </div>
 
                 <div className="sbc-highlight-grid">
@@ -90,6 +33,8 @@ export const About = () => {
                         </article>
                     ))}
                 </div>
+
+                <Venue/>
             </div>
         </section>
     );

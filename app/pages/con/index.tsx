@@ -5,12 +5,11 @@ import { useHashScroll } from '~/lib/useHashScroll';
 import { useVenues } from '~/lib/venues';
 import { Navigation } from '~/pages/con/Navigation';
 import { Hero } from '~/pages/con/Hero';
+import { Tickets } from '~/pages/con/Tickets';
 import { About } from '~/pages/con/About';
 import { Schedule } from '~/pages/con/Schedule';
 import { Guests } from '~/pages/con/Guests';
 import { Vendors } from '~/pages/con/Vendors';
-import { Tickets } from '~/pages/con/Tickets';
-import { Venue } from '~/pages/con/Venue';
 import { Faq } from '~/pages/con/Faq';
 import { Footer } from '~/pages/con/Footer';
 import { Unpublished } from '~/pages/con/Unpublished';
@@ -68,12 +67,11 @@ export const ConPage = () => {
             <Navigation/>
             <main>
                 <Hero/>
+                <Tickets/>
                 <About/>
                 <Schedule/>
                 <Guests/>
                 <Vendors/>
-                <Tickets/>
-                <Venue/>
                 <Faq/>
             </main>
             <Footer/>

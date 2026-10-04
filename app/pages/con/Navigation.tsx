@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { FiArrowLeft, FiMenu, FiX } from 'react-icons/fi';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
@@ -8,14 +8,16 @@ import { useT } from '~/pages/con/i18n';
 import { useActiveSection, useScrolledPast } from '~/pages/con/hooks';
 import { scrollToSection } from '~/pages/con/utils';
 
+const HEADER_LINKS = NAV_LINKS.filter(link => !link.footerOnly);
+const HEADER_SECTION_IDS = HEADER_LINKS.map(link => link.id);
+
 export const Navigation = () => {
     const t = useT();
     const {ticketUrl} = useConContent().content.event;
     const [menuOpen, setMenuOpen] = useState(false);
 
     const solid = useScrolledPast(80);
-    const sectionIds = useMemo(() => NAV_LINKS.map(link => link.id), []);
-    const activeSection = useActiveSection(sectionIds);
+    const activeSection = useActiveSection(HEADER_SECTION_IDS);
 
     // Keep the page from scrolling behind the full-screen mobile menu.
     useEffect(() => {
@@ -58,7 +60,7 @@ export const Navigation = () => {
                 </div>
 
                 <ul className={`sbc-nav-links${menuOpen ? ' sbc-nav-links--open' : ''}`}>
-                    {NAV_LINKS.map(link => (
+                    {HEADER_LINKS.map(link => (
                         <li key={link.id}>
                             <a
                                 className={`sbc-nav-link${activeSection === link.id ? ' sbc-nav-link--active' : ''}`}
@@ -69,6 +71,11 @@ export const Navigation = () => {
                             </a>
                         </li>
                     ))}
+                    <li>
+                        <Link className="sbc-nav-link" to="/policy" onClick={() => setMenuOpen(false)}>
+                            {t({en: 'Policy', zh: '政策'})}
+                        </Link>
+                    </li>
                     <li className="sbc-nav-links-cta">
                         <a
                             className="btn btn-primary sbc-btn-compact"

@@ -444,6 +444,12 @@
     color: #fff;
 }
 
+.sbc-hero-meta-icon {
+    flex-shrink: 0;
+    font-size: 16px;
+    color: var(--sbc-gold);
+}
+
 .sbc-hero-meta-dim {
     color: rgba(255, 255, 255, 0.65);
     font-weight: 500;
@@ -628,11 +634,11 @@
     box-shadow: var(--sbc-shadow-panel);
 }
 
-.sbc-about-grid {
+/* Two paragraphs side by side; they stack once the card narrows. */
+.sbc-about-text {
     display: grid;
-    grid-template-columns: 1.35fr 1fr;
-    gap: 48px;
-    align-items: start;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px 48px;
 }
 
 .sbc-about-text p {
@@ -640,53 +646,6 @@
     font-weight: 500;
     line-height: 1.85;
     color: var(--color-text-body);
-}
-
-.sbc-about-text p + p {
-    margin-top: 18px;
-}
-
-.sbc-facts-card {
-    padding: 28px;
-    border-radius: var(--sbc-radius-card);
-    background: linear-gradient(135deg, rgba(255, 107, 157, 0.07), rgba(254, 202, 87, 0.07));
-    border: 2px solid rgba(255, 107, 157, 0.14);
-}
-
-.sbc-facts-title {
-    font-family: var(--font-display);
-    font-size: 1.4rem;
-    color: var(--color-primary);
-    margin-bottom: 18px;
-}
-
-.sbc-facts-list {
-    display: grid;
-    gap: 16px;
-}
-
-.sbc-fact-row dt {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 1.2px;
-    text-transform: uppercase;
-    color: var(--color-text-muted);
-}
-
-.sbc-fact-icon {
-    font-size: 15px;
-}
-
-.sbc-fact-row dd {
-    margin-top: 4px;
-    margin-left: 0;
-    font-size: 0.98rem;
-    font-weight: 600;
-    line-height: 1.5;
-    color: var(--sbc-heading);
 }
 
 .sbc-highlight-grid {
@@ -1008,12 +967,13 @@
 }
 
 .sbc-guest-card::before {
-    content: '✨';
+    content: '✦';
     position: absolute;
     top: 14px;
     right: 18px;
-    font-size: 18px;
-    opacity: 0.5;
+    font-size: 16px;
+    color: var(--color-primary);
+    opacity: 0.35;
 }
 
 .sbc-guest-card:hover {
@@ -1360,15 +1320,36 @@
     color: var(--color-text-secondary);
 }
 
-.sbc-venue-layout {
-    display: grid;
-    grid-template-columns: 0.9fr 1.1fr;
-    gap: 26px;
-    align-items: start;
+/* Venue — the last block inside the About card, ruled off like the highlights. */
+.sbc-about-venue {
+    margin-top: 46px;
+    padding-top: 40px;
+    border-top: 1px solid rgba(255, 182, 193, 0.35);
+    /* Lands /con#venue with its title 94px down, where the section headers land. */
+    scroll-margin-top: 54px;
 }
 
+.sbc-about-venue-title {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    color: var(--color-primary);
+}
+
+.sbc-about-venue-subtitle {
+    margin: 6px 0 24px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    line-height: 1.65;
+    color: var(--color-text-secondary);
+}
+
+/* Pin and name on the left, buttons on the right; the buttons drop below when narrow. */
 .sbc-venue-address-card {
-    padding: 40px 36px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px 24px;
+    padding: 32px 36px;
     border-radius: var(--sbc-radius-panel);
     background: linear-gradient(150deg, var(--sbc-night-800), var(--sbc-night-700));
     color: #fff;
@@ -1376,61 +1357,29 @@
 }
 
 .sbc-venue-pin {
-    display: block;
-    font-size: 32px;
-    margin-bottom: 14px;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: rgba(254, 202, 87, 0.14);
+    color: var(--sbc-gold);
+    font-size: 24px;
 }
 
 .sbc-venue-name {
+    flex: 1 1 220px;
     font-family: var(--font-display);
     font-size: 1.9rem;
     line-height: 1.25;
-    margin-bottom: 26px;
 }
 
-/* No map button follows when the venue has no coordinates. */
-.sbc-venue-name:last-child {
-    margin-bottom: 0;
-}
-
-.sbc-venue-notes {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 18px;
-}
-
-.sbc-venue-note {
+.sbc-venue-actions {
     display: flex;
-    gap: 14px;
-    padding: 24px;
-    background: #fff;
-    border-radius: var(--sbc-radius-card);
-    box-shadow: var(--shadow-soft);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.sbc-venue-note:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-card);
-}
-
-.sbc-venue-note-icon {
-    font-size: 24px;
-    line-height: 1.2;
-}
-
-.sbc-venue-note-label {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--sbc-heading);
-    margin-bottom: 6px;
-}
-
-.sbc-venue-note-body {
-    font-size: 0.88rem;
-    font-weight: 500;
-    line-height: 1.65;
-    color: var(--color-text-body);
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .sbc-faq-list {
@@ -1614,18 +1563,13 @@
         padding: 40px 34px;
     }
 
-    .sbc-about-grid {
+    .sbc-about-text {
         grid-template-columns: 1fr;
-        gap: 34px;
     }
 
     .sbc-highlight-grid,
     .sbc-guest-grid {
         grid-template-columns: repeat(2, 1fr);
-    }
-
-    .sbc-venue-layout {
-        grid-template-columns: 1fr;
     }
 }
 
@@ -1719,10 +1663,6 @@
         grid-template-columns: 1fr;
         max-width: 460px;
         margin: 0 auto;
-    }
-
-    .sbc-venue-notes {
-        grid-template-columns: 1fr;
     }
 }
 
@@ -1849,6 +1789,8 @@
 
     .sbc-callout-actions,
     .sbc-callout .btn,
+    .sbc-venue-actions,
+    .sbc-venue-actions .btn,
     .sbc-inperson-sessions {
         width: 100%;
         justify-content: center;
