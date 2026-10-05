@@ -8,6 +8,7 @@ import { Hero } from '~/pages/con/Hero';
 import { Tickets } from '~/pages/con/Tickets';
 import { About } from '~/pages/con/About';
 import { Schedule } from '~/pages/con/Schedule';
+import { Lineup } from '~/pages/con/Lineup';
 import { Guests } from '~/pages/con/Guests';
 import { Vendors } from '~/pages/con/Vendors';
 import { Faq } from '~/pages/con/Faq';
@@ -70,6 +71,7 @@ export const ConPage = () => {
                 <Tickets/>
                 <About/>
                 <Schedule/>
+                <Lineup/>
                 <Guests/>
                 <Vendors/>
                 <Faq/>
