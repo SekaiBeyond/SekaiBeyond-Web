@@ -1790,14 +1790,6 @@
     max-width: 1180px;
 }
 
-@font-face {
-    font-family: "Sekai Salt";
-    src: url("/SALT-REGULAR.OTF") format("opentype");
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-}
-
 .sbc-lineup-editor {
     display: grid;
     grid-template-columns: minmax(250px, 0.8fr) minmax(0, 1.2fr);
@@ -2125,6 +2117,86 @@
     color: var(--color-text-muted);
 }
 
+.sbc-lineup-font-picker {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.sbc-lineup-font-picker legend {
+    margin-bottom: 12px;
+    padding: 0;
+}
+
+/* Seven fonts plus the upload tile: two rows of four, or four of two on phones. */
+.sbc-lineup-font-options {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+/* Each option is written in its own font (sized inline), so the choice is made by eye. */
+.sbc-lineup-font-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 52px;
+    padding: 6px 8px;
+    border: 1px solid rgba(90, 90, 90, 0.18);
+    border-radius: 11px;
+    background: #fff;
+    color: var(--color-text-secondary);
+    line-height: 1.1;
+    text-align: center;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.sbc-lineup-font-option:hover {
+    border-color: rgba(255, 107, 157, 0.55);
+}
+
+.sbc-lineup-font-option:has(input:checked) {
+    border-color: rgba(255, 107, 157, 0.75);
+    background: rgba(255, 107, 157, 0.08);
+    color: #ff1678;
+}
+
+.sbc-lineup-font-option:has(input:focus-visible) {
+    outline: 3px solid rgba(255, 107, 157, 0.28);
+    outline-offset: 2px;
+}
+
+.sbc-lineup-font-upload {
+    border-style: dashed;
+    border-color: rgba(255, 107, 157, 0.45);
+    color: var(--color-primary);
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.sbc-lineup-font-picker:has(.sbc-lineup-font-file:focus-visible) .sbc-lineup-font-file-trigger {
+    outline: 3px solid rgba(255, 107, 157, 0.28);
+    outline-offset: 2px;
+}
+
+.sbc-lineup-font-change {
+    color: var(--color-primary);
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.sbc-lineup-font-note {
+    margin: 10px 0 0;
+    color: var(--color-text-muted);
+    font-size: 0.76rem;
+    line-height: 1.5;
+}
+
 .sbc-lineup-extra-text {
     display: grid;
     justify-items: start;
@@ -2213,6 +2285,10 @@
         font-size: 0.82rem;
     }
 
+    .sbc-lineup-font-picker legend {
+        margin-bottom: 8px;
+    }
+
     .sbc-lineup-control-actions {
         gap: 7px;
     }
@@ -2228,6 +2304,10 @@
 @media (max-width: 480px) {
     .sbc-lineup-upload-button {
         font-size: 0.76rem;
+    }
+
+    .sbc-lineup-font-options {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .sbc-lineup-control-actions > button {

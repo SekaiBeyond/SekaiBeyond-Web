@@ -7,10 +7,10 @@ import { useT } from '~/pages/con/i18n';
 const CANVAS_WIDTH = 1080;
 const CANVAS_HEIGHT = 1350;
 const CANVAS_BACKGROUND = '#faf3f6';
-const CARD_FONT_FAMILY = 'Sekai Salt';
 // The photo opening in foreground-overlay.png, measured in source-image pixels.
 const PHOTO_WINDOW = {left: 460, top: 615, right: 1724, bottom: 2287, sourceWidth: 2166, sourceHeight: 2707};
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_FONT_BYTES = 30 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 40_000_000;
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 3;
@@ -30,6 +30,53 @@ const CARD_TITLE_PRESETS: Record<Exclude<CardTitlePreset, 'custom'>, string> = {
     panel: 'Panel',
 };
 
+type TitleFont = {family: string; size: number};
+type UploadedFont = TitleFont & {name: string; face: FontFace};
+
+// The longest preset title, and how wide every font draws it.
+const TITLE_SAMPLE = CARD_TITLE_PRESETS.cosplay;
+const TITLE_SAMPLE_WIDTH = 690;
+// Open-licensed (SIL OFL or Apache) Google Fonts only: visitors type their own
+// titles here, which commercial webfont licenses forbid. Each size draws
+// TITLE_SAMPLE at TITLE_SAMPLE_WIDTH; longer titles still shrink to fit.
+const TITLE_FONTS: TitleFont[] = [
+    {family: 'Caveat Brush', size: 132},
+    {family: 'Water Brush', size: 132},
+    {family: 'Comforter Brush', size: 150},
+    {family: 'Kaushan Script', size: 116},
+    {family: 'Marck Script', size: 114},
+    {family: 'Yellowtail', size: 128},
+    {family: 'Caveat', size: 143},
+];
+// None of the title fonts has Chinese glyphs, so Chinese titles fall through to this brush face.
+const TITLE_CJK_FONT = 'Ma Shan Zheng';
+const TITLE_FONT_STYLESHEET = 'https://fonts.googleapis.com/css2?'
+    + [...TITLE_FONTS.map(font => font.family), TITLE_CJK_FONT].map(family => `family=${family.replaceAll(' ', '+')}&`).join('')
+    + 'display=swap';
+
+const titleFontStack = (family: string) => `"${family}", "${TITLE_CJK_FONT}", sans-serif`;
+
+let titleFontStylesheet: Promise<void> | undefined;
+// Added when the share card first mounts, so the rest of the site never fetches it.
+const loadTitleFontStylesheet = () => titleFontStylesheet ??= new Promise(resolve => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = TITLE_FONT_STYLESHEET;
+    // A failed request still settles, so the title falls back to sans-serif instead of never drawing.
+    link.onload = () => resolve();
+    link.onerror = () => resolve();
+    document.head.append(link);
+});
+
+// Uploaded fonts can't be measured ahead of time, so they're sized here the way the presets were.
+const measureTitleSize = (family: string) => {
+    const context = document.createElement('canvas').getContext('2d');
+    if (!context) return TITLE_FONTS[0].size;
+    context.font = `100px ${titleFontStack(family)}`;
+    const width = context.measureText(TITLE_SAMPLE).width;
+    return width > 0 ? Math.min(260, Math.max(52, Math.round(100 * TITLE_SAMPLE_WIDTH / width))) : TITLE_FONTS[0].size;
+};
+
 const drawCenteredText = (
     context: CanvasRenderingContext2D,
     text: string,
@@ -38,15 +85,13 @@ const drawCenteredText = (
     preferredSize: number,
     minimumSize: number,
     maxHeight: number,
-    fontFamily = CARD_FONT_FAMILY,
+    fontFamily: string,
 ) => {
     const content = text.trim();
     if (!content) return;
 
     const setCanvasFont = (fontSize: number) => {
-        context.font = fontFamily === 'sans-serif'
-            ? `${fontSize}px sans-serif`
-            : `${fontSize}px "${fontFamily}", sans-serif`;
+        context.font = `${fontSize}px ${fontFamily}`;
     };
     let size = preferredSize;
     context.textAlign = 'center';
@@ -73,6 +118,7 @@ const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 export const Lineup = () => {
     const t = useT();
     const inputId = useId();
+    const fontInputId = `${inputId}-font-file`;
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const loadToken = useRef(0);
     const activePointers = useRef(new Map<number, PointerPoint>());
@@ -82,7 +128,13 @@ export const Lineup = () => {
     const [overlay, setOverlay] = useState<HTMLImageElement | null>(null);
     const [overlayLoading, setOverlayLoading] = useState(true);
     const [overlayError, setOverlayError] = useState(false);
-    const [fontReady, setFontReady] = useState(false);
+    const fontUploadToken = useRef(0);
+    const [titleFont, setTitleFont] = useState<TitleFont>(TITLE_FONTS[0]);
+    const [uploadedFont, setUploadedFont] = useState<UploadedFont | null>(null);
+    const [fontOpening, setFontOpening] = useState(false);
+    const [fontError, setFontError] = useState('');
+    const [readyFamily, setReadyFamily] = useState<string | null>(null);
+    const [fontLoads, setFontLoads] = useState(0);
     const [titlePreset, setTitlePreset] = useState<CardTitlePreset>('cosplay');
     const [customTitle, setCustomTitle] = useState('');
     const [extraTextEnabled, setExtraTextEnabled] = useState(false);
@@ -119,17 +171,29 @@ export const Lineup = () => {
         };
     }, []);
 
+    const title = titlePreset === 'custom' ? customTitle : CARD_TITLE_PRESETS[titlePreset];
+
     useEffect(() => {
         let cancelled = false;
-        void document.fonts.load(`180px "${CARD_FONT_FAMILY}"`)
+        // Loading against the title also fetches the CJK font's glyph slices for a
+        // Chinese title. The canvas can't repaint itself when they arrive, so every
+        // finished load bumps a counter that redraws the card.
+        void loadTitleFontStylesheet()
+            .then(() => document.fonts.load(`${titleFont.size}px ${titleFontStack(titleFont.family)}`, title.trim() || 'A'))
             .catch(() => [])
             .then(() => {
-                if (!cancelled) setFontReady(true);
+                if (cancelled) return;
+                setReadyFamily(titleFont.family);
+                setFontLoads(count => count + 1);
             });
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [titleFont, title]);
+
+    useEffect(() => () => {
+        if (uploadedFont) document.fonts.delete(uploadedFont.face);
+    }, [uploadedFont]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -180,12 +244,51 @@ export const Lineup = () => {
             context.drawImage(overlay, (CANVAS_WIDTH - width) / 2, (CANVAS_HEIGHT - height) / 2, width, height);
         }
 
-        if (fontReady) {
-            const title = titlePreset === 'custom' ? customTitle : CARD_TITLE_PRESETS[titlePreset];
-            drawCenteredText(context, title, 160, 930, 145, 52, 210);
+        if (readyFamily === titleFont.family) {
+            // 760 wide keeps a long title clear of the artwork's top-left corner bracket (x 63–134).
+            drawCenteredText(context, title, 160, 760, titleFont.size, 52, 210, titleFontStack(titleFont.family));
             if (extraTextEnabled) drawCenteredText(context, extraText, 280, 850, 56, 32, 76, 'sans-serif');
         }
-    }, [photo, overlay, zoom, rotation, offsetX, offsetY, fontReady, titlePreset, customTitle, extraTextEnabled, extraText]);
+    }, [photo, overlay, zoom, rotation, offsetX, offsetY, titleFont, readyFamily, fontLoads, title, extraTextEnabled, extraText]);
+
+    const onFontSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.currentTarget.files?.[0];
+        // Clearing the input lets someone choose the same file again.
+        event.currentTarget.value = '';
+        if (!file) return;
+
+        const token = ++fontUploadToken.current;
+        setFontError('');
+        if (file.size > MAX_FONT_BYTES) {
+            setFontOpening(false);
+            setFontError(t({en: 'That font file is larger than 30 MB.', zh: '字体文件超过 30 MB。'}));
+            return;
+        }
+
+        setFontOpening(true);
+        // Read into memory so the file never leaves this device. An ArrayBuffer
+        // source also needs no blob: URL, which our CSP's font-src doesn't allow.
+        const family = `Uploaded Font ${token}`;
+        let face: FontFace;
+        try {
+            face = await new FontFace(family, await file.arrayBuffer()).load();
+        } catch {
+            if (token !== fontUploadToken.current) return;
+            setFontOpening(false);
+            setFontError(t({
+                en: "That file isn't a font this browser can read. Try a TTF, OTF, WOFF, or WOFF2 file.",
+                zh: '无法读取这个字体文件，请换成 TTF、OTF、WOFF 或 WOFF2 格式。',
+            }));
+            return;
+        }
+        if (token !== fontUploadToken.current) return;
+
+        document.fonts.add(face);
+        const font = {family, size: measureTitleSize(family), name: file.name.replace(/\.[^.]+$/, ''), face};
+        setFontOpening(false);
+        setUploadedFont(font);
+        setTitleFont(font);
+    };
 
     const onPhotoSelected = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.currentTarget.files?.[0];
@@ -347,6 +450,21 @@ export const Lineup = () => {
         }, 'image/png');
     };
 
+    const fontOption = (font: TitleFont, label: string) => (
+        <label key={font.family} className="sbc-lineup-font-option">
+            <input
+                className="sbc-sr-only"
+                type="radio"
+                name={`${inputId}-font`}
+                value={font.family}
+                checked={titleFont.family === font.family}
+                onChange={() => setTitleFont(font)}
+            />
+            {/* Scaled like the card title, so every option reads at about the same width. */}
+            <span style={{fontFamily: titleFontStack(font.family), fontSize: `${font.size / 100}rem`}}>{label}</span>
+        </label>
+    );
+
     return (
         <section id="lineup" className="sbc-section sbc-lineup-section">
             <SectionHeader
@@ -401,7 +519,7 @@ export const Lineup = () => {
                                 {t({en: photo ? 'Change photo' : 'Choose photo', zh: photo ? '更换照片' : '选择照片'})}
                             </label>
                             <button type="button" className="btn btn-primary sbc-lineup-download"
-                                    disabled={!photo || loading || overlayLoading || overlayError}
+                                    disabled={!photo || loading || overlayLoading || overlayError || readyFamily !== titleFont.family}
                                     onClick={downloadPng}>
                                 <FiDownload aria-hidden="true"/>
                                 {t({en: 'Save PNG', zh: '保存 PNG'})}
@@ -461,6 +579,44 @@ export const Lineup = () => {
                                 />
                             </label>
                         )}
+
+                        <fieldset className="sbc-lineup-font-picker">
+                            <legend className="sbc-lineup-control-heading">{t({en: 'Title font', zh: '标题字体'})}</legend>
+                            <div className="sbc-lineup-font-options">
+                                {TITLE_FONTS.map(font => fontOption(font, font.family))}
+                                {/* An added font takes the upload tile's place, keeping the grid at two rows. */}
+                                {uploadedFont ? fontOption(uploadedFont, uploadedFont.name) : (
+                                    <label className="sbc-lineup-font-option sbc-lineup-font-upload sbc-lineup-font-file-trigger"
+                                           htmlFor={fontInputId}>
+                                        <FiPlus aria-hidden="true"/>
+                                        {t({en: 'Your own font', zh: '自己的字体'})}
+                                    </label>
+                                )}
+                            </div>
+                            <input
+                                id={fontInputId}
+                                className="sbc-sr-only sbc-lineup-font-file"
+                                type="file"
+                                accept=".ttf,.otf,.woff,.woff2"
+                                onChange={onFontSelected}
+                            />
+                            {fontOpening && <p className="sbc-lineup-status" role="status">{t({en: 'Opening font…', zh: '正在读取字体…'})}</p>}
+                            {fontError && <p className="sbc-lineup-error" role="alert">{fontError}</p>}
+                            <p className="sbc-lineup-font-note">
+                                {t({
+                                    en: 'Your own font can be a TTF, OTF, WOFF, or WOFF2 file. It stays on your device.',
+                                    zh: '自己的字体支持 TTF、OTF、WOFF 或 WOFF2 文件，文件只留在你的设备上。',
+                                })}
+                                {uploadedFont && (
+                                    <>
+                                        {' '}
+                                        <label className="sbc-lineup-font-change sbc-lineup-font-file-trigger" htmlFor={fontInputId}>
+                                            {t({en: 'Choose another file', zh: '换一个文件'})}
+                                        </label>
+                                    </>
+                                )}
+                            </p>
+                        </fieldset>
 
                         <div className="sbc-lineup-extra-text">
                             <button
@@ -554,8 +710,8 @@ export const Lineup = () => {
                     </div>
                     <p className="sbc-lineup-privacy">
                         {t({
-                            en: 'Your photo and custom text are processed only in this page. They are never uploaded or saved by us; refreshing clears them.',
-                            zh: '照片和自定义文字只在当前页面内处理，不会上传或被我们保存；刷新页面后会清空。',
+                            en: 'Your photo, custom text, and font file are processed only in this page. They are never uploaded or saved by us; refreshing clears them.',
+                            zh: '照片、自定义文字和字体文件只在当前页面内处理，不会上传或被我们保存；刷新页面后会清空。',
                         })}
                     </p>
                 </div>
