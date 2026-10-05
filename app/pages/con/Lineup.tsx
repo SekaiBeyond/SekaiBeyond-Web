@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react';
 import type { ChangeEvent, PointerEvent } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { FiDownload, FiPlus, FiRotateCcw, FiRotateCw, FiUpload, FiX } from 'react-icons/fi';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 import { useT } from '~/pages/con/i18n';
@@ -497,21 +497,26 @@ export const Lineup = () => {
                             </div>
                         )}
                     </div>
-                    {photo && (
-                        <p className="sbc-lineup-hint">
-                            {t({
-                                en: 'Drag to move. On touch screens, use two fingers to move, zoom, and rotate.',
-                                zh: '拖动即可移动；手机上可用双指移动、缩放和旋转。',
-                            })}
-                        </p>
-                    )}
+                    {/* Always rendered so the preview doesn't shrink when a photo arrives; hidden until then. */}
+                    <p className={`sbc-lineup-hint${photo ? '' : ' sbc-lineup-hint--idle'}`}>
+                        {t({
+                            en: 'Drag to move. On touch screens, use two fingers to move, zoom, and rotate.',
+                            zh: '拖动即可移动；手机上可用双指移动、缩放和旋转。',
+                        })}
+                    </p>
                 </div>
 
                 <div className="sbc-lineup-controls">
                     <div className="sbc-lineup-upload-card">
                         <div className="sbc-lineup-upload-copy">
-                            <strong>{t({en: photo ? 'Photo ready to edit' : 'Start with a photo', zh: photo ? '照片已就绪' : '从一张照片开始'})}</strong>
-                            <span>{t({en: 'JPG, PNG, or WebP · up to 20 MB', zh: 'JPG、PNG 或 WebP · 最大 20 MB'})}</span>
+                            <strong>{t({
+                                en: photo ? 'Photo ready to edit' : 'Start with a photo',
+                                zh: photo ? '照片已就绪' : '从一张照片开始'
+                            })}</strong>
+                            <span>{t({
+                                en: 'JPG, PNG, or WebP · up to 20 MB',
+                                zh: 'JPG、PNG 或 WebP · 最大 20 MB'
+                            })}</span>
                         </div>
                         <div className="sbc-lineup-file-actions">
                             <label className="btn sbc-lineup-upload-button" htmlFor={inputId}>
@@ -534,7 +539,10 @@ export const Lineup = () => {
                         />
                     </div>
 
-                    {loading && <p className="sbc-lineup-status" role="status">{t({en: 'Opening photo…', zh: '正在读取照片…'})}</p>}
+                    {loading && <p className="sbc-lineup-status" role="status">{t({
+                        en: 'Opening photo…',
+                        zh: '正在读取照片…'
+                    })}</p>}
                     {overlayLoading && (
                         <p className="sbc-lineup-status" role="status">
                             {t({en: 'Loading the share card design…', zh: '正在加载分享卡片设计…'})}
@@ -542,7 +550,10 @@ export const Lineup = () => {
                     )}
                     {overlayError && (
                         <p className="sbc-lineup-error" role="alert">
-                            {t({en: 'The share card design could not be loaded. Refresh the page to try again.', zh: '无法加载分享卡片设计，请刷新页面重试。'})}
+                            {t({
+                                en: 'The share card design could not be loaded. Refresh the page to try again.',
+                                zh: '无法加载分享卡片设计，请刷新页面重试。'
+                            })}
                         </p>
                     )}
                     {error && <p className="sbc-lineup-error" role="alert">{error}</p>}
@@ -559,7 +570,10 @@ export const Lineup = () => {
                                 onChange={event => setTitlePreset(event.currentTarget.value as CardTitlePreset)}
                             >
                                 <option value="cosplay">{t({en: 'Cosplay Lineup', zh: 'Cosplay 阵容'})}</option>
-                                <option value="vendor">{t({en: 'Vendor / Artist Alley', zh: '摊主 / 创作者市集'})}</option>
+                                <option value="vendor">{t({
+                                    en: 'Vendor / Artist Alley',
+                                    zh: '摊主 / 创作者市集'
+                                })}</option>
                                 <option value="performer">{t({en: 'Performer', zh: '表演者'})}</option>
                                 <option value="panel">{t({en: 'Panel', zh: 'Panel 专题'})}</option>
                                 <option value="custom">{t({en: 'Custom title…', zh: '自定义标题…'})}</option>
@@ -568,7 +582,10 @@ export const Lineup = () => {
 
                         {titlePreset === 'custom' && (
                             <label className="sbc-lineup-control">
-                                <span className="sbc-lineup-control-heading">{t({en: 'Your title', zh: '自定义标题'})}</span>
+                                <span className="sbc-lineup-control-heading">{t({
+                                    en: 'Your title',
+                                    zh: '自定义标题'
+                                })}</span>
                                 <input
                                     className="sbc-lineup-text-input"
                                     type="text"
@@ -581,13 +598,17 @@ export const Lineup = () => {
                         )}
 
                         <fieldset className="sbc-lineup-font-picker">
-                            <legend className="sbc-lineup-control-heading">{t({en: 'Title font', zh: '标题字体'})}</legend>
+                            <legend className="sbc-lineup-control-heading">{t({
+                                en: 'Title font',
+                                zh: '标题字体'
+                            })}</legend>
                             <div className="sbc-lineup-font-options">
                                 {TITLE_FONTS.map(font => fontOption(font, font.family))}
                                 {/* An added font takes the upload tile's place, keeping the grid at two rows. */}
                                 {uploadedFont ? fontOption(uploadedFont, uploadedFont.name) : (
-                                    <label className="sbc-lineup-font-option sbc-lineup-font-upload sbc-lineup-font-file-trigger"
-                                           htmlFor={fontInputId}>
+                                    <label
+                                        className="sbc-lineup-font-option sbc-lineup-font-upload sbc-lineup-font-file-trigger"
+                                        htmlFor={fontInputId}>
                                         <FiPlus aria-hidden="true"/>
                                         {t({en: 'Your own font', zh: '自己的字体'})}
                                     </label>
@@ -600,7 +621,10 @@ export const Lineup = () => {
                                 accept=".ttf,.otf,.woff,.woff2"
                                 onChange={onFontSelected}
                             />
-                            {fontOpening && <p className="sbc-lineup-status" role="status">{t({en: 'Opening font…', zh: '正在读取字体…'})}</p>}
+                            {fontOpening && <p className="sbc-lineup-status" role="status">{t({
+                                en: 'Opening font…',
+                                zh: '正在读取字体…'
+                            })}</p>}
                             {fontError && <p className="sbc-lineup-error" role="alert">{fontError}</p>}
                             <p className="sbc-lineup-font-note">
                                 {t({
@@ -610,7 +634,8 @@ export const Lineup = () => {
                                 {uploadedFont && (
                                     <>
                                         {' '}
-                                        <label className="sbc-lineup-font-change sbc-lineup-font-file-trigger" htmlFor={fontInputId}>
+                                        <label className="sbc-lineup-font-change sbc-lineup-font-file-trigger"
+                                               htmlFor={fontInputId}>
                                             {t({en: 'Choose another file', zh: '换一个文件'})}
                                         </label>
                                     </>
@@ -626,11 +651,17 @@ export const Lineup = () => {
                                 onClick={() => setExtraTextEnabled(enabled => !enabled)}
                             >
                                 {extraTextEnabled ? <FiX aria-hidden="true"/> : <FiPlus aria-hidden="true"/>}
-                                {t({en: extraTextEnabled ? 'Remove extra text' : 'Add text', zh: extraTextEnabled ? '移除补充文字' : '添加文字'})}
+                                {t({
+                                    en: extraTextEnabled ? 'Remove extra text' : 'Add text',
+                                    zh: extraTextEnabled ? '移除补充文字' : '添加文字'
+                                })}
                             </button>
                             {extraTextEnabled && (
                                 <label className="sbc-lineup-control">
-                                    <span className="sbc-lineup-control-heading">{t({en: 'Extra text', zh: '补充文字'})}</span>
+                                    <span className="sbc-lineup-control-heading">{t({
+                                        en: 'Extra text',
+                                        zh: '补充文字'
+                                    })}</span>
                                     <input
                                         className="sbc-lineup-text-input"
                                         type="text"
@@ -651,11 +682,15 @@ export const Lineup = () => {
                             aria-expanded={fineTuneOpen}
                             onClick={() => setFineTuneOpen(open => !open)}
                         >
-                            {t({en: fineTuneOpen ? 'Hide fine-tune sliders' : 'Fine-tune sliders', zh: fineTuneOpen ? '收起精细调整' : '精细调整滑杆'})}
+                            {t({
+                                en: fineTuneOpen ? 'Hide fine-tune sliders' : 'Fine-tune sliders',
+                                zh: fineTuneOpen ? '收起精细调整' : '精细调整滑杆'
+                            })}
                         </button>
                     )}
 
-                    <div className={`sbc-lineup-adjustments${photo ? '' : ' sbc-lineup-adjustments--disabled'}${fineTuneOpen ? ' sbc-lineup-adjustments--open' : ''}`}>
+                    <div
+                        className={`sbc-lineup-adjustments${photo ? '' : ' sbc-lineup-adjustments--disabled'}${fineTuneOpen ? ' sbc-lineup-adjustments--open' : ''}`}>
                         <div className="sbc-lineup-adjustment-grid">
                             <label className="sbc-lineup-control">
                                 <span className="sbc-lineup-control-heading">
@@ -670,7 +705,10 @@ export const Lineup = () => {
                                     value={zoom}
                                     disabled={!photo}
                                     aria-label={t({en: 'Photo size', zh: '照片大小'})}
-                                    onChange={event => applyTransform({...transformRef.current, zoom: Number(event.currentTarget.value)})}
+                                    onChange={event => applyTransform({
+                                        ...transformRef.current,
+                                        zoom: Number(event.currentTarget.value)
+                                    })}
                                 />
                             </label>
 
@@ -687,23 +725,33 @@ export const Lineup = () => {
                                     value={rotation}
                                     disabled={!photo}
                                     aria-label={t({en: 'Photo rotation', zh: '照片旋转角度'})}
-                                    onChange={event => applyTransform({...transformRef.current, rotation: Number(event.currentTarget.value)})}
+                                    onChange={event => applyTransform({
+                                        ...transformRef.current,
+                                        rotation: Number(event.currentTarget.value)
+                                    })}
                                 />
                             </label>
                         </div>
 
                         <div className="sbc-lineup-control-actions">
                             <button type="button" className="sbc-lineup-secondary-button" disabled={!photo}
-                                    onClick={() => applyTransform({...transformRef.current, rotation: normalizeAngle(transformRef.current.rotation - 90)})}>
+                                    onClick={() => applyTransform({
+                                        ...transformRef.current,
+                                        rotation: normalizeAngle(transformRef.current.rotation - 90)
+                                    })}>
                                 <FiRotateCcw aria-hidden="true"/>
                                 {t({en: 'Rotate left', zh: '向左旋转'})}
                             </button>
                             <button type="button" className="sbc-lineup-secondary-button" disabled={!photo}
-                                    onClick={() => applyTransform({...transformRef.current, rotation: normalizeAngle(transformRef.current.rotation + 90)})}>
+                                    onClick={() => applyTransform({
+                                        ...transformRef.current,
+                                        rotation: normalizeAngle(transformRef.current.rotation + 90)
+                                    })}>
                                 <FiRotateCw aria-hidden="true"/>
                                 {t({en: 'Rotate right', zh: '向右旋转'})}
                             </button>
-                            <button type="button" className="sbc-lineup-reset-button" disabled={!photo} onClick={resetPhoto}>
+                            <button type="button" className="sbc-lineup-reset-button" disabled={!photo}
+                                    onClick={resetPhoto}>
                                 {t({en: 'Reset', zh: '重置'})}
                             </button>
                         </div>

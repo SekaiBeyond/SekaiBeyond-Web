@@ -1,6 +1,14 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router';
-import { LuArrowDown, LuArrowUpRight, LuCalendar, LuClock, LuImagePlus, LuMapPin, LuSquareParking } from 'react-icons/lu';
+import {
+    LuArrowDown,
+    LuArrowUpRight,
+    LuCalendar,
+    LuClock,
+    LuImagePlus,
+    LuMapPin,
+    LuSquareParking
+} from 'react-icons/lu';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent, useConVenue } from '~/lib/conContent';
 import { CON_NAME, HERO_EMBED, VENUE_MAP_URL, VENUE_TBA } from '~/pages/con/content';
