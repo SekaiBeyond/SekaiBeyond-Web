@@ -13,7 +13,7 @@ import {
 } from '~/lib/firebase';
 import { formatCode } from '~/lib/codes';
 import type { BadgeCode } from './types';
-import { getClaimUrl, type ShowToast } from './utils';
+import { getClaimUrl, type ShowToast, toDatetimeLocal } from './utils';
 
 type Variant = 'checkin' | 'staff';
 
@@ -71,6 +71,8 @@ interface ClaimCodeSectionProps {
     variant: Variant;
     showToast: ShowToast;
     readOnly?: boolean;
+    /** When given, offers a button that fills Active until with this time. */
+    eventEndAt?: Date;
 }
 
 /**
@@ -80,7 +82,7 @@ interface ClaimCodeSectionProps {
  * the event from either collection. The staff variant is core-staff-only per
  * Firestore rules, so mount it only for core staff.
  */
-export function ClaimCodeSection({eventId, variant, showToast, readOnly = false}: ClaimCodeSectionProps) {
+export function ClaimCodeSection({eventId, variant, showToast, readOnly = false, eventEndAt}: ClaimCodeSectionProps) {
     const {isEnglish} = useLanguage();
     const isStaff = variant === 'staff';
     const text = TEXT[variant];
@@ -104,6 +106,9 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false}
     const [codeFrom, setCodeFrom] = useState('');
     const [codeUntil, setCodeUntil] = useState('');
     const [maxUses, setMaxUses] = useState(0);
+    // Staff codes rarely need a time window, so its inputs stay folded away
+    // until asked for, unless the code already has one saved.
+    const [showWindow, setShowWindow] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -136,6 +141,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false}
                 setCodeFrom(picked?.activeFrom ?? '');
                 setCodeUntil(picked?.activeUntil ?? '');
                 setMaxUses(picked?.maxUses ?? 0);
+                setShowWindow(false);
             } catch {
                 if (!stale) {
                     const msg = TEXT[variant].loadFailed;
@@ -208,6 +214,16 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false}
         }
     };
 
+    const hideWindow = () => {
+        setCodeFrom('');
+        setCodeUntil('');
+        setShowWindow(false);
+    };
+
+    const hasSavedWindow = !!(code?.activeFrom || code?.activeUntil);
+    const windowVisible = !isStaff || hasSavedWindow || showWindow;
+    const eventEndLocal = eventEndAt ? toDatetimeLocal(eventEndAt) : '';
+
     // Staff codes are claimed by typing the code, so they show the dashed form;
     // check-in codes are scanned from a URL, which carries the code as stored.
     const copyValue = code ? (isStaff ? formatCode(code.code) : getClaimUrl(code.code)) : '';
@@ -268,36 +284,64 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false}
                     </span>
                     {!readOnly && (
                         <>
-                            <div className="admin-code-time-inputs">
-                                <label>
-                                    <span>{isEnglish ? 'Active from' : '开始时间'}</span>
-                                    <input
-                                        type="datetime-local"
-                                        value={codeFrom}
-                                        onChange={(e) => setCodeFrom(e.target.value)}
-                                        className="admin-datetime-input"
-                                    />
-                                </label>
-                                <label>
-                                    <span>{isEnglish ? 'Active until' : '结束时间'}</span>
-                                    <input
-                                        type="datetime-local"
-                                        value={codeUntil}
-                                        onChange={(e) => setCodeUntil(e.target.value)}
-                                        className="admin-datetime-input"
-                                    />
-                                </label>
+                            {windowVisible ? (
+                                <>
+                                    <div className="admin-code-time-inputs">
+                                        <label>
+                                            <span>{isEnglish ? 'Active from' : '开始时间'}</span>
+                                            <input
+                                                type="datetime-local"
+                                                value={codeFrom}
+                                                onChange={(e) => setCodeFrom(e.target.value)}
+                                                className="admin-datetime-input"
+                                            />
+                                        </label>
+                                        <label>
+                                            <span>{isEnglish ? 'Active until' : '结束时间'}</span>
+                                            <input
+                                                type="datetime-local"
+                                                value={codeUntil}
+                                                onChange={(e) => setCodeUntil(e.target.value)}
+                                                className="admin-datetime-input"
+                                            />
+                                        </label>
+                                        {eventEndLocal && (
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-edit"
+                                                onClick={() => setCodeUntil(eventEndLocal)}
+                                                disabled={codeUntil === eventEndLocal}
+                                            >
+                                                {isEnglish ? 'Use Event End' : '设为活动结束时间'}
+                                            </button>
+                                        )}
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-save"
+                                            onClick={() => void saveTimeWindow()}
+                                            disabled={codeFrom === (code.activeFrom ?? '') && codeUntil === (code.activeUntil ?? '')}
+                                        >
+                                            {isEnglish ? 'Save' : '保存'}
+                                        </button>
+                                        {isStaff && !hasSavedWindow && (
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-cancel"
+                                                onClick={hideWindow}
+                                            >
+                                                {isEnglish ? 'Hide' : '收起'}
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="admin-time-hint">
+                                        {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
+                                    </p>
+                                </>
+                            ) : (
                                 <button
-                                    className="admin-toggle-btn admin-toggle-save"
-                                    onClick={() => void saveTimeWindow()}
-                                    disabled={codeFrom === (code.activeFrom ?? '') && codeUntil === (code.activeUntil ?? '')}
+                                    className="admin-toggle-btn admin-toggle-edit"
+                                    onClick={() => setShowWindow(true)}
                                 >
-                                    {isEnglish ? 'Save' : '保存'}
+                                    {isEnglish ? 'Set Time Window' : '设置时间窗口'}
                                 </button>
-                            </div>
-                            <p className="admin-time-hint">
-                                {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
-                            </p>
+                            )}
                             {isStaff && (
                                 <>
                                     <label className="admin-max-uses-label">

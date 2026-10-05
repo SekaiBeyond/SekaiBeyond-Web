@@ -704,6 +704,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     eventId={selectedEvt.id}
                                     variant="staff"
                                     showToast={showToast}
+                                    eventEndAt={selectedEvt.endAt}
                                 />
                             )}
                             {eventSubTab === 'staff' && (
