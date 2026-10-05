@@ -4138,6 +4138,426 @@ select.admin-tickets-tag:focus {
     font-size: 15px;
 }
 
+/* QR Scanner tool. The frame is the one dark object on the page: it holds the
+   camera, then freezes on the code that was read. Everything else stays light. */
+.qrs {
+    --qrs-frame: #2a1d2e; /* plum-black, the brand pink's shadow; see FRAME_BACKDROP */
+    --qrs-pink-strong: #cf3c73; /* brand pink deepened until white text on it reads */
+    --qrs-line: rgba(255, 107, 157, 0.2);
+    max-width: 480px;
+}
+
+.qrs-frame {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    margin-top: 4px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: var(--qrs-frame);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 16px 32px -18px rgba(42, 29, 46, 0.7);
+}
+
+.qrs-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    visibility: hidden;
+}
+
+.qrs-frame--live .qrs-video {
+    visibility: visible;
+}
+
+.qrs-reticle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    height: 64%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.qrs-reticle svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.qrs-reticle path {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.18);
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+    transition: stroke 0.2s ease;
+}
+
+.qrs-frame--live .qrs-reticle path,
+.qrs-frame--reading .qrs-reticle path {
+    stroke: var(--color-primary);
+}
+
+.qrs-scanline {
+    position: absolute;
+    left: 6%;
+    right: 6%;
+    top: 8%;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--color-primary) 20%, var(--color-primary) 80%, transparent);
+    box-shadow: 0 0 14px 2px rgba(255, 107, 157, 0.55);
+    animation: qrs-sweep 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes qrs-sweep {
+    to {
+        top: 92%;
+    }
+}
+
+.qrs-notice {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 18%;
+    text-align: center;
+    color: #fff;
+}
+
+.qrs-notice-icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 4px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    font-size: 22px;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.qrs-notice-title {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.qrs-notice-body {
+    font-size: 13px;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.qrs-caption {
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(26, 16, 28, 0.6);
+    backdrop-filter: blur(6px);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.qrs-snapshot {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.qrs-snapshot-dim {
+    fill: rgba(26, 16, 28, 0.55);
+    animation: qrs-fade-in 0.3s ease-out both;
+}
+
+.qrs-snapshot-outline {
+    fill: none;
+    stroke: var(--color-primary);
+    stroke-width: 3;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+    stroke-dasharray: 1;
+    animation: qrs-draw 0.45s ease-out both;
+}
+
+@keyframes qrs-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes qrs-draw {
+    from {
+        stroke-dashoffset: 1;
+    }
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+.qrs-controls,
+.qrs-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.qrs-controls {
+    margin-top: 14px;
+}
+
+.qrs-note {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+.qrs-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 0 16px;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.qrs-btn svg {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+}
+
+.qrs-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.qrs-btn:focus-visible,
+.qrs-copy:focus-visible,
+.qrs-raw summary:focus-visible {
+    outline: 2px solid var(--qrs-pink-strong);
+    outline-offset: 2px;
+}
+
+.qrs-btn--primary {
+    background: var(--qrs-pink-strong);
+    color: #fff;
+    box-shadow: 0 8px 18px -10px rgba(207, 60, 115, 0.8);
+}
+
+.qrs-btn--primary:hover:not(:disabled) {
+    background: #b9305f;
+}
+
+.qrs-btn--soft {
+    background: rgba(255, 107, 157, 0.14);
+    color: var(--qrs-pink-strong);
+}
+
+.qrs-btn--soft:hover:not(:disabled) {
+    background: rgba(255, 107, 157, 0.24);
+}
+
+.qrs-btn--quiet {
+    background: rgba(255, 255, 255, 0.75);
+    border-color: rgba(74, 81, 96, 0.18);
+    color: var(--color-text);
+}
+
+.qrs-btn--quiet:hover:not(:disabled) {
+    background: #fff;
+    border-color: rgba(74, 81, 96, 0.32);
+}
+
+.qrs-btn--wide {
+    grid-column: 1 / -1;
+}
+
+.qrs-result {
+    display: flex;
+    flex-direction: column;
+    margin-top: 18px;
+}
+
+.qrs-kind {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.qrs-kind-icon {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 107, 157, 0.14);
+    color: var(--qrs-pink-strong);
+    font-size: 15px;
+}
+
+.qrs-headline {
+    margin: 10px 0 0;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+}
+
+.qrs-detail {
+    margin-top: 4px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+    word-break: break-all;
+}
+
+.qrs-text {
+    margin-top: 10px;
+    max-height: 40vh;
+    overflow-y: auto;
+    padding: 14px 16px;
+    border: 1px solid var(--qrs-line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.75);
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--color-text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.qrs-fields {
+    margin: 16px 0 0;
+    border: 1px solid var(--qrs-line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.75);
+}
+
+.qrs-field {
+    display: grid;
+    grid-template-columns: 7.5rem 1fr 36px;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 8px 8px 8px 16px;
+}
+
+.qrs-field + .qrs-field {
+    border-top: 1px solid var(--qrs-line);
+}
+
+.qrs-field dt {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.qrs-field dd {
+    margin: 0;
+    min-width: 0;
+    font-size: 15px;
+    color: var(--color-text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.qrs-copy {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.qrs-copy:hover {
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--qrs-pink-strong);
+}
+
+.qrs-actions {
+    margin-top: 18px;
+}
+
+.qrs-raw {
+    margin-top: 16px;
+}
+
+.qrs-raw summary {
+    width: fit-content;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+}
+
+.qrs-raw pre {
+    margin-top: 8px;
+    max-height: 240px;
+    overflow: auto;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid var(--qrs-line);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 360px) {
+    .qrs-field {
+        grid-template-columns: 1fr 36px;
+    }
+
+    .qrs-field dt {
+        grid-column: 1 / -1;
+        margin-bottom: -10px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .qrs-scanline {
+        top: 50%;
+        animation: none;
+    }
+
+    .qrs-snapshot-dim,
+    .qrs-snapshot-outline {
+        animation: none;
+    }
+}
+
 .admin-rate-color-row {
     display: flex;
     flex-wrap: wrap;

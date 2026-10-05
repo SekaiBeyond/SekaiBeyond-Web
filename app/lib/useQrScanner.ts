@@ -1,14 +1,14 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
-
-type JsQRFn = (data: Uint8ClampedArray, w: number, h: number) => {data: string} | null;
+import { cornersOf, type JsQRFn, loadJsQR, type QrCorners } from './qrDecode';
 
 interface UseQrScannerOptions {
     /**
      * Invoked with each decoded QR payload. Return `true` once a match has been
      * handled to stop the camera and the scan loop; return `false` to keep
-     * scanning (e.g. ignore an irrelevant code).
+     * scanning (e.g. ignore an irrelevant code). `corners` locate the code on
+     * `canvasRef`, which still holds the frame it was read from.
      */
-    onDecode: (raw: string) => boolean;
+    onDecode: (raw: string, corners: QrCorners) => boolean;
     /** Message shown when the camera can't be started (permissions, no device, …). */
     cameraErrorMessage: string;
     /** Prefix for console error logs, e.g. '[TicketScanner]'. */
@@ -77,7 +77,7 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
                 if (ctx) {
                     ctx.drawImage(video, 0, 0, w, h);
                     const code = jsQR(ctx.getImageData(0, 0, w, h).data, w, h);
-                    if (code?.data && optionsRef.current.onDecode(code.data)) {
+                    if (code?.data && optionsRef.current.onDecode(code.data, cornersOf(code.location))) {
                         stopCamera(); // handled: tear down and stop the loop
                         return;
                     }
@@ -95,10 +95,7 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
         optionsRef.current.onStart?.();
         cancelledRef.current = false;
         try {
-            if (!jsQRRef.current) {
-                const mod = await import('jsqr');
-                jsQRRef.current = mod.default as JsQRFn;
-            }
+            jsQRRef.current ??= await loadJsQR();
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {facingMode: 'environment'},
                 audio: false,
