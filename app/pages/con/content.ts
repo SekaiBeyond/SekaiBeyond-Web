@@ -143,6 +143,7 @@ export const NAV_LINKS: NavLink[] = [
     {id: 'tickets', label: {en: 'Tickets', zh: '门票'}},
     {id: 'about', label: {en: 'About', zh: '关于漫展'}},
     {id: 'schedule', label: {en: 'Schedule', zh: '活动日程'}},
+    {id: 'lineup', label: {en: 'Share Card', zh: '分享卡'}},
     {id: 'guests', label: {en: 'Guests', zh: '嘉宾'}},
     {id: 'vendors', label: {en: 'Artist Alley', zh: '创作者市集'}},
     {id: 'faq', label: {en: 'FAQ', zh: '常见问题'}},

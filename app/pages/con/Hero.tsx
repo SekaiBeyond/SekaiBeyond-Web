@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router';
-import { LuArrowDown, LuArrowUpRight, LuCalendar, LuClock, LuMapPin, LuSquareParking } from 'react-icons/lu';
+import { LuArrowDown, LuArrowUpRight, LuCalendar, LuClock, LuImagePlus, LuMapPin, LuSquareParking } from 'react-icons/lu';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent, useConVenue } from '~/lib/conContent';
 import { CON_NAME, HERO_EMBED, VENUE_MAP_URL, VENUE_TBA } from '~/pages/con/content';
@@ -199,6 +199,14 @@ export const Hero = () => {
                             <LuSquareParking aria-hidden="true"/>
                         </Link>
                     )}
+                    <a
+                        className="btn sbc-btn-ghost"
+                        href="#lineup"
+                        onClick={scrollToSection('lineup')}
+                    >
+                        <span>{t({en: 'Make a Share Card', zh: '制作分享图'})}</span>
+                        <LuImagePlus aria-hidden="true"/>
+                    </a>
                 </div>
             </div>
 
