@@ -4138,8 +4138,9 @@ select.admin-tickets-tag:focus {
     font-size: 15px;
 }
 
-/* QR Scanner tool. The frame is the one dark object on the page: it holds the
-   camera, then freezes on the code that was read. Everything else stays light. */
+/* QR Scanner, under QR Codes. The frame is the one dark object on the page:
+   it holds the camera, then freezes on the code that was read. Everything else
+   stays light. */
 .qrs {
     --qrs-frame: #2a1d2e; /* plum-black, the brand pink's shadow; see FRAME_BACKDROP */
     --qrs-pink-strong: #cf3c73; /* brand pink deepened until white text on it reads */

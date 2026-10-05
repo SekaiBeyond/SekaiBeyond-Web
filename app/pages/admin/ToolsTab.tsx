@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { QrGeneratorTool } from './tools/QrGeneratorTool';
+import { QrCodesTool } from './tools/QrCodesTool';
 import { EmailQuotaTool } from './tools/EmailQuotaTool';
-import { QrScannerTool } from './tools/QrScannerTool';
 
-type ToolId = 'qr-generator' | 'qr-scanner' | 'email-quota';
+type ToolId = 'qr-codes' | 'email-quota';
 
 interface ToolDef {
     id: ToolId;
@@ -19,18 +18,11 @@ interface ToolDef {
 
 const TOOLS: ToolDef[] = [
     {
-        id: 'qr-generator',
+        id: 'qr-codes',
         title: 'QR Codes',
         titleCn: '二维码',
-        description: 'Generate trackable QR codes, pin them to a map spot, and see how often each one is scanned.',
-        descriptionCn: '生成可追踪二维码，关联地图位置，并查看每个二维码的扫描次数。',
-    },
-    {
-        id: 'qr-scanner',
-        title: 'QR Scanner',
-        titleCn: '扫码识别',
-        description: 'Read any QR code with the camera or from a photo, and see the link, Wi-Fi login, contact or text inside before opening it.',
-        descriptionCn: '用摄像头或照片识别任意二维码，在打开前查看其中的链接、Wi-Fi、联系人或文字信息。',
+        description: 'Generate trackable QR codes, pin them to a map spot, and see how often each one is scanned. Or scan any QR code to see what it holds before opening it.',
+        descriptionCn: '生成可追踪二维码，关联地图位置，并查看每个二维码的扫描次数；也可扫描任意二维码，在打开前查看其中内容。',
     },
     {
         id: 'email-quota',
@@ -51,12 +43,8 @@ export const ToolsTab = ({showToast, readOnly = false}: ToolsTabProps) => {
     const {isEnglish} = useLanguage();
     const [activeTool, setActiveTool] = useState<ToolId | null>(null);
 
-    if (activeTool === 'qr-generator') {
-        return <QrGeneratorTool onBack={() => setActiveTool(null)} showToast={showToast} readOnly={readOnly}/>;
-    }
-
-    if (activeTool === 'qr-scanner') {
-        return <QrScannerTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
+    if (activeTool === 'qr-codes') {
+        return <QrCodesTool onBack={() => setActiveTool(null)} showToast={showToast} readOnly={readOnly}/>;
     }
 
     if (activeTool === 'email-quota') {

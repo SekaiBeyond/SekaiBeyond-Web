@@ -15,6 +15,7 @@ interface QrDashboardProps {
     loading: boolean;
     onSelect: (id: string) => void;
     onCreate: () => void;
+    onScan: () => void;
     onScanLink: () => void;
     onRefresh: () => Promise<void>;
     readOnly: boolean;
@@ -26,6 +27,7 @@ export const QrDashboard = ({
                                 loading,
                                 onSelect,
                                 onCreate,
+                                onScan,
                                 onScanLink,
                                 onRefresh,
                                 readOnly
@@ -85,6 +87,9 @@ export const QrDashboard = ({
                 <div className="admin-btn-row">
                     <button className="admin-toggle-btn admin-toggle-edit" onClick={doRefresh} disabled={refreshing}>
                         {refreshing ? (isEnglish ? 'Loading...' : '加载中...') : (isEnglish ? 'Refresh' : '刷新')}
+                    </button>
+                    <button className="admin-toggle-btn admin-toggle-edit" onClick={onScan} type="button">
+                        {isEnglish ? 'Scan' : '扫码'}
                     </button>
                     {!readOnly && (
                         <button className="admin-toggle-btn admin-toggle-save" onClick={onCreate}>

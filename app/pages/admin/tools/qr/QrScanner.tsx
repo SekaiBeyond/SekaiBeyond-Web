@@ -1,15 +1,30 @@
 import { type ChangeEvent, type ComponentType, useRef, useState } from 'react';
 import {
-    FiAlertCircle, FiCamera, FiCameraOff, FiCopy, FiExternalLink, FiFileText, FiImage, FiLink, FiMail,
-    FiMap, FiMapPin, FiMessageSquare, FiPhone, FiRotateCcw, FiSquare, FiUser, FiWifi,
+    FiAlertCircle,
+    FiCamera,
+    FiCameraOff,
+    FiCopy,
+    FiExternalLink,
+    FiFileText,
+    FiImage,
+    FiLink,
+    FiMail,
+    FiMap,
+    FiMapPin,
+    FiMessageSquare,
+    FiPhone,
+    FiRotateCcw,
+    FiSquare,
+    FiUser,
+    FiWifi,
 } from 'react-icons/fi';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { decodeQrImage, type QrCorners, type QrRect, type QrSnapshot, snapshotAround } from '~/lib/qrDecode';
 import { useQrScanner } from '~/lib/useQrScanner';
-import type { ShowToast } from '../utils';
+import type { ShowToast } from '../../utils';
 import { parseQrContent, type QrContentKind, type QrFieldKey } from './qrContent';
 
-interface QrScannerToolProps {
+interface QrScannerProps {
     onBack: () => void;
     showToast: ShowToast;
 }
@@ -65,7 +80,7 @@ interface ScanResult {
  * so a link can be checked before anyone opens it. Decoding happens in the
  * browser; photos aren't uploaded anywhere.
  */
-export const QrScannerTool = ({onBack, showToast}: QrScannerToolProps) => {
+export const QrScanner = ({onBack, showToast}: QrScannerProps) => {
     const {isEnglish} = useLanguage();
     const t = (label: Bilingual) => (isEnglish ? label.en : label.cn);
 
@@ -88,7 +103,7 @@ export const QrScannerTool = ({onBack, showToast}: QrScannerToolProps) => {
         cameraErrorMessage: isEnglish
             ? 'Allow camera access for this site, or choose a photo instead.'
             : '请允许本网站使用摄像头，或改为选择照片。',
-        logLabel: '[QrScannerTool]',
+        logLabel: '[QrScanner]',
     });
 
     const onPhotoChosen = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -111,7 +126,7 @@ export const QrScannerTool = ({onBack, showToast}: QrScannerToolProps) => {
                 setPhotoMissed(true);
             }
         } catch (err) {
-            console.error('[QrScannerTool] photo decode', err);
+            console.error('[QrScanner] photo decode', err);
             setPhotoUnreadable(true);
         } finally {
             setReadingPhoto(false);
@@ -136,26 +151,26 @@ export const QrScannerTool = ({onBack, showToast}: QrScannerToolProps) => {
     const notice: {icon: Icon; title: string; body?: string; problem?: boolean} | null =
         stage !== 'idle' ? null
             : photoUnreadable ? {
-                icon: FiAlertCircle,
-                problem: true,
-                title: isEnglish ? 'That image couldn’t be opened' : '无法打开该图片',
-                body: isEnglish ? 'Try a JPEG or PNG.' : '请尝试 JPEG 或 PNG 格式。',
-            }
-            : photoMissed ? {
-                icon: FiAlertCircle,
-                problem: true,
-                title: isEnglish ? 'No QR code in that photo' : '照片中没有找到二维码',
-                body: isEnglish
-                    ? 'Try a sharper shot where the code fills more of the frame.'
-                    : '换一张更清晰、二维码占画面更大的照片试试。',
-            }
-            : scanner.cameraError ? {
-                icon: FiCameraOff,
-                problem: true,
-                title: isEnglish ? 'Camera unavailable' : '无法使用摄像头',
-                body: scanner.cameraError,
-            }
-            : {icon: FiCamera, title: isEnglish ? 'Camera is off' : '摄像头未开启'};
+                    icon: FiAlertCircle,
+                    problem: true,
+                    title: isEnglish ? 'That image couldn’t be opened' : '无法打开该图片',
+                    body: isEnglish ? 'Try a JPEG or PNG.' : '请尝试 JPEG 或 PNG 格式。',
+                }
+                : photoMissed ? {
+                        icon: FiAlertCircle,
+                        problem: true,
+                        title: isEnglish ? 'No QR code in that photo' : '照片中没有找到二维码',
+                        body: isEnglish
+                            ? 'Try a sharper shot where the code fills more of the frame.'
+                            : '换一张更清晰、二维码占画面更大的照片试试。',
+                    }
+                    : scanner.cameraError ? {
+                            icon: FiCameraOff,
+                            problem: true,
+                            title: isEnglish ? 'Camera unavailable' : '无法使用摄像头',
+                            body: scanner.cameraError,
+                        }
+                        : {icon: FiCamera, title: isEnglish ? 'Camera is off' : '摄像头未开启'};
 
     const content = result && parseQrContent(result.raw);
 
@@ -163,7 +178,7 @@ export const QrScannerTool = ({onBack, showToast}: QrScannerToolProps) => {
         <div className="admin-section qrs">
             <div className="admin-tools-header">
                 <button className="admin-btn admin-btn--link" onClick={onBack} type="button">
-                    {isEnglish ? '← Back to Tools' : '← 返回工具'}
+                    {isEnglish ? '← Back to QR Codes' : '← 返回二维码列表'}
                 </button>
                 <h3 className="admin-tools-title">{isEnglish ? 'QR Scanner' : '扫码识别'}</h3>
             </div>
@@ -183,7 +198,8 @@ export const QrScannerTool = ({onBack, showToast}: QrScannerToolProps) => {
                 {stage !== 'result' && !notice?.problem && (
                     <div className="qrs-reticle" aria-hidden="true">
                         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                            <path d="M2 24V10a8 8 0 0 1 8-8h14M76 2h14a8 8 0 0 1 8 8v14M98 76v14a8 8 0 0 1-8 8H76M24 98H10a8 8 0 0 1-8-8V76"/>
+                            <path
+                                d="M2 24V10a8 8 0 0 1 8-8h14M76 2h14a8 8 0 0 1 8 8v14M98 76v14a8 8 0 0 1-8 8H76M24 98H10a8 8 0 0 1-8-8V76"/>
                         </svg>
                         {(stage === 'live' || stage === 'reading') && <span className="qrs-scanline"/>}
                     </div>
@@ -206,7 +222,8 @@ export const QrScannerTool = ({onBack, showToast}: QrScannerToolProps) => {
                 )}
 
                 {result?.snapshot && (
-                    <Snapshot snapshot={result.snapshot} label={isEnglish ? 'The code that was read' : '已识别的二维码'}/>
+                    <Snapshot snapshot={result.snapshot}
+                              label={isEnglish ? 'The code that was read' : '已识别的二维码'}/>
                 )}
             </div>
 
@@ -289,7 +306,8 @@ export const QrScannerTool = ({onBack, showToast}: QrScannerToolProps) => {
                             {action && (
                                 <a className="qrs-btn qrs-btn--primary qrs-btn--wide" href={content.href}
                                    target="_blank" rel="noopener noreferrer">
-                                    <action.icon aria-hidden/>{t(action)}
+                                    <action.icon aria-hidden/>
+                                    {t(action)}
                                 </a>
                             )}
                             {content.kind === 'url' ? (
@@ -326,7 +344,7 @@ function snapshot(frame: HTMLCanvasElement, corners: QrCorners, bounds?: QrRect)
         return snapshotAround(frame, corners, FRAME_BACKDROP, bounds);
     } catch (err) {
         // A missing snapshot only costs the picture; the result still shows.
-        console.error('[QrScannerTool] snapshot', err);
+        console.error('[QrScanner] snapshot', err);
         return null;
     }
 }

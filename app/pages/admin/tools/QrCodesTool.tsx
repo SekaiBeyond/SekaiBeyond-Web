@@ -6,19 +6,20 @@ import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { QrDashboard } from './qr/QrDashboard';
 import { QrCodeDetail } from './qr/QrCodeDetail';
 import { QrLinkScanner } from './qr/QrLinkScanner';
+import { QrScanner } from './qr/QrScanner';
 import { QuickQrGenerator } from './qr/QuickQrGenerator';
 import { SocialPlatformsManager } from './qr/SocialPlatformsManager';
 import { buildQrPayload, emptyDraft, QrCodeForm, type QrDraft, } from './qr/QrCodeForm';
 
-interface QrGeneratorToolProps {
+interface QrCodesToolProps {
     onBack: () => void;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     readOnly?: boolean;
 }
 
-type View = 'dashboard' | 'create' | 'detail' | 'scan' | 'platforms';
+type View = 'dashboard' | 'create' | 'detail' | 'scan' | 'link' | 'platforms';
 
-export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGeneratorToolProps) => {
+export const QrCodesTool = ({onBack, showToast, readOnly = false}: QrCodesToolProps) => {
     const {isEnglish} = useLanguage();
     const {qrCodes, loading, refresh} = useQrCodes();
     const {upcomingEvents} = useAllUpcomingEvents();
@@ -79,6 +80,10 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
     }
 
     if (view === 'scan') {
+        return <QrScanner onBack={() => setView('dashboard')} showToast={showToast}/>;
+    }
+
+    if (view === 'link') {
         return (
             <QrLinkScanner
                 codes={qrCodes}
@@ -180,7 +185,8 @@ export const QrGeneratorTool = ({onBack, showToast, readOnly = false}: QrGenerat
                     setView('detail');
                 }}
                 onCreate={openCreate}
-                onScanLink={() => setView('scan')}
+                onScan={() => setView('scan')}
+                onScanLink={() => setView('link')}
                 onRefresh={refresh}
                 readOnly={readOnly}
             />

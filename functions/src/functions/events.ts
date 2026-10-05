@@ -1,7 +1,14 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminTransaction, checkRateLimit, MANAGEABLE_GROUPS, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
+import {
+    adminTransaction,
+    checkRateLimit,
+    MANAGEABLE_GROUPS,
+    normalizeGroup,
+    requireAdmin,
+    requireAuth
+} from "../utils/auth";
 import { deletionExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
@@ -467,6 +474,7 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         }
     }
 );
+
 /**
  * Writes that bring `dest` from the `copied` snapshot up to `live`, then empty
  * `live`'s collection. A doc whose update time hasn't moved was copied as it
@@ -493,6 +501,7 @@ function reconcileCopy(
     }
     return ops;
 }
+
 export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
