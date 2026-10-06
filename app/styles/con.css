@@ -1344,6 +1344,20 @@
     color: var(--color-text-body);
 }
 
+.sbc-faq-policy-link {
+    color: var(--color-primary);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+}
+
+.sbc-faq-policy-link:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
 /* One centred column: name, who runs it, links, socials, then the small print. */
 .sbc-footer {
     margin-top: 40px;

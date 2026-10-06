@@ -1,8 +1,22 @@
+import { Link } from 'react-router';
 import { LINKS } from '~/constants';
 import { useConContent } from '~/lib/conContent';
 import { useSiteConfig } from '~/lib/siteConfig';
 import { useT } from '~/pages/con/i18n';
 import { SectionHeader } from '~/pages/con/SectionHeader';
+
+const POLICY_WORD = {en: 'Policy', zh: '政策'};
+
+/**
+ * Links each mention of the Policy page in an answer, so the plain text written
+ * in the admin panel can point there. Case-sensitive: a lowercase "policy" in
+ * passing stays plain.
+ */
+const linkPolicy = (text: string, word: string) =>
+    text.split(word).flatMap((part, i) => i === 0 ? [part] : [
+        <Link key={i} className="sbc-faq-policy-link" to="/policy">{word}</Link>,
+        part,
+    ]);
 
 export const Faq = () => {
     const t = useT();
@@ -22,7 +36,7 @@ export const Faq = () => {
                             <span>{t(entry.q)}</span>
                             <span className="sbc-faq-marker" aria-hidden="true">+</span>
                         </summary>
-                        <p className="sbc-faq-answer">{t(entry.a)}</p>
+                        <p className="sbc-faq-answer">{linkPolicy(t(entry.a), t(POLICY_WORD))}</p>
                     </details>
                 ))}
             </div>

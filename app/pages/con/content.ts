@@ -596,8 +596,8 @@ export const FAQ: FaqEntry[] = [
     {
         q: {en: 'Can I cosplay? Are there prop rules?', zh: '可以 Cosplay 吗？道具有什么规定？'},
         a: {
-            en: 'Please do. Props must be clearly non-functional, blunt, and short enough to carry safely indoors. No live steel, no realistic firearms, no open flame.',
-            zh: '非常欢迎。道具需明显不具功能性、无锋利边缘，且长度便于在室内安全携带。禁止真刃、仿真枪械与明火。',
+            en: 'Please do. Props must be clearly non-functional, blunt, and short enough to carry safely indoors. No live steel, no realistic firearms, no open flame. See the Policy page for the full rules.',
+            zh: '非常欢迎。道具需明显不具功能性、无锋利边缘，且长度便于在室内安全携带。禁止真刃、仿真枪械与明火。完整规定请参阅政策页面。',
         },
     },
     {
@@ -624,8 +624,8 @@ export const FAQ: FaqEntry[] = [
     {
         q: {en: 'What is the photo and recording policy?', zh: '拍照与录像有什么规定？'},
         a: {
-            en: 'Ask before photographing cosplayers, and respect a no. The event is documented by our media team, and footage may appear on our channels.',
-            zh: '拍摄 Coser 前请先征得同意，被拒绝时请予尊重。活动将由我们的媒体组记录，素材可能出现在我们的社交平台上。',
+            en: 'Ask before photographing cosplayers, and respect a no. The event is documented by our media team, and footage may appear on our channels. See the Policy page for details.',
+            zh: '拍摄 Coser 前请先征得同意，被拒绝时请予尊重。活动将由我们的媒体组记录，素材可能出现在我们的社交平台上。详情请参阅政策页面。',
         },
     },
 ];
