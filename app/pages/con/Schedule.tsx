@@ -139,10 +139,15 @@ export const Schedule = () => {
         [content.schedule, activeRoom],
     );
 
-    // Counted rather than written down, and from the rooms with something booked —
-    // the columns the grid draws — so a room added ahead of its programming doesn't
-    // make the subtitle promise a track the schedule doesn't show.
-    const tracks = filterableRooms.length;
+    // Counted rather than written down, and from the rooms with something on the
+    // clock — the columns the grid draws — so neither a room added ahead of its
+    // programming nor one holding only unscheduled items makes the subtitle promise
+    // a track the schedule doesn't show.
+    const tracks = useMemo(() => {
+        const timed = new Set(content.schedule.flatMap(item =>
+            item.room && minutesOf(item.start) !== null ? [item.room] : []));
+        return content.rooms.filter(room => timed.has(room.id)).length;
+    }, [content.rooms, content.schedule]);
     const trackLine = tracks > 0
         ? {en: `One day, ${tracks} ${tracks === 1 ? 'track' : 'tracks'}. `, zh: `一天，${tracks} 条线路。`}
         : {en: '', zh: ''};

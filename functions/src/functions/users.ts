@@ -69,7 +69,7 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
         });
     });
 
-    if (!alreadyExists && email) {
+    if (!alreadyExists && email && request.auth.token.email_verified === true) {
         try {
             await creditScannedTickets(userRef, email.trim().toLowerCase());
         } catch (err) {
@@ -88,9 +88,10 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
  * while the event is live. Anyone who signs up after the event ends, archived
  * or not, is caught here, the one moment that gap opens.
  *
- * Sign-in is Google only, so the token's email is verified and may claim the
- * tickets sent to it. The collection-group query rides the attendees.email
- * override in firestore.indexes.json.
+ * Only a verified email may claim the tickets sent to it, so the caller checks
+ * the token says so: sign-in is Google only today, but that is a setting in the
+ * Firebase console, not something this code enforces. The collection-group query
+ * rides the attendees.email override in firestore.indexes.json.
  */
 async function creditScannedTickets(
     userRef: FirebaseFirestore.DocumentReference,

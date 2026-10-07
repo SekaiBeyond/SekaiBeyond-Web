@@ -275,6 +275,13 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     };
 
     const selectedEvt = selectedEvent ? upcomingEvents.find(e => e.id === selectedEvent) ?? null : null;
+    // The sub-tab chosen on selection can belong to the other kind of event: a
+    // link into the panel selects before the event list has loaded, and an open
+    // event can be switched to or from paid. Derived rather than corrected in an
+    // effect, so the panel never renders a tab the event doesn't have.
+    const subTab = selectedEvt?.paid && (eventSubTab === 'codes' || eventSubTab === 'attendees') ? 'tickets'
+        : selectedEvt && !selectedEvt.paid && eventSubTab === 'tickets' ? 'codes'
+            : eventSubTab;
 
     return (
         <div className="admin-section">
@@ -634,7 +641,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             <div className="admin-sub-tabs">
                                 {!selectedEvt.paid && (
                                     <button
-                                        className={`admin-sub-tab ${eventSubTab === 'codes' ? 'admin-sub-tab-active' : ''}`}
+                                        className={`admin-sub-tab ${subTab === 'codes' ? 'admin-sub-tab-active' : ''}`}
                                         onClick={() => setEventSubTab('codes')}
                                     >
                                         {isEnglish ? 'Check-in Code' : '签到码'}
@@ -642,7 +649,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 )}
                                 {!selectedEvt.paid && (
                                     <button
-                                        className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
+                                        className={`admin-sub-tab ${subTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
                                         onClick={() => {
                                             setEventSubTab('attendees');
                                             loadEventAttendees(selectedEvent!).then();
@@ -656,14 +663,14 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 )}
                                 {selectedEvt.paid && (
                                     <button
-                                        className={`admin-sub-tab ${eventSubTab === 'tickets' ? 'admin-sub-tab-active' : ''}`}
+                                        className={`admin-sub-tab ${subTab === 'tickets' ? 'admin-sub-tab-active' : ''}`}
                                         onClick={() => setEventSubTab('tickets')}
                                     >
                                         {isEnglish ? 'Tickets' : '门票'}
                                     </button>
                                 )}
                                 <button
-                                    className={`admin-sub-tab ${eventSubTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
+                                    className={`admin-sub-tab ${subTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
                                     onClick={() => setEventSubTab('staff')}
                                 >
                                     {isEnglish ? 'Staff' : '工作人员'}
@@ -673,7 +680,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 </button>
                             </div>
 
-                            {eventSubTab === 'codes' && !selectedEvt.paid && (
+                            {subTab === 'codes' && !selectedEvt.paid && (
                                 <ClaimCodeSection
                                     eventId={selectedEvt.id}
                                     variant="checkin"
@@ -682,7 +689,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 />
                             )}
 
-                            {eventSubTab === 'attendees' && !selectedEvt.paid && (
+                            {subTab === 'attendees' && !selectedEvt.paid && (
                                 <EventAttendeesList
                                     loading={searchingAttendees}
                                     attendees={eventAttendees}
@@ -693,7 +700,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 />
                             )}
 
-                            {eventSubTab === 'staff' && !readOnly && (
+                            {subTab === 'staff' && !readOnly && (
                                 <ClaimCodeSection
                                     eventId={selectedEvt.id}
                                     variant="staff"
@@ -701,7 +708,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     eventEndAt={selectedEvt.endAt}
                                 />
                             )}
-                            {eventSubTab === 'staff' && (
+                            {subTab === 'staff' && (
                                 <EventStaffSection
                                     eventId={selectedEvt.id}
                                     showToast={showToast}
@@ -710,7 +717,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 />
                             )}
 
-                            {eventSubTab === 'tickets' && selectedEvt.paid && (
+                            {subTab === 'tickets' && selectedEvt.paid && (
                                 <TicketsSubtab
                                     event={selectedEvt}
                                     readOnly={readOnly}
