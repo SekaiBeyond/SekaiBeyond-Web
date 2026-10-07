@@ -24,7 +24,7 @@ import { StatsSection } from './StatsSection';
 import { TemplateSection } from './TemplateSection';
 import { mapAttendeeDoc } from './helpers';
 import { useAccountLinks } from './useAccountLinks';
-import { type AttendeeData, type TicketsSection, type TicketType } from './types';
+import { type AttendeeData, type TicketData, type TicketsSection, type TicketType } from './types';
 
 interface TicketsSubtabProps {
     event: UpcomingEvent;
@@ -154,12 +154,19 @@ export function TicketsSubtab({
     const attendeeEmails = useMemo(() => attendees.map(a => a.email), [attendees]);
     const {links: accountLinks} = useAccountLinks(eventId, attendeeEmails);
 
-    const onAttendeeUpdated = (updated: AttendeeData) => {
-        setAttendees(prev => prev.map(a => a.id === updated.id ? updated : a));
+    // Merged into the attendee as it stands when the call returns, not as it was
+    // when the button was pressed: actions on two of someone's tickets can be in
+    // flight together, and the second to land would otherwise undo the first on
+    // screen.
+    const updateAttendee = (attendeeId: string, changes: Partial<AttendeeData>) => {
+        setAttendees(prev => prev.map(a => a.id === attendeeId ? {...a, ...changes} : a));
     };
 
-    const onAttendeeDeleted = (attendeeId: string) => {
-        setAttendees(prev => prev.filter(a => a.id !== attendeeId));
+    const updateTicket = (attendeeId: string, ticketId: string, changes: Partial<TicketData>) => {
+        setAttendees(prev => prev.map(a => a.id !== attendeeId ? a : {
+            ...a,
+            tickets: a.tickets.map(t => t.ticketId === ticketId ? {...t, ...changes} : t),
+        }));
     };
 
     const voidTicketAction = async (a: AttendeeData, ticketId: string) => {
@@ -170,10 +177,7 @@ export function TicketsSubtab({
         if (!ok) return;
         try {
             await callVoidTicket({eventId, attendeeId: a.id, ticketId});
-            const updatedTickets = a.tickets.map(t =>
-                t.ticketId === ticketId ? {...t, voided: true} : t,
-            );
-            onAttendeeUpdated({...a, tickets: updatedTickets});
+            updateTicket(a.id, ticketId, {voided: true});
             showToast(isEnglish ? 'Ticket voided.' : '门票已作废。', 'warning');
         } catch {
             showToast(isEnglish ? 'Failed to void ticket.' : '作废门票失败。', 'error');
@@ -188,10 +192,7 @@ export function TicketsSubtab({
         if (!ok) return;
         try {
             await callUnvoidTicket({eventId, attendeeId: a.id, ticketId});
-            const updatedTickets = a.tickets.map(t =>
-                t.ticketId === ticketId ? {...t, voided: false} : t,
-            );
-            onAttendeeUpdated({...a, tickets: updatedTickets});
+            updateTicket(a.id, ticketId, {voided: false});
             showToast(isEnglish ? 'Ticket unvoided.' : '门票已撤销作废。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to unvoid ticket.' : '撤销作废门票失败。', 'error');
@@ -210,12 +211,11 @@ export function TicketsSubtab({
                 showToast(isEnglish ? 'Ticket was already redeemed.' : '此门票此前已验证。', 'warning');
                 return;
             }
-            const updatedTickets = a.tickets.map(t =>
-                t.ticketId === ticketId
-                    ? {...t, redeemed: true, redeemedAt: new Date(), redeemedByName: profile?.displayName ?? ''}
-                    : t,
-            );
-            onAttendeeUpdated({...a, tickets: updatedTickets});
+            updateTicket(a.id, ticketId, {
+                redeemed: true,
+                redeemedAt: new Date(),
+                redeemedByName: profile?.displayName ?? '',
+            });
             showToast(isEnglish ? 'Ticket redeemed.' : '门票已验证。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to redeem ticket.' : '验证门票失败。', 'error');
@@ -230,20 +230,14 @@ export function TicketsSubtab({
         if (!ok) return;
         try {
             await callResetTicket({eventId, attendeeId: a.id, ticketId});
-            const updatedTickets = a.tickets.map(t =>
-                t.ticketId === ticketId
-                    ? {
-                        ...t,
-                        redeemed: false,
-                        redeemedAt: null,
-                        redeemedBy: '',
-                        redeemedByName: '',
-                        checkedIn: false,
-                        checkedInAt: null,
-                    }
-                    : t,
-            );
-            onAttendeeUpdated({...a, tickets: updatedTickets});
+            updateTicket(a.id, ticketId, {
+                redeemed: false,
+                redeemedAt: null,
+                redeemedBy: '',
+                redeemedByName: '',
+                checkedIn: false,
+                checkedInAt: null,
+            });
             showToast(isEnglish ? 'Ticket reset.' : '门票已重置。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to reset ticket.' : '重置门票失败。', 'error');
@@ -254,10 +248,7 @@ export function TicketsSubtab({
         if (readOnly) return;
         try {
             await callUpdateTicketType({eventId, attendeeId: a.id, ticketId, type: newType});
-            const updatedTickets = a.tickets.map(t =>
-                t.ticketId === ticketId ? {...t, type: newType} : t,
-            );
-            onAttendeeUpdated({...a, tickets: updatedTickets});
+            updateTicket(a.id, ticketId, {type: newType});
             showToast(isEnglish ? 'Ticket type updated.' : '门票类型已更新。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to update ticket type.' : '更新门票类型失败。', 'error');
@@ -272,7 +263,7 @@ export function TicketsSubtab({
         if (!ok) return;
         try {
             await callDeleteEventAttendee({eventId, attendeeId: a.id});
-            onAttendeeDeleted(a.id);
+            setAttendees(prev => prev.filter(x => x.id !== a.id));
             showToast(isEnglish ? 'Attendee removed.' : '参加者已移除。', 'warning');
         } catch {
             showToast(isEnglish ? 'Failed to remove attendee.' : '移除失败。', 'error');
@@ -288,11 +279,9 @@ export function TicketsSubtab({
             const sent = result.data.sentCount;
             const queued = result.data.queuedCount;
             if (sent > 0) {
-                onAttendeeUpdated({
-                    ...a, emailSent: true, emailScheduled: false, emailSentAt: new Date(),
-                });
+                updateAttendee(a.id, {emailSent: true, emailScheduled: false, emailSentAt: new Date()});
             } else if (queued > 0) {
-                onAttendeeUpdated({...a, emailSent: true, emailScheduled: true});
+                updateAttendee(a.id, {emailSent: true, emailScheduled: true});
             }
             showToast(
                 sent > 0
@@ -463,8 +452,8 @@ export function TicketsSubtab({
                     eventId={eventId}
                     attendee={editingAttendee}
                     onClose={() => setEditingAttendee(null)}
-                    onSaved={(updated) => {
-                        onAttendeeUpdated(updated);
+                    onSaved={(changes) => {
+                        updateAttendee(editingAttendee.id, changes);
                         setEditingAttendee(null);
                     }}
                     onRegenerated={() => {

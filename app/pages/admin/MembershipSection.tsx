@@ -8,7 +8,7 @@ interface MembershipSectionProps {
     user: UserRecord;
     /** Core-staff+ acting on someone below them. Read-only staff never see the controls. */
     canManage: boolean;
-    onUpdated: (updated: UserRecord) => void;
+    onUpdated: (uid: string, changes: Partial<UserRecord>) => void;
     showToast: ShowToast;
 }
 
@@ -56,7 +56,7 @@ export function MembershipSection({user, canManage, onUpdated, showToast}: Membe
         try {
             const result = await callSetMembership({targetUid: user.uid, ...payload});
             const iso = result.data.membershipExpiresAt;
-            onUpdated({...user, membershipExpiresAt: iso ? new Date(iso) : null});
+            onUpdated(user.uid, {membershipExpiresAt: iso ? new Date(iso) : null});
             setEditing(false);
             showToast(successMessage, 'success');
         } catch {

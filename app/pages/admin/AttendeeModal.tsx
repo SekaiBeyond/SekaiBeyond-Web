@@ -24,10 +24,10 @@ interface AttendeeModalProps {
     onClose: () => void;
     /** Add mode: called after a successful add (the modal closes itself). */
     onAdded?: () => void;
-    // Name-only edit: optimistic update with the patched attendee.
+    // Name-only edit: an optimistic patch for the parent to merge.
     // Regenerated edit: ticket UUIDs are minted server-side, so the parent must
     // refetch instead of trusting a placeholder array.
-    onSaved?: (updated: AttendeeData) => void;
+    onSaved?: (changes: Partial<AttendeeData>) => void;
     onRegenerated?: () => void;
     showToast: ShowToast;
 }
@@ -149,12 +149,7 @@ export function AttendeeModal({
             if (regenerated) {
                 onRegenerated?.();
             } else {
-                onSaved?.({
-                    ...existing,
-                    name: trimmedName,
-                    ticketCount: parsedCount,
-                    updatedAt: new Date(),
-                });
+                onSaved?.({name: trimmedName, updatedAt: new Date()});
             }
             showToast(
                 regenerated
@@ -310,8 +305,8 @@ export function AttendeeModal({
 
                 <div className="admin-btn-row">
                     <button
+                        type="submit"
                         className="admin-toggle-btn admin-toggle-save"
-                        onClick={submit}
                         disabled={!canSave}
                     >
                         {attendee
@@ -323,6 +318,7 @@ export function AttendeeModal({
                                 : (isEnglish ? 'Add Attendee' : '添加参加者'))}
                     </button>
                     <button
+                        type="button"
                         className="admin-toggle-btn admin-toggle-cancel"
                         onClick={onClose}
                         disabled={saving}

@@ -42,7 +42,11 @@ export function SendSection({
     const [noTemplate, setNoTemplate] = useState(false);
     const [quota, setQuota] = useState<QuotaState | null>(null);
     const [quotaError, setQuotaError] = useState(false);
+    // The send loop reads the ref between chunks. The state only exists so that
+    // pressing Cancel re-renders the button and the note at once, not when the
+    // chunk in flight comes back.
     const cancelRef = useRef(false);
+    const [cancelling, setCancelling] = useState(false);
 
     const loadQuota = useCallback(async () => {
         try {
@@ -203,12 +207,14 @@ export function SendSection({
             setSending(false);
             setProgress(null);
             cancelRef.current = false;
+            setCancelling(false);
             void loadQuota();
         }
     };
 
     const cancel = () => {
         cancelRef.current = true;
+        setCancelling(true);
     };
 
     return (
@@ -276,7 +282,7 @@ export function SendSection({
                         {isEnglish
                             ? `Sending ${progress.sent} / ${progress.target}${progress.queued > 0 ? ` (+${progress.queued} queued)` : ''}...`
                             : `发送中 ${progress.sent} / ${progress.target}${progress.queued > 0 ? `（另有 ${progress.queued} 封已排队）` : ''}...`}
-                        {cancelRef.current && (
+                        {cancelling && (
                             <span> {isEnglish ? '(cancelling after current chunk)' : '（将在本批后停止）'}</span>
                         )}
                     </div>
@@ -312,7 +318,7 @@ export function SendSection({
                     <button
                         className="admin-toggle-btn admin-toggle-cancel"
                         onClick={cancel}
-                        disabled={cancelRef.current}
+                        disabled={cancelling}
                     >
                         {isEnglish ? 'Cancel' : '取消'}
                     </button>
