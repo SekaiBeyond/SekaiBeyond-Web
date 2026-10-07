@@ -12,7 +12,7 @@ import {
     ROOM_ACCENTS,
     type RoomAccent,
 } from '~/pages/con/content';
-import type { Localized } from '~/pages/con/i18n';
+import { type Localized, useT } from '~/pages/con/i18n';
 import { formatPrice, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/con/utils';
 import { type ShowToast, validateVideoFile } from './utils';
 import { ImageUploadField } from './ImageUploadField';
@@ -675,8 +675,8 @@ const SettingsSection = ({content, loading, showToast, readOnly}: SectionProps) 
         <SectionShell
             section="settings"
             helper={{
-                en: 'While the page is unpublished, visitors get a short “coming soon” card and none of the content below leaves the admin panel. Core staff and the president still see the real page, with a banner along the bottom.',
-                zh: '未发布时，访客将看到简短的「敬请期待」提示页，下方内容不会离开管理面板。核心成员与社长仍可查看真实页面，底部会显示提示横幅。',
+                en: 'While the page is unpublished, visitors get a short “coming soon” card and none of the content below leaves the admin panel. Staff, core staff and the president still see the real page, with a banner along the bottom.',
+                zh: '未发布时，访客将看到简短的「敬请期待」提示页，下方内容不会离开管理面板。工作人员、核心成员与社长仍可查看真实页面，底部会显示提示横幅。',
             }}
             editor={editor}
             readOnly={readOnly}
@@ -830,6 +830,7 @@ const RoomsSection = ({content, loading, showToast, readOnly}: SectionProps) => 
 
 const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
+    const t = useT();
     const editor = useSectionEditor('schedule', content.schedule, loading, showToast);
     const {draft, setDraft} = editor;
     const [roomFilter, setRoomFilter] = useState<string | null>(null);
@@ -897,7 +898,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                             aria-pressed={activeRoom === room.id}
                             onClick={() => setRoomFilter(room.id)}
                         >
-                            {isEnglish ? room.name.en : room.name.zh}
+                            {t(room.name)}
                         </button>
                     ))}
                 </div>
@@ -983,7 +984,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                                         >
                                             {content.rooms.map(room => (
                                                 <option key={room.id} value={room.id}>
-                                                    {isEnglish ? room.name.en : room.name.zh}
+                                                    {t(room.name)}
                                                 </option>
                                             ))}
                                         </select>
@@ -1483,6 +1484,7 @@ const TicketsSection = ({content, loading, showToast, readOnly}: SectionProps) =
 
 const TicketFeeSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
+    const t = useT();
     const editor = useSectionEditor('ticketFee', content.ticketFee, loading, showToast);
     const {draft, setDraft} = editor;
     const lang = isEnglish ? 'en' : 'zh';
@@ -1497,7 +1499,7 @@ const TicketFeeSection = ({content, loading, showToast, readOnly}: SectionProps)
 
     // Against the saved tiers, since those are the prices visitors actually see.
     const previews = content.tickets.flatMap(tier => {
-        const name = isEnglish ? tier.name.en : tier.name.zh;
+        const name = t(tier.name);
         const rows: string[] = [];
         if (tier.earlyBird && tier.earlyBird.price > 0) {
             rows.push(`${name} (${isEnglish ? 'early bird' : '早鸟'}): ${previewAt(tier.earlyBird.price)}`);
@@ -1798,8 +1800,8 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
             <div className="admin-section">
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? 'Edits here go live on /con as soon as they are saved. Each section saves on its own, so you can leave the rest untouched. Anything never saved keeps showing the copy shipped with the site.'
-                        : '此处的修改保存后立即在 /con 页面生效。每个板块单独保存，不会影响其他板块。从未保存过的板块将继续显示网站内置的文案。'}
+                        ? 'While the page is published, edits here go live on /con as soon as they are saved. Each section saves on its own, so you can leave the rest untouched. Anything never saved keeps showing the copy shipped with the site.'
+                        : '页面发布期间，此处的修改保存后立即在 /con 页面生效。每个板块单独保存，不会影响其他板块。从未保存过的板块将继续显示网站内置的文案。'}
                 </p>
             </div>
 

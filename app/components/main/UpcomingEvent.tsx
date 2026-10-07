@@ -71,7 +71,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                         ? (isEnglish ? "Happening Now" : "进行中")
                         : (isEnglish ? "Coming Soon" : "即将到来")}
                 </span>
-                <h2 className="convention-title">{isEnglish ? event.title : event.titleCn}</h2>
+                <h2 className="convention-title">{isEnglish ? event.title : (event.titleCn || event.title)}</h2>
                 <p className="event-date-text">{event.startAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
                     year: 'numeric',
                     month: 'long',
@@ -83,7 +83,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     {eventLocationDisplay(event.location, event.locationCn, event.venueId, venues, isEnglish)}
                 </div>
                 <p className="event-description-text">
-                    {isEnglish ? event.description : event.descriptionCn}
+                    {isEnglish ? event.description : (event.descriptionCn || event.description)}
                 </p>
                 {event.poster && (
                     <div className="convention-poster convention-poster--spaced">
@@ -133,7 +133,9 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                                className="btn btn-secondary con-btn">{isEnglish ? "Learn More" : "了解更多"}</a>) : null}
                         {event.customButtonLink && isValidHttpUrl(event.customButtonLink) ? (
                             <a href={event.customButtonLink} target="_blank" rel="noopener noreferrer"
-                               className="btn btn-secondary con-btn">{isEnglish ? event.customButtonText : event.customButtonTextCn}</a>) : null}
+                               className="btn btn-secondary con-btn">{isEnglish
+                                   ? (event.customButtonText || event.customButtonTextCn)
+                                   : (event.customButtonTextCn || event.customButtonText)}</a>) : null}
                         {parkingVenue && (
                             <a href={`/parking/${event.id}`} className="btn btn-parking con-btn">
                                 <span className="parking-guide-link-icon">🅿️</span>

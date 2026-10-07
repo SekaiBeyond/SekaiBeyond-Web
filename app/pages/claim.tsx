@@ -247,7 +247,7 @@ export const ClaimPage = () => {
                         {eventInfo?.eventPoster && (
                             <div className="claim-badge-icon">
                                 <img src={eventInfo.eventPoster}
-                                     alt={isEnglish ? eventInfo.eventTitle : eventInfo.eventTitleCn}/>
+                                     alt={isEnglish ? eventInfo.eventTitle : (eventInfo.eventTitleCn || eventInfo.eventTitle)}/>
                             </div>
                         )}
                         <h2>

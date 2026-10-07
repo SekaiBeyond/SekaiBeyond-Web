@@ -8,7 +8,7 @@ export const PolicyPage = () => {
     const {isEnglish} = useLanguage();
     const {policy, loading} = usePolicy();
 
-    const content = isEnglish ? policy.contentEn : policy.contentCn;
+    const content = isEnglish ? policy.contentEn : (policy.contentCn || policy.contentEn);
     const contentHtml = useMemo(() => renderPolicyMarkdown(content), [content]);
 
     return (

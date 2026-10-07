@@ -500,7 +500,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 )}
                                 <div className="admin-event-card-info">
                                     <span
-                                        className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
+                                        className="admin-event-card-title">{isEnglish ? event.title : (event.titleCn || event.title)}</span>
                                     <span className="admin-event-card-date">
                                         {event.startAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
                                             year: 'numeric', month: 'short', day: 'numeric',
@@ -546,7 +546,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <img src={selectedEvt.poster} alt="" className="admin-event-detail-img"/>
                                 )}
                                 <div>
-                                    <h3>{isEnglish ? selectedEvt.title : selectedEvt.titleCn}</h3>
+                                    <h3>{isEnglish ? selectedEvt.title : (selectedEvt.titleCn || selectedEvt.title)}</h3>
                                     <p className="admin-event-detail-meta">
                                         <span>
                                             {selectedEvt.startAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
@@ -557,7 +557,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         <span>{eventLocationDisplay(selectedEvt.location, selectedEvt.locationCn, selectedEvt.venueId, venues, isEnglish)}</span>
                                     </p>
                                     <p className="admin-description-text">
-                                        {isEnglish ? selectedEvt.description : selectedEvt.descriptionCn}
+                                        {isEnglish ? selectedEvt.description : (selectedEvt.descriptionCn || selectedEvt.description)}
                                     </p>
                                 </div>
                             </div>

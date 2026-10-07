@@ -947,9 +947,9 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                 <img src={bd.imageUrl} alt="" className="admin-badge-img"/>
                                                 <div className="admin-badge-info">
                                                 <span
-                                                    className="admin-badge-name">{isEnglish ? bd.name : bd.nameCn}</span>
+                                                    className="admin-badge-name">{isEnglish ? bd.name : (bd.nameCn || bd.name)}</span>
                                                     <span
-                                                        className="admin-badge-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
+                                                        className="admin-badge-date">{isEnglish ? bd.description : (bd.descriptionCn || bd.description)}</span>
                                                 </div>
                                                 {readOnly
                                                     ? <span
@@ -988,7 +988,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                         <img src={event.icon} alt="" className="admin-badge-img"/>
                                         <div className="admin-badge-info">
                                         <span
-                                            className="admin-badge-name">{isEnglish ? event.title : event.titleCn}</span>
+                                            className="admin-badge-name">{isEnglish ? event.title : (event.titleCn || event.title)}</span>
                                             <span className="admin-badge-date">{event.date}</span>
                                         </div>
                                         {readOnly

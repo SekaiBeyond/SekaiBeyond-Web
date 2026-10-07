@@ -379,7 +379,7 @@ export function TicketsSubtab({
             {section === 'scan' && canScan && (
                 <TicketScanner
                     eventId={eventId}
-                    eventTitle={isEnglish ? event.title : event.titleCn}
+                    eventTitle={isEnglish ? event.title : (event.titleCn || event.title)}
                     onRedeemed={() => void loadAttendees()}
                 />
             )}

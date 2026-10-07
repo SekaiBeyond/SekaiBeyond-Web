@@ -235,7 +235,7 @@ export const RedeemModal = () => {
                     <>
                         {badge && (
                             <div className="claim-badge-icon">
-                                <img src={badge.imageUrl} alt={isEnglish ? badge.name : badge.nameCn}/>
+                                <img src={badge.imageUrl} alt={isEnglish ? badge.name : (badge.nameCn || badge.name)}/>
                             </div>
                         )}
                         <h2 className="redeem-heading">
@@ -244,10 +244,10 @@ export const RedeemModal = () => {
                         {badge && (
                             <>
                                 <p className="claim-event-title redeem-centered-text">
-                                    {isEnglish ? badge.name : badge.nameCn}
+                                    {isEnglish ? badge.name : (badge.nameCn || badge.name)}
                                 </p>
                                 <p className="claim-event-category redeem-centered-text">
-                                    {isEnglish ? badge.description : badge.descriptionCn}
+                                    {isEnglish ? badge.description : (badge.descriptionCn || badge.description)}
                                 </p>
                             </>
                         )}
@@ -262,7 +262,7 @@ export const RedeemModal = () => {
                         {eventInfo?.eventPoster && (
                             <div className="claim-badge-icon">
                                 <img src={eventInfo.eventPoster}
-                                     alt={isEnglish ? eventInfo.eventTitle : eventInfo.eventTitleCn}/>
+                                     alt={isEnglish ? eventInfo.eventTitle : (eventInfo.eventTitleCn || eventInfo.eventTitle)}/>
                             </div>
                         )}
                         <h2 className="redeem-heading">

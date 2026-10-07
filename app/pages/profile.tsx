@@ -89,10 +89,10 @@ const BadgeCard = ({badge, earnedDate, isEnglish, onOpen}: {
         <span className="badge-icon-wrapper">
             <img src={badge.imageUrl} alt="" className="badge-icon"/>
         </span>
-        <span className="badge-label">{isEnglish ? badge.name : badge.nameCn}</span>
+        <span className="badge-label">{isEnglish ? badge.name : (badge.nameCn || badge.name)}</span>
         <span className="badge-tooltip" aria-hidden="true">
-            <span className="badge-tooltip-name">{isEnglish ? badge.name : badge.nameCn}</span>
-            <span className="badge-tooltip-desc">{isEnglish ? badge.description : badge.descriptionCn}</span>
+            <span className="badge-tooltip-name">{isEnglish ? badge.name : (badge.nameCn || badge.name)}</span>
+            <span className="badge-tooltip-desc">{isEnglish ? badge.description : (badge.descriptionCn || badge.description)}</span>
             {earnedDate && (
                 <span className="badge-tooltip-date">
                     {isEnglish ? 'Earned ' : '获得于 '}
@@ -114,7 +114,7 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
     tagLabels?: string[];
     wasStaff?: boolean;
 }) => {
-    const title = isEnglish ? event.title : event.titleCn;
+    const title = isEnglish ? event.title : (event.titleCn || event.title);
     return (
         <div className="profile-event-card">
             <div className="profile-event-icon-wrapper">
@@ -1034,7 +1034,7 @@ export const ProfilePage = () => {
                                             tagLabels={event.tagIds
                                                 .map(id => tagMap.get(id))
                                                 .filter((t): t is NonNullable<typeof t> => !!t)
-                                                .map(t => isEnglish ? t.name : t.nameCn)}
+                                                .map(t => isEnglish ? t.name : (t.nameCn || t.name))}
                                         />
                                     ))}
                                 </div>
@@ -1049,11 +1049,11 @@ export const ProfilePage = () => {
                         <button className="badge-modal-close" onClick={() => setSelectedBadge(null)}>×</button>
                         <div className="badge-modal-header">
                             <img src={selectedBadge.imageUrl}
-                                 alt={isEnglish ? selectedBadge.name : selectedBadge.nameCn}
+                                 alt={isEnglish ? selectedBadge.name : (selectedBadge.nameCn || selectedBadge.name)}
                                  className="badge-modal-icon"/>
-                            <h3 className="badge-modal-title">{isEnglish ? selectedBadge.name : selectedBadge.nameCn}</h3>
+                            <h3 className="badge-modal-title">{isEnglish ? selectedBadge.name : (selectedBadge.nameCn || selectedBadge.name)}</h3>
                         </div>
-                        <p className="badge-modal-desc">{isEnglish ? selectedBadge.description : selectedBadge.descriptionCn}</p>
+                        <p className="badge-modal-desc">{isEnglish ? selectedBadge.description : (selectedBadge.descriptionCn || selectedBadge.description)}</p>
                         <div className="badge-modal-meta">
                             {earnedDates[selectedBadge.id] && (
                                 <p className="badge-modal-date">

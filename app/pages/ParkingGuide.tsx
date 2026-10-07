@@ -551,7 +551,7 @@ export const ParkingGuide = () => {
                                         >
                                             <div className="parking-popup-content">
                                                 <div
-                                                    className="parking-popup-title">{isEnglish ? venue.nameEn : venue.nameCn}</div>
+                                                    className="parking-popup-title">{isEnglish ? venue.nameEn : (venue.nameCn || venue.nameEn)}</div>
                                                 <div
                                                     className="parking-popup-type">{isEnglish ? 'Event Venue' : '活动场地'}</div>
                                             </div>
@@ -593,7 +593,7 @@ export const ParkingGuide = () => {
                                                     >
                                                         <div className="parking-popup-content">
                                                             <div
-                                                                className="parking-popup-title">{isEnglish ? lot.name : lot.nameCn}</div>
+                                                                className="parking-popup-title">{isEnglish ? lot.name : (lot.nameCn || lot.name)}</div>
                                                             <div className="parking-popup-type">{typeLabel}</div>
                                                             {rateText && (
                                                                 <div className="parking-popup-type">💲 {rateText}</div>
