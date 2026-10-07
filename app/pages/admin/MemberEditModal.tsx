@@ -115,6 +115,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
     };
 
     const handleImageChange = async (file: File, previewUrl: string) => {
+        const previous = formData.imageUrl;
         setUploading(true);
         setFormData(prev => ({...prev, imageUrl: previewUrl}));
         try {
@@ -127,6 +128,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
             setFormData(prev => ({...prev, imageUrl: url}));
             showToast(isEnglish ? 'Image uploaded.' : '图片已上传。', 'success');
         } catch {
+            // The preview is a local blob the server won't accept on Save.
+            setFormData(prev => ({...prev, imageUrl: previous}));
             showToast(isEnglish ? 'Image upload failed.' : '图片上传失败。', 'error');
         } finally {
             setUploading(false);

@@ -309,6 +309,8 @@ const AmountField = (
 interface RowActionsProps {
     onRemove: () => void;
     readOnly?: boolean;
+    /** Holds the row in place while something is due to land in the list by position. */
+    disabled?: boolean;
     /**
      * Reordering, for a section that keeps an order of its own. A section put in
      * order as it saves — the schedule, by start time — passes none of these and
@@ -319,7 +321,7 @@ interface RowActionsProps {
     onMove?: (delta: number) => void;
 }
 
-const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly}: RowActionsProps) => {
+const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly, disabled}: RowActionsProps) => {
     const {isEnglish} = useLanguage();
     if (readOnly) return null;
 
@@ -331,7 +333,7 @@ const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly}: RowActio
                         type="button"
                         className="admin-con-icon-btn"
                         onClick={() => onMove(-1)}
-                        disabled={index === 0}
+                        disabled={disabled || index === 0}
                         aria-label={isEnglish ? 'Move up' : '上移'}
                     >
                         ↑
@@ -340,7 +342,7 @@ const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly}: RowActio
                         type="button"
                         className="admin-con-icon-btn"
                         onClick={() => onMove(1)}
-                        disabled={index === count - 1}
+                        disabled={disabled || index === count - 1}
                         aria-label={isEnglish ? 'Move down' : '下移'}
                     >
                         ↓
@@ -351,6 +353,7 @@ const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly}: RowActio
                 type="button"
                 className="admin-con-icon-btn admin-con-icon-btn--danger"
                 onClick={onRemove}
+                disabled={disabled}
                 aria-label={isEnglish ? 'Remove' : '删除'}
             >
                 ×
@@ -1091,12 +1094,16 @@ const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) =>
                                     </span>
                                 )}
                             </span>
+                            {/* The photo lands by position, so the line-up holds
+                                still until it has: move a guest mid-upload and the
+                                photo would go to whoever had taken their slot. */}
                             <RowActions
                                 index={index}
                                 count={draft.length}
                                 onMove={delta => setDraft(prev => moveAt(prev, index, delta))}
                                 onRemove={() => setDraft(prev => removeAt(prev, index))}
                                 readOnly={readOnly}
+                                disabled={preview !== null}
                             />
                         </div>
 

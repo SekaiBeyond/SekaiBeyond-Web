@@ -91,7 +91,10 @@ export const PassportDetail = ({
     const [missing, setMissing] = useState(false);
     const [loadFailed, setLoadFailed] = useState(false);
     const [owner, setOwner] = useState<UserRecord | null>(null);
+    // Gone and unreadable are kept apart for the holder as well, so a failed read
+    // never tells the admin the account was deleted.
     const [ownerMissing, setOwnerMissing] = useState(false);
+    const [ownerFailed, setOwnerFailed] = useState(false);
     const [busy, setBusy] = useState(false);
     // Fetched on the first Show, since every fetch is written to the Records tab.
     // Hide only masks it, so showing it again isn't a second look.
@@ -126,11 +129,10 @@ export const PassportDetail = ({
 
     const ownerUid = passport?.ownerUid ?? null;
     useEffect(() => {
-        if (!ownerUid) {
-            setOwner(null);
-            setOwnerMissing(false);
-            return;
-        }
+        setOwner(null);
+        setOwnerMissing(false);
+        setOwnerFailed(false);
+        if (!ownerUid) return;
         let stale = false;
         getDoc(doc(getFirebaseDb(), 'users', ownerUid))
             .then(snap => {
@@ -139,7 +141,7 @@ export const PassportDetail = ({
                 else setOwnerMissing(true);
             })
             .catch(() => {
-                if (!stale) setOwnerMissing(true);
+                if (!stale) setOwnerFailed(true);
             });
         return () => {
             stale = true;
@@ -317,17 +319,22 @@ export const PassportDetail = ({
 
     const unclaimed = passport.status === 'unclaimed';
     const keyViewable = !readOnly;
-    // What ticking the box would do. Null while the holder is still loading, for
-    // an account that is gone, and for a membership that has already run out —
-    // none of the three has days to give back, so the box stays off for all of
-    // them, and the line below says which it is.
+    // What ticking the box would do. Null while the holder is loading or couldn't
+    // be read, for an account that is gone, and for a membership that has already
+    // run out — none of them has days to show being given back, so the box stays
+    // off for all of them, and the line below says which it is.
     const reduction = previewReduced(owner?.membershipExpiresAt ?? null, passport.termDays);
-    const ownerLoading = !owner && !ownerMissing;
+    const ownerLoading = !owner && !ownerMissing && !ownerFailed;
 
     /** The line under the checkbox: what the box as it stands would leave behind. */
     const deleteEffect = (): string => {
         if (ownerLoading) {
             return isEnglish ? 'Checking the holder’s membership…' : '正在读取持有者的会员资格…';
+        }
+        if (ownerFailed) {
+            return isEnglish
+                ? 'The holder’s membership couldn’t be read. To take days back, go back and open this passport again.'
+                : '无法读取持有者的会员资格。如需收回天数，请返回后重新打开此通行证。';
         }
         if (!reduction) {
             return isEnglish
@@ -422,6 +429,20 @@ export const PassportDetail = ({
                         {isEnglish
                             ? 'The passport stays bound to it, and its public page no longer resolves.'
                             : '通行证仍与该账号保持绑定，其公开页面不再显示。'}
+                    </p>
+                </div>
+            );
+        }
+        if (ownerFailed) {
+            return (
+                <div className="admin-passport-holder-empty">
+                    <p className="admin-passport-holder-empty-title">
+                        {isEnglish ? 'Couldn’t load the holder' : '无法加载持有者'}
+                    </p>
+                    <p className="admin-passport-holder-empty-note">
+                        {isEnglish
+                            ? 'The passport is still bound to their account. Go back and open it again to retry.'
+                            : '通行证仍与其账号绑定。请返回后重新打开以重试。'}
                     </p>
                 </div>
             );

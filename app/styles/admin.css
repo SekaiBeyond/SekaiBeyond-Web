@@ -5803,8 +5803,9 @@ select.admin-tickets-tag:focus {
     white-space: nowrap;
 }
 
-/* No holder to show: stock, a deleted account, or still loading. Dashed, so
-   the empty state reads as a space waiting to be filled rather than a card. */
+/* No holder to show: stock, a deleted account, one that couldn't be read, or
+   still loading. Dashed, so the empty state reads as a space waiting to be
+   filled rather than a card. */
 .admin-passport-holder-empty {
     padding: 14px;
     border: 1px dashed rgba(122, 129, 144, 0.32);

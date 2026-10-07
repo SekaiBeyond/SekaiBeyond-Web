@@ -131,6 +131,7 @@ export const PassportStock = ({
                               }: PassportStockProps) => {
     const {isEnglish} = useLanguage();
     const [owners, setOwners] = useState<Map<string, UserRecord> | null>(null);
+    const [ownersFailed, setOwnersFailed] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [exportingKeys, setExportingKeys] = useState(false);
     const {request: requestPngs, progress, node: pngNode} = usePassportPngExport(
@@ -158,6 +159,7 @@ export const PassportStock = ({
     // what hasn't changed unless a uid has.
     const ownerKey = ownerUids.join(',');
     useEffect(() => {
+        setOwnersFailed(false);
         if (ownerUids.length === 0) {
             setOwners(new Map());
             return;
@@ -171,7 +173,10 @@ export const PassportStock = ({
             .catch(() => {
                 // An unreadable holder is a blank cell, never a broken table: the
                 // codes, statuses and dates are all still worth showing.
-                if (!stale) setOwners(new Map());
+                if (!stale) {
+                    setOwners(new Map());
+                    setOwnersFailed(true);
+                }
             });
         return () => {
             stale = true;
@@ -588,7 +593,12 @@ export const PassportStock = ({
                                     <td className={`admin-passport-cell-holder${
                                         passport.status === 'claimed' && passport.ownerUid
                                             ? '' : ' admin-passport-cell-holder--none'}`}>
-                                        <Holder passport={passport} owners={owners} isEnglish={isEnglish}/>
+                                        <Holder
+                                            passport={passport}
+                                            owners={owners}
+                                            ownersFailed={ownersFailed}
+                                            isEnglish={isEnglish}
+                                        />
                                     </td>
                                     <td
                                         className="admin-passport-cell-date"
@@ -638,11 +648,14 @@ export const PassportStock = ({
 /**
  * The Holder cell. A claimed passport whose account has since been deleted says
  * so rather than showing a blank — the passport stays bound either way, and that
- * is the one case where an empty cell would be misread as "nobody".
+ * is the one case where an empty cell would be misread as "nobody". When the
+ * holders couldn't be read at all, nobody is known to be missing, so it stays
+ * blank.
  */
-const Holder = ({passport, owners, isEnglish}: {
+const Holder = ({passport, owners, ownersFailed, isEnglish}: {
     passport: Passport;
     owners: Map<string, UserRecord> | null;
+    ownersFailed: boolean;
     isEnglish: boolean;
 }) => {
     if (passport.status !== 'claimed' || !passport.ownerUid) {
@@ -651,6 +664,7 @@ const Holder = ({passport, owners, isEnglish}: {
     if (owners === null) return <span className="admin-passport-cell-blank">…</span>;
 
     const owner = owners.get(passport.ownerUid);
+    if (!owner && ownersFailed) return <span className="admin-passport-cell-blank">—</span>;
     if (!owner) {
         return (
             <span className="admin-passport-cell-blank">

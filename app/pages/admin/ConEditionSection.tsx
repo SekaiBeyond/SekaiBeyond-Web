@@ -33,14 +33,23 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
     }, [conEdition]);
 
     const handleImageChange = async (file: File, previewUrl: string) => {
+        const previous = formData.image;
         setUploading(true);
         setFormData(prev => ({...prev, image: previewUrl}));
         try {
             showToast(isEnglish ? 'Uploading image...' : '正在上传图片...', 'warning');
-            const url = await callUploadAdminImage(file, `config/con-${formData.year}.webp`);
+            // Time-stamped so a replacement lands on a new object: admin images are
+            // cached as immutable, and the old URL is what the home page serves
+            // until this section is saved.
+            const url = await callUploadAdminImage(
+                file,
+                `config/con-${formData.year}-${Date.now().toString(36)}.webp`,
+            );
             setFormData(prev => ({...prev, image: url}));
             showToast(isEnglish ? 'Image uploaded.' : '图片已上传。', 'success');
         } catch {
+            // The preview is a local blob the server won't accept on Save.
+            setFormData(prev => ({...prev, image: previous}));
             showToast(isEnglish ? 'Image upload failed.' : '图片上传失败。', 'error');
         } finally {
             setUploading(false);
