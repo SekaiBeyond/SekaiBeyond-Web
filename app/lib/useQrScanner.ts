@@ -39,7 +39,9 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const rafRef = useRef<number | null>(null);
-    const cancelledRef = useRef(false);
+    // Moved on by every stop, so a start still waiting on the camera can tell it
+    // was called off and leave the camera off instead of turning it on.
+    const sessionRef = useRef(0);
     const startingRef = useRef(false);
     const jsQRRef = useRef<JsQRFn | null>(null);
 
@@ -52,6 +54,7 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     const [cameraError, setCameraError] = useState<string | null>(null);
 
     const stopCamera = useCallback(() => {
+        sessionRef.current++;
         if (rafRef.current !== null) {
             cancelAnimationFrame(rafRef.current);
             rafRef.current = null;
@@ -64,7 +67,7 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     }, []);
 
     const tick = useCallback(() => {
-        if (cancelledRef.current) return;
+        if (!streamRef.current) return; // stopped
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const jsQR = jsQRRef.current;
@@ -94,26 +97,36 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
         // a second stream that nothing ever stops.
         if (streamRef.current || startingRef.current) return;
         startingRef.current = true;
+        const session = sessionRef.current;
+        const stopped = () => sessionRef.current !== session;
         setCameraError(null);
         optionsRef.current.onStart?.();
-        cancelledRef.current = false;
         try {
             jsQRRef.current ??= await loadJsQR();
+            if (stopped()) return;
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {facingMode: 'environment'},
                 audio: false,
             });
+            if (stopped()) {
+                stream.getTracks().forEach(t => t.stop());
+                return;
+            }
             streamRef.current = stream;
             const video = videoRef.current;
-            if (!video || cancelledRef.current) {
+            if (!video) {
                 stopCamera();
                 return;
             }
             video.srcObject = stream;
             await video.play();
+            // A stop during play() has already shut the stream.
+            if (stopped()) return;
             setCameraActive(true);
             rafRef.current = requestAnimationFrame(tick);
         } catch (err) {
+            // Stopped while starting: whatever failed was cut short, not broken.
+            if (stopped()) return;
             // A stream that opened but won't play must not stay on, or block the next start.
             stopCamera();
             console.error(`${optionsRef.current.logLabel} camera error`, err);
@@ -124,10 +137,8 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
         }
     }, [tick, stopCamera]);
 
-    useEffect(() => () => {
-        cancelledRef.current = true;
-        stopCamera();
-    }, [stopCamera]);
+    // Unmounting stops the camera, and with it any start still in flight.
+    useEffect(() => stopCamera, [stopCamera]);
 
     return {videoRef, canvasRef, cameraActive, cameraError, startCamera, stopCamera};
 }

@@ -17,7 +17,7 @@ import {
 } from "../utils/passports";
 import { sanitizeDisplayText, validateDocId, validateStorageImageUrl, validateStr } from "../utils/validation";
 import { recordDoc, recordRef } from "../utils/records";
-import { deleteStorageFile, logStorageCleanupError } from "../utils/storage";
+import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 
 /**
  * Physical passports.
@@ -607,6 +607,7 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
         } else {
             year = createYear!;
         }
+        await requireNewlyLinkedFilesExist([coverImageUrl, outerCoverImageUrl], prevImages);
 
         const names = shownNames({name, nameCn});
         const sameYear = await txn.get(db.collection(DESIGNS).where("year", "==", year));

@@ -85,8 +85,8 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
             await callSaveSiteConfig({conEdition: formData});
             await refreshAfterSave(refreshConfig, showToast, isEnglish);
             showToast(isEnglish ? 'Convention edition saved.' : '漫展年度已保存。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to save convention edition.' : '保存漫展年度失败。', 'error');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to save convention edition.' : '保存漫展年度失败。'), 'error');
         } finally {
             setSaving(false);
         }

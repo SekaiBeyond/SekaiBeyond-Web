@@ -19,6 +19,7 @@ import {
     MAX_UPLOAD_SIZE_MB,
     MAX_VIDEO_UPLOAD_SIZE,
     MAX_VIDEO_UPLOAD_SIZE_MB,
+    requireNewlyLinkedFilesExist,
     validateStoragePath
 } from "../utils/storage";
 import {
@@ -343,6 +344,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         const prevConImage: string = conEdition !== undefined
             ? (await txn.get(configRef)).data()?.conEdition?.image ?? ""
             : "";
+        if (conEdition) await requireNewlyLinkedFilesExist([conEdition.image], [prevConImage]);
 
         const updateData: Record<string, any> = {
             updatedBy: uid,
@@ -848,6 +850,7 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
         const publicRef = db.collection("conContent").doc("main");
 
         const stored = (await txn.get(draftRef)).data() ?? {};
+        await requireNewlyLinkedFilesExist(conAssetUrls(updateData), conAssetUrls(stored));
 
         if (updateData.event !== undefined) {
             const venueSnap = await txn.get(db.collection("venues").doc(updateData.event.venueId));
