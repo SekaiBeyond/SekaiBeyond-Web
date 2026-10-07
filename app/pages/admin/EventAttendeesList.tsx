@@ -65,15 +65,24 @@ export function EventAttendeesList({
                     {attendees.length} {isEnglish ? 'attendees' : '人参加'}
                 </p>
             )}
+            {/* A new tab, so the event stays open behind the profile. */}
             {!loading && attendees.map((u) => (
-                <UserRow key={u.uid} user={u}>
+                <UserRow
+                    key={u.uid}
+                    user={u}
+                    onClick={() => window.open(`/profile?uid=${u.uid}`, '_blank', 'noopener')}
+                >
                     <span className="admin-user-group-tag" data-group={u.group}>
                         {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
                     </span>
                     {canRemove && (
                         <button
                             className="admin-toggle-btn admin-toggle-revoke"
-                            onClick={() => removeAttendee(u)}
+                            onClick={(e) => {
+                                e.stopPropagation(); // the row behind it opens the profile
+                                void removeAttendee(u);
+                            }}
+                            onKeyDown={(e) => e.stopPropagation()}
                             disabled={busyUid === u.uid}
                         >
                             {busyUid === u.uid
