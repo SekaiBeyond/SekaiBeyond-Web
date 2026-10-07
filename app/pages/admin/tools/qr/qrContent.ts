@@ -153,10 +153,10 @@ function parseSms(text: string, scheme: string): QrContent {
     return {kind: 'sms', headline: number, fields: body ? [{key: 'message', value: body}] : []};
 }
 
-// geo:35.6595,139.7005?q=Shibuya
+// geo:35.6595,139.7005?q=Shibuya   geo:35.6595,139.7005;u=35
 function parseGeo(text: string): QrContent | null {
     const [coords, query] = splitOnce(text.slice('geo:'.length), '?');
-    const [lat, lng] = coords.split(',').map(Number);
+    const [lat, lng] = coords.split(';')[0].split(',').map(Number);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
         return null;
     }

@@ -755,7 +755,8 @@ export const Lineup = () => {
                             <label className="sbc-lineup-control">
                                 <span className="sbc-lineup-control-heading">
                                     <span>{t({en: 'Rotation', zh: '旋转'})}</span>
-                                    <output>{transform.rotation}°</output>
+                                    {/* Rounded: a two-finger turn leaves it fractional. */}
+                                    <output>{Math.round(transform.rotation)}°</output>
                                 </span>
                                 <input
                                     type="range"
