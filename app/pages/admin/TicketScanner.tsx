@@ -22,8 +22,8 @@ type ScanStatus =
 
 interface CachedRedemption {
     ticketId: string;
-    /** When this device redeemed it. */
-    at: number;
+    /** When the server's grace window for it closes, on this device's clock. */
+    until: number;
     attendeeName: string;
     attendeeEmail: string;
     ticketType: string;
@@ -32,8 +32,6 @@ interface CachedRedemption {
 
 const DEDUPE_MS = 3000;
 const CACHE_SIZE = 20;
-/** Mirrors REDEEM_GRACE_PERIOD_MS in functions/src/functions/tickets.ts. */
-const REPEAT_GRACE_MS = 15_000;
 
 interface TicketScannerProps {
     eventId: string;
@@ -59,7 +57,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         // a round trip, but only inside the server's grace window. Past it the scan
         // goes to the server, which answers "already redeemed": a ticket shown again
         // later — a shared screenshot — must not get in on the strength of a cache.
-        const cached = redeemedCacheRef.current.find(c => c.ticketId === ticketId && now - c.at < REPEAT_GRACE_MS);
+        const cached = redeemedCacheRef.current.find(c => c.ticketId === ticketId && now < c.until);
         if (cached) {
             setStatus({
                 kind: 'success',
@@ -95,8 +93,11 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 };
                 setStatus({kind: 'success', ...successData});
 
+                // The window is timed from the first admission, which a rescan
+                // answered from the server may be well into, so the server says how
+                // much of it is left. Without that, the entry expires at once.
                 redeemedCacheRef.current = [
-                    {ticketId, at: now, ...successData},
+                    {ticketId, until: now + (d.graceRemainingMs ?? 0), ...successData},
                     ...redeemedCacheRef.current.filter(c => c.ticketId !== ticketId),
                 ].slice(0, CACHE_SIZE);
 

@@ -231,6 +231,10 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
         // alreadyRedeemed is true.
         redeemedBy?: string;
         redeemedAt?: string | null;
+        // On success: how much longer this scanner may scan the ticket again and
+        // still be told it succeeded. A duration rather than a time, so the
+        // scanner can time it on its own clock.
+        graceRemainingMs?: number;
     }>(getFunctions(), 'redeemTicket')(data);
 
 /** One of the caller's own tickets, as /profile shows it. */

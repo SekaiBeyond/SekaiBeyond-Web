@@ -651,8 +651,8 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         const REDEEM_GRACE_PERIOD_MS = 15_000;
 
         if (ticket.redeemed) {
-            const redeemedAtMs = ticket.redeemedAt?.toMillis?.() ?? 0;
-            const isWithinGracePeriod = (now.toMillis() - redeemedAtMs) < REDEEM_GRACE_PERIOD_MS;
+            const sinceRedeemedMs = now.toMillis() - (ticket.redeemedAt?.toMillis?.() ?? 0);
+            const isWithinGracePeriod = sinceRedeemedMs < REDEEM_GRACE_PERIOD_MS;
             const isSameScanner = ticket.redeemedBy === uid;
 
             if (!isWithinGracePeriod || !isSameScanner) {
@@ -667,6 +667,21 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                     redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
                 };
             }
+
+            // The same scanner reading it again moments later: report the admission
+            // it already made, and write nothing. Rewriting redeemedAt here restarted
+            // the window on every rescan, so a ticket held up to the camera every few
+            // seconds kept reading as a fresh admission.
+            return {
+                success: true,
+                attendeeName,
+                attendeeEmail,
+                eventTitle,
+                ticketIndex: idx,
+                ticketType: ticket.type || "normal",
+                userCheckedIn: ticket.checkedIn === true,
+                graceRemainingMs: Math.min(REDEEM_GRACE_PERIOD_MS, REDEEM_GRACE_PERIOD_MS - sinceRedeemedMs),
+            };
         }
 
         // Try to link to a registered user by email.
@@ -706,6 +721,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
             ticketIndex: idx,
             ticketType: ticket.type || "normal",
             userCheckedIn,
+            graceRemainingMs: REDEEM_GRACE_PERIOD_MS,
         };
     });
 });
