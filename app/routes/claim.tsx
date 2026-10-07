@@ -3,8 +3,8 @@ import { ClaimPage } from "~/pages/claim";
 
 export function meta({}: Route.MetaArgs) {
     return [
-        {title: "Claim Badge | Sekai Beyond"},
-        {name: "description", content: "Claim your event attendance badge"},
+        {title: "Check In | Sekai Beyond"},
+        {name: "description", content: "Check in at a Sekai Beyond event"},
     ];
 }
 

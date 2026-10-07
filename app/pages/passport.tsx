@@ -30,6 +30,8 @@ import { type ShowToast, ToastContainer, useToasts } from '~/lib/useToasts';
 export const PassportPage = () => {
     const {passportId: raw} = useParams();
     const {isEnglish} = useLanguage();
+    const {user, loading: authLoading} = useAuth();
+    const viewerUid = user?.uid ?? null;
     const passportId = normalizePassportCode(raw ?? '');
     const wellFormed = isPassportCodeShape(passportId, PASSPORT_ID_LENGTH);
 
@@ -42,8 +44,11 @@ export const PassportPage = () => {
         if (id === passportId) setNonce(n => n + 1);
     }), [passportId]);
 
+    // Resolved again when the viewer signs in or out: the server decides whether
+    // they own it, which is what shows them the privacy switch and, if they hid
+    // it, the page itself.
     useEffect(() => {
-        if (!wellFormed) return;
+        if (!wellFormed || authLoading) return;
         let stale = false;
         setResult(null);
         setFailed(false);
@@ -57,7 +62,7 @@ export const PassportPage = () => {
         return () => {
             stale = true;
         };
-    }, [passportId, wellFormed, nonce]);
+    }, [passportId, wellFormed, nonce, authLoading, viewerUid]);
 
     // A code that can't be a passport id is answered here rather than by the
     // server, which would give the same "invalid" either way.

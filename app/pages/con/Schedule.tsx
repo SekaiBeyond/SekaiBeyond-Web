@@ -139,9 +139,10 @@ export const Schedule = () => {
         [content.schedule, activeRoom],
     );
 
-    // Counted rather than written down, so editing the rooms in the admin panel
-    // cannot leave the subtitle claiming a number of tracks that no longer exists.
-    const tracks = content.rooms.length;
+    // Counted rather than written down, and from the rooms with something booked —
+    // the columns the grid draws — so a room added ahead of its programming doesn't
+    // make the subtitle promise a track the schedule doesn't show.
+    const tracks = filterableRooms.length;
     const trackLine = tracks > 0
         ? {en: `One day, ${tracks} ${tracks === 1 ? 'track' : 'tracks'}. `, zh: `一天，${tracks} 条线路。`}
         : {en: '', zh: ''};

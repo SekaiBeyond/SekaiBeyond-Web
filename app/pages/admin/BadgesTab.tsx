@@ -504,7 +504,8 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             <button key={bd.id} className="admin-event-card" onClick={() => selectBadgeDef(bd)}>
                                 <img src={bd.imageUrl} alt="" className="admin-event-card-img"/>
                                 <div className="admin-event-card-info">
-                                    <span className="admin-event-card-title">{isEnglish ? bd.name : (bd.nameCn || bd.name)}</span>
+                                    <span
+                                        className="admin-event-card-title">{isEnglish ? bd.name : (bd.nameCn || bd.name)}</span>
                                     <span
                                         className="admin-event-card-date">{isEnglish ? bd.description : (bd.descriptionCn || bd.description)}</span>
                                     {bd.deleteAt && (

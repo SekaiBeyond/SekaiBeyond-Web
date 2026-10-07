@@ -53,6 +53,11 @@ export const ClaimPage = () => {
     const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
     const [ticketInfo, setTicketInfo] = useState<TicketInfo | null>(null);
     const [retryCount, setRetryCount] = useState(0);
+    // Whether there is a profile, not the profile itself: a claim refreshes the
+    // profile when it lands, and re-running on the new object would claim again —
+    // an event code would flip to "already have", and a ticket would re-redeem,
+    // inside its grace window, until the rate limit stopped it.
+    const hasProfile = !!profile;
 
     useEffect(() => {
         if (!code && !isTicketFlow) {
@@ -60,7 +65,7 @@ export const ClaimPage = () => {
             return;
         }
         if (authLoading) return;
-        if (!user || !profile) {
+        if (!user || !hasProfile) {
             setState('not-logged-in');
             return;
         }
@@ -158,7 +163,7 @@ export const ClaimPage = () => {
                     setState('error');
             }
         });
-    }, [code, ticketIdParam, eventIdParam, isTicketFlow, user, profile, authLoading, retryCount]);
+    }, [code, ticketIdParam, eventIdParam, isTicketFlow, user, hasProfile, authLoading, retryCount]);
 
     if (state === 'loading' || authLoading) {
         return (

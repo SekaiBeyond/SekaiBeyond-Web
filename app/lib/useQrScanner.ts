@@ -40,6 +40,7 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     const streamRef = useRef<MediaStream | null>(null);
     const rafRef = useRef<number | null>(null);
     const cancelledRef = useRef(false);
+    const startingRef = useRef(false);
     const jsQRRef = useRef<JsQRFn | null>(null);
 
     // Keep the latest options in a ref so the rAF loop never reads a stale
@@ -88,9 +89,11 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     }, [stopCamera]);
 
     const startCamera = useCallback(async () => {
-        // Prevent double invocation — a second call while getUserMedia is
-        // in-flight would overwrite streamRef and leak the first stream.
-        if (streamRef.current) return;
+        // One start at a time. The Start button stays up until the camera is
+        // playing, and a second press while getUserMedia is in flight would open
+        // a second stream that nothing ever stops.
+        if (streamRef.current || startingRef.current) return;
+        startingRef.current = true;
         setCameraError(null);
         optionsRef.current.onStart?.();
         cancelledRef.current = false;
@@ -102,8 +105,8 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
             });
             streamRef.current = stream;
             const video = videoRef.current;
-            if (!video) {
-                stream.getTracks().forEach(t => t.stop());
+            if (!video || cancelledRef.current) {
+                stopCamera();
                 return;
             }
             video.srcObject = stream;
@@ -111,11 +114,15 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
             setCameraActive(true);
             rafRef.current = requestAnimationFrame(tick);
         } catch (err) {
+            // A stream that opened but won't play must not stay on, or block the next start.
+            stopCamera();
             console.error(`${optionsRef.current.logLabel} camera error`, err);
             setCameraError(optionsRef.current.cameraErrorMessage);
             optionsRef.current.onStartError?.();
+        } finally {
+            startingRef.current = false;
         }
-    }, [tick]);
+    }, [tick, stopCamera]);
 
     useEffect(() => () => {
         cancelledRef.current = true;

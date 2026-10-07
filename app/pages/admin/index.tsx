@@ -32,6 +32,16 @@ import { SectionNav } from './SectionNav';
 import type { CardHighlightHandle, LocationListHandle } from './useCardHighlight';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
 
+/** Every tab a link can name, and the older names now folded into another tab. */
+const LINKABLE_TABS: Tab[] = ['users', 'events', 'locations', 'badges', 'passports', 'records', 'tools', 'config', 'con'];
+const TAB_ALIASES: Record<string, Tab> = {
+    venues: 'locations',
+    parking: 'locations',
+    tags: 'events',
+    upcoming: 'events',
+    policy: 'config',
+};
+
 export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
@@ -116,55 +126,22 @@ export const AdminPage = () => {
         if (!isCoreStaffOrAbove && !isStaffGroup && !isEventStaffOnly) return;
         const tab = searchParams.get('tab');
         const event = searchParams.get('event');
+        // Selections are queued rather than made here: the tab only mounts once
+        // setActiveTab lands, so its ref is still empty at this point.
         if (isEventStaffOnly) {
             setActiveTab('events');
             const firstEventId = event && staffUpcomingEvents.some(e => e.id === event)
                 ? event
                 : staffUpcomingEvents[0]?.id;
-            if (firstEventId) {
-                upcomingTabRef.current?.selectEvent(firstEventId);
-            }
-        } else if (isStaffGroup) {
-            if (tab === 'events' || tab === 'locations' || tab === 'tools' || tab === 'users' || tab === 'badges' || tab === 'passports' || tab === 'records' || tab === 'config' || tab === 'con') {
-                setActiveTab(tab);
-            } else if (tab === 'venues' || tab === 'parking') {
-                setActiveTab('locations');
-            } else if (tab === 'tags') {
-                setActiveTab('events');
-            } else if (tab === 'upcoming') {
-                setActiveTab('events');
-            } else if (tab === 'policy') {
-                setActiveTab('config');
-            } else {
-                setActiveTab('users');
-            }
-            if (tab === 'events' && event) {
-                eventsTabRef.current?.selectManagedEvent(event);
-            }
-            if (tab === 'upcoming' && event) {
-                upcomingTabRef.current?.selectEvent(event);
-            }
+            if (firstEventId) queueAction('selectUpcomingEvent', firstEventId);
         } else {
-            if (tab === 'events' || tab === 'locations' || tab === 'badges' || tab === 'passports' || tab === 'records' || tab === 'users' || tab === 'tools' || tab === 'config' || tab === 'con') {
-                setActiveTab(tab);
-            } else if (tab === 'venues' || tab === 'parking') {
-                setActiveTab('locations');
-            } else if (tab === 'tags') {
-                setActiveTab('events');
-            } else if (tab === 'upcoming') {
-                setActiveTab('events');
-            } else if (tab === 'policy') {
-                setActiveTab('config');
-            }
-            if (tab === 'events' && event) {
-                eventsTabRef.current?.selectManagedEvent(event);
-            }
-            if (tab === 'upcoming' && event) {
-                upcomingTabRef.current?.selectEvent(event);
-            }
+            const target = LINKABLE_TABS.includes(tab as Tab) ? tab as Tab : TAB_ALIASES[tab ?? ''];
+            if (target) setActiveTab(target);
+            if (tab === 'events' && event) queueAction('selectEvent', event);
+            if (tab === 'upcoming' && event) queueAction('selectUpcomingEvent', event);
         }
         urlParamsHandled.current = true;
-    }, [loading, user, profile, searchParams, isCoreStaffOrAbove, isStaffGroup, isEventStaffOnly, staffUpcomingEvents]);
+    }, [loading, user, profile, searchParams, isCoreStaffOrAbove, isStaffGroup, isEventStaffOnly, staffUpcomingEvents, queueAction]);
 
     useEffect(() => {
         if (loading || !user || !profile || (!isCoreStaffOrAbove && !isStaffGroup)) return;

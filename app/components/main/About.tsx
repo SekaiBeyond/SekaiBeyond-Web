@@ -7,7 +7,7 @@ export const About = () => {
     const [isHovering, setIsHovering] = useState(false);
     const {isEnglish} = useLanguage();
     const modalRef = useRef<HTMLDivElement>(null);
-    useModalEffects(isModalOpen, modalRef);
+    useModalEffects(isModalOpen, modalRef, () => setIsModalOpen(false));
 
     return (
         <section id="about" className="about-section section">

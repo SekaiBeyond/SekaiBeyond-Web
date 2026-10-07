@@ -53,7 +53,7 @@ export const LoginButton = () => {
                 onMouseLeave={handleMouseLeave}
             >
                 <img
-                    src={profile?.photoURL ?? user.photoURL ?? '/mika.webp'}
+                    src={profile?.photoURL || user.photoURL || '/mika.webp'}
                     alt={isEnglish ? 'Profile' : '个人主页'}
                     className="login-avatar"
                     referrerPolicy="no-referrer"

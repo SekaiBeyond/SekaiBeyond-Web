@@ -134,8 +134,8 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                         {event.customButtonLink && isValidHttpUrl(event.customButtonLink) ? (
                             <a href={event.customButtonLink} target="_blank" rel="noopener noreferrer"
                                className="btn btn-secondary con-btn">{isEnglish
-                                   ? (event.customButtonText || event.customButtonTextCn)
-                                   : (event.customButtonTextCn || event.customButtonText)}</a>) : null}
+                                ? (event.customButtonText || event.customButtonTextCn)
+                                : (event.customButtonTextCn || event.customButtonText)}</a>) : null}
                         {parkingVenue && (
                             <a href={`/parking/${event.id}`} className="btn btn-parking con-btn">
                                 <span className="parking-guide-link-icon">🅿️</span>

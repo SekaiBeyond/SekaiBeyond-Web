@@ -50,7 +50,10 @@ export const RedeemModal = () => {
     const inputRef = useRef<HTMLInputElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
     const submittingRef = useRef(false);
-    useModalEffects(show, overlayRef);
+    // Escape closes it, but not mid-claim: the answer would land in a closed modal.
+    useModalEffects(show, overlayRef, () => {
+        if (!submittingRef.current) setShow(false);
+    });
 
     useEffect(() => {
         const handler = () => {
