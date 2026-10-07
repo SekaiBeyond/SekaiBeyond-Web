@@ -415,9 +415,11 @@ interface HeldTicket {
  * Attendee docs are keyed by the email the ticket was bought with, and the
  * `attendees` subcollection is closed to everyone but staff (see
  * firestore.rules), so this call is the only way a holder reaches their own
- * tickets. The email comes off the ID token rather than the users doc: the token
- * is what Auth actually verified, so nobody reads someone else's tickets by
- * having a profile field say so.
+ * tickets. The email comes off the ID token rather than the users doc, and only
+ * once the token says it is verified, so nobody reads someone else's tickets by
+ * having a profile field say so, or by signing up with an address they don't
+ * own. Sign-in is Google only today, but that is a setting in the Firebase
+ * console, not something this code enforces.
  *
  * The cut is the event's end, never the scan. A ticket already through the door
  * stays visible for the length of the event — people re-open their own ticket to
@@ -438,7 +440,7 @@ interface HeldTicket {
 export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
     const email = (request.auth?.token.email ?? "").trim().toLowerCase();
-    if (!email) return {events: []};
+    if (!email || request.auth?.token.email_verified !== true) return {events: []};
 
     // Filtering on endAt alone keeps this on the automatic single-field index —
     // there are only ever a handful of live events to sift in memory.
