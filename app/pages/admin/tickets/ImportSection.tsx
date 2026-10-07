@@ -3,11 +3,24 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportEventAttendees, functionsErrorCode } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 import { EMAIL_RE } from './helpers';
-import type { AttendeeData, ParsedRow, ParseError, TicketType } from './types';
+import { type AttendeeData, type ParsedRow, type ParseError, TICKET_TYPES, type TicketType } from './types';
 import { useAccountLinks } from './useAccountLinks';
 
 const MAX_PREVIEW = 50;
 const MAX_IMPORT_ROWS = 1000;
+
+/** Folds a type cell so that "Early Bird", "early_bird" and "earlybird" read alike. */
+const foldType = (raw: string) => raw.toLowerCase().replace(/[\s_-]+/g, '');
+
+/**
+ * Every spelling a type column may use: the stored value and both of the labels
+ * the panel shows for it, plus the short "comp". Anything else imports as normal.
+ */
+const TYPE_BY_NAME = new Map<string, TicketType>([
+    ...TICKET_TYPES.flatMap(tt =>
+        [tt.value, tt.labelEn, tt.labelCn].map(name => [foldType(name), tt.value] as const)),
+    ['comp', 'Comp Ticket'],
+]);
 
 interface ImportSectionProps {
     eventId: string;
@@ -117,7 +130,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
             const email = (row[emailKey] ?? '').trim().toLowerCase();
             const name = (row[nameKey] ?? '').trim();
             const countRaw = countKey ? (row[countKey] ?? '').trim() : '';
-            const typeRaw = (typeKey ? (row[typeKey] ?? '').trim().toLowerCase() : 'normal');
+            const typeRaw = typeKey ? (row[typeKey] ?? '') : '';
             const timestampRaw = (timestampKey ? (row[timestampKey] ?? '').trim() : '');
 
             if (!email && !name && !countRaw && !timestampRaw) return;
@@ -157,15 +170,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 }
             }
 
-            let type: TicketType = 'normal';
-            if (typeRaw === 'early-bird-student' || typeRaw === 'earlybirdstudent'
-                || typeRaw === 'early bird student' || typeRaw === '早鸟学生') type = 'early-bird-student';
-            else if (typeRaw === 'early-bird' || typeRaw === 'earlybird') type = 'early-bird';
-            else if (typeRaw === 'student' || typeRaw === '学生') type = 'student';
-            else if (typeRaw === 'vip') type = 'vip';
-            else if (typeRaw === 'comp ticket' || typeRaw === 'comp' || typeRaw === '赠票') type = 'Comp Ticket';
-            else if (typeRaw === 'guest' || typeRaw === '嘉宾') type = 'guest';
-            else if (typeRaw === 'vendor' || typeRaw === '商摊') type = 'vendor';
+            const type = TYPE_BY_NAME.get(foldType(typeRaw)) ?? 'normal';
 
             const timestamp = timestampRaw ? parseImportDate(timestampRaw) : undefined;
             if (timestampRaw && !timestamp) {

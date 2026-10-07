@@ -117,47 +117,59 @@ export const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
 export const usesContactEmail = (template: Pick<EmailTemplate, 'subject' | 'bodyHtml'>): boolean =>
     [template.subject, template.bodyHtml].some(t => t.search(CONTACT_EMAIL_PLACEHOLDER) !== -1);
 
-// contactEmail is Site Config's. While it is blank the placeholder is left in
-// place, so the preview shows what is missing instead of an empty gap.
-export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEvent, contactEmail: string): string => {
-    const sampleData = {
-        attendeeEmail: 'sample@example.com',
-        attendeeName: 'Sample Attendee',
-        eventTitle: event.title,
-        eventTitleCn: event.titleCn,
-        eventDate: event.startAt.toLocaleString('en-US', {
-            year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
-        }),
-        ticketCount: 2,
-        headerImage: event.emailHeaderBg
-            ? `<img src="${event.emailHeaderBg}" alt="${event.title}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
-            : `<div style="background-color:#ff6b9d;height:120px;"></div>`,
-    };
-    // Mirrors renderTicketQrBlock on the server — same spacing, same code size —
-    // with a placeholder where each QR goes, since a sample has no ticket to draw.
-    const sampleTickets = [
-        {label: 'General Admission', color: '#ff6b9d', id: 'ticket-uuid-1'},
-        {label: 'VIP', color: '#f39c12', id: 'ticket-uuid-2'},
-    ];
-    const ticketBlock = sampleTickets.map(({label, color, id}, i) =>
-        `<div style="margin:${i === 0 ? 16 : 72}px 0 16px;text-align:center;">` +
-        `<div style="display:inline-block;background-color:${color};color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">${label}</div><br/>` +
-        `<div style="display:inline-block;width:300px;max-width:100%;height:300px;line-height:300px;border:1px dashed #aaa;box-sizing:border-box;color:#999;font-size:13px;">QR code, drawn at send time</div>` +
-        `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
-        `</div>`,
-    ).join('\n');
+const escapeHtml = (s: string): string => s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+// Mirrors renderTicketQrBlock on the server — same spacing, same code size —
+// with a placeholder where each QR goes, since a sample has no ticket to draw.
+const SAMPLE_TICKET_BLOCK = [
+    {label: 'General Admission', color: '#ff6b9d', id: 'ticket-uuid-1'},
+    {label: 'VIP', color: '#f39c12', id: 'ticket-uuid-2'},
+].map(({label, color, id}, i) =>
+    `<div style="margin:${i === 0 ? 16 : 72}px 0 16px;text-align:center;">` +
+    `<div style="display:inline-block;background-color:${color};color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">${label}</div><br/>` +
+    `<div style="display:inline-block;width:300px;max-width:100%;height:300px;line-height:300px;border:1px dashed #aaa;box-sizing:border-box;color:#999;font-size:13px;">QR code, drawn at send time</div>` +
+    `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
+    `</div>`,
+).join('\n');
+
+/**
+ * Mirrors renderTemplate on the server, with sample values standing in for an
+ * attendee: escaped where they land in the body, as typed in the subject.
+ * contactEmail is Site Config's. While it is blank the placeholder is left in
+ * place, so the preview shows what is missing instead of an empty gap.
+ */
+const fillSample = (text: string, event: UpcomingEvent, contactEmail: string, htmlContext: boolean): string => {
+    const sub = htmlContext ? escapeHtml : (s: string) => s;
+    const headerImage = event.emailHeaderBg
+        ? `<img src="${escapeHtml(event.emailHeaderBg)}" alt="${sub(event.title)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
+        : `<div style="background-color:#ff6b9d;height:120px;"></div>`;
+    // In the zone the server writes it in, whatever the admin's own clock says.
+    const eventDate = event.startAt.toLocaleString('en-US', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
     // Function replacements, as on the server, so a $ in the event's title shows as typed.
-    const body = template.bodyHtml
-        .replace(/{{\s*attendeeEmail\s*}}/g, () => sampleData.attendeeEmail)
-        .replace(/{{\s*attendeeName\s*}}/g, () => sampleData.attendeeName)
-        .replace(/{{\s*eventTitle\s*}}/g, () => sampleData.eventTitle)
-        .replace(/{{\s*eventTitleCn\s*}}/g, () => sampleData.eventTitleCn)
-        .replace(/{{\s*eventDate\s*}}/g, () => sampleData.eventDate)
-        .replace(/{{\s*ticketCount\s*}}/g, () => String(sampleData.ticketCount))
-        .replace(CONTACT_EMAIL_PLACEHOLDER, placeholder => contactEmail || placeholder)
-        .replace(/{{\s*eventHeader\s*}}/g, () => sampleData.headerImage)
-        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, () => ticketBlock);
-    // Sanitize with the same allowlist the server applies at save time so the
-    // admin never sees content that wouldn't survive the save.
-    return sanitizeEmailHtml(body);
+    return text
+        .replace(/{{\s*attendeeEmail\s*}}/g, () => 'sample@example.com')
+        .replace(/{{\s*attendeeName\s*}}/g, () => 'Sample Attendee')
+        .replace(/{{\s*eventTitle\s*}}/g, () => sub(event.title))
+        .replace(/{{\s*eventTitleCn\s*}}/g, () => sub(event.titleCn))
+        .replace(/{{\s*eventDate\s*}}/g, () => sub(eventDate))
+        .replace(/{{\s*eventHeader\s*}}/g, () => headerImage)
+        .replace(/{{\s*ticketCount\s*}}/g, () => '2')
+        .replace(CONTACT_EMAIL_PLACEHOLDER, placeholder => contactEmail ? sub(contactEmail) : placeholder)
+        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, () => SAMPLE_TICKET_BLOCK);
 };
+
+export const renderSampleSubject = (template: EmailTemplate, event: UpcomingEvent, contactEmail: string): string =>
+    fillSample(template.subject, event, contactEmail, false);
+
+// Sanitized with the same allowlist the server applies at save time, so the
+// admin never sees content that wouldn't survive the save.
+export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEvent, contactEmail: string): string =>
+    sanitizeEmailHtml(fillSample(template.bodyHtml, event, contactEmail, true));
