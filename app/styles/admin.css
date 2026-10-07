@@ -4805,13 +4805,6 @@ select.admin-tickets-tag:focus {
     outline-offset: 1px;
 }
 
-/* Takes the whole row so the chips stay on one line above it. */
-.admin-con-filter-note {
-    flex-basis: 100%;
-    font-size: 12px;
-    color: var(--color-text-muted);
-}
-
 .admin-con-empty {
     margin: 0;
     font-size: 13px;
