@@ -84,7 +84,6 @@ export const About = () => {
                 </div>
             </div>
 
-            {/* Modal */}
             {isModalOpen && (
                 <div ref={modalRef} className="modal-overlay" onClick={() => setIsModalOpen(false)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>

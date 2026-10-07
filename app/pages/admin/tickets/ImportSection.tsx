@@ -402,11 +402,12 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
             onImported();
         } catch (err) {
             const code = functionsErrorCode(err);
-            let msg: string;
-            msg = isEnglish
-                ? `Import failed${code ? ` (${code})` : ''}.`
-                : `导入失败${code ? ` (${code})` : ''}。`;
-            showToast(msg, 'error');
+            showToast(
+                isEnglish
+                    ? `Import failed${code ? ` (${code})` : ''}.`
+                    : `导入失败${code ? ` (${code})` : ''}。`,
+                'error',
+            );
         } finally {
             setImporting(false);
         }

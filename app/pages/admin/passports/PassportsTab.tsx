@@ -71,7 +71,6 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
     useEffect(() => {
         if (designs.length === 0) return;
         if (designId === null || !designs.some(d => d.id === designId)) setDesignId(designs[0].id);
-
     }, [designs, designId]);
 
     // The design can be switched again while a load is in flight, and the second

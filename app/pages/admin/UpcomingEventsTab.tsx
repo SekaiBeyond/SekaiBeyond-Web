@@ -242,12 +242,6 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             });
 
             await refreshEvents();
-            // If the currently open event just flipped to paid, drop the tabs
-            // that are hidden for paid (codes, attendees) and clear cached state.
-            if (editingEvent && editingEvent.id === selectedEvent && form.paid) {
-                setEventAttendees([]);
-                setEventSubTab(prev => (prev === 'codes' || prev === 'attendees') ? 'tickets' : prev);
-            }
             showToast(
                 editingEvent
                     ? (isEnglish ? 'Event updated.' : '活动已更新。')

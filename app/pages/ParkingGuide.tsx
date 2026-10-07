@@ -486,7 +486,6 @@ export const ParkingGuide = () => {
 
     return (
         <div className="parking-page">
-            {/* Decorative blobs */}
             <div className="parking-deco-blob parking-deco-blob--1"/>
             <div className="parking-deco-blob parking-deco-blob--2"/>
 
@@ -499,7 +498,6 @@ export const ParkingGuide = () => {
                 <LanguageSwitcher/>
             </div>
 
-            {/* Header */}
             <header className="parking-header">
                 <span className="parking-header-sparkle">✦</span>
                 <span className="parking-header-sparkle">✦</span>
@@ -519,10 +517,8 @@ export const ParkingGuide = () => {
                 </div>
             </header>
 
-            {/* Main content */}
             {venue ? (
                 <div className="parking-content">
-                    {/* Map */}
                     <div className="parking-map-container">
                         <div className="parking-map">
                             <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
@@ -647,7 +643,6 @@ export const ParkingGuide = () => {
                         </div>
                     </div>
 
-                    {/* Info panel */}
                     <div className="parking-info-panel">
                         {/* Find any parking lot and see its distance from the venue */}
                         <LotSearch
@@ -750,7 +745,6 @@ export const ParkingGuide = () => {
                 </div>
             )}
 
-            {/* Footer branding */}
             <div className="parking-footer">
                 <span className="parking-footer-text">
                     <span className="parking-footer-sparkle">✦</span>

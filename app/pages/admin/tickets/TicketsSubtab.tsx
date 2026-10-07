@@ -416,7 +416,6 @@ export function TicketsSubtab({
                     onDelete={deleteAttendeeAction}
                     onRefresh={() => void loadAttendees()}
                     hasMore={displayCount < filteredAttendees.length}
-                    loadingMore={false}
                     onLoadMore={() => setDisplayCount(c => c + 10)}
                 />
             )}

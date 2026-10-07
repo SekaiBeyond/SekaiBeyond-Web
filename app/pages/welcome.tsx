@@ -16,37 +16,16 @@ export const Welcome = () => {
 
     return (
         <>
-            {/* Navigation */}
             <Navigation/>
-
-            {/* Hero Section */}
             <Hero/>
-
-            {/* About Section */}
             <About/>
-
-            {/* Video Section */}
             <Video/>
-
-            {/* Sekai Beyond Con Section */}
             <SekaiBeyondCon/>
-
-            {/* Past Events Section */}
             <PastEvents/>
-
-            {/* Upcoming Event Section */}
             <UpcomingEvent/>
-
-            {/* Team Section */}
             <Team/>
-
-            {/* Contact Section */}
             <Contact/>
-
-            {/* Footer */}
             <Footer/>
-
-            {/* Go to Top Button */}
             <GoToTop/>
         </>
     );

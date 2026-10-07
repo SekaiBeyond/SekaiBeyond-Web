@@ -951,7 +951,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                 </div>
                                                 {readOnly
                                                     ? <span
-                                                        className={`admin-user-group-tag ${has ? 'data-group-member' : ''}`}
+                                                        className="admin-user-group-tag"
                                                         style={{opacity: has ? 1 : 0.35}}>{has ? (isEnglish ? 'Has badge' : '已持有') : (isEnglish ? 'No badge' : '未持有')}</span>
                                                     : <button
                                                         className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
@@ -990,7 +990,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                             <span className="admin-badge-date">{event.date}</span>
                                         </div>
                                         {readOnly
-                                            ? <span className={`admin-user-group-tag ${has ? 'data-group-member' : ''}`}
+                                            ? <span className="admin-user-group-tag"
                                                     style={{opacity: has ? 1 : 0.35}}>{has ? (isEnglish ? 'Attended' : '已参加') : (isEnglish ? 'Not attended' : '未参加')}</span>
                                             : <button
                                                 className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}

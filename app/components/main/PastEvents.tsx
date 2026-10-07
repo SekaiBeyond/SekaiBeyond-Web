@@ -130,7 +130,6 @@ export const PastEvents = () => {
                 </>
             )}
 
-            {/* Event Image Modal */}
             {selectedImage && (
                 <EventImageModal
                     imageUrl={selectedImage}
