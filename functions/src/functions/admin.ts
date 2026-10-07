@@ -13,6 +13,7 @@ import {
     deleteStorageFile,
     detectImageMime,
     detectVideoMime,
+    extractStoragePath,
     logStorageCleanupError,
     MAX_UPLOAD_SIZE,
     MAX_UPLOAD_SIZE_MB,
@@ -231,6 +232,11 @@ function isBilibiliImageUrl(value: string): boolean {
     }
 }
 
+// Con edition posters are config/con-<year>-<stamp>.webp, or config/con-<year>.webp
+// from before they were time-stamped. Matched exactly rather than by prefix: the
+// con page's guest photos (config/con-guest-*) share the "config/con-" one.
+const CON_EDITION_IMAGE_PATH = /^config\/con-\d+[-.]/;
+
 export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
@@ -330,7 +336,14 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         }
     }
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    const configRef = db.collection("config").doc("main");
+    const oldConImage = await adminTransaction(uid, async (txn, callerSnap) => {
+        // Read before the writes, as transactions require. Only a save that carries
+        // the con edition can replace or clear its image.
+        const prevConImage: string = conEdition !== undefined
+            ? (await txn.get(configRef)).data()?.conEdition?.image ?? ""
+            : "";
+
         const updateData: Record<string, any> = {
             updatedBy: uid,
             updatedByName: callerSnap.data()?.displayName ?? "",
@@ -356,14 +369,29 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
             configSections.push("con-edition");
         }
 
-        txn.set(db.collection("config").doc("main"), updateData, {merge: true});
+        txn.set(configRef, updateData, {merge: true});
         txn.set(recordRef(), recordDoc("config-update", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             configSections,
         }));
-        return {saved: true};
+        return prevConImage;
     });
+
+    // Each upload writes a new time-stamped object, so the image this save
+    // replaces — or a reset drops — is left behind unless deleted here. Compared
+    // by path rather than URL: a client from before uploads were time-stamped
+    // overwrites config/con-<year>.webp in place, which can give the same object
+    // a new URL.
+    const oldConImagePath = extractStoragePath(oldConImage);
+    if (oldConImagePath
+        && oldConImagePath !== extractStoragePath(conEdition?.image ?? "")
+        && CON_EDITION_IMAGE_PATH.test(oldConImagePath)) {
+        await deleteStorageFile(oldConImage)
+            .catch(logStorageCleanupError("saveSiteConfig con edition"));
+    }
+
+    return {saved: true};
 });
 
 // Mirrors ROOM_ACCENTS in app/pages/con/content.ts. Each value names a CSS class
@@ -775,6 +803,17 @@ const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
     faq: buildConFaq,
 };
 
+/** Where the con editor uploads to: the hero clip, and the guests' photos. */
+const CON_ASSET_PREFIXES = ["con/", "config/con-guest-"];
+
+/** Every file URL con content points at. Root-relative public/ paths come along
+ *  too; deleteStorageFile passes over anything that is not a Storage URL. */
+function conAssetUrls(content: Record<string, any>): string[] {
+    const guests: any[] = Array.isArray(content.guests) ? content.guests : [];
+    return [content.heroVideo?.webm, ...guests.map(guest => guest?.avatar)]
+        .filter((url): url is string => typeof url === "string" && url !== "");
+}
+
 /**
  * Writes one or more sections of the /con page.
  *
@@ -804,7 +843,7 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
         updateData[section] = CON_SECTION_BUILDERS[section](input[section]);
     }
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    const orphanedAssets = await adminTransaction(uid, async (txn, callerSnap) => {
         const draftRef = db.collection("conContent").doc("draft");
         const publicRef = db.collection("conContent").doc("main");
 
@@ -876,8 +915,21 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             performedByName: callerSnap.data()?.displayName ?? "",
             conSection: sections.join(", "),
         }));
-        return {saved: true};
+
+        // Each upload writes a new time-stamped object, so a clip or photo this
+        // save replaces — or a removed guest's photo — is left behind and deleted
+        // once the save commits. Both documents now name the clip and photos that
+        // `merged` does, so one it no longer names is referenced by neither.
+        const stillReferenced = new Set(conAssetUrls(merged));
+        return [...new Set(conAssetUrls(stored))].filter(url => !stillReferenced.has(url));
     });
+
+    for (const url of orphanedAssets) {
+        await deleteStorageFile(url, CON_ASSET_PREFIXES)
+            .catch(logStorageCleanupError(`saveConContent ${url}`));
+    }
+
+    return {saved: true};
 });
 
 const PARKING_LOT_TYPES = ["general", "disabled", "garage"] as const;
