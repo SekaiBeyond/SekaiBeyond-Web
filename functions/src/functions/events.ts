@@ -448,8 +448,8 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: eventStaffEvents cascade failed for ${eventId}`, err);
         }
 
-        // Clean up any orphaned subcollection docs (can occur if archive fails
-        // after Phase C partially completed, or on TTL-driven deletion).
+        // Firestore does not delete subcollections with their parent. An archive
+        // never reaches here: archiveUpcomingEvent's Phase C clears its own.
         try {
             const orphanedOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
             for (const subCol of ["attendees", "emailTemplate"]) {

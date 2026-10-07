@@ -10,11 +10,11 @@
  * still works; it sets what a visitor sees before the fetch lands, and what they
  * keep seeing for any section an admin has never touched.
  *
- * The rest — NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS — is code-only, because
- * it is tied to section anchors an admin cannot add. ROOM_ACCENTS is code-only for the
- * same reason (each value is a CSS class), but which rooms exist and which accent
- * each wears is data. CON_NAME is code-only because the con's name does not
- * change between editions.
+ * The rest — NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS — is code-only, because it
+ * is tied to section anchors an admin cannot add. ROOM_ACCENTS is code-only for
+ * the same reason (each value is a CSS class), but which rooms exist and which
+ * accent each wears is data. CON_NAME is code-only because the con's name does
+ * not change between editions.
  */
 
 import type { Localized } from '~/pages/con/i18n';

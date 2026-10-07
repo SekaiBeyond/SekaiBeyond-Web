@@ -1777,8 +1777,7 @@
     color: var(--color-text-body);
 }
 
-/* Local-only photo editor. The canvas uses the card's pale pink base color so
-   the exported card remains opaque even where the photo or frame has alpha. */
+/* Share card — a local-only photo editor */
 .sbc-lineup-section {
     max-width: 1180px;
 }

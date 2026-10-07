@@ -367,7 +367,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
 });
 
 // Mirrors ROOM_ACCENTS in app/pages/con/content.ts. Each value names a CSS class
-// (sbc-room-chip--<accent>), so the palette is a whitelist even though the rooms
+// (sbc-accent--<accent>), so the palette is a whitelist even though the rooms
 // that use it are free-form, admin-managed data.
 const CON_ROOM_ACCENTS = ["pink", "violet", "amber", "sky", "mint", "slate"] as const;
 

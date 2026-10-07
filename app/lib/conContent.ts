@@ -300,8 +300,8 @@ export interface ConContentRead {
 /**
  * What /con should render for the current viewer: the published mirror for the
  * public, the unpublished draft for core staff so they can preview before the
- * page goes live. Resolving it here rather than at the page level keeps all nine
- * section components on one call and stops half the page rendering one source
+ * page goes live. Resolving it here rather than at the page level keeps every
+ * section component on one call and stops half the page rendering one source
  * while half renders the other.
  */
 export function useConContent(): ConContentRead {
