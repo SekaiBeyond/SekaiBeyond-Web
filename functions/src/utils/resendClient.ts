@@ -40,12 +40,12 @@ export function countRecipients(envelopes: ResendEnvelope[]): number {
     return total;
 }
 
-// Custom error carrying the daily-quota header value (if Resend responded).
-// Callers use `dailyConsumed !== null` to decide whether to roll back any
-// pre-charge they wrote before the call: a null value means Resend never
-// answered, so the cache still holds whatever the caller wrote and needs
-// to be rolled back. A non-null value means resendClient already updated
-// the cache with the authoritative count, so no rollback is safe.
+// Custom error carrying the daily-quota header value, if one came back.
+// Callers use it to settle the pre-charge they wrote before the call: null
+// means the reservation is still in place (Resend never answered, or answered
+// without the header), so the caller rolls it back; non-null means
+// resendClient already folded the header into the cache, and rolling back
+// would release the reservation twice.
 export class ResendSendError extends Error {
     dailyConsumed: number | null;
 
@@ -177,10 +177,6 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
     // reads see the fresh count.
     if (dailyConsumed !== null) {
         await applyProviderUsage(dailyConsumed, totalRecipients);
-    } else if (resp.ok) {
-        // Send succeeded but no header arrived (e.g. on paid plans). Release
-        // the pre-charge to prevent the reservation from leaking permanently.
-        await rollbackQuotaReservation(totalRecipients);
     }
 
     if (!resp.ok) {
@@ -210,5 +206,9 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
         const batchJson = json as {data?: Array<{id: string}>};
         ids = (batchJson.data ?? []).map(d => d.id);
     }
+    // Sent, but no header arrived (e.g. on paid plans): release the pre-charge
+    // so it doesn't leak. Last, because a throw anywhere above leaves that
+    // release to the caller, and releasing here as well would do it twice.
+    if (dailyConsumed === null) await rollbackQuotaReservation(totalRecipients);
     return {sentCount: ids.length, ids, dailyConsumed};
 }
