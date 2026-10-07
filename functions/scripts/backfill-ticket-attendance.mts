@@ -39,7 +39,9 @@ initializeApp({projectId});
 const db = getFirestore();
 
 // Scanned-in emails per event, from every ticket list. Same test as
-// getMyTickets and createUserProfile: redeemed and not voided.
+// isScannedTicket in src/utils/tickets.ts, which getMyTickets and
+// createUserProfile use: redeemed and not voided. Copied rather than imported,
+// because node loads src as CommonJS and a script can't import from it.
 const scannedEmails = new Map<string, {ref: DocumentReference; emails: Set<string>}>();
 for (const doc of (await db.collectionGroup("attendees").get()).docs) {
     const eventRef = doc.ref.parent.parent;

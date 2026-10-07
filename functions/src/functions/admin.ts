@@ -927,10 +927,9 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
         return [...new Set(conAssetUrls(stored))].filter(url => !stillReferenced.has(url));
     });
 
-    for (const url of orphanedAssets) {
-        await deleteStorageFile(url, CON_ASSET_PREFIXES)
-            .catch(logStorageCleanupError(`saveConContent ${url}`));
-    }
+    await Promise.all(orphanedAssets.map(url =>
+        deleteStorageFile(url, CON_ASSET_PREFIXES)
+            .catch(logStorageCleanupError(`saveConContent ${url}`))));
 
     return {saved: true};
 });
@@ -1258,10 +1257,9 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         return orphaned;
     });
 
-    for (const url of orphanedImages) {
-        await deleteStorageFile(url, ["team/"])
-            .catch(logStorageCleanupError(`saveTeamMembers ${url}`));
-    }
+    await Promise.all(orphanedImages.map(url =>
+        deleteStorageFile(url, ["team/"])
+            .catch(logStorageCleanupError(`saveTeamMembers ${url}`))));
 
     return {saved: true};
 });

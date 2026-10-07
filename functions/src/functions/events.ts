@@ -78,6 +78,15 @@ export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) =>
 
     return {cancelled: true};
 });
+
+/** Deletes an event's attendees and email template, which Firestore leaves
+ *  behind when the event document itself is deleted. */
+async function deleteEventSubcollections(eventRef: FirebaseFirestore.DocumentReference): Promise<void> {
+    const snaps = await Promise.all(["attendees", "emailTemplate"].map(sub => eventRef.collection(sub).get()));
+    const ops = snaps.flatMap(snap => snap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)));
+    if (ops.length > 0) await commitInChunks(ops);
+}
+
 export const onPastEventDeleted = onDocumentDeleted(
     {document: "pastEvents/{eventId}", maxInstances: 10},
     async (event) => {
@@ -110,15 +119,7 @@ export const onPastEventDeleted = onDocumentDeleted(
         // Firestore does not delete subcollections with their parent: a paid
         // event's attendees and email template, copied here when it was archived.
         try {
-            const orphanedOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
-            for (const subCol of ["attendees", "emailTemplate"]) {
-                const snap = await db.collection("pastEvents").doc(eventId)
-                    .collection(subCol).get();
-                for (const d of snap.docs) {
-                    orphanedOps.push(b => b.delete(d.ref));
-                }
-            }
-            if (orphanedOps.length > 0) await commitInChunks(orphanedOps);
+            await deleteEventSubcollections(db.collection("pastEvents").doc(eventId));
         } catch (err) {
             console.error(`onPastEventDeleted: subcollection cleanup failed for ${eventId}`, err);
         }
@@ -469,15 +470,7 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         // Firestore does not delete subcollections with their parent. An archive
         // never reaches here: archiveUpcomingEvent's Phase C clears its own.
         try {
-            const orphanedOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
-            for (const subCol of ["attendees", "emailTemplate"]) {
-                const snap = await db.collection("upcomingEvents").doc(eventId)
-                    .collection(subCol).get();
-                for (const d of snap.docs) {
-                    orphanedOps.push(b => b.delete(d.ref));
-                }
-            }
-            if (orphanedOps.length > 0) await commitInChunks(orphanedOps);
+            await deleteEventSubcollections(db.collection("upcomingEvents").doc(eventId));
         } catch (err) {
             console.error(`onUpcomingEventDeleted: subcollection cleanup failed for ${eventId}`, err);
         }

@@ -20,6 +20,7 @@ import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB } from "../utils/s
 import { sanitizeDisplayText, validateDocId, validateISODate } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
+import { isScannedTicket } from "../utils/tickets";
 
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     if (!request.auth) {
@@ -104,11 +105,7 @@ async function creditScannedTickets(
         const root = eventRef?.parent.id;
         if (!eventRef || (root !== "pastEvents" && root !== "upcomingEvents")) continue;
         const tickets: unknown[] = Array.isArray(doc.data().tickets) ? doc.data().tickets : [];
-        const scanned = tickets.some(raw => {
-            const t = raw as {redeemed?: unknown; voided?: unknown} | null;
-            return t?.redeemed === true && t.voided !== true;
-        });
-        if (scanned) eventRefs.set(eventRef.id, eventRef);
+        if (tickets.some(isScannedTicket)) eventRefs.set(eventRef.id, eventRef);
     }
     if (eventRefs.size === 0) return;
 

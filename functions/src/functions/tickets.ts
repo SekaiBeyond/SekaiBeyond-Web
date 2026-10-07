@@ -17,6 +17,7 @@ import { RESEND_API_KEY, type ResendEnvelope, ResendSendError, sendEmails } from
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 import { EMAIL_RE, sanitizeDisplayText, validateDocId, validateEmail, validateStr } from "../utils/validation";
 import { recordDoc, recordRef } from "../utils/records";
+import { isScannedTicket } from "../utils/tickets";
 
 function validateTicketCount(value: unknown): number {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 50) {
@@ -494,7 +495,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     events.sort((a, b) => a.startAt.localeCompare(b.startAt));
 
     const scannedInto = events
-        .filter(e => e.tickets.some(t => t.redeemed && !t.voided))
+        .filter(e => e.tickets.some(isScannedTicket))
         .map(e => e.eventId);
     if (scannedInto.length > 0) {
         try {

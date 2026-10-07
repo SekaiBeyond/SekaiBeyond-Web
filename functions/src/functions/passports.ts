@@ -645,10 +645,9 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
             url && url !== coverImageUrl && url !== outerCoverImageUrl);
     });
 
-    for (const url of orphanedImages) {
-        await deleteStorageFile(url, ["passports/"])
-            .catch(logStorageCleanupError(`savePassportDesign ${ref.id}`));
-    }
+    await Promise.all(orphanedImages.map(url =>
+        deleteStorageFile(url, ["passports/"])
+            .catch(logStorageCleanupError(`savePassportDesign ${ref.id}`))));
 
     return {designId: ref.id};
 });
@@ -675,10 +674,9 @@ export const deletePassportDesign = onCall({maxInstances: 10}, async (request) =
     }
 
     await ref.delete();
-    for (const url of [snap.data()?.coverImageUrl, snap.data()?.outerCoverImageUrl]) {
-        await deleteStorageFile(url ?? "", ["passports/"])
-            .catch(logStorageCleanupError(`deletePassportDesign ${designId}`));
-    }
+    await Promise.all([snap.data()?.coverImageUrl, snap.data()?.outerCoverImageUrl].map(url =>
+        deleteStorageFile(url ?? "", ["passports/"])
+            .catch(logStorageCleanupError(`deletePassportDesign ${designId}`))));
     await recordRef().set(recordDoc("passport-design-delete", {
         performedBy: uid,
         performedByName: performerName(callerSnap),
