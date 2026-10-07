@@ -24,9 +24,9 @@ import { SectionNav } from './SectionNav';
  *
  * Each section owns its own Save button and writes only its own field, so two
  * people editing different parts of the page cannot clobber each other. The
- * parts of the con page that are not editable here — the nav links, the track
- * names, the about copy, the venue travel notes — are tied to section anchors or
- * to CSS class names, and stay in code.
+ * parts of the con page that are not editable here — the nav links, the about
+ * copy, the venue travel notes — are tied to section anchors or to CSS class
+ * names, and stay in code.
  */
 
 interface ConContentTabProps {

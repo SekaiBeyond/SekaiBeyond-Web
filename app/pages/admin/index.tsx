@@ -47,7 +47,7 @@ export const AdminPage = () => {
     const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => b.date.localeCompare(a.date)), [rawPastEvents]);
 
     const isCoreStaffOrAbove = !!profile && hasPermission(profile.group, 'core-staff');
-    // Staff group (level 2): view-only admin access + Tools. Superset of event-staff access.
+    // Staff group: view-only admin access + Tools. Superset of event-staff access.
     const isStaffGroup = !!profile && hasPermission(profile.group, 'staff') && !isCoreStaffOrAbove;
     // Event-staff is a per-event tag, independent of the global user group — a user
     // below staff group who is staff for an UPCOMING event gets scanner/admin access

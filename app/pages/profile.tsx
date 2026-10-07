@@ -614,7 +614,7 @@ export const ProfilePage = () => {
         ...(showEvents ? [stat('events', attendedEvents.length, 'Event', 'Events', '活动')] : []),
     ] : [];
     // Avatar uploads are a membership perk, but staff+ keep them without one —
-    // the only people blocked are plain users who have never paid.
+    // the only people blocked are plain users with no active membership.
     const canEdit = isOwnProfile && (isMember || hasPermission(profile!.group, 'staff'));
     // Non-members can't upload a photo, but may remove one an admin gave them.
     const canRemovePhoto = isOwnProfile && hasCustomPhoto;

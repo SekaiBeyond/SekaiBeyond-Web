@@ -367,8 +367,7 @@ export const PassportStock = ({
                 ticked, so the table doesn't jump the first time a row is. The
                 select-all lives here rather than in the table header because a
                 box in a header can't say that it takes the whole view and not
-                the page — which is the whole of what the paragraph that used to
-                sit here was explaining.
+                the page.
 
                 A view with no rows still gets the bar while something is ticked,
                 since a selection is built across tabs and its actions have to

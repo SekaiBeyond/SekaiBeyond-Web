@@ -499,9 +499,10 @@ const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}: Passpo
             setIssued(run);
             // Save them without being asked. Off this screen they have to be picked
             // out of the stock table again, so the file is written first and the
-            // screen becomes a confirmation rather than the only copy of the lot. Only a throw re-arms the warning — a download the browser
-            // silently blocks still reads as exported, which is why the banner
-            // tells the admin to go and look for the file.
+            // screen becomes a confirmation rather than the only copy of the lot.
+            // Only a throw re-arms the warning — a download the browser silently
+            // blocks still reads as exported, which is why the banner tells the
+            // admin to go and look for the file.
             setExported(false);
             try {
                 exportCsv(run);

@@ -25,8 +25,7 @@ import { type ShowToast, ToastContainer, useToasts } from '~/lib/useToasts';
  * What it renders depends on the passport, not on who is looking: an unclaimed
  * sticker is the passport shown shut, a claimed one is its owner's public page
  * (no sign-in required), and an unknown code is a blank page stamped as having
- * no record. The owner also gets a
- * privacy toggle on their own passport.
+ * no record. The owner also gets a privacy toggle on their own passport.
  */
 export const PassportPage = () => {
     const {passportId: raw} = useParams();
@@ -464,7 +463,6 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
 
                     {/* A div, not <footer>: the landing page styles every footer element. */}
                     <div className="passport-book-foot">
-                        {/* Absent until the function that sends it is deployed. */}
                         {owner.uid && (
                             <Link to={`/profile?uid=${owner.uid}`} className="passport-profile-link">
                                 {isEnglish ? 'View profile' : '查看个人主页'}

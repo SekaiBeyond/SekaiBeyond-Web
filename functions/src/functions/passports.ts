@@ -43,9 +43,9 @@ const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap
  * time. Each one is an independent document: how many were made in the same call
  * is not recorded, and nothing downstream groups them.
  *
- * The keys come back in bulk only in this response. If the export is lost before
- * the slips are printed, revealPassportKey serves them again one passport at a
- * time.
+ * The keys come back in bulk in this response. If the export is lost before the
+ * slips are printed, exportPassportKeys serves a selection of them again, and
+ * revealPassportKey one at a time.
  */
 export const generatePassports = onCall({maxInstances: 5}, async (request) => {
     const uid = await requireAuth(request);

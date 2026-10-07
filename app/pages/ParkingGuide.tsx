@@ -22,10 +22,6 @@ import { AdvancedMarker, APIProvider, InfoWindow, Map, useMap } from '@vis.gl/re
 /** Sentinel id for the venue marker's popup, kept distinct from any lot document id. */
 const VENUE_MARKER_ID = '__venue__';
 
-/**
- * Searchable venue picker shown in the parking-guide header. Defaults to the event's own
- * venue but lets visitors switch to any other venue to view its parking map and lots.
- */
 interface VenueSwitcherProps {
     venues: Venue[];
     selectedId: string;
@@ -33,6 +29,11 @@ interface VenueSwitcherProps {
     isEnglish: boolean;
 }
 
+/**
+ * Searchable venue picker shown in the parking-guide header. Defaults to the event's own
+ * venue, or the one a `?venue=` link names, but lets visitors switch to any other venue to
+ * view its parking map and lots.
+ */
 const VenueSwitcher = ({venues, selectedId, onSelect, isEnglish}: VenueSwitcherProps) => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -133,11 +134,6 @@ const VenueSwitcher = ({venues, selectedId, onSelect, isEnglish}: VenueSwitcherP
     );
 };
 
-/**
- * Searchable parking-lot finder shown in the info panel. Searches every mappable lot (not
- * just the venue's linked ones); picking one focuses it on the map and surfaces its
- * straight-line distance from the selected venue.
- */
 interface LotSearchProps {
     lots: ParkingLot[];
     selectedLotId: string | null;
@@ -146,6 +142,11 @@ interface LotSearchProps {
     isEnglish: boolean;
 }
 
+/**
+ * Searchable parking-lot finder shown in the info panel. Searches every mappable lot (not
+ * just the venue's linked ones); picking one focuses it on the map and surfaces its
+ * straight-line distance from the selected venue.
+ */
 const LotSearch = ({lots, selectedLotId, distanceFor, onSelect, isEnglish}: LotSearchProps) => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');

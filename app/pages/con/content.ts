@@ -245,7 +245,7 @@ export const ROOMS: Room[] = [
 export interface ScheduleItem {
     /**
      * Omitted together when the slot is announced but unscheduled — the page
-     * shows "TBA" in the time column rather than hiding the item.
+     * lists it under the grid as "time to be confirmed" rather than hiding it.
      */
     start?: string
     end?: string
