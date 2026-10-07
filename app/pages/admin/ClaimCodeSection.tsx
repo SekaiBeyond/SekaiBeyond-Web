@@ -77,10 +77,11 @@ interface ClaimCodeSectionProps {
 
 /**
  * Self-contained claim-code manager for a single event: loads the event's code,
- * generates/regenerates it, toggles it, and edits its active time window. Works
- * for both upcoming and past events — the generate/claim Cloud Functions resolve
- * the event from either collection. The staff variant is core-staff-only per
- * Firestore rules, so mount it only for core staff.
+ * generates/regenerates it, toggles it, and edits its active time window. Staff
+ * codes work for past events as well as upcoming ones — their Cloud Functions
+ * resolve the event from either collection — while check-in codes are for
+ * upcoming events only. The staff variant is core-staff-only per Firestore
+ * rules, so mount it only for core staff.
  */
 export function ClaimCodeSection({eventId, variant, showToast, readOnly = false, eventEndAt}: ClaimCodeSectionProps) {
     const {isEnglish} = useLanguage();

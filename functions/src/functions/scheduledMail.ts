@@ -130,8 +130,8 @@ export const scheduledMailDrain = onSchedule({
     }
 
     // Pre-charge the cache so a concurrent admin send sees the
-    // reservation immediately. The batch response header overwrites this
-    // with Resend's authoritative count on success.
+    // reservation immediately. It is released once the send settles, by
+    // sendEmails or by the catch below.
     const totalRecipients = countRecipients(candidates.map(c => c.envelope));
     await db.runTransaction(async (txn) => {
         const {reserved} = await computeEmailQuotaInTxn(txn);
@@ -149,7 +149,7 @@ export const scheduledMailDrain = onSchedule({
     } catch (err) {
         console.error("scheduledMailDrain: send failed", err);
         sendError = err;
-        // Roll back the pre-charge only if Resend never answered.
+        // Roll back the pre-charge unless a quota header came back.
         const headerArrived = err instanceof ResendSendError
             && err.dailyConsumed !== null;
         if (!headerArrived) {

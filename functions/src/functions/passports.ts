@@ -269,11 +269,11 @@ export const exportPassportKeys = onCall({maxInstances: 10}, async (request) => 
 /**
  * Resolve a scanned sticker, for anyone — no sign-in.
  *
- * This is the second unauthenticated callable in the codebase (after
- * recordQrScan). The uid-keyed checkRateLimit can't apply, so abuse protection
- * is App Check, enforced for every callable by setGlobalOptions in index.ts, plus
- * the fact that reaching a real passport means holding a 10-character printed
- * code out of 31^10.
+ * Like recordQrScan and getPublicTeamMembers, this takes anonymous callers. The
+ * uid-keyed checkRateLimit can't apply, so abuse protection is App Check,
+ * enforced for every callable by setGlobalOptions in index.ts, plus the fact
+ * that reaching a real passport means holding a 10-character printed code out
+ * of 31^10.
  *
  * It must not widen uid-keyed profile reads, and doesn't: nothing here accepts a
  * uid, and the owner's uid it hands back only builds the link to their profile,

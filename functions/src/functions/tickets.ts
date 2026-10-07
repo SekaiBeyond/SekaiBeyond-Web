@@ -348,10 +348,9 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         const now = FieldValue.serverTimestamp();
         const customDate = row.timestamp ? Timestamp.fromDate(row.timestamp) : undefined;
 
-        // For replaced records, we only update `updatedAt` unless a custom timestamp is provided, 
-        // in which case it might make sense to update `createdAt` to that too if we want it to act as the original import date.
-        // Let's just update `updatedAt` for replaced, and `createdAt`/`updatedAt` for new. 
-        // Actually, if a custom timestamp is provided, let's set `createdAt` to it for both added and replaced, so the ticket acts like it was created then.
+        // A row's own timestamp, when the import has one, stands in for both dates,
+        // so the ticket reads as bought then. Without one, a new record is stamped
+        // now and a replaced one keeps its createdAt.
 
         if (existing) {
             replacedCount++;
@@ -1276,10 +1275,10 @@ export const sendTicketEmails = onCall(
         // admin sends both observe pre-reservation state and double-spend:
         // Firestore's optimistic concurrency on system/resendQuota means
         // whichever txn lands second retries against the new total. Once
-        // the send returns, applyProviderHeaderQuota releases this send's own
-        // reservation and records Resend's authoritative count. Queue audit
-        // shares the txn for symmetry — doesn't consume the daily cap, cheap
-        // to include.
+        // the send settles, this send's own reservation is released, and
+        // Resend's authoritative count recorded if a quota header came back.
+        // Queue audit shares the txn for symmetry — doesn't consume the
+        // daily cap, cheap to include.
         const callerSnap = await db.collection("users").doc(uid).get();
         const performedByName = callerSnap.data()?.displayName ?? "";
         const {sendAuditRef, queueAuditRef, expectedSentCount, expectedQueuedCount} =
@@ -1385,9 +1384,9 @@ export const sendTicketEmails = onCall(
         // at 100 so a single call always covers the chunk.
         // Failure mode: all-or-nothing — a 4xx/5xx fails every envelope. If
         // Resend responded with the quota header, resendClient already
-        // wrote the authoritative count to the cache; if it didn't
-        // (network error), we roll back the pre-charge so a retry doesn't
-        // see a false ceiling.
+        // wrote the authoritative count to the cache; if no header came
+        // back, we roll back the pre-charge so a retry doesn't see a false
+        // ceiling.
         let sentCount = 0;
         let sendError: unknown = null;
         if (sendEnvelopes.length > 0) {
@@ -1397,8 +1396,8 @@ export const sendTicketEmails = onCall(
             } catch (err) {
                 console.error("sendTicketEmails: send failed", err);
                 sendError = err;
-                // Roll back the pre-charge only if Resend never answered;
-                // a header response already corrected the cache.
+                // Roll back the pre-charge unless a quota header came back;
+                // resendClient has already folded that into the cache.
                 const headerArrived = err instanceof ResendSendError
                     && err.dailyConsumed !== null;
                 if (!headerArrived) {

@@ -22,8 +22,8 @@ import type { Localized } from '~/pages/con/i18n';
 /** Page-level switches, kept apart from the copy they govern. */
 export interface ConSettings {
     /**
-     * When false, /con is visible to core-staff and the president only; everyone
-     * else gets a short "coming soon" card.
+     * When false, /con is visible to staff and above only; everyone else gets a
+     * short "coming soon" card.
      *
      * Defaults to false, and publishing is what creates the public `conContent/main`
      * mirror in the first place. Nothing about a con is public until someone ticks

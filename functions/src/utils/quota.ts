@@ -92,12 +92,13 @@ export function reserveQuotaInTxn(
     }, {merge: true});
 }
 
-// Release a `reserveQuotaInTxn` pre-charge when the send never reached Resend
-// (network error, no response header). When Resend *did* respond,
-// applyProviderHeaderQuota already released the reservation and this must NOT be
-// called. Uses increment so it composes with concurrent writes; the read-side
-// clamp keeps `reserved` from going negative. Logs and swallows errors — a
-// failed rollback self-heals on the next header write.
+// Release a `reserveQuotaInTxn` pre-charge when no quota header came back: a
+// send that failed, or one that went out on a plan that sends no header. When a
+// header did come back, applyProviderUsage already released the reservation and
+// this must NOT be called. Uses increment so it composes with concurrent writes;
+// the read-side clamp keeps `reserved` from going negative. Logs and swallows
+// errors. Nothing else releases a reservation, so a failed rollback stays in
+// `reserved` until system/resendQuota is corrected by hand.
 export async function rollbackQuotaReservation(amount: number): Promise<void> {
     if (amount <= 0) return;
     try {
@@ -112,11 +113,12 @@ export async function rollbackQuotaReservation(amount: number): Promise<void> {
 
 // Fold a fresh used-quota reading from the provider into the cache: set
 // `confirmed` to its authoritative count and release this send's own
-// reservation (`sentDelta`, the envelope count it pre-charged) from `reserved`.
+// reservation (`sentDelta`, the recipients it pre-charged) from `reserved`.
 // Runs in a txn so a reservation racing the write isn't lost — only this send's
 // delta is removed, never a concurrent admin's. Called by resendClient.sendEmails
 // on any response that carried the quota header, success or 4xx/429 alike.
-// Logs and swallows errors; the next write self-heals.
+// Logs and swallows errors: the next reading corrects `confirmed`, but this
+// send's reservation stays in `reserved` (see rollbackQuotaReservation).
 //
 // Pass sentDelta = 0 for a reading that wasn't attached to a send (a
 // fetchProviderUsage scan): it refreshes `confirmed` while leaving in-flight
@@ -135,6 +137,6 @@ export async function applyProviderUsage(
             });
         });
     } catch (err) {
-        console.error("applyProviderHeaderQuota: failed", err);
+        console.error("applyProviderUsage: failed", err);
     }
 }
