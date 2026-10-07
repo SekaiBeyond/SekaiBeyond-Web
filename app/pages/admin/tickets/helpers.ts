@@ -146,16 +146,17 @@ export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEven
         `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
         `</div>`,
     ).join('\n');
+    // Function replacements, as on the server, so a $ in the event's title shows as typed.
     const body = template.bodyHtml
-        .replace(/{{\s*attendeeEmail\s*}}/g, sampleData.attendeeEmail)
-        .replace(/{{\s*attendeeName\s*}}/g, sampleData.attendeeName)
-        .replace(/{{\s*eventTitle\s*}}/g, sampleData.eventTitle)
-        .replace(/{{\s*eventTitleCn\s*}}/g, sampleData.eventTitleCn)
-        .replace(/{{\s*eventDate\s*}}/g, sampleData.eventDate)
-        .replace(/{{\s*ticketCount\s*}}/g, String(sampleData.ticketCount))
-        .replace(CONTACT_EMAIL_PLACEHOLDER, contactEmail || '$&')
-        .replace(/{{\s*eventHeader\s*}}/g, sampleData.headerImage)
-        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, ticketBlock);
+        .replace(/{{\s*attendeeEmail\s*}}/g, () => sampleData.attendeeEmail)
+        .replace(/{{\s*attendeeName\s*}}/g, () => sampleData.attendeeName)
+        .replace(/{{\s*eventTitle\s*}}/g, () => sampleData.eventTitle)
+        .replace(/{{\s*eventTitleCn\s*}}/g, () => sampleData.eventTitleCn)
+        .replace(/{{\s*eventDate\s*}}/g, () => sampleData.eventDate)
+        .replace(/{{\s*ticketCount\s*}}/g, () => String(sampleData.ticketCount))
+        .replace(CONTACT_EMAIL_PLACEHOLDER, placeholder => contactEmail || placeholder)
+        .replace(/{{\s*eventHeader\s*}}/g, () => sampleData.headerImage)
+        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, () => ticketBlock);
     // Sanitize with the same allowlist the server applies at save time so the
     // admin never sees content that wouldn't survive the save.
     return sanitizeEmailHtml(body);

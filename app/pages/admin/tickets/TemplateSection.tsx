@@ -213,9 +213,9 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                 >
                     <div className="admin-tickets-preview-subject">
                         <strong>{isEnglish ? 'Subject: ' : '主题：'}</strong>
-                        {template.subject.replace(/{{\s*eventTitle\s*}}/g, event.title)
-                            .replace(/{{\s*eventTitleCn\s*}}/g, event.titleCn)
-                            .replace(/{{\s*attendeeName\s*}}/g, 'Sample Attendee')}
+                        {template.subject.replace(/{{\s*eventTitle\s*}}/g, () => event.title)
+                            .replace(/{{\s*eventTitleCn\s*}}/g, () => event.titleCn)
+                            .replace(/{{\s*attendeeName\s*}}/g, () => 'Sample Attendee')}
                     </div>
                     <div
                         className="admin-tickets-preview-body"

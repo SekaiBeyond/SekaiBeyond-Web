@@ -240,24 +240,27 @@ function renderTemplate(
     const sub = htmlContext ? escapeHtml : (s: string) => s;
     // CSS background-image is unreliable in email clients (Outlook strips it
     // entirely; several others ignore it). Render a real <img> instead so the
-    // header artwork shows everywhere. URL is validated as a Firebase Storage
-    // URL at save time (validateStorageImageUrl) so it's safe to interpolate.
+    // header artwork shows everywhere. The URL was checked as a Firebase Storage
+    // URL at save time (validateStorageImageUrl), but that check reads the parsed
+    // URL while the stored string is what lands here, so it is escaped too.
     const headerImage = data.emailHeaderBg
-        ? `<img src="${data.emailHeaderBg}" alt="${sub(data.eventTitle)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
+        ? `<img src="${escapeHtml(data.emailHeaderBg)}" alt="${sub(data.eventTitle)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
         : `<div style="background-color:#ff6b9d;height:120px;"></div>`;
 
+    // Function replacements throughout: a replacement string reads $&, $' and $$
+    // as patterns, so a name or title containing one would come out mangled.
     return template
-        .replace(/{{\s*attendeeEmail\s*}}/g, sub(data.attendeeEmail))
-        .replace(/{{\s*attendeeName\s*}}/g, sub(data.attendeeName))
-        .replace(/{{\s*eventTitle\s*}}/g, sub(data.eventTitle))
-        .replace(/{{\s*eventTitleCn\s*}}/g, sub(data.eventTitleCn))
-        .replace(/{{\s*eventDate\s*}}/g, sub(data.eventDate))
-        .replace(/{{\s*eventHeader\s*}}/g, headerImage)
-        .replace(/{{\s*ticketCount\s*}}/g, String(data.ticketCount))
-        .replace(CONTACT_EMAIL_PLACEHOLDER, sub(data.contactEmail))
+        .replace(/{{\s*attendeeEmail\s*}}/g, () => sub(data.attendeeEmail))
+        .replace(/{{\s*attendeeName\s*}}/g, () => sub(data.attendeeName))
+        .replace(/{{\s*eventTitle\s*}}/g, () => sub(data.eventTitle))
+        .replace(/{{\s*eventTitleCn\s*}}/g, () => sub(data.eventTitleCn))
+        .replace(/{{\s*eventDate\s*}}/g, () => sub(data.eventDate))
+        .replace(/{{\s*eventHeader\s*}}/g, () => headerImage)
+        .replace(/{{\s*ticketCount\s*}}/g, () => String(data.ticketCount))
+        .replace(CONTACT_EMAIL_PLACEHOLDER, () => sub(data.contactEmail))
         // {{ ticketIds[] }} — with optional surrounding <p>/<div> tags collapsed.
         // ticketBlock is server-built HTML, never escaped.
-        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[]\s*}}(\s*<\/p>|\s*<\/div>)?/g, data.ticketBlock);
+        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[]\s*}}(\s*<\/p>|\s*<\/div>)?/g, () => data.ticketBlock);
 }
 
 export const importEventAttendees = onCall({maxInstances: 10}, async (request) => {
@@ -1230,7 +1233,6 @@ export const sendTicketEmails = onCall(
         // Ops here are only for non-email side effects (ticketless attendee
         // marks). The actual Resend send happens in one batch call below.
         const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
-        let lastProcessedId: string | null = null;
 
         // Walk targets into a candidates list. The send-vs-queue split is
         // deferred until inside the reservation transaction below, so the
@@ -1244,9 +1246,15 @@ export const sendTicketEmails = onCall(
             tickets: any[];
         }[] = [];
         const prelimBudget = prelimRemainingToday + queueCapacity;
-        for (const target of targets) {
-            lastProcessedId = target.id;
-            if (candidates.length >= prelimBudget) break;
+        // How many of `targets`, in order, this call deals with — lowered below if
+        // the reservation trims candidates. A resend-all pass resumes after the
+        // last of them, so a target left over is picked up next call, not skipped.
+        let handled = targets.length;
+        for (const [i, target] of targets.entries()) {
+            if (candidates.length >= prelimBudget) {
+                handled = i;
+                break;
+            }
             const data = target.data();
             const rawTickets: any[] = data.tickets ?? [];
             const activeTickets = rawTickets.filter(t => !t.voided);
@@ -1323,6 +1331,9 @@ export const sendTicketEmails = onCall(
         // admin send may have consumed slots between the pre-check and the
         // txn read). First `expectedSentCount` ship now; the rest queue.
         const reservedCount = expectedSentCount + expectedQueuedCount;
+        if (reservedCount < candidates.length) {
+            handled = Math.min(handled, targets.indexOf(candidates[reservedCount].target));
+        }
         const sendableTargets = candidates.slice(0, reservedCount).map((c, i) => ({
             ...c,
             queued: i >= expectedSentCount,
@@ -1497,12 +1508,12 @@ export const sendTicketEmails = onCall(
                 });
         }
 
-        // hasMore: the query returned a full chunk (there may be more).
-        // For attendeeIds, the client controls chunking — never set hasMore.
-        const hasMore = !attendeeIds && queriedCount >= chunkSize;
-        const nextCursor = mode === "all" && hasMore && lastProcessedId
-            ? lastProcessedId
-            : undefined;
+        // hasMore: the query returned a full chunk (there may be more), or this
+        // call stopped short of the chunk it read. For attendeeIds, the client
+        // controls chunking — never set hasMore.
+        const hasMore = !attendeeIds && (queriedCount >= chunkSize || handled < targets.length);
+        const resumeAfter = handled > 0 ? targets[handled - 1].id : cursor;
+        const nextCursor = mode === "all" && hasMore && resumeAfter ? resumeAfter : undefined;
 
         return {sentCount, queuedCount, hasMore, ...(nextCursor ? {nextCursor} : {})};
     });
