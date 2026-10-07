@@ -432,7 +432,8 @@ interface HeldTicket {
  * A redeemed ticket also backfills attendance. The scanner credits the holder's
  * account as it scans, but only if an account already carried the ticket's
  * email; someone who signed up afterwards would otherwise never be credited for
- * the event they were scanned into.
+ * the event they were scanned into. createUserProfile does the same at sign-up,
+ * for ended events too; this catches a sign-up whose credit failed.
  */
 export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
