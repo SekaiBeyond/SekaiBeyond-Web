@@ -1804,6 +1804,10 @@
     max-width: 1180px;
 }
 
+.sbc-lineup-qr-source {
+    display: none;
+}
+
 /* The preview column stretches to the controls' height and the preview fills it,
    so the two sides line up. */
 .sbc-lineup-editor {

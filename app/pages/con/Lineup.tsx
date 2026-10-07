@@ -1,6 +1,7 @@
 import type { ChangeEvent, PointerEvent } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { FiDownload, FiPlus, FiRotateCcw, FiRotateCw, FiUpload, FiX } from 'react-icons/fi';
+import { QRCodeCanvas } from 'qrcode.react';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 import { useT } from '~/pages/con/i18n';
 
@@ -14,6 +15,16 @@ const MAX_FONT_BYTES = 30 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 40_000_000;
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 3;
+const QR_ACCENT = '#c20e59';
+const SHARE_QR_MARGIN = 48;
+const SHARE_QR_SIZE = 120;
+const EXTRA_TEXT_FONT = 'Caveat Brush';
+const EXTRA_TEXT_SIZE = 42;
+const SHARE_QR = {
+    left: SHARE_QR_MARGIN,
+    top: CANVAS_HEIGHT - SHARE_QR_MARGIN - SHARE_QR_SIZE,
+    size: SHARE_QR_SIZE,
+};
 
 type PhotoTransform = {zoom: number; rotation: number; offsetX: number; offsetY: number};
 type PointerPoint = {x: number; y: number};
@@ -117,9 +128,12 @@ const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 
 export const Lineup = () => {
     const t = useT();
+    const qrHeading = t({en: 'MAKE YOUR OWN', zh: '制作你的分享卡'});
+    const qrPrompt = t({en: 'Scan to start', zh: '扫码开始制作'});
     const inputId = useId();
     const fontInputId = `${inputId}-font-file`;
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const qrCanvasRef = useRef<HTMLCanvasElement>(null);
     const loadToken = useRef(0);
     const activePointers = useRef(new Map<number, PointerPoint>());
     const gestureStart = useRef<GestureStart | null>(null);
@@ -146,6 +160,13 @@ export const Lineup = () => {
     const [fineTuneOpen, setFineTuneOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [shareUrl, setShareUrl] = useState('');
+
+    useEffect(() => {
+        // Keep the QR pointed at this deployment (localhost, preview, or live)
+        // while always opening directly at the share-card editor.
+        setShareUrl(`${window.location.origin}${window.location.pathname}#lineup`);
+    }, []);
 
     useEffect(() => () => photo?.close(), [photo]);
 
@@ -179,7 +200,12 @@ export const Lineup = () => {
         // Chinese title. The canvas can't repaint itself when they arrive, so every
         // finished load bumps a counter that redraws the card.
         void loadTitleFontStylesheet()
-            .then(() => document.fonts.load(`${titleFont.size}px ${titleFontStack(titleFont.family)}`, title.trim() || 'A'))
+            .then(() => Promise.all([
+                document.fonts.load(`${titleFont.size}px ${titleFontStack(titleFont.family)}`, title.trim() || 'A'),
+                ...(extraTextEnabled
+                    ? [document.fonts.load(`${EXTRA_TEXT_SIZE}px ${titleFontStack(EXTRA_TEXT_FONT)}`, extraText.trim() || 'A')]
+                    : []),
+            ]))
             .catch(() => [])
             .then(() => {
                 if (cancelled) return;
@@ -189,7 +215,7 @@ export const Lineup = () => {
         return () => {
             cancelled = true;
         };
-    }, [titleFont, title]);
+    }, [titleFont, title, extraTextEnabled, extraText]);
 
     useEffect(() => () => {
         if (uploadedFont) document.fonts.delete(uploadedFont.face);
@@ -247,9 +273,35 @@ export const Lineup = () => {
         if (readyFamily === titleFont.family) {
             // 760 wide keeps a long title clear of the artwork's top-left corner bracket (x 63–134).
             drawCenteredText(context, title, 160, 760, titleFont.size, 52, 210, titleFontStack(titleFont.family));
-            if (extraTextEnabled) drawCenteredText(context, extraText, 280, 850, 56, 32, 76, 'sans-serif');
+            if (extraTextEnabled) {
+                drawCenteredText(
+                    context,
+                    extraText,
+                    280,
+                    850,
+                    EXTRA_TEXT_SIZE,
+                    24,
+                    58,
+                    titleFontStack(EXTRA_TEXT_FONT),
+                );
+            }
         }
-    }, [photo, overlay, zoom, rotation, offsetX, offsetY, titleFont, readyFamily, fontLoads, title, extraTextEnabled, extraText]);
+
+        const qrCanvas = qrCanvasRef.current;
+        if (shareUrl && qrCanvas) {
+            // Let the quiet zone show the artwork through, keeping the QR integrated
+            // with the pale lower edge instead of adding another block to the card.
+            context.drawImage(qrCanvas, SHARE_QR.left, SHARE_QR.top, SHARE_QR.size, SHARE_QR.size);
+
+            context.textAlign = 'left';
+            context.textBaseline = 'middle';
+            context.fillStyle = QR_ACCENT;
+            context.font = '700 26px sans-serif';
+            context.fillText(qrHeading, SHARE_QR.left + SHARE_QR.size + 16, SHARE_QR.top + 48, 370);
+            context.font = '500 18px sans-serif';
+            context.fillText(qrPrompt, SHARE_QR.left + SHARE_QR.size + 16, SHARE_QR.top + 76, 370);
+        }
+    }, [photo, overlay, zoom, rotation, offsetX, offsetY, titleFont, readyFamily, fontLoads, title, extraTextEnabled, extraText, shareUrl, qrHeading, qrPrompt]);
 
     const onFontSelected = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.currentTarget.files?.[0];
@@ -764,6 +816,17 @@ export const Lineup = () => {
                     </p>
                 </div>
             </div>
+            <QRCodeCanvas
+                ref={qrCanvasRef}
+                className="sbc-lineup-qr-source"
+                value={shareUrl || ' '}
+                size={512}
+                level="M"
+                marginSize={4}
+                fgColor={QR_ACCENT}
+                bgColor="rgba(250, 243, 246, 0)"
+                aria-hidden="true"
+            />
         </section>
     );
 };
