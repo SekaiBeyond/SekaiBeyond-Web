@@ -54,7 +54,13 @@ const cache = createValueCache<SiteConfig>('site config', async () => {
     };
 }, DEFAULT_CONFIG);
 
-export function useSiteConfig(): {config: SiteConfig; loading: boolean; refresh: () => Promise<void>} {
-    const {value: config, loading, refresh} = cache.useValue();
-    return {config, loading, refresh};
+/** `failed` means the read never succeeded, so `config` is DEFAULT_CONFIG. */
+export function useSiteConfig(): {
+    config: SiteConfig;
+    loading: boolean;
+    failed: boolean;
+    refresh: () => Promise<void>;
+} {
+    const {value: config, loading, error, refresh} = cache.useValue();
+    return {config, loading, failed: error !== null, refresh};
 }

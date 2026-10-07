@@ -25,9 +25,10 @@ const cache = createValueCache<Policy>('policy', async () => {
     };
 }, EMPTY_POLICY);
 
-export function usePolicy(): {policy: Policy; loading: boolean; refresh: () => Promise<void>} {
-    const {value: policy, loading, refresh} = cache.useValue();
-    return {policy, loading, refresh};
+/** `failed` means the read never succeeded, so `policy` is empty. */
+export function usePolicy(): {policy: Policy; loading: boolean; failed: boolean; refresh: () => Promise<void>} {
+    const {value: policy, loading, error, refresh} = cache.useValue();
+    return {policy, loading, failed: error !== null, refresh};
 }
 
 // What policy Markdown may render to. Admin-written, but sanitized anyway since

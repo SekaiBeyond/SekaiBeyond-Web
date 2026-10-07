@@ -112,11 +112,13 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     const [showWindow, setShowWindow] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [loadFailed, setLoadFailed] = useState(false);
 
     useEffect(() => {
         let stale = false;
         const load = async () => {
             setLoading(true);
+            setLoadFailed(false);
             try {
                 const db = getFirebaseDb();
                 const collectionName = variant === 'staff' ? 'staffClaimCodes' : 'claimCodes';
@@ -145,6 +147,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                 setShowWindow(false);
             } catch {
                 if (!stale) {
+                    setLoadFailed(true);
                     const msg = TEXT[variant].loadFailed;
                     showToast(isEnglish ? msg.en : msg.cn, 'error');
                 }
@@ -233,6 +236,20 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         return (
             <div className="admin-codes-section">
                 <div className="spinner spinner-centered"/>
+            </div>
+        );
+    }
+
+    // "No code yet" is only said when the read came back empty. Generating retires
+    // every code the event already has, so offering it after a failed read could
+    // switch off one that is printed and in use, without the regenerate warning.
+    if (loadFailed) {
+        return (
+            <div className="admin-codes-section">
+                {text.label && (
+                    <p className="admin-section-label">{tr(text.label)}</p>
+                )}
+                <p className="admin-no-results">{tr(text.loadFailed)}</p>
             </div>
         );
     }

@@ -31,6 +31,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
     });
     const [loading, setLoading] = useState(true);
+    const [loadFailed, setLoadFailed] = useState(false);
     const [saving, setSaving] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
 
@@ -38,6 +39,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         let cancelled = false;
         const load = async () => {
             setLoading(true);
+            setLoadFailed(false);
             try {
                 const db = getFirebaseDb();
                 const snap = await getDoc(
@@ -70,6 +72,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                 }
             } catch (err) {
                 console.error('[template] load', err);
+                if (!cancelled) setLoadFailed(true);
                 showToast(
                     isEnglish ? 'Failed to load template.' : '加载模板失败。',
                     'error',
@@ -128,6 +131,18 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
 
     if (loading) {
         return <div className="spinner spinner-centered"/>;
+    }
+
+    // An empty editor would invite saving over the stored template, so a failed
+    // read shows no editor at all.
+    if (loadFailed) {
+        return (
+            <p className="admin-no-results">
+                {isEnglish
+                    ? 'Could not load this event’s email template. Reload the page before editing it.'
+                    : '无法加载此活动的邮件模板。请重新加载页面后再编辑。'}
+            </p>
+        );
     }
 
     return (

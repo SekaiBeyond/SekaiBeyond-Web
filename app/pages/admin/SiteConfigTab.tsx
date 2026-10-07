@@ -44,7 +44,7 @@ const PolicyPreview = ({label, content}: {label: string; content: string}) => {
 export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps) => {
     const {isEnglish} = useLanguage();
 
-    const {config, loading: configLoading, refresh: refreshConfig} = useSiteConfig();
+    const {config, loading: configLoading, failed: configFailed, refresh: refreshConfig} = useSiteConfig();
     const [bvidInput, setBvidInput] = useState('');
     const [savingVideo, setSavingVideo] = useState(false);
     const [emailInput, setEmailInput] = useState('');
@@ -56,7 +56,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     const [senderSettings, setSenderSettings] = useState<{domain: string, defaultPrefix: string} | null>(null);
     const [configInitialized, setConfigInitialized] = useState(false);
 
-    const {policy, loading: policyLoading, refresh: refreshPolicy} = usePolicy();
+    const {policy, loading: policyLoading, failed: policyFailed, refresh: refreshPolicy} = usePolicy();
     const [contentEn, setContentEn] = useState('');
     const [contentCn, setContentCn] = useState('');
     const [savingPolicy, setSavingPolicy] = useState(false);
@@ -167,6 +167,24 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                 <div className="policy-spinner-wrap">
                     <div className="spinner"/>
                 </div>
+            </div>
+        );
+    }
+
+    // Editing here would mean saving the built-in defaults over whatever is
+    // actually stored — the con edition and the policy each save whole — so the
+    // tab stays closed until both reads succeed.
+    if (configFailed || policyFailed) {
+        return (
+            <div className="admin-section">
+                <h3 className="admin-badges-title">
+                    {isEnglish ? 'Could not load site config' : '无法加载网站配置'}
+                </h3>
+                <p className="admin-helper-text">
+                    {isEnglish
+                        ? 'The saved settings could not be read, so this tab would be showing the site’s built-in defaults. Reload the page before editing — saving now would overwrite what is stored.'
+                        : '无法读取已保存的设置，此标签页显示的将是网站内置的默认值。请重新加载页面后再编辑——此时保存会覆盖已存储的内容。'}
+                </p>
             </div>
         );
     }
