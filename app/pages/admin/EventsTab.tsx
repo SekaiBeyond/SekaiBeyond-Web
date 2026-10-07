@@ -242,8 +242,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             setShowCreateEvent(false);
             resetEventForm();
             setEditingEvent(null);
-        } catch {
-            showToast(isEnglish ? 'Failed to save event.' : '保存活动失败。', 'error');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to save event.' : '保存活动失败。'), 'error');
         } finally {
             setSavingEvent(false);
         }

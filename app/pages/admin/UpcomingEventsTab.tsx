@@ -251,8 +251,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             setShowForm(false);
             resetForm();
             setEditingEvent(null);
-        } catch {
-            showToast(isEnglish ? 'Failed to save event.' : '保存活动失败。', 'error');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to save event.' : '保存活动失败。'), 'error');
         } finally {
             setSaving(false);
         }

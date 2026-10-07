@@ -315,8 +315,8 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             if (editForm.imagePreview?.startsWith('blob:')) URL.revokeObjectURL(editForm.imagePreview);
             setEditForm(emptyBadgeForm);
             showToast(isEnglish ? 'Badge updated.' : '徽章已更新。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to save badge.' : '保存徽章失败。', 'error');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to save badge.' : '保存徽章失败。'), 'error');
         } finally {
             setSavingBadgeDef(false);
         }

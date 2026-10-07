@@ -12,7 +12,7 @@ import {
 import { deletionExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
-import { deleteStorageFile, logStorageCleanupError } from "../utils/storage";
+import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 import { recordDoc, recordRef } from "../utils/records";
 import {
     validateDocId,
@@ -172,6 +172,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
             prevIcon = existing.data()?.icon ?? "";
         }
+        await requireNewlyLinkedFilesExist([icon], [prevIcon]);
         const ref = db.collection("pastEvents").doc(docId);
         if (eventId) {
             txn.update(ref, data);
@@ -277,6 +278,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
             prevEmailHeaderBg = existing.data()?.emailHeaderBg ?? "";
             wasPublished = existing.data()?.published ?? false;
         }
+        await requireNewlyLinkedFilesExist([poster, emailHeaderBg], [prevPoster, prevEmailHeaderBg]);
 
         // Paid events use tickets, not check-in codes — purge any claim codes
         // that exist for this event (e.g., left over from a free→paid toggle).

@@ -1228,6 +1228,7 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         // keeps it safe. Read before the writes, as transactions require.
         const rosterSnap = await txn.get(rosterRef);
         const prevMembers = (rosterSnap.data()?.teamMembers ?? []) as {imageUrl?: string}[];
+        await requireNewlyLinkedFilesExist(validMembers.map(m => m.imageUrl), prevMembers.map(m => m.imageUrl ?? ""));
         const stillReferenced = new Set(validMembers.map(m => m.imageUrl).filter(Boolean));
         const orphaned = [...new Set(
             prevMembers

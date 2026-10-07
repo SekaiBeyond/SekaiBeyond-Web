@@ -106,8 +106,8 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
             // pulls the canonical roster (with uid/flags) back into the editor.
             await Promise.all([refreshAfterSave(refreshConfig, showToast, isEnglish), loadRoster()]);
             showToast(isEnglish ? 'Team updated.' : '团队已更新。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to update team.' : '更新团队失败。', 'error');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to update team.' : '更新团队失败。'), 'error');
             // Revert state if saving failed
             setMembers(members);
         } finally {
