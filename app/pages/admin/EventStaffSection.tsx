@@ -59,7 +59,9 @@ export function EventStaffSection({
         return () => {
             stale = true;
         };
-    }, [eventId, isEnglish, showToast, onCountChange]);
+        // Not keyed on isEnglish, which only words the failure toast: a language
+        // toggle shouldn't refetch the roster.
+    }, [eventId, showToast, onCountChange]);
 
     const addStaff = async (user: UserRecord) => {
         setBusyUid(user.uid);

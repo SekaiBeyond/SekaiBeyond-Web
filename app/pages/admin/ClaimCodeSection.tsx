@@ -159,7 +159,9 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         return () => {
             stale = true;
         };
-    }, [eventId, variant, isEnglish, showToast]);
+        // Not keyed on isEnglish, which only words the failure toast: a language
+        // toggle would reload the code over an unsaved time window.
+    }, [eventId, variant, showToast]);
 
     const generateCode = async () => {
         setGenerating(true);

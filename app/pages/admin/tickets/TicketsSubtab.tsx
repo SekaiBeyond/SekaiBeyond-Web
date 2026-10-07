@@ -50,7 +50,9 @@ export function TicketsSubtab({
     const [section, setSection] = useState<TicketsSection>(canScan && readOnly ? 'scan' : 'attendees');
     const [attendees, setAttendees] = useState<AttendeeData[]>([]);
     const [loadingAttendees, setLoadingAttendees] = useState(false);
-    const [attendeesError, setAttendeesError] = useState<string | null>(null);
+    // A flag rather than the message, so that the load needn't depend on the
+    // language: a toggle would otherwise refetch every attendee.
+    const [attendeesFailed, setAttendeesFailed] = useState(false);
     const [search, setSearch] = useState('');
     const [filterUnsent, setFilterUnsent] = useState(false);
     const [ticketTypeFilter, setTicketTypeFilter] = useState<TicketType | 'all'>('all');
@@ -63,7 +65,7 @@ export function TicketsSubtab({
 
     const loadAttendees = useCallback(async () => {
         setLoadingAttendees(true);
-        setAttendeesError(null);
+        setAttendeesFailed(false);
         try {
             const db = getFirebaseDb();
             const col = collection(db, collectionRoot, eventId, 'attendees');
@@ -73,11 +75,11 @@ export function TicketsSubtab({
             setDisplayCount(10);
         } catch (err) {
             console.error('[TicketsSubtab] loadAttendees', err);
-            setAttendeesError(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。');
+            setAttendeesFailed(true);
         } finally {
             setLoadingAttendees(false);
         }
-    }, [eventId, isEnglish, collectionRoot]);
+    }, [eventId, collectionRoot]);
 
     useEffect(() => {
         void loadAttendees();
@@ -314,6 +316,10 @@ export function TicketsSubtab({
             }
         }
     };
+
+    const attendeesError = attendeesFailed
+        ? (isEnglish ? 'Failed to load attendees.' : '加载参加者失败。')
+        : null;
 
     const tabVisible = (t: TicketsSection) => {
         if (t === 'scan') return canScan;

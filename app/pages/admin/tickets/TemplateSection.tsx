@@ -85,7 +85,9 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         return () => {
             cancelled = true;
         };
-    }, [event.id, isEnglish, showToast]);
+        // Not keyed on isEnglish, which only words the failure toast: a language
+        // toggle would reload the template over any unsaved edits.
+    }, [event.id, showToast]);
 
     const isDirty = template.subject !== initialTemplate.subject
         || template.bodyHtml !== initialTemplate.bodyHtml;
