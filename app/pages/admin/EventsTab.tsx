@@ -12,7 +12,7 @@ import type { Tag } from '~/lib/tags';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { UserRecord } from './types';
 import { eventLocationDisplay, useVenues } from '~/lib/venues';
-import { fetchEventAttendees, fetchEventStaffCount, pastEventHasTickets } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount, pastEventHasTickets, refreshAfterSave } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { LocationFormField } from './LocationFormField';
 import { ClaimCodeSection } from './ClaimCodeSection';
@@ -232,7 +232,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 recapLinkCn: eventForm.recapLinkCn.trim(),
             });
 
-            await refreshEvents();
+            await refreshAfterSave(refreshEvents, showToast, isEnglish);
             showToast(
                 editingEvent
                     ? (isEnglish ? 'Event updated.' : '活动已更新。')

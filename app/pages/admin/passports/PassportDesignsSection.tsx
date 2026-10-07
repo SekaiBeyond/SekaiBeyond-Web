@@ -10,7 +10,7 @@ import {
 import { BilingualFormField } from '../BilingualFormField';
 import { CardEditDeleteActions } from '../CrudShell';
 import { ImageUploadField } from '../ImageUploadField';
-import type { ShowToast } from '../utils';
+import { refreshAfterSave, type ShowToast } from '../utils';
 
 const TERM_PRESETS = [30, 90, 180, 365, 730];
 
@@ -60,7 +60,7 @@ export const PassportDesignsSection = ({
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const saved = async () => {
-        await onChanged();
+        await refreshAfterSave(onChanged, showToast, isEnglish);
         setEditing(null);
     };
 
@@ -72,7 +72,7 @@ export const PassportDesignsSection = ({
         setDeletingId(design.id);
         try {
             await callDeletePassportDesign({designId: design.id});
-            await onChanged();
+            await refreshAfterSave(onChanged, showToast, isEnglish);
             showToast(isEnglish ? 'Design deleted.' : '设计已删除。', 'warning');
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to delete design.' : '删除设计失败。'), 'error');

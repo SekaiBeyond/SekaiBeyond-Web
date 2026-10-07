@@ -12,7 +12,7 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import type { UserRecord } from './types';
-import { fetchEventAttendees, fetchEventStaffCount, toDatetimeLocal } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount, refreshAfterSave, toDatetimeLocal } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { ClaimCodeSection } from './ClaimCodeSection';
 import { LocationFormField } from './LocationFormField';
@@ -241,7 +241,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 paid: form.paid,
             });
 
-            await refreshEvents();
+            await refreshAfterSave(refreshEvents, showToast, isEnglish);
             showToast(
                 editingEvent
                     ? (isEnglish ? 'Event updated.' : '活动已更新。')
@@ -262,7 +262,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         setArchiving(true);
         try {
             await callArchiveUpcomingEvent({eventId: event.id, tagIds: archiveTagIds});
-            await Promise.all([refreshEvents(), refreshPastEvents()]);
+            await refreshAfterSave(() => Promise.all([refreshEvents(), refreshPastEvents()]), showToast, isEnglish);
             setSelectedEvent(null);
             setShowArchive(false);
             setArchiveTagIds([]);

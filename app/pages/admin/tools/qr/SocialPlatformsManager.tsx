@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteSocialPlatform, callSaveSocialPlatform, callSeedSocialPlatforms } from '~/lib/firebase';
 import { type SocialPlatform, useSocialPlatforms } from '~/lib/socialPlatforms';
+import { refreshAfterSave } from '../../utils';
 
 interface PlatformDraft {
     label: string;
@@ -57,7 +58,7 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
         setSeeding(true);
         try {
             await callSeedSocialPlatforms();
-            await refresh();
+            await refreshAfterSave(refresh, showToast, isEnglish);
             showToast(isEnglish ? 'Defaults loaded — you can now edit them.' : '已加载默认平台，现在可以编辑。', 'success');
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to load defaults.' : '加载默认平台失败。'), 'error');
@@ -74,7 +75,7 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
         setSaving(true);
         try {
             await callSaveSocialPlatform(payloadFrom({...createDraft, order: platforms.length}));
-            await refresh();
+            await refreshAfterSave(refresh, showToast, isEnglish);
             setCreateDraft(emptyDraft(0));
             setShowCreate(false);
             showToast(isEnglish ? 'Platform added.' : '平台已添加。', 'success');
@@ -99,7 +100,7 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
         setSaving(true);
         try {
             await callSaveSocialPlatform(payloadFrom(editDraft, editingId));
-            await refresh();
+            await refreshAfterSave(refresh, showToast, isEnglish);
             setEditingId(null);
             showToast(isEnglish ? 'Platform updated.' : '平台已更新。', 'success');
         } catch (e: any) {
@@ -117,7 +118,7 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
         setDeletingId(p.id);
         try {
             await callDeleteSocialPlatform({id: p.id});
-            await refresh();
+            await refreshAfterSave(refresh, showToast, isEnglish);
             if (editingId === p.id) setEditingId(null);
             showToast(isEnglish ? 'Platform deleted.' : '平台已删除。', 'warning');
         } catch {

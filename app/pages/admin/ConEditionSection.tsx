@@ -3,6 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveSiteConfig, callUploadAdminImage } from '~/lib/firebase';
 import type { ConEdition } from '~/constants';
 import { ImageUploadField } from './ImageUploadField';
+import { refreshAfterSave } from './utils';
 
 interface ConEditionSectionProps {
     conEdition: ConEdition | null;
@@ -82,7 +83,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
         setSaving(true);
         try {
             await callSaveSiteConfig({conEdition: formData});
-            await refreshConfig();
+            await refreshAfterSave(refreshConfig, showToast, isEnglish);
             showToast(isEnglish ? 'Convention edition saved.' : '漫展年度已保存。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to save convention edition.' : '保存漫展年度失败。', 'error');
@@ -96,7 +97,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
         setSaving(true);
         try {
             await callSaveSiteConfig({conEdition: null});
-            await refreshConfig();
+            await refreshAfterSave(refreshConfig, showToast, isEnglish);
             showToast(isEnglish ? 'Convention configuration reset.' : '漫展配置已重置。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to reset convention configuration.' : '重置漫展配置失败。', 'error');

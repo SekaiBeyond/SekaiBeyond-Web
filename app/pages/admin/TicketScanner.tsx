@@ -93,9 +93,10 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 };
                 setStatus({kind: 'success', ...successData});
 
-                // The window is timed from the first admission, which a rescan
-                // answered from the server may be well into, so the server says how
-                // much of it is left. Without that, the entry expires at once.
+                // The server times the window from the first admission, and a rescan
+                // it answers can come well into it, so it says how much is left. A
+                // duration, not a time, so this phone's clock being off doesn't
+                // matter. Without it, the entry expires at once.
                 redeemedCacheRef.current = [
                     {ticketId, until: now + (d.graceRemainingMs ?? 0), ...successData},
                     ...redeemedCacheRef.current.filter(c => c.ticketId !== ticketId),

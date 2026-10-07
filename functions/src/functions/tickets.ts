@@ -648,6 +648,10 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         const eventTitle: string = eventSnap.data()?.title ?? "";
 
         const now = Timestamp.now();
+        // How long after admitting a ticket the same scanner can read it again and
+        // be told it succeeded, so a ticket still held up to the camera doesn't flip
+        // to "already redeemed" a moment after it got in. Timed from the admission;
+        // the scanner's cache is told what is left of it.
         const REDEEM_GRACE_PERIOD_MS = 15_000;
 
         if (ticket.redeemed) {
@@ -669,9 +673,9 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
             }
 
             // The same scanner reading it again moments later: report the admission
-            // it already made, and write nothing. Rewriting redeemedAt here restarted
-            // the window on every rescan, so a ticket held up to the camera every few
-            // seconds kept reading as a fresh admission.
+            // it already made, and write nothing. Writing redeemedAt again would
+            // restart the window on every rescan, and a ticket held up to the camera
+            // every few seconds would never stop reading as a fresh admission.
             return {
                 success: true,
                 attendeeName,

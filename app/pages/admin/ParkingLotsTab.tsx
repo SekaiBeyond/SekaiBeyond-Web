@@ -8,6 +8,7 @@ import { BilingualFormField } from './BilingualFormField';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
 import { MapPicker } from './MapPicker';
 import { type LocationListHandle, useCardHighlight } from './useCardHighlight';
+import { refreshAfterSave } from './utils';
 
 const LOT_TYPES: ParkingLot['type'][] = ['general', 'disabled', 'garage'];
 
@@ -92,7 +93,7 @@ export const ParkingLotsTab = forwardRef<LocationListHandle, ParkingLotsTabProps
         setSaving(true);
         try {
             await callSaveParkingLot(buildPayload(createDraft));
-            await refreshParkingLots();
+            await refreshAfterSave(refreshParkingLots, showToast, isEnglish);
             setCreateDraft(emptyDraft());
             setShowCreate(false);
             showToast(isEnglish ? 'Parking lot created.' : '停车场已创建。', 'success');
@@ -128,7 +129,7 @@ export const ParkingLotsTab = forwardRef<LocationListHandle, ParkingLotsTabProps
         setSaving(true);
         try {
             await callSaveParkingLot({lotId: editingId, ...buildPayload(editDraft)});
-            await refreshParkingLots();
+            await refreshAfterSave(refreshParkingLots, showToast, isEnglish);
             setEditingId(null);
             showToast(isEnglish ? 'Parking lot updated.' : '停车场已更新。', 'success');
         } catch (e: any) {
@@ -146,7 +147,7 @@ export const ParkingLotsTab = forwardRef<LocationListHandle, ParkingLotsTabProps
         setDeletingId(lot.id);
         try {
             const res = await callDeleteParkingLot({lotId: lot.id});
-            await Promise.all([refreshParkingLots(), refreshVenues()]);
+            await refreshAfterSave(() => Promise.all([refreshParkingLots(), refreshVenues()]), showToast, isEnglish);
             if (editingId === lot.id) setEditingId(null);
             const unlinkedCount = res.data.unlinkedFrom;
             const msg = unlinkedCount > 0

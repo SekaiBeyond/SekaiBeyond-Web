@@ -8,6 +8,7 @@ import { EMAIL_RE } from './tickets/helpers';
 import { TeamSection } from './TeamSection';
 import { ConEditionSection } from './ConEditionSection';
 import { SectionNav } from './SectionNav';
+import { refreshAfterSave } from './utils';
 
 interface SiteConfigTabProps {
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
@@ -98,7 +99,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         setSavingVideo(true);
         try {
             await callSaveSiteConfig({bilibiliVideoBvid: bvid});
-            await refreshConfig();
+            await refreshAfterSave(refreshConfig, showToast, isEnglish);
             showToast(isEnglish ? 'Video saved.' : '视频已保存。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to save video.' : '保存视频失败。', 'error');
@@ -116,7 +117,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         setSavingEmail(true);
         try {
             await callSaveSiteConfig({contactEmail: email});
-            await refreshConfig();
+            await refreshAfterSave(refreshConfig, showToast, isEnglish);
             setEmailInput(email);
             showToast(isEnglish ? 'Contact email saved.' : '联系邮箱已保存。', 'success');
         } catch {
@@ -138,7 +139,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         setSavingSender(true);
         try {
             await callSaveSiteConfig({senderPrefix: prefix});
-            await refreshConfig();
+            await refreshAfterSave(refreshConfig, showToast, isEnglish);
             setSenderInput(prefix);
             showToast(isEnglish ? 'Sender saved.' : '发件邮箱已保存。', 'success');
         } catch {
@@ -152,7 +153,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         setSavingPolicy(true);
         try {
             await callSavePolicy({contentEn: contentEn.trim(), contentCn: contentCn.trim()});
-            await refreshPolicy();
+            await refreshAfterSave(refreshPolicy, showToast, isEnglish);
             showToast(isEnglish ? 'Policy saved.' : '政策已保存。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to save policy.' : '保存政策失败。', 'error');

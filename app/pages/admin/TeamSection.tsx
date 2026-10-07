@@ -5,6 +5,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetTeamRoster, callSaveTeamMembers, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
 import { MemberEditModal } from './MemberEditModal';
+import { refreshAfterSave } from './utils';
 
 interface LinkedAccount {
     title: string;
@@ -103,7 +104,7 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
             await callSaveTeamMembers({teamMembers: newMembers});
             // refreshConfig updates the public projection cache elsewhere; loadRoster
             // pulls the canonical roster (with uid/flags) back into the editor.
-            await Promise.all([refreshConfig(), loadRoster()]);
+            await Promise.all([refreshAfterSave(refreshConfig, showToast, isEnglish), loadRoster()]);
             showToast(isEnglish ? 'Team updated.' : '团队已更新。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to update team.' : '更新团队失败。', 'error');

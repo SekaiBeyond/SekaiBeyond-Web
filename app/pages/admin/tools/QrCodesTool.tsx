@@ -10,6 +10,7 @@ import { QrScanner } from './qr/QrScanner';
 import { QuickQrGenerator } from './qr/QuickQrGenerator';
 import { SocialPlatformsManager } from './qr/SocialPlatformsManager';
 import { buildQrPayload, emptyDraft, QrCodeForm, type QrDraft, } from './qr/QrCodeForm';
+import { refreshAfterSave } from '../utils';
 
 interface QrCodesToolProps {
     onBack: () => void;
@@ -54,7 +55,7 @@ export const QrCodesTool = ({onBack, showToast, readOnly = false}: QrCodesToolPr
         setSaving(true);
         try {
             const res = await callSaveQrCode(built.payload);
-            await refresh();
+            await refreshAfterSave(refresh, showToast, isEnglish);
             setSelectedId(res.data.qrId);
             setView('detail');
             showToast(isEnglish ? 'QR code created.' : '二维码已创建。', 'success');

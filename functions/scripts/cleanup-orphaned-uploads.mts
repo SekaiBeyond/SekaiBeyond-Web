@@ -68,6 +68,7 @@ async function findBucket() {
     console.error(`No bucket found (tried ${names.join(", ")}): pass --bucket <name>.`);
     process.exit(1);
 }
+
 const bucket = await findBucket();
 
 // The same URL shape extractStoragePath reads, found anywhere in a string so
