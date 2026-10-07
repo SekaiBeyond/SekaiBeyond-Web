@@ -1,22 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { FiArrowLeft, FiMenu, FiX } from 'react-icons/fi';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
-import { useConContent } from '~/lib/conContent';
-import { CON_NAME, NAV_LINKS } from '~/pages/con/content';
+import { useConContent, useConNavLinks } from '~/lib/conContent';
+import { CON_NAME } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { useActiveSection, useScrolledPast } from '~/pages/con/hooks';
 import { scrollToSection } from '~/pages/con/utils';
 
-const SECTION_IDS = NAV_LINKS.map(link => link.id);
-
 export const Navigation = () => {
     const t = useT();
     const {ticketUrl} = useConContent().content.event;
+    const navLinks = useConNavLinks();
     const [menuOpen, setMenuOpen] = useState(false);
 
     const solid = useScrolledPast(80);
-    const activeSection = useActiveSection(SECTION_IDS);
+    const sectionIds = useMemo(() => navLinks.map(link => link.id), [navLinks]);
+    const activeSection = useActiveSection(sectionIds);
 
     // Keep the page from scrolling behind the full-screen mobile menu.
     useEffect(() => {
@@ -59,7 +59,7 @@ export const Navigation = () => {
                 </div>
 
                 <ul className={`sbc-nav-links${menuOpen ? ' sbc-nav-links--open' : ''}`}>
-                    {NAV_LINKS.map(link => (
+                    {navLinks.map(link => (
                         <li key={link.id}>
                             <a
                                 className={`sbc-nav-link${activeSection === link.id ? ' sbc-nav-link--active' : ''}`}

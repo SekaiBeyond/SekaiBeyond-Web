@@ -377,6 +377,10 @@ const CON_SECTIONS = [
 ] as const;
 type ConSection = typeof CON_SECTIONS[number];
 
+// Mirrors HIDEABLE_SECTIONS in app/pages/con/content.ts. Each is a key of
+// CON_SECTIONS as well as an anchor on the page.
+const CON_HIDEABLE_SECTIONS = ["guests", "vendors"] as const satisfies readonly ConSection[];
+
 // Caps on how much copy one section can hold. Generous against real use, tight
 // enough that a runaway client cannot grow the public document without bound.
 const CON_LIMITS = {
@@ -462,13 +466,25 @@ function validateConLink(raw: unknown, name: string): string {
  * Page-level switches. `published: false` takes /con off the public web, so it is
  * stored as a strict boolean rather than anything truthy — a stray string here
  * would silently republish the page.
+ *
+ * `hiddenSections` is optional so a client from before it existed can still save;
+ * leaving it out shows every section.
  */
 function buildConSettings(raw: unknown) {
     const s = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
     if (typeof s.published !== "boolean") {
         throw new HttpsError("invalid-argument", "published must be true or false.");
     }
-    return {published: s.published};
+    const hidden = s.hiddenSections ?? [];
+    const hideable: readonly unknown[] = CON_HIDEABLE_SECTIONS;
+    if (!Array.isArray(hidden) || hidden.some(section => !hideable.includes(section))) {
+        throw new HttpsError("invalid-argument", `hiddenSections may only list ${CON_HIDEABLE_SECTIONS.join(", ")}.`);
+    }
+    return {
+        published: s.published,
+        // Canonical order, matching what the editor compares its draft against.
+        hiddenSections: CON_HIDEABLE_SECTIONS.filter(section => hidden.includes(section)),
+    };
 }
 
 function buildConEvent(raw: unknown) {
@@ -840,12 +856,17 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
         // it world-readable behind a client-side flag. Written whole, not merged, so
         // a section deleted in the draft cannot survive in the mirror. `updatedBy`
         // is deliberately left out — nothing about who edits belongs on a public doc.
+        // A hidden section's copy stays out of it for the same reason the whole
+        // mirror does while unpublished: hiding a line-up should not leave it
+        // readable to anyone who asks the database directly.
         const merged = {...stored, ...updateData};
-        const published = (merged.settings as {published?: boolean} | undefined)?.published === true;
+        const settings = merged.settings as {published?: boolean; hiddenSections?: string[]} | undefined;
+        const published = settings?.published === true;
         if (published) {
+            const hidden = new Set<string>(settings?.hiddenSections ?? []);
             const mirror: Record<string, any> = {updatedAt: FieldValue.serverTimestamp()};
             for (const section of CON_SECTIONS) {
-                if (merged[section] !== undefined) mirror[section] = merged[section];
+                if (merged[section] !== undefined && !hidden.has(section)) mirror[section] = merged[section];
             }
             txn.set(publicRef, mirror);
         } else {

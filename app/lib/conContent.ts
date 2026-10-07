@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { createValueCache } from './collectionCache';
@@ -15,8 +16,11 @@ import {
     type Guest,
     GUESTS,
     HERO_VIDEO,
+    HIDEABLE_SECTIONS,
     IN_PERSON_SALES,
     type InPersonSales,
+    NAV_LINKS,
+    type NavLink,
     type Room,
     ROOM_ACCENTS,
     type RoomAccent,
@@ -119,7 +123,11 @@ const readSettings = (raw: unknown): ConSettings => {
     // Only an explicit `true` publishes. A missing or malformed field means "never
     // configured", and an unconfigured con is not one anybody has agreed to show.
     const s = obj(raw);
-    return {published: s.published === true};
+    const hidden = Array.isArray(s.hiddenSections) ? s.hiddenSections : [];
+    return {
+        published: s.published === true,
+        hiddenSections: HIDEABLE_SECTIONS.filter(section => hidden.includes(section)),
+    };
 };
 
 const readEvent = (raw: unknown): ConEvent => {
@@ -257,7 +265,7 @@ const publicCache = createValueCache<ConContent>('con content', async () => {
     const snap = await getDoc(doc(db, 'conContent', 'main'));
     const data = snap.data();
     if (!data) return DEFAULT_CON_CONTENT;
-    return {...readSections(data), settings: {published: true}};
+    return {...readSections(data), settings: {...readSettings(data.settings), published: true}};
 }, DEFAULT_CON_CONTENT);
 
 /**
@@ -330,6 +338,19 @@ export function useConVenue(): ConVenue | null {
         name: {en: venue.nameEn, zh: venue.nameCn || venue.nameEn},
         parkingUrl: `/parking?venue=${encodeURIComponent(venue.id)}`,
     };
+}
+
+/**
+ * The navbar and footer links, less any section an admin has hidden — a link to
+ * an anchor that is not on the page would scroll nowhere. Memoised because the
+ * navbar hands the ids to an IntersectionObserver that rebuilds on every new array.
+ */
+export function useConNavLinks(): NavLink[] {
+    const {hiddenSections} = useConContent().content.settings;
+    return useMemo(
+        () => NAV_LINKS.filter(link => !(hiddenSections as readonly string[]).includes(link.id)),
+        [hiddenSections],
+    );
 }
 
 /**

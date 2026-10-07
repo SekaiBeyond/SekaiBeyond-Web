@@ -42,6 +42,9 @@ export const ConPage = () => {
     // A read that failed falls back to the shipped defaults, and those are not a
     // page anybody agreed to publish.
     const published = content.settings.published && !failed;
+    // Staff previewing the draft see these gone too, so the preview stays the page
+    // the public will get.
+    const hidden = content.settings.hiddenSections;
 
     // The switch and the viewer's group both arrive asynchronously. Rendering
     // before either is known would flash an unpublished con at the public, which is
@@ -72,8 +75,8 @@ export const ConPage = () => {
                 <About/>
                 <Schedule/>
                 <Lineup/>
-                <Guests/>
-                <Vendors/>
+                {!hidden.includes('guests') && <Guests/>}
+                {!hidden.includes('vendors') && <Vendors/>}
                 <Faq/>
             </main>
             <Footer/>

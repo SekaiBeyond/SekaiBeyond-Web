@@ -35,10 +35,26 @@ export interface ConSettings {
      * the database directly.
      */
     published: boolean
+    /**
+     * Sections taken off the page, its navbar and its footer. Kept in
+     * HIDEABLE_SECTIONS order so the editor's dirty check, which compares JSON,
+     * does not see a reordering as a change.
+     */
+    hiddenSections: HideableSection[]
 }
+
+/**
+ * The sections an admin can hide. Each value is both the section's anchor id
+ * and its key in the editable content, so hiding one also leaves its copy out
+ * of the public `conContent/main` mirror.
+ */
+export const HIDEABLE_SECTIONS = ['guests', 'vendors'] as const;
+
+export type HideableSection = typeof HIDEABLE_SECTIONS[number]
 
 export const CON_SETTINGS: ConSettings = {
     published: false,
+    hiddenSections: [],
 };
 
 /** Shown in the hero, the navbar logo, and the footer. */

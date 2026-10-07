@@ -4,7 +4,14 @@ import { MAX_IMAGE_SIZE_MB, MAX_VIDEO_SIZE_MB } from '~/constants';
 import { callSaveConContent, callUploadAdminImage, callUploadConVideo } from '~/lib/firebase';
 import { type ConContent, type ConContentSection, refreshConContent, useConDraft, } from '~/lib/conContent';
 import { useVenues } from '~/lib/venues';
-import { type EarlyBird, type InPersonSession, ROOM_ACCENTS, type RoomAccent } from '~/pages/con/content';
+import {
+    type EarlyBird,
+    HIDEABLE_SECTIONS,
+    type HideableSection,
+    type InPersonSession,
+    ROOM_ACCENTS,
+    type RoomAccent,
+} from '~/pages/con/content';
 import type { Localized } from '~/pages/con/i18n';
 import { formatPrice, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/con/utils';
 import { type ShowToast, validateVideoFile } from './utils';
@@ -742,6 +749,27 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
     );
 };
 
+/** Kept in HIDEABLE_SECTIONS order, so ticking a box off and on again reads as no change. */
+const setHidden = (hidden: HideableSection[], section: HideableSection, hide: boolean): HideableSection[] =>
+    HIDEABLE_SECTIONS.filter(s => (s === section ? hide : hidden.includes(s)));
+
+/**
+ * Flags a section whose saved settings keep it off /con, so nobody edits it
+ * wondering why the page has not changed.
+ */
+const HiddenSectionNote = ({content, section}: {content: ConContent; section: HideableSection}) => {
+    const {isEnglish} = useLanguage();
+    if (!content.settings.hiddenSections.includes(section)) return null;
+
+    return (
+        <p className="admin-helper-text admin-con-warning">
+            {isEnglish
+                ? 'Hidden from /con. Show it again under Page Visibility.'
+                : '已在 /con 隐藏。可在「页面可见性」中重新显示。'}
+        </p>
+    );
+};
+
 const SettingsSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('settings', content.settings, loading, showToast);
@@ -761,7 +789,7 @@ const SettingsSection = ({content, loading, showToast, readOnly}: SectionProps) 
                 <input
                     type="checkbox"
                     checked={draft.published}
-                    onChange={e => !readOnly && setDraft({published: e.target.checked})}
+                    onChange={e => !readOnly && setDraft(prev => ({...prev, published: e.target.checked}))}
                     disabled={readOnly}
                 />
                 <span>
@@ -778,6 +806,26 @@ const SettingsSection = ({content, loading, showToast, readOnly}: SectionProps) 
                         ? 'Hidden from the public, and the saved copy is staff-only until you publish — safe for an unannounced line-up.'
                         : '当前对公众隐藏，且在发布前已保存的内容仅工作人员可见——可安全用于尚未公布的阵容。')}
             </p>
+
+            <p className="admin-helper-text admin-mt-12">
+                {isEnglish
+                    ? 'Sections to show. An unticked section leaves the page, the navbar and the footer, and its saved copy stays staff-only, so it can be filled in before it is announced.'
+                    : '要显示的板块。取消勾选的板块将从页面、导航栏与页脚中移除，其已保存的内容仅工作人员可见，可在公布前先行填写。'}
+            </p>
+            {HIDEABLE_SECTIONS.map(section => (
+                <label key={section} className="admin-checkbox-label admin-mt-8">
+                    <input
+                        type="checkbox"
+                        checked={!draft.hiddenSections.includes(section)}
+                        onChange={e => !readOnly && setDraft(prev => ({
+                            ...prev,
+                            hiddenSections: setHidden(prev.hiddenSections, section, !e.target.checked),
+                        }))}
+                        disabled={readOnly}
+                    />
+                    <span>{isEnglish ? SECTION_LABELS[section].en : SECTION_LABELS[section].zh}</span>
+                </label>
+            ))}
         </SectionShell>
     );
 };
@@ -1135,6 +1183,7 @@ const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) =>
             busyLabel={{en: 'Waiting for the photo upload...', zh: '正在等待照片上传...'}}
             readOnly={readOnly}
         >
+            <HiddenSectionNote content={content} section="guests"/>
             <div className="admin-con-list">
                 {draft.length === 0 && <EmptyRow label={{en: 'No guests announced yet.', zh: '暂未公布嘉宾。'}}/>}
 
@@ -1240,6 +1289,7 @@ const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) =
             editor={editor}
             readOnly={readOnly}
         >
+            <HiddenSectionNote content={content} section="vendors"/>
             <div className="admin-con-list">
                 {draft.list.length === 0 && <EmptyRow label={{en: 'No tables listed yet.', zh: '暂无摊位。'}}/>}
 
