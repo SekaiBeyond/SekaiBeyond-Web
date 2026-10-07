@@ -271,7 +271,7 @@
     transform: scale(1.08);
 }
 
-/* Hero — Bilibili reel or a self-hosted loop as the backdrop */
+/* Hero — a self-hosted loop as the backdrop */
 
 .sbc-hero {
     position: relative;
@@ -296,7 +296,6 @@
     pointer-events: none;
 }
 
-/* A self-hosted loop needs no crop tricks — it is our own file, chrome-free. */
 .sbc-hero-clip {
     position: absolute;
     inset: 0;
@@ -306,33 +305,13 @@
     object-position: center;
 }
 
-/*
- * The iframe is blown up past the viewport on purpose: it pushes Bilibili's own
- * control bar, logo, and title overlay outside the visible area so the reel
- * reads as a background plate rather than an embedded player.
- */
-.sbc-hero-frame {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 100vw;
-    height: 56.25vw; /* 16:9 */
-    min-width: 177.78vh; /* cover tall viewports too */
-    min-height: 100vh;
-    border: 0;
-    transform: translate(-50%, -50%) scale(1.35);
-    transform-origin: center;
-}
-
-.sbc-hero-poster {
+.sbc-hero-backdrop {
     position: absolute;
     inset: 0;
     background-color: var(--sbc-night-800);
     background-image: radial-gradient(circle at 20% 20%, rgba(255, 107, 157, 0.45), transparent 55%),
     radial-gradient(circle at 80% 30%, rgba(72, 219, 251, 0.35), transparent 55%),
     radial-gradient(circle at 50% 85%, rgba(254, 202, 87, 0.35), transparent 55%);
-    background-size: cover;
-    background-position: center;
 }
 
 .sbc-hero-scrim {
@@ -1809,10 +1788,11 @@
 }
 
 /* The preview column stretches to the controls' height and the preview fills it,
-   so the two sides line up. */
+   so the two sides line up. The controls get the wider share so the photo buttons
+   fit beside the upload copy. */
 .sbc-lineup-editor {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     gap: 32px;
     align-items: stretch;
 }
@@ -1908,21 +1888,31 @@
 .sbc-lineup-controls {
     min-width: 0;
     padding: 22px;
+    container-type: inline-size;
     border: 1px solid rgba(255, 107, 157, 0.14);
     border-radius: 24px;
     background: #fff;
     box-shadow: var(--shadow-soft);
 }
 
+/* The buttons take the width their labels need, so "Choose photo" stays on one
+   line; the copy gets the rest. */
 .sbc-lineup-upload-card {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(240px, 0.9fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 14px;
     padding: 14px;
     border: 1px dashed rgba(255, 107, 157, 0.4);
     border-radius: 16px;
     background: rgba(255, 107, 157, 0.045);
+}
+
+/* Too narrow for both side by side, so the buttons drop below the copy. */
+@container (max-width: 520px) {
+    .sbc-lineup-upload-card {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 .sbc-lineup-upload-copy {

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Tracks a CSS media query in JS. The con hero uses it to keep the Bilibili
- * iframe off phones and off reduced-motion setups entirely, rather than just
- * hiding it with CSS.
+ * Tracks a CSS media query in JS. The con hero uses it to keep its clip off
+ * reduced-motion setups entirely, rather than just hiding it with CSS.
  */
 export const useMediaQuery = (query: string) => {
     const [matches, setMatches] = useState(false);

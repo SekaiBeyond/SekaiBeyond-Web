@@ -3,34 +3,11 @@ import { Link } from 'react-router';
 import { LuArrowUpRight, LuCalendar, LuClock, LuMapPin, LuSquareParking } from 'react-icons/lu';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent, useConVenue } from '~/lib/conContent';
-import { CON_NAME, HERO_EMBED, VENUE_MAP_URL, VENUE_TBA } from '~/pages/con/content';
+import { CON_NAME, VENUE_MAP_URL, VENUE_TBA } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { useMediaQuery } from '~/pages/con/hooks';
 import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/con/utils';
 import { Countdown } from '~/pages/con/Countdown';
-
-/**
- * Bilibili's embed player only autoplays when it is muted, ignores autoplay
- * entirely on mobile browsers, and has no loop parameter — it plays once and
- * stops. A clip uploaded in Admin → Con Content → Hero Video is preferred for
- * exactly those reasons; this is the fallback when none is configured.
- */
-const buildPlayerUrl = () => {
-    const params = new URLSearchParams({
-        isOutside: 'true',
-        aid: HERO_EMBED.aid,
-        bvid: HERO_EMBED.bvid,
-        cid: HERO_EMBED.cid,
-        p: '1',
-        autoplay: '1',
-        muted: '1',
-        danmaku: '0',
-        hideCoverInfo: '1',
-        noEndPanel: '1',
-        high_quality: '1',
-    });
-    return `https://player.bilibili.com/player.html?${params.toString()}`;
-};
 
 const generateSparkStyles = () =>
     Array.from({length: 7}, () => ({
@@ -44,54 +21,35 @@ const generateSparkStyles = () =>
 export const Hero = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
-    const {content, loading} = useConContent();
+    const {content} = useConContent();
     const venue = useConVenue();
     const {event, heroVideo} = content;
     const sparks = useMemo(generateSparkStyles, []);
 
-    const isWide = useMediaQuery('(min-width: 769px)');
     const allowsMotion = useMediaQuery('(prefers-reduced-motion: no-preference)');
 
-    // A local clip is muted + playsinline, so phones autoplay it happily; the
-    // Bilibili iframe they refuse outright, hence the width gate on that path.
-    const hasClip = Boolean(heroVideo.webm);
-    const showClip = hasClip && allowsMotion;
-    // Which clip is configured is not known until the content lands, so the embed
-    // waits for it. Starting the iframe on the defaults would fetch a player we
-    // then tear down a moment later, and the swap is visible.
-    const showEmbed = !hasClip && !loading && isWide && allowsMotion;
-
-    const posterStyle = heroVideo.poster
-        ? {backgroundImage: `url('${heroVideo.poster}')`}
-        : undefined;
+    // Muted + playsinline, so phones autoplay it too.
+    const showClip = Boolean(heroVideo.webm) && allowsMotion;
 
     return (
         <section id="con-home" className="sbc-hero">
             <div className="sbc-hero-media" aria-hidden="true">
                 {/*
-                 * The floor every other layer is laid on, rather than the branch
-                 * taken when there is nothing to lay: whatever the clip or the
-                 * embed above fails to do — a codec the browser will not decode,
-                 * a request that never answers, the seconds before the first frame
-                 * — ends on the poster instead of on nothing. The clip is a WebM
-                 * and nothing else, so this is not a rare path: Safari, iPhone and
-                 * iPad skip a `<source>` whose `type` they cannot decode, without
-                 * fetching it, and stay on this image for good.
+                 * The floor the clip is laid on: whatever it fails to do — a
+                 * request that never answers, the seconds before the first frame —
+                 * ends on this gradient instead of on nothing. It is also the whole
+                 * backdrop when no clip is uploaded, and for reduced-motion visitors.
                  *
                  * Both layers are inset-0 absolutes with no z-index, so the order
                  * they are written in is the order they paint.
                  */}
-                <div className="sbc-hero-poster" style={posterStyle}/>
+                <div className="sbc-hero-backdrop"/>
 
                 {showClip && (
                     // Keyed on the source so swapping the clip in the admin panel
                     // remounts the element; React alone would leave <video> playing
                     // the file it already loaded, since changing a <source> child
                     // does nothing without a .load() call.
-                    //
-                    // No `poster` of its own: the layer underneath is that image
-                    // already, and an empty one there would leave a clip that is
-                    // still buffering painting over the gradient with nothing.
                     <video
                         key={heroVideo.webm}
                         className="sbc-hero-clip"
@@ -104,18 +62,6 @@ export const Hero = () => {
                     >
                         <source src={heroVideo.webm} type="video/webm"/>
                     </video>
-                )}
-
-                {showEmbed && (
-                    <iframe
-                        className="sbc-hero-frame"
-                        src={buildPlayerUrl()}
-                        title=""
-                        tabIndex={-1}
-                        loading="eager"
-                        referrerPolicy="no-referrer"
-                        sandbox="allow-scripts allow-same-origin allow-presentation"
-                    />
                 )}
             </div>
 

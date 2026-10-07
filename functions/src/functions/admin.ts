@@ -438,7 +438,7 @@ function requireISODate(raw: unknown, name: string): string {
 }
 
 /**
- * Con assets — guest photos, the hero clip and its poster — come from two places:
+ * Con assets — guest photos and the hero clip — come from two places:
  * an admin upload (a Storage download URL) or a file committed under public/ (a
  * root-relative path). Anything else — an off-site URL, a traversal attempt — is
  * rejected, so nothing the page loads is served from a host we do not control.
@@ -519,14 +519,12 @@ function buildConEvent(raw: unknown) {
 }
 
 /**
- * The hero's background loop. Both fields are optional: with neither set the hero
- * falls back to the Bilibili embed, which is what the page did before this
- * section existed.
+ * The hero's background loop. Optional: with no clip the hero shows a gradient.
  *
  * The extension is pinned to the container the source element claims. A .webm url
  * holding something else is not a security problem, but it is an invisible one —
  * a browser that cannot decode what it finds drops the source silently, and the
- * hero would sit on the poster with nothing to say why.
+ * hero would sit on the gradient with nothing to say why.
  */
 function buildConHeroVideo(raw: unknown) {
     const v = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
@@ -534,7 +532,7 @@ function buildConHeroVideo(raw: unknown) {
     if (webm && !/\.webm(\?|$)/i.test(webm)) {
         throw new HttpsError("invalid-argument", "The clip must be a .webm file.");
     }
-    return {webm, poster: validateConAsset(v.poster, "hero poster")};
+    return {webm};
 }
 
 /**

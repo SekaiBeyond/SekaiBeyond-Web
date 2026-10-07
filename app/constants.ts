@@ -6,9 +6,7 @@ export const MAX_VIDEO_SIZE_MB = Number(import.meta.env.VITE_MAX_VIDEO_SIZE_MB ?
 export const FOUNDED_DATE = new Date('2024-12-05T00:00:00Z');
 
 export const BILIBILI_VIDEO = {
-    aid: "116106639514970",
     bvid: "BV1GsfjB7E6J",
-    cid: "36189832448",
     p: "1",
 }
 

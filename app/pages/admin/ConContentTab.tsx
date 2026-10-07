@@ -1,6 +1,6 @@
 import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { MAX_IMAGE_SIZE_MB, MAX_VIDEO_SIZE_MB } from '~/constants';
+import { MAX_VIDEO_SIZE_MB } from '~/constants';
 import { callSaveConContent, callUploadAdminImage, callUploadConVideo } from '~/lib/firebase';
 import { type ConContent, type ConContentSection, refreshConContent, useConDraft, } from '~/lib/conContent';
 import { useVenues } from '~/lib/venues';
@@ -526,14 +526,6 @@ const ClipField = ({url, uploading, disabled, onPick, onClear, readOnly}: ClipFi
                 </span>
             </div>
 
-            <p className="admin-helper-text">
-                {isEnglish
-                    ? 'Plays on Chrome, Firefox and Edge. Safari, iPhone and iPad get the poster below instead — '
-                    + 'they do not download the clip at all.'
-                    : '在 Chrome、Firefox 与 Edge 中播放。Safari、iPhone 与 iPad 将改为显示下方的封面图——'
-                    + '这些设备完全不会下载该视频。'}
-            </p>
-
             {url ? (
                 // Muted and looping like the hero itself, so the preview shows the
                 // loop point — the one thing about a background clip that is easy
@@ -584,17 +576,12 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('heroVideo', content.heroVideo, loading, showToast);
     const {draft, setDraft} = editor;
-    /**
-     * Which upload is in flight, or null. Held beside the draft for the same
-     * reason the guest avatar's preview is: a `blob:` URL is not something the
-     * server will accept, and Save is blocked until it resolves either way.
-     */
-    const [busy, setBusy] = useState<'clip' | 'poster' | null>(null);
-    const [posterPreview, setPosterPreview] = useState<string | null>(null);
+    /** True while the clip uploads; Save waits for it rather than going out without it. */
+    const [busy, setBusy] = useState(false);
 
     const uploadClip = async (file: File) => {
         if (!validateVideoFile(file, isEnglish, showToast)) return;
-        setBusy('clip');
+        setBusy(true);
         try {
             showToast(isEnglish ? 'Uploading clip...' : '正在上传视频...', 'warning');
             // Time-stamped so a replacement lands on a new object: the old URL is
@@ -606,41 +593,19 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Clip upload failed.' : '视频上传失败。'), 'error');
         } finally {
-            setBusy(null);
+            setBusy(false);
         }
     };
-
-    const uploadPoster = async (file: File, previewUrl: string) => {
-        setPosterPreview(previewUrl);
-        setBusy('poster');
-        try {
-            showToast(isEnglish ? 'Uploading poster...' : '正在上传封面图...', 'warning');
-            const url = await callUploadAdminImage(file, `con/hero-poster-${Date.now().toString(36)}.webp`);
-            setDraft(prev => ({...prev, poster: url}));
-            showToast(isEnglish ? 'Poster uploaded.' : '封面图已上传。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Poster upload failed.' : '封面图上传失败。'), 'error');
-        } finally {
-            URL.revokeObjectURL(previewUrl);
-            setPosterPreview(null);
-            setBusy(null);
-        }
-    };
-
-    const hasClip = Boolean(draft.webm);
 
     return (
         <SectionShell
             section="heroVideo"
             helper={{
-                en: 'The looping backdrop behind the hero: a WebM clip for the browsers that play one, and a '
-                    + 'poster image for the rest. Upload both — with no clip the hero falls back to the Bilibili '
-                    + 'reel, which plays once and is skipped on phones entirely.',
-                zh: '首屏背后的背景：为支持的浏览器提供 WebM 循环视频，其余设备显示封面图。请两者都上传——'
-                    + '未上传视频时，首屏将回退到 B 站视频，该视频只播放一次，且在手机上不会显示。',
+                en: 'The looping WebM clip behind the hero. With no clip the hero shows a gradient.',
+                zh: '首屏背后的 WebM 循环视频。未上传视频时，首屏显示渐变背景。',
             }}
             editor={editor}
-            busy={busy !== null}
+            busy={busy}
             busyLabel={{en: 'Waiting for the upload...', zh: '正在等待上传...'}}
             readOnly={readOnly}
         >
@@ -658,91 +623,19 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
             <div className="admin-con-list admin-mt-12">
                 <ClipField
                     url={draft.webm}
-                    uploading={busy === 'clip'}
-                    disabled={busy !== null}
+                    uploading={busy}
+                    disabled={busy}
                     onPick={uploadClip}
                     onClear={() => setDraft(prev => ({...prev, webm: ''}))}
                     readOnly={readOnly}
                 />
-
-                <div className="admin-con-item">
-                    <div className="admin-con-card-head">
-                        <span className="admin-con-card-title">
-                            {isEnglish ? 'Poster image' : '封面图'}
-                            {busy === 'poster' && (
-                                <span className="admin-con-dirty">{isEnglish ? 'Uploading...' : '上传中...'}</span>
-                            )}
-                        </span>
-                    </div>
-                    <p className="admin-helper-text">
-                        {isEnglish
-                            ? 'Not optional in practice: it is the whole hero for Safari, iPhone and iPad, which '
-                            + 'never play the clip. Also shown while the clip buffers, and to visitors who have '
-                            + 'asked their device to reduce motion. With no poster, all of them get a gradient.'
-                            : '实际上并非可选项：对于不会播放该视频的 Safari、iPhone 与 iPad，封面图就是整个首屏。'
-                            + '此外，视频缓冲期间以及访客开启「减少动态效果」时也会显示。未上传时，'
-                            + '上述所有情况均显示渐变背景。'}
-                    </p>
-
-                    {draft.poster && !posterPreview && (
-                        <img className="admin-video-cover-preview" src={draft.poster} alt=""/>
-                    )}
-
-                    {!readOnly && (
-                        <div className="admin-mt-12">
-                            <ImageUploadField
-                                label="Poster"
-                                labelCn="封面图"
-                                preview={posterPreview}
-                                onFileChange={uploadPoster}
-                                onCleanupPreview={url => URL.revokeObjectURL(url)}
-                                convertToWebp
-                                showToast={showToast}
-                            />
-                            <p className="admin-helper-text">
-                                {isEnglish
-                                    ? `Any image up to ${MAX_IMAGE_SIZE_MB} MB; it is converted to WebP for you. `
-                                    + 'A frame from the clip itself works best.'
-                                    : `任意图片，最大 ${MAX_IMAGE_SIZE_MB} MB，将自动转换为 WebP 格式。`
-                                    + '建议直接使用视频中的某一帧。'}
-                            </p>
-                        </div>
-                    )}
-
-                    {draft.poster && !readOnly && (
-                        <div className="admin-btn-row admin-mt-12">
-                            <button
-                                className="admin-btn admin-btn--chip admin-btn-sm"
-                                onClick={() => setDraft(prev => ({...prev, poster: ''}))}
-                                disabled={busy !== null}
-                            >
-                                {isEnglish ? 'Remove poster' : '移除封面图'}
-                            </button>
-                        </div>
-                    )}
-                </div>
             </div>
 
-            {/*
-              * A clip with no poster is the one arrangement that looks finished
-              * from the panel and is not: whoever uploaded it sees it playing,
-              * and every Safari, iPhone and iPad visitor gets the gradient.
-              *
-              * Not .admin-helper-text on the warning: it is defined after
-              * .admin-warning-hint and would take the colour back off it.
-              */}
-            {hasClip && !draft.poster && (
-                <p className="admin-title-hint admin-warning-hint">
-                    {isEnglish
-                        ? '⚠️ No poster uploaded — Safari, iPhone and iPad will show the gradient, not the clip.'
-                        : '⚠️ 未上传封面图——Safari、iPhone 与 iPad 将显示渐变背景，而非该视频。'}
-                </p>
-            )}
-            {!hasClip && (
+            {!draft.webm && (
                 <p className="admin-helper-text admin-mt-12">
                     {isEnglish
-                        ? 'No clip uploaded — the hero is currently showing the Bilibili reel, which does not loop.'
-                        : '尚未上传视频——首屏当前显示的是 B 站视频，该视频不会循环播放。'}
+                        ? 'No clip uploaded — the hero is currently showing a gradient.'
+                        : '尚未上传视频——首屏当前显示的是渐变背景。'}
                 </p>
             )}
         </SectionShell>

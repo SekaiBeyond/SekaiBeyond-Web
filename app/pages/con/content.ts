@@ -10,15 +10,13 @@
  * still works; it sets what a visitor sees before the fetch lands, and what they
  * keep seeing for any section an admin has never touched.
  *
- * The rest — HERO_EMBED, NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS —
- * is code-only, because it is tied to section anchors an admin cannot add or to
- * the reel the main site already points at. ROOM_ACCENTS is code-only for the
+ * The rest — NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS — is code-only, because
+ * it is tied to section anchors an admin cannot add. ROOM_ACCENTS is code-only for the
  * same reason (each value is a CSS class), but which rooms exist and which accent
  * each wears is data. CON_NAME is code-only because the con's name does not
  * change between editions.
  */
 
-import { BILIBILI_VIDEO } from '~/constants';
 import type { Localized } from '~/pages/con/i18n';
 
 /** Page-level switches, kept apart from the copy they govern. */
@@ -115,39 +113,16 @@ export const CON: ConEvent = {
     ticketUrl: '',
 };
 
-/** The featured reel, shared with the main site's video section. */
-export const HERO_EMBED = {
-    aid: BILIBILI_VIDEO.aid,
-    bvid: BILIBILI_VIDEO.bvid,
-    cid: BILIBILI_VIDEO.cid,
-};
-
 /**
- * The hero backdrop, in order of preference:
- *
- *   1. `webm` — a short silent clip uploaded in Admin → Con Content → Hero Video.
- *      This is the only option that actually loops, and it autoplays on phones too.
- *   2. The `HERO_EMBED` reel above — plays once, desktop only. Bilibili's iframe
- *      has no loop parameter and is cross-origin, so we cannot restart it ourselves.
- *   3. `poster`, or a gradient if that is empty too.
- *
- * One format on purpose, and not the universal one. An MP4 would play everywhere
- * a WebM does and in Safari besides, but the point of a background plate is that
- * it costs little: a browser skips a `<source>` whose `type` it cannot decode
- * without fetching it, so Safari, iPhone and iPad spend nothing here and rest on
- * `poster` — which is what they would see under a reduced-motion setting anyway.
- * That makes the poster the picture half the audience actually gets, rather than
- * a frame shown while the clip buffers.
+ * The hero backdrop: a short silent loop uploaded in Admin → Con Content → Hero
+ * Video. With none uploaded, or for a reduced-motion visitor, the hero is a gradient.
  */
 export interface ConHeroVideo {
     webm: string;
-    /** The still Safari, iOS and reduced-motion visitors see in place of the clip. */
-    poster: string;
 }
 
 export const HERO_VIDEO: ConHeroVideo = {
     webm: '',
-    poster: '',
 };
 
 export interface NavLink {
