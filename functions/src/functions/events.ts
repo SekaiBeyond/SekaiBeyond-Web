@@ -107,6 +107,22 @@ export const onPastEventDeleted = onDocumentDeleted(
             console.error(`onPastEventDeleted: cascade failed for ${eventId}`, err);
         }
 
+        // Firestore does not delete subcollections with their parent: a paid
+        // event's attendees and email template, copied here when it was archived.
+        try {
+            const orphanedOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+            for (const subCol of ["attendees", "emailTemplate"]) {
+                const snap = await db.collection("pastEvents").doc(eventId)
+                    .collection(subCol).get();
+                for (const d of snap.docs) {
+                    orphanedOps.push(b => b.delete(d.ref));
+                }
+            }
+            if (orphanedOps.length > 0) await commitInChunks(orphanedOps);
+        } catch (err) {
+            console.error(`onPastEventDeleted: subcollection cleanup failed for ${eventId}`, err);
+        }
+
         await deleteStorageFile(data.icon ?? "", ["events/", "upcoming-events/"])
             .catch(logStorageCleanupError(`onPastEventDeleted ${eventId}`));
 
