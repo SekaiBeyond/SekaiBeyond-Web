@@ -19,8 +19,8 @@ import { db } from "./firebase";
 // sentToday = confirmed + reserved. Keeping the two separate is what stops a
 // completing send from clobbering a concurrent admin's reservation: a header
 // write only ever releases its *own* delta from `reserved`, never the whole
-// counter. Exported so resendClient shares the exact same doc reference.
-export const QUOTA_DOC = db.collection("system").doc("resendQuota");
+// counter.
+const QUOTA_DOC = db.collection("system").doc("resendQuota");
 
 function num(v: unknown): number {
     return typeof v === "number" && Number.isFinite(v) ? v : 0;
