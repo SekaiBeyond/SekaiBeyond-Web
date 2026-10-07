@@ -233,10 +233,10 @@ function isBilibiliImageUrl(value: string): boolean {
     }
 }
 
-// Con edition posters are config/con-<year>-<stamp>.webp, or config/con-<year>.webp
-// from before they were time-stamped. Matched exactly rather than by prefix: the
-// con page's guest photos (config/con-guest-*) share the "config/con-" one.
-const CON_EDITION_IMAGE_PATH = /^config\/con-\d+[-.]/;
+// Con edition posters are config/con-<year>-<stamp>.webp. Matched exactly rather
+// than by prefix: the con page's guest photos (config/con-guest-*) share the
+// "config/con-" one.
+const CON_EDITION_IMAGE_PATH = /^config\/con-\d+-/;
 
 export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -381,10 +381,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     });
 
     // Each upload writes a new time-stamped object, so the image this save
-    // replaces — or a reset drops — is left behind unless deleted here. Compared
-    // by path rather than URL: a client from before uploads were time-stamped
-    // overwrites config/con-<year>.webp in place, which can give the same object
-    // a new URL.
+    // replaces — or a reset drops — is left behind unless deleted here.
     const oldConImagePath = extractStoragePath(oldConImage);
     if (oldConImagePath
         && oldConImagePath !== extractStoragePath(conEdition?.image ?? "")

@@ -146,8 +146,7 @@ const readEvent = (raw: unknown): ConEvent => {
 
 /**
  * Optional — a con with no clip uploaded yet stores an empty string, and the hero
- * shows its gradient. A `poster` left over from when the hero had one is dropped
- * here.
+ * shows its gradient.
  */
 const readHeroVideo = (raw: unknown): ConHeroVideo => {
     if (!raw || typeof raw !== 'object') return HERO_VIDEO;
