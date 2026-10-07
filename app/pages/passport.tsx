@@ -25,12 +25,13 @@ import { type ShowToast, ToastContainer, useToasts } from '~/lib/useToasts';
  * What it renders depends on the passport, not on who is looking: an unclaimed
  * sticker is the passport shown shut, a claimed one is its owner's public page
  * (no sign-in required), and an unknown code is a blank page stamped as having
- * no record. The owner also gets a
- * privacy toggle on their own passport.
+ * no record. The owner also gets a privacy toggle on their own passport.
  */
 export const PassportPage = () => {
     const {passportId: raw} = useParams();
     const {isEnglish} = useLanguage();
+    const {user, loading: authLoading} = useAuth();
+    const viewerUid = user?.uid ?? null;
     const passportId = normalizePassportCode(raw ?? '');
     const wellFormed = isPassportCodeShape(passportId, PASSPORT_ID_LENGTH);
 
@@ -43,8 +44,11 @@ export const PassportPage = () => {
         if (id === passportId) setNonce(n => n + 1);
     }), [passportId]);
 
+    // Resolved again when the viewer signs in or out: the server decides whether
+    // they own it, which is what shows them the privacy switch and, if they hid
+    // it, the page itself.
     useEffect(() => {
-        if (!wellFormed) return;
+        if (!wellFormed || authLoading) return;
         let stale = false;
         setResult(null);
         setFailed(false);
@@ -58,7 +62,7 @@ export const PassportPage = () => {
         return () => {
             stale = true;
         };
-    }, [passportId, wellFormed, nonce]);
+    }, [passportId, wellFormed, nonce, authLoading, viewerUid]);
 
     // A code that can't be a passport id is answered here rather than by the
     // server, which would give the same "invalid" either way.
@@ -464,7 +468,6 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
 
                     {/* A div, not <footer>: the landing page styles every footer element. */}
                     <div className="passport-book-foot">
-                        {/* Absent until the function that sends it is deployed. */}
                         {owner.uid && (
                             <Link to={`/profile?uid=${owner.uid}`} className="passport-profile-link">
                                 {isEnglish ? 'View profile' : '查看个人主页'}

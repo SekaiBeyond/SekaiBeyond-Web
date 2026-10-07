@@ -18,6 +18,7 @@ import {
 import { QrPreview, useQrDownload } from './qrExport';
 import { ScanTrendsSection } from '../../ScanTrends';
 import { QrSpotsMap } from './QrSpotsMap';
+import { refreshAfterSave } from '../../utils';
 
 const QR_SIZE = 240;
 
@@ -111,7 +112,7 @@ export const QrCodeDetail = ({
         setSaving(true);
         try {
             await callSaveQrCode({qrId: code.id, ...built.payload});
-            await onChanged();
+            await refreshAfterSave(onChanged, showToast, isEnglish);
             setEditing(null);
             showToast(isEnglish ? 'QR code updated.' : '二维码已更新。', 'success');
         } catch (e: any) {
@@ -128,7 +129,7 @@ export const QrCodeDetail = ({
         setDeleting(true);
         try {
             await callDeleteQrCode({qrId: code.id});
-            await onChanged();
+            await refreshAfterSave(onChanged, showToast, isEnglish);
             showToast(isEnglish ? 'QR code deleted.' : '二维码已删除。', 'warning');
             onBack();
         } catch (e: any) {

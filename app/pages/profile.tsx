@@ -35,10 +35,10 @@ import { ProfileSettingsTab } from '~/pages/ProfileSettingsTab';
 import { ProfileTickets, useHeldTickets } from '~/pages/ProfileTickets';
 import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 import { validateImageFile } from "~/pages/admin/utils";
+import { useModalEffects } from '~/lib/useModalEffects';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
 
 interface BadgeDef extends BaseBadgeDef {
-    holderPct?: number;
     createdByUid?: string;
     createdByName?: string;
     createdByLink?: string;
@@ -89,10 +89,11 @@ const BadgeCard = ({badge, earnedDate, isEnglish, onOpen}: {
         <span className="badge-icon-wrapper">
             <img src={badge.imageUrl} alt="" className="badge-icon"/>
         </span>
-        <span className="badge-label">{isEnglish ? badge.name : badge.nameCn}</span>
+        <span className="badge-label">{isEnglish ? badge.name : (badge.nameCn || badge.name)}</span>
         <span className="badge-tooltip" aria-hidden="true">
-            <span className="badge-tooltip-name">{isEnglish ? badge.name : badge.nameCn}</span>
-            <span className="badge-tooltip-desc">{isEnglish ? badge.description : badge.descriptionCn}</span>
+            <span className="badge-tooltip-name">{isEnglish ? badge.name : (badge.nameCn || badge.name)}</span>
+            <span
+                className="badge-tooltip-desc">{isEnglish ? badge.description : (badge.descriptionCn || badge.description)}</span>
             {earnedDate && (
                 <span className="badge-tooltip-date">
                     {isEnglish ? 'Earned ' : '获得于 '}
@@ -114,7 +115,7 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
     tagLabels?: string[];
     wasStaff?: boolean;
 }) => {
-    const title = isEnglish ? event.title : event.titleCn;
+    const title = isEnglish ? event.title : (event.titleCn || event.title);
     return (
         <div className="profile-event-card">
             <div className="profile-event-icon-wrapper">
@@ -198,6 +199,8 @@ export const ProfilePage = () => {
     const [viewedLoadError, setViewedLoadError] = useState(false);
     const {toasts, showToast} = useToasts();
     const [selectedBadge, setSelectedBadge] = useState<BadgeDef | null>(null);
+    const badgeModalRef = useRef<HTMLDivElement>(null);
+    useModalEffects(!!selectedBadge, badgeModalRef, () => setSelectedBadge(null));
     const {passports, failed: passportsFailed} = usePassportsByOwner(isViewingOther ? null : user?.uid ?? null);
     const {ticketEvents, failed: ticketsFailed} = useHeldTickets(isViewingOther ? null : user?.uid ?? null);
 
@@ -245,7 +248,6 @@ export const ProfilePage = () => {
                             description: data.description ?? '',
                             descriptionCn: data.descriptionCn ?? '',
                             imageUrl: data.imageUrl ?? '',
-                            holderPct: data.holderPct,
                             createdByUid: data.createdByUid ?? '',
                             createdByName: data.createdByName ?? '',
                             createdByLink: data.createdByLink ?? '',
@@ -614,7 +616,7 @@ export const ProfilePage = () => {
         ...(showEvents ? [stat('events', attendedEvents.length, 'Event', 'Events', '活动')] : []),
     ] : [];
     // Avatar uploads are a membership perk, but staff+ keep them without one —
-    // the only people blocked are plain users who have never paid.
+    // the only people blocked are plain users with no active membership.
     const canEdit = isOwnProfile && (isMember || hasPermission(profile!.group, 'staff'));
     // Non-members can't upload a photo, but may remove one an admin gave them.
     const canRemovePhoto = isOwnProfile && hasCustomPhoto;
@@ -768,7 +770,7 @@ export const ProfilePage = () => {
                                     className="profile-avatar-delete"
                                     onClick={handlePhotoDelete}
                                     type="button"
-                                    aria-label="Remove photo"
+                                    aria-label={isEnglish ? 'Remove photo' : '删除头像'}
                                 >
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                                          strokeLinecap="round" strokeLinejoin="round">
@@ -828,7 +830,7 @@ export const ProfilePage = () => {
                                             <>
                                                 <button type="button" className="profile-name-save"
                                                         onClick={() => void handleSaveName()}
-                                                        aria-label="Save name">
+                                                        aria-label={isEnglish ? 'Save name' : '保存名称'}>
                                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                                          strokeWidth="2.5"
                                                          strokeLinecap="round" strokeLinejoin="round">
@@ -837,7 +839,7 @@ export const ProfilePage = () => {
                                                 </button>
                                                 <button type="button" className="profile-name-cancel"
                                                         onClick={cancelEditingName}
-                                                        aria-label="Cancel editing">
+                                                        aria-label={isEnglish ? 'Cancel editing' : '取消编辑'}>
                                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                                          strokeWidth="2.5"
                                                          strokeLinecap="round" strokeLinejoin="round">
@@ -854,7 +856,7 @@ export const ProfilePage = () => {
                                         {canEdit && (
                                             <button className="profile-name-pencil" onClick={startEditingName}
                                                     type="button"
-                                                    aria-label="Edit name">
+                                                    aria-label={isEnglish ? 'Edit name' : '编辑名称'}>
                                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                                      strokeWidth="2"
                                                      strokeLinecap="round" strokeLinejoin="round">
@@ -1034,7 +1036,7 @@ export const ProfilePage = () => {
                                             tagLabels={event.tagIds
                                                 .map(id => tagMap.get(id))
                                                 .filter((t): t is NonNullable<typeof t> => !!t)
-                                                .map(t => isEnglish ? t.name : t.nameCn)}
+                                                .map(t => isEnglish ? t.name : (t.nameCn || t.name))}
                                         />
                                     ))}
                                 </div>
@@ -1044,16 +1046,18 @@ export const ProfilePage = () => {
                 </div>
             </div>
             {selectedBadge && (
-                <div className="badge-modal-overlay" onClick={() => setSelectedBadge(null)}>
+                <div ref={badgeModalRef} className="badge-modal-overlay" onClick={() => setSelectedBadge(null)}>
                     <div className="badge-modal-content" onClick={e => e.stopPropagation()}>
-                        <button className="badge-modal-close" onClick={() => setSelectedBadge(null)}>×</button>
+                        <button className="badge-modal-close" onClick={() => setSelectedBadge(null)}
+                                aria-label={isEnglish ? 'Close' : '关闭'}>×
+                        </button>
                         <div className="badge-modal-header">
                             <img src={selectedBadge.imageUrl}
-                                 alt={isEnglish ? selectedBadge.name : selectedBadge.nameCn}
+                                 alt={isEnglish ? selectedBadge.name : (selectedBadge.nameCn || selectedBadge.name)}
                                  className="badge-modal-icon"/>
-                            <h3 className="badge-modal-title">{isEnglish ? selectedBadge.name : selectedBadge.nameCn}</h3>
+                            <h3 className="badge-modal-title">{isEnglish ? selectedBadge.name : (selectedBadge.nameCn || selectedBadge.name)}</h3>
                         </div>
-                        <p className="badge-modal-desc">{isEnglish ? selectedBadge.description : selectedBadge.descriptionCn}</p>
+                        <p className="badge-modal-desc">{isEnglish ? selectedBadge.description : (selectedBadge.descriptionCn || selectedBadge.description)}</p>
                         <div className="badge-modal-meta">
                             {earnedDates[selectedBadge.id] && (
                                 <p className="badge-modal-date">
@@ -1062,14 +1066,6 @@ export const ProfilePage = () => {
                                         isEnglish ? 'en-US' : 'zh-CN',
                                         {year: 'numeric', month: 'short', day: 'numeric'}
                                     )}
-                                </p>
-                            )}
-                            {selectedBadge.holderPct != null && (
-                                <p className="badge-modal-pct">
-                                    <strong>{isEnglish ? 'Rarity' : '稀有度'}</strong>
-                                    {isEnglish
-                                        ? `${selectedBadge.holderPct}% of members`
-                                        : `${selectedBadge.holderPct}% 的成员拥有`}
                                 </p>
                             )}
                             {selectedBadge.createdByName && (

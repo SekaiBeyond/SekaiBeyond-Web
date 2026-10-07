@@ -1,5 +1,6 @@
 import { createCollectionCache, toDate } from './collectionCache';
 import { fetchScans, type ScanHistory } from './scans';
+import { hasCoordinates } from './venues';
 
 export type QrExpirationMode = 'none' | 'event' | 'date';
 
@@ -87,7 +88,7 @@ export function qrIsSocial(code: Pick<QrCode, 'platforms'>): boolean {
 
 /** A spot is "set" only when both coords are finite and not the (0, 0) sentinel. */
 export function qrHasSpot(code: Pick<QrCode, 'lat' | 'lng'>): boolean {
-    return Number.isFinite(code.lat) && Number.isFinite(code.lng) && !(code.lat === 0 && code.lng === 0);
+    return hasCoordinates(code.lat, code.lng);
 }
 
 /**

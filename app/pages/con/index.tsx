@@ -24,7 +24,7 @@ import { useT } from '~/pages/con/i18n';
  */
 export const ConPage = () => {
     const t = useT();
-    // Resolves to the published mirror, or to the draft when core staff are
+    // Resolves to the published mirror, or to the draft when staff are
     // previewing; `loading` already covers waiting on the viewer's group.
     const {content, loading: contentLoading, failed} = useConContent();
     // Fetched alongside the content so the venue name is there on first paint,

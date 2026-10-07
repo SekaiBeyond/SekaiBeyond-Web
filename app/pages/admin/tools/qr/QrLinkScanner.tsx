@@ -4,6 +4,7 @@ import { callSetQrSpot } from '~/lib/firebase';
 import { type QrCode, qrHasSpot, qrIsSocial } from '~/lib/qrCodes';
 import { useQrScanner } from '~/lib/useQrScanner';
 import { QrScannerViewport } from '~/pages/admin/QrScannerViewport';
+import { refreshAfterSave } from '../../utils';
 
 type LinkState = 'idle' | 'locating' | 'saving' | 'done' | 'error';
 
@@ -95,7 +96,7 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
                 setLinkState('saving');
                 try {
                     await callSetQrSpot({qrId: matched.id, lat: latitude, lng: longitude});
-                    await onLinked();
+                    await refreshAfterSave(onLinked, showToast, isEnglish);
                     setLinkState('done');
                     showToast(isEnglish
                         ? `Linked “${matched.label}” to your location.`

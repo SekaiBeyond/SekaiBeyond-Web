@@ -22,10 +22,6 @@ import { AdvancedMarker, APIProvider, InfoWindow, Map, useMap } from '@vis.gl/re
 /** Sentinel id for the venue marker's popup, kept distinct from any lot document id. */
 const VENUE_MARKER_ID = '__venue__';
 
-/**
- * Searchable venue picker shown in the parking-guide header. Defaults to the event's own
- * venue but lets visitors switch to any other venue to view its parking map and lots.
- */
 interface VenueSwitcherProps {
     venues: Venue[];
     selectedId: string;
@@ -33,6 +29,11 @@ interface VenueSwitcherProps {
     isEnglish: boolean;
 }
 
+/**
+ * Searchable venue picker shown in the parking-guide header. Defaults to the event's own
+ * venue, or the one a `?venue=` link names, but lets visitors switch to any other venue to
+ * view its parking map and lots.
+ */
 const VenueSwitcher = ({venues, selectedId, onSelect, isEnglish}: VenueSwitcherProps) => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -133,11 +134,6 @@ const VenueSwitcher = ({venues, selectedId, onSelect, isEnglish}: VenueSwitcherP
     );
 };
 
-/**
- * Searchable parking-lot finder shown in the info panel. Searches every mappable lot (not
- * just the venue's linked ones); picking one focuses it on the map and surfaces its
- * straight-line distance from the selected venue.
- */
 interface LotSearchProps {
     lots: ParkingLot[];
     selectedLotId: string | null;
@@ -146,6 +142,11 @@ interface LotSearchProps {
     isEnglish: boolean;
 }
 
+/**
+ * Searchable parking-lot finder shown in the info panel. Searches every mappable lot (not
+ * just the venue's linked ones); picking one focuses it on the map and surfaces its
+ * straight-line distance from the selected venue.
+ */
 const LotSearch = ({lots, selectedLotId, distanceFor, onSelect, isEnglish}: LotSearchProps) => {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -485,7 +486,6 @@ export const ParkingGuide = () => {
 
     return (
         <div className="parking-page">
-            {/* Decorative blobs */}
             <div className="parking-deco-blob parking-deco-blob--1"/>
             <div className="parking-deco-blob parking-deco-blob--2"/>
 
@@ -498,7 +498,6 @@ export const ParkingGuide = () => {
                 <LanguageSwitcher/>
             </div>
 
-            {/* Header */}
             <header className="parking-header">
                 <span className="parking-header-sparkle">✦</span>
                 <span className="parking-header-sparkle">✦</span>
@@ -518,10 +517,8 @@ export const ParkingGuide = () => {
                 </div>
             </header>
 
-            {/* Main content */}
             {venue ? (
                 <div className="parking-content">
-                    {/* Map */}
                     <div className="parking-map-container">
                         <div className="parking-map">
                             <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
@@ -554,7 +551,7 @@ export const ParkingGuide = () => {
                                         >
                                             <div className="parking-popup-content">
                                                 <div
-                                                    className="parking-popup-title">{isEnglish ? venue.nameEn : venue.nameCn}</div>
+                                                    className="parking-popup-title">{isEnglish ? venue.nameEn : (venue.nameCn || venue.nameEn)}</div>
                                                 <div
                                                     className="parking-popup-type">{isEnglish ? 'Event Venue' : '活动场地'}</div>
                                             </div>
@@ -596,7 +593,7 @@ export const ParkingGuide = () => {
                                                     >
                                                         <div className="parking-popup-content">
                                                             <div
-                                                                className="parking-popup-title">{isEnglish ? lot.name : lot.nameCn}</div>
+                                                                className="parking-popup-title">{isEnglish ? lot.name : (lot.nameCn || lot.name)}</div>
                                                             <div className="parking-popup-type">{typeLabel}</div>
                                                             {rateText && (
                                                                 <div className="parking-popup-type">💲 {rateText}</div>
@@ -646,7 +643,6 @@ export const ParkingGuide = () => {
                         </div>
                     </div>
 
-                    {/* Info panel */}
                     <div className="parking-info-panel">
                         {/* Find any parking lot and see its distance from the venue */}
                         <LotSearch
@@ -749,7 +745,6 @@ export const ParkingGuide = () => {
                 </div>
             )}
 
-            {/* Footer branding */}
             <div className="parking-footer">
                 <span className="parking-footer-text">
                     <span className="parking-footer-sparkle">✦</span>

@@ -8,6 +8,7 @@ import { BilingualFormField } from './BilingualFormField';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
 import { MapPicker } from './MapPicker';
 import { type LocationListHandle, useCardHighlight } from './useCardHighlight';
+import { refreshAfterSave } from './utils';
 
 interface VenueDraft {
     nameEn: string;
@@ -82,7 +83,7 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                 lng: createDraft.lng,
                 parkingLots: createDraft.parkingLots,
             });
-            await refreshVenues();
+            await refreshAfterSave(refreshVenues, showToast, isEnglish);
             setCreateDraft(emptyDraft());
             setShowCreate(false);
             showToast(isEnglish ? 'Venue created.' : '场地已创建。', 'success');
@@ -125,7 +126,7 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                 lng: editDraft.lng,
                 parkingLots: editDraft.parkingLots,
             });
-            await refreshVenues();
+            await refreshAfterSave(refreshVenues, showToast, isEnglish);
             setEditingId(null);
             showToast(isEnglish ? 'Venue updated.' : '场地已更新。', 'success');
         } catch (e: any) {
@@ -143,7 +144,7 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         setDeletingId(venue.id);
         try {
             await callDeleteVenue({venueId: venue.id});
-            await refreshVenues();
+            await refreshAfterSave(refreshVenues, showToast, isEnglish);
             if (editingId === venue.id) setEditingId(null);
             showToast(isEnglish ? 'Venue deleted.' : '场地已删除。', 'warning');
         } catch {

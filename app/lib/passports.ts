@@ -23,7 +23,7 @@ export interface Passport {
     status: PassportStatus;
     ownerUid: string | null;
     claimedAt: Date | null;
-    /** Days of membership this passport grants on claim (365 at generation). */
+    /** Days of membership this passport grants on claim: its design's term, copied at generation. */
     termDays: number;
     createdAt: Date | null;
     createdByName: string;
@@ -56,8 +56,8 @@ export interface PassportDesign {
 }
 
 /**
- * One scanned sticker, resolved for anyone — the only unauthenticated read of a
- * member's public data. It is keyed by the printed passport code, never by uid.
+ * One scanned sticker, resolved for anyone, signed in or not. It is keyed by the
+ * printed passport code, never by uid.
  * The owner's uid comes back only to link to their profile; `isOwner` is decided
  * server-side.
  *

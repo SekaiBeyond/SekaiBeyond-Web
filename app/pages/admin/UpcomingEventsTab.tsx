@@ -12,7 +12,7 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import type { UserRecord } from './types';
-import { fetchEventAttendees, fetchEventStaffCount, toDatetimeLocal } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount, refreshAfterSave, toDatetimeLocal } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { ClaimCodeSection } from './ClaimCodeSection';
 import { LocationFormField } from './LocationFormField';
@@ -241,13 +241,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 paid: form.paid,
             });
 
-            await refreshEvents();
-            // If the currently open event just flipped to paid, drop the tabs
-            // that are hidden for paid (codes, attendees) and clear cached state.
-            if (editingEvent && editingEvent.id === selectedEvent && form.paid) {
-                setEventAttendees([]);
-                setEventSubTab(prev => (prev === 'codes' || prev === 'attendees') ? 'tickets' : prev);
-            }
+            await refreshAfterSave(refreshEvents, showToast, isEnglish);
             showToast(
                 editingEvent
                     ? (isEnglish ? 'Event updated.' : '活动已更新。')
@@ -257,8 +251,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             setShowForm(false);
             resetForm();
             setEditingEvent(null);
-        } catch {
-            showToast(isEnglish ? 'Failed to save event.' : '保存活动失败。', 'error');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to save event.' : '保存活动失败。'), 'error');
         } finally {
             setSaving(false);
         }
@@ -268,7 +262,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         setArchiving(true);
         try {
             await callArchiveUpcomingEvent({eventId: event.id, tagIds: archiveTagIds});
-            await Promise.all([refreshEvents(), refreshPastEvents()]);
+            await refreshAfterSave(() => Promise.all([refreshEvents(), refreshPastEvents()]), showToast, isEnglish);
             setSelectedEvent(null);
             setShowArchive(false);
             setArchiveTagIds([]);
@@ -281,6 +275,13 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     };
 
     const selectedEvt = selectedEvent ? upcomingEvents.find(e => e.id === selectedEvent) ?? null : null;
+    // The sub-tab chosen on selection can belong to the other kind of event: a
+    // link into the panel selects before the event list has loaded, and an open
+    // event can be switched to or from paid. Derived rather than corrected in an
+    // effect, so the panel never renders a tab the event doesn't have.
+    const subTab = selectedEvt?.paid && (eventSubTab === 'codes' || eventSubTab === 'attendees') ? 'tickets'
+        : selectedEvt && !selectedEvt.paid && eventSubTab === 'tickets' ? 'codes'
+            : eventSubTab;
 
     return (
         <div className="admin-section">
@@ -506,7 +507,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 )}
                                 <div className="admin-event-card-info">
                                     <span
-                                        className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
+                                        className="admin-event-card-title">{isEnglish ? event.title : (event.titleCn || event.title)}</span>
                                     <span className="admin-event-card-date">
                                         {event.startAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
                                             year: 'numeric', month: 'short', day: 'numeric',
@@ -552,7 +553,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <img src={selectedEvt.poster} alt="" className="admin-event-detail-img"/>
                                 )}
                                 <div>
-                                    <h3>{isEnglish ? selectedEvt.title : selectedEvt.titleCn}</h3>
+                                    <h3>{isEnglish ? selectedEvt.title : (selectedEvt.titleCn || selectedEvt.title)}</h3>
                                     <p className="admin-event-detail-meta">
                                         <span>
                                             {selectedEvt.startAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
@@ -563,7 +564,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         <span>{eventLocationDisplay(selectedEvt.location, selectedEvt.locationCn, selectedEvt.venueId, venues, isEnglish)}</span>
                                     </p>
                                     <p className="admin-description-text">
-                                        {isEnglish ? selectedEvt.description : selectedEvt.descriptionCn}
+                                        {isEnglish ? selectedEvt.description : (selectedEvt.descriptionCn || selectedEvt.description)}
                                     </p>
                                 </div>
                             </div>
@@ -640,7 +641,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             <div className="admin-sub-tabs">
                                 {!selectedEvt.paid && (
                                     <button
-                                        className={`admin-sub-tab ${eventSubTab === 'codes' ? 'admin-sub-tab-active' : ''}`}
+                                        className={`admin-sub-tab ${subTab === 'codes' ? 'admin-sub-tab-active' : ''}`}
                                         onClick={() => setEventSubTab('codes')}
                                     >
                                         {isEnglish ? 'Check-in Code' : '签到码'}
@@ -648,7 +649,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 )}
                                 {!selectedEvt.paid && (
                                     <button
-                                        className={`admin-sub-tab ${eventSubTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
+                                        className={`admin-sub-tab ${subTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
                                         onClick={() => {
                                             setEventSubTab('attendees');
                                             loadEventAttendees(selectedEvent!).then();
@@ -662,14 +663,14 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 )}
                                 {selectedEvt.paid && (
                                     <button
-                                        className={`admin-sub-tab ${eventSubTab === 'tickets' ? 'admin-sub-tab-active' : ''}`}
+                                        className={`admin-sub-tab ${subTab === 'tickets' ? 'admin-sub-tab-active' : ''}`}
                                         onClick={() => setEventSubTab('tickets')}
                                     >
                                         {isEnglish ? 'Tickets' : '门票'}
                                     </button>
                                 )}
                                 <button
-                                    className={`admin-sub-tab ${eventSubTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
+                                    className={`admin-sub-tab ${subTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
                                     onClick={() => setEventSubTab('staff')}
                                 >
                                     {isEnglish ? 'Staff' : '工作人员'}
@@ -679,7 +680,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 </button>
                             </div>
 
-                            {eventSubTab === 'codes' && !selectedEvt.paid && (
+                            {subTab === 'codes' && !selectedEvt.paid && (
                                 <ClaimCodeSection
                                     eventId={selectedEvt.id}
                                     variant="checkin"
@@ -688,7 +689,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 />
                             )}
 
-                            {eventSubTab === 'attendees' && !selectedEvt.paid && (
+                            {subTab === 'attendees' && !selectedEvt.paid && (
                                 <EventAttendeesList
                                     loading={searchingAttendees}
                                     attendees={eventAttendees}
@@ -699,7 +700,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 />
                             )}
 
-                            {eventSubTab === 'staff' && !readOnly && (
+                            {subTab === 'staff' && !readOnly && (
                                 <ClaimCodeSection
                                     eventId={selectedEvt.id}
                                     variant="staff"
@@ -707,7 +708,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     eventEndAt={selectedEvt.endAt}
                                 />
                             )}
-                            {eventSubTab === 'staff' && (
+                            {subTab === 'staff' && (
                                 <EventStaffSection
                                     eventId={selectedEvt.id}
                                     showToast={showToast}
@@ -716,7 +717,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 />
                             )}
 
-                            {eventSubTab === 'tickets' && selectedEvt.paid && (
+                            {subTab === 'tickets' && selectedEvt.paid && (
                                 <TicketsSubtab
                                     event={selectedEvt}
                                     readOnly={readOnly}

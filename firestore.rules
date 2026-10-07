@@ -43,7 +43,7 @@ service cloud.firestore {
                 && isStaffOrAbove();
         }
 
-        // Event/badge claim codes — staff+ can read only; all mutations via Cloud Functions
+        // Event check-in codes — staff+ can read only; all mutations via Cloud Functions
         match /claimCodes/{codeId} {
             allow read: if request.auth != null
                 && isStaffOrAbove();
@@ -102,7 +102,7 @@ service cloud.firestore {
         }
 
         // Scheduled-mail overflow queue — core-staff+ can read for visibility;
-        // writes via Cloud Functions only. Drained at 00:05 LA by the
+        // writes via Cloud Functions only. Drained every 30 minutes by the
         // scheduledMailDrain function.
         match /scheduledMail/{docId} {
             allow read: if request.auth != null
@@ -140,7 +140,7 @@ service cloud.firestore {
         // web, not merely that the page declines to draw it:
         //   main  — the published mirror. Public, and written only while the con is
         //           published; unpublishing deletes it.
-        //   draft — what the admin panel edits and core staff preview. Staff+ only,
+        //   draft — what the admin panel edits and staff preview. Staff+ only,
         //           so an unannounced line-up is not readable by querying directly.
         // Any other document here is server-only.
         match /conContent/main {

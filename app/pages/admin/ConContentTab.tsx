@@ -12,7 +12,7 @@ import {
     ROOM_ACCENTS,
     type RoomAccent,
 } from '~/pages/con/content';
-import type { Localized } from '~/pages/con/i18n';
+import { type Localized, useT } from '~/pages/con/i18n';
 import { formatPrice, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/con/utils';
 import { type ShowToast, validateVideoFile } from './utils';
 import { ImageUploadField } from './ImageUploadField';
@@ -24,9 +24,9 @@ import { SectionNav } from './SectionNav';
  *
  * Each section owns its own Save button and writes only its own field, so two
  * people editing different parts of the page cannot clobber each other. The
- * parts of the con page that are not editable here — the nav links, the track
- * names, the about copy, the venue travel notes — are tied to section anchors or
- * to CSS class names, and stay in code.
+ * parts of the con page that are not editable here — the nav links, the about
+ * copy, the venue travel notes — are tied to section anchors or to CSS class
+ * names, and stay in code.
  */
 
 interface ConContentTabProps {
@@ -309,6 +309,8 @@ const AmountField = (
 interface RowActionsProps {
     onRemove: () => void;
     readOnly?: boolean;
+    /** Holds the row in place while something is due to land in the list by position. */
+    disabled?: boolean;
     /**
      * Reordering, for a section that keeps an order of its own. A section put in
      * order as it saves — the schedule, by start time — passes none of these and
@@ -319,7 +321,7 @@ interface RowActionsProps {
     onMove?: (delta: number) => void;
 }
 
-const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly}: RowActionsProps) => {
+const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly, disabled}: RowActionsProps) => {
     const {isEnglish} = useLanguage();
     if (readOnly) return null;
 
@@ -331,7 +333,7 @@ const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly}: RowActio
                         type="button"
                         className="admin-con-icon-btn"
                         onClick={() => onMove(-1)}
-                        disabled={index === 0}
+                        disabled={disabled || index === 0}
                         aria-label={isEnglish ? 'Move up' : '上移'}
                     >
                         ↑
@@ -340,7 +342,7 @@ const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly}: RowActio
                         type="button"
                         className="admin-con-icon-btn"
                         onClick={() => onMove(1)}
-                        disabled={index === count - 1}
+                        disabled={disabled || index === count - 1}
                         aria-label={isEnglish ? 'Move down' : '下移'}
                     >
                         ↓
@@ -351,6 +353,7 @@ const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly}: RowActio
                 type="button"
                 className="admin-con-icon-btn admin-con-icon-btn--danger"
                 onClick={onRemove}
+                disabled={disabled}
                 aria-label={isEnglish ? 'Remove' : '删除'}
             >
                 ×
@@ -672,8 +675,8 @@ const SettingsSection = ({content, loading, showToast, readOnly}: SectionProps) 
         <SectionShell
             section="settings"
             helper={{
-                en: 'While the page is unpublished, visitors get a short “coming soon” card and none of the content below leaves the admin panel. Core staff and the president still see the real page, with a banner along the bottom.',
-                zh: '未发布时，访客将看到简短的「敬请期待」提示页，下方内容不会离开管理面板。核心成员与社长仍可查看真实页面，底部会显示提示横幅。',
+                en: 'While the page is unpublished, visitors get a short “coming soon” card and none of the content below leaves the admin panel. Staff, core staff and the president still see the real page, with a banner along the bottom.',
+                zh: '未发布时，访客将看到简短的「敬请期待」提示页，下方内容不会离开管理面板。工作人员、核心成员与社长仍可查看真实页面，底部会显示提示横幅。',
             }}
             editor={editor}
             readOnly={readOnly}
@@ -827,6 +830,7 @@ const RoomsSection = ({content, loading, showToast, readOnly}: SectionProps) => 
 
 const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
+    const t = useT();
     const editor = useSectionEditor('schedule', content.schedule, loading, showToast);
     const {draft, setDraft} = editor;
     const [roomFilter, setRoomFilter] = useState<string | null>(null);
@@ -894,7 +898,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                             aria-pressed={activeRoom === room.id}
                             onClick={() => setRoomFilter(room.id)}
                         >
-                            {isEnglish ? room.name.en : room.name.zh}
+                            {t(room.name)}
                         </button>
                     ))}
                 </div>
@@ -980,7 +984,7 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                                         >
                                             {content.rooms.map(room => (
                                                 <option key={room.id} value={room.id}>
-                                                    {isEnglish ? room.name.en : room.name.zh}
+                                                    {t(room.name)}
                                                 </option>
                                             ))}
                                         </select>
@@ -1091,12 +1095,16 @@ const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) =>
                                     </span>
                                 )}
                             </span>
+                            {/* The photo lands by position, so the line-up holds
+                                still until it has: move a guest mid-upload and the
+                                photo would go to whoever had taken their slot. */}
                             <RowActions
                                 index={index}
                                 count={draft.length}
                                 onMove={delta => setDraft(prev => moveAt(prev, index, delta))}
                                 onRemove={() => setDraft(prev => removeAt(prev, index))}
                                 readOnly={readOnly}
+                                disabled={preview !== null}
                             />
                         </div>
 
@@ -1476,6 +1484,7 @@ const TicketsSection = ({content, loading, showToast, readOnly}: SectionProps) =
 
 const TicketFeeSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
+    const t = useT();
     const editor = useSectionEditor('ticketFee', content.ticketFee, loading, showToast);
     const {draft, setDraft} = editor;
     const lang = isEnglish ? 'en' : 'zh';
@@ -1490,7 +1499,7 @@ const TicketFeeSection = ({content, loading, showToast, readOnly}: SectionProps)
 
     // Against the saved tiers, since those are the prices visitors actually see.
     const previews = content.tickets.flatMap(tier => {
-        const name = isEnglish ? tier.name.en : tier.name.zh;
+        const name = t(tier.name);
         const rows: string[] = [];
         if (tier.earlyBird && tier.earlyBird.price > 0) {
             rows.push(`${name} (${isEnglish ? 'early bird' : '早鸟'}): ${previewAt(tier.earlyBird.price)}`);
@@ -1791,8 +1800,8 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
             <div className="admin-section">
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? 'Edits here go live on /con as soon as they are saved. Each section saves on its own, so you can leave the rest untouched. Anything never saved keeps showing the copy shipped with the site.'
-                        : '此处的修改保存后立即在 /con 页面生效。每个板块单独保存，不会影响其他板块。从未保存过的板块将继续显示网站内置的文案。'}
+                        ? 'While the page is published, edits here go live on /con as soon as they are saved. Each section saves on its own, so you can leave the rest untouched. Anything never saved keeps showing the copy shipped with the site.'
+                        : '页面发布期间，此处的修改保存后立即在 /con 页面生效。每个板块单独保存，不会影响其他板块。从未保存过的板块将继续显示网站内置的文案。'}
                 </p>
             </div>
 

@@ -3,6 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveSiteConfig, callUploadAdminImage } from '~/lib/firebase';
 import type { ConEdition } from '~/constants';
 import { ImageUploadField } from './ImageUploadField';
+import { refreshAfterSave } from './utils';
 
 interface ConEditionSectionProps {
     conEdition: ConEdition | null;
@@ -33,14 +34,23 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
     }, [conEdition]);
 
     const handleImageChange = async (file: File, previewUrl: string) => {
+        const previous = formData.image;
         setUploading(true);
         setFormData(prev => ({...prev, image: previewUrl}));
         try {
             showToast(isEnglish ? 'Uploading image...' : '正在上传图片...', 'warning');
-            const url = await callUploadAdminImage(file, `config/con-${formData.year}.webp`);
+            // Time-stamped so a replacement lands on a new object: admin images are
+            // cached as immutable, and the old URL is what the home page serves
+            // until this section is saved.
+            const url = await callUploadAdminImage(
+                file,
+                `config/con-${formData.year}-${Date.now().toString(36)}.webp`,
+            );
             setFormData(prev => ({...prev, image: url}));
             showToast(isEnglish ? 'Image uploaded.' : '图片已上传。', 'success');
         } catch {
+            // The preview is a local blob the server won't accept on Save.
+            setFormData(prev => ({...prev, image: previous}));
             showToast(isEnglish ? 'Image upload failed.' : '图片上传失败。', 'error');
         } finally {
             setUploading(false);
@@ -73,10 +83,10 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
         setSaving(true);
         try {
             await callSaveSiteConfig({conEdition: formData});
-            await refreshConfig();
+            await refreshAfterSave(refreshConfig, showToast, isEnglish);
             showToast(isEnglish ? 'Convention edition saved.' : '漫展年度已保存。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to save convention edition.' : '保存漫展年度失败。', 'error');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to save convention edition.' : '保存漫展年度失败。'), 'error');
         } finally {
             setSaving(false);
         }
@@ -87,7 +97,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
         setSaving(true);
         try {
             await callSaveSiteConfig({conEdition: null});
-            await refreshConfig();
+            await refreshAfterSave(refreshConfig, showToast, isEnglish);
             showToast(isEnglish ? 'Convention configuration reset.' : '漫展配置已重置。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to reset convention configuration.' : '重置漫展配置失败。', 'error');

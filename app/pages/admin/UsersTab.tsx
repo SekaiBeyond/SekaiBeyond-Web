@@ -101,11 +101,19 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [bannerBusy, setBannerBusy] = useState(false);
+    // Bumped whenever the filters change, so a page asked for under the old ones
+    // is dropped when it lands instead of being shown, or appended, under the new.
+    const recentGenRef = useRef(0);
 
-    const applyUserUpdate = (updated: UserRecord) => {
-        if (selectedUser?.uid === updated.uid) setSelectedUser(updated);
-        setSearchResults(prev => prev.map(u => u.uid === updated.uid ? updated : u));
-        setRecentUsers(prev => prev.map(u => u.uid === updated.uid ? updated : u));
+    // Merged into each list's current copy rather than the one the request began
+    // from: two edits in flight at once (a rename and a membership change, say)
+    // would otherwise each put back the field the other changed, and an admin who
+    // has gone back to the list isn't pulled back into the user when it lands.
+    const applyUserUpdate = (uid: string, changes: Partial<UserRecord>) => {
+        const merge = (u: UserRecord) => u.uid === uid ? {...u, ...changes} : u;
+        setSelectedUser(prev => prev && merge(prev));
+        setSearchResults(prev => prev.map(merge));
+        setRecentUsers(prev => prev.map(merge));
     };
 
     useImperativeHandle(ref, () => ({
@@ -171,6 +179,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     }, []);
 
     useEffect(() => {
+        const gen = ++recentGenRef.current;
         const loadRecentUsers = async () => {
             setLoadingRecent(true);
             try {
@@ -179,11 +188,12 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     membersOnly,
                     pageSize: PAGE_SIZE,
                 }));
+                if (recentGenRef.current !== gen) return;
                 setRecentUsers(snapshot.docs.map(docToUserRecord));
                 setLastRecentSnap(snapshot.docs[snapshot.docs.length - 1] ?? null);
                 setHasMoreRecent(snapshot.docs.length === PAGE_SIZE);
             } finally {
-                setLoadingRecent(false);
+                if (recentGenRef.current === gen) setLoadingRecent(false);
             }
         };
         loadRecentUsers().catch(err => {
@@ -193,6 +203,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
 
     const loadMoreRecentUsers = async () => {
         if (!hasMoreRecent || !lastRecentSnap) return;
+        const gen = recentGenRef.current;
         setLoadingRecent(true);
         try {
             const snapshot = await getDocs(buildUserListQuery({
@@ -201,12 +212,13 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 pageSize: PAGE_SIZE,
                 cursor: lastRecentSnap,
             }));
+            if (recentGenRef.current !== gen) return;
             const newUsers = snapshot.docs.map(docToUserRecord);
             setRecentUsers(prev => [...prev, ...newUsers]);
             setLastRecentSnap(snapshot.docs[snapshot.docs.length - 1] ?? lastRecentSnap);
             setHasMoreRecent(newUsers.length === PAGE_SIZE);
         } finally {
-            setLoadingRecent(false);
+            if (recentGenRef.current === gen) setLoadingRecent(false);
         }
     };
 
@@ -230,13 +242,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const has = userRecord.attendedEvents.includes(eventId);
             await callToggleAttendance({targetUid: userRecord.uid, eventId, grant: !has});
 
-            const updatedEvents = has
-                ? userRecord.attendedEvents.filter(e => e !== eventId)
-                : [...userRecord.attendedEvents, eventId];
-
-            const updated = {...userRecord, attendedEvents: updatedEvents};
-            if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
-            setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            applyUserUpdate(userRecord.uid, {
+                attendedEvents: has
+                    ? userRecord.attendedEvents.filter(e => e !== eventId)
+                    : [...userRecord.attendedEvents, eventId],
+            });
             showToast(
                 has
                     ? (isEnglish ? 'Attendance revoked.' : '已取消参加记录。')
@@ -262,13 +272,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const has = userRecord.badges.includes(badgeId);
             await callToggleUserBadge({targetUid: userRecord.uid, badgeId, grant: !has});
 
-            const updatedBadges = has
-                ? userRecord.badges.filter(id => id !== badgeId)
-                : [...userRecord.badges, badgeId];
-
-            const updated = {...userRecord, badges: updatedBadges};
-            if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
-            setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            applyUserUpdate(userRecord.uid, {
+                badges: has
+                    ? userRecord.badges.filter(id => id !== badgeId)
+                    : [...userRecord.badges, badgeId],
+            });
             showToast(
                 has
                     ? (isEnglish ? 'Badge revoked.' : '已撤销徽章。')
@@ -355,10 +363,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
             const title = keepTitles ? (userRecord.title ?? '') : '';
             const titleCn = keepTitles ? (userRecord.titleCn ?? '') : '';
             await callChangeUserGroup({targetUid: userRecord.uid, newGroup, title, titleCn});
-
-            const updated = {...userRecord, group: newGroup, title, titleCn};
-            if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
-            setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            applyUserUpdate(userRecord.uid, {group: newGroup, title, titleCn});
             showToast(isEnglish ? 'Group updated.' : '用户组已更新。', 'success');
         } catch {
             showToast(
@@ -381,7 +386,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         setNameBusy(true);
         try {
             const result = await callUpdateDisplayName({displayName: newName, targetUid: userRecord.uid});
-            applyUserUpdate({...userRecord, displayName: result.data.displayName});
+            applyUserUpdate(userRecord.uid, {displayName: result.data.displayName});
             setEditingName(false);
             showToast(isEnglish ? 'Name updated.' : '名称已更新。', 'success');
         } catch {
@@ -416,7 +421,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         setPhotoBusy(true);
         try {
             const url = await callUploadAvatar(cropped, userRecord.uid);
-            applyUserUpdate({...userRecord, photoURL: url});
+            applyUserUpdate(userRecord.uid, {photoURL: url});
             showToast(isEnglish ? 'Profile photo updated.' : '头像已更新。', 'success');
         } catch {
             showToast(
@@ -438,7 +443,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         setPhotoBusy(true);
         try {
             const result = await callDeleteAvatar({targetUid: userRecord.uid});
-            applyUserUpdate({...userRecord, photoURL: result.data.photoURL});
+            applyUserUpdate(userRecord.uid, {photoURL: result.data.photoURL});
             showToast(isEnglish ? 'Profile photo removed.' : '头像已删除。', 'warning');
         } catch {
             showToast(
@@ -462,7 +467,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         setBannerBusy(true);
         try {
             await callDeleteBanner({targetUid: userRecord.uid});
-            applyUserUpdate({...userRecord, bannerURL: ''});
+            applyUserUpdate(userRecord.uid, {bannerURL: ''});
             showToast(isEnglish ? 'Profile banner removed.' : '主页横幅已删除。', 'warning');
         } catch {
             showToast(
@@ -486,10 +491,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 title: newTitle || undefined,
                 titleCn: newTitleCn || undefined,
             });
-
-            const updated = {...userRecord, title: newTitle, titleCn: newTitleCn};
-            if (selectedUser?.uid === userRecord.uid) setSelectedUser(updated);
-            setSearchResults(prev => prev.map(u => u.uid === userRecord.uid ? updated : u));
+            applyUserUpdate(userRecord.uid, {title: newTitle, titleCn: newTitleCn});
             const hasAnyTitle = newTitle || newTitleCn;
             showToast(
                 hasAnyTitle
@@ -945,13 +947,13 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                 <img src={bd.imageUrl} alt="" className="admin-badge-img"/>
                                                 <div className="admin-badge-info">
                                                 <span
-                                                    className="admin-badge-name">{isEnglish ? bd.name : bd.nameCn}</span>
+                                                    className="admin-badge-name">{isEnglish ? bd.name : (bd.nameCn || bd.name)}</span>
                                                     <span
-                                                        className="admin-badge-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
+                                                        className="admin-badge-date">{isEnglish ? bd.description : (bd.descriptionCn || bd.description)}</span>
                                                 </div>
                                                 {readOnly
                                                     ? <span
-                                                        className={`admin-user-group-tag ${has ? 'data-group-member' : ''}`}
+                                                        className="admin-user-group-tag"
                                                         style={{opacity: has ? 1 : 0.35}}>{has ? (isEnglish ? 'Has badge' : '已持有') : (isEnglish ? 'No badge' : '未持有')}</span>
                                                     : <button
                                                         className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
@@ -986,11 +988,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                         <img src={event.icon} alt="" className="admin-badge-img"/>
                                         <div className="admin-badge-info">
                                         <span
-                                            className="admin-badge-name">{isEnglish ? event.title : event.titleCn}</span>
+                                            className="admin-badge-name">{isEnglish ? event.title : (event.titleCn || event.title)}</span>
                                             <span className="admin-badge-date">{event.date}</span>
                                         </div>
                                         {readOnly
-                                            ? <span className={`admin-user-group-tag ${has ? 'data-group-member' : ''}`}
+                                            ? <span className="admin-user-group-tag"
                                                     style={{opacity: has ? 1 : 0.35}}>{has ? (isEnglish ? 'Attended' : '已参加') : (isEnglish ? 'Not attended' : '未参加')}</span>
                                             : <button
                                                 className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}

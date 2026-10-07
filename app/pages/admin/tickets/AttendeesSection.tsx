@@ -35,7 +35,6 @@ interface AttendeesSectionProps {
     onDelete: (a: AttendeeData) => void;
     onRefresh: () => void;
     hasMore: boolean;
-    loadingMore: boolean;
     onLoadMore: () => void;
 }
 
@@ -65,7 +64,6 @@ export function AttendeesSection({
                                      onDelete,
                                      onRefresh,
                                      hasMore,
-                                     loadingMore,
                                      onLoadMore,
                                  }: AttendeesSectionProps) {
     const {isEnglish} = useLanguage();
@@ -432,14 +430,8 @@ export function AttendeesSection({
 
             {hasMore && (
                 <div style={{textAlign: 'center', marginTop: '20px'}}>
-                    <button
-                        className="admin-toggle-btn admin-toggle-edit"
-                        onClick={onLoadMore}
-                        disabled={loadingMore}
-                    >
-                        {loadingMore
-                            ? (isEnglish ? 'Loading...' : '加载中...')
-                            : (isEnglish ? 'Load More' : '加载更多')}
+                    <button className="admin-toggle-btn admin-toggle-edit" onClick={onLoadMore}>
+                        {isEnglish ? 'Load More' : '加载更多'}
                     </button>
                 </div>
             )}

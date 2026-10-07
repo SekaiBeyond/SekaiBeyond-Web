@@ -81,6 +81,32 @@ export async function deleteStorageFile(downloadUrl: string, allowedPrefixes?: s
     if (exists) await file.delete();
 }
 
+/**
+ * Refuses a save that links a Storage file that is no longer there.
+ *
+ * The saves that call this delete the files they stop linking, so a form opened
+ * before someone else replaced a file still holds the URL of the one that was
+ * deleted. Saving it would store a dead link, and delete the replacement as the
+ * file it replaced. Only files `alreadyLinked` doesn't name are checked: a dead
+ * link that is already stored isn't this save's doing, and refusing it would
+ * block every save until someone fixed it by hand. Compared by path, since a
+ * re-upload to the same path gives the file a new URL.
+ */
+export async function requireNewlyLinkedFilesExist(linked: string[], alreadyLinked: string[]): Promise<void> {
+    const known = new Set(alreadyLinked.map(extractStoragePath));
+    const paths = [...new Set(linked.map(extractStoragePath))]
+        .filter((path): path is string => path !== null && !known.has(path));
+    const bucket = getStorage().bucket();
+    const found = await Promise.all(paths.map(async path => (await bucket.file(path).exists())[0]));
+    if (found.includes(false)) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Someone else changed this after you opened it, and a file it links to has since been deleted. " +
+            "Reload and make your change again.",
+        );
+    }
+}
+
 export function logStorageCleanupError(context: string): (err: unknown) => void {
     return (err) => console.error(`Storage cleanup failed (${context}):`, err);
 }

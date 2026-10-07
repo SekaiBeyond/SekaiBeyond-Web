@@ -77,10 +77,11 @@ interface ClaimCodeSectionProps {
 
 /**
  * Self-contained claim-code manager for a single event: loads the event's code,
- * generates/regenerates it, toggles it, and edits its active time window. Works
- * for both upcoming and past events — the generate/claim Cloud Functions resolve
- * the event from either collection. The staff variant is core-staff-only per
- * Firestore rules, so mount it only for core staff.
+ * generates/regenerates it, toggles it, and edits its active time window. Staff
+ * codes work for past events as well as upcoming ones — their Cloud Functions
+ * resolve the event from either collection — while check-in codes are for
+ * upcoming events only. The staff variant is core-staff-only per Firestore
+ * rules, so mount it only for core staff.
  */
 export function ClaimCodeSection({eventId, variant, showToast, readOnly = false, eventEndAt}: ClaimCodeSectionProps) {
     const {isEnglish} = useLanguage();
@@ -111,11 +112,13 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     const [showWindow, setShowWindow] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [loadFailed, setLoadFailed] = useState(false);
 
     useEffect(() => {
         let stale = false;
         const load = async () => {
             setLoading(true);
+            setLoadFailed(false);
             try {
                 const db = getFirebaseDb();
                 const collectionName = variant === 'staff' ? 'staffClaimCodes' : 'claimCodes';
@@ -144,6 +147,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                 setShowWindow(false);
             } catch {
                 if (!stale) {
+                    setLoadFailed(true);
                     const msg = TEXT[variant].loadFailed;
                     showToast(isEnglish ? msg.en : msg.cn, 'error');
                 }
@@ -155,7 +159,9 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         return () => {
             stale = true;
         };
-    }, [eventId, variant, isEnglish, showToast]);
+        // Not keyed on isEnglish, which only words the failure toast: a language
+        // toggle would reload the code over an unsaved time window.
+    }, [eventId, variant, showToast]);
 
     const generateCode = async () => {
         setGenerating(true);
@@ -232,6 +238,20 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         return (
             <div className="admin-codes-section">
                 <div className="spinner spinner-centered"/>
+            </div>
+        );
+    }
+
+    // "No code yet" is only said when the read came back empty. Generating retires
+    // every code the event already has, so offering it after a failed read could
+    // switch off one that is printed and in use, without the regenerate warning.
+    if (loadFailed) {
+        return (
+            <div className="admin-codes-section">
+                {text.label && (
+                    <p className="admin-section-label">{tr(text.label)}</p>
+                )}
+                <p className="admin-no-results">{tr(text.loadFailed)}</p>
             </div>
         );
     }

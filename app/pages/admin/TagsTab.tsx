@@ -5,6 +5,7 @@ import { callDeleteTag, callSaveTag } from '~/lib/firebase';
 import type { Tag } from '~/lib/tags';
 import { BilingualFormField } from './BilingualFormField';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
+import { refreshAfterSave } from './utils';
 
 function isDuplicateError(err: unknown): boolean {
     return err instanceof FirebaseError && err.code === 'functions/already-exists';
@@ -35,7 +36,7 @@ export const TagsTab = ({tags, refreshTags, showToast, readOnly = false}: TagsTa
         setSaving(true);
         try {
             await callSaveTag({name: name.trim(), nameCn: nameCn.trim()});
-            await refreshTags();
+            await refreshAfterSave(refreshTags, showToast, isEnglish);
             setName('');
             setNameCn('');
             setShowCreate(false);
@@ -60,7 +61,7 @@ export const TagsTab = ({tags, refreshTags, showToast, readOnly = false}: TagsTa
         setSavingEdit(true);
         try {
             await callSaveTag({tagId: editingTag.id, name: editName.trim(), nameCn: editNameCn.trim()});
-            await refreshTags();
+            await refreshAfterSave(refreshTags, showToast, isEnglish);
             setEditingTag(null);
             showToast(isEnglish ? 'Tag updated.' : '标签已更新。', 'success');
         } catch (err) {
@@ -80,7 +81,7 @@ export const TagsTab = ({tags, refreshTags, showToast, readOnly = false}: TagsTa
         setDeletingId(tag.id);
         try {
             await callDeleteTag({tagId: tag.id});
-            await refreshTags();
+            await refreshAfterSave(refreshTags, showToast, isEnglish);
             if (editingTag?.id === tag.id) setEditingTag(null);
             showToast(isEnglish ? 'Tag deleted.' : '标签已删除。', 'warning');
         } catch {

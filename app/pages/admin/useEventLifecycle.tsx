@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { functionsErrorCode } from '~/lib/firebase';
-import type { ShowToast } from './utils';
+import { refreshAfterSave, type ShowToast } from './utils';
 
 interface UseEventLifecycleOptions {
     /** Schedule the ~48h delayed deletion (past or upcoming variant of the callable). */
@@ -35,7 +35,7 @@ export function useEventLifecycle({
         setDeletionBusyId(event.id);
         try {
             await requestDeletion({eventId: event.id});
-            await refresh();
+            await refreshAfterSave(refresh, showToast, isEnglish);
             showToast(isEnglish ? 'Deletion scheduled.' : '已计划删除。', 'warning');
         } catch (err) {
             const code = functionsErrorCode(err);
@@ -54,7 +54,7 @@ export function useEventLifecycle({
         setDeletionBusyId(event.id);
         try {
             await cancelDeletion({eventId: event.id});
-            await refresh();
+            await refreshAfterSave(refresh, showToast, isEnglish);
             showToast(isEnglish ? 'Deletion cancelled.' : '已取消删除。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to cancel deletion.' : '取消删除失败。', 'error');
@@ -67,7 +67,7 @@ export function useEventLifecycle({
         const newPublished = !event.published;
         try {
             await setPublished({eventId: event.id, published: newPublished});
-            await refresh();
+            await refreshAfterSave(refresh, showToast, isEnglish);
             showToast(
                 newPublished
                     ? (isEnglish ? 'Event published.' : '活动已发布。')

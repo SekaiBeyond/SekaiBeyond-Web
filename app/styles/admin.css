@@ -4690,9 +4690,10 @@ select.admin-tickets-tag:focus {
     margin-top: 4px;
 }
 
-/* Con Content tab — repeated entry cards (schedule blocks, guests, tiers, FAQ).
-   Each card is one editable entry with its own reorder/remove controls; nested
-   .admin-con-item rows are the entries inside an entry (schedule items, perks). */
+/* Con Content tab — repeated entry cards (rooms, schedule items, guests, tables,
+   tiers, FAQ, sale days), each one editable entry with its own controls. The
+   lighter .admin-con-item row holds something smaller than an entry: a tier's
+   perks, the hero's clip. */
 .admin-con-list {
     display: flex;
     flex-direction: column;
@@ -4805,13 +4806,6 @@ select.admin-tickets-tag:focus {
     outline-offset: 1px;
 }
 
-/* Takes the whole row so the chips stay on one line above it. */
-.admin-con-filter-note {
-    flex-basis: 100%;
-    font-size: 12px;
-    color: var(--color-text-muted);
-}
-
 .admin-con-empty {
     margin: 0;
     font-size: 13px;
@@ -4845,7 +4839,7 @@ select.admin-tickets-tag:focus {
    ========================================================================== */
 
 /* Which slice of the stock the table is showing. Underlined rather than boxed,
-   so the counts read as one row of figures instead of four buttons. */
+   so the counts read as one row of figures instead of three buttons. */
 .admin-passport-tabs {
     display: flex;
     flex-wrap: wrap;
@@ -5214,8 +5208,8 @@ select.admin-tickets-tag:focus {
     margin-top: 10px;
 }
 
-/* Generation warnings. The urgent variant is for the one screen where losing
-   the page loses data that cannot be recovered. */
+/* A boxed warning, in red when what it warns about can't be undone — the
+   claimed passport's delete panel is built on the urgent one. */
 .admin-passport-warning {
     padding: 14px 16px;
     margin-bottom: 16px;
@@ -5809,8 +5803,9 @@ select.admin-tickets-tag:focus {
     white-space: nowrap;
 }
 
-/* No holder to show: stock, a deleted account, or still loading. Dashed, so
-   the empty state reads as a space waiting to be filled rather than a card. */
+/* No holder to show: stock, a deleted account, one that couldn't be read, or
+   still loading. Dashed, so the empty state reads as a space waiting to be
+   filled rather than a card. */
 .admin-passport-holder-empty {
     padding: 14px;
     border: 1px dashed rgba(122, 129, 144, 0.32);

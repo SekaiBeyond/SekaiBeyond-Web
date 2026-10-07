@@ -17,6 +17,7 @@ import {
 } from "../utils/passports";
 import { sanitizeDisplayText, validateDocId, validateStorageImageUrl, validateStr } from "../utils/validation";
 import { recordDoc, recordRef } from "../utils/records";
+import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 
 /**
  * Physical passports.
@@ -43,9 +44,9 @@ const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap
  * time. Each one is an independent document: how many were made in the same call
  * is not recorded, and nothing downstream groups them.
  *
- * The keys come back in bulk only in this response. If the export is lost before
- * the slips are printed, revealPassportKey serves them again one passport at a
- * time.
+ * The keys come back in bulk in this response. If the export is lost before the
+ * slips are printed, exportPassportKeys serves a selection of them again, and
+ * revealPassportKey one at a time.
  */
 export const generatePassports = onCall({maxInstances: 5}, async (request) => {
     const uid = await requireAuth(request);
@@ -269,11 +270,11 @@ export const exportPassportKeys = onCall({maxInstances: 10}, async (request) => 
 /**
  * Resolve a scanned sticker, for anyone — no sign-in.
  *
- * This is the second unauthenticated callable in the codebase (after
- * recordQrScan). The uid-keyed checkRateLimit can't apply, so abuse protection
- * is App Check, enforced for every callable by setGlobalOptions in index.ts, plus
- * the fact that reaching a real passport means holding a 10-character printed
- * code out of 31^10.
+ * Like recordQrScan and getPublicTeamMembers, this takes anonymous callers. The
+ * uid-keyed checkRateLimit can't apply, so abuse protection is App Check,
+ * enforced for every callable by setGlobalOptions in index.ts, plus the fact
+ * that reaching a real passport means holding a 10-character printed code out
+ * of 31^10.
  *
  * It must not widen uid-keyed profile reads, and doesn't: nothing here accepts a
  * uid, and the owner's uid it hands back only builds the link to their profile,
@@ -595,15 +596,18 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
 
     const ref = designId ? db.collection(DESIGNS).doc(designId) : db.collection(DESIGNS).doc();
 
-    await adminTransaction(uid, async (txn, callerSnap) => {
+    const orphanedImages = await adminTransaction(uid, async (txn, callerSnap) => {
         let year: number;
+        let prevImages: string[] = [];
         if (designId) {
             const existing = await txn.get(ref);
             if (!existing.exists) throw new HttpsError("not-found", "Design not found.");
             year = existing.data()!.year;
+            prevImages = [existing.data()!.coverImageUrl ?? "", existing.data()!.outerCoverImageUrl ?? ""];
         } else {
             year = createYear!;
         }
+        await requireNewlyLinkedFilesExist([coverImageUrl, outerCoverImageUrl], prevImages);
 
         const names = shownNames({name, nameCn});
         const sameYear = await txn.get(db.collection(DESIGNS).where("year", "==", year));
@@ -633,7 +637,17 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
             passportDesignName: name,
             passportYear: year,
         }));
+        // Each cover upload writes a new time-stamped object, so one this save
+        // replaces — or an outer cover it clears — is left behind and deleted once
+        // the save commits. Passports read their design's covers live, so nothing
+        // else holds these URLs.
+        return [...new Set(prevImages)].filter(url =>
+            url && url !== coverImageUrl && url !== outerCoverImageUrl);
     });
+
+    await Promise.all(orphanedImages.map(url =>
+        deleteStorageFile(url, ["passports/"])
+            .catch(logStorageCleanupError(`savePassportDesign ${ref.id}`))));
 
     return {designId: ref.id};
 });
@@ -660,6 +674,9 @@ export const deletePassportDesign = onCall({maxInstances: 10}, async (request) =
     }
 
     await ref.delete();
+    await Promise.all([snap.data()?.coverImageUrl, snap.data()?.outerCoverImageUrl].map(url =>
+        deleteStorageFile(url ?? "", ["passports/"])
+            .catch(logStorageCleanupError(`deletePassportDesign ${designId}`))));
     await recordRef().set(recordDoc("passport-design-delete", {
         performedBy: uid,
         performedByName: performerName(callerSnap),

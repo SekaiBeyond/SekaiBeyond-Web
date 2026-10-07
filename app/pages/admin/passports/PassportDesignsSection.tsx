@@ -10,7 +10,7 @@ import {
 import { BilingualFormField } from '../BilingualFormField';
 import { CardEditDeleteActions } from '../CrudShell';
 import { ImageUploadField } from '../ImageUploadField';
-import type { ShowToast } from '../utils';
+import { refreshAfterSave, type ShowToast } from '../utils';
 
 const TERM_PRESETS = [30, 90, 180, 365, 730];
 
@@ -60,25 +60,19 @@ export const PassportDesignsSection = ({
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const saved = async () => {
-        await onChanged();
+        await refreshAfterSave(onChanged, showToast, isEnglish);
         setEditing(null);
     };
 
     const remove = async (design: PassportDesign) => {
         const name = passportName(design, isEnglish);
         if (!window.confirm(isEnglish
-            ? `Delete
-                the
-                ${design.year}
-                design
-                “
-                ${name}
-                ”? This is only possible while no passports have been generated from it.`
+            ? `Delete the ${design.year} design “${name}”? This is only possible while no passports have been generated from it.`
             : `删除 ${design.year} 年的设计「${name}」？仅在尚未用它生成通行证时可删除。`)) return;
         setDeletingId(design.id);
         try {
             await callDeletePassportDesign({designId: design.id});
-            await onChanged();
+            await refreshAfterSave(onChanged, showToast, isEnglish);
             showToast(isEnglish ? 'Design deleted.' : '设计已删除。', 'warning');
         } catch (e: any) {
             showToast(e?.message ?? (isEnglish ? 'Failed to delete design.' : '删除设计失败。'), 'error');

@@ -231,6 +231,10 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
         // alreadyRedeemed is true.
         redeemedBy?: string;
         redeemedAt?: string | null;
+        // On success: how much longer this scanner may scan the ticket again and
+        // still be told it succeeded. A duration rather than a time, so the
+        // scanner can time it on its own clock.
+        graceRemainingMs?: number;
     }>(getFunctions(), 'redeemTicket')(data);
 
 /** One of the caller's own tickets, as /profile shows it. */
@@ -404,20 +408,20 @@ export const callSaveConContent = (data: Partial<ConContent>) =>
 export const callSaveTeamMembers = (data: {teamMembers: any[]}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveTeamMembers')(data);
 
-// Public resolver: returns team members with account-linked fields (name/role/photo)
+// Public resolver: returns team members with account-linked fields (role/photo)
 // filled from the linked account's live data. Callable without auth.
 export const callGetPublicTeamMembers = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getPublicTeamMembers')({});
 
-// Admin editor read: the full roster (incl. linked-account uid + follow flags) from
-// the server-only teamRoster doc. Staff+ only. Public config carries a display-only
-// projection, so the editor can't source uid/flags from there.
 export const callGetSenderSettings = () =>
     httpsCallable<Record<string, never>, {
         domain: string,
         defaultPrefix: string
     }>(getFunctions(), 'getSenderSettings')({});
 
+// Admin editor read: the full roster (incl. linked-account uid + follow flags) from
+// the server-only teamRoster doc. Staff+ only. Public config carries a display-only
+// projection, so the editor can't source uid/flags from there.
 export const callGetTeamRoster = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getTeamRoster')({});
 
@@ -544,9 +548,9 @@ export const callDeleteSocialPlatform = (data: {id: string}) =>
 export const callSeedSocialPlatforms = () =>
     httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
 
-// Physical passports. The activation keys come back in bulk from
-// callGeneratePassports only — export the CSV before leaving the screen, or they
-// have to be looked up one passport at a time with callRevealPassportKey.
+// Physical passports. callGeneratePassports returns the new keys in bulk; if that
+// export is lost, callExportPassportKeys fetches a selection's again, and
+// callRevealPassportKey one passport's.
 export const callGeneratePassports = (data: {designId: string; count: number}) =>
     httpsCallable<typeof data, {
         designId: string;

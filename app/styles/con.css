@@ -13,7 +13,6 @@
 .sbc-page {
     --sbc-night-900: #12122a;
     --sbc-night-800: #1a1a2e;
-    --sbc-night-700: #16213e;
     --sbc-gold: #feca57;
     --sbc-heading: #3f4450;
     /* The one rule colour: card edges, dividers, and the schedule's hour lines. */
@@ -695,7 +694,7 @@
 }
 
 /*
- * Schedule. Six rooms run at once, so the readable shape is the run-of-show grid
+ * Schedule. Several rooms run at once, so the readable shape is the run-of-show grid
  * this is transcribed from: one column per room, one clock down the side, and each
  * item drawn as tall as it actually runs. A single chronological list answered
  * "what is on at 2pm" only by making you read every room's rows in turn.
@@ -710,9 +709,9 @@
     padding: 28px 24px;
 }
 
-/* The columns keep a readable width and scroll sideways rather than squeezing six
-   rooms onto a phone. The room filter above is the way out of the scroll: one room
-   picked is one column, which fits anywhere. */
+/* The columns keep a readable width and scroll sideways rather than squeezing
+   every room onto a phone. The room filter above is the way out of the scroll: one
+   room picked is one column, which fits anywhere. */
 .sbc-grid-scroll {
     overflow-x: auto;
     overscroll-behavior-x: contain;
@@ -863,8 +862,8 @@
     --sbc-accent-ink: #5a616f;
 }
 
-/* Room filter. Six columns need a sideways scroll on anything narrower than a
-   laptop, so picking one room narrows the grid to a single column — and to that
+/* Room filter. A column per room needs a sideways scroll on anything narrower than
+   a laptop, so picking one room narrows the grid to a single column — and to that
    room's own hours — which fits a phone without a second layout to maintain.
    `aria-pressed` carries the selected state, so the styling hook and the state a
    screen reader announces cannot drift apart. */
@@ -1074,7 +1073,7 @@
     gap: 12px;
 }
 
-/* Cards stretch to one height so the three Reserve buttons line up. */
+/* Cards stretch to one height so the Reserve buttons line up. */
 .sbc-ticket-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -1703,7 +1702,7 @@
     }
 }
 
-/* Shown to core staff previewing a con page that is switched off. Pinned to the
+/* Shown to staff previewing a con page that is switched off. Pinned to the
    bottom rather than the top: the navbar is `position: fixed; top: 0`, so a banner
    in the flow above it gets overlapped, and pushing the navbar down instead would
    mean hard-coding a banner height that this wrapping text does not have. */
@@ -1777,8 +1776,7 @@
     color: var(--color-text-body);
 }
 
-/* Local-only photo editor. The canvas uses the card's pale pink base color so
-   the exported card remains opaque even where the photo or frame has alpha. */
+/* Share card — a local-only photo editor */
 .sbc-lineup-section {
     max-width: 1180px;
 }

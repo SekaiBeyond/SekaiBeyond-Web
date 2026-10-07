@@ -7,7 +7,6 @@ export const FOUNDED_DATE = new Date('2024-12-05T00:00:00Z');
 
 export const BILIBILI_VIDEO = {
     bvid: "BV1GsfjB7E6J",
-    p: "1",
 }
 
 export const LINKS = {

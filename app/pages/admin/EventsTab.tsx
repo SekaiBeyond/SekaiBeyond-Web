@@ -12,7 +12,7 @@ import type { Tag } from '~/lib/tags';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { UserRecord } from './types';
 import { eventLocationDisplay, useVenues } from '~/lib/venues';
-import { fetchEventAttendees, fetchEventStaffCount, pastEventHasTickets } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount, pastEventHasTickets, refreshAfterSave } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { LocationFormField } from './LocationFormField';
 import { ClaimCodeSection } from './ClaimCodeSection';
@@ -232,7 +232,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 recapLinkCn: eventForm.recapLinkCn.trim(),
             });
 
-            await refreshEvents();
+            await refreshAfterSave(refreshEvents, showToast, isEnglish);
             showToast(
                 editingEvent
                     ? (isEnglish ? 'Event updated.' : '活动已更新。')
@@ -242,8 +242,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             setShowCreateEvent(false);
             resetEventForm();
             setEditingEvent(null);
-        } catch {
-            showToast(isEnglish ? 'Failed to save event.' : '保存活动失败。', 'error');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to save event.' : '保存活动失败。'), 'error');
         } finally {
             setSavingEvent(false);
         }
@@ -362,7 +362,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 <img src={event.icon} alt="" className="admin-event-card-img"/>
                                 <div className="admin-event-card-info">
                                     <span
-                                        className="admin-event-card-title">{isEnglish ? event.title : event.titleCn}</span>
+                                        className="admin-event-card-title">{isEnglish ? event.title : (event.titleCn || event.title)}</span>
                                     <span className="admin-event-card-date">{event.date}</span>
                                     {!event.published && (
                                         <span className="admin-ended-tag">
@@ -390,12 +390,12 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             <div className="admin-event-detail-header">
                                 <img src={managedEvt.icon} alt="" className="admin-event-detail-img"/>
                                 <div>
-                                    <h3>{isEnglish ? managedEvt.title : managedEvt.titleCn}</h3>
+                                    <h3>{isEnglish ? managedEvt.title : (managedEvt.titleCn || managedEvt.title)}</h3>
                                     <p className="admin-event-detail-meta">
                                         <span>{managedEvt.tagIds
                                             .map(id => tags.find(t => t.id === id))
                                             .filter((t): t is Tag => !!t)
-                                            .map(t => isEnglish ? t.name : t.nameCn)
+                                            .map(t => isEnglish ? t.name : (t.nameCn || t.name))
                                             .join(', ')}</span>
                                         <span>{managedEvt.date}</span>
                                         <span>{eventLocationDisplay(managedEvt.location, managedEvt.locationCn, managedEvt.venueId, venues, isEnglish)}</span>

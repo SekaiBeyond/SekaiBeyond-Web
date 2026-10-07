@@ -22,6 +22,8 @@ type ScanStatus =
 
 interface CachedRedemption {
     ticketId: string;
+    /** When the server's grace window for it closes, on this device's clock. */
+    until: number;
     attendeeName: string;
     attendeeEmail: string;
     ticketType: string;
@@ -51,8 +53,11 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         const now = Date.now();
         if (last && last.ticketId === ticketId && now - last.at < DEDUPE_MS) return;
 
-        // Check RAM cache for "immediate" success on repeat scans in the same session
-        const cached = redeemedCacheRef.current.find(c => c.ticketId === ticketId);
+        // A ticket this device let in moments ago reads as the same success without
+        // a round trip, but only inside the server's grace window. Past it the scan
+        // goes to the server, which answers "already redeemed": a ticket shown again
+        // later — a shared screenshot — must not get in on the strength of a cache.
+        const cached = redeemedCacheRef.current.find(c => c.ticketId === ticketId && now < c.until);
         if (cached) {
             setStatus({
                 kind: 'success',
@@ -88,9 +93,13 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 };
                 setStatus({kind: 'success', ...successData});
 
+                // The server times the window from the first admission, and a rescan
+                // it answers can come well into it, so it says how much is left. A
+                // duration, not a time, so this phone's clock being off doesn't
+                // matter. Without it, the entry expires at once.
                 redeemedCacheRef.current = [
-                    {ticketId, ...successData},
-                    ...redeemedCacheRef.current,
+                    {ticketId, until: now + (d.graceRemainingMs ?? 0), ...successData},
+                    ...redeemedCacheRef.current.filter(c => c.ticketId !== ticketId),
                 ].slice(0, CACHE_SIZE);
 
                 onRedeemed();

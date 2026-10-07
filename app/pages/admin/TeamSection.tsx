@@ -5,6 +5,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetTeamRoster, callSaveTeamMembers, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
 import { MemberEditModal } from './MemberEditModal';
+import { refreshAfterSave } from './utils';
 
 interface LinkedAccount {
     title: string;
@@ -29,6 +30,10 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
     const {isEnglish} = useLanguage();
     const [members, setMembers] = useState<TeamMemberConfig[]>([]);
     const [loadingRoster, setLoadingRoster] = useState(true);
+    // A roster that couldn't be read keeps the editor shut rather than showing an
+    // empty team: every change saves the whole list, so adding one member to an
+    // empty editor would write over everybody else.
+    const [rosterFailed, setRosterFailed] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [isAdding, setIsAdding] = useState(false);
@@ -40,8 +45,9 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
         try {
             const res = await callGetTeamRoster();
             setMembers(res.data.teamMembers);
+            setRosterFailed(false);
         } catch {
-            setMembers([]);
+            setRosterFailed(true);
         } finally {
             setLoadingRoster(false);
         }
@@ -98,10 +104,10 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
             await callSaveTeamMembers({teamMembers: newMembers});
             // refreshConfig updates the public projection cache elsewhere; loadRoster
             // pulls the canonical roster (with uid/flags) back into the editor.
-            await Promise.all([refreshConfig(), loadRoster()]);
+            await Promise.all([refreshAfterSave(refreshConfig, showToast, isEnglish), loadRoster()]);
             showToast(isEnglish ? 'Team updated.' : '团队已更新。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to update team.' : '更新团队失败。', 'error');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to update team.' : '更新团队失败。'), 'error');
             // Revert state if saving failed
             setMembers(members);
         } finally {
@@ -268,6 +274,12 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
                 <div className="policy-spinner-wrap">
                     <div className="spinner"/>
                 </div>
+            ) : rosterFailed ? (
+                <p className="admin-no-results">
+                    {isEnglish
+                        ? 'Could not load the team. Reload the page before editing — saving now would replace the stored team.'
+                        : '无法加载团队成员。请重新加载页面后再编辑——此时保存会覆盖已存储的团队。'}
+                </p>
             ) : (
                 <>
                     <div style={groupHeadingStyle}>

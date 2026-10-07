@@ -5,6 +5,7 @@ import { type ParkingRate, RATE_COLOR_PRESETS, rateColorById } from '~/lib/parki
 import { BilingualFormField } from './BilingualFormField';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
 import { type CardHighlightHandle, useCardHighlight } from './useCardHighlight';
+import { refreshAfterSave } from './utils';
 
 /** Preset swatches + a native picker for custom colors. `value` is always a hex color. */
 const RateColorField = ({value, onChange, isEnglish}: {
@@ -82,7 +83,7 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
                 labelCn: labelCn.trim(),
                 color: color || nextPreset,
             });
-            await refreshParkingRates();
+            await refreshAfterSave(refreshParkingRates, showToast, isEnglish);
             setLabelEn('');
             setLabelCn('');
             setColor('');
@@ -113,7 +114,7 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
                 labelCn: editLabelCn.trim(),
                 color: editColor,
             });
-            await refreshParkingRates();
+            await refreshAfterSave(refreshParkingRates, showToast, isEnglish);
             setEditingRate(null);
             showToast(isEnglish ? 'Rate updated.' : '费率已更新。', 'success');
         } catch {
@@ -131,7 +132,7 @@ export const ParkingRatesTab = forwardRef<CardHighlightHandle, ParkingRatesTabPr
         setDeletingId(rate.id);
         try {
             const res = await callDeleteParkingRate({rateId: rate.id});
-            await Promise.all([refreshParkingRates(), refreshParkingLots()]);
+            await refreshAfterSave(() => Promise.all([refreshParkingRates(), refreshParkingLots()]), showToast, isEnglish);
             if (editingRate?.id === rate.id) setEditingRate(null);
             const unlinkedCount = res.data.unlinkedFrom;
             const msg = unlinkedCount > 0

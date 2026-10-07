@@ -3,7 +3,7 @@ import { Timestamp } from "firebase-admin/firestore";
 export const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN ?? "https://sekaibeyond.com";
 // Resend free-plan daily cap. Tracked as a sliding 24h window on Resend's
 // side — we don't reset this on calendar boundaries; we read the consumed
-// count back from response headers and store it in system/resendQuota.
+// count from Resend (see fetchProviderUsage) and cache it in system/resendQuota.
 export const RESEND_DAILY_CAP = Number(process.env.RESEND_DAILY_CAP) || 100;
 // Resend's batch endpoint caps at 100 envelopes per call; SEND_CHUNK_SIZE
 // is also the per-call attendee ceiling for sendTicketEmails, so it is
@@ -35,10 +35,10 @@ export function recordExpiresAt(): Timestamp {
     return Timestamp.fromMillis(Date.now() + RECORD_RETENTION_DAYS * 24 * 60 * 60 * 1000);
 }
 
-// Individual scan events (QR codes, passports) are kept for a year so trend
-// charts stay useful across a full event season, then auto-expire. The TTL
-// policy is set on the `scans` collection GROUP, so every parent's subcollection
-// of that name is covered by the one policy in the deploy:ttl script.
+// Individual QR code scan events are kept for a year so trend charts stay
+// useful across a full event season, then auto-expire. The TTL policy is set
+// on the `scans` collection GROUP, so every parent's subcollection of that
+// name is covered by the one policy in firestore.indexes.json.
 export const SCAN_RETENTION_DAYS = 365;
 
 export function scanExpiresAt(): Timestamp {

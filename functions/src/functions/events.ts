@@ -12,7 +12,7 @@ import {
 import { deletionExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
-import { deleteStorageFile, logStorageCleanupError } from "../utils/storage";
+import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 import { recordDoc, recordRef } from "../utils/records";
 import {
     validateDocId,
@@ -78,6 +78,15 @@ export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) =>
 
     return {cancelled: true};
 });
+
+/** Deletes an event's attendees and email template, which Firestore leaves
+ *  behind when the event document itself is deleted. */
+async function deleteEventSubcollections(eventRef: FirebaseFirestore.DocumentReference): Promise<void> {
+    const snaps = await Promise.all(["attendees", "emailTemplate"].map(sub => eventRef.collection(sub).get()));
+    const ops = snaps.flatMap(snap => snap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)));
+    if (ops.length > 0) await commitInChunks(ops);
+}
+
 export const onPastEventDeleted = onDocumentDeleted(
     {document: "pastEvents/{eventId}", maxInstances: 10},
     async (event) => {
@@ -105,6 +114,14 @@ export const onPastEventDeleted = onDocumentDeleted(
             if (cascadeOps.length > 0) await commitInChunks(cascadeOps);
         } catch (err) {
             console.error(`onPastEventDeleted: cascade failed for ${eventId}`, err);
+        }
+
+        // Firestore does not delete subcollections with their parent: a paid
+        // event's attendees and email template, copied here when it was archived.
+        try {
+            await deleteEventSubcollections(db.collection("pastEvents").doc(eventId));
+        } catch (err) {
+            console.error(`onPastEventDeleted: subcollection cleanup failed for ${eventId}`, err);
         }
 
         await deleteStorageFile(data.icon ?? "", ["events/", "upcoming-events/"])
@@ -156,6 +173,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
             prevIcon = existing.data()?.icon ?? "";
         }
+        await requireNewlyLinkedFilesExist([icon], [prevIcon]);
         const ref = db.collection("pastEvents").doc(docId);
         if (eventId) {
             txn.update(ref, data);
@@ -261,6 +279,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
             prevEmailHeaderBg = existing.data()?.emailHeaderBg ?? "";
             wasPublished = existing.data()?.published ?? false;
         }
+        await requireNewlyLinkedFilesExist([poster, emailHeaderBg], [prevPoster, prevEmailHeaderBg]);
 
         // Paid events use tickets, not check-in codes — purge any claim codes
         // that exist for this event (e.g., left over from a free→paid toggle).
@@ -448,18 +467,10 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: eventStaffEvents cascade failed for ${eventId}`, err);
         }
 
-        // Clean up any orphaned subcollection docs (can occur if archive fails
-        // after Phase C partially completed, or on TTL-driven deletion).
+        // Firestore does not delete subcollections with their parent. An archive
+        // never reaches here: archiveUpcomingEvent's Phase C clears its own.
         try {
-            const orphanedOps: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
-            for (const subCol of ["attendees", "emailTemplate"]) {
-                const snap = await db.collection("upcomingEvents").doc(eventId)
-                    .collection(subCol).get();
-                for (const d of snap.docs) {
-                    orphanedOps.push(b => b.delete(d.ref));
-                }
-            }
-            if (orphanedOps.length > 0) await commitInChunks(orphanedOps);
+            await deleteEventSubcollections(db.collection("upcomingEvents").doc(eventId));
         } catch (err) {
             console.error(`onUpcomingEventDeleted: subcollection cleanup failed for ${eventId}`, err);
         }

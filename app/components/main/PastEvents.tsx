@@ -47,12 +47,12 @@ export const PastEvents = () => {
                                     type="button"
                                     className="event-image-btn"
                                     onClick={() => setSelectedImage(event.icon)}
-                                    aria-label={isEnglish ? `View ${event.title} photo` : `查看${event.titleCn}照片`}
+                                    aria-label={isEnglish ? `View ${event.title} photo` : `查看${event.titleCn || event.title}照片`}
                                 >
                                     <img
                                         className="event-image"
                                         src={event.icon}
-                                        alt={isEnglish ? event.title : event.titleCn}
+                                        alt={isEnglish ? event.title : (event.titleCn || event.title)}
                                     />
                                 </button>
                                 <div className="event-content">
@@ -64,13 +64,13 @@ export const PastEvents = () => {
                                             <div className="event-labels">
                                                 {eventTags.map(tag => (
                                                     <span key={tag.id} className="event-label">
-                                                        {isEnglish ? tag.name : tag.nameCn}
+                                                        {isEnglish ? tag.name : (tag.nameCn || tag.name)}
                                                     </span>
                                                 ))}
                                             </div>
                                         ) : null;
                                     })()}
-                                    <h3 className="event-title">{isEnglish ? event.title : event.titleCn}</h3>
+                                    <h3 className="event-title">{isEnglish ? event.title : (event.titleCn || event.title)}</h3>
                                     <div className="event-date">
                                         <span>📅</span>
                                         <span>{new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : "zh-CN", {
@@ -90,7 +90,7 @@ export const PastEvents = () => {
                                         ) : null;
                                     })()}
                                     <p className="event-description">
-                                        {isEnglish ? event.description : event.descriptionCn}
+                                        {isEnglish ? event.description : (event.descriptionCn || event.description)}
                                     </p>
                                     {(() => {
                                         const recapHref = isEnglish
@@ -130,7 +130,6 @@ export const PastEvents = () => {
                 </>
             )}
 
-            {/* Event Image Modal */}
             {selectedImage && (
                 <EventImageModal
                     imageUrl={selectedImage}

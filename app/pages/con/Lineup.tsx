@@ -8,6 +8,7 @@ import { useT } from '~/pages/con/i18n';
 const CANVAS_WIDTH = 1080;
 const CANVAS_HEIGHT = 1350;
 const CANVAS_BACKGROUND = '#faf3f6';
+const TEXT_COLOR = '#ff1678';
 // The photo opening in foreground-overlay.png, measured in source-image pixels.
 const PHOTO_WINDOW = {left: 460, top: 615, right: 1724, bottom: 2287, sourceWidth: 2166, sourceHeight: 2707};
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -18,15 +19,16 @@ const MAX_ZOOM = 3;
 const QR_ACCENT = '#c20e59';
 const SHARE_QR_MARGIN = 48;
 const SHARE_QR_SIZE = 120;
-const EXTRA_TEXT_FONT = 'Caveat Brush';
-const EXTRA_TEXT_SIZE = 42;
 const SHARE_QR = {
     left: SHARE_QR_MARGIN,
     top: CANVAS_HEIGHT - SHARE_QR_MARGIN - SHARE_QR_SIZE,
     size: SHARE_QR_SIZE,
 };
+const EXTRA_TEXT_FONT = 'Caveat Brush';
+const EXTRA_TEXT_SIZE = 42;
 
 type PhotoTransform = {zoom: number; rotation: number; offsetX: number; offsetY: number};
+const DEFAULT_TRANSFORM: PhotoTransform = {zoom: 1, rotation: 0, offsetX: 0, offsetY: 0};
 type PointerPoint = {x: number; y: number};
 type GestureStart =
     | {kind: 'pan'; pointerId: number; x: number; y: number; transform: PhotoTransform}
@@ -107,7 +109,7 @@ const drawCenteredText = (
     let size = preferredSize;
     context.textAlign = 'center';
     context.textBaseline = 'alphabetic';
-    context.fillStyle = '#ff1678';
+    context.fillStyle = TEXT_COLOR;
     setCanvasFont(size);
     let metrics = context.measureText(content);
     while (size > minimumSize && (
@@ -126,6 +128,25 @@ const normalizeAngle = (angle: number) => ((angle + 180) % 360 + 360) % 360 - 18
 
 const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 
+// The artwork is almost exactly 4:5: fit it whole and centred, without distorting it.
+const fitOverlay = (sourceWidth: number, sourceHeight: number) => {
+    const scale = Math.min(CANVAS_WIDTH / sourceWidth, CANVAS_HEIGHT / sourceHeight);
+    const width = sourceWidth * scale;
+    const height = sourceHeight * scale;
+    return {left: (CANVAS_WIDTH - width) / 2, top: (CANVAS_HEIGHT - height) / 2, width, height};
+};
+
+const measurePinch = (first: PointerPoint, second: PointerPoint) => {
+    const dx = second.x - first.x;
+    const dy = second.y - first.y;
+    return {
+        distance: Math.max(1, Math.hypot(dx, dy)),
+        angle: Math.atan2(dy, dx) * 180 / Math.PI,
+        midpointX: (first.x + second.x) / 2,
+        midpointY: (first.y + second.y) / 2,
+    };
+};
+
 export const Lineup = () => {
     const t = useT();
     const qrHeading = t({en: 'MAKE YOUR OWN', zh: '制作你的分享卡'});
@@ -134,15 +155,16 @@ export const Lineup = () => {
     const fontInputId = `${inputId}-font-file`;
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const qrCanvasRef = useRef<HTMLCanvasElement>(null);
-    const loadToken = useRef(0);
+    const photoLoadToken = useRef(0);
+    const fontUploadToken = useRef(0);
     const activePointers = useRef(new Map<number, PointerPoint>());
     const gestureStart = useRef<GestureStart | null>(null);
-    const transformRef = useRef<PhotoTransform>({zoom: 1, rotation: 0, offsetX: 0, offsetY: 0});
+    // Mirrors `transform` for gesture handlers, which can run before a re-render.
+    const transformRef = useRef<PhotoTransform>(DEFAULT_TRANSFORM);
     const [photo, setPhoto] = useState<ImageBitmap | null>(null);
     const [overlay, setOverlay] = useState<HTMLImageElement | null>(null);
     const [overlayLoading, setOverlayLoading] = useState(true);
     const [overlayError, setOverlayError] = useState(false);
-    const fontUploadToken = useRef(0);
     const [titleFont, setTitleFont] = useState<TitleFont>(TITLE_FONTS[0]);
     const [uploadedFont, setUploadedFont] = useState<UploadedFont | null>(null);
     const [fontOpening, setFontOpening] = useState(false);
@@ -153,10 +175,7 @@ export const Lineup = () => {
     const [customTitle, setCustomTitle] = useState('');
     const [extraTextEnabled, setExtraTextEnabled] = useState(false);
     const [extraText, setExtraText] = useState('');
-    const [zoom, setZoom] = useState(1);
-    const [rotation, setRotation] = useState(0);
-    const [offsetX, setOffsetX] = useState(0);
-    const [offsetY, setOffsetY] = useState(0);
+    const [transform, setTransform] = useState<PhotoTransform>(DEFAULT_TRANSFORM);
     const [fineTuneOpen, setFineTuneOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -234,41 +253,29 @@ export const Lineup = () => {
         context.fillStyle = CANVAS_BACKGROUND;
         context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+        // The overlay's place on the card. Until it loads, its measured size stands in.
+        const frame = fitOverlay(
+            overlay?.naturalWidth ?? PHOTO_WINDOW.sourceWidth,
+            overlay?.naturalHeight ?? PHOTO_WINDOW.sourceHeight,
+        );
+
         if (photo) {
             // Fit the whole photo into the frame's transparent opening by default.
-            // Its size and center are derived from the supplied high-res overlay.
-            const overlayScale = overlay
-                ? Math.min(CANVAS_WIDTH / overlay.naturalWidth, CANVAS_HEIGHT / overlay.naturalHeight)
-                : Math.min(CANVAS_WIDTH / PHOTO_WINDOW.sourceWidth, CANVAS_HEIGHT / PHOTO_WINDOW.sourceHeight);
-            const overlayWidth = overlay ? overlay.naturalWidth * overlayScale : CANVAS_WIDTH;
-            const overlayHeight = overlay ? overlay.naturalHeight * overlayScale : CANVAS_HEIGHT;
-            const overlayLeft = (CANVAS_WIDTH - overlayWidth) / 2;
-            const overlayTop = (CANVAS_HEIGHT - overlayHeight) / 2;
-            const windowWidth = (PHOTO_WINDOW.right - PHOTO_WINDOW.left) / PHOTO_WINDOW.sourceWidth * overlayWidth;
-            const windowHeight = (PHOTO_WINDOW.bottom - PHOTO_WINDOW.top) / PHOTO_WINDOW.sourceHeight * overlayHeight;
-            const windowCenterX = overlayLeft + (PHOTO_WINDOW.left + PHOTO_WINDOW.right) / 2 / PHOTO_WINDOW.sourceWidth * overlayWidth;
-            const windowCenterY = overlayTop + (PHOTO_WINDOW.top + PHOTO_WINDOW.bottom) / 2 / PHOTO_WINDOW.sourceHeight * overlayHeight;
+            const windowWidth = (PHOTO_WINDOW.right - PHOTO_WINDOW.left) / PHOTO_WINDOW.sourceWidth * frame.width;
+            const windowHeight = (PHOTO_WINDOW.bottom - PHOTO_WINDOW.top) / PHOTO_WINDOW.sourceHeight * frame.height;
+            const windowCenterX = frame.left + (PHOTO_WINDOW.left + PHOTO_WINDOW.right) / 2 / PHOTO_WINDOW.sourceWidth * frame.width;
+            const windowCenterY = frame.top + (PHOTO_WINDOW.top + PHOTO_WINDOW.bottom) / 2 / PHOTO_WINDOW.sourceHeight * frame.height;
             const fitScale = Math.min(windowWidth / photo.width, windowHeight / photo.height);
-            const scale = fitScale * zoom;
+            const scale = fitScale * transform.zoom;
             context.save();
-            context.translate(windowCenterX + offsetX, windowCenterY + offsetY);
-            context.rotate(rotation * Math.PI / 180);
+            context.translate(windowCenterX + transform.offsetX, windowCenterY + transform.offsetY);
+            context.rotate(transform.rotation * Math.PI / 180);
             context.drawImage(photo, -photo.width * scale / 2, -photo.height * scale / 2,
                 photo.width * scale, photo.height * scale);
             context.restore();
         }
 
-        if (overlay) {
-            // The supplied artwork is high resolution and almost exactly 4:5.
-            // Fit it proportionally into the export canvas without distorting it.
-            const overlayScale = Math.min(
-                CANVAS_WIDTH / overlay.naturalWidth,
-                CANVAS_HEIGHT / overlay.naturalHeight,
-            );
-            const width = overlay.naturalWidth * overlayScale;
-            const height = overlay.naturalHeight * overlayScale;
-            context.drawImage(overlay, (CANVAS_WIDTH - width) / 2, (CANVAS_HEIGHT - height) / 2, width, height);
-        }
+        if (overlay) context.drawImage(overlay, frame.left, frame.top, frame.width, frame.height);
 
         if (readyFamily === titleFont.family) {
             // 760 wide keeps a long title clear of the artwork's top-left corner bracket (x 63–134).
@@ -301,7 +308,7 @@ export const Lineup = () => {
             context.font = '500 18px sans-serif';
             context.fillText(qrPrompt, SHARE_QR.left + SHARE_QR.size + 16, SHARE_QR.top + 76, 370);
         }
-    }, [photo, overlay, zoom, rotation, offsetX, offsetY, titleFont, readyFamily, fontLoads, title, extraTextEnabled, extraText, shareUrl, qrHeading, qrPrompt]);
+    }, [photo, overlay, transform, titleFont, readyFamily, fontLoads, title, extraTextEnabled, extraText, shareUrl, qrHeading, qrPrompt]);
 
     const onFontSelected = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.currentTarget.files?.[0];
@@ -348,7 +355,7 @@ export const Lineup = () => {
         event.currentTarget.value = '';
         if (!file) return;
 
-        const token = ++loadToken.current;
+        const token = ++photoLoadToken.current;
         setError('');
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
             setLoading(false);
@@ -370,7 +377,7 @@ export const Lineup = () => {
         setLoading(true);
         try {
             const bitmap = await createImageBitmap(file);
-            if (token !== loadToken.current) {
+            if (token !== photoLoadToken.current) {
                 bitmap.close();
                 return;
             }
@@ -384,43 +391,30 @@ export const Lineup = () => {
             }
 
             setPhoto(bitmap);
-            applyTransform({zoom: 1, rotation: 0, offsetX: 0, offsetY: 0});
+            applyTransform(DEFAULT_TRANSFORM);
         } catch {
             setError(t({
                 en: 'This image could not be opened. Try a JPG, PNG, or WebP file.',
                 zh: '无法打开这张图片，请尝试 JPG、PNG 或 WebP 文件。',
             }));
         } finally {
-            if (token === loadToken.current) setLoading(false);
+            if (token === photoLoadToken.current) setLoading(false);
         }
     };
 
-    const applyTransform = (transform: PhotoTransform) => {
-        transformRef.current = transform;
-        setZoom(transform.zoom);
-        setRotation(transform.rotation);
-        setOffsetX(transform.offsetX);
-        setOffsetY(transform.offsetY);
+    const applyTransform = (next: PhotoTransform) => {
+        transformRef.current = next;
+        setTransform(next);
     };
 
     const beginGesture = () => {
         const points = [...activePointers.current.entries()].slice(0, 2);
-        const transform = transformRef.current;
         if (points.length >= 2) {
             const [first, second] = points.map(([, point]) => point);
-            const dx = second.x - first.x;
-            const dy = second.y - first.y;
-            gestureStart.current = {
-                kind: 'pinch',
-                distance: Math.max(1, Math.hypot(dx, dy)),
-                angle: Math.atan2(dy, dx) * 180 / Math.PI,
-                midpointX: (first.x + second.x) / 2,
-                midpointY: (first.y + second.y) / 2,
-                transform,
-            };
+            gestureStart.current = {kind: 'pinch', ...measurePinch(first, second), transform: transformRef.current};
         } else if (points.length === 1) {
             const [pointerId, point] = points[0];
-            gestureStart.current = {kind: 'pan', pointerId, x: point.x, y: point.y, transform};
+            gestureStart.current = {kind: 'pan', pointerId, x: point.x, y: point.y, transform: transformRef.current};
         } else {
             gestureStart.current = null;
         }
@@ -453,13 +447,7 @@ export const Lineup = () => {
 
         const points = [...activePointers.current.values()].slice(0, 2);
         if (points.length < 2) return;
-        const [first, second] = points;
-        const dx = second.x - first.x;
-        const dy = second.y - first.y;
-        const distance = Math.max(1, Math.hypot(dx, dy));
-        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-        const midpointX = (first.x + second.x) / 2;
-        const midpointY = (first.y + second.y) / 2;
+        const {distance, angle, midpointX, midpointY} = measurePinch(points[0], points[1]);
         applyTransform({
             zoom: clampZoom(start.transform.zoom * distance / start.distance),
             rotation: normalizeAngle(start.transform.rotation + normalizeAngle(angle - start.angle)),
@@ -478,7 +466,7 @@ export const Lineup = () => {
     };
 
     const resetPhoto = () => {
-        applyTransform({zoom: 1, rotation: 0, offsetX: 0, offsetY: 0});
+        applyTransform(DEFAULT_TRANSFORM);
     };
 
     const downloadPng = () => {
@@ -747,14 +735,14 @@ export const Lineup = () => {
                             <label className="sbc-lineup-control">
                                 <span className="sbc-lineup-control-heading">
                                     <span>{t({en: 'Size', zh: '大小'})}</span>
-                                    <output>{Math.round(zoom * 100)}%</output>
+                                    <output>{Math.round(transform.zoom * 100)}%</output>
                                 </span>
                                 <input
                                     type="range"
                                     min={MIN_ZOOM}
                                     max={MAX_ZOOM}
                                     step="0.01"
-                                    value={zoom}
+                                    value={transform.zoom}
                                     disabled={!photo}
                                     aria-label={t({en: 'Photo size', zh: '照片大小'})}
                                     onChange={event => applyTransform({
@@ -767,14 +755,15 @@ export const Lineup = () => {
                             <label className="sbc-lineup-control">
                                 <span className="sbc-lineup-control-heading">
                                     <span>{t({en: 'Rotation', zh: '旋转'})}</span>
-                                    <output>{rotation}°</output>
+                                    {/* Rounded: a two-finger turn leaves it fractional. */}
+                                    <output>{Math.round(transform.rotation)}°</output>
                                 </span>
                                 <input
                                     type="range"
                                     min="-180"
                                     max="180"
                                     step="1"
-                                    value={rotation}
+                                    value={transform.rotation}
                                     disabled={!photo}
                                     aria-label={t({en: 'Photo rotation', zh: '照片旋转角度'})}
                                     onChange={event => applyTransform({

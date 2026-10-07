@@ -10,6 +10,7 @@ import {
     DEFAULT_TEMPLATE_BODY_EN,
     DEFAULT_TEMPLATE_SUBJECT,
     renderSamplePreview,
+    renderSampleSubject,
     tsToDate,
     usesContactEmail,
 } from './helpers';
@@ -31,6 +32,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
     });
     const [loading, setLoading] = useState(true);
+    const [loadFailed, setLoadFailed] = useState(false);
     const [saving, setSaving] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
 
@@ -38,6 +40,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         let cancelled = false;
         const load = async () => {
             setLoading(true);
+            setLoadFailed(false);
             try {
                 const db = getFirebaseDb();
                 const snap = await getDoc(
@@ -70,6 +73,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                 }
             } catch (err) {
                 console.error('[template] load', err);
+                if (!cancelled) setLoadFailed(true);
                 showToast(
                     isEnglish ? 'Failed to load template.' : '加载模板失败。',
                     'error',
@@ -82,7 +86,9 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         return () => {
             cancelled = true;
         };
-    }, [event.id, isEnglish, showToast]);
+        // Not keyed on isEnglish, which only words the failure toast: a language
+        // toggle would reload the template over any unsaved edits.
+    }, [event.id, showToast]);
 
     const isDirty = template.subject !== initialTemplate.subject
         || template.bodyHtml !== initialTemplate.bodyHtml;
@@ -128,6 +134,18 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
 
     if (loading) {
         return <div className="spinner spinner-centered"/>;
+    }
+
+    // An empty editor would invite saving over the stored template, so a failed
+    // read shows no editor at all.
+    if (loadFailed) {
+        return (
+            <p className="admin-no-results">
+                {isEnglish
+                    ? 'Could not load this event’s email template. Reload the page before editing it.'
+                    : '无法加载此活动的邮件模板。请重新加载页面后再编辑。'}
+            </p>
+        );
     }
 
     return (
@@ -213,9 +231,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                 >
                     <div className="admin-tickets-preview-subject">
                         <strong>{isEnglish ? 'Subject: ' : '主题：'}</strong>
-                        {template.subject.replace(/{{\s*eventTitle\s*}}/g, event.title)
-                            .replace(/{{\s*eventTitleCn\s*}}/g, event.titleCn)
-                            .replace(/{{\s*attendeeName\s*}}/g, 'Sample Attendee')}
+                        {renderSampleSubject(template, event, config.contactEmail)}
                     </div>
                     <div
                         className="admin-tickets-preview-body"

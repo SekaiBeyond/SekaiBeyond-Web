@@ -20,6 +20,7 @@ import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB } from "../utils/s
 import { sanitizeDisplayText, validateDocId, validateISODate } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
+import { isScannedTicket } from "../utils/tickets";
 
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     if (!request.auth) {
@@ -69,8 +70,52 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
         });
     });
 
+    if (!alreadyExists && email && request.auth.token.email_verified === true) {
+        try {
+            await creditScannedTickets(userRef, email.trim().toLowerCase());
+        } catch (err) {
+            // The profile exists either way; a missed credit must not fail sign-up.
+            console.error(`createUserProfile: ticket credit failed for ${uid}`, err);
+        }
+    }
+
     return {alreadyExists};
 });
+
+/**
+ * Credit a new account with the paid events its email was scanned into. The
+ * scanner credits the holder as it scans, but only an account that already
+ * carried the ticket's email, and getMyTickets catches later sign-ups only
+ * while the event is live. Anyone who signs up after the event ends, archived
+ * or not, is caught here, the one moment that gap opens.
+ *
+ * Only a verified email may claim the tickets sent to it, so the caller checks
+ * the token says so: sign-in is Google only today, but that is a setting in the
+ * Firebase console, not something this code enforces. The collection-group query
+ * rides the attendees.email override in firestore.indexes.json.
+ */
+async function creditScannedTickets(
+    userRef: FirebaseFirestore.DocumentReference,
+    email: string,
+): Promise<void> {
+    const snap = await db.collectionGroup("attendees").where("email", "==", email).get();
+    const eventRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+    for (const doc of snap.docs) {
+        const eventRef = doc.ref.parent.parent;
+        const root = eventRef?.parent.id;
+        if (!eventRef || (root !== "pastEvents" && root !== "upcomingEvents")) continue;
+        const tickets: unknown[] = Array.isArray(doc.data().tickets) ? doc.data().tickets : [];
+        if (tickets.some(isScannedTicket)) eventRefs.set(eventRef.id, eventRef);
+    }
+    if (eventRefs.size === 0) return;
+
+    // A deleted event's ticket list outlives it when its cleanup fails; an
+    // event that is gone must not land in attendedEvents.
+    const events = await db.getAll(...eventRefs.values());
+    const ids = events.filter(e => e.exists).map(e => e.id);
+    if (ids.length > 0) await userRef.update({attendedEvents: FieldValue.arrayUnion(...ids)});
+}
+
 export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");

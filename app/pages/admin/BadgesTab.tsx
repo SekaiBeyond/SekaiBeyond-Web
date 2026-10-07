@@ -315,8 +315,8 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             if (editForm.imagePreview?.startsWith('blob:')) URL.revokeObjectURL(editForm.imagePreview);
             setEditForm(emptyBadgeForm);
             showToast(isEnglish ? 'Badge updated.' : '徽章已更新。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to save badge.' : '保存徽章失败。', 'error');
+        } catch (e: any) {
+            showToast(e?.message ?? (isEnglish ? 'Failed to save badge.' : '保存徽章失败。'), 'error');
         } finally {
             setSavingBadgeDef(false);
         }
@@ -504,9 +504,10 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                             <button key={bd.id} className="admin-event-card" onClick={() => selectBadgeDef(bd)}>
                                 <img src={bd.imageUrl} alt="" className="admin-event-card-img"/>
                                 <div className="admin-event-card-info">
-                                    <span className="admin-event-card-title">{isEnglish ? bd.name : bd.nameCn}</span>
                                     <span
-                                        className="admin-event-card-date">{isEnglish ? bd.description : bd.descriptionCn}</span>
+                                        className="admin-event-card-title">{isEnglish ? bd.name : (bd.nameCn || bd.name)}</span>
+                                    <span
+                                        className="admin-event-card-date">{isEnglish ? bd.description : (bd.descriptionCn || bd.description)}</span>
                                     {bd.deleteAt && (
                                         <span className="admin-ended-tag">
                                             {isEnglish ? 'Pending deletion' : '待删除'}
@@ -536,9 +537,9 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 <div className="admin-event-detail-header">
                     <img src={selectedBadgeDef.imageUrl} alt="" className="admin-event-detail-img"/>
                     <div>
-                        <h3>{isEnglish ? selectedBadgeDef.name : selectedBadgeDef.nameCn}</h3>
+                        <h3>{isEnglish ? selectedBadgeDef.name : (selectedBadgeDef.nameCn || selectedBadgeDef.name)}</h3>
                         <p className="admin-event-detail-meta">
-                            {isEnglish ? selectedBadgeDef.description : selectedBadgeDef.descriptionCn}
+                            {isEnglish ? selectedBadgeDef.description : (selectedBadgeDef.descriptionCn || selectedBadgeDef.description)}
                         </p>
                         {selectedBadgeDef.createdByName && (
                             <p className="admin-event-detail-meta admin-mt-4">

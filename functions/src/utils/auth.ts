@@ -8,8 +8,7 @@ export const RATE_LIMIT_MAX = 10;
 export async function checkRateLimit(uid: string): Promise<void> {
     const ref = db.collection("rateLimits").doc(uid);
     const now = Date.now();
-    // expiresAt is used by Firestore TTL policy to auto-delete stale documents.
-    // Configure TTL on the "expiresAt" field in the Firebase console.
+    // expiresAt lets the TTL policy in firestore.indexes.json delete stale documents.
     const expiresAt = new Date(now + RATE_LIMIT_WINDOW_MS * 2);
 
     await db.runTransaction(async (txn) => {

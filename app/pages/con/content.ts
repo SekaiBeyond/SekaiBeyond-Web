@@ -10,11 +10,11 @@
  * still works; it sets what a visitor sees before the fetch lands, and what they
  * keep seeing for any section an admin has never touched.
  *
- * The rest — NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS — is code-only, because
- * it is tied to section anchors an admin cannot add. ROOM_ACCENTS is code-only for the
- * same reason (each value is a CSS class), but which rooms exist and which accent
- * each wears is data. CON_NAME is code-only because the con's name does not
- * change between editions.
+ * The rest — NAV_LINKS, ABOUT_PARAGRAPHS, HIGHLIGHTS — is code-only, because it
+ * is tied to section anchors an admin cannot add. ROOM_ACCENTS is code-only for
+ * the same reason (each value is a CSS class), but which rooms exist and which
+ * accent each wears is data. CON_NAME is code-only because the con's name does
+ * not change between editions.
  */
 
 import type { Localized } from '~/pages/con/i18n';
@@ -22,8 +22,8 @@ import type { Localized } from '~/pages/con/i18n';
 /** Page-level switches, kept apart from the copy they govern. */
 export interface ConSettings {
     /**
-     * When false, /con is visible to core-staff and the president only; everyone
-     * else gets a short "coming soon" card.
+     * When false, /con is visible to staff and above only; everyone else gets a
+     * short "coming soon" card.
      *
      * Defaults to false, and publishing is what creates the public `conContent/main`
      * mirror in the first place. Nothing about a con is public until someone ticks
@@ -245,7 +245,7 @@ export const ROOMS: Room[] = [
 export interface ScheduleItem {
     /**
      * Omitted together when the slot is announced but unscheduled — the page
-     * shows "TBA" in the time column rather than hiding the item.
+     * lists it under the grid as "time to be confirmed" rather than hiding it.
      */
     start?: string
     end?: string

@@ -271,7 +271,7 @@ const publicCache = createValueCache<ConContent>('con content', async () => {
 
 /**
  * The editable draft, readable by staff only. This is what the admin panel shows
- * and what core staff preview on /con before publishing.
+ * and what staff preview on /con before publishing.
  */
 const draftCache = createValueCache<ConContent>('con content draft', async () => {
     const db = getFirebaseDb();
@@ -299,9 +299,9 @@ export interface ConContentRead {
 
 /**
  * What /con should render for the current viewer: the published mirror for the
- * public, the unpublished draft for core staff so they can preview before the
- * page goes live. Resolving it here rather than at the page level keeps all nine
- * section components on one call and stops half the page rendering one source
+ * public, the unpublished draft for staff so they can preview before the page
+ * goes live. Resolving it here rather than at the page level keeps every
+ * section component on one call and stops half the page rendering one source
  * while half renders the other.
  */
 export function useConContent(): ConContentRead {
@@ -355,9 +355,9 @@ export function useConNavLinks(): NavLink[] {
 }
 
 /**
- * The editable draft, for the admin panel. Always the draft — plain `staff` can
- * open the Con Content tab read-only but cannot preview /con, so it cannot go
- * through `useConContent`.
+ * The editable draft, for the admin panel. Always the draft: going through
+ * `useConContent` would tie the editor to who /con lets preview, and anyone
+ * left out would be handed the public mirror to edit.
  */
 export function useConDraft(): ConContentRead {
     const {value: content, loading, error, refresh} = draftCache.useValue();

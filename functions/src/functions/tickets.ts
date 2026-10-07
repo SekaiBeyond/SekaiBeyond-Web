@@ -17,6 +17,7 @@ import { RESEND_API_KEY, type ResendEnvelope, ResendSendError, sendEmails } from
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 import { EMAIL_RE, sanitizeDisplayText, validateDocId, validateEmail, validateStr } from "../utils/validation";
 import { recordDoc, recordRef } from "../utils/records";
+import { isScannedTicket } from "../utils/tickets";
 
 function validateTicketCount(value: unknown): number {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 50) {
@@ -240,24 +241,27 @@ function renderTemplate(
     const sub = htmlContext ? escapeHtml : (s: string) => s;
     // CSS background-image is unreliable in email clients (Outlook strips it
     // entirely; several others ignore it). Render a real <img> instead so the
-    // header artwork shows everywhere. URL is validated as a Firebase Storage
-    // URL at save time (validateStorageImageUrl) so it's safe to interpolate.
+    // header artwork shows everywhere. The URL was checked as a Firebase Storage
+    // URL at save time (validateStorageImageUrl), but that check reads the parsed
+    // URL while the stored string is what lands here, so it is escaped too.
     const headerImage = data.emailHeaderBg
-        ? `<img src="${data.emailHeaderBg}" alt="${sub(data.eventTitle)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
+        ? `<img src="${escapeHtml(data.emailHeaderBg)}" alt="${sub(data.eventTitle)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
         : `<div style="background-color:#ff6b9d;height:120px;"></div>`;
 
+    // Function replacements throughout: a replacement string reads $&, $' and $$
+    // as patterns, so a name or title containing one would come out mangled.
     return template
-        .replace(/{{\s*attendeeEmail\s*}}/g, sub(data.attendeeEmail))
-        .replace(/{{\s*attendeeName\s*}}/g, sub(data.attendeeName))
-        .replace(/{{\s*eventTitle\s*}}/g, sub(data.eventTitle))
-        .replace(/{{\s*eventTitleCn\s*}}/g, sub(data.eventTitleCn))
-        .replace(/{{\s*eventDate\s*}}/g, sub(data.eventDate))
-        .replace(/{{\s*eventHeader\s*}}/g, headerImage)
-        .replace(/{{\s*ticketCount\s*}}/g, String(data.ticketCount))
-        .replace(CONTACT_EMAIL_PLACEHOLDER, sub(data.contactEmail))
+        .replace(/{{\s*attendeeEmail\s*}}/g, () => sub(data.attendeeEmail))
+        .replace(/{{\s*attendeeName\s*}}/g, () => sub(data.attendeeName))
+        .replace(/{{\s*eventTitle\s*}}/g, () => sub(data.eventTitle))
+        .replace(/{{\s*eventTitleCn\s*}}/g, () => sub(data.eventTitleCn))
+        .replace(/{{\s*eventDate\s*}}/g, () => sub(data.eventDate))
+        .replace(/{{\s*eventHeader\s*}}/g, () => headerImage)
+        .replace(/{{\s*ticketCount\s*}}/g, () => String(data.ticketCount))
+        .replace(CONTACT_EMAIL_PLACEHOLDER, () => sub(data.contactEmail))
         // {{ ticketIds[] }} — with optional surrounding <p>/<div> tags collapsed.
         // ticketBlock is server-built HTML, never escaped.
-        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[]\s*}}(\s*<\/p>|\s*<\/div>)?/g, data.ticketBlock);
+        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[]\s*}}(\s*<\/p>|\s*<\/div>)?/g, () => data.ticketBlock);
 }
 
 export const importEventAttendees = onCall({maxInstances: 10}, async (request) => {
@@ -348,10 +352,9 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         const now = FieldValue.serverTimestamp();
         const customDate = row.timestamp ? Timestamp.fromDate(row.timestamp) : undefined;
 
-        // For replaced records, we only update `updatedAt` unless a custom timestamp is provided, 
-        // in which case it might make sense to update `createdAt` to that too if we want it to act as the original import date.
-        // Let's just update `updatedAt` for replaced, and `createdAt`/`updatedAt` for new. 
-        // Actually, if a custom timestamp is provided, let's set `createdAt` to it for both added and replaced, so the ticket acts like it was created then.
+        // A row's own timestamp, when the import has one, stands in for both dates,
+        // so the ticket reads as bought then. Without one, a new record is stamped
+        // now and a replaced one keeps its createdAt.
 
         if (existing) {
             replacedCount++;
@@ -413,9 +416,11 @@ interface HeldTicket {
  * Attendee docs are keyed by the email the ticket was bought with, and the
  * `attendees` subcollection is closed to everyone but staff (see
  * firestore.rules), so this call is the only way a holder reaches their own
- * tickets. The email comes off the ID token rather than the users doc: the token
- * is what Auth actually verified, so nobody reads someone else's tickets by
- * having a profile field say so.
+ * tickets. The email comes off the ID token rather than the users doc, and only
+ * once the token says it is verified, so nobody reads someone else's tickets by
+ * having a profile field say so, or by signing up with an address they don't
+ * own. Sign-in is Google only today, but that is a setting in the Firebase
+ * console, not something this code enforces.
  *
  * The cut is the event's end, never the scan. A ticket already through the door
  * stays visible for the length of the event — people re-open their own ticket to
@@ -430,12 +435,13 @@ interface HeldTicket {
  * A redeemed ticket also backfills attendance. The scanner credits the holder's
  * account as it scans, but only if an account already carried the ticket's
  * email; someone who signed up afterwards would otherwise never be credited for
- * the event they were scanned into.
+ * the event they were scanned into. createUserProfile does the same at sign-up,
+ * for ended events too; this catches a sign-up whose credit failed.
  */
 export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
     const email = (request.auth?.token.email ?? "").trim().toLowerCase();
-    if (!email) return {events: []};
+    if (!email || request.auth?.token.email_verified !== true) return {events: []};
 
     // Filtering on endAt alone keeps this on the automatic single-field index —
     // there are only ever a handful of live events to sift in memory.
@@ -489,7 +495,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     events.sort((a, b) => a.startAt.localeCompare(b.startAt));
 
     const scannedInto = events
-        .filter(e => e.tickets.some(t => t.redeemed && !t.voided))
+        .filter(e => e.tickets.some(isScannedTicket))
         .map(e => e.eventId);
     if (scannedInto.length > 0) {
         try {
@@ -645,11 +651,15 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         const eventTitle: string = eventSnap.data()?.title ?? "";
 
         const now = Timestamp.now();
+        // How long after admitting a ticket the same scanner can read it again and
+        // be told it succeeded, so a ticket still held up to the camera doesn't flip
+        // to "already redeemed" a moment after it got in. Timed from the admission;
+        // the scanner's cache is told what is left of it.
         const REDEEM_GRACE_PERIOD_MS = 15_000;
 
         if (ticket.redeemed) {
-            const redeemedAtMs = ticket.redeemedAt?.toMillis?.() ?? 0;
-            const isWithinGracePeriod = (now.toMillis() - redeemedAtMs) < REDEEM_GRACE_PERIOD_MS;
+            const sinceRedeemedMs = now.toMillis() - (ticket.redeemedAt?.toMillis?.() ?? 0);
+            const isWithinGracePeriod = sinceRedeemedMs < REDEEM_GRACE_PERIOD_MS;
             const isSameScanner = ticket.redeemedBy === uid;
 
             if (!isWithinGracePeriod || !isSameScanner) {
@@ -664,6 +674,21 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                     redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
                 };
             }
+
+            // The same scanner reading it again moments later: report the admission
+            // it already made, and write nothing. Writing redeemedAt again would
+            // restart the window on every rescan, and a ticket held up to the camera
+            // every few seconds would never stop reading as a fresh admission.
+            return {
+                success: true,
+                attendeeName,
+                attendeeEmail,
+                eventTitle,
+                ticketIndex: idx,
+                ticketType: ticket.type || "normal",
+                userCheckedIn: ticket.checkedIn === true,
+                graceRemainingMs: Math.min(REDEEM_GRACE_PERIOD_MS, REDEEM_GRACE_PERIOD_MS - sinceRedeemedMs),
+            };
         }
 
         // Try to link to a registered user by email.
@@ -703,6 +728,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
             ticketIndex: idx,
             ticketType: ticket.type || "normal",
             userCheckedIn,
+            graceRemainingMs: REDEEM_GRACE_PERIOD_MS,
         };
     });
 });
@@ -1231,7 +1257,6 @@ export const sendTicketEmails = onCall(
         // Ops here are only for non-email side effects (ticketless attendee
         // marks). The actual Resend send happens in one batch call below.
         const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
-        let lastProcessedId: string | null = null;
 
         // Walk targets into a candidates list. The send-vs-queue split is
         // deferred until inside the reservation transaction below, so the
@@ -1245,9 +1270,15 @@ export const sendTicketEmails = onCall(
             tickets: any[];
         }[] = [];
         const prelimBudget = prelimRemainingToday + queueCapacity;
-        for (const target of targets) {
-            lastProcessedId = target.id;
-            if (candidates.length >= prelimBudget) break;
+        // How many of `targets`, in order, this call deals with — lowered below if
+        // the reservation trims candidates. A resend-all pass resumes after the
+        // last of them, so a target left over is picked up next call, not skipped.
+        let handled = targets.length;
+        for (const [i, target] of targets.entries()) {
+            if (candidates.length >= prelimBudget) {
+                handled = i;
+                break;
+            }
             const data = target.data();
             const rawTickets: any[] = data.tickets ?? [];
             const activeTickets = rawTickets.filter(t => !t.voided);
@@ -1276,10 +1307,10 @@ export const sendTicketEmails = onCall(
         // admin sends both observe pre-reservation state and double-spend:
         // Firestore's optimistic concurrency on system/resendQuota means
         // whichever txn lands second retries against the new total. Once
-        // the send returns, applyProviderHeaderQuota releases this send's own
-        // reservation and records Resend's authoritative count. Queue audit
-        // shares the txn for symmetry — doesn't consume the daily cap, cheap
-        // to include.
+        // the send settles, this send's own reservation is released, and
+        // Resend's authoritative count recorded if a quota header came back.
+        // Queue audit shares the txn for symmetry — doesn't consume the
+        // daily cap, cheap to include.
         const callerSnap = await db.collection("users").doc(uid).get();
         const performedByName = callerSnap.data()?.displayName ?? "";
         const {sendAuditRef, queueAuditRef, expectedSentCount, expectedQueuedCount} =
@@ -1324,6 +1355,9 @@ export const sendTicketEmails = onCall(
         // admin send may have consumed slots between the pre-check and the
         // txn read). First `expectedSentCount` ship now; the rest queue.
         const reservedCount = expectedSentCount + expectedQueuedCount;
+        if (reservedCount < candidates.length) {
+            handled = Math.min(handled, targets.indexOf(candidates[reservedCount].target));
+        }
         const sendableTargets = candidates.slice(0, reservedCount).map((c, i) => ({
             ...c,
             queued: i >= expectedSentCount,
@@ -1385,9 +1419,9 @@ export const sendTicketEmails = onCall(
         // at 100 so a single call always covers the chunk.
         // Failure mode: all-or-nothing — a 4xx/5xx fails every envelope. If
         // Resend responded with the quota header, resendClient already
-        // wrote the authoritative count to the cache; if it didn't
-        // (network error), we roll back the pre-charge so a retry doesn't
-        // see a false ceiling.
+        // wrote the authoritative count to the cache; if no header came
+        // back, we roll back the pre-charge so a retry doesn't see a false
+        // ceiling.
         let sentCount = 0;
         let sendError: unknown = null;
         if (sendEnvelopes.length > 0) {
@@ -1397,8 +1431,8 @@ export const sendTicketEmails = onCall(
             } catch (err) {
                 console.error("sendTicketEmails: send failed", err);
                 sendError = err;
-                // Roll back the pre-charge only if Resend never answered;
-                // a header response already corrected the cache.
+                // Roll back the pre-charge unless a quota header came back;
+                // resendClient has already folded that into the cache.
                 const headerArrived = err instanceof ResendSendError
                     && err.dailyConsumed !== null;
                 if (!headerArrived) {
@@ -1498,12 +1532,12 @@ export const sendTicketEmails = onCall(
                 });
         }
 
-        // hasMore: the query returned a full chunk (there may be more).
-        // For attendeeIds, the client controls chunking — never set hasMore.
-        const hasMore = !attendeeIds && queriedCount >= chunkSize;
-        const nextCursor = mode === "all" && hasMore && lastProcessedId
-            ? lastProcessedId
-            : undefined;
+        // hasMore: the query returned a full chunk (there may be more), or this
+        // call stopped short of the chunk it read. For attendeeIds, the client
+        // controls chunking — never set hasMore.
+        const hasMore = !attendeeIds && (queriedCount >= chunkSize || handled < targets.length);
+        const resumeAfter = handled > 0 ? targets[handled - 1].id : cursor;
+        const nextCursor = mode === "all" && hasMore && resumeAfter ? resumeAfter : undefined;
 
         return {sentCount, queuedCount, hasMore, ...(nextCursor ? {nextCursor} : {})};
     });

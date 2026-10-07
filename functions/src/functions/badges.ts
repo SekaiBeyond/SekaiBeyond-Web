@@ -5,7 +5,7 @@ import { adminTransaction, checkRateLimit } from "../utils/auth";
 import { deletionExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
-import { deleteStorageFile, logStorageCleanupError } from "../utils/storage";
+import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 import { recordDoc, recordRef } from "../utils/records";
 import {
     sanitizeDisplayText,
@@ -140,6 +140,7 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
             const existing = await txn.get(db.collection("badges").doc(badgeId));
             if (!existing.exists) throw new HttpsError("not-found", "Badge not found.");
             const prevImageUrl: string = existing.data()?.imageUrl ?? "";
+            await requireNewlyLinkedFilesExist([imageUrl], [prevImageUrl]);
 
             txn.update(db.collection("badges").doc(badgeId), {
                 name, nameCn, description, descriptionCn, imageUrl,

@@ -30,6 +30,27 @@ const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
 export type { ShowToast };
 
 /**
+ * The re-read after an admin write has landed. Its failure is a stale screen, not a
+ * failed save, so it is reported with a warning and never thrown. Thrown inside the
+ * write's try, it would read as "Failed to save", and saving again would repeat the
+ * write: a second copy of whatever was being created.
+ */
+export async function refreshAfterSave(
+    refresh: () => Promise<unknown>,
+    showToast: ShowToast,
+    isEnglish: boolean,
+): Promise<void> {
+    try {
+        await refresh();
+    } catch (err) {
+        console.error('Re-read after a save failed:', err);
+        showToast(isEnglish
+            ? 'The change was saved, but this page couldn\'t reload, so it may not show it yet. Reload the page to see it.'
+            : '更改已保存，但页面未能重新加载，可能暂未显示。请刷新页面查看。', 'warning');
+    }
+}
+
+/**
  * Format a Date as the `YYYY-MM-DDTHH:mm` value a `datetime-local` input expects.
  * Built from local getters rather than `toISOString`, which would shift the
  * displayed time by the UTC offset. A null date maps to the empty (unset) input.
