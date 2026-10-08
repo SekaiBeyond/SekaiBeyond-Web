@@ -69,7 +69,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                 <span className={`convention-label${isInProgress ? ' convention-label--progress' : ''}`}>
                     {isInProgress
                         ? (isEnglish ? "Happening Now" : "进行中")
-                        : (isEnglish ? "Coming Soon" : "即将到来")}
+                        : (isEnglish ? "Coming Soon" : "即将开始")}
                 </span>
                 <h2 className="convention-title">{isEnglish ? event.title : (event.titleCn || event.title)}</h2>
                 <p className="event-date-text">{event.startAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {

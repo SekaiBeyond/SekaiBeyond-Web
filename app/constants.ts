@@ -58,6 +58,12 @@ const SHARED_LINKS: NavLink[] = [
         labelCn: '关于我们',
     },
     {
+        id: 'upcoming',
+        href: '#upcoming',
+        labelEn: 'Upcoming Events',
+        labelCn: '活动预告',
+    },
+    {
         id: 'con',
         href: '#con',
         publishedRoute: '/con',
@@ -69,12 +75,6 @@ const SHARED_LINKS: NavLink[] = [
         href: '#events',
         labelEn: 'Past Events',
         labelCn: '往期活动',
-    },
-    {
-        id: 'upcoming',
-        href: '#upcoming',
-        labelEn: 'Upcoming Events',
-        labelCn: '活动预告',
     },
     {
         id: 'team',

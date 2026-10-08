@@ -19,10 +19,10 @@ export const Welcome = () => {
             <Navigation/>
             <Hero/>
             <About/>
+            <UpcomingEvent/>
             <Video/>
             <SekaiBeyondCon/>
             <PastEvents/>
-            <UpcomingEvent/>
             <Team/>
             <Contact/>
             <Footer/>

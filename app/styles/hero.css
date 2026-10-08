@@ -107,6 +107,11 @@
     margin-bottom: 40px;
 }
 
+.hero-action--pending {
+    visibility: hidden;
+    pointer-events: none;
+}
+
 .btn {
     padding: 16px 35px;
     font-size: 17px;

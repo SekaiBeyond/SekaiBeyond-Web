@@ -18,6 +18,18 @@
         padding: 0 5px;
     }
 
+    .hero-actions {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        max-width: 320px;
+        margin-inline: auto;
+    }
+
+    .hero-actions .btn {
+        justify-content: center;
+    }
+
     .about-content {
         grid-template-columns: 1fr;
         gap: 40px;

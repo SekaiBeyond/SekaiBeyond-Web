@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { type MouseEvent, useMemo } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { FOUNDED_DATE } from "~/constants";
+import { usePastEvents } from "~/lib/pastEvents";
+import { useUpcomingEvents } from "~/lib/upcomingEvents";
 
 const generateBubbleStyles = () =>
     Array.from({length: 6}, () => ({
@@ -22,6 +24,19 @@ const yearsSince = (from: Date) => {
 export const Hero = () => {
     const {isEnglish} = useLanguage();
     const bubbleStyles = useMemo(generateBubbleStyles, []);
+    const {activeEvents, loading: upcomingLoading} = useUpcomingEvents();
+    const {pastEvents, loading: pastLoading} = usePastEvents();
+
+    // While events load, their buttons are rendered invisibly so the hero keeps its
+    // height instead of jumping when they appear. Once loaded, a button with
+    // nothing behind it is dropped, matching the navbar and the hidden sections.
+    const showUpcoming = upcomingLoading || activeEvents.length > 0;
+    const showPast = pastLoading || pastEvents.some(e => e.published);
+
+    const scrollTo = (e: MouseEvent, id: string) => {
+        e.preventDefault();
+        document.getElementById(id)?.scrollIntoView({behavior: "smooth"});
+    };
 
     return (
         <section id="home" className="hero">
@@ -46,21 +61,28 @@ export const Hero = () => {
                         : '加入我们一起参与动漫、游戏、Cosplay与创作活动：从游戏夜到游戏开发，从舞台表演到展会，欢迎所有同学参与'
                     }
                 </p>
-                <div className="hero-buttons">
-                    <a href="#contact" className="btn btn-primary" onClick={(e) => {
-                        e.preventDefault();
-                        document.getElementById("contact")?.scrollIntoView({behavior: "smooth"});
-                    }}>
+                <div className="hero-buttons hero-actions">
+                    <a href="#contact" className="btn btn-primary" onClick={(e) => scrollTo(e, "contact")}>
                         <span>{isEnglish ? "Become a Member" : "成为会员"}</span>
                         <span>🌸</span>
                     </a>
-                    <a href="#events" className="btn btn-secondary" onClick={(e) => {
-                        e.preventDefault();
-                        document.getElementById("events")?.scrollIntoView({behavior: "smooth"});
-                    }}>
-                        <span>{isEnglish ? "Explore Events" : "探索活动"}</span>
-                        <span>✨</span>
-                    </a>
+                    {showUpcoming && (
+                        <a href="#upcoming"
+                           className={`btn btn-secondary${upcomingLoading ? ' hero-action--pending' : ''}`}
+                           aria-hidden={upcomingLoading || undefined} tabIndex={upcomingLoading ? -1 : undefined}
+                           onClick={(e) => scrollTo(e, "upcoming")}>
+                            <span>{isEnglish ? (activeEvents.length === 1 ? "Upcoming Event" : "Upcoming Events") : "活动预告"}</span>
+                            <span>✨</span>
+                        </a>
+                    )}
+                    {showPast && (
+                        <a href="#events" className={`btn btn-secondary${pastLoading ? ' hero-action--pending' : ''}`}
+                           aria-hidden={pastLoading || undefined} tabIndex={pastLoading ? -1 : undefined}
+                           onClick={(e) => scrollTo(e, "events")}>
+                            <span>{isEnglish ? "Past Events" : "往期活动"}</span>
+                            <span>📸</span>
+                        </a>
+                    )}
                 </div>
                 <div className="stats-container">
                     <div className="stat-item">
