@@ -1,14 +1,17 @@
 import { Fragment } from "react";
-import { FOOTER_LINKS, type NavLink } from "~/constants";
+import { Link } from "react-router";
+import { FOOTER_LINKS, type NavLink, resolveNavHref } from "~/constants";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
 import { useSiteConfig } from "~/lib/siteConfig";
+import { useConContent } from "~/lib/conContent";
 
 export const Footer = () => {
     const {isEnglish} = useLanguage();
     const {hasActive, activeEvents} = useUpcomingEvents();
     const singleUpcoming = activeEvents.length === 1;
     const {config} = useSiteConfig();
+    const conPublished = useConContent().content.settings.published;
 
     const hrefFor = (link: NavLink) =>
         link.id === 'email' ? link.href + config.contactEmail : link.href;
@@ -25,17 +28,17 @@ export const Footer = () => {
                 {FOOTER_LINKS.map((link: NavLink) => link.disabled || (link.id === 'upcoming' && !hasActive)
                 || (link.id === 'email' && !config.contactEmail) ? null : (
                     <Fragment key={link.id}>
-                        {link.href.startsWith("#") ? (
+                        {resolveNavHref(link, conPublished).startsWith("#") ? (
                             <a href={link.href} className="footer-link" onClick={(e) => {
                                 e.preventDefault();
                                 document.querySelector(link.href)?.scrollIntoView({behavior: "smooth"});
                             }}>
                                 {labelFor(link)}
                             </a>
-                        ) : link.href.startsWith("/") ? (
-                            <a href={link.href} className="footer-link">
+                        ) : resolveNavHref(link, conPublished).startsWith("/") ? (
+                            <Link to={resolveNavHref(link, conPublished)} className="footer-link">
                                 {labelFor(link)}
-                            </a>
+                            </Link>
                         ) : (
                             <a href={hrefFor(link)} className="footer-link" target="_blank"
                                rel="noopener noreferrer">

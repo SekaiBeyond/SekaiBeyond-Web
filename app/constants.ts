@@ -39,7 +39,16 @@ export interface NavLink {
     labelEn: string;
     labelCn: string;
     disabled?: boolean;
+    /**
+     * A route to open instead of scrolling to `href` once the page behind it is
+     * published. `href` stays the fallback so visitors never land on a placeholder.
+     */
+    publishedRoute?: string;
 }
+
+/** The link a nav item should currently point at. */
+export const resolveNavHref = (link: NavLink, published: boolean): string =>
+    published && link.publishedRoute ? link.publishedRoute : link.href;
 
 const SHARED_LINKS: NavLink[] = [
     {
@@ -51,6 +60,7 @@ const SHARED_LINKS: NavLink[] = [
     {
         id: 'con',
         href: '#con',
+        publishedRoute: '/con',
         labelEn: 'Sekai Beyond Con',
         labelCn: '彼世界动漫游戏展',
     },
