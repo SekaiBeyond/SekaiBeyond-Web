@@ -1,7 +1,6 @@
 import { type MouseEvent, useMemo } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { FOUNDED_DATE } from "~/constants";
-import { usePastEvents } from "~/lib/pastEvents";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
 
 const generateBubbleStyles = () =>
@@ -24,14 +23,7 @@ const yearsSince = (from: Date) => {
 export const Hero = () => {
     const {isEnglish} = useLanguage();
     const bubbleStyles = useMemo(generateBubbleStyles, []);
-    const {activeEvents, loading: upcomingLoading} = useUpcomingEvents();
-    const {pastEvents, loading: pastLoading} = usePastEvents();
-
-    // While events load, their buttons are rendered invisibly so the hero keeps its
-    // height instead of jumping when they appear. Once loaded, a button with
-    // nothing behind it is dropped, matching the navbar and the hidden sections.
-    const showUpcoming = upcomingLoading || activeEvents.length > 0;
-    const showPast = pastLoading || pastEvents.some(e => e.published);
+    const {activeEvents, hasActive} = useUpcomingEvents();
 
     const scrollTo = (e: MouseEvent, id: string) => {
         e.preventDefault();
@@ -66,20 +58,15 @@ export const Hero = () => {
                         <span>{isEnglish ? "Become a Member" : "成为会员"}</span>
                         <span>🌸</span>
                     </a>
-                    {showUpcoming && (
-                        <a href="#upcoming"
-                           className={`btn btn-secondary${upcomingLoading ? ' hero-action--pending' : ''}`}
-                           aria-hidden={upcomingLoading || undefined} tabIndex={upcomingLoading ? -1 : undefined}
-                           onClick={(e) => scrollTo(e, "upcoming")}>
-                            <span>{isEnglish ? (activeEvents.length === 1 ? "Upcoming Event" : "Upcoming Events") : "活动预告"}</span>
+                    {/* Past events are always there, so they hold this spot until an upcoming event takes it. */}
+                    {hasActive ? (
+                        <a href="#upcoming" className="btn btn-secondary" onClick={(e) => scrollTo(e, "upcoming")}>
+                            <span>{isEnglish ? (activeEvents.length === 1 ? "See Upcoming Event" : "See Upcoming Events") : "查看活动预告"}</span>
                             <span>✨</span>
                         </a>
-                    )}
-                    {showPast && (
-                        <a href="#events" className={`btn btn-secondary${pastLoading ? ' hero-action--pending' : ''}`}
-                           aria-hidden={pastLoading || undefined} tabIndex={pastLoading ? -1 : undefined}
-                           onClick={(e) => scrollTo(e, "events")}>
-                            <span>{isEnglish ? "Past Events" : "往期活动"}</span>
+                    ) : (
+                        <a href="#events" className="btn btn-secondary" onClick={(e) => scrollTo(e, "events")}>
+                            <span>{isEnglish ? "See Past Events" : "查看往期活动"}</span>
                             <span>📸</span>
                         </a>
                     )}

@@ -28,7 +28,7 @@ export const PastEvents = () => {
     const displayedEvents = showAll ? publishedEvents : publishedEvents.slice(0, initialCount);
 
     return (
-        <section id="events" className="section" hidden={!loading && publishedEvents.length === 0}>
+        <section id="events" className="section">
             <div className="section-header">
                 <h2 className="section-title">{isEnglish ? "Past Events" : "往期活动"}</h2>
                 <p className="section-subtitle">{isEnglish ? "Check out the amazing events we've hosted!" : "查看我们举办过的精彩活动！"}</p>
