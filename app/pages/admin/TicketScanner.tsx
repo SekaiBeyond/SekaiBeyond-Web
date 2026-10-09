@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callRedeemTicket, functionsErrorCode } from '~/lib/firebase';
 import { useQrScanner } from '~/lib/useQrScanner';
+import { type ScanOutcome, useScanSound, useScanVibration } from '~/lib/useScanFeedback';
 import { QrScannerViewport } from './QrScannerViewport';
 import { ticketTypeLabel } from './tickets/types';
 
@@ -32,6 +33,12 @@ interface CachedRedemption {
 
 const DEDUPE_MS = 3000;
 const CACHE_SIZE = 20;
+/**
+ * How long the same result for the same code stays quiet after it last came up.
+ * A code held in front of the camera comes back every frame, or from the server
+ * every DEDUPE_MS; this outlasts that plus the round trip, so it sounds once.
+ */
+const CUE_QUIET_MS = 5000;
 
 interface TicketScannerProps {
     eventId: string;
@@ -43,10 +50,27 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
     const {isEnglish} = useLanguage();
     const lastScanRef = useRef<{ticketId: string; at: number} | null>(null);
     const redeemedCacheRef = useRef<CachedRedemption[]>([]);
+    const lastCueRef = useRef<{key: string; at: number} | null>(null);
+    const sound = useScanSound();
+    const vibration = useScanVibration();
+    const {play: playSound} = sound;
+    const {play: vibrate} = vibration;
 
     const [status, setStatus] = useState<ScanStatus>({kind: 'idle'});
     const [manualTicketId, setManualTicketId] = useState('');
     const [busy, setBusy] = useState(false);
+
+    // Signals a result once per showing of a code: each repeat of the same result
+    // for it inside CUE_QUIET_MS restarts the quiet instead of playing again.
+    const cue = useCallback((outcome: ScanOutcome, code: string) => {
+        const key = `${outcome}:${code}`;
+        const now = Date.now();
+        const last = lastCueRef.current;
+        lastCueRef.current = {key, at: now};
+        if (last?.key === key && now - last.at < CUE_QUIET_MS) return;
+        playSound(outcome);
+        vibrate(outcome);
+    }, [playSound, vibrate]);
 
     const handleTicket = useCallback(async (ticketId: string) => {
         const last = lastScanRef.current;
@@ -66,6 +90,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 ticketType: cached.ticketType,
                 userCheckedIn: cached.userCheckedIn,
             });
+            cue('success', ticketId);
             return;
         }
 
@@ -84,6 +109,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                     redeemedBy: d.redeemedBy ?? '',
                     redeemedAt: d.redeemedAt ?? null,
                 });
+                cue('issue', ticketId);
             } else {
                 const successData = {
                     attendeeName: d.attendeeName ?? '',
@@ -92,6 +118,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                     userCheckedIn: !!d.userCheckedIn,
                 };
                 setStatus({kind: 'success', ...successData});
+                cue('success', ticketId);
 
                 // The server times the window from the first admission, and a rescan
                 // it answers can come well into it, so it says how much is left. A
@@ -119,10 +146,11 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 reason = isEnglish ? 'Scan failed. Please try again.' : '扫描失败，请重试。';
             }
             setStatus({kind: 'error', reason});
+            cue('issue', ticketId);
         } finally {
             setBusy(false);
         }
-    }, [eventId, isEnglish, onRedeemed]);
+    }, [eventId, isEnglish, onRedeemed, cue]);
 
     // Each decoded code: redeem if it's for this event, warn if it's for another,
     // ignore anything unparseable. Always returns false so scanning continues.
@@ -137,9 +165,10 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                     ? 'QR code is for a different event.'
                     : '二维码属于其他活动。',
             });
+            cue('issue', raw);
         }
         return false;
-    }, [eventId, handleTicket, isEnglish]);
+    }, [eventId, handleTicket, isEnglish, cue]);
 
     const scanner = useQrScanner({
         onDecode,
@@ -156,6 +185,8 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         if (!raw) return;
         const parsed = parseTicketUrl(raw);
         const ticketId = parsed?.ticketId ?? raw;
+        // Typed in on purpose, so it sounds even if the camera just read the same.
+        lastCueRef.current = null;
         await handleTicket(ticketId);
         setManualTicketId('');
     };
@@ -163,6 +194,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
     const clearStatus = () => {
         setStatus(scanner.cameraActive ? {kind: 'scanning'} : {kind: 'idle'});
         lastScanRef.current = null;
+        lastCueRef.current = null;
     };
 
     return (
@@ -179,6 +211,26 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                         {isEnglish ? 'Next Scan' : '继续扫描'}
                     </button>
                 )}
+                <div className="admin-tickets-scanner-feedback">
+                    <label className="admin-checkbox-label">
+                        <input
+                            type="checkbox"
+                            checked={sound.enabled}
+                            onChange={(e) => sound.setEnabled(e.target.checked)}
+                        />
+                        <span>{isEnglish ? 'Sound' : '提示音'}</span>
+                    </label>
+                    {vibration.supported && (
+                        <label className="admin-checkbox-label">
+                            <input
+                                type="checkbox"
+                                checked={vibration.enabled}
+                                onChange={(e) => vibration.setEnabled(e.target.checked)}
+                            />
+                            <span>{isEnglish ? 'Vibrate' : '振动'}</span>
+                        </label>
+                    )}
+                </div>
             </QrScannerViewport>
 
             <ResultBanner status={status} isEnglish={isEnglish}/>

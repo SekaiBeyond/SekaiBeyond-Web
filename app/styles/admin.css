@@ -2976,6 +2976,16 @@ select.admin-tickets-tag:focus {
     text-transform: uppercase;
 }
 
+.admin-tickets-scanner .admin-btn-row {
+    flex-wrap: wrap;
+}
+
+.admin-tickets-scanner-feedback {
+    margin-left: auto;
+    display: flex;
+    gap: 14px;
+}
+
 .admin-tickets-scanner-manual {
     margin-top: 16px;
     padding: 16px 18px;
