@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callRedeemTicket, functionsErrorCode } from '~/lib/firebase';
 import { useQrScanner } from '~/lib/useQrScanner';
@@ -10,16 +10,28 @@ type ScanStatus =
     | {kind: 'idle'}
     | {kind: 'scanning'}
     | {kind: 'loading'; ticketId: string}
-    | {kind: 'success'; attendeeName: string; attendeeEmail: string; ticketType: string; userCheckedIn: boolean}
+    | {
+    kind: 'success';
+    attendeeName: string;
+    attendeeEmail: string;
+    ticketType: string;
+    userCheckedIn: boolean;
+    /** When it went up. A fresh one restarts the countdown to clearing it. */
+    shownAt: number
+}
     | {
     kind: 'already';
     attendeeName: string;
     attendeeEmail: string;
     ticketType: string;
     redeemedBy: string;
-    redeemedAt: string | null
+    redeemedAt: string | null;
+    shownAt: number
 }
-    | {kind: 'error'; reason: string};
+    | {kind: 'error'; reason: string; shownAt: number};
+
+/** A result on show, which clears itself after {@link CLEAR_AFTER_MS}. */
+type ShownStatus = Extract<ScanStatus, {shownAt: number}>;
 
 interface CachedRedemption {
     ticketId: string;
@@ -39,6 +51,16 @@ const CACHE_SIZE = 20;
  * every DEDUPE_MS; this outlasts that plus the round trip, so it sounds once.
  */
 const CUE_QUIET_MS = 5000;
+/** How long each result stays up before clearing itself for the next scan. */
+const CLEAR_AFTER_MS: Record<ShownStatus['kind'], number> = {
+    // An admitted ticket needs nothing more from the operator.
+    success: 5000,
+    // A problem may need reading out to the attendee or acting on.
+    already: 15000,
+    error: 15000,
+};
+/** The last stretch of that, over which a result fades out. Matches the CSS. */
+const FADE_MS = 300;
 
 interface TicketScannerProps {
     eventId: string;
@@ -59,6 +81,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
     const [status, setStatus] = useState<ScanStatus>({kind: 'idle'});
     const [manualTicketId, setManualTicketId] = useState('');
     const [busy, setBusy] = useState(false);
+    const [leaving, setLeaving] = useState(false);
 
     // Signals a result once per showing of a code: each repeat of the same result
     // for it inside CUE_QUIET_MS restarts the quiet instead of playing again.
@@ -89,6 +112,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 attendeeEmail: cached.attendeeEmail,
                 ticketType: cached.ticketType,
                 userCheckedIn: cached.userCheckedIn,
+                shownAt: now,
             });
             cue('success', ticketId);
             return;
@@ -108,6 +132,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                     ticketType: d.ticketType ?? 'normal',
                     redeemedBy: d.redeemedBy ?? '',
                     redeemedAt: d.redeemedAt ?? null,
+                    shownAt: Date.now(),
                 });
                 cue('issue', ticketId);
             } else {
@@ -117,7 +142,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                     ticketType: d.ticketType ?? 'normal',
                     userCheckedIn: !!d.userCheckedIn,
                 };
-                setStatus({kind: 'success', ...successData});
+                setStatus({kind: 'success', ...successData, shownAt: Date.now()});
                 cue('success', ticketId);
 
                 // The server times the window from the first admission, and a rescan
@@ -145,7 +170,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
             } else {
                 reason = isEnglish ? 'Scan failed. Please try again.' : '扫描失败，请重试。';
             }
-            setStatus({kind: 'error', reason});
+            setStatus({kind: 'error', reason, shownAt: Date.now()});
             cue('issue', ticketId);
         } finally {
             setBusy(false);
@@ -164,6 +189,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 reason: isEnglish
                     ? 'QR code is for a different event.'
                     : '二维码属于其他活动。',
+                shownAt: Date.now(),
             });
             cue('issue', raw);
         }
@@ -179,6 +205,25 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
             : '无法访问摄像头，请使用下方手动输入。',
         logLabel: '[TicketScanner]',
     });
+
+    // A result fades and clears itself for the next in line. Unlike Next Scan
+    // this keeps the cue state, so a code still held up doesn't sound again. A
+    // held code sets the status anew each frame or rescan, which restarts the
+    // timer, so the result clears once the code is put away.
+    useEffect(() => {
+        if (!('shownAt' in status)) return;
+        const ms = CLEAR_AFTER_MS[status.kind];
+        const fade = setTimeout(() => setLeaving(true), ms - FADE_MS);
+        const clear = setTimeout(
+            () => setStatus(scanner.cameraActive ? {kind: 'scanning'} : {kind: 'idle'}),
+            ms,
+        );
+        return () => {
+            clearTimeout(fade);
+            clearTimeout(clear);
+            setLeaving(false);
+        };
+    }, [status, scanner.cameraActive]);
 
     const submitManual = async () => {
         const raw = manualTicketId.trim();
@@ -233,7 +278,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 </div>
             </QrScannerViewport>
 
-            <ResultBanner status={status} isEnglish={isEnglish}/>
+            <ResultBanner status={status} leaving={leaving} isEnglish={isEnglish}/>
 
             <div className="admin-tickets-scanner-manual">
                 <label className="admin-tickets-template-field">
@@ -276,8 +321,9 @@ function parseTicketUrl(raw: string): {ticketId: string; eventId: string} | null
     return null;
 }
 
-function ResultBanner({status, isEnglish}: {status: ScanStatus; isEnglish: boolean}) {
+function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving: boolean; isEnglish: boolean}) {
     if (status.kind === 'idle' || status.kind === 'scanning') return null;
+    const leavingClass = leaving ? ' admin-tickets-scan-leaving' : '';
     if (status.kind === 'loading') {
         return (
             <div className="admin-tickets-scan-banner admin-tickets-scan-loading">
@@ -288,7 +334,7 @@ function ResultBanner({status, isEnglish}: {status: ScanStatus; isEnglish: boole
     }
     if (status.kind === 'success') {
         return (
-            <div className="admin-tickets-scan-banner admin-tickets-scan-success">
+            <div className={`admin-tickets-scan-banner admin-tickets-scan-success${leavingClass}`}>
                 <strong>{isEnglish ? '✓ Redeemed' : '✓ 验证成功'}</strong>
                 <div>{status.attendeeName} <span
                     className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{ticketTypeLabel(status.ticketType, isEnglish)}</span>
@@ -299,12 +345,13 @@ function ResultBanner({status, isEnglish}: {status: ScanStatus; isEnglish: boole
                         ? (isEnglish ? 'User auto-checked in.' : '用户已自动签到。')
                         : (isEnglish ? 'Attendee not registered on site.' : '参加者未注册账号。')}
                 </div>
+                <Countdown status={status}/>
             </div>
         );
     }
     if (status.kind === 'already') {
         return (
-            <div className="admin-tickets-scan-banner admin-tickets-scan-already">
+            <div className={`admin-tickets-scan-banner admin-tickets-scan-already${leavingClass}`}>
                 <strong>{isEnglish ? '! Already redeemed' : '! 此门票已验证'}</strong>
                 <div>{status.attendeeName} <span
                     className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{ticketTypeLabel(status.ticketType, isEnglish)}</span>
@@ -319,13 +366,33 @@ function ResultBanner({status, isEnglish}: {status: ScanStatus; isEnglish: boole
                         })}</>
                     )}
                 </div>
+                <Countdown status={status}/>
             </div>
         );
     }
     return (
-        <div className="admin-tickets-scan-banner admin-tickets-scan-error">
+        <div className={`admin-tickets-scan-banner admin-tickets-scan-error${leavingClass}`}>
             <strong>{isEnglish ? '✗ Error' : '✗ 错误'}</strong>
             <div>{status.reason}</div>
+            <Countdown status={status}/>
         </div>
+    );
+}
+
+/**
+ * A ring that runs down as a result's auto-clear does, and starts over with it.
+ * The radius makes the circumference 100, which the CSS dashes by.
+ */
+function Countdown({status}: {status: ShownStatus}) {
+    return (
+        <svg className="admin-tickets-scan-countdown" viewBox="0 0 36 36" aria-hidden="true">
+            <circle className="admin-tickets-scan-countdown-track" cx="18" cy="18" r="15.9155"/>
+            <circle
+                key={status.shownAt}
+                className="admin-tickets-scan-countdown-ring"
+                cx="18" cy="18" r="15.9155"
+                style={{animationDuration: `${CLEAR_AFTER_MS[status.kind]}ms`}}
+            />
+        </svg>
     );
 }

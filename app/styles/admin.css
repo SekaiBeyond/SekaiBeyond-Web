@@ -3055,6 +3055,56 @@ select.admin-tickets-tag:focus {
     color: #2e7d4f;
 }
 
+/* Time left before a result clears for the next scan, as a ring on the right
+   in the banner's colour whose arc sweeps away clockwise from the top. */
+.admin-tickets-scan-success,
+.admin-tickets-scan-already,
+.admin-tickets-scan-error {
+    position: relative;
+    padding-right: 60px;
+}
+
+.admin-tickets-scan-countdown {
+    position: absolute;
+    top: 50%;
+    right: 18px;
+    width: 28px;
+    height: 28px;
+    transform: translateY(-50%) rotate(-90deg);
+}
+
+.admin-tickets-scan-countdown circle {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 4;
+}
+
+.admin-tickets-scan-countdown-track {
+    opacity: 0.18;
+}
+
+.admin-tickets-scan-countdown-ring {
+    stroke-dasharray: 100;
+    animation-name: admin-tickets-scan-countdown;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+}
+
+@keyframes admin-tickets-scan-countdown {
+    from {
+        stroke-dashoffset: 0;
+    }
+    to {
+        stroke-dashoffset: -100;
+    }
+}
+
+/* Its last FADE_MS, before it clears. */
+.admin-tickets-scan-leaving {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
 .admin-tickets-scan-already {
     background: rgba(254, 202, 87, 0.2);
     border-color: rgba(254, 202, 87, 0.5);
