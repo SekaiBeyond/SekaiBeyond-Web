@@ -54,10 +54,10 @@ const CUE_QUIET_MS = 5000;
 /** How long each result stays up before clearing itself for the next scan. */
 const CLEAR_AFTER_MS: Record<ShownStatus['kind'], number> = {
     // An admitted ticket needs nothing more from the operator.
-    success: 5000,
+    success: 4000,
     // A problem may need reading out to the attendee or acting on.
-    already: 15000,
-    error: 15000,
+    already: 12000,
+    error: 12000,
 };
 /** The last stretch of that, over which a result fades out. Matches the CSS. */
 const FADE_MS = 300;
