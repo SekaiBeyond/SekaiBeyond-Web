@@ -6,6 +6,7 @@ import { ADMIN_GROUPS, adminTransaction, normalizeGroup, requireAdmin, requireAu
 import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, RESEND_QUEUE_CAP, SEND_CHUNK_SIZE } from "../utils/config";
 import { db } from "../utils/firebase";
 import { syncProviderUsage } from "../utils/emailProvider";
+import { isOnEventDay } from "../utils/eventDays";
 import { commitInChunks } from "../utils/helpers";
 import {
     computeEmailQuota,
@@ -611,8 +612,9 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         const group = normalizeGroup(callerData.group);
         const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
         const isCoreStaffOrAbove = ADMIN_GROUPS.includes(group);
+        const isStaffGroup = group === "staff";
         const isEventStaff = callerEventStaff.includes(eventId);
-        if (!isCoreStaffOrAbove && !isEventStaff) {
+        if (!isCoreStaffOrAbove && !isStaffGroup && !isEventStaff) {
             throw new HttpsError("permission-denied", "Not authorized to scan tickets for this event.",
                 {code: "not-authorized"});
         }
@@ -621,6 +623,16 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
         if (!eventSnap.exists) {
             throw new HttpsError("not-found", "Event not found.", {code: "event-missing"});
+        }
+
+        const now = Timestamp.now();
+        // Core staff scan whenever. The staff group and the event's own staff scan
+        // on the day(s) it runs — all day, not only its hours, so the door can
+        // open early — and are told so before anything about the ticket.
+        if (!isCoreStaffOrAbove
+            && !isOnEventDay(eventSnap.data()?.startAt, eventSnap.data()?.endAt, now.toMillis())) {
+            throw new HttpsError("failed-precondition", "Tickets can only be scanned on the day of the event.",
+                {code: "not-event-day"});
         }
 
         const attendeeQuery = await txn.get(
@@ -650,7 +662,6 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         const attendeeName: string = attendeeData.name ?? "";
         const eventTitle: string = eventSnap.data()?.title ?? "";
 
-        const now = Timestamp.now();
         // How long after admitting a ticket the same scanner can read it again and
         // be told it succeeded, so a ticket still held up to the camera doesn't flip
         // to "already redeemed" a moment after it got in. Timed from the admission;

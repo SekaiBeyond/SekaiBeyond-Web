@@ -36,7 +36,6 @@ interface UpcomingEventsTabProps {
     tags: Tag[];
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     readOnly?: boolean;
-    eventStaffEvents?: string[];
     onDetailChange?: (inDetail: boolean) => void;
 }
 
@@ -78,7 +77,6 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                                                                                   tags,
                                                                                                   showToast,
                                                                                                   readOnly = false,
-                                                                                                  eventStaffEvents = [],
                                                                                                   onDetailChange,
                                                                                               }, forwardedRef) => {
     const {isEnglish} = useLanguage();
@@ -721,7 +719,9 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                 <TicketsSubtab
                                     event={selectedEvt}
                                     readOnly={readOnly}
-                                    canScan={!readOnly || eventStaffEvents.includes(selectedEvt.id)}
+                                    // Read-only here means the staff group, or event staff, who are
+                                    // shown only their own events: both scan on the event's day(s).
+                                    scanAccess={readOnly ? 'event-days' : 'always'}
                                     showToast={showToast}
                                 />
                             )}

@@ -13,6 +13,7 @@ import {
     functionsErrorCode,
     getFirebaseDb,
 } from '~/lib/firebase';
+import { eventDayStatus, formatEventDays } from '~/lib/eventDays';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { AttendeeModal } from '../AttendeeModal';
 import { TicketScanner } from '../TicketScanner';
@@ -29,7 +30,12 @@ import { type AttendeeData, type TicketData, type TicketsSection, type TicketTyp
 interface TicketsSubtabProps {
     event: UpcomingEvent;
     readOnly: boolean;
-    canScan: boolean;
+    /**
+     * Who may scan this event's tickets, as redeemTicket decides it: 'always' for
+     * core staff, 'event-days' for the staff group and the event's own staff, who
+     * scan only on the calendar day(s) it runs.
+     */
+    scanAccess: 'always' | 'event-days' | 'none';
     showToast: ShowToast;
     // Where ticket attendees live. Archived events keep them under `pastEvents`
     // (migrated on archive); live events under `upcomingEvents`.
@@ -39,15 +45,30 @@ interface TicketsSubtabProps {
 export function TicketsSubtab({
                                   event,
                                   readOnly,
-                                  canScan,
+                                  scanAccess,
                                   showToast,
                                   collectionRoot = 'upcomingEvents'
                               }: TicketsSubtabProps) {
     const {isEnglish} = useLanguage();
     const {profile} = useAuth();
     const eventId = event.id;
+    const startMs = event.startAt.getTime();
+    const endMs = event.endAt.getTime();
 
-    const [section, setSection] = useState<TicketsSection>(canScan && readOnly ? 'scan' : 'attendees');
+    // Checked each minute, so a scanner left open overnight opens on the day
+    // without a reload. The server holds the same line whatever this says.
+    const [eventDay, setEventDay] = useState(() => eventDayStatus(event.startAt, event.endAt));
+    useEffect(() => {
+        const check = () => setEventDay(eventDayStatus(new Date(startMs), new Date(endMs)));
+        check();
+        const timer = setInterval(check, 60_000);
+        return () => clearInterval(timer);
+    }, [startMs, endMs]);
+
+    const canScan = scanAccess !== 'none';
+    const scanOpen = scanAccess === 'always' || (scanAccess === 'event-days' && eventDay === 'during');
+
+    const [section, setSection] = useState<TicketsSection>(scanOpen && readOnly ? 'scan' : 'attendees');
     const [attendees, setAttendees] = useState<AttendeeData[]>([]);
     const [loadingAttendees, setLoadingAttendees] = useState(false);
     // A flag rather than the message, so that the load needn't depend on the
@@ -376,12 +397,24 @@ export function TicketsSubtab({
                 )}
             </div>
 
-            {section === 'scan' && canScan && (
+            {section === 'scan' && scanOpen && (
                 <TicketScanner
                     eventId={eventId}
                     eventTitle={isEnglish ? event.title : (event.titleCn || event.title)}
                     onRedeemed={() => void loadAttendees()}
                 />
+            )}
+
+            {section === 'scan' && canScan && !scanOpen && (
+                <p className="admin-no-results">
+                    {eventDay === 'before'
+                        ? (isEnglish
+                            ? `Ticket scanning opens on the day of the event, and is open all day ${formatEventDays(event.startAt, event.endAt, true)} (Pacific time).`
+                            : `门票扫码将于活动当天开放，开放时间为 ${formatEventDays(event.startAt, event.endAt, false)} 全天（太平洋时间）。`)
+                        : (isEnglish
+                            ? `Ticket scanning has closed. It was open all day ${formatEventDays(event.startAt, event.endAt, true)} (Pacific time).`
+                            : `门票扫码已关闭，开放时间为 ${formatEventDays(event.startAt, event.endAt, false)} 全天（太平洋时间）。`)}
+                </p>
             )}
 
             {section === 'attendees' && (

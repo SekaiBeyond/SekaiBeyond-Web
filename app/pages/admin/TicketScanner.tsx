@@ -165,6 +165,10 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 reason = isEnglish ? 'Ticket not found.' : '未找到此门票。';
             } else if (code === 'not-authorized') {
                 reason = isEnglish ? 'You are not authorized to scan for this event.' : '你没有权限扫描此活动的门票。';
+            } else if (code === 'not-event-day') {
+                reason = isEnglish
+                    ? 'Tickets can only be scanned on the day of the event.'
+                    : '门票仅可在活动当天扫描。';
             } else if (code === 'event-missing') {
                 reason = isEnglish ? 'Event not found.' : '活动不存在。';
             } else {

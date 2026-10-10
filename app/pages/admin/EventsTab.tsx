@@ -458,12 +458,12 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
 
                             {isPaidEvent && eventSubTab === 'tickets' && (
                                 // Archived paid event — tickets are read-only and live
-                                // under pastEvents (migrated on archive). canScan is off
+                                // under pastEvents (migrated on archive). Scanning is off
                                 // because the event is over.
                                 <TicketsSubtab
                                     event={toTicketEvent(managedEvt)}
                                     readOnly
-                                    canScan={false}
+                                    scanAccess="none"
                                     collectionRoot="pastEvents"
                                     showToast={showToast}
                                 />

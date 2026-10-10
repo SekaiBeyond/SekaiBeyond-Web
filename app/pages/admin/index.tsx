@@ -397,7 +397,6 @@ export const AdminPage = () => {
                                 tags={tags}
                                 showToast={showToast}
                                 readOnly={!isCoreStaffOrAbove}
-                                eventStaffEvents={profile.eventStaffEvents}
                                 onDetailChange={setUpcomingInDetail}
                             />
                         </div>
