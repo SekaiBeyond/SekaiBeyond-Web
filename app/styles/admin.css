@@ -2764,11 +2764,43 @@ select.admin-tickets-tag:focus {
     outline-offset: -2px;
 }
 
+/* A ticket's ID, cut short; pressing it copies the whole of it. */
 .admin-tickets-ticket-id {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 6px;
+    margin: -2px -6px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 12px;
     color: var(--color-text-muted);
-    cursor: help;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-tickets-ticket-id:hover {
+    background: rgba(155, 89, 182, 0.1);
+    color: var(--color-text);
+}
+
+.admin-tickets-ticket-id:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+}
+
+.admin-tickets-ticket-id-action {
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-purple);
+}
+
+.admin-tickets-ticket-id-action--copied {
+    color: var(--color-success);
 }
 
 .admin-tickets-void-btn {

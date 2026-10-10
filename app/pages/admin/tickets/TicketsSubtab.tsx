@@ -445,6 +445,7 @@ export function TicketsSubtab({
                     onRefresh={() => void loadAttendees()}
                     hasMore={displayCount < filteredAttendees.length}
                     onLoadMore={() => setDisplayCount(c => c + 10)}
+                    showToast={showToast}
                 />
             )}
 

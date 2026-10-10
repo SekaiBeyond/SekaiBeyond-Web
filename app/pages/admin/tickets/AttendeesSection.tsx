@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import type { ShowToast } from '../utils';
 import { ticketStatusCounts } from './helpers';
 import { type AttendeeData, type AttendeeTotals, TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
 import type { AccountLink } from './useAccountLinks';
@@ -36,6 +37,7 @@ interface AttendeesSectionProps {
     onRefresh: () => void;
     hasMore: boolean;
     onLoadMore: () => void;
+    showToast: ShowToast;
 }
 
 export function AttendeesSection({
@@ -65,9 +67,30 @@ export function AttendeesSection({
                                      onRefresh,
                                      hasMore,
                                      onLoadMore,
+                                     showToast,
                                  }: AttendeesSectionProps) {
     const {isEnglish} = useLanguage();
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [copiedTicketId, setCopiedTicketId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!copiedTicketId) return;
+        const timer = setTimeout(() => setCopiedTicketId(null), 2000);
+        return () => clearTimeout(timer);
+    }, [copiedTicketId]);
+
+    // The whole ID, which is what the scanner's manual entry takes.
+    const copyTicketId = async (ticketId: string) => {
+        try {
+            await navigator.clipboard.writeText(ticketId);
+            setCopiedTicketId(ticketId);
+        } catch {
+            showToast(
+                isEnglish ? `Couldn't copy. The ticket ID is ${ticketId}` : `复制失败。门票 ID 为 ${ticketId}`,
+                'error',
+            );
+        }
+    };
 
     const toggleExpand = (id: string) => {
         setExpanded(prev => {
@@ -298,8 +321,25 @@ export function AttendeesSection({
                                         {a.tickets.map((t, i) => (
                                             <tr key={t.ticketId}>
                                                 <td>{i + 1}</td>
-                                                <td className="admin-tickets-ticket-id" title={t.ticketId}>
-                                                    {t.ticketId.slice(0, 8)}…
+                                                <td>
+                                                    <button
+                                                        type="button"
+                                                        className="admin-tickets-ticket-id"
+                                                        title={t.ticketId}
+                                                        aria-label={isEnglish ? `Copy ticket ID ${t.ticketId}` : `复制门票 ID ${t.ticketId}`}
+                                                        onClick={() => void copyTicketId(t.ticketId)}
+                                                    >
+                                                        {t.ticketId.slice(0, 8)}…
+                                                        {copiedTicketId === t.ticketId ? (
+                                                            <span className="admin-tickets-ticket-id-action admin-tickets-ticket-id-action--copied">
+                                                                {isEnglish ? 'Copied ✓' : '已复制 ✓'}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="admin-tickets-ticket-id-action">
+                                                                {isEnglish ? 'Copy' : '复制'}
+                                                            </span>
+                                                        )}
+                                                    </button>
                                                 </td>
                                                 <td>
                                                     {readOnly ? (
