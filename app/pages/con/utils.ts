@@ -1,12 +1,20 @@
 import type { MouseEvent } from 'react';
+import { formatSiteTime, labelSiteZone, parseSiteTime, SITE_TIME_ZONE } from '~/lib/siteTime';
 import type { EarlyBird, InPersonSession, TicketFee, TicketTier } from '~/pages/con/content';
 import type { ConLanguage } from '~/pages/con/i18n';
 
 const locales: Record<ConLanguage, string> = {en: 'en-US', zh: 'zh-CN'};
 
+/*
+ * Con times are stored zoneless, as the admin typed them, and mean the Pacific
+ * clock wherever the page is read: parseSiteTime reads them that way, and each
+ * is shown back in SITE_TIME_ZONE, so a visitor abroad sees the hours the con
+ * keeps and a countdown that ends when it opens.
+ */
+
 /** "November 14, 2026" / "2026年11月14日" */
 export const formatEventDate = (iso: string, lang: ConLanguage) =>
-    new Date(iso).toLocaleDateString(locales[lang], {
+    formatSiteTime(parseSiteTime(iso), lang === 'en', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -14,20 +22,21 @@ export const formatEventDate = (iso: string, lang: ConLanguage) =>
 
 /** "Saturday" / "星期六" */
 export const formatWeekday = (iso: string, lang: ConLanguage) =>
-    new Date(iso).toLocaleDateString(locales[lang], {weekday: 'long'});
+    formatSiteTime(parseSiteTime(iso), lang === 'en', {weekday: 'long'});
 
 const TIME_OPTIONS: Intl.DateTimeFormatOptions = {hour: 'numeric', minute: '2-digit'};
 
-/** "11:00 AM – 8:00 PM" / "11:00–20:00" */
+/** "11:00 AM – 8:00 PM PT" / "11:00 – 20:00（太平洋时间）" */
 export const formatTimeRange = (startIso: string, endIso: string, lang: ConLanguage) => {
-    const start = new Date(startIso).toLocaleTimeString(locales[lang], TIME_OPTIONS);
-    const end = new Date(endIso).toLocaleTimeString(locales[lang], TIME_OPTIONS);
-    return `${start} – ${end}`;
+    const options = {...TIME_OPTIONS, timeZone: SITE_TIME_ZONE};
+    const start = parseSiteTime(startIso).toLocaleTimeString(locales[lang], options);
+    const end = parseSiteTime(endIso).toLocaleTimeString(locales[lang], options);
+    return labelSiteZone(`${start} – ${end}`, lang === 'en');
 };
 
-/** "Oct 1, 11:59 PM" / "10月1日 23:59" */
+/** "Oct 1, 11:59 PM PT" / "10月1日 23:59（太平洋时间）" */
 export const formatDeadline = (iso: string, lang: ConLanguage) =>
-    new Date(iso).toLocaleString(locales[lang], {month: 'short', day: 'numeric', ...TIME_OPTIONS});
+    formatSiteTime(parseSiteTime(iso), lang === 'en', {month: 'short', day: 'numeric', ...TIME_OPTIONS});
 
 /**
  * 10 → "$10", 12.5 → "$12.50", 0 → "Free" / "免费". Cents only show when there
@@ -50,7 +59,7 @@ export const formatPrice = (price: number, lang: ConLanguage) => {
  */
 export const activeEarlyBird = (tier: TicketTier, now: number): EarlyBird | null => {
     if (!tier.earlyBird) return null;
-    const ends = new Date(tier.earlyBird.endsAt).getTime();
+    const ends = parseSiteTime(tier.earlyBird.endsAt).getTime();
     return Number.isFinite(ends) && now < ends ? tier.earlyBird : null;
 };
 
@@ -78,7 +87,7 @@ export const formatSessionDay = (date: string, lang: ConLanguage) =>
         day: 'numeric',
     });
 
-/** When an in-person session opens and closes, as zoneless ISO strings. */
+/** When an in-person session opens and closes, as zoneless ISO strings on the Pacific clock (see parseSiteTime). */
 export const sessionBounds = (session: InPersonSession) => ({
     opens: `${session.date}T${session.start}`,
     closes: `${session.date}T${session.end}`,

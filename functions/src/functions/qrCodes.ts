@@ -9,7 +9,7 @@ import {
     sanitizeDisplayText,
     validateCoordinate,
     validateDocId,
-    validateISODate,
+    validateInstant,
     validateStr,
     validateStringArray,
     validateUrl,
@@ -80,7 +80,7 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
     }
     let expiresAt: Timestamp | null = null;
     if (expirationMode === "date") {
-        const iso = validateISODate(input.expiresAt, "expiresAt");
+        const iso = validateInstant(input.expiresAt, "expiresAt");
         if (!iso) throw new HttpsError("invalid-argument", "An expiration date is required.");
         expiresAt = Timestamp.fromDate(new Date(iso));
     }

@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase/firestore';
 import { sanitizeEmailHtml } from '~/lib/emailSanitize';
+import { SITE_TIME_ZONE } from '~/lib/siteTime';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { AttendeeData, EmailTemplate, TicketData } from './types';
 
@@ -150,8 +151,9 @@ const fillSample = (text: string, event: UpcomingEvent, contactEmail: string, ht
         : `<div style="background-color:#ff6b9d;height:120px;"></div>`;
     // In the zone the server writes it in, whatever the admin's own clock says.
     const eventDate = event.startAt.toLocaleString('en-US', {
-        timeZone: 'America/Los_Angeles',
+        timeZone: SITE_TIME_ZONE,
         year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        timeZoneName: 'shortGeneric',
     });
     // Function replacements, as on the server, so a $ in the event's title shows as typed.
     return text

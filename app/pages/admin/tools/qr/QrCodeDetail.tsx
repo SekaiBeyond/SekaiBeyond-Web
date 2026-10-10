@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteQrCode, callSaveQrCode } from '~/lib/firebase';
 import { fetchQrScans, type QrCode, qrHasSpot, qrIsActive, qrIsSocial, qrScanUrl } from '~/lib/qrCodes';
+import { formatSiteTime } from '~/lib/siteTime';
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import {
@@ -142,6 +143,10 @@ export const QrCodeDetail = ({
         d ? d.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
         }) : (isEnglish ? 'Never' : '从未');
+    // An expiry is set on the Pacific clock, so it reads back on it; a scan is
+    // something that happened, so fmtDate shows it on the viewer's.
+    const fmtExpiry = (d: Date): string =>
+        formatSiteTime(d, isEnglish, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
 
     // Small inline "Edit" affordance shown beside a facet's name.
     const editButton = (section: EditSection) =>
@@ -173,7 +178,7 @@ export const QrCodeDetail = ({
 
     const expirationText = code.expirationMode === 'date'
         ? (code.expiresAt
-            ? (isEnglish ? `Until ${fmtDate(code.expiresAt)}` : `至 ${fmtDate(code.expiresAt)}`)
+            ? (isEnglish ? `Until ${fmtExpiry(code.expiresAt)}` : `至 ${fmtExpiry(code.expiresAt)}`)
             : (isEnglish ? 'Custom date (unset)' : '自定义日期（未设置）'))
         : code.expirationMode === 'event'
             ? (isEnglish ? 'When the linked event ends' : '关联活动结束时')

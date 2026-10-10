@@ -17,7 +17,7 @@ import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } fr
 import { db } from "../utils/firebase";
 import { pastEventIds, toStringIds } from "../utils/publicProfile";
 import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB } from "../utils/storage";
-import { sanitizeDisplayText, validateDocId, validateISODate } from "../utils/validation";
+import { sanitizeDisplayText, validateDocId, validateInstant } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
 import { isScannedTicket } from "../utils/tickets";
@@ -585,7 +585,7 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
     // expiresAt: null revokes. A date sets the expiry outright.
     let absoluteExpiry: Timestamp | null = null;
     if (hasExpiresAt && input.expiresAt !== null) {
-        const iso = validateISODate(input.expiresAt, "expiresAt");
+        const iso = validateInstant(input.expiresAt, "expiresAt");
         if (!iso) {
             throw new HttpsError("invalid-argument", "expiresAt must be a date or null.");
         }

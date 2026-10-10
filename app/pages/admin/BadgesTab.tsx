@@ -27,12 +27,17 @@ import {
 } from '~/lib/firebase';
 import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
 import { formatCode } from '~/lib/codes';
+import { formatSiteTime, parseSiteTime } from '~/lib/siteTime';
 import { isValidHttpUrl } from '~/lib/urls';
 import { docToUserRecord } from './utils';
 import { AccountPicker } from './AccountPicker';
 import { UserRow } from './UserRow';
 import { BilingualFormField } from './BilingualFormField';
 import { ImageUploadField } from './ImageUploadField';
+
+const CODE_TIME_FORMAT: Intl.DateTimeFormatOptions = {
+    year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+};
 
 interface BadgesTabProps {
     badgeDefs: BadgeDef[];
@@ -363,8 +368,8 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 badgeId,
                 maxUses: newCodeMaxUses,
             };
-            if (newCodeFrom) params.activeFrom = new Date(newCodeFrom).toISOString();
-            if (newCodeUntil) params.activeUntil = new Date(newCodeUntil).toISOString();
+            if (newCodeFrom) params.activeFrom = parseSiteTime(newCodeFrom).toISOString();
+            if (newCodeUntil) params.activeUntil = parseSiteTime(newCodeUntil).toISOString();
 
             const result = await callGenerateBadgeActivationCode(params);
             const {id, code} = result.data;
@@ -720,13 +725,13 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                     </div>
                                 </label>
                                 <label>
-                                    <span>{isEnglish ? 'Active From' : '生效时间'}</span>
+                                    <span>{isEnglish ? 'Active From (Pacific)' : '生效时间（太平洋时间）'}</span>
                                     <input type="datetime-local" value={newCodeFrom}
                                            onChange={e => setNewCodeFrom(e.target.value)}
                                            className="admin-input"/>
                                 </label>
                                 <label>
-                                    <span>{isEnglish ? 'Active Until' : '失效时间'}</span>
+                                    <span>{isEnglish ? 'Active Until (Pacific)' : '失效时间（太平洋时间）'}</span>
                                     <input type="datetime-local" value={newCodeUntil}
                                            onChange={e => setNewCodeUntil(e.target.value)}
                                            className="admin-input"/>
@@ -760,12 +765,12 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                     </span>
                                     {ac.activeFrom && (
                                         <span className="admin-activation-time">
-                                            {isEnglish ? 'From: ' : '从：'}{new Date(ac.activeFrom).toLocaleString()}
+                                            {isEnglish ? 'From: ' : '从：'}{formatSiteTime(parseSiteTime(ac.activeFrom), isEnglish, CODE_TIME_FORMAT)}
                                         </span>
                                     )}
                                     {ac.activeUntil && (
                                         <span className="admin-activation-time">
-                                            {isEnglish ? 'Until: ' : '至：'}{new Date(ac.activeUntil).toLocaleString()}
+                                            {isEnglish ? 'Until: ' : '至：'}{formatSiteTime(parseSiteTime(ac.activeUntil), isEnglish, CODE_TIME_FORMAT)}
                                         </span>
                                     )}
                                 </div>

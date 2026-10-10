@@ -2,7 +2,7 @@ import { type QrCode, type QrExpirationMode, qrHasSpot } from '~/lib/qrCodes';
 import { useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { MapPicker } from '../../MapPicker';
-import { toDatetimeLocal } from '../../utils';
+import { parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
 
 /**
  * The two kinds of tracked code — mutually exclusive and fixed at creation
@@ -21,7 +21,7 @@ export interface QrDraft {
     targetUrl: string;
     eventId: string;
     expirationMode: QrExpirationMode;
-    /** datetime-local string (local time) used while editing the custom date. */
+    /** datetime-local string (Pacific time) used while editing the custom date. */
     expiresLocal: string;
     /** Editing-only: which kind of code this is (see {@link QrKind}). */
     kind: QrKind;
@@ -105,7 +105,7 @@ export function buildQrPayload(
         if (!draft.expiresLocal) {
             return {error: isEnglish ? 'Pick an expiration date.' : '请选择过期日期。'};
         }
-        const d = new Date(draft.expiresLocal);
+        const d = parseSiteTime(draft.expiresLocal);
         if (isNaN(d.getTime())) {
             return {error: isEnglish ? 'Invalid expiration date.' : '过期日期无效。'};
         }
@@ -231,7 +231,7 @@ export const QrExpirationFields = ({draft, setDraft, isEnglish}: QrFieldProps) =
         </label>
         {draft.expirationMode === 'date' && (
             <label>
-                <span>{isEnglish ? 'Active Until' : '有效截止'}</span>
+                <span>{isEnglish ? 'Active Until (Pacific)' : '有效截止（太平洋时间）'}</span>
                 <input
                     type="datetime-local"
                     value={draft.expiresLocal}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callRedeemCode, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
+import { formatSiteTime } from '~/lib/siteTime';
 import type { BadgeDef } from '~/lib/types';
 import { useModalEffects } from '~/lib/useModalEffects';
 
@@ -183,7 +184,7 @@ export const RedeemModal = () => {
     if (!show) return null;
 
     const memberUntil = passport
-        ? new Date(passport.membershipExpiresAt).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+        ? formatSiteTime(new Date(passport.membershipExpiresAt), isEnglish, {
             year: 'numeric', month: 'long', day: 'numeric',
         })
         : '';

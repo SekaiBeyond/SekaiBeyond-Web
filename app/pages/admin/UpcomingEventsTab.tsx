@@ -12,7 +12,8 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import type { UserRecord } from './types';
-import { fetchEventAttendees, fetchEventStaffCount, refreshAfterSave, toDatetimeLocal } from './utils';
+import { formatSiteTime, parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
+import { fetchEventAttendees, fetchEventStaffCount, refreshAfterSave } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { ClaimCodeSection } from './ClaimCodeSection';
 import { LocationFormField } from './LocationFormField';
@@ -186,8 +187,9 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
 
     const saveEvent = async () => {
         if (!form.title.trim() || !form.startAt || !form.endAt) return;
-        const startAt = new Date(form.startAt);
-        const endAt = new Date(form.endAt);
+        // Typed on the Pacific clock, whatever the admin's own computer is set to.
+        const startAt = parseSiteTime(form.startAt);
+        const endAt = parseSiteTime(form.endAt);
         if (endAt <= startAt) {
             showToast(isEnglish ? 'End time must be after start time.' : '结束时间必须晚于开始时间。', 'error');
             return;
@@ -302,7 +304,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     placeholderCn={isEnglish ? 'Event title in Chinese' : '活动中文标题'}
                                 />
                                 <label>
-                                    <span>{isEnglish ? 'Start Time' : '开始时间'}</span>
+                                    <span>{isEnglish ? 'Start Time (Pacific)' : '开始时间（太平洋时间）'}</span>
                                     <input
                                         type="datetime-local"
                                         value={form.startAt}
@@ -311,7 +313,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     />
                                 </label>
                                 <label>
-                                    <span>{isEnglish ? 'End Time' : '结束时间'}</span>
+                                    <span>{isEnglish ? 'End Time (Pacific)' : '结束时间（太平洋时间）'}</span>
                                     <input
                                         type="datetime-local"
                                         value={form.endAt}
@@ -507,7 +509,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <span
                                         className="admin-event-card-title">{isEnglish ? event.title : (event.titleCn || event.title)}</span>
                                     <span className="admin-event-card-date">
-                                        {event.startAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+                                        {formatSiteTime(event.startAt, isEnglish, {
                                             year: 'numeric', month: 'short', day: 'numeric',
                                         })}
                                     </span>
@@ -554,7 +556,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     <h3>{isEnglish ? selectedEvt.title : (selectedEvt.titleCn || selectedEvt.title)}</h3>
                                     <p className="admin-event-detail-meta">
                                         <span>
-                                            {selectedEvt.startAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                                            {formatSiteTime(selectedEvt.startAt, isEnglish, {
                                                 year: 'numeric', month: 'long', day: 'numeric',
                                                 hour: 'numeric', minute: 'numeric',
                                             })}

@@ -11,6 +11,19 @@ export function validateISODate(value: unknown, name: string): string | null {
     return value;
 }
 
+/**
+ * An ISO date-time that names its zone (ends in Z or an offset), so it is the
+ * same moment wherever it is read. A zoneless one is refused rather than read in
+ * the server's UTC, which is never the clock it was typed on. Null when absent.
+ */
+export function validateInstant(value: unknown, name: string): string | null {
+    const iso = validateISODate(value, name);
+    if (iso && !/(Z|[+-]\d{2}:\d{2})$/.test(iso)) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must name its time zone.`);
+    }
+    return iso;
+}
+
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Trimmed and lowercased. */

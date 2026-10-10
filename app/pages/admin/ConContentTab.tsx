@@ -3,6 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { MAX_VIDEO_SIZE_MB } from '~/constants';
 import { callSaveConContent, callUploadAdminImage, callUploadConVideo } from '~/lib/firebase';
 import { type ConContent, type ConContentSection, refreshConContent, useConDraft, } from '~/lib/conContent';
+import { parseSiteTime } from '~/lib/siteTime';
 import { useVenues } from '~/lib/venues';
 import {
     type EarlyBird,
@@ -453,7 +454,7 @@ const EventSection = ({content, loading, showToast, readOnly}: SectionProps) => 
                 />
 
                 <label>
-                    <span>{isEnglish ? 'Starts' : '开始时间'}</span>
+                    <span>{isEnglish ? 'Starts (Pacific)' : '开始时间（太平洋时间）'}</span>
                     <input
                         className="admin-input"
                         type="datetime-local"
@@ -463,7 +464,7 @@ const EventSection = ({content, loading, showToast, readOnly}: SectionProps) => 
                     />
                 </label>
                 <label>
-                    <span>{isEnglish ? 'Ends' : '结束时间'}</span>
+                    <span>{isEnglish ? 'Ends (Pacific)' : '结束时间（太平洋时间）'}</span>
                     <input
                         className="admin-input"
                         type="datetime-local"
@@ -1297,7 +1298,7 @@ interface EarlyBirdFieldsProps {
 
 const EarlyBirdFields = ({earlyBird, onChange, readOnly}: EarlyBirdFieldsProps) => {
     const {isEnglish} = useLanguage();
-    const ended = earlyBird.endsAt !== '' && new Date(earlyBird.endsAt).getTime() <= Date.now();
+    const ended = earlyBird.endsAt !== '' && parseSiteTime(earlyBird.endsAt).getTime() <= Date.now();
 
     return (
         <>
@@ -1308,7 +1309,7 @@ const EarlyBirdFields = ({earlyBird, onChange, readOnly}: EarlyBirdFieldsProps) 
                 readOnly={readOnly}
             />
             <label>
-                <span>{isEnglish ? 'Early bird ends' : '早鸟截止时间'}</span>
+                <span>{isEnglish ? 'Early bird ends (Pacific)' : '早鸟截止时间（太平洋时间）'}</span>
                 <input
                     className="admin-input"
                     type="datetime-local"
@@ -1594,7 +1595,7 @@ const InPersonSalesSection = ({content, loading, showToast, readOnly}: SectionPr
                 )}
 
                 {draft.sessions.map((session, index) => {
-                    const closes = new Date(sessionBounds(session).closes).getTime();
+                    const closes = parseSiteTime(sessionBounds(session).closes).getTime();
                     const ended = Number.isFinite(closes) && closes <= Date.now();
 
                     return (
@@ -1644,7 +1645,7 @@ const InPersonSalesSection = ({content, loading, showToast, readOnly}: SectionPr
                                     )}
                                 </label>
                                 <label>
-                                    <span>{isEnglish ? 'Opens' : '开始'}</span>
+                                    <span>{isEnglish ? 'Opens (Pacific)' : '开始（太平洋时间）'}</span>
                                     <input
                                         className="admin-input"
                                         type="time"
@@ -1657,7 +1658,7 @@ const InPersonSalesSection = ({content, loading, showToast, readOnly}: SectionPr
                                     />
                                 </label>
                                 <label>
-                                    <span>{isEnglish ? 'Closes' : '结束'}</span>
+                                    <span>{isEnglish ? 'Closes (Pacific)' : '结束（太平洋时间）'}</span>
                                     <input
                                         className="admin-input"
                                         type="time"

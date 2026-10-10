@@ -7,6 +7,7 @@ import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, RESEND_QUEUE_CAP, SEND_CHUNK_SIZE } fro
 import { db } from "../utils/firebase";
 import { syncProviderUsage } from "../utils/emailProvider";
 import { isOnEventDay } from "../utils/eventDays";
+import { SITE_TIME_ZONE } from "../utils/siteTime";
 import { commitInChunks } from "../utils/helpers";
 import {
     computeEmailQuota,
@@ -84,9 +85,11 @@ function formatEventDateForEmail(startAt: Timestamp | undefined): string {
     if (!startAt) return "";
     try {
         return new Intl.DateTimeFormat("en-US", {
-            timeZone: "America/Los_Angeles",
+            timeZone: SITE_TIME_ZONE,
             year: "numeric", month: "long", day: "numeric",
             hour: "numeric", minute: "2-digit",
+            // "PT", so an attendee reading it elsewhere doesn't take it for their own clock.
+            timeZoneName: "shortGeneric",
         }).format(startAt.toDate());
     } catch {
         return "";

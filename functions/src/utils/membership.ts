@@ -1,4 +1,5 @@
 import { Timestamp } from "firebase-admin/firestore";
+import { addSiteDays } from "./siteTime";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -13,11 +14,13 @@ export function isMembershipActive(data: FirebaseFirestore.DocumentData | undefi
 
 // Grants stack: extending an active membership adds to its tail, while extending a
 // lapsed or never-held one starts from today. Passport claims (#9) use this too, so
-// claiming two passports the same day is two years rather than one.
+// claiming two passports the same day is two years rather than one. Days are
+// counted on the Pacific calendar, so an expiry set to the end of a day stays
+// there across a DST change.
 export function extendedExpiry(current: unknown, days: number): Timestamp {
     const active = current instanceof Timestamp && current.toMillis() > Date.now();
     const base = active ? (current as Timestamp).toMillis() : Date.now();
-    return Timestamp.fromMillis(base + days * DAY_MS);
+    return Timestamp.fromMillis(addSiteDays(base, days));
 }
 
 /**
@@ -38,10 +41,11 @@ export function reducedExpiry(current: unknown, days: number): {expiresAt: Times
     if (!(current instanceof Timestamp)) return null;
     const now = Date.now();
     if (current.toMillis() <= now) return null;
-    const floored = Math.max(now, current.toMillis() - days * DAY_MS);
+    const floored = Math.max(now, addSiteDays(current.toMillis(), -days));
     return {
         expiresAt: Timestamp.fromMillis(floored),
-        // Whole days, for the record and the toast. The expiry itself is exact.
+        // Whole days, for the record and the toast — rounded, as a day across a
+        // DST change is 23 or 25 hours. The expiry itself is exact.
         daysRemoved: Math.round((current.toMillis() - floored) / DAY_MS),
     };
 }

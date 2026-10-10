@@ -72,7 +72,7 @@ export interface ConEvent {
     edition: number
     tagline: Localized
     intro: Localized
-    /** Local time, no timezone suffix. */
+    /** Pacific time, no zone suffix — read with parseSiteTime. */
     date: string
     endTime: string
     /** A document in `venues`, managed in Admin → Locations. */
@@ -458,7 +458,7 @@ export const VENDOR_CTA: VendorCta = {
 
 /**
  * A cheaper price that holds until `endsAt`, a zoneless `YYYY-MM-DDTHH:MM` read
- * in the viewer's clock like the event's own date. After it passes, the page
+ * on the Pacific clock like the event's own date. After it passes, the page
  * shows the tier's regular `price` on its own.
  */
 export interface EarlyBird {
@@ -537,7 +537,7 @@ export const TICKET_FEE: TicketFee = {
     flat: 0,
 };
 
-/** One day the in-person table is selling. Zoneless, read in the viewer's clock. */
+/** One day the in-person table is selling. Zoneless, read on the Pacific clock. */
 export interface InPersonSession {
     /** YYYY-MM-DD */
     date: string

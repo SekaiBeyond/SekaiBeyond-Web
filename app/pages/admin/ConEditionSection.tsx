@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveSiteConfig, callUploadAdminImage } from '~/lib/firebase';
 import type { ConEdition } from '~/constants';
+import { siteDay } from '~/lib/siteTime';
 import { ImageUploadField } from './ImageUploadField';
 import { refreshAfterSave } from './utils';
 
@@ -16,7 +17,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
     const {isEnglish} = useLanguage();
     const [formData, setFormData] = useState<ConEdition>({
         year: new Date().getFullYear(),
-        date: new Date().toISOString().split('T')[0],
+        date: siteDay(new Date()),
         location: '',
         locationCn: '',
         description: '',

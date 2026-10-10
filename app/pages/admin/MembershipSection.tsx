@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSetMembership } from '~/lib/firebase';
+import { formatSiteTime, parseSiteTime, siteDay } from '~/lib/siteTime';
 import type { UserRecord } from './types';
 import type { ShowToast } from './utils';
 
@@ -13,11 +14,6 @@ interface MembershipSectionProps {
 }
 
 const QUICK_EXTENSIONS = [30, 90, 365];
-
-const toDateInputValue = (date: Date) => {
-    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-    return local.toISOString().slice(0, 10);
-};
 
 const daysUntil = (date: Date) => Math.ceil((date.getTime() - Date.now()) / 86_400_000);
 
@@ -36,7 +32,7 @@ export function MembershipSection({user, canManage, onUpdated, showToast}: Membe
 
     const statusText = () => {
         if (!expiresAt) return isEnglish ? 'Not a member' : '非会员';
-        const formatted = expiresAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+        const formatted = formatSiteTime(expiresAt, isEnglish, {
             year: 'numeric', month: 'long', day: 'numeric',
         });
         if (!isActive) {
@@ -74,8 +70,9 @@ export function MembershipSection({user, canManage, onUpdated, showToast}: Membe
     const saveDate = () => {
         if (!dateInput) return;
         // Membership runs to the end of the chosen day rather than to midnight at
-        // its start, so "expires on the 5th" means the 5th is still covered.
-        const iso = new Date(`${dateInput}T23:59:59`).toISOString();
+        // its start, so "expires on the 5th" means the 5th is still covered — the
+        // day as it falls in Pacific time, wherever the admin is.
+        const iso = parseSiteTime(`${dateInput}T23:59:59`).toISOString();
         void apply({expiresAt: iso}, isEnglish ? 'Membership updated.' : '会员资格已更新。');
     };
 
@@ -103,7 +100,7 @@ export function MembershipSection({user, canManage, onUpdated, showToast}: Membe
                     <button
                         className="admin-detail-name-pencil"
                         onClick={() => {
-                            setDateInput(expiresAt ? toDateInputValue(expiresAt) : '');
+                            setDateInput(expiresAt ? siteDay(expiresAt) : '');
                             setEditing(true);
                         }}
                         type="button"
@@ -171,8 +168,8 @@ export function MembershipSection({user, canManage, onUpdated, showToast}: Membe
                     </div>
                     <p className="admin-title-hint">
                         {isEnglish
-                            ? 'Extensions stack: adding days to an active membership extends its tail, while adding to a lapsed one starts from today. Changing membership never changes the user\'s role.'
-                            : '延长会累加：为有效会员延长会在原到期日基础上顺延，为已过期会员延长则从今天开始计算。修改会员资格不会改变用户组。'}
+                            ? 'Extensions stack: adding days to an active membership extends its tail, while adding to a lapsed one starts from today. A set expiry runs to the end of that day, Pacific time. Changing membership never changes the user\'s role.'
+                            : '延长会累加：为有效会员延长会在原到期日基础上顺延，为已过期会员延长则从今天开始计算。设置的到期日截至当天结束（太平洋时间）。修改会员资格不会改变用户组。'}
                     </p>
                 </>
             )}

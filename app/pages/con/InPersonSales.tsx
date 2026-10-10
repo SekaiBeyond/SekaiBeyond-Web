@@ -1,5 +1,6 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent } from '~/lib/conContent';
+import { parseSiteTime } from '~/lib/siteTime';
 import { useNowAcross } from '~/pages/con/hooks';
 import { useT } from '~/pages/con/i18n';
 import { formatClockTime, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/con/utils';
@@ -19,7 +20,7 @@ export const InPersonSales = () => {
 
     const timed = sessions.map(session => {
         const {opens, closes} = sessionBounds(session);
-        return {session, opens: new Date(opens).getTime(), closes: new Date(closes).getTime(), iso: [opens, closes]};
+        return {session, opens: parseSiteTime(opens).getTime(), closes: parseSiteTime(closes).getTime(), iso: [opens, closes]};
     });
     const now = useNowAcross(timed.flatMap(entry => entry.iso));
 

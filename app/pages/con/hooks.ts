@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { parseSiteTime } from '~/lib/siteTime';
 
 /**
  * Tracks a CSS media query in JS. The con hero uses it to keep its clip off
@@ -55,13 +56,14 @@ const remainingFrom = (target: number, end: number): Countdown => {
 
 /**
  * Counts down to `isoDate`, ticking once a second, and reports when `endIsoDate`
- * has passed too. The timer exists only to move something on screen, so it stops
+ * has passed too. Both are read as parseSiteTime reads them, so the count ends
+ * when the con opens, not when that hour comes round on the viewer's clock. The timer exists only to move something on screen, so it stops
  * once the con has ended — until then it has to keep running even after the start
  * time, because the live → ended transition is what it drives.
  */
 export const useCountdown = (isoDate: string, endIsoDate: string): Countdown => {
-    const target = new Date(isoDate).getTime();
-    const end = new Date(endIsoDate).getTime();
+    const target = parseSiteTime(isoDate).getTime();
+    const end = parseSiteTime(endIsoDate).getTime();
     const [countdown, setCountdown] = useState(() => remainingFrom(target, end));
 
     useEffect(() => {
@@ -87,8 +89,8 @@ export const useCountdown = (isoDate: string, endIsoDate: string): Countdown => 
 const MAX_TIMEOUT = 2 ** 31 - 1;
 
 /**
- * The current time, re-read the moment each of `isoDates` passes and at no
- * other time. Lets a page left open across an early bird deadline switch to the
+ * The current time, re-read the moment each of `isoDates` (read as parseSiteTime
+ * reads them) passes and at no other time. Lets a page left open across an early bird deadline switch to the
  * regular price without ticking every second to catch it.
  */
 export const useNowAcross = (isoDates: string[]) => {
@@ -99,7 +101,7 @@ export const useNowAcross = (isoDates: string[]) => {
     useEffect(() => {
         const next = Math.min(
             ...key.split('|')
-                .map(iso => new Date(iso).getTime())
+                .map(iso => parseSiteTime(iso).getTime())
                 .filter(time => Number.isFinite(time) && time > now),
         );
         if (!Number.isFinite(next)) return;

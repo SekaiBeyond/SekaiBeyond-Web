@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { FiCalendar, FiCheck, FiMapPin, FiMaximize2, FiX } from 'react-icons/fi';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetMyTickets, type HeldTicket, type HeldTicketEvent } from '~/lib/firebase';
+import { formatSiteTime } from '~/lib/siteTime';
 import { useModalEffects } from '~/lib/useModalEffects';
 import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import { ticketTypeLabel } from '~/pages/admin/tickets/types';
@@ -274,13 +275,10 @@ export const ProfileTickets = ({ticketEvents}: {ticketEvents: HeldTicketEvent[]}
                                     <h3 className="profile-ticket-event-title">{title}</h3>
                                     <p className="profile-ticket-event-line">
                                         <FiCalendar aria-hidden="true"/>
-                                        {new Date(event.startAt).toLocaleString(
-                                            isEnglish ? 'en-US' : 'zh-CN',
-                                            {
-                                                year: 'numeric', month: 'long', day: 'numeric',
-                                                hour: 'numeric', minute: '2-digit',
-                                            },
-                                        )}
+                                        {formatSiteTime(new Date(event.startAt), isEnglish, {
+                                            year: 'numeric', month: 'long', day: 'numeric',
+                                            hour: 'numeric', minute: '2-digit',
+                                        })}
                                     </p>
                                     {where && (
                                         <p className="profile-ticket-event-line">

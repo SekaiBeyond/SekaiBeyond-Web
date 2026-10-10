@@ -12,8 +12,9 @@ import {
     getFirebaseDb,
 } from '~/lib/firebase';
 import { formatCode } from '~/lib/codes';
+import { formatSiteTime, parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
 import type { BadgeCode } from './types';
-import { getClaimUrl, type ShowToast, toDatetimeLocal } from './utils';
+import { getClaimUrl, type ShowToast } from './utils';
 
 type Variant = 'checkin' | 'staff';
 
@@ -86,9 +87,27 @@ const STATE_TAG: Record<CodeState, {en: string; cn: string; className: string}> 
 };
 
 const formatWhen = (value: string, isEnglish: boolean) =>
-    new Date(value).toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+    formatSiteTime(new Date(value), isEnglish, {
         year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
     });
+
+/**
+ * A stored window bound as an ISO moment, or null for none. Bounds saved before
+ * they carried a zone hold the bare datetime-local value, typed on the Pacific
+ * clock, so parseSiteTime reads them as Pacific — as validateCodeInTransaction
+ * does. One it can't read is no bound there either.
+ */
+const storedBound = (value: unknown): string | null => {
+    if (typeof value !== 'string' || !value) return null;
+    const date = parseSiteTime(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+/** A bound as its datetime-local input shows it: on the Pacific clock, wherever the admin is. */
+const boundInput = (bound: string | null): string => bound ? toDatetimeLocal(new Date(bound)) : '';
+
+/** A datetime-local input's value as the bound it sends, which names its zone. */
+const inputBound = (value: string): string | null => value ? parseSiteTime(value).toISOString() : null;
 
 interface ClaimCodeSectionProps {
     eventId: string;
@@ -174,16 +193,16 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                         code: data.code,
                         eventId: data.eventId ?? '',
                         active: data.active ?? true,
-                        activeFrom: data.activeFrom ?? null,
-                        activeUntil: data.activeUntil ?? null,
+                        activeFrom: storedBound(data.activeFrom),
+                        activeUntil: storedBound(data.activeUntil),
                         maxUses: data.maxUses ?? 0,
                         usedCount: data.usedCount ?? 0,
                     };
                 });
                 const picked = codes.find(c => c.active) ?? codes[0] ?? null;
                 setCode(picked);
-                setCodeFrom(picked?.activeFrom ?? '');
-                setCodeUntil(picked?.activeUntil ?? '');
+                setCodeFrom(boundInput(picked?.activeFrom ?? null));
+                setCodeUntil(boundInput(picked?.activeUntil ?? null));
                 resetMaxUsesDraft(picked?.maxUses ?? 0);
                 setEditingWindow(false);
             } catch {
@@ -248,8 +267,8 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
 
     const saveTimeWindow = async () => {
         if (!code) return;
-        const activeFrom = codeFrom || null;
-        const activeUntil = codeUntil || null;
+        const activeFrom = inputBound(codeFrom);
+        const activeUntil = inputBound(codeUntil);
         setSavingWindow(true);
         try {
             await api.saveWindow({codeId: code.id, activeFrom, activeUntil});
@@ -264,8 +283,8 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     };
 
     const cancelWindowEdit = () => {
-        setCodeFrom(code?.activeFrom ?? '');
-        setCodeUntil(code?.activeUntil ?? '');
+        setCodeFrom(boundInput(code?.activeFrom ?? null));
+        setCodeUntil(boundInput(code?.activeUntil ?? null));
         setEditingWindow(false);
     };
 
@@ -387,8 +406,8 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         );
     }
 
-    const windowDirty = codeFrom !== (code.activeFrom ?? '') || codeUntil !== (code.activeUntil ?? '');
-    // datetime-local values share one fixed format, so they compare as strings.
+    const windowDirty = codeFrom !== boundInput(code.activeFrom) || codeUntil !== boundInput(code.activeUntil);
+    // datetime-local values share one fixed format and one clock, so they compare as strings.
     const windowBackwards = !!codeFrom && !!codeUntil && codeFrom >= codeUntil;
 
     // `trailing` sits at the end of the inputs' row, after Use Event End and Clear.
@@ -438,7 +457,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
             <p className={windowBackwards ? 'admin-time-hint admin-time-hint--error' : 'admin-time-hint'}>
                 {windowBackwards
                     ? (isEnglish ? 'Active until must be after active from.' : '结束时间必须晚于开始时间。')
-                    : (isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。')}
+                    : (isEnglish ? 'Pacific time. Leave empty for no time limit.' : '太平洋时间。留空表示不限时间。')}
             </p>
         </>
     );

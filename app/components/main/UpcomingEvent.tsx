@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { type UpcomingEvent as UpcomingEventType, useUpcomingEvents } from "~/lib/upcomingEvents";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
+import { formatSiteTime } from "~/lib/siteTime";
 import { isValidHttpUrl } from "~/lib/urls";
 import { eventLocationDisplay, resolveVenueById, useVenues } from "~/lib/venues";
 
@@ -72,7 +73,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                         : (isEnglish ? "Coming Soon" : "即将开始")}
                 </span>
                 <h2 className="convention-title">{isEnglish ? event.title : (event.titleCn || event.title)}</h2>
-                <p className="event-date-text">{event.startAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                <p className="event-date-text">{formatSiteTime(event.startAt, isEnglish, {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',

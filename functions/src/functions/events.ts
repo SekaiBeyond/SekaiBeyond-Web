@@ -14,9 +14,10 @@ import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 import { recordDoc, recordRef } from "../utils/records";
+import { siteDay } from "../utils/siteTime";
 import {
     validateDocId,
-    validateISODate,
+    validateInstant,
     validateStorageImageUrl,
     validateStr,
     validateStringArray,
@@ -251,9 +252,9 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     validateUrl(learnMore, "learnMore");
     validateUrl(customButtonLink, "customButtonLink");
 
-    const startAtStr = validateISODate(input.startAt, "startAt");
+    const startAtStr = validateInstant(input.startAt, "startAt");
     if (!startAtStr) throw new HttpsError("invalid-argument", "startAt is required.");
-    const endAtStr = validateISODate(input.endAt, "endAt");
+    const endAtStr = validateInstant(input.endAt, "endAt");
     if (!endAtStr) throw new HttpsError("invalid-argument", "endAt is required.");
     const startAt = Timestamp.fromDate(new Date(startAtStr));
     const endAt = Timestamp.fromDate(new Date(endAtStr));
@@ -564,10 +565,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         const eventData = eventSnap.data()!;
 
         const startDate: Date = eventData.startAt?.toDate?.() ?? new Date();
-        const dateStr = new Intl.DateTimeFormat("en-CA", {
-            timeZone: "America/Los_Angeles",
-            year: "numeric", month: "2-digit", day: "2-digit",
-        }).format(startDate);
+        const dateStr = siteDay(startDate.getTime());
 
         txn.set(newDocRef, {
             title: eventData.title ?? "",

@@ -5,7 +5,7 @@ import { db } from "../utils/firebase";
 import { codeKind, issueCode, normalizeCode } from "../utils/codes";
 import { validateCodeInTransaction } from "../utils/helpers";
 import { claimPassportWithKey, findPassportByKey, normalizeActivationKey } from "../utils/passports";
-import { validateDocId, validateISODate, validateMaxUses } from "../utils/validation";
+import { validateDocId, validateInstant, validateMaxUses } from "../utils/validation";
 import { recordDoc, type RecordFields, recordRef } from "../utils/records";
 
 const INVALID = "Invalid or deactivated code.";
@@ -217,8 +217,8 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
     };
     const badgeId = validateDocId(input.badgeId, "badgeId");
     const maxUses = validateMaxUses(input.maxUses);
-    const activeFrom = validateISODate(input.activeFrom, "activeFrom");
-    const activeUntil = validateISODate(input.activeUntil, "activeUntil");
+    const activeFrom = validateInstant(input.activeFrom, "activeFrom");
+    const activeUntil = validateInstant(input.activeUntil, "activeUntil");
     const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
     let code = "";
@@ -289,8 +289,8 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
         activeUntil?: string;
     };
     const eventId = validateDocId(input.eventId, "eventId");
-    const activeFrom = validateISODate(input.activeFrom, "activeFrom");
-    const activeUntil = validateISODate(input.activeUntil, "activeUntil");
+    const activeFrom = validateInstant(input.activeFrom, "activeFrom");
+    const activeUntil = validateInstant(input.activeUntil, "activeUntil");
     const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
     let code = "";
@@ -406,8 +406,8 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
 
     const input = request.data as {codeId?: string; activeFrom?: string; activeUntil?: string};
     const codeId = validateDocId(input.codeId, "codeId");
-    const activeFrom = validateISODate(input.activeFrom, "activeFrom");
-    const activeUntil = validateISODate(input.activeUntil, "activeUntil");
+    const activeFrom = validateInstant(input.activeFrom, "activeFrom");
+    const activeUntil = validateInstant(input.activeUntil, "activeUntil");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         const codeSnap = await txn.get(db.collection("claimCodes").doc(codeId));
@@ -498,8 +498,8 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
 
     const input = request.data as {eventId?: string; activeFrom?: string; activeUntil?: string; maxUses?: number};
     const eventId = validateDocId(input.eventId, "eventId");
-    const activeFrom = validateISODate(input.activeFrom, "activeFrom");
-    const activeUntil = validateISODate(input.activeUntil, "activeUntil");
+    const activeFrom = validateInstant(input.activeFrom, "activeFrom");
+    const activeUntil = validateInstant(input.activeUntil, "activeUntil");
     const maxUses = validateMaxUses(input.maxUses);
     const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
@@ -682,8 +682,8 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
 
     const input = request.data as {codeId?: string; activeFrom?: string; activeUntil?: string; maxUses?: number};
     const codeId = validateDocId(input.codeId, "codeId");
-    const activeFrom = validateISODate(input.activeFrom, "activeFrom");
-    const activeUntil = validateISODate(input.activeUntil, "activeUntil");
+    const activeFrom = validateInstant(input.activeFrom, "activeFrom");
+    const activeUntil = validateInstant(input.activeUntil, "activeUntil");
     const maxUses = validateMaxUses(input.maxUses);
 
     return adminTransaction(uid, async (txn, callerSnap) => {

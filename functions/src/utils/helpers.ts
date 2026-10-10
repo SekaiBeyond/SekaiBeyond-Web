@@ -2,6 +2,7 @@ import * as crypto from "crypto";
 import { HttpsError } from "firebase-functions/v2/https";
 import { BATCH_LIMIT } from "./config";
 import { db } from "./firebase";
+import { parseSiteTime } from "./siteTime";
 
 export const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
@@ -30,11 +31,13 @@ export function validateCodeInTransaction(data: {
         throw new HttpsError("failed-precondition", "This code is inactive.", {code: "inactive"});
     }
 
+    // Bounds saved before they carried a zone hold the bare datetime-local value,
+    // typed on the Pacific clock, which parseSiteTime reads as Pacific.
     const now = new Date();
-    if (data.activeFrom && new Date(data.activeFrom) > now) {
+    if (data.activeFrom && parseSiteTime(data.activeFrom) > now) {
         throw new HttpsError("failed-precondition", "This code is not active yet.", {code: "not-active-yet"});
     }
-    if (data.activeUntil && new Date(data.activeUntil) < now) {
+    if (data.activeUntil && parseSiteTime(data.activeUntil) < now) {
         throw new HttpsError("failed-precondition", "This code has expired.", {code: "expired"});
     }
 
