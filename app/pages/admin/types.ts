@@ -9,6 +9,7 @@ export interface BadgeCode {
     activeFrom: string | null;
     activeUntil: string | null;
     maxUses?: number;
+    usedCount?: number;
 }
 
 export interface BadgeActivationCode {

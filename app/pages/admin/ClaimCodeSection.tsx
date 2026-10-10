@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '~/components/LanguageContextProvider';
@@ -62,6 +62,34 @@ const TEXT: Record<Variant, VariantText> = {
     },
 };
 
+/**
+ * Whether the code would be accepted if someone used it now and, if not, why.
+ * The same checks, in the same order, as validateCodeInTransaction in functions.
+ */
+type CodeState = 'active' | 'disabled' | 'scheduled' | 'expired' | 'used-up';
+
+const codeState = (code: BadgeCode, now: Date): CodeState => {
+    if (!code.active) return 'disabled';
+    if (code.activeFrom && new Date(code.activeFrom) > now) return 'scheduled';
+    if (code.activeUntil && new Date(code.activeUntil) < now) return 'expired';
+    const maxUses = code.maxUses ?? 0;
+    if (maxUses > 0 && (code.usedCount ?? 0) >= maxUses) return 'used-up';
+    return 'active';
+};
+
+const STATE_TAG: Record<CodeState, {en: string; cn: string; className: string}> = {
+    active: {en: 'Active', cn: '启用', className: 'admin-code-active-tag'},
+    disabled: {en: 'Disabled', cn: '已停用', className: 'admin-code-inactive-tag'},
+    scheduled: {en: 'Not started', cn: '未开始', className: 'admin-code-pending-tag'},
+    expired: {en: 'Expired', cn: '已过期', className: 'admin-code-inactive-tag'},
+    'used-up': {en: 'Used up', cn: '已用完', className: 'admin-code-pending-tag'},
+};
+
+const formatWhen = (value: string, isEnglish: boolean) =>
+    new Date(value).toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+
 interface ClaimCodeSectionProps {
     eventId: string;
     /**
@@ -106,13 +134,25 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     const [code, setCode] = useState<BadgeCode | null>(null);
     const [codeFrom, setCodeFrom] = useState('');
     const [codeUntil, setCodeUntil] = useState('');
-    const [maxUses, setMaxUses] = useState(0);
-    // Staff codes rarely need a time window, so its inputs stay folded away
-    // until asked for, unless the code already has one saved.
-    const [showWindow, setShowWindow] = useState(false);
+    // The max-uses draft: a checkbox for whether there is a cap at all, and the
+    // cap as typed, so clearing the field to retype it doesn't lift the cap.
+    const [limitUses, setLimitUses] = useState(false);
+    const [maxUsesText, setMaxUsesText] = useState('');
+    // Staff codes show their time window as a summary, opened for editing on
+    // request; check-in codes always show the inputs.
+    const [editingWindow, setEditingWindow] = useState(false);
+    const [copied, setCopied] = useState(false);
     const [generating, setGenerating] = useState(false);
+    const [toggling, setToggling] = useState(false);
+    const [savingWindow, setSavingWindow] = useState(false);
+    const [savingMaxUses, setSavingMaxUses] = useState(false);
     const [loading, setLoading] = useState(true);
     const [loadFailed, setLoadFailed] = useState(false);
+
+    const resetMaxUsesDraft = (saved: number) => {
+        setLimitUses(saved > 0);
+        setMaxUsesText(saved > 0 ? String(saved) : '');
+    };
 
     useEffect(() => {
         let stale = false;
@@ -137,14 +177,15 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                         activeFrom: data.activeFrom ?? null,
                         activeUntil: data.activeUntil ?? null,
                         maxUses: data.maxUses ?? 0,
+                        usedCount: data.usedCount ?? 0,
                     };
                 });
                 const picked = codes.find(c => c.active) ?? codes[0] ?? null;
                 setCode(picked);
                 setCodeFrom(picked?.activeFrom ?? '');
                 setCodeUntil(picked?.activeUntil ?? '');
-                setMaxUses(picked?.maxUses ?? 0);
-                setShowWindow(false);
+                resetMaxUsesDraft(picked?.maxUses ?? 0);
+                setEditingWindow(false);
             } catch {
                 if (!stale) {
                     setLoadFailed(true);
@@ -163,14 +204,25 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         // toggle would reload the code over an unsaved time window.
     }, [eventId, variant, showToast]);
 
+    useEffect(() => {
+        if (!copied) return;
+        const timer = setTimeout(() => setCopied(false), 2000);
+        return () => clearTimeout(timer);
+    }, [copied]);
+
     const generateCode = async () => {
         setGenerating(true);
         try {
             const result = await api.generate();
             const {id, code: newCode} = result.data;
-            setCode({id, code: newCode, eventId, active: true, activeFrom: null, activeUntil: null});
+            setCode({
+                id, code: newCode, eventId, active: true,
+                activeFrom: null, activeUntil: null, maxUses: 0, usedCount: 0,
+            });
             setCodeFrom('');
             setCodeUntil('');
+            resetMaxUsesDraft(0);
+            setEditingWindow(false);
             showToast(tr(text.generated), 'success');
         } catch {
             showToast(tr(text.generateFailed), 'error');
@@ -182,12 +234,15 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     const toggleActive = async () => {
         if (!code) return;
         const newActive = !code.active;
+        setToggling(true);
         try {
             await api.toggle(code.id, newActive);
             setCode({...code, active: newActive});
             showToast(tr(newActive ? text.enabled : text.disabled), newActive ? 'success' : 'warning');
         } catch {
             showToast(tr(text.toggleFailed), 'error');
+        } finally {
+            setToggling(false);
         }
     };
 
@@ -195,44 +250,67 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         if (!code) return;
         const activeFrom = codeFrom || null;
         const activeUntil = codeUntil || null;
+        setSavingWindow(true);
         try {
             await api.saveWindow({codeId: code.id, activeFrom, activeUntil});
             setCode({...code, activeFrom, activeUntil});
+            setEditingWindow(false);
             showToast(isEnglish ? 'Time window saved.' : '时间窗口已保存。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to save time window.' : '保存时间窗口失败。', 'error');
+        } finally {
+            setSavingWindow(false);
         }
     };
 
+    const cancelWindowEdit = () => {
+        setCodeFrom(code?.activeFrom ?? '');
+        setCodeUntil(code?.activeUntil ?? '');
+        setEditingWindow(false);
+    };
+
+    const savedMaxUses = code?.maxUses ?? 0;
+    const usedCount = code?.usedCount ?? 0;
+    const draftMaxUses = limitUses ? Number(maxUsesText) : 0;
+    const draftMaxUsesValid = !limitUses || (Number.isInteger(draftMaxUses) && draftMaxUses >= 1);
+
     const saveMaxUses = async () => {
-        if (!code) return;
+        if (!code || !draftMaxUsesValid) return;
+        setSavingMaxUses(true);
         try {
             await callSaveStaffCodeTimeWindow({
                 codeId: code.id,
                 activeFrom: code.activeFrom,
                 activeUntil: code.activeUntil,
-                maxUses,
+                maxUses: draftMaxUses,
             });
-            setCode({...code, maxUses});
+            setCode({...code, maxUses: draftMaxUses});
+            resetMaxUsesDraft(draftMaxUses);
             showToast(isEnglish ? 'Max uses saved.' : '最大次数已保存。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to save max uses.' : '保存最大次数失败。', 'error');
+        } finally {
+            setSavingMaxUses(false);
         }
     };
 
-    const hideWindow = () => {
-        setCodeFrom('');
-        setCodeUntil('');
-        setShowWindow(false);
-    };
-
-    const hasSavedWindow = !!(code?.activeFrom || code?.activeUntil);
-    const windowVisible = !isStaff || hasSavedWindow || showWindow;
     const eventEndLocal = eventEndAt ? toDatetimeLocal(eventEndAt) : '';
 
     // Staff codes are claimed by typing the code, so they show the dashed form;
     // check-in codes are scanned from a URL, which carries the code as stored.
     const copyValue = code ? (isStaff ? formatCode(code.code) : getClaimUrl(code.code)) : '';
+
+    const copyCode = async () => {
+        try {
+            await navigator.clipboard.writeText(copyValue);
+            setCopied(true);
+        } catch {
+            showToast(
+                isEnglish ? 'Couldn\'t copy. Select the code and copy it by hand.' : '复制失败，请手动选择并复制。',
+                'error',
+            );
+        }
+    };
 
     if (loading) {
         return (
@@ -242,47 +320,180 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         );
     }
 
+    const stateTag = code ? STATE_TAG[codeState(code, new Date())] : null;
+
+    const staffHeader = isStaff && text.label && (
+        <div className="admin-staff-code-head">
+            <div>
+                <h4 className="admin-staff-code-title">{tr(text.label)}</h4>
+                <p className="admin-title-hint">
+                    {isEnglish
+                        ? 'Staff enter this code under Redeem Code in their account menu to join this event\'s staff.'
+                        : '工作人员在账户菜单的「兑换激活码」中输入此码，即可成为本活动的工作人员。'}
+                </p>
+            </div>
+            {stateTag && !loadFailed && (
+                <span className={stateTag.className}>{tr(stateTag)}</span>
+            )}
+        </div>
+    );
+
     // "No code yet" is only said when the read came back empty. Generating retires
     // every code the event already has, so offering it after a failed read could
     // switch off one that is printed and in use, without the regenerate warning.
     if (loadFailed) {
         return (
             <div className="admin-codes-section">
-                {text.label && (
-                    <p className="admin-section-label">{tr(text.label)}</p>
+                {isStaff ? (
+                    <div className="admin-staff-code">
+                        {staffHeader}
+                        <p className="admin-no-results">{tr(text.loadFailed)}</p>
+                    </div>
+                ) : (
+                    <p className="admin-no-results">{tr(text.loadFailed)}</p>
                 )}
-                <p className="admin-no-results">{tr(text.loadFailed)}</p>
             </div>
         );
     }
 
-    return (
-        <div className="admin-codes-section">
-            {text.label && (
-                <p className="admin-section-label">{tr(text.label)}</p>
-            )}
-            {!code ? (
-                <>
-                    <p className="admin-no-results">{tr(text.none)}</p>
-                    {!readOnly && (
-                        <button
-                            className="admin-btn admin-btn--dashed"
-                            onClick={() => void generateCode()}
-                            disabled={generating}
-                        >
-                            {generating
-                                ? (isEnglish ? 'Generating...' : '生成中...')
-                                : tr(text.generate)}
-                        </button>
-                    )}
-                </>
-            ) : (
+    const generateButton = !readOnly && (
+        <button
+            className="admin-btn admin-btn--dashed"
+            onClick={() => void generateCode()}
+            disabled={generating}
+        >
+            {generating
+                ? (isEnglish ? 'Generating...' : '生成中...')
+                : tr(text.generate)}
+        </button>
+    );
+
+    if (!code) {
+        return (
+            <div className="admin-codes-section">
+                {isStaff ? (
+                    <div className="admin-staff-code">
+                        {staffHeader}
+                        <p className="admin-no-results admin-staff-code-empty">{tr(text.none)}</p>
+                        {generateButton}
+                    </div>
+                ) : (
+                    <>
+                        <p className="admin-no-results">{tr(text.none)}</p>
+                        {generateButton}
+                    </>
+                )}
+            </div>
+        );
+    }
+
+    const windowDirty = codeFrom !== (code.activeFrom ?? '') || codeUntil !== (code.activeUntil ?? '');
+    // datetime-local values share one fixed format, so they compare as strings.
+    const windowBackwards = !!codeFrom && !!codeUntil && codeFrom >= codeUntil;
+
+    // `trailing` sits at the end of the inputs' row, after Use Event End and Clear.
+    const windowFields = (trailing?: ReactNode) => (
+        <>
+            <div className="admin-code-time-inputs">
+                <label>
+                    <span>{isEnglish ? 'Active from' : '开始时间'}</span>
+                    <input
+                        type="datetime-local"
+                        value={codeFrom}
+                        onChange={(e) => setCodeFrom(e.target.value)}
+                        className="admin-datetime-input"
+                    />
+                </label>
+                <label>
+                    <span>{isEnglish ? 'Active until' : '结束时间'}</span>
+                    <input
+                        type="datetime-local"
+                        value={codeUntil}
+                        onChange={(e) => setCodeUntil(e.target.value)}
+                        className="admin-datetime-input"
+                    />
+                </label>
+                {eventEndLocal && (
+                    <button
+                        className="admin-toggle-btn admin-toggle-edit"
+                        onClick={() => setCodeUntil(eventEndLocal)}
+                        disabled={codeUntil === eventEndLocal}
+                    >
+                        {isEnglish ? 'Use Event End' : '设为活动结束时间'}
+                    </button>
+                )}
+                {(codeFrom || codeUntil) && (
+                    <button
+                        className="admin-toggle-btn admin-toggle-cancel"
+                        onClick={() => {
+                            setCodeFrom('');
+                            setCodeUntil('');
+                        }}
+                    >
+                        {isEnglish ? 'Clear' : '清空'}
+                    </button>
+                )}
+                {trailing}
+            </div>
+            <p className={windowBackwards ? 'admin-time-hint admin-time-hint--error' : 'admin-time-hint'}>
+                {windowBackwards
+                    ? (isEnglish ? 'Active until must be after active from.' : '结束时间必须晚于开始时间。')
+                    : (isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。')}
+            </p>
+        </>
+    );
+
+    const saveWindowButton = (
+        <button
+            className="admin-toggle-btn admin-toggle-save"
+            onClick={() => void saveTimeWindow()}
+            disabled={!windowDirty || windowBackwards || savingWindow}
+        >
+            {savingWindow ? (isEnglish ? 'Saving...' : '保存中...') : (isEnglish ? 'Save' : '保存')}
+        </button>
+    );
+
+    const codeActions = (
+        <>
+            <button
+                className={`admin-toggle-btn ${code.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                onClick={() => void toggleActive()}
+                disabled={toggling}
+            >
+                {code.active
+                    ? (isEnglish ? 'Disable' : '停用')
+                    : (isEnglish ? 'Enable' : '启用')}
+            </button>
+            <button
+                className="admin-toggle-btn admin-toggle-revoke"
+                onClick={() => {
+                    if (window.confirm(tr(text.regenConfirm))) void generateCode();
+                }}
+                disabled={generating}
+            >
+                {generating
+                    ? (isEnglish ? 'Regenerating...' : '重新生成中...')
+                    : (isEnglish ? 'Regenerate' : '重新生成')}
+            </button>
+        </>
+    );
+
+    const copyButton = (
+        <button
+            className={`admin-btn admin-btn--purple ${copied ? 'admin-btn--copied' : ''}`}
+            onClick={() => void copyCode()}
+        >
+            {copied ? (isEnglish ? 'Copied ✓' : '已复制 ✓') : (isEnglish ? 'Copy' : '复制')}
+        </button>
+    );
+
+    if (!isStaff) {
+        return (
+            <div className="admin-codes-section">
                 <div className="admin-single-code">
-                    {!isStaff && (
-                        <div className="admin-single-code-qr">
-                            <QRCodeSVG value={copyValue} size={200} level="M"/>
-                        </div>
-                    )}
+                    <div className="admin-single-code-qr">
+                        <QRCodeSVG value={copyValue} size={200} level="M"/>
+                    </div>
                     <div className="admin-code-url">
                         <input
                             readOnly
@@ -290,124 +501,153 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                             onClick={(e) => (e.target as HTMLInputElement).select()}
                             className="admin-code-input"
                         />
-                        <button
-                            className="admin-btn admin-btn--purple"
-                            onClick={() => navigator.clipboard.writeText(copyValue)}
-                        >
-                            {isEnglish ? 'Copy' : '复制'}
-                        </button>
+                        {copyButton}
                     </div>
-                    <span className={code.active ? 'admin-code-active-tag' : 'admin-code-inactive-tag'}>
-                        {code.active
-                            ? (isEnglish ? 'Active' : '启用')
-                            : (isEnglish ? 'Disabled' : '已停用')}
-                    </span>
+                    {stateTag && <span className={stateTag.className}>{tr(stateTag)}</span>}
                     {!readOnly && (
                         <>
-                            {windowVisible ? (
-                                <>
-                                    <div className="admin-code-time-inputs">
-                                        <label>
-                                            <span>{isEnglish ? 'Active from' : '开始时间'}</span>
-                                            <input
-                                                type="datetime-local"
-                                                value={codeFrom}
-                                                onChange={(e) => setCodeFrom(e.target.value)}
-                                                className="admin-datetime-input"
-                                            />
-                                        </label>
-                                        <label>
-                                            <span>{isEnglish ? 'Active until' : '结束时间'}</span>
-                                            <input
-                                                type="datetime-local"
-                                                value={codeUntil}
-                                                onChange={(e) => setCodeUntil(e.target.value)}
-                                                className="admin-datetime-input"
-                                            />
-                                        </label>
-                                        {eventEndLocal && (
-                                            <button
-                                                className="admin-toggle-btn admin-toggle-edit"
-                                                onClick={() => setCodeUntil(eventEndLocal)}
-                                                disabled={codeUntil === eventEndLocal}
-                                            >
-                                                {isEnglish ? 'Use Event End' : '设为活动结束时间'}
-                                            </button>
-                                        )}
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-save"
-                                            onClick={() => void saveTimeWindow()}
-                                            disabled={codeFrom === (code.activeFrom ?? '') && codeUntil === (code.activeUntil ?? '')}
-                                        >
-                                            {isEnglish ? 'Save' : '保存'}
-                                        </button>
-                                        {isStaff && !hasSavedWindow && (
-                                            <button
-                                                className="admin-toggle-btn admin-toggle-cancel"
-                                                onClick={hideWindow}
-                                            >
-                                                {isEnglish ? 'Hide' : '收起'}
-                                            </button>
-                                        )}
-                                    </div>
-                                    <p className="admin-time-hint">
-                                        {isEnglish ? 'Leave empty for no time limit.' : '留空表示不限时间。'}
-                                    </p>
-                                </>
-                            ) : (
-                                <button
-                                    className="admin-toggle-btn admin-toggle-edit"
-                                    onClick={() => setShowWindow(true)}
-                                >
-                                    {isEnglish ? 'Set Time Window' : '设置时间窗口'}
-                                </button>
-                            )}
-                            {isStaff && (
-                                <>
-                                    <label className="admin-max-uses-label">
-                                        <span>{isEnglish ? 'Max uses (0 = unlimited)' : '最大使用次数（0 = 不限）'}</span>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            value={maxUses}
-                                            onChange={(e) => setMaxUses(Number(e.target.value))}
-                                            className="admin-number-input"
-                                        />
-                                    </label>
-                                    <button
-                                        className="admin-toggle-btn admin-toggle-save"
-                                        onClick={() => void saveMaxUses()}
-                                        disabled={maxUses === (code.maxUses ?? 0)}
-                                    >
-                                        {isEnglish ? 'Save Max Uses' : '保存最大次数'}
-                                    </button>
-                                </>
-                            )}
-                            <div className="admin-single-code-actions">
-                                <button
-                                    className={`admin-toggle-btn ${code.active ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                    onClick={() => void toggleActive()}
-                                >
-                                    {code.active
-                                        ? (isEnglish ? 'Disable' : '停用')
-                                        : (isEnglish ? 'Enable' : '启用')}
-                                </button>
-                                <button
-                                    className="admin-toggle-btn admin-toggle-revoke"
-                                    onClick={() => {
-                                        if (window.confirm(tr(text.regenConfirm))) void generateCode();
-                                    }}
-                                    disabled={generating}
-                                >
-                                    {generating
-                                        ? (isEnglish ? 'Regenerating...' : '重新生成中...')
-                                        : (isEnglish ? 'Regenerate' : '重新生成')}
-                                </button>
-                            </div>
+                            {windowFields(saveWindowButton)}
+                            <div className="admin-single-code-actions">{codeActions}</div>
                         </>
                     )}
                 </div>
-            )}
+            </div>
+        );
+    }
+
+    const hasSavedWindow = !!(code.activeFrom || code.activeUntil);
+    const windowSummary = code.activeFrom && code.activeUntil
+        ? `${formatWhen(code.activeFrom, isEnglish)} – ${formatWhen(code.activeUntil, isEnglish)}`
+        : code.activeFrom
+            ? (isEnglish ? 'From ' : '自 ') + formatWhen(code.activeFrom, isEnglish)
+            : code.activeUntil
+                ? (isEnglish ? 'Until ' : '至 ') + formatWhen(code.activeUntil, isEnglish)
+                : (isEnglish ? 'Any time' : '不限时间');
+
+    const usageFull = savedMaxUses > 0 && usedCount >= savedMaxUses;
+    const maxUsesDirty = draftMaxUses !== savedMaxUses;
+    // A cap at or under the uses already spent shuts the code for anyone new.
+    const capClosesCode = limitUses && draftMaxUsesValid && maxUsesDirty && draftMaxUses <= usedCount;
+
+    return (
+        <div className="admin-codes-section">
+            <div className="admin-staff-code">
+                {staffHeader}
+
+                <div className="admin-staff-code-value-row">
+                    <code className={`admin-staff-code-value ${code.active ? '' : 'admin-staff-code-value--off'}`}>
+                        {copyValue}
+                    </code>
+                    {copyButton}
+                </div>
+
+                <div className="admin-staff-code-usage">
+                    <span>
+                        {savedMaxUses > 0
+                            ? (isEnglish ? `Used ${usedCount} of ${savedMaxUses}` : `已使用 ${usedCount} / ${savedMaxUses} 次`)
+                            : (isEnglish
+                                ? `Used ${usedCount} ${usedCount === 1 ? 'time' : 'times'} · no limit`
+                                : `已使用 ${usedCount} 次 · 不限次数`)}
+                    </span>
+                    {savedMaxUses > 0 && (
+                        <div className="admin-staff-code-meter" aria-hidden="true">
+                            <div
+                                className={`admin-staff-code-meter-fill ${usageFull ? 'admin-staff-code-meter-fill--full' : ''}`}
+                                style={{width: `${Math.min(100, (usedCount / savedMaxUses) * 100)}%`}}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {!readOnly && (
+                    <>
+                        <div className="admin-staff-code-settings">
+                            <div className="admin-staff-code-setting">
+                                <span className="admin-staff-code-setting-label">
+                                    {isEnglish ? 'Uses' : '使用次数'}
+                                </span>
+                                <div className="admin-staff-code-setting-body">
+                                    <label className="admin-unlimited-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={limitUses}
+                                            onChange={(e) => {
+                                                setLimitUses(e.target.checked);
+                                                if (e.target.checked && !maxUsesText) {
+                                                    setMaxUsesText(String(Math.max(10, usedCount + 1)));
+                                                }
+                                            }}
+                                        />
+                                        {isEnglish ? 'Limit to' : '限制为'}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        inputMode="numeric"
+                                        value={limitUses ? maxUsesText : ''}
+                                        placeholder="∞"
+                                        disabled={!limitUses}
+                                        onChange={(e) => setMaxUsesText(e.target.value)}
+                                        className="admin-number-input"
+                                        aria-label={isEnglish ? 'Max uses' : '最大使用次数'}
+                                    />
+                                    <span className="admin-staff-code-unit">{isEnglish ? 'uses' : '次'}</span>
+                                    <button
+                                        className="admin-toggle-btn admin-toggle-save"
+                                        onClick={() => void saveMaxUses()}
+                                        disabled={!maxUsesDirty || !draftMaxUsesValid || savingMaxUses}
+                                    >
+                                        {savingMaxUses ? (isEnglish ? 'Saving...' : '保存中...') : (isEnglish ? 'Save' : '保存')}
+                                    </button>
+                                </div>
+                                {capClosesCode && (
+                                    <p className="admin-time-hint admin-time-hint--error">
+                                        {isEnglish
+                                            ? `This code has been used ${usedCount} ${usedCount === 1 ? 'time' : 'times'}, so a limit of ${draftMaxUses} stops anyone new from joining with it.`
+                                            : `此码已使用 ${usedCount} 次，上限设为 ${draftMaxUses} 后将无法再有新的工作人员通过此码加入。`}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="admin-staff-code-setting">
+                                <span className="admin-staff-code-setting-label">
+                                    {isEnglish ? 'Time window' : '时间窗口'}
+                                </span>
+                                {editingWindow ? (
+                                    <div className="admin-staff-code-window-edit">
+                                        {windowFields()}
+                                        <div className="admin-staff-code-window-buttons">
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-cancel"
+                                                onClick={cancelWindowEdit}
+                                                disabled={savingWindow}
+                                            >
+                                                {isEnglish ? 'Cancel' : '取消'}
+                                            </button>
+                                            {saveWindowButton}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="admin-staff-code-setting-body">
+                                        <span className={hasSavedWindow ? 'admin-staff-code-window' : 'admin-staff-code-window admin-staff-code-window--none'}>
+                                            {windowSummary}
+                                        </span>
+                                        <button
+                                            className="admin-toggle-btn admin-toggle-edit"
+                                            onClick={() => setEditingWindow(true)}
+                                        >
+                                            {hasSavedWindow ? (isEnglish ? 'Edit' : '编辑') : (isEnglish ? 'Set' : '设置')}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="admin-staff-code-actions">{codeActions}</div>
+                    </>
+                )}
+            </div>
         </div>
     );
 }

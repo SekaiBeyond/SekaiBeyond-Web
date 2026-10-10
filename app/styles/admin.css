@@ -1115,6 +1115,26 @@
     margin: 0;
 }
 
+.admin-time-hint--error {
+    color: var(--color-error);
+}
+
+/* Switched on but not taking anyone right now: not started yet, or used up. */
+.admin-code-pending-tag {
+    padding: 2px 10px;
+    border-radius: 10px;
+    background: #fff3cd;
+    color: #b95400;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* A copy button that has just copied reads "Copied" in green for a moment. */
+.admin-btn--copied,
+.admin-btn--copied:hover:not(:disabled) {
+    background: var(--color-success);
+}
+
 @media (max-width: 600px) {
     .admin-single-code {
         padding: 16px;
@@ -1122,6 +1142,234 @@
 
     .admin-code-url {
         flex-direction: column;
+    }
+}
+
+/* Staff claim code: a card read top to bottom — what the code is for, the code
+   itself, how much of it is spent, then the limits on it and what to do to it. */
+.admin-staff-code {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    background: white;
+    border-radius: 16px;
+    border: 1px solid #e8e8e8;
+}
+
+.admin-staff-code-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-staff-code-head > span {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.admin-staff-code-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-staff-code-head .admin-title-hint {
+    margin-top: 4px;
+}
+
+.admin-staff-code-empty {
+    padding: 8px;
+}
+
+.admin-staff-code .admin-btn--dashed {
+    margin-bottom: 0;
+}
+
+.admin-staff-code-value-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
+/* Big and monospaced: the code is read off a screen, or out loud, and typed. */
+.admin-staff-code-value {
+    flex: 1;
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px dashed #d4a6ff;
+    border-radius: 12px;
+    background: #faf5ff;
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-align: center;
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.admin-staff-code-value--off {
+    border-color: #e0e0e0;
+    background: #f7f7f7;
+    color: var(--color-text-light);
+}
+
+.admin-staff-code-value-row .admin-btn--purple {
+    min-width: 96px;
+    padding: 0 20px;
+    border-radius: 12px;
+    font-size: 14px;
+}
+
+.admin-staff-code-usage {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.admin-staff-code-meter {
+    flex: 1;
+    max-width: 240px;
+    height: 6px;
+    border-radius: 3px;
+    background: #f0e6f7;
+    overflow: hidden;
+}
+
+.admin-staff-code-meter-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--color-purple);
+    transition: width 0.3s ease;
+}
+
+.admin-staff-code-meter-fill--full {
+    background: #e8a33d;
+}
+
+.admin-staff-code-settings {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid #f0f0f0;
+}
+
+.admin-staff-code-setting {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    align-items: start;
+    column-gap: 16px;
+    row-gap: 6px;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.admin-staff-code-setting > .admin-time-hint {
+    grid-column: 2;
+}
+
+/* As tall as the controls beside it, so the two read as one line. */
+.admin-staff-code-setting-label {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 32px;
+    color: var(--color-text);
+}
+
+.admin-staff-code-setting-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+.admin-staff-code-setting-body > .admin-toggle-btn:last-child {
+    margin-left: auto;
+}
+
+.admin-staff-code-settings .admin-toggle-btn {
+    padding: 6px 14px;
+    font-size: 13px;
+}
+
+.admin-staff-code-settings .admin-number-input {
+    width: 80px;
+}
+
+.admin-staff-code-settings .admin-number-input:disabled {
+    background: #f7f7f7;
+    color: var(--color-text-light);
+}
+
+.admin-staff-code-window {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.admin-staff-code-window--none {
+    font-weight: 500;
+    color: var(--color-text-muted);
+}
+
+.admin-staff-code-window-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.admin-staff-code-window-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.admin-staff-code-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+@media (max-width: 600px) {
+    .admin-staff-code {
+        padding: 16px;
+    }
+
+    .admin-staff-code-value-row {
+        flex-direction: column;
+    }
+
+    .admin-staff-code-value {
+        font-size: 20px;
+        letter-spacing: 0.08em;
+        padding: 12px;
+    }
+
+    .admin-staff-code-value-row .admin-btn--purple {
+        padding: 10px 20px;
+    }
+
+    .admin-staff-code-setting {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-staff-code-setting > .admin-time-hint {
+        grid-column: 1;
+    }
+
+    .admin-staff-code-setting-label {
+        line-height: normal;
     }
 }
 
