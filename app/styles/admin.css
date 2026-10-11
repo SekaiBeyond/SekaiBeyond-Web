@@ -1297,7 +1297,8 @@
     margin-left: auto;
 }
 
-.admin-staff-code-settings .admin-toggle-btn {
+.admin-staff-code-settings .admin-toggle-btn,
+.admin-staff-code-retired .admin-toggle-btn {
     padding: 6px 14px;
     font-size: 13px;
 }
@@ -1339,6 +1340,29 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 10px;
+}
+
+/* Codes a regenerate switched off, listed under the current one so they can be deleted. */
+.admin-staff-code-retired {
+    border-top: 1px solid #f0f0f0;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.admin-staff-code-retired-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.admin-staff-code-retired-value {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--color-text-light);
 }
 
 @media (max-width: 600px) {

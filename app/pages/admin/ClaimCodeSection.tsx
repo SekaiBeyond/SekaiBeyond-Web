@@ -3,6 +3,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
+    callDeleteStaffCode,
     callGenerateEventCode,
     callGenerateStaffCode,
     callSaveClaimCodeTimeWindow,
@@ -151,6 +152,9 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         };
 
     const [code, setCode] = useState<BadgeCode | null>(null);
+    // The event's other codes, which generating a new one retired. Staff codes
+    // list them so they can be deleted.
+    const [otherCodes, setOtherCodes] = useState<BadgeCode[]>([]);
     const [codeFrom, setCodeFrom] = useState('');
     const [codeUntil, setCodeUntil] = useState('');
     // The max-uses draft: a checkbox for whether there is a cap at all, and the
@@ -165,12 +169,24 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     const [toggling, setToggling] = useState(false);
     const [savingWindow, setSavingWindow] = useState(false);
     const [savingMaxUses, setSavingMaxUses] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadFailed, setLoadFailed] = useState(false);
 
     const resetMaxUsesDraft = (saved: number) => {
         setLimitUses(saved > 0);
         setMaxUsesText(saved > 0 ? String(saved) : '');
+    };
+
+    /** Shows the active code, or failing that the first, with the rest as `otherCodes`. */
+    const showCodes = (codes: BadgeCode[]) => {
+        const picked = codes.find(c => c.active) ?? codes[0] ?? null;
+        setCode(picked);
+        setOtherCodes(codes.filter(c => c !== picked));
+        setCodeFrom(boundInput(picked?.activeFrom ?? null));
+        setCodeUntil(boundInput(picked?.activeUntil ?? null));
+        resetMaxUsesDraft(picked?.maxUses ?? 0);
+        setEditingWindow(false);
     };
 
     useEffect(() => {
@@ -199,12 +215,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                         usedCount: data.usedCount ?? 0,
                     };
                 });
-                const picked = codes.find(c => c.active) ?? codes[0] ?? null;
-                setCode(picked);
-                setCodeFrom(boundInput(picked?.activeFrom ?? null));
-                setCodeUntil(boundInput(picked?.activeUntil ?? null));
-                resetMaxUsesDraft(picked?.maxUses ?? 0);
-                setEditingWindow(false);
+                showCodes(codes);
             } catch {
                 if (!stale) {
                     setLoadFailed(true);
@@ -234,6 +245,8 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         try {
             const result = await api.generate();
             const {id, code: newCode} = result.data;
+            // Generating retired every code the event already had.
+            setOtherCodes([...(code ? [code] : []), ...otherCodes].map(c => ({...c, active: false})));
             setCode({
                 id, code: newCode, eventId, active: true,
                 activeFrom: null, activeUntil: null, maxUses: 0, usedCount: 0,
@@ -279,6 +292,28 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
             showToast(isEnglish ? 'Failed to save time window.' : '保存时间窗口失败。', 'error');
         } finally {
             setSavingWindow(false);
+        }
+    };
+
+    const deleteStaffCode = async (target: BadgeCode) => {
+        const usedNote = target.usedCount
+            ? (isEnglish ? ` It has been used ${target.usedCount} time(s); those staff stay staff.` : `此码已被使用 ${target.usedCount} 次，已加入的工作人员不受影响。`)
+            : '';
+        if (!window.confirm(
+            isEnglish
+                ? `Delete staff code "${formatCode(target.code)}"?${usedNote} This cannot be undone.`
+                : `删除工作人员码"${formatCode(target.code)}"？${usedNote}此操作不可撤销。`
+        )) return;
+        setDeletingId(target.id);
+        try {
+            await callDeleteStaffCode({codeId: target.id});
+            if (target.id === code?.id) showCodes(otherCodes);
+            else setOtherCodes(otherCodes.filter(c => c.id !== target.id));
+            showToast(isEnglish ? 'Staff code deleted.' : '工作人员码已删除。', 'warning');
+        } catch {
+            showToast(isEnglish ? 'Failed to delete staff code.' : '删除工作人员码失败。', 'error');
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -472,6 +507,17 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         </button>
     );
 
+    // Only a disabled staff code can be deleted, as deleteStaffCode requires.
+    const deleteButton = (target: BadgeCode) => (
+        <button
+            className="admin-toggle-btn admin-toggle-revoke"
+            onClick={() => void deleteStaffCode(target)}
+            disabled={deletingId !== null}
+        >
+            {deletingId === target.id ? (isEnglish ? 'Deleting...' : '删除中...') : (isEnglish ? 'Delete' : '删除')}
+        </button>
+    );
+
     const codeActions = (
         <>
             <button
@@ -494,6 +540,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                     ? (isEnglish ? 'Regenerating...' : '重新生成中...')
                     : (isEnglish ? 'Regenerate' : '重新生成')}
             </button>
+            {isStaff && !code.active && deleteButton(code)}
         </>
     );
 
@@ -649,7 +696,8 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                                     </div>
                                 ) : (
                                     <div className="admin-staff-code-setting-body">
-                                        <span className={hasSavedWindow ? 'admin-staff-code-window' : 'admin-staff-code-window admin-staff-code-window--none'}>
+                                        <span
+                                            className={hasSavedWindow ? 'admin-staff-code-window' : 'admin-staff-code-window admin-staff-code-window--none'}>
                                             {windowSummary}
                                         </span>
                                         <button
@@ -664,6 +712,27 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                         </div>
 
                         <div className="admin-staff-code-actions">{codeActions}</div>
+
+                        {otherCodes.length > 0 && (
+                            <div className="admin-staff-code-setting admin-staff-code-retired">
+                                <span className="admin-staff-code-setting-label">
+                                    {isEnglish ? 'Retired codes' : '已停用的旧码'}
+                                </span>
+                                <ul className="admin-staff-code-retired-list">
+                                    {otherCodes.map(c => (
+                                        <li key={c.id} className="admin-staff-code-setting-body">
+                                            <code className="admin-staff-code-retired-value">{formatCode(c.code)}</code>
+                                            <span>
+                                                {isEnglish
+                                                    ? `Used ${c.usedCount ?? 0} ${c.usedCount === 1 ? 'time' : 'times'}`
+                                                    : `已使用 ${c.usedCount ?? 0} 次`}
+                                            </span>
+                                            {!c.active && deleteButton(c)}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                     </>
                 )}
             </div>

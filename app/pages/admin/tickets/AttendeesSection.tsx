@@ -331,7 +331,8 @@ export function AttendeesSection({
                                                     >
                                                         {t.ticketId.slice(0, 8)}…
                                                         {copiedTicketId === t.ticketId ? (
-                                                            <span className="admin-tickets-ticket-id-action admin-tickets-ticket-id-action--copied">
+                                                            <span
+                                                                className="admin-tickets-ticket-id-action admin-tickets-ticket-id-action--copied">
                                                                 {isEnglish ? 'Copied ✓' : '已复制 ✓'}
                                                             </span>
                                                         ) : (

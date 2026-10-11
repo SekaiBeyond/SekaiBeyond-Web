@@ -70,7 +70,8 @@ export const RECORD_CATEGORIES = {
         en: 'Code', zh: '兑换码',
         types: ['code-create', 'badge-code-activate', 'badge-code-deactivate', 'code-delete',
             'event-code-activate', 'event-code-deactivate', 'event-code-time-window',
-            'staff-code-create', 'staff-code-activate', 'staff-code-deactivate', 'staff-code-time-window'],
+            'staff-code-create', 'staff-code-activate', 'staff-code-deactivate', 'staff-code-time-window',
+            'staff-code-delete'],
     },
     attend: {
         en: 'Attend', zh: '签到',

@@ -466,6 +466,9 @@ export const callGenerateStaffCode = (data: {
 export const callToggleStaffCodeActive = (data: {codeId: string; active: boolean}) =>
     httpsCallable<typeof data, {active: boolean}>(getFunctions(), 'toggleStaffCodeActive')(data);
 
+export const callDeleteStaffCode = (data: {codeId: string}) =>
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteStaffCode')(data);
+
 export const callSaveStaffCodeTimeWindow = (data: {
     codeId: string;
     activeFrom?: string | null;

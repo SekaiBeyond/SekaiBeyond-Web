@@ -713,3 +713,43 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
         return {saved: true};
     });
 });
+/**
+ * Deletes a staff code for good. Only a disabled one, so a code that is printed
+ * and in use has to be switched off first. Staff it already admitted stay staff:
+ * that lives on their user record, not on the code.
+ */
+export const deleteStaffCode = onCall({maxInstances: 10}, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+    const uid = request.auth.uid;
+    await checkRateLimit(uid);
+
+    const codeId = validateDocId((request.data as {codeId?: string})?.codeId, "codeId");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const codeRef = db.collection("staffClaimCodes").doc(codeId);
+        const codeSnap = await txn.get(codeRef);
+        if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
+        const codeData = codeSnap.data()!;
+        if (codeData.active !== false) {
+            throw new HttpsError("failed-precondition", "Disable the code before deleting it.", {code: "active"});
+        }
+
+        // Staff codes can belong to a past event as well as an upcoming one.
+        const [upcomingSnap, pastSnap] = codeData.eventId
+            ? await Promise.all([
+                txn.get(db.collection("upcomingEvents").doc(codeData.eventId)),
+                txn.get(db.collection("pastEvents").doc(codeData.eventId)),
+            ])
+            : [null, null];
+        const eventSnap = upcomingSnap?.exists ? upcomingSnap : pastSnap;
+
+        txn.delete(codeRef);
+        txn.set(recordRef(), recordDoc("staff-code-delete", {
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
+            eventId: codeData.eventId ?? "",
+        }));
+        return {deleted: true};
+    });
+});

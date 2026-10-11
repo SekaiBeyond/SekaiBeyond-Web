@@ -423,6 +423,10 @@ export const RecordsTab = ({
                 return isEnglish
                     ? <>updated time window for staff code of {event}</>
                     : <>更新了 {event} 工作人员码的时间窗口</>;
+            case 'staff-code-delete':
+                return isEnglish
+                    ? <>deleted a staff code for {event}</>
+                    : <>删除了 {event} 的一个工作人员码</>;
             case 'tag-create':
                 return isEnglish
                     ? <>created tag {r.tagName ?? ''}</>

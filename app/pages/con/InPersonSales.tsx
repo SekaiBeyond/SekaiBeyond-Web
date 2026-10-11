@@ -20,7 +20,12 @@ export const InPersonSales = () => {
 
     const timed = sessions.map(session => {
         const {opens, closes} = sessionBounds(session);
-        return {session, opens: parseSiteTime(opens).getTime(), closes: parseSiteTime(closes).getTime(), iso: [opens, closes]};
+        return {
+            session,
+            opens: parseSiteTime(opens).getTime(),
+            closes: parseSiteTime(closes).getTime(),
+            iso: [opens, closes]
+        };
     });
     const now = useNowAcross(timed.flatMap(entry => entry.iso));
 
