@@ -1,6 +1,6 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent } from '~/lib/conContent';
-import { parseSiteTime } from '~/lib/siteTime';
+import { labelSiteZone, parseSiteTime } from '~/lib/siteTime';
 import { useNowAcross } from '~/pages/con/hooks';
 import { useT } from '~/pages/con/i18n';
 import { formatClockTime, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/con/utils';
@@ -67,7 +67,10 @@ export const InPersonSales = () => {
                             {formatSessionDay(session.date, currentLanguage)}
                         </time>
                         <span className="sbc-inperson-time">
-                            {formatClockTime(session.start, currentLanguage)} – {formatClockTime(session.end, currentLanguage)}
+                            {labelSiteZone(
+                                `${formatClockTime(session.start, currentLanguage)} – ${formatClockTime(session.end, currentLanguage)}`,
+                                currentLanguage === 'en',
+                            )}
                         </span>
                         {now >= opens && (
                             <span className="sbc-inperson-open">{t({en: 'Open now', zh: '进行中'})}</span>

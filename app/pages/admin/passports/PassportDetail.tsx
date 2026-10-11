@@ -17,6 +17,7 @@ import {
     passportStatusLabel,
     usePassportDesigns,
 } from '~/lib/passports';
+import { addSiteDays, formatSiteTime } from '~/lib/siteTime';
 import { QrPreview } from '../tools/qr/qrExport';
 import type { UserRecord } from '../types';
 import { docToUserRecord, type ShowToast } from '../utils';
@@ -40,9 +41,10 @@ const previewReduced = (current: Date | null, days: number): {expiresAt: Date; d
     if (!current) return null;
     const now = Date.now();
     if (current.getTime() <= now) return null;
-    const floored = Math.max(now, current.getTime() - days * DAY_MS);
+    const floored = Math.max(now, addSiteDays(current.getTime(), -days));
     return {
         expiresAt: new Date(floored),
+        // Rounded, as a day across a DST change is 23 or 25 hours.
         daysRemoved: Math.round((current.getTime() - floored) / DAY_MS),
     };
 };
@@ -164,6 +166,14 @@ export const PassportDetail = ({
 
     const fmtDate = (date: Date | null): string =>
         passportDateTime(date, isEnglish, isEnglish ? 'Never' : '从未');
+    // A membership expiry is set on the Pacific clock, so it reads back on it;
+    // an issue, claim or creation is something that happened, so fmtDate shows
+    // it on the viewer's.
+    const fmtExpiry = (date: Date | null): string => date
+        ? formatSiteTime(date, isEnglish, {
+            year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+        })
+        : (isEnglish ? 'Never' : '从未');
 
     const copyLink = () => {
         navigator.clipboard.writeText(scanValue)
@@ -341,7 +351,7 @@ export const PassportDetail = ({
                 ? 'There are no membership days left to take back — the holder’s membership has already run out, or their account is gone.'
                 : '没有可收回的会员天数 — 持有者的会员资格已到期，或其账号已删除。';
         }
-        const from = fmtDate(owner?.membershipExpiresAt ?? null);
+        const from = fmtExpiry(owner?.membershipExpiresAt ?? null);
         if (!subtractDays) {
             return isEnglish
                 ? `Left off, the membership keeps its current expiry of ${from}.`
@@ -355,8 +365,8 @@ export const PassportDetail = ({
                 : `仅剩 ${reduction.daysRemoved} 天可收回，因此会员资格将于今日结束，而不会变为负数。`;
         }
         return isEnglish
-            ? `Membership expiry moves from ${from} to ${fmtDate(reduction.expiresAt)}.`
-            : `会员到期日将从 ${from} 变更为 ${fmtDate(reduction.expiresAt)}。`;
+            ? `Membership expiry moves from ${from} to ${fmtExpiry(reduction.expiresAt)}.`
+            : `会员到期日将从 ${from} 变更为 ${fmtExpiry(reduction.expiresAt)}。`;
     };
 
     const design = designs.find(d => d.id === passport.designId);
@@ -404,12 +414,12 @@ export const PassportDetail = ({
                             className={`admin-passport-holder-member${active ? '' : ' admin-passport-holder-member--lapsed'}`}>
                             {active
                                 ? (isEnglish
-                                    ? `Member until ${fmtDate(membership)}`
-                                    : `会员资格至 ${fmtDate(membership)}`)
+                                    ? `Member until ${fmtExpiry(membership)}`
+                                    : `会员资格至 ${fmtExpiry(membership)}`)
                                 : membership
                                     ? (isEnglish
-                                        ? `Membership ran out ${fmtDate(membership)}`
-                                        : `会员资格已于 ${fmtDate(membership)} 到期`)
+                                        ? `Membership ran out ${fmtExpiry(membership)}`
+                                        : `会员资格已于 ${fmtExpiry(membership)} 到期`)
                                     : (isEnglish ? 'No membership on file' : '无会员资格记录')}
                         </span>
                     </span>

@@ -28,6 +28,7 @@ import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
+import { formatSiteTime } from '~/lib/siteTime';
 import { isValidHttpUrl } from '~/lib/urls';
 import { PassportShelf, usePassportsByOwner } from '~/pages/PassportShelf';
 import { ProfileCard, ProfileCardNote, ProfileSection, ProfileWelcome, type SectionState, } from '~/pages/ProfileCards';
@@ -901,7 +902,12 @@ export const ProfilePage = () => {
                                             <span className="profile-meta-item">
                                                 <FiClock aria-hidden="true"/>
                                                 {isEnglish ? 'Membership end: ' : '会员到期日期：'}
-                                                {longDate(profile!.membershipExpiresAt!)}
+                                                {/* The end is set on the Pacific calendar, as admin and
+                                                    the redeem screen show it; the start is when it
+                                                    happened, so it stays on the viewer's. */}
+                                                {formatSiteTime(profile!.membershipExpiresAt!, isEnglish, {
+                                                    year: 'numeric', month: 'long', day: 'numeric',
+                                                })}
                                             </span>
                                         </>
                                     )}

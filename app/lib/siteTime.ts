@@ -11,6 +11,8 @@
  */
 export const SITE_TIME_ZONE = 'America/Los_Angeles';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 const CLOCK_FORMAT = new Intl.DateTimeFormat('en-US', {
     timeZone: SITE_TIME_ZONE,
     // h23, so midnight reads 00 rather than 24.
@@ -62,6 +64,13 @@ export const parseSiteTime = (value: string): Date => {
  */
 export const toDatetimeLocal = (date: Date | null): string =>
     date && !Number.isNaN(date.getTime()) ? new Date(clockAt(date.getTime())).toISOString().slice(0, 16) : '';
+
+/**
+ * `days` calendar days on from `ms`: the same time on the clock in
+ * SITE_TIME_ZONE, `days` dates later. Not `days` × 24 hours — across a DST change
+ * a day is 23 or 25 of them. Mirrors addSiteDays in functions/src/utils/siteTime.ts.
+ */
+export const addSiteDays = (ms: number, days: number): number => momentAt(clockAt(ms) + days * DAY_MS);
 
 /** The calendar day `date` falls on in SITE_TIME_ZONE, as YYYY-MM-DD, which sorts as it reads. */
 export const siteDay = (date: Date): string => toDatetimeLocal(date).slice(0, 10);
