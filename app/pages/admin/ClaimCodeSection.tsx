@@ -58,8 +58,8 @@ const TEXT: Record<Variant, VariantText> = {
         toggleFailed: {en: 'Failed to update staff code status.', cn: '更新工作人员码状态失败。'},
         loadFailed: {en: 'Failed to load staff code.', cn: '加载工作人员码失败。'},
         regenConfirm: {
-            en: 'This will deactivate the current staff code and generate a new one. Users with the old code will no longer be able to join as staff. Continue?',
-            cn: '此操作将停用当前工作人员码并生成新码。持有旧码的用户将无法再通过该码加入。是否继续？',
+            en: 'This will delete the current staff code and generate a new one. Users with the old code will no longer be able to join as staff, while staff who joined with it stay staff. Continue?',
+            cn: '此操作将删除当前工作人员码并生成新码。持有旧码的用户将无法再通过该码加入，已加入的工作人员不受影响。是否继续？',
         },
     },
 };
@@ -152,9 +152,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         };
 
     const [code, setCode] = useState<BadgeCode | null>(null);
-    // The event's other codes, which generating a new one retired. Staff codes
-    // list them so they can be deleted.
-    const [otherCodes, setOtherCodes] = useState<BadgeCode[]>([]);
     const [codeFrom, setCodeFrom] = useState('');
     const [codeUntil, setCodeUntil] = useState('');
     // The max-uses draft: a checkbox for whether there is a cap at all, and the
@@ -169,24 +166,13 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     const [toggling, setToggling] = useState(false);
     const [savingWindow, setSavingWindow] = useState(false);
     const [savingMaxUses, setSavingMaxUses] = useState(false);
-    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const [loading, setLoading] = useState(true);
     const [loadFailed, setLoadFailed] = useState(false);
 
     const resetMaxUsesDraft = (saved: number) => {
         setLimitUses(saved > 0);
         setMaxUsesText(saved > 0 ? String(saved) : '');
-    };
-
-    /** Shows the active code, or failing that the first, with the rest as `otherCodes`. */
-    const showCodes = (codes: BadgeCode[]) => {
-        const picked = codes.find(c => c.active) ?? codes[0] ?? null;
-        setCode(picked);
-        setOtherCodes(codes.filter(c => c !== picked));
-        setCodeFrom(boundInput(picked?.activeFrom ?? null));
-        setCodeUntil(boundInput(picked?.activeUntil ?? null));
-        resetMaxUsesDraft(picked?.maxUses ?? 0);
-        setEditingWindow(false);
     };
 
     useEffect(() => {
@@ -215,7 +201,12 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                         usedCount: data.usedCount ?? 0,
                     };
                 });
-                showCodes(codes);
+                const picked = codes.find(c => c.active) ?? codes[0] ?? null;
+                setCode(picked);
+                setCodeFrom(boundInput(picked?.activeFrom ?? null));
+                setCodeUntil(boundInput(picked?.activeUntil ?? null));
+                resetMaxUsesDraft(picked?.maxUses ?? 0);
+                setEditingWindow(false);
             } catch {
                 if (!stale) {
                     setLoadFailed(true);
@@ -245,8 +236,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         try {
             const result = await api.generate();
             const {id, code: newCode} = result.data;
-            // Generating retired every code the event already had.
-            setOtherCodes([...(code ? [code] : []), ...otherCodes].map(c => ({...c, active: false})));
             setCode({
                 id, code: newCode, eventId, active: true,
                 activeFrom: null, activeUntil: null, maxUses: 0, usedCount: 0,
@@ -295,25 +284,29 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         }
     };
 
-    const deleteStaffCode = async (target: BadgeCode) => {
-        const usedNote = target.usedCount
-            ? (isEnglish ? ` It has been used ${target.usedCount} time(s); those staff stay staff.` : `此码已被使用 ${target.usedCount} 次，已加入的工作人员不受影响。`)
+    const deleteStaffCode = async () => {
+        if (!code) return;
+        const usedNote = code.usedCount
+            ? (isEnglish ? ` It has been used ${code.usedCount} time(s); those staff stay staff.` : `此码已被使用 ${code.usedCount} 次，已加入的工作人员不受影响。`)
             : '';
         if (!window.confirm(
             isEnglish
-                ? `Delete staff code "${formatCode(target.code)}"?${usedNote} This cannot be undone.`
-                : `删除工作人员码"${formatCode(target.code)}"？${usedNote}此操作不可撤销。`
+                ? `Delete staff code "${formatCode(code.code)}"?${usedNote} This cannot be undone.`
+                : `删除工作人员码"${formatCode(code.code)}"？${usedNote}此操作不可撤销。`
         )) return;
-        setDeletingId(target.id);
+        setDeleting(true);
         try {
-            await callDeleteStaffCode({codeId: target.id});
-            if (target.id === code?.id) showCodes(otherCodes);
-            else setOtherCodes(otherCodes.filter(c => c.id !== target.id));
+            await callDeleteStaffCode({codeId: code.id});
+            setCode(null);
+            setCodeFrom('');
+            setCodeUntil('');
+            resetMaxUsesDraft(0);
+            setEditingWindow(false);
             showToast(isEnglish ? 'Staff code deleted.' : '工作人员码已删除。', 'warning');
         } catch {
             showToast(isEnglish ? 'Failed to delete staff code.' : '删除工作人员码失败。', 'error');
         } finally {
-            setDeletingId(null);
+            setDeleting(false);
         }
     };
 
@@ -393,8 +386,9 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     );
 
     // "No code yet" is only said when the read came back empty. Generating retires
-    // every code the event already has, so offering it after a failed read could
-    // switch off one that is printed and in use, without the regenerate warning.
+    // every code the event already has (a staff code, by deleting it), so offering
+    // it after a failed read could take away one that is printed and in use,
+    // without the regenerate warning.
     if (loadFailed) {
         return (
             <div className="admin-codes-section">
@@ -507,17 +501,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         </button>
     );
 
-    // Only a disabled staff code can be deleted, as deleteStaffCode requires.
-    const deleteButton = (target: BadgeCode) => (
-        <button
-            className="admin-toggle-btn admin-toggle-revoke"
-            onClick={() => void deleteStaffCode(target)}
-            disabled={deletingId !== null}
-        >
-            {deletingId === target.id ? (isEnglish ? 'Deleting...' : '删除中...') : (isEnglish ? 'Delete' : '删除')}
-        </button>
-    );
-
     const codeActions = (
         <>
             <button
@@ -540,7 +523,16 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                     ? (isEnglish ? 'Regenerating...' : '重新生成中...')
                     : (isEnglish ? 'Regenerate' : '重新生成')}
             </button>
-            {isStaff && !code.active && deleteButton(code)}
+            {/* Only a disabled staff code can be deleted, as deleteStaffCode requires. */}
+            {isStaff && !code.active && (
+                <button
+                    className="admin-toggle-btn admin-toggle-revoke"
+                    onClick={() => void deleteStaffCode()}
+                    disabled={deleting}
+                >
+                    {deleting ? (isEnglish ? 'Deleting...' : '删除中...') : (isEnglish ? 'Delete' : '删除')}
+                </button>
+            )}
         </>
     );
 
@@ -712,27 +704,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                         </div>
 
                         <div className="admin-staff-code-actions">{codeActions}</div>
-
-                        {otherCodes.length > 0 && (
-                            <div className="admin-staff-code-setting admin-staff-code-retired">
-                                <span className="admin-staff-code-setting-label">
-                                    {isEnglish ? 'Retired codes' : '已停用的旧码'}
-                                </span>
-                                <ul className="admin-staff-code-retired-list">
-                                    {otherCodes.map(c => (
-                                        <li key={c.id} className="admin-staff-code-setting-body">
-                                            <code className="admin-staff-code-retired-value">{formatCode(c.code)}</code>
-                                            <span>
-                                                {isEnglish
-                                                    ? `Used ${c.usedCount ?? 0} ${c.usedCount === 1 ? 'time' : 'times'}`
-                                                    : `已使用 ${c.usedCount ?? 0} 次`}
-                                            </span>
-                                            {!c.active && deleteButton(c)}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
                     </>
                 )}
             </div>

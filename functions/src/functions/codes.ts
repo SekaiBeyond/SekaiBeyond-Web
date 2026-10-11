@@ -527,17 +527,16 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
 
                 const [existing, existingCodes] = await Promise.all([
                     txn.get(codeRef),
-                    txn.get(
-                        db.collection("staffClaimCodes")
-                            .where("eventId", "==", eventId)
-                            .where("active", "==", true)
-                    ),
+                    txn.get(db.collection("staffClaimCodes").where("eventId", "==", eventId)),
                 ]);
                 if (existing.exists) throw new Error("duplicate");
 
+                // The new code replaces every code the event had, enabled or not,
+                // rather than leaving them switched off. Staff they admitted stay
+                // staff: that lives on their user records.
                 for (const oldDoc of existingCodes.docs) {
-                    txn.update(oldDoc.ref, {active: false});
-                    txn.set(recordRef(), recordDoc("staff-code-deactivate", {
+                    txn.delete(oldDoc.ref);
+                    txn.set(recordRef(), recordDoc("staff-code-delete", {
                         performedBy: uid,
                         performedByName: callerSnap.data()?.displayName ?? "",
                         eventTitle: eventSnap.data()?.title ?? eventId,
