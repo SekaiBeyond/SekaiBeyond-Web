@@ -594,15 +594,15 @@ export const FAQ: FaqEntry[] = [
     {
         q: {en: 'Is there a place to change into costume?', zh: '现场有换装的地方吗？'},
         a: {
-            en: 'Yes — a marked changing room is available near registration for the whole day. It is not a storage room, so plan to carry your bag or use a locker.',
-            zh: '有的，签到处附近设有标示清晰的更衣室，全天开放。更衣室不提供寄存，请自行携带背包或使用储物柜。',
+            en: 'There are several restrooms on every floor of the building, but there is no designated changing area, so we recommend arriving already in costume.',
+            zh: '大楼每层都设有多个洗手间，但现场没有专门的更衣区，建议提前换好装再来。',
         },
     },
     {
         q: {en: 'Is food available?', zh: '现场有餐饮吗？'},
         a: {
-            en: 'HUB dining is open during the event, and campus has plenty of options nearby. Outside food is fine in the lobby but not in the stage hall.',
-            zh: 'HUB 内餐饮在活动期间正常营业，校园周边也有很多选择。外带食物可在大厅食用，但请勿带入舞台厅。',
+            en: 'HUB dining will be closed during the event, but you can stop by our maid café — check the schedule for its room and hours. For a quick snack or drink, there are several vending machines in the building. For a full meal, we recommend heading to the U District or University Village, which have plenty of dine-in and takeout options. Outside food is fine in the lobby, but please avoid bringing it into the main hall.',
+            zh: '活动期间 HUB 内餐饮不营业，但欢迎光临我们的女仆咖啡——具体场地与时间请查看活动日程。如需快速补充零食饮料，大楼内设有多台自动售货机。正餐建议前往附近的 U District 或 University Village，那里有很多堂食与外带选择。外带食物可在大厅食用，但请避免带入主会场。',
         },
     },
     {
