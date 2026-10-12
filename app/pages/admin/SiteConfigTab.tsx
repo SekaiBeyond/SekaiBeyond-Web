@@ -3,7 +3,6 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetSenderSettings, callSavePolicy, callSaveSiteConfig } from '~/lib/firebase';
 import { useSiteConfig } from '~/lib/siteConfig';
 import { renderPolicyMarkdown, usePolicy } from '~/lib/policy';
-import { BILIBILI_VIDEO } from '~/constants';
 import { EMAIL_RE } from './tickets/helpers';
 import { TeamSection } from './TeamSection';
 import { ConEditionSection } from './ConEditionSection';
@@ -66,7 +65,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
     useEffect(() => {
         if (!configLoading && !configInitialized) {
-            setBvidInput(config.bilibiliVideoBvid || BILIBILI_VIDEO.bvid);
+            setBvidInput(config.bilibiliVideoBvid);
             setEmailInput(config.contactEmail);
             setSenderInput(config.senderPrefix);
             setConfigInitialized(true);
@@ -190,7 +189,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         );
     }
 
-    const previewBvid = parseBvid(bvidInput) || BILIBILI_VIDEO.bvid;
+    const previewBvid = parseBvid(bvidInput);
     const defaultSender = senderSettings && `${senderSettings.defaultPrefix}@${senderSettings.domain}`;
 
     return (
@@ -215,10 +214,12 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                             readOnly={readOnly}
                             placeholder="BV1GsfjB7E6J or https://www.bilibili.com/video/BV..."
                         />
-                        <span className="admin-helper-text" style={{marginTop: 4, display: 'block'}}>
-                            {isEnglish ? 'Will link to: ' : '将跳转至：'}
-                            <code>https://www.bilibili.com/video/{previewBvid}</code>
-                        </span>
+                        {previewBvid && (
+                            <span className="admin-helper-text" style={{marginTop: 4, display: 'block'}}>
+                                {isEnglish ? 'Will link to: ' : '将跳转至：'}
+                                <code>https://www.bilibili.com/video/{previewBvid}</code>
+                            </span>
+                        )}
                     </label>
                     <div>
                         <span style={{fontSize: 13, fontWeight: 600, color: 'var(--color-text)'}}>

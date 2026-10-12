@@ -1,14 +1,18 @@
 import { useLanguage } from "~/components/LanguageContextProvider";
-import { BILIBILI_VIDEO, LINKS } from "~/constants";
+import { LINKS } from "~/constants";
 import { useSiteConfig } from "~/lib/siteConfig";
 
 export const Video = () => {
     const {isEnglish} = useLanguage();
-    const {config} = useSiteConfig();
+    const {config, loading} = useSiteConfig();
 
-    const bvid = config.bilibiliVideoBvid || BILIBILI_VIDEO.bvid;
+    const bvid = config.bilibiliVideoBvid;
     const bilibiliWatchUrl = `https://www.bilibili.com/video/${bvid}`;
     const coverUrl = config.bilibiliVideoCoverUrl;
+
+    if (!loading && !bvid) {
+        return null;
+    }
 
     return (
         <section id="video" className="video-section section">
@@ -25,18 +29,20 @@ export const Video = () => {
 
             <div className="video-content">
                 <div className="video-wrapper video-wrapper--desktop">
-                    <iframe
-                        src={`https://player.bilibili.com/player.html?isOutside=true&bvid=${bvid}&autoplay=0`}
-                        allowFullScreen={true}
-                        title={isEnglish ? "Sekai Beyond Video" : "彼世界视频"}
-                        autoFocus={false}
-                        sandbox="allow-scripts allow-same-origin allow-presentation"
-                    />
+                    {bvid && (
+                        <iframe
+                            src={`https://player.bilibili.com/player.html?isOutside=true&bvid=${bvid}&autoplay=0`}
+                            allowFullScreen={true}
+                            title={isEnglish ? "Sekai Beyond Video" : "彼世界视频"}
+                            autoFocus={false}
+                            sandbox="allow-scripts allow-same-origin allow-presentation"
+                        />
+                    )}
                 </div>
 
                 <a
                     className="video-wrapper video-wrapper--mobile"
-                    href={bilibiliWatchUrl}
+                    href={bvid ? bilibiliWatchUrl : undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={isEnglish ? "Watch on Bilibili" : "在B站观看"}

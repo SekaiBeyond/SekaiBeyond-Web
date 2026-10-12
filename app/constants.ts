@@ -5,10 +5,6 @@ export const MAX_VIDEO_SIZE_MB = Number(import.meta.env.VITE_MAX_VIDEO_SIZE_MB ?
 
 export const FOUNDED_DATE = new Date('2024-12-05T00:00:00Z');
 
-export const BILIBILI_VIDEO = {
-    bvid: "BV1GsfjB7E6J",
-}
-
 export const LINKS = {
     discord: "https://discord.gg/4xPFPmwsW3",
     instagram: "https://www.instagram.com/sekai_beyond/",
