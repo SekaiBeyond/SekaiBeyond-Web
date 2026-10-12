@@ -4,8 +4,10 @@ import { FaBars, FaTimes } from "react-icons/fa";
 import { LanguageSwitcher } from "~/components/LanguageSwitcher";
 import { LoginButton } from "~/components/LoginButton";
 import { useLanguage } from "~/components/LanguageContextProvider";
-import { NAVIGATION_LINKS, type NavLink, resolveNavHref } from "~/constants";
+import { hasFollowLinks } from "~/components/main/Contact";
+import { NAVIGATION_LINKS, type NavLink, resolveNavHref } from "~/components/main/navLinks";
 import { useConContent } from "~/lib/conContent";
+import { useSiteConfig } from "~/lib/siteConfig";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
 
 export const Navigation = () => {
@@ -13,6 +15,9 @@ export const Navigation = () => {
     const {hasActive, activeEvents} = useUpcomingEvents();
     const {content: conContent} = useConContent();
     const conPublished = conContent.settings.published;
+    const {config, loading: configLoading} = useSiteConfig();
+    // Matches when the Follow Us section hides itself.
+    const followHidden = !configLoading && !hasFollowLinks(config.socialLinks);
     const [mobileOpen, setMobileOpen] = useState(false);
     const singleUpcoming = activeEvents.length === 1;
 
@@ -30,7 +35,7 @@ export const Navigation = () => {
                 </a>
                 <ul className={`nav-links${mobileOpen ? ' active' : ''}`}>
                     {NAVIGATION_LINKS.map((link: NavLink) => {
-                        if (link.disabled || (link.id === 'upcoming' && !hasActive)) return null;
+                        if ((link.id === 'upcoming' && !hasActive) || (link.id === 'contact' && followHidden)) return null;
                         const href = resolveNavHref(link, conPublished);
                         const label = link.id === 'upcoming' && singleUpcoming && isEnglish
                             ? 'Upcoming Event'

@@ -3,8 +3,8 @@ import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { type Auth, getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import { type Firestore, getFirestore } from "firebase/firestore";
 import { type Functions, type FunctionsError, getFunctions as _getFunctions, httpsCallable } from "firebase/functions";
-import { type ConEdition } from "~/constants";
-import type { TeamMemberConfig } from "./siteConfig";
+import type { ConEdition, SocialLinks, TeamMemberConfig } from "./siteConfig";
+import type { UploadLimits } from "./uploadLimits";
 import type { ConContent } from "./conContent";
 import type { PassportPublicProfile } from "./passports";
 import type { ProfileVisibility } from "./privacy";
@@ -395,6 +395,7 @@ export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
 export const callSaveSiteConfig = (data: {
     bilibiliVideoBvid?: string,
     contactEmail?: string,
+    socialLinks?: SocialLinks,
     senderPrefix?: string,
     conEdition?: ConEdition | null
 }) =>
@@ -687,6 +688,9 @@ export const callUploadConVideo = async (file: File, storagePath: string): Promi
     });
     return result.data.url;
 };
+
+export const callGetUploadLimits = () =>
+    httpsCallable<Record<string, never>, UploadLimits>(getFunctions(), 'getUploadLimits')({});
 
 export const callUpdateDisplayName = (data: {displayName: string; targetUid?: string}) =>
     httpsCallable<{displayName: string; targetUid?: string}, {displayName: string}>(

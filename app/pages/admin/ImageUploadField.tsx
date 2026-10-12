@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { MAX_IMAGE_SIZE_MB } from '~/constants';
+import { useUploadLimits } from '~/lib/uploadLimits';
 import { convertImageToWebp, type ShowToast, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 
@@ -42,6 +42,7 @@ export const ImageUploadField = ({
                                      placeholderSrc,
                                  }: ImageUploadFieldProps) => {
     const {isEnglish} = useLanguage();
+    const {imageMb} = useUploadLimits();
     const [pendingFile, setPendingFile] = useState<File | null>(null);
     const [converting, setConverting] = useState(false);
 
@@ -49,7 +50,7 @@ export const ImageUploadField = ({
         const file = e.target.files?.[0];
         if (!file) return;
         if (cropAspect) {
-            if (!validateImageFile(file, isEnglish, showToast, true)) {
+            if (!validateImageFile(file, imageMb, isEnglish, showToast, true)) {
                 e.target.value = '';
                 return;
             }
@@ -58,7 +59,7 @@ export const ImageUploadField = ({
             return;
         }
         if (convertToWebp) {
-            if (!validateImageFile(file, isEnglish, showToast, true)) {
+            if (!validateImageFile(file, imageMb, isEnglish, showToast, true)) {
                 e.target.value = '';
                 return;
             }
@@ -66,7 +67,7 @@ export const ImageUploadField = ({
             setConverting(true);
             try {
                 const webp = await convertImageToWebp(file);
-                if (!validateImageFile(webp, isEnglish, showToast)) return;
+                if (!validateImageFile(webp, imageMb, isEnglish, showToast)) return;
                 if (preview?.startsWith('blob:')) onCleanupPreview?.(preview);
                 onFileChange(webp, URL.createObjectURL(webp));
             } catch {
@@ -76,7 +77,7 @@ export const ImageUploadField = ({
             }
             return;
         }
-        if (!validateImageFile(file, isEnglish, showToast)) {
+        if (!validateImageFile(file, imageMb, isEnglish, showToast)) {
             e.target.value = '';
             return;
         }
@@ -109,10 +110,10 @@ export const ImageUploadField = ({
         // the whole story; without one it is only trimmed to fit at display
         // time, which is a different promise and worth saying differently.
         const hint = {
-            en: `Any image up to ${MAX_IMAGE_SIZE_MB} MB.` + (cropAspect
+            en: `Any image up to ${imageMb} MB.` + (cropAspect
                 ? cover ? " You'll crop it to 3:4 before it's saved." : " You'll crop it before it's saved."
                 : cover ? ' Shown at 3:4, trimmed to fill.' : ''),
-            zh: `任意图片，最大 ${MAX_IMAGE_SIZE_MB} MB。` + (cropAspect
+            zh: `任意图片，最大 ${imageMb} MB。` + (cropAspect
                 ? cover ? '保存前需裁剪为 3:4。' : '保存前需先裁剪。'
                 : cover ? '按 3:4 显示，超出部分会被裁切。' : ''),
         };

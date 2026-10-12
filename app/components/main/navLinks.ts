@@ -1,40 +1,9 @@
-export const MAX_IMAGE_SIZE_MB = Number(import.meta.env.VITE_MAX_IMAGE_SIZE_MB ?? 10);
-
-/** Mirrors MAX_VIDEO_UPLOAD_SIZE_MB in functions/src/utils/storage.ts. */
-export const MAX_VIDEO_SIZE_MB = Number(import.meta.env.VITE_MAX_VIDEO_SIZE_MB ?? 20);
-
-export const FOUNDED_DATE = new Date('2024-12-05T00:00:00Z');
-
-export const LINKS = {
-    discord: "https://discord.gg/4xPFPmwsW3",
-    instagram: "https://www.instagram.com/sekai_beyond/",
-    bilibili: "https://space.bilibili.com/3546779589020292",
-    xiaohongshu: "https://www.xiaohongshu.com/user/profile/62d4eefd000000000e00ed42",
-    linkedin: "https://www.linkedin.com/company/sekai-beyond/",
-    github: "https://github.com/SekaiBeyond",
-}
-
-export interface ConEdition {
-    year: number;
-    date: string;
-    location: string;
-    locationCn?: string;
-    description: string;
-    descriptionCn: string;
-    image: string;
-    highlights: {
-        labelEn: string;
-        labelCn: string;
-        icon: string;
-    }[];
-}
-
 export interface NavLink {
     id: string;
+    /** Blank for the footer's email and GitHub links, whose targets are site config. */
     href: string;
     labelEn: string;
     labelCn: string;
-    disabled?: boolean;
     /**
      * A route to open instead of scrolling to `href` once the page behind it is
      * published. `href` stays the fallback so visitors never land on a placeholder.
@@ -84,13 +53,13 @@ export const FOOTER_LINKS: NavLink[] = [
     ...SHARED_LINKS,
     {
         id: 'github',
-        href: LINKS.github,
+        href: '',
         labelEn: 'GitHub',
         labelCn: 'GitHub',
     },
     {
         id: 'email',
-        href: 'mailto:',
+        href: '',
         labelEn: 'Contact Us',
         labelCn: '联系我们',
     },

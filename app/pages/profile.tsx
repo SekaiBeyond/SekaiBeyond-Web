@@ -29,6 +29,7 @@ import { useTags } from '~/lib/tags';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { formatSiteTime } from '~/lib/siteTime';
+import { useUploadLimits } from '~/lib/uploadLimits';
 import { isValidHttpUrl } from '~/lib/urls';
 import { PassportShelf, usePassportsByOwner } from '~/pages/PassportShelf';
 import { ProfileCard, ProfileCardNote, ProfileSection, ProfileWelcome, type SectionState, } from '~/pages/ProfileCards';
@@ -160,6 +161,7 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
 export const ProfilePage = () => {
     const {user, profile, isMember, loading, signIn, updateProfile} = useAuth();
     const {isEnglish} = useLanguage();
+    const {imageMb} = useUploadLimits();
     const {pastEvents, loading: eventsLoading} = usePastEvents();
     const {tags} = useTags();
     const tagMap = useMemo(() => new Map(tags.map(t => [t.id, t])), [tags]);
@@ -366,7 +368,7 @@ export const ProfilePage = () => {
         const file = e.target.files?.[0];
         if (fileInputRef.current) fileInputRef.current.value = '';
         if (!file || !profile || !user) return;
-        if (!validateImageFile(file, isEnglish, showToast, true)) return;
+        if (!validateImageFile(file, imageMb, isEnglish, showToast, true)) return;
         setPendingPhoto(file);
     };
 
@@ -409,7 +411,7 @@ export const ProfilePage = () => {
         const file = e.target.files?.[0];
         if (bannerInputRef.current) bannerInputRef.current.value = '';
         if (!file || !profile || !user) return;
-        if (!validateImageFile(file, isEnglish, showToast, true)) return;
+        if (!validateImageFile(file, imageMb, isEnglish, showToast, true)) return;
         setPendingBanner(file);
     };
 

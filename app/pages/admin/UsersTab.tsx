@@ -44,6 +44,7 @@ import {
 } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { PastEvent } from '~/lib/pastEvents';
+import { useUploadLimits } from '~/lib/uploadLimits';
 import type { BadgeDef, UserRecord } from './types';
 import { UserRow } from './UserRow';
 import { buildUserListQuery, docToUserRecord, searchUsers, validateImageFile } from './utils';
@@ -76,6 +77,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                                        readOnly = false,
                                                                    }, ref) => {
     const {isEnglish} = useLanguage();
+    const {imageMb} = useUploadLimits();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedGroup, setSelectedGroup] = useState<UserGroup | ''>('');
     const [membersOnly, setMembersOnly] = useState(false);
@@ -410,7 +412,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
         const file = e.target.files?.[0];
         if (fileInputRef.current) fileInputRef.current.value = '';
         if (!file) return;
-        if (!validateImageFile(file, isEnglish, showToast, true)) return;
+        if (!validateImageFile(file, imageMb, isEnglish, showToast, true)) return;
         setPendingPhoto(file);
     };
 

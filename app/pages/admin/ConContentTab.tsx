@@ -1,9 +1,9 @@
 import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { MAX_VIDEO_SIZE_MB } from '~/constants';
 import { callSaveConContent, callUploadAdminImage, callUploadConVideo } from '~/lib/firebase';
 import { type ConContent, type ConContentSection, refreshConContent, useConDraft, } from '~/lib/conContent';
 import { parseSiteTime } from '~/lib/siteTime';
+import { useUploadLimits } from '~/lib/uploadLimits';
 import { useVenues } from '~/lib/venues';
 import {
     type EarlyBird,
@@ -578,13 +578,14 @@ const ClipField = ({url, uploading, disabled, onPick, onClear, readOnly}: ClipFi
 
 const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
+    const {videoMb} = useUploadLimits();
     const editor = useSectionEditor('heroVideo', content.heroVideo, loading, showToast);
     const {draft, setDraft} = editor;
     /** True while the clip uploads; Save waits for it rather than going out without it. */
     const [busy, setBusy] = useState(false);
 
     const uploadClip = async (file: File) => {
-        if (!validateVideoFile(file, isEnglish, showToast)) return;
+        if (!validateVideoFile(file, videoMb, isEnglish, showToast)) return;
         setBusy(true);
         try {
             showToast(isEnglish ? 'Uploading clip...' : '正在上传视频...', 'warning');
@@ -617,10 +618,10 @@ const HeroVideoSection = ({content, loading, showToast, readOnly}: SectionProps)
                 {isEnglish
                     ? `Export a 10–20 second silent cut as WebM/VP9. 720p is plenty — a dark scrim and blurred `
                     + `highlights sit over it, so detail is not visible. Aim for a couple of MB; `
-                    + `${MAX_VIDEO_SIZE_MB} MB is the hard limit. Make the first and last frames match, or the `
+                    + `${videoMb} MB is the hard limit. Make the first and last frames match, or the `
                     + `loop point will read as a jump.`
                     : `请导出 10–20 秒的无声片段，格式为 WebM/VP9。720p 已足够——视频上方覆盖有深色遮罩与模糊光晕，`
-                    + `细节不可见。建议控制在几 MB 以内，上限为 ${MAX_VIDEO_SIZE_MB} MB。`
+                    + `细节不可见。建议控制在几 MB 以内，上限为 ${videoMb} MB。`
                     + `请让首尾画面衔接一致，否则循环处会出现明显跳帧。`}
             </p>
 

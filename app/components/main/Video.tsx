@@ -1,5 +1,4 @@
 import { useLanguage } from "~/components/LanguageContextProvider";
-import { LINKS } from "~/constants";
 import { useSiteConfig } from "~/lib/siteConfig";
 
 export const Video = () => {
@@ -75,15 +74,17 @@ export const Video = () => {
                             ? "Watch highlights from our events, performances, and community gatherings!"
                             : "观看我们活动、表演和社区聚会的精彩集锦！"}
                     </p>
-                    <a
-                        href={LINKS.bilibili}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="video-cta"
-                    >
-                        <span>{isEnglish ? "More Videos on Bilibili" : "在B站观看更多"}</span>
-                        <span className="cta-arrow">→</span>
-                    </a>
+                    {config.socialLinks.bilibili && (
+                        <a
+                            href={config.socialLinks.bilibili}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="video-cta"
+                        >
+                            <span>{isEnglish ? "More Videos on Bilibili" : "在B站观看更多"}</span>
+                            <span className="cta-arrow">→</span>
+                        </a>
+                    )}
                 </div>
             </div>
         </section>

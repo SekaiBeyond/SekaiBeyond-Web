@@ -1,18 +1,17 @@
 import { Link } from 'react-router';
 import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from 'react-icons/si';
-import { LINKS } from '~/constants';
 import { useConNavLinks } from '~/lib/conContent';
-import { useSiteConfig } from '~/lib/siteConfig';
+import { SOCIAL_LINK_NAMES, useSiteConfig } from '~/lib/siteConfig';
 import { CON_NAME } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { scrollToSection } from '~/pages/con/utils';
 
 const SOCIALS = [
-    {id: 'discord', label: 'Discord', href: LINKS.discord, Icon: SiDiscord},
-    {id: 'instagram', label: 'Instagram', href: LINKS.instagram, Icon: SiInstagram},
-    {id: 'bilibili', label: 'Bilibili', href: LINKS.bilibili, Icon: SiBilibili},
-    {id: 'xiaohongshu', label: 'Xiaohongshu', href: LINKS.xiaohongshu, Icon: SiXiaohongshu},
-];
+    {key: 'discord', Icon: SiDiscord},
+    {key: 'instagram', Icon: SiInstagram},
+    {key: 'bilibili', Icon: SiBilibili},
+    {key: 'xiaohongshu', Icon: SiXiaohongshu},
+] as const;
 
 export const Footer = () => {
     const t = useT();
@@ -55,14 +54,14 @@ export const Footer = () => {
                 </nav>
 
                 <div className="sbc-footer-socials">
-                    {SOCIALS.map(({id, label, href, Icon}) => (
+                    {SOCIALS.filter(({key}) => config.socialLinks[key]).map(({key, Icon}) => (
                         <a
-                            key={id}
+                            key={key}
                             className="sbc-footer-social"
-                            href={href}
+                            href={config.socialLinks[key]}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={label}
+                            aria-label={t(SOCIAL_LINK_NAMES[key])}
                         >
                             <Icon/>
                         </a>

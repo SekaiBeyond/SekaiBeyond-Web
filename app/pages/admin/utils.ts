@@ -18,12 +18,8 @@ import { getFirebaseDb } from '~/lib/firebase';
 import { normalizeGroup, type UserGroup } from '~/components/AuthProvider';
 import type { UserRecord } from './types';
 import type { ShowToast } from '~/lib/useToasts';
-import { MAX_IMAGE_SIZE_MB, MAX_VIDEO_SIZE_MB } from '~/constants';
 
 export const WEBP_QUALITY = 0.95;
-
-const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
-const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
 
 // Re-exported so the admin panel keeps importing its toaster type from here,
 // while there is only one definition of it (in ~/lib/useToasts).
@@ -194,7 +190,8 @@ export const getClaimUrl = (code: string): string => {
     return `${window.location.origin}/claim?code=${code}`;
 };
 
-export function validateImageFile(f: File, isEnglish: boolean, showToast: ShowToast, allowAnyImage: boolean = false): boolean {
+/** `maxMb` is the server's image cap, from useUploadLimits. */
+export function validateImageFile(f: File, maxMb: number, isEnglish: boolean, showToast: ShowToast, allowAnyImage: boolean = false): boolean {
     if (allowAnyImage) {
         if (!f.type.startsWith('image/')) {
             showToast(isEnglish ? 'Please select an image file.' : '请选择图片文件。', 'error');
@@ -204,8 +201,8 @@ export function validateImageFile(f: File, isEnglish: boolean, showToast: ShowTo
         showToast(isEnglish ? 'Please upload a WebP image.' : '请上传 WebP 格式的图片。', 'error');
         return false;
     }
-    if (f.size > MAX_IMAGE_SIZE_BYTES) {
-        showToast(isEnglish ? `Image must be under ${MAX_IMAGE_SIZE_MB} MB.` : `图片大小不能超过 ${MAX_IMAGE_SIZE_MB} MB。`, 'error');
+    if (f.size > maxMb * 1024 * 1024) {
+        showToast(isEnglish ? `Image must be under ${maxMb} MB.` : `图片大小不能超过 ${maxMb} MB。`, 'error');
         return false;
     }
     return true;
@@ -219,8 +216,10 @@ export function validateImageFile(f: File, isEnglish: boolean, showToast: ShowTo
  * The browser reports the container, not the codecs, so this only rules out the
  * wrong kind of file. A .webm holding AV1 passes here and then fails to decode
  * on anything too old for it — which is why the helper text names VP9.
+ *
+ * `maxMb` is the server's video cap, from useUploadLimits.
  */
-export function validateVideoFile(f: File, isEnglish: boolean, showToast: ShowToast): boolean {
+export function validateVideoFile(f: File, maxMb: number, isEnglish: boolean, showToast: ShowToast): boolean {
     if (f.type !== 'video/webm') {
         showToast(
             isEnglish ? 'Please upload a WebM video.' : '请上传 WebM 格式的视频。',
@@ -228,11 +227,11 @@ export function validateVideoFile(f: File, isEnglish: boolean, showToast: ShowTo
         );
         return false;
     }
-    if (f.size > MAX_VIDEO_SIZE_BYTES) {
+    if (f.size > maxMb * 1024 * 1024) {
         showToast(
             isEnglish
-                ? `Video must be under ${MAX_VIDEO_SIZE_MB} MB.`
-                : `视频大小不能超过 ${MAX_VIDEO_SIZE_MB} MB。`,
+                ? `Video must be under ${maxMb} MB.`
+                : `视频大小不能超过 ${maxMb} MB。`,
             'error',
         );
         return false;

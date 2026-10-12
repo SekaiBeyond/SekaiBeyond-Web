@@ -1,7 +1,8 @@
 import { type MouseEvent, useMemo } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
-import { FOUNDED_DATE } from "~/constants";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
+
+const FOUNDED_DATE = new Date('2024-12-05T00:00:00Z');
 
 const generateBubbleStyles = () =>
     Array.from({length: 6}, () => ({

@@ -1,10 +1,26 @@
 import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from "react-icons/si";
 import { FaLinkedin } from "react-icons/fa";
-import { LINKS } from "~/constants";
 import { useLanguage } from "~/components/LanguageContextProvider";
+import { SOCIAL_LINK_NAMES, type SocialLinks, useSiteConfig } from "~/lib/siteConfig";
+
+const SOCIALS = [
+    {key: 'discord', Icon: SiDiscord},
+    {key: 'instagram', Icon: SiInstagram},
+    {key: 'bilibili', Icon: SiBilibili},
+    {key: 'xiaohongshu', Icon: SiXiaohongshu},
+    {key: 'linkedin', Icon: FaLinkedin},
+] as const;
+
+/** Whether this section has a link to show, so the nav can drop "Follow Us" when it doesn't. */
+export const hasFollowLinks = (links: SocialLinks): boolean => SOCIALS.some(({key}) => links[key]);
 
 export const Contact = () => {
     const {isEnglish} = useLanguage();
+    const {config, loading} = useSiteConfig();
+
+    if (!loading && !hasFollowLinks(config.socialLinks)) {
+        return null;
+    }
 
     return (<section id="contact" className="contact-section section">
         <div className="section-header">
@@ -15,26 +31,15 @@ export const Contact = () => {
         </div>
         <div className="contact-inner">
             <div className="social-links-grid">
-                <a className="social-card" href={LINKS.discord} target="_blank" rel="noopener noreferrer">
-                    <SiDiscord className="social-icon"/>
-                    <div className="social-name">Discord</div>
-                </a>
-                <a className="social-card" href={LINKS.instagram} target="_blank" rel="noopener noreferrer">
-                    <SiInstagram className="social-icon"/>
-                    <div className="social-name">Instagram</div>
-                </a>
-                <a className="social-card" href={LINKS.bilibili} target="_blank" rel="noopener noreferrer">
-                    <SiBilibili className="social-icon"/>
-                    <div className="social-name">{isEnglish ? "Bilibili" : "哔哩哔哩"}</div>
-                </a>
-                <a className="social-card" href={LINKS.xiaohongshu} target="_blank" rel="noopener noreferrer">
-                    <SiXiaohongshu className="social-icon"/>
-                    <div className="social-name">{isEnglish ? "Xiaohongshu" : "小红书"}</div>
-                </a>
-                <a className="social-card" href={LINKS.linkedin} target="_blank" rel="noopener noreferrer">
-                    <FaLinkedin className="social-icon"/>
-                    <div className="social-name">{isEnglish ? "LinkedIn" : "领英"}</div>
-                </a>
+                {SOCIALS.filter(({key}) => config.socialLinks[key]).map(({key, Icon}) => (
+                    <a key={key} className="social-card" href={config.socialLinks[key]} target="_blank"
+                       rel="noopener noreferrer">
+                        <Icon className="social-icon"/>
+                        <div className="social-name">
+                            {isEnglish ? SOCIAL_LINK_NAMES[key].en : SOCIAL_LINK_NAMES[key].zh}
+                        </div>
+                    </a>
+                ))}
             </div>
         </div>
     </section>)

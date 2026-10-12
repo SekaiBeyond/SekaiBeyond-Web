@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveSiteConfig, callUploadAdminImage } from '~/lib/firebase';
-import type { ConEdition } from '~/constants';
+import type { ConEdition } from '~/lib/siteConfig';
 import { siteDay } from '~/lib/siteTime';
 import { ImageUploadField } from './ImageUploadField';
 import { refreshAfterSave } from './utils';

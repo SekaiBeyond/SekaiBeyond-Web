@@ -133,6 +133,15 @@ export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async 
     return {url: downloadUrl};
 });
 
+// The upload caps, for the web app's early size check and its "up to N MB"
+// hints. Served from here so they come from the env that enforces them rather
+// than a copy in the web build. Public: members check their own profile photos
+// against the image cap, and both numbers are already in the errors above.
+export const getUploadLimits = onCall({maxInstances: 10}, async () => ({
+    imageMb: MAX_UPLOAD_SIZE_MB,
+    videoMb: MAX_VIDEO_UPLOAD_SIZE_MB,
+}));
+
 export const saveTag = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
@@ -238,6 +247,28 @@ function isBilibiliImageUrl(value: string): boolean {
 // "config/con-" one.
 const CON_EDITION_IMAGE_PATH = /^config\/con-\d+-/;
 
+// Mirrors SOCIAL_LINK_KEYS in app/lib/siteConfig.ts. Each names an account the
+// site draws an icon for, so the set is fixed even though the URLs are not.
+const SOCIAL_LINK_KEYS = ["discord", "instagram", "bilibili", "xiaohongshu", "linkedin", "github"] as const;
+
+/** Every key in SOCIAL_LINK_KEYS, each an https URL or "" (which hides that link). */
+function validateSocialLinks(value: unknown): Record<string, string> {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        throw new HttpsError("invalid-argument", "Invalid socialLinks.");
+    }
+    const input = value as Record<string, unknown>;
+    const unknownKey = Object.keys(input).find(key => !(SOCIAL_LINK_KEYS as readonly string[]).includes(key));
+    if (unknownKey) throw new HttpsError("invalid-argument", `Unknown social link: ${unknownKey}.`);
+
+    const links: Record<string, string> = {};
+    for (const key of SOCIAL_LINK_KEYS) {
+        const url = validateStr(input[key], `${key} link`, 500).trim();
+        validateUrl(url, `${key} link`);
+        links[key] = url;
+    }
+    return links;
+}
+
 export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
@@ -263,6 +294,8 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     const senderPrefix = input.senderPrefix === undefined ? undefined
         : input.senderPrefix === "" ? ""
             : validateSenderPrefix(input.senderPrefix, "senderPrefix");
+
+    const socialLinks = input.socialLinks === undefined ? undefined : validateSocialLinks(input.socialLinks);
 
     const conEditionRaw = input.conEdition;
     let conEdition: any | undefined = undefined;
@@ -365,6 +398,10 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         if (senderPrefix !== undefined) {
             updateData.senderPrefix = senderPrefix;
             configSections.push("sender");
+        }
+        if (socialLinks !== undefined) {
+            updateData.socialLinks = socialLinks;
+            configSections.push("social-links");
         }
         if (conEdition !== undefined) {
             updateData.conEdition = conEdition;

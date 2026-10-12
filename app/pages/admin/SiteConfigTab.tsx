@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetSenderSettings, callSavePolicy, callSaveSiteConfig } from '~/lib/firebase';
-import { useSiteConfig } from '~/lib/siteConfig';
+import { SOCIAL_LINK_KEYS, SOCIAL_LINK_NAMES, type SocialLinks, useSiteConfig } from '~/lib/siteConfig';
 import { renderPolicyMarkdown, usePolicy } from '~/lib/policy';
 import { EMAIL_RE } from './tickets/helpers';
 import { TeamSection } from './TeamSection';
@@ -16,6 +16,18 @@ interface SiteConfigTabProps {
 
 // Mirrors SENDER_PREFIX_RE in functions/src/utils/validation.ts.
 const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
+
+// Mirrors validateUrl in functions/src/utils/validation.ts.
+const isHttpsUrl = (value: string): boolean => {
+    try {
+        return new URL(value).protocol === 'https:';
+    } catch {
+        return false;
+    }
+};
+
+const trimLinks = (links: SocialLinks): SocialLinks =>
+    Object.fromEntries(SOCIAL_LINK_KEYS.map(key => [key, links[key].trim()])) as SocialLinks;
 
 function parseBvid(input: string): string {
     const match = input.trim().match(/BV[a-zA-Z0-9]+/);
@@ -49,6 +61,8 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     const [savingVideo, setSavingVideo] = useState(false);
     const [emailInput, setEmailInput] = useState('');
     const [savingEmail, setSavingEmail] = useState(false);
+    const [socialInputs, setSocialInputs] = useState<SocialLinks>(config.socialLinks);
+    const [savingSocial, setSavingSocial] = useState(false);
     const [senderInput, setSenderInput] = useState('');
     const [savingSender, setSavingSender] = useState(false);
     // The domain lives on the server (from PUBLIC_ORIGIN). Until it loads, or if
@@ -67,6 +81,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         if (!configLoading && !configInitialized) {
             setBvidInput(config.bilibiliVideoBvid);
             setEmailInput(config.contactEmail);
+            setSocialInputs(config.socialLinks);
             setSenderInput(config.senderPrefix);
             setConfigInitialized(true);
         }
@@ -123,6 +138,31 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
             showToast(isEnglish ? 'Failed to save contact email.' : '保存联系邮箱失败。', 'error');
         } finally {
             setSavingEmail(false);
+        }
+    };
+
+    const saveSocial = async () => {
+        const links = trimLinks(socialInputs);
+        const bad = SOCIAL_LINK_KEYS.find(key => links[key] && !isHttpsUrl(links[key]));
+        if (bad) {
+            showToast(
+                isEnglish
+                    ? `${SOCIAL_LINK_NAMES[bad].en} must be a full link starting with https://.`
+                    : `${SOCIAL_LINK_NAMES[bad].zh} 须为以 https:// 开头的完整链接。`,
+                'error'
+            );
+            return;
+        }
+        setSavingSocial(true);
+        try {
+            await callSaveSiteConfig({socialLinks: links});
+            await refreshAfterSave(refreshConfig, showToast, isEnglish);
+            setSocialInputs(links);
+            showToast(isEnglish ? 'Social links saved.' : '社交链接已保存。', 'success');
+        } catch {
+            showToast(isEnglish ? 'Failed to save social links.' : '保存社交链接失败。', 'error');
+        } finally {
+            setSavingSocial(false);
         }
     };
 
@@ -191,6 +231,8 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
     const previewBvid = parseBvid(bvidInput);
     const defaultSender = senderSettings && `${senderSettings.defaultPrefix}@${senderSettings.domain}`;
+    const trimmedSocial = trimLinks(socialInputs);
+    const socialUnchanged = SOCIAL_LINK_KEYS.every(key => trimmedSocial[key] === config.socialLinks[key]);
 
     return (
         <>
@@ -286,6 +328,47 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                             {savingEmail
                                 ? (isEnglish ? 'Saving...' : '保存中...')
                                 : (isEnglish ? 'Save Email' : '保存邮箱')}
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div className="admin-divider"/>
+
+            <div id="admin-sec-social" className="admin-section">
+                <h3 className="admin-badges-title">
+                    {isEnglish ? 'Social Links' : '社交链接'}
+                </h3>
+                <p className="admin-helper-text">
+                    {isEnglish
+                        ? 'The accounts linked from the "Follow Us" section, the footers, the featured video, and the con FAQ. Leave one blank to hide every link to it.'
+                        : '「关注我们」板块、页脚、精选视频和漫展常见问题中链接的账号。留空则隐藏指向该账号的所有链接。'}
+                </p>
+                <div className="admin-form-grid admin-mt-12">
+                    {SOCIAL_LINK_KEYS.map(key => (
+                        <label key={key}>
+                            <span>{isEnglish ? SOCIAL_LINK_NAMES[key].en : SOCIAL_LINK_NAMES[key].zh}</span>
+                            <input
+                                className="admin-input"
+                                type="url"
+                                value={socialInputs[key]}
+                                onChange={e => !readOnly && setSocialInputs(prev => ({...prev, [key]: e.target.value}))}
+                                readOnly={readOnly}
+                                placeholder="https://"
+                            />
+                        </label>
+                    ))}
+                </div>
+                {!readOnly && (
+                    <div className="admin-btn-row admin-mt-12">
+                        <button
+                            className="admin-toggle-btn admin-toggle-save"
+                            onClick={saveSocial}
+                            disabled={savingSocial || socialUnchanged}
+                        >
+                            {savingSocial
+                                ? (isEnglish ? 'Saving...' : '保存中...')
+                                : (isEnglish ? 'Save Links' : '保存链接')}
                         </button>
                     </div>
                 )}
@@ -416,6 +499,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                 sections={[
                     {id: 'admin-sec-video', label: isEnglish ? 'Featured Video' : '精选视频'},
                     {id: 'admin-sec-contact', label: isEnglish ? 'Contact Email' : '联系邮箱'},
+                    {id: 'admin-sec-social', label: isEnglish ? 'Social Links' : '社交链接'},
                     {id: 'admin-sec-sender', label: isEnglish ? 'Sender Email' : '发件邮箱'},
                     {id: 'admin-sec-team', label: isEnglish ? 'Our Team' : '我们的团队'},
                     {id: 'admin-sec-con-edition', label: isEnglish ? 'Sekai Beyond Con' : '彼世界动漫游戏展'},

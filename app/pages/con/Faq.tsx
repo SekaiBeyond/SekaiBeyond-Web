@@ -1,5 +1,4 @@
 import { Link } from 'react-router';
-import { LINKS } from '~/constants';
 import { useConContent } from '~/lib/conContent';
 import { useSiteConfig } from '~/lib/siteConfig';
 import { useT } from '~/pages/con/i18n';
@@ -41,34 +40,39 @@ export const Faq = () => {
                 ))}
             </div>
 
-            <div className="sbc-callout">
-                <div>
-                    <h3 className="sbc-callout-title">
-                        {t({en: 'Something else on your mind?', zh: '还有其他问题？'})}
-                    </h3>
-                    <p className="sbc-callout-body">
-                        {t({
-                            en: 'Reach us by email or drop into the Discord — we answer both.',
-                            zh: '可以发邮件或加入我们的 Discord——两边都有人回复。',
-                        })}
-                    </p>
+            {/* Each way to reach us is a site config setting; with neither set there is nothing to offer. */}
+            {(config.contactEmail || config.socialLinks.discord) && (
+                <div className="sbc-callout">
+                    <div>
+                        <h3 className="sbc-callout-title">
+                            {t({en: 'Something else on your mind?', zh: '还有其他问题？'})}
+                        </h3>
+                        <p className="sbc-callout-body">
+                            {t({
+                                en: 'Reach us by email or drop into the Discord — we answer both.',
+                                zh: '可以发邮件或加入我们的 Discord——两边都有人回复。',
+                            })}
+                        </p>
+                    </div>
+                    <div className="sbc-callout-actions">
+                        {config.contactEmail && (
+                            <a className="btn btn-secondary" href={`mailto:${config.contactEmail}`}>
+                                <span>{t({en: 'Email us', zh: '发邮件'})}</span>
+                            </a>
+                        )}
+                        {config.socialLinks.discord && (
+                            <a
+                                className="btn btn-secondary"
+                                href={config.socialLinks.discord}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <span>Discord</span>
+                            </a>
+                        )}
+                    </div>
                 </div>
-                <div className="sbc-callout-actions">
-                    {config.contactEmail && (
-                        <a className="btn btn-secondary" href={`mailto:${config.contactEmail}`}>
-                            <span>{t({en: 'Email us', zh: '发邮件'})}</span>
-                        </a>
-                    )}
-                    <a
-                        className="btn btn-secondary"
-                        href={LINKS.discord}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        <span>Discord</span>
-                    </a>
-                </div>
-            </div>
+            )}
         </section>
     );
 };
