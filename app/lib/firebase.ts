@@ -399,7 +399,9 @@ export const callSaveSiteConfig = (data: {
     senderPrefix?: string,
     conEdition?: ConEdition | null
 }) =>
-    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveSiteConfig')(data);
+    // `socialLinks` comes back when it was sent, as stored: a Xiaohongshu share
+    // link resolved to the profile it opens.
+    httpsCallable<typeof data, {saved: boolean, socialLinks?: SocialLinks}>(getFunctions(), 'saveSiteConfig')(data);
 
 // Only the sections present in `data` are written, so each Save button in the
 // Con Content tab leaves the sections it does not own untouched.

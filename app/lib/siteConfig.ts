@@ -18,8 +18,8 @@ export interface ConEdition {
 }
 
 // The accounts the site links to. Each has an icon drawn in code, so the set is
-// fixed; the URLs are site config. Mirrored by SOCIAL_LINK_KEYS in
-// functions/src/functions/admin.ts.
+// fixed; the URLs are site config. Mirrored by the keys of SOCIAL_LINK_PATTERNS
+// in functions/src/functions/admin.ts.
 export const SOCIAL_LINK_KEYS = ['discord', 'instagram', 'bilibili', 'xiaohongshu', 'linkedin', 'github'] as const;
 export type SocialLinkKey = typeof SOCIAL_LINK_KEYS[number];
 /** Profile URL per account. Blank hides every link to that account. */

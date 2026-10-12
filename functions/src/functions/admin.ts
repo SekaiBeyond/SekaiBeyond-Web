@@ -247,26 +247,67 @@ function isBilibiliImageUrl(value: string): boolean {
 // "config/con-" one.
 const CON_EDITION_IMAGE_PATH = /^config\/con-\d+-/;
 
-// Mirrors SOCIAL_LINK_KEYS in app/lib/siteConfig.ts. Each names an account the
-// site draws an icon for, so the set is fixed even though the URLs are not.
-const SOCIAL_LINK_KEYS = ["discord", "instagram", "bilibili", "xiaohongshu", "linkedin", "github"] as const;
+// Each account's link, in the one form the Site Config form builds from an ID
+// or any link to it (SOCIAL_LINK_FORMATS in app/pages/admin/socialLinkInput.ts).
+// The keys mirror SOCIAL_LINK_KEYS in app/lib/siteConfig.ts; each names an
+// account the site draws an icon for. Pinning the host keeps every link on the
+// platform it is shown as.
+const SOCIAL_LINK_PATTERNS: Record<string, RegExp> = {
+    discord: /^https:\/\/discord\.gg\/[A-Za-z0-9-]+$/,
+    instagram: /^https:\/\/www\.instagram\.com\/[A-Za-z0-9._]+\/$/,
+    bilibili: /^https:\/\/space\.bilibili\.com\/\d+$/,
+    xiaohongshu: /^https:\/\/www\.xiaohongshu\.com\/user\/profile\/[0-9a-f]{24}$/,
+    linkedin: /^https:\/\/www\.linkedin\.com\/company\/[A-Za-z0-9-]+\/$/,
+    github: /^https:\/\/github\.com\/[A-Za-z0-9-]+$/,
+};
 
-/** Every key in SOCIAL_LINK_KEYS, each an https URL or "" (which hides that link). */
+// The Xiaohongshu app shares a profile as a short link that redirects to it.
+// The form passes one through as is, for resolveXiaohongshuShareLink.
+const XIAOHONGSHU_SHARE_LINK = /^https:\/\/xhslink\.(?:cn|com)\/[A-Za-z0-9/]+$/;
+
+/** Every key in SOCIAL_LINK_PATTERNS, each a link in its pattern or "" (which hides that link). */
 function validateSocialLinks(value: unknown): Record<string, string> {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
         throw new HttpsError("invalid-argument", "Invalid socialLinks.");
     }
     const input = value as Record<string, unknown>;
-    const unknownKey = Object.keys(input).find(key => !(SOCIAL_LINK_KEYS as readonly string[]).includes(key));
+    const unknownKey = Object.keys(input).find(key => !(key in SOCIAL_LINK_PATTERNS));
     if (unknownKey) throw new HttpsError("invalid-argument", `Unknown social link: ${unknownKey}.`);
 
     const links: Record<string, string> = {};
-    for (const key of SOCIAL_LINK_KEYS) {
-        const url = validateStr(input[key], `${key} link`, 500).trim();
-        validateUrl(url, `${key} link`);
-        links[key] = url;
+    for (const [key, pattern] of Object.entries(SOCIAL_LINK_PATTERNS)) {
+        const link = validateStr(input[key], `${key} link`, 500).trim();
+        if (link && !pattern.test(link) && !(key === "xiaohongshu" && XIAOHONGSHU_SHARE_LINK.test(link))) {
+            throw new HttpsError("invalid-argument", `Invalid ${key} link.`);
+        }
+        links[key] = link;
     }
     return links;
+}
+
+/**
+ * The profile a Xiaohongshu share link opens. The redirect's target carries the
+ * sharer's tracking (share_id, shareRedId, xsec_token), so only the bare profile
+ * link is kept.
+ */
+async function resolveXiaohongshuShareLink(shareLink: string): Promise<string> {
+    let target = "";
+    try {
+        const resp = await fetch(shareLink, {
+            redirect: "manual",
+            headers: {"User-Agent": "Mozilla/5.0"},
+            signal: AbortSignal.timeout(5000),
+        });
+        target = resp.headers.get("location") ?? "";
+    } catch {
+        // Unreachable reads the same as a link to something else, below.
+    }
+    const id = target.match(/^https:\/\/www\.xiaohongshu\.com\/user\/profile\/([0-9a-f]{24})(?:[/?#]|$)/)?.[1];
+    if (!id) {
+        throw new HttpsError("invalid-argument",
+            "That Xiaohongshu share link doesn't open a profile. Paste the profile link or user ID instead.");
+    }
+    return `https://www.xiaohongshu.com/user/profile/${id}`;
 }
 
 export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
@@ -327,6 +368,11 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     // signed-in user could trigger a server-side fetch and overwrite the
     // public cover object.
     await requireAdmin(uid);
+
+    // Behind the admin check for the same reason: it is a server-side fetch.
+    if (socialLinks && XIAOHONGSHU_SHARE_LINK.test(socialLinks.xiaohongshu)) {
+        socialLinks.xiaohongshu = await resolveXiaohongshuShareLink(socialLinks.xiaohongshu);
+    }
 
     let coverUrl = '';
     if (bvid) {
@@ -427,7 +473,8 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
             .catch(logStorageCleanupError("saveSiteConfig con edition"));
     }
 
-    return {saved: true};
+    // The links as stored, so the form can show the profile a share link opened.
+    return socialLinks ? {saved: true, socialLinks} : {saved: true};
 });
 
 // Mirrors ROOM_ACCENTS in app/pages/con/content.ts. Each value names a CSS class

@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
+import { FirebaseError } from 'firebase/app';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetSenderSettings, callSavePolicy, callSaveSiteConfig } from '~/lib/firebase';
-import { SOCIAL_LINK_KEYS, SOCIAL_LINK_NAMES, type SocialLinks, useSiteConfig } from '~/lib/siteConfig';
+import {
+    SOCIAL_LINK_KEYS,
+    SOCIAL_LINK_NAMES,
+    type SocialLinkKey,
+    type SocialLinks,
+    useSiteConfig
+} from '~/lib/siteConfig';
 import { renderPolicyMarkdown, usePolicy } from '~/lib/policy';
 import { EMAIL_RE } from './tickets/helpers';
 import { TeamSection } from './TeamSection';
 import { ConEditionSection } from './ConEditionSection';
 import { SectionNav } from './SectionNav';
+import { isXiaohongshuShareLink, socialLinkInputs, socialLinkPlaceholder, toSocialLink } from './socialLinkInput';
 import { refreshAfterSave } from './utils';
 
 interface SiteConfigTabProps {
@@ -16,18 +24,6 @@ interface SiteConfigTabProps {
 
 // Mirrors SENDER_PREFIX_RE in functions/src/utils/validation.ts.
 const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
-
-// Mirrors validateUrl in functions/src/utils/validation.ts.
-const isHttpsUrl = (value: string): boolean => {
-    try {
-        return new URL(value).protocol === 'https:';
-    } catch {
-        return false;
-    }
-};
-
-const trimLinks = (links: SocialLinks): SocialLinks =>
-    Object.fromEntries(SOCIAL_LINK_KEYS.map(key => [key, links[key].trim()])) as SocialLinks;
 
 function parseBvid(input: string): string {
     const match = input.trim().match(/BV[a-zA-Z0-9]+/);
@@ -61,7 +57,8 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     const [savingVideo, setSavingVideo] = useState(false);
     const [emailInput, setEmailInput] = useState('');
     const [savingEmail, setSavingEmail] = useState(false);
-    const [socialInputs, setSocialInputs] = useState<SocialLinks>(config.socialLinks);
+    // Each field holds what the admin typed: an ID, or any link to the account.
+    const [socialInputs, setSocialInputs] = useState<SocialLinks>(() => socialLinkInputs(config.socialLinks));
     const [savingSocial, setSavingSocial] = useState(false);
     const [senderInput, setSenderInput] = useState('');
     const [savingSender, setSavingSender] = useState(false);
@@ -81,7 +78,7 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         if (!configLoading && !configInitialized) {
             setBvidInput(config.bilibiliVideoBvid);
             setEmailInput(config.contactEmail);
-            setSocialInputs(config.socialLinks);
+            setSocialInputs(socialLinkInputs(config.socialLinks));
             setSenderInput(config.senderPrefix);
             setConfigInitialized(true);
         }
@@ -141,26 +138,43 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         }
     };
 
+    // What each field will save, or null where it can't be read.
+    const socialLinks = Object.fromEntries(
+        SOCIAL_LINK_KEYS.map(key => [key, toSocialLink(key, socialInputs[key])]),
+    ) as Record<SocialLinkKey, string | null>;
+    const socialUnchanged = SOCIAL_LINK_KEYS.every(key => socialLinks[key] === config.socialLinks[key]);
+
     const saveSocial = async () => {
-        const links = trimLinks(socialInputs);
-        const bad = SOCIAL_LINK_KEYS.find(key => links[key] && !isHttpsUrl(links[key]));
+        const bad = SOCIAL_LINK_KEYS.find(key => socialLinks[key] === null);
         if (bad) {
             showToast(
                 isEnglish
-                    ? `${SOCIAL_LINK_NAMES[bad].en} must be a full link starting with https://.`
-                    : `${SOCIAL_LINK_NAMES[bad].zh} 须为以 https:// 开头的完整链接。`,
+                    ? `${SOCIAL_LINK_NAMES[bad].en}: enter the account's ID or a link to it.`
+                    : `${SOCIAL_LINK_NAMES[bad].zh}：请输入账号 ID 或其链接。`,
                 'error'
             );
             return;
         }
+        const links = socialLinks as SocialLinks;
         setSavingSocial(true);
         try {
-            await callSaveSiteConfig({socialLinks: links});
+            const res = await callSaveSiteConfig({socialLinks: links});
             await refreshAfterSave(refreshConfig, showToast, isEnglish);
-            setSocialInputs(links);
+            setSocialInputs(socialLinkInputs(res.data.socialLinks ?? links));
             showToast(isEnglish ? 'Social links saved.' : '社交链接已保存。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to save social links.' : '保存社交链接失败。', 'error');
+        } catch (err) {
+            // The one save the form can't check ahead: a share link the server
+            // follows that doesn't lead to a profile.
+            const shareLinkFailed = err instanceof FirebaseError && err.code === 'functions/invalid-argument'
+                && isXiaohongshuShareLink(links.xiaohongshu);
+            showToast(
+                shareLinkFailed
+                    ? (isEnglish
+                        ? 'That Xiaohongshu share link doesn\'t open a profile. Paste the profile link or user ID instead.'
+                        : '该小红书分享链接未指向个人主页，请改为粘贴主页链接或用户 ID。')
+                    : (isEnglish ? 'Failed to save social links.' : '保存社交链接失败。'),
+                'error'
+            );
         } finally {
             setSavingSocial(false);
         }
@@ -231,8 +245,6 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
     const previewBvid = parseBvid(bvidInput);
     const defaultSender = senderSettings && `${senderSettings.defaultPrefix}@${senderSettings.domain}`;
-    const trimmedSocial = trimLinks(socialInputs);
-    const socialUnchanged = SOCIAL_LINK_KEYS.every(key => trimmedSocial[key] === config.socialLinks[key]);
 
     return (
         <>
@@ -345,19 +357,41 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                         : '「关注我们」板块、页脚、精选视频和漫展常见问题中链接的账号。留空则隐藏指向该账号的所有链接。'}
                 </p>
                 <div className="admin-form-grid admin-mt-12">
-                    {SOCIAL_LINK_KEYS.map(key => (
-                        <label key={key}>
-                            <span>{isEnglish ? SOCIAL_LINK_NAMES[key].en : SOCIAL_LINK_NAMES[key].zh}</span>
-                            <input
-                                className="admin-input"
-                                type="url"
-                                value={socialInputs[key]}
-                                onChange={e => !readOnly && setSocialInputs(prev => ({...prev, [key]: e.target.value}))}
-                                readOnly={readOnly}
-                                placeholder="https://"
-                            />
-                        </label>
-                    ))}
+                    {SOCIAL_LINK_KEYS.map(key => {
+                        const link = socialLinks[key];
+                        const placeholder = socialLinkPlaceholder(key);
+                        return (
+                            <label key={key}>
+                                <span>{isEnglish ? SOCIAL_LINK_NAMES[key].en : SOCIAL_LINK_NAMES[key].zh}</span>
+                                <input
+                                    className="admin-input"
+                                    type="text"
+                                    value={socialInputs[key]}
+                                    onChange={e => !readOnly && setSocialInputs(prev => ({
+                                        ...prev,
+                                        [key]: e.target.value
+                                    }))}
+                                    readOnly={readOnly}
+                                    placeholder={isEnglish ? placeholder.en : placeholder.zh}
+                                />
+                                {link === null ? (
+                                    <small className="admin-time-hint admin-time-hint--error">
+                                        {isEnglish ? 'Not an ID or a link to this account.' : '不是该账号的 ID 或链接。'}
+                                    </small>
+                                ) : link && isXiaohongshuShareLink(link) ? (
+                                    <small className="admin-time-hint">
+                                        {isEnglish
+                                            ? 'Will link to the profile this share link opens, looked up when you save.'
+                                            : '将链接到此分享链接打开的个人主页，保存时解析。'}
+                                    </small>
+                                ) : link && (
+                                    <small className="admin-time-hint" style={{overflowWrap: 'anywhere'}}>
+                                        {isEnglish ? 'Will link to: ' : '将跳转至：'}<code>{link}</code>
+                                    </small>
+                                )}
+                            </label>
+                        );
+                    })}
                 </div>
                 {!readOnly && (
                     <div className="admin-btn-row admin-mt-12">
