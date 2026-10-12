@@ -5,7 +5,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { openRedeemModal } from '~/components/RedeemModal';
 
 export const LoginButton = () => {
-    const {user, profile, loading, signIn, signOut} = useAuth();
+    const {user, profile, authReady, cachedPhotoURL, signIn, signOut} = useAuth();
     const {isEnglish} = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -28,7 +28,9 @@ export const LoginButton = () => {
         };
     }, [isOpen]);
 
-    if (loading) return null;
+    // Only waits for auth, not the profile: the avatar falls back to the cached and
+    // account photos, and the profile fills in the rest when it arrives.
+    if (!authReady) return null;
 
     const closeDropdown = () => setIsOpen(false);
 
@@ -53,7 +55,7 @@ export const LoginButton = () => {
                 onMouseLeave={handleMouseLeave}
             >
                 <img
-                    src={profile?.photoURL || user.photoURL || '/mika.webp'}
+                    src={(profile ? profile.photoURL : cachedPhotoURL) || user.photoURL || '/mika.webp'}
                     alt={isEnglish ? 'Profile' : '个人主页'}
                     className="login-avatar"
                     referrerPolicy="no-referrer"

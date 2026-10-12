@@ -152,7 +152,14 @@ interface AuthContextType {
     // Derived from profile.membershipExpiresAt so membership checks aren't
     // re-implemented per page. Recomputed on render, not on a timer.
     isMember: boolean;
+    // True until both the signed-in user and their profile are known.
     loading: boolean;
+    // True once the signed-in user is known, without waiting on the profile, so
+    // UI that only needs `user` doesn't sit behind the Firestore read.
+    authReady: boolean;
+    // The profile photo last seen on this device for the signed-in user, to show
+    // until the profile loads. Empty when there is none.
+    cachedPhotoURL: string;
     authError: Error | null;
     signIn: () => Promise<void>;
     signOut: () => Promise<void>;
@@ -167,6 +174,34 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const PHOTO_CACHE_KEY = 'profilePhoto';
+
+// Stored with the uid so a different account on this device never shows it.
+function readCachedPhoto(uid: string): string {
+    try {
+        const cached = JSON.parse(localStorage.getItem(PHOTO_CACHE_KEY) ?? 'null');
+        return cached?.uid === uid && typeof cached.photoURL === 'string' ? cached.photoURL : '';
+    } catch {
+        return '';
+    }
+}
+
+function cachePhoto(uid: string, photoURL: string) {
+    try {
+        localStorage.setItem(PHOTO_CACHE_KEY, JSON.stringify({uid, photoURL}));
+    } catch {
+        // Storage can be full or blocked; the avatar just waits for the profile.
+    }
+}
+
+function clearCachedPhoto() {
+    try {
+        localStorage.removeItem(PHOTO_CACHE_KEY);
+    } catch {
+        // Nothing to clear if storage is blocked.
+    }
+}
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -184,11 +219,15 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
     const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [authReady, setAuthReady] = useState(false);
+    const [cachedPhotoURL, setCachedPhotoURL] = useState('');
     const [authError, setAuthError] = useState<Error | null>(null);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(getFirebaseAuth(), async (firebaseUser) => {
             setUser(firebaseUser);
+            setCachedPhotoURL(firebaseUser ? readCachedPhoto(firebaseUser.uid) : '');
+            setAuthReady(true);
             setAuthError(null);
 
             try {
@@ -196,19 +235,21 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
                     const userRef = doc(getFirebaseDb(), 'users', firebaseUser.uid);
                     const userSnap = await getDoc(userRef);
 
-                    if (userSnap.exists()) {
-                        setProfile(toUserProfile(userSnap.data(), firebaseUser.email ?? ''));
-                    } else {
+                    let data = userSnap.data();
+                    if (!data) {
                         await callCreateUserProfile();
                         const freshSnap = await getDoc(userRef);
-                        const data = freshSnap.data();
+                        data = freshSnap.data();
                         if (!data) {
                             throw new Error('Profile creation succeeded but document was not found.');
                         }
-                        setProfile(toUserProfile(data, firebaseUser.email ?? ''));
                     }
+                    const loaded = toUserProfile(data, firebaseUser.email ?? '');
+                    setProfile(loaded);
+                    cachePhoto(firebaseUser.uid, loaded.photoURL);
                 } else {
                     setProfile(null);
+                    clearCachedPhoto();
                 }
             } catch (error) {
                 console.error('AuthProvider: failed to load or create user profile', error);
@@ -236,7 +277,9 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         const userRef = doc(getFirebaseDb(), 'users', user.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
-            setProfile(toUserProfile(userSnap.data(), user.email ?? ''));
+            const loaded = toUserProfile(userSnap.data(), user.email ?? '');
+            setProfile(loaded);
+            cachePhoto(user.uid, loaded.photoURL);
         }
     };
 
@@ -257,9 +300,11 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         if (updates.deletePhoto) {
             const result = await callDeleteAvatar();
             setProfile(prev => prev ? {...prev, photoURL: result.data.photoURL} : prev);
+            cachePhoto(user.uid, result.data.photoURL);
         } else if (updates.photoFile) {
             const url = await callUploadAvatar(updates.photoFile);
             setProfile(prev => prev ? {...prev, photoURL: url} : prev);
+            cachePhoto(user.uid, url);
         }
 
         if (updates.deleteBanner) {
@@ -276,6 +321,8 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         profile,
         isMember: isMembershipActive(profile?.membershipExpiresAt),
         loading,
+        authReady,
+        cachedPhotoURL,
         authError,
         signIn,
         signOut,
