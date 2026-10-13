@@ -1,18 +1,21 @@
 import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveConContent, callUploadAdminImage, callUploadConVideo } from '~/lib/firebase';
-import { type ConContent, type ConContentSection, refreshConContent, useConDraft, } from '~/lib/conContent';
-import { parseSiteTime } from '~/lib/siteTime';
-import { useUploadLimits } from '~/lib/uploadLimits';
-import { useVenues } from '~/lib/venues';
 import {
+    type ConContent,
+    type ConContentSection,
     type EarlyBird,
     HIDEABLE_SECTIONS,
     type HideableSection,
     type InPersonSession,
+    refreshConContent,
     ROOM_ACCENTS,
     type RoomAccent,
-} from '~/pages/con/content';
+    useConDraft,
+} from '~/lib/conContent';
+import { parseSiteTime } from '~/lib/siteTime';
+import { useUploadLimits } from '~/lib/uploadLimits';
+import { useVenues } from '~/lib/venues';
 import { byHallOrder, HALL_ROWS, HALL_TABLES, type HallRow, rowOf } from '~/pages/con/hall';
 import { HallMap } from '~/pages/con/HallMap';
 import { type Localized, useT } from '~/pages/con/i18n';
@@ -22,14 +25,14 @@ import { ImageUploadField } from './ImageUploadField';
 import { SectionNav } from './SectionNav';
 
 /**
- * Editor for the public /con page's copy. Everything here is stored in
- * `conContent/main` and overlaid on the defaults in `app/pages/con/content.ts`.
+ * Editor for the public /con page's copy. Everything here is saved to the
+ * staff-only `conContent/draft`, mirrored to the public `conContent/main` while
+ * the con is published, and read back through `app/lib/conContent.ts`.
  *
  * Each section owns its own Save button and writes only its own field, so two
  * people editing different parts of the page cannot clobber each other. The
- * parts of the con page that are not editable here — the nav links, the about
- * copy, the venue travel notes — are tied to section anchors or to CSS class
- * names, and stay in code.
+ * parts of the con page that are not editable here — the con's name, the About
+ * section, the nav links, the room colours — stay in code.
  */
 
 interface ConContentTabProps {
@@ -1834,7 +1837,7 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
         );
     }
 
-    // Editing here would mean saving the shipped defaults over whatever is
+    // Editing here would mean saving the blank defaults over whatever is
     // actually stored, so the form stays closed until a read succeeds.
     if (failed) {
         return (
@@ -1844,8 +1847,8 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
                 </h3>
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? 'The saved content could not be read, so the editor is showing the site’s built-in copy. Reload the page before editing — saving now would replace what is stored.'
-                        : '无法读取已保存的内容，编辑器当前显示的是网站内置文案。请重新加载页面后再编辑——此时保存会覆盖已存储的内容。'}
+                        ? 'The saved content could not be read. Reload the page before editing — saving now would replace what is stored.'
+                        : '无法读取已保存的内容。请重新加载页面后再编辑——此时保存会覆盖已存储的内容。'}
                 </p>
             </div>
         );
@@ -1858,8 +1861,8 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
             <div className="admin-section">
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? 'While the page is published, edits here go live on /con as soon as they are saved. Each section saves on its own, so you can leave the rest untouched. Anything never saved keeps showing the copy shipped with the site.'
-                        : '页面发布期间，此处的修改保存后立即在 /con 页面生效。每个板块单独保存，不会影响其他板块。从未保存过的板块将继续显示网站内置的文案。'}
+                        ? 'While the page is published, edits here go live on /con as soon as they are saved. Each section saves on its own, so you can leave the rest untouched. A section never saved shows empty on /con.'
+                        : '页面发布期间，此处的修改保存后立即在 /con 页面生效。每个板块单独保存，不会影响其他板块。从未保存过的板块在 /con 页面上显示为空。'}
                 </p>
             </div>
 

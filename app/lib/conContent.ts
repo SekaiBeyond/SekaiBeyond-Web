@@ -4,45 +4,223 @@ import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { createValueCache } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 import { resolveVenueById, useVenues } from './venues';
-import {
-    CON,
-    CON_SETTINGS,
-    type ConEvent,
-    type ConHeroVideo,
-    type ConSettings,
-    type EarlyBird,
-    FAQ,
-    type FaqEntry,
-    type Guest,
-    GUESTS,
-    HERO_VIDEO,
-    HIDEABLE_SECTIONS,
-    IN_PERSON_SALES,
-    type InPersonSales,
-    NAV_LINKS,
-    type NavLink,
-    type Room,
-    ROOM_ACCENTS,
-    type RoomAccent,
-    ROOMS,
-    SCHEDULE,
-    type ScheduleItem,
-    TICKET_FEE,
-    type TicketFee,
-    TICKETS,
-    type TicketTier,
-    type Vendor,
-    VENDOR_CTA,
-    type VendorCta,
-    VENDORS,
-} from '~/pages/con/content';
 import { isHallTable } from '~/pages/con/hall';
 import type { Localized } from '~/pages/con/i18n';
 
+/*
+ * Everything on /con that admins edit in Admin → Con Content, and the few fixed
+ * pieces of the page around it. The copy itself lives in Firestore: the editor
+ * saves to the staff-only `conContent/draft`, which is mirrored whole to the public
+ * `conContent/main` while the con is published.
+ */
+
+// Fixed in code
+
 /**
- * The admin-editable half of the con page. Each key mirrors one section of
- * `content.ts` and one Save button in the admin panel's Con Content tab, and is
- * stored under that name in `conContent/main`.
+ * Shown in the hero, the navbar logo, and the footer. Fixed in code because the
+ * con's name does not change between editions.
+ */
+export const CON_NAME: Localized = {en: 'Sekai Beyond Con', zh: '彼世界动漫游戏展'};
+
+export interface NavLink {
+    id: string
+    label: Localized
+}
+
+/** Each id is a section's anchor on the page, which an admin cannot add. */
+const NAV_LINKS: NavLink[] = [
+    {id: 'tickets', label: {en: 'Tickets', zh: '门票'}},
+    {id: 'about', label: {en: 'About', zh: '关于漫展'}},
+    {id: 'schedule', label: {en: 'Schedule', zh: '活动日程'}},
+    {id: 'lineup', label: {en: 'Share Card', zh: '分享卡'}},
+    {id: 'guests', label: {en: 'Guests', zh: '嘉宾'}},
+    {id: 'vendors', label: {en: 'Artist Alley', zh: '创作者市集'}},
+    {id: 'faq', label: {en: 'FAQ', zh: '常见问题'}},
+];
+
+/**
+ * Chip colours a room can use. The palette is fixed in code because each value
+ * is a CSS class (`sbc-accent--pink`); which room wears which colour is not.
+ */
+export const ROOM_ACCENTS = ['pink', 'violet', 'amber', 'sky', 'mint', 'slate'] as const;
+
+export type RoomAccent = typeof ROOM_ACCENTS[number]
+
+/**
+ * The sections an admin can hide. Each value is both the section's anchor id
+ * and its key in the editable content, so hiding one also leaves its copy out
+ * of the public `conContent/main` mirror.
+ */
+export const HIDEABLE_SECTIONS = ['guests', 'vendors'] as const;
+
+export type HideableSection = typeof HIDEABLE_SECTIONS[number]
+
+// What each section holds
+
+/** Page-level switches, kept apart from the copy they govern. */
+export interface ConSettings {
+    /**
+     * When false, /con is visible to staff and above only; everyone else gets a
+     * short "coming soon" card.
+     *
+     * Defaults to false, and publishing is what creates the public `conContent/main`
+     * mirror in the first place. Nothing about a con is public until someone ticks
+     * the box in Admin → Con Content, which is the only reading under which the
+     * switch is worth anything: the alternative — public by default, hidden by an
+     * explicit flag — leaves the unannounced line-up readable to anyone who asks
+     * the database directly.
+     */
+    published: boolean
+    /**
+     * Sections taken off the page, its navbar and its footer. Kept in
+     * HIDEABLE_SECTIONS order so the editor's dirty check, which compares JSON,
+     * does not see a reordering as a change.
+     */
+    hiddenSections: HideableSection[]
+}
+
+export interface ConEvent {
+    edition: number
+    tagline: Localized
+    intro: Localized
+    /** Pacific time, no zone suffix — read with parseSiteTime. */
+    date: string
+    endTime: string
+    /** A document in `venues`, managed in Admin → Locations. */
+    venueId: string
+    ticketUrl: string
+}
+
+/**
+ * The hero backdrop: a short silent loop uploaded in Admin → Con Content → Hero
+ * Video. With none uploaded, or for a reduced-motion visitor, the hero is a gradient.
+ */
+export interface ConHeroVideo {
+    webm: string;
+}
+
+export interface Room {
+    /** Stable slug referenced by `ScheduleItem.room`. */
+    id: string
+    name: Localized
+    accent: RoomAccent
+}
+
+export interface ScheduleItem {
+    /**
+     * Omitted together when the slot is announced but unscheduled — the page
+     * lists it under the grid as "time to be confirmed" rather than hiding it.
+     */
+    start?: string
+    end?: string
+    /**
+     * A `Room.id`, and absent on a slot with no time. A con books the room and the
+     * hour in one go, so an item waiting on the hour is waiting on the room too —
+     * and a room guessed at now is one the page would show as settled. The grid has
+     * a column per room, so an id matching none of them falls out of it; the server
+     * refuses to store one either way.
+     */
+    room?: string
+    title: Localized
+}
+
+export interface Guest {
+    name: string
+    role: Localized
+    blurb: Localized
+    /** Path under public/, e.g. '/guests/name.webp'. Falls back to an initial badge. */
+    avatar?: string
+    link?: string
+}
+
+/** Who is at a table on the main hall floor plan (con/hall.ts). */
+export interface Vendor {
+    /** A table on the floor plan, e.g. "A1" — one of HALL_TABLES. One vendor per table. */
+    table: string
+    /** As they asked to be listed; a shared table is one entry, "A & B". */
+    name: string
+    link?: string
+}
+
+export interface VendorCta {
+    /**
+     * Whether the callout shows at all, ticked in Admin → Con Content → Artist
+     * Alley. Off unless explicitly turned on: a recruiting call left up after the
+     * tables are taken reads as an offer the con can't keep.
+     */
+    visible: boolean
+    heading: Localized
+    body: Localized
+    label: Localized
+}
+
+/**
+ * A cheaper price that holds until `endsAt`, a zoneless `YYYY-MM-DDTHH:MM` read
+ * on the Pacific clock like the event's own date. After it passes, the page
+ * shows the tier's regular `price` on its own.
+ */
+export interface EarlyBird {
+    price: number
+    endsAt: string
+}
+
+export interface TicketTier {
+    id: string
+    name: Localized
+    /**
+     * The regular price in US dollars — what the tier costs once any early bird
+     * has ended. A number, not copy: `formatPrice` renders it per language, and 0
+     * reads as "Free".
+     */
+    price: number
+    earlyBird?: EarlyBird
+    note: Localized
+    perks: Localized[]
+    featured?: boolean
+}
+
+/**
+ * What buying a ticket online adds on top of its price, per paid ticket: a share
+ * of the price plus a flat amount, the shape most payment processors charge in.
+ * Either can be 0, and both at 0 means no fee line on the cards at all.
+ */
+export interface TicketFee {
+    /** Percent of the ticket price, e.g. 2.9 for 2.9%. */
+    percent: number
+    /** US dollars. */
+    flat: number
+}
+
+/** One day the in-person table is selling. Zoneless, read on the Pacific clock. */
+export interface InPersonSession {
+    /** YYYY-MM-DD */
+    date: string
+    /** HH:MM */
+    start: string
+    end: string
+}
+
+/**
+ * Tickets sold in person before the con, which skip the online transaction fee.
+ * The page shows the block while any session is still to come, and drops each
+ * session once it ends.
+ */
+export interface InPersonSales {
+    location: Localized
+    /** Optional — payment methods, where to find the table. */
+    note: Localized
+    sessions: InPersonSession[]
+}
+
+export interface FaqEntry {
+    q: Localized
+    a: Localized
+}
+
+/**
+ * The admin-editable half of the con page. Each key is one Save button in the
+ * admin panel's Con Content tab, and is stored under that name in the draft and
+ * its public mirror.
  */
 export interface ConContent {
     settings: ConSettings;
@@ -58,24 +236,32 @@ export interface ConContent {
     faq: FaqEntry[];
 }
 
-/** What visitors see before the fetch resolves, and for any section never edited. */
-export const DEFAULT_CON_CONTENT: ConContent = {
-    settings: CON_SETTINGS,
-    event: CON,
-    heroVideo: HERO_VIDEO,
-    rooms: ROOMS,
-    schedule: SCHEDULE,
-    guests: GUESTS,
-    vendors: {tables: VENDORS, cta: VENDOR_CTA},
-    tickets: TICKETS,
-    ticketFee: TICKET_FEE,
-    inPersonSales: IN_PERSON_SALES,
-    faq: FAQ,
-};
-
 export type ConContentSection = keyof ConContent;
 
 const BLANK: Localized = {en: '', zh: ''};
+
+/**
+ * What a section reads as until it is first saved in admin, and what the staff
+ * preview falls back to when the read fails. /con waits for the fetch, so a
+ * visitor never sees these on the way in.
+ *
+ * Blank on purpose: this file ships in the public bundle whatever the publish
+ * switch says, so a line-up, a price or a vendor written here would be public
+ * before the con is.
+ */
+export const DEFAULT_CON_CONTENT: ConContent = {
+    settings: {published: false, hiddenSections: []},
+    event: {edition: 2026, tagline: BLANK, intro: BLANK, date: '', endTime: '', venueId: '', ticketUrl: ''},
+    heroVideo: {webm: ''},
+    rooms: [],
+    schedule: [],
+    guests: [],
+    vendors: {tables: [], cta: {visible: false, heading: BLANK, body: BLANK, label: BLANK}},
+    tickets: [],
+    ticketFee: {percent: 0, flat: 0},
+    inPersonSales: {location: BLANK, note: BLANK, sessions: []},
+    faq: [],
+};
 
 /**
  * `saveConContent` validates everything on the way in, so a well-formed document
@@ -83,14 +269,14 @@ const BLANK: Localized = {en: '', zh: ''};
  * doc, or a field this build predates — where the alternative is the whole con
  * page crashing on a missing `.en`.
  */
-const loc = (raw: unknown, fallback: Localized = BLANK): Localized => {
-    if (!raw || typeof raw !== 'object') return fallback;
+const loc = (raw: unknown): Localized => {
+    if (!raw || typeof raw !== 'object') return BLANK;
     const {en, zh} = raw as Partial<Localized>;
-    if (typeof en !== 'string' || typeof zh !== 'string') return fallback;
+    if (typeof en !== 'string' || typeof zh !== 'string') return BLANK;
     return {en, zh};
 };
 
-const str = (raw: unknown, fallback = ''): string => (typeof raw === 'string' ? raw : fallback);
+const str = (raw: unknown): string => (typeof raw === 'string' ? raw : '');
 
 /** Optional string fields are dropped when blank, so `guest.link &&` stays meaningful. */
 const optStr = (raw: unknown): string | undefined =>
@@ -99,12 +285,9 @@ const optStr = (raw: unknown): string | undefined =>
 const obj = (raw: unknown): Record<string, unknown> =>
     raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
 
-/**
- * A stored `[]` means "the admin emptied this section" and is honoured; a missing
- * or non-array value means "never set" and falls back to the shipped copy.
- */
-const list = <T>(raw: unknown, fallback: T[], read: (item: Record<string, unknown>) => T): T[] => {
-    if (!Array.isArray(raw)) return fallback;
+/** Anything but an array reads as empty, the same as a section never saved. */
+const list = <T>(raw: unknown, read: (item: Record<string, unknown>) => T): T[] => {
+    if (!Array.isArray(raw)) return [];
     return raw.filter(item => !!item && typeof item === 'object').map(item => read(item as Record<string, unknown>));
 };
 
@@ -114,7 +297,7 @@ const readAccent = (raw: unknown): RoomAccent =>
         : 'slate';
 
 const readRooms = (raw: unknown): Room[] =>
-    list(raw, ROOMS, room => ({
+    list(raw, room => ({
         id: str(room.id),
         name: loc(room.name),
         accent: readAccent(room.accent),
@@ -132,16 +315,15 @@ const readSettings = (raw: unknown): ConSettings => {
 };
 
 const readEvent = (raw: unknown): ConEvent => {
-    if (!raw || typeof raw !== 'object') return CON;
     const e = obj(raw);
     return {
-        edition: typeof e.edition === 'number' ? e.edition : CON.edition,
-        tagline: loc(e.tagline, CON.tagline),
-        intro: loc(e.intro, CON.intro),
-        date: str(e.date, CON.date),
-        endTime: str(e.endTime, CON.endTime),
-        venueId: str(e.venueId, CON.venueId),
-        ticketUrl: str(e.ticketUrl, CON.ticketUrl),
+        edition: typeof e.edition === 'number' ? e.edition : DEFAULT_CON_CONTENT.event.edition,
+        tagline: loc(e.tagline),
+        intro: loc(e.intro),
+        date: str(e.date),
+        endTime: str(e.endTime),
+        venueId: str(e.venueId),
+        ticketUrl: str(e.ticketUrl),
     };
 };
 
@@ -149,11 +331,7 @@ const readEvent = (raw: unknown): ConEvent => {
  * Optional — a con with no clip uploaded yet stores an empty string, and the hero
  * shows its gradient.
  */
-const readHeroVideo = (raw: unknown): ConHeroVideo => {
-    if (!raw || typeof raw !== 'object') return HERO_VIDEO;
-    const v = obj(raw);
-    return {webm: str(v.webm)};
-};
+const readHeroVideo = (raw: unknown): ConHeroVideo => ({webm: str(obj(raw).webm)});
 
 const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({
     // Absent times mean "TBA", which the page renders — so they stay undefined
@@ -164,10 +342,10 @@ const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({
     title: loc(item.title),
 });
 
-const readSchedule = (raw: unknown): ScheduleItem[] => list(raw, SCHEDULE, readScheduleItem);
+const readSchedule = (raw: unknown): ScheduleItem[] => list(raw, readScheduleItem);
 
 const readGuests = (raw: unknown): Guest[] =>
-    list(raw, GUESTS, guest => ({
+    list(raw, guest => ({
         name: str(guest.name),
         role: loc(guest.role),
         blurb: loc(guest.blurb),
@@ -176,17 +354,16 @@ const readGuests = (raw: unknown): Guest[] =>
     }));
 
 const readVendors = (raw: unknown): ConContent['vendors'] => {
-    if (!raw || typeof raw !== 'object') return DEFAULT_CON_CONTENT.vendors;
     const v = obj(raw);
     const cta = obj(v.cta);
     const seen = new Set<string>();
     return {
         // `tables` replaced a plain `list` with no table numbers. A document still
-        // holding only that has nothing the floor plan could place, so it falls
-        // back like a section never saved. A table the plan no longer has — or
-        // listed twice — would have nowhere to be drawn, and the editor nowhere to
-        // show it, so it is left out here rather than kept invisibly.
-        tables: list(v.tables, VENDORS, vendor => ({
+        // holding only that has nothing the floor plan could place, so it reads
+        // like a section never saved. A table the plan no longer has — or listed
+        // twice — would have nowhere to be drawn, and the editor nowhere to show
+        // it, so it is left out here rather than kept invisibly.
+        tables: list(v.tables, vendor => ({
             table: str(vendor.table),
             name: str(vendor.name),
             link: optStr(vendor.link),
@@ -199,9 +376,9 @@ const readVendors = (raw: unknown): ConContent['vendors'] => {
             // Only an explicit true shows it, as with `published`: a callout saved
             // before the switch existed stays off rather than reappearing.
             visible: cta.visible === true,
-            heading: loc(cta.heading, VENDOR_CTA.heading),
-            body: loc(cta.body, VENDOR_CTA.body),
-            label: loc(cta.label, VENDOR_CTA.label),
+            heading: loc(cta.heading),
+            body: loc(cta.body),
+            label: loc(cta.label),
         },
     };
 };
@@ -218,7 +395,7 @@ const readEarlyBird = (raw: unknown): EarlyBird | undefined => {
 };
 
 const readTickets = (raw: unknown): TicketTier[] =>
-    list(raw, TICKETS, tier => ({
+    list(raw, tier => ({
         id: str(tier.id),
         name: loc(tier.name),
         price: nonNegative(tier.price),
@@ -231,18 +408,16 @@ const readTickets = (raw: unknown): TicketTier[] =>
     }));
 
 const readTicketFee = (raw: unknown): TicketFee => {
-    if (!raw || typeof raw !== 'object') return TICKET_FEE;
     const f = obj(raw);
     return {percent: nonNegative(f.percent), flat: nonNegative(f.flat)};
 };
 
 const readInPersonSales = (raw: unknown): InPersonSales => {
-    if (!raw || typeof raw !== 'object') return IN_PERSON_SALES;
     const s = obj(raw);
     return {
-        location: loc(s.location, IN_PERSON_SALES.location),
+        location: loc(s.location),
         note: loc(s.note),
-        sessions: list(s.sessions, [], session => ({
+        sessions: list(s.sessions, session => ({
             date: str(session.date),
             start: str(session.start),
             end: str(session.end),
@@ -251,7 +426,7 @@ const readInPersonSales = (raw: unknown): InPersonSales => {
 };
 
 const readFaq = (raw: unknown): FaqEntry[] =>
-    list(raw, FAQ, entry => ({q: loc(entry.q), a: loc(entry.a)}));
+    list(raw, entry => ({q: loc(entry.q), a: loc(entry.a)}));
 
 const readSections = (data: Record<string, unknown>): Omit<ConContent, 'settings'> => ({
     event: readEvent(data.event),

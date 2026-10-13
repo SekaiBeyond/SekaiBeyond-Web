@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { useConContent } from '~/lib/conContent';
-import type { RoomAccent, ScheduleItem } from '~/pages/con/content';
+import { type RoomAccent, type ScheduleItem, useConContent } from '~/lib/conContent';
 import type { Localized } from '~/pages/con/i18n';
 import { useT } from '~/pages/con/i18n';
 import { formatClockTime, pad } from '~/pages/con/utils';

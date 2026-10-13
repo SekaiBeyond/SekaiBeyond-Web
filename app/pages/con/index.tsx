@@ -59,8 +59,8 @@ export const ConPage = () => {
                 <div className="sbc-preview-banner" role="status">
                     {failed
                         ? t({
-                            en: 'Could not load the saved content — showing built-in copy, hidden from the public.',
-                            zh: '无法读取已保存的内容——当前显示内置文案，并对公众隐藏。',
+                            en: 'Could not load the saved content, so most sections are empty. This page is hidden from the public.',
+                            zh: '无法读取已保存的内容，大部分板块为空。此页面对公众隐藏。',
                         })
                         : t({
                             en: 'Not published — only staff can see this page. Publish it from Admin → Con Content.',

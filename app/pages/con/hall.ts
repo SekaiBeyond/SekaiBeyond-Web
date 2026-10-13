@@ -2,9 +2,9 @@ import type { CSSProperties } from 'react';
 
 /**
  * The main hall floor plan the Artist Alley section draws: the HUB Ballroom as
- * laid out for the con, transcribed from HUB's reservation diagram. Like
- * VENUE_MAP_URL it is fixed to HUB — if the con moves hall, or HUB redraws the
- * tables, this file is what changes. Which vendor sits at each table is admin data
+ * laid out for the con, transcribed from HUB's reservation diagram. Like the
+ * hero's VENUE_MAP_URL it is fixed to HUB — if the con moves hall, or HUB redraws
+ * the tables, this file is what changes. Which vendor sits at each table is admin data
  * (Admin → Con Content → Artist Alley); the tables themselves are not.
  *
  * Only what a visitor walks past is drawn: the stage, the free cheering space,

@@ -477,7 +477,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     return socialLinks ? {saved: true, socialLinks} : {saved: true};
 });
 
-// Mirrors ROOM_ACCENTS in app/pages/con/content.ts. Each value names a CSS class
+// Mirrors ROOM_ACCENTS in app/lib/conContent.ts. Each value names a CSS class
 // (sbc-accent--<accent>), so the palette is a whitelist even though the rooms
 // that use it are free-form, admin-managed data.
 const CON_ROOM_ACCENTS = ["pink", "violet", "amber", "sky", "mint", "slate"] as const;
@@ -488,7 +488,7 @@ const CON_SECTIONS = [
 ] as const;
 type ConSection = typeof CON_SECTIONS[number];
 
-// Mirrors HIDEABLE_SECTIONS in app/pages/con/content.ts. Each is a key of
+// Mirrors HIDEABLE_SECTIONS in app/lib/conContent.ts. Each is a key of
 // CON_SECTIONS as well as an anchor on the page.
 const CON_HIDEABLE_SECTIONS = ["guests", "vendors"] as const satisfies readonly ConSection[];
 

@@ -2,12 +2,18 @@ import { useMemo } from 'react';
 import { Link } from 'react-router';
 import { LuArrowUpRight, LuCalendar, LuClock, LuMapPin, LuSquareParking } from 'react-icons/lu';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { useConContent, useConVenue } from '~/lib/conContent';
-import { CON_NAME, VENUE_MAP_URL, VENUE_TBA } from '~/pages/con/content';
+import { CON_NAME, useConContent, useConVenue } from '~/lib/conContent';
 import { useT } from '~/pages/con/i18n';
 import { useMediaQuery } from '~/pages/con/hooks';
 import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/con/utils';
 import { Countdown } from '~/pages/con/Countdown';
+
+/**
+ * Where the venue name links: the Husky Union Building's Google Maps page. Fixed
+ * here rather than read from the venue picked in Admin → Con Content, so if the
+ * con moves, change this too, or the new venue's name will open a map of HUB.
+ */
+const VENUE_MAP_URL = 'https://maps.app.goo.gl/wVdWeZfELBYUEckx9';
 
 const generateSparkStyles = () =>
     Array.from({length: 7}, () => ({
@@ -113,7 +119,7 @@ export const Hero = () => {
                         ) : (
                             <>
                                 <LuMapPin className="sbc-hero-meta-icon" aria-hidden="true"/>
-                                <span>{t(VENUE_TBA)}</span>
+                                <span>{t({en: 'Venue TBA', zh: '场地待定'})}</span>
                             </>
                         )}
                     </li>

@@ -1,5 +1,5 @@
 import type { PointerEvent } from 'react';
-import type { Vendor } from '~/pages/con/content';
+import type { Vendor } from '~/lib/conContent';
 import {
     HALL_COMPASS,
     HALL_DOORS,

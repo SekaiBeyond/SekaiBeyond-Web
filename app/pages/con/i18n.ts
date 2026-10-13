@@ -6,9 +6,9 @@ export type Localized = {en: string; zh: string};
 export type ConLanguage = 'en' | 'zh';
 
 /**
- * The con page keeps its copy in bilingual pairs (see `content.ts`), so it reads
- * the shared language context through this helper instead of writing
- * `isEnglish ? ... : ...` at every call site.
+ * The con page keeps its copy in bilingual pairs (see `app/lib/conContent.ts`),
+ * so it reads the shared language context through this helper instead of
+ * writing `isEnglish ? ... : ...` at every call site.
  *
  * Either half of an admin-written pair may be left blank, so a missing one falls
  * back to the other rather than leaving a gap on the page.

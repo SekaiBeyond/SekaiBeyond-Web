@@ -1,6 +1,6 @@
 import type { MouseEvent } from 'react';
 import { formatSiteTime, labelSiteZone, parseSiteTime, SITE_TIME_ZONE } from '~/lib/siteTime';
-import type { EarlyBird, InPersonSession, TicketFee, TicketTier } from '~/pages/con/content';
+import type { EarlyBird, InPersonSession, TicketFee, TicketTier } from '~/lib/conContent';
 import type { ConLanguage } from '~/pages/con/i18n';
 
 const locales: Record<ConLanguage, string> = {en: 'en-US', zh: 'zh-CN'};

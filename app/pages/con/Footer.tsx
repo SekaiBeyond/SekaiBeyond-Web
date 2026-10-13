@@ -1,8 +1,7 @@
 import { Link } from 'react-router';
 import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from 'react-icons/si';
-import { useConNavLinks } from '~/lib/conContent';
+import { CON_NAME, useConNavLinks } from '~/lib/conContent';
 import { SOCIAL_LINK_NAMES, useSiteConfig } from '~/lib/siteConfig';
-import { CON_NAME } from '~/pages/con/content';
 import { useT } from '~/pages/con/i18n';
 import { scrollToSection } from '~/pages/con/utils';
 
