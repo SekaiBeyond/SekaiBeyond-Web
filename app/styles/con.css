@@ -1037,6 +1037,14 @@
     color: var(--color-text-secondary);
 }
 
+.sbc-hall-note {
+    margin-top: 2px;
+    font-size: 0.8rem;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+
 .sbc-vendor-search {
     position: relative;
     flex: 0 1 340px;

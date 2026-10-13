@@ -87,6 +87,12 @@ export const Vendors = () => {
                                 ? t({en: `${tables.length} tables`, zh: `${tables.length} 个摊位`})
                                 : t({en: 'Tables to be announced', zh: '摊位待公布'})}
                         </p>
+                        <p className="sbc-hall-note">
+                            {t({
+                                en: 'Table assignments and the layout are subject to change.',
+                                zh: '摊位安排与场地布局可能会有变动。',
+                            })}
+                        </p>
                     </div>
 
                     {tables.length > 0 && (

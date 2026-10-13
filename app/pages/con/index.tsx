@@ -76,7 +76,7 @@ export const ConPage = () => {
                 <Schedule/>
                 <Lineup/>
                 {!hidden.includes('guests') && <Guests/>}
-                {!hidden.includes('vendors') && <Vendors/>}
+                <Vendors/>
                 <Faq/>
             </main>
             <Footer/>

@@ -490,7 +490,7 @@ type ConSection = typeof CON_SECTIONS[number];
 
 // Mirrors HIDEABLE_SECTIONS in app/pages/con/content.ts. Each is a key of
 // CON_SECTIONS as well as an anchor on the page.
-const CON_HIDEABLE_SECTIONS = ["guests", "vendors"] as const satisfies readonly ConSection[];
+const CON_HIDEABLE_SECTIONS = ["guests"] as const satisfies readonly ConSection[];
 
 // Caps on how much copy one section can hold. Generous against real use, tight
 // enough that a runaway client cannot grow the public document without bound.
@@ -1003,7 +1003,10 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
         const settings = merged.settings as {published?: boolean; hiddenSections?: string[]} | undefined;
         const published = settings?.published === true;
         if (published) {
-            const hidden = new Set<string>(settings?.hiddenSections ?? []);
+            // Only what can still be hidden: a draft saved while the artist alley
+            // was hideable may list it, and it is always on the page now.
+            const hideable: readonly string[] = CON_HIDEABLE_SECTIONS;
+            const hidden = new Set((settings?.hiddenSections ?? []).filter(section => hideable.includes(section)));
             const mirror: Record<string, any> = {updatedAt: FieldValue.serverTimestamp()};
             for (const section of CON_SECTIONS) {
                 if (merged[section] !== undefined && !hidden.has(section)) mirror[section] = merged[section];

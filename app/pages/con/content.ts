@@ -44,9 +44,10 @@ export interface ConSettings {
 /**
  * The sections an admin can hide. Each value is both the section's anchor id
  * and its key in the editable content, so hiding one also leaves its copy out
- * of the public `conContent/main` mirror.
+ * of the public `conContent/main` mirror. The artist alley is always shown: its
+ * floor plan is worth having up even before anyone is assigned a table.
  */
-export const HIDEABLE_SECTIONS = ['guests', 'vendors'] as const;
+export const HIDEABLE_SECTIONS = ['guests'] as const;
 
 export type HideableSection = typeof HIDEABLE_SECTIONS[number]
 
@@ -434,9 +435,8 @@ export interface Vendor {
 /**
  * Empty on purpose. The table list is entered or imported in Admin → Con
  * Content → Artist Alley, where it stays in the staff-only draft until the page
- * and the section are both published — anything written here would ship in the
- * public bundle whatever those two switches say. Until then the floor plan shows
- * every table open.
+ * is published — anything written here would ship in the public bundle whatever
+ * that switch says. Until then the floor plan shows every table open.
  */
 export const VENDORS: Vendor[] = [];
 
