@@ -1236,6 +1236,8 @@ const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) =
             editor={editor}
             readOnly={readOnly}
         >
+            <HiddenSectionNote content={content} section="vendors"/>
+
             <div className="admin-con-card">
                 <div className="admin-con-card-head">
                     <span className="admin-con-card-title">
