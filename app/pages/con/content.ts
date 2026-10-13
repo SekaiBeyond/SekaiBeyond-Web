@@ -421,23 +421,24 @@ export const GUESTS: Guest[] = [
     },
 ];
 
-// Artist alley / vendors — PLACEHOLDER
+// Artist alley — who is at which table on the main hall floor plan (con/hall.ts)
 
 export interface Vendor {
+    /** A table on the floor plan, e.g. "A1" — one of HALL_TABLES. One vendor per table. */
+    table: string
+    /** As they asked to be listed; a shared table is one entry, "A & B". */
     name: string
-    kind: Localized
-    handle?: string
     link?: string
 }
 
-export const VENDORS: Vendor[] = [
-    {name: 'Table A1 — TBA', kind: {en: 'Prints & Stickers', zh: '海报与贴纸'}},
-    {name: 'Table A2 — TBA', kind: {en: 'Acrylic Charms', zh: '亚克力挂件'}},
-    {name: 'Table A3 — TBA', kind: {en: 'Original Comics', zh: '原创漫画'}},
-    {name: 'Table B1 — TBA', kind: {en: 'Handmade Props', zh: '手作道具'}},
-    {name: 'Table B2 — TBA', kind: {en: 'Plush & Fibre Art', zh: '毛绒与织物'}},
-    {name: 'Table B3 — TBA', kind: {en: 'Zines & Art Books', zh: '画册与刊物'}},
-];
+/**
+ * Empty on purpose. The table list is entered or imported in Admin → Con
+ * Content → Artist Alley, where it stays in the staff-only draft until the page
+ * and the section are both published — anything written here would ship in the
+ * public bundle whatever those two switches say. Until then the floor plan shows
+ * every table open.
+ */
+export const VENDORS: Vendor[] = [];
 
 export interface VendorCta {
     heading: Localized

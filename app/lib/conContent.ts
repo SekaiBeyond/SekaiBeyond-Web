@@ -36,6 +36,7 @@ import {
     type VendorCta,
     VENDORS,
 } from '~/pages/con/content';
+import { isHallTable } from '~/pages/con/hall';
 import type { Localized } from '~/pages/con/i18n';
 
 /**
@@ -50,7 +51,7 @@ export interface ConContent {
     rooms: Room[];
     schedule: ScheduleItem[];
     guests: Guest[];
-    vendors: {list: Vendor[]; cta: VendorCta};
+    vendors: {tables: Vendor[]; cta: VendorCta};
     tickets: TicketTier[];
     ticketFee: TicketFee;
     inPersonSales: InPersonSales;
@@ -65,7 +66,7 @@ export const DEFAULT_CON_CONTENT: ConContent = {
     rooms: ROOMS,
     schedule: SCHEDULE,
     guests: GUESTS,
-    vendors: {list: VENDORS, cta: VENDOR_CTA},
+    vendors: {tables: VENDORS, cta: VENDOR_CTA},
     tickets: TICKETS,
     ticketFee: TICKET_FEE,
     inPersonSales: IN_PERSON_SALES,
@@ -179,13 +180,22 @@ const readVendors = (raw: unknown): ConContent['vendors'] => {
     if (!raw || typeof raw !== 'object') return DEFAULT_CON_CONTENT.vendors;
     const v = obj(raw);
     const cta = obj(v.cta);
+    const seen = new Set<string>();
     return {
-        list: list(v.list, VENDORS, vendor => ({
+        // `tables` replaced a plain `list` with no table numbers. A document still
+        // holding only that has nothing the floor plan could place, so it falls
+        // back like a section never saved. A table the plan no longer has — or
+        // listed twice — would have nowhere to be drawn, and the editor nowhere to
+        // show it, so it is left out here rather than kept invisibly.
+        tables: list(v.tables, VENDORS, vendor => ({
+            table: str(vendor.table),
             name: str(vendor.name),
-            kind: loc(vendor.kind),
-            handle: optStr(vendor.handle),
             link: optStr(vendor.link),
-        })),
+        })).filter(vendor => {
+            if (!isHallTable(vendor.table) || seen.has(vendor.table)) return false;
+            seen.add(vendor.table);
+            return true;
+        }),
         cta: {
             heading: loc(cta.heading, VENDOR_CTA.heading),
             body: loc(cta.body, VENDOR_CTA.body),

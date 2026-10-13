@@ -5161,6 +5161,50 @@ select.admin-tickets-tag:focus {
     color: var(--color-primary);
 }
 
+/* Artist alley editor: the /con floor plan as an overview, then one collapsible
+   row of tables each, every table a single line — sixty-three of them as cards
+   would be pages long. */
+.admin-con-import {
+    margin-left: auto;
+}
+
+.admin-con-vendor-import-hint {
+    margin-top: -4px;
+}
+
+.admin-con-vendor-row > summary {
+    cursor: pointer;
+}
+
+.admin-con-vendor-tables {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.admin-con-vendor-table {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-con-vendor-table .admin-input {
+    min-width: 0;
+}
+
+@media (max-width: 600px) {
+    .admin-con-vendor-table {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    /* The link drops under the name, still lined up with it. */
+    .admin-con-vendor-table .admin-input[type='url'] {
+        grid-column: 2;
+    }
+}
+
 /* Reserved for state that is off the normal path — e.g. the con page being
    unpublished, which is worth noticing while scrolling past. */
 .admin-con-warning {

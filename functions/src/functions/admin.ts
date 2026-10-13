@@ -498,7 +498,6 @@ const CON_LIMITS = {
     rooms: 24,
     scheduleItems: 120,
     guests: 60,
-    vendors: 120,
     tickets: 8,
     perks: 12,
     inPersonSessions: 30,
@@ -506,6 +505,12 @@ const CON_LIMITS = {
 };
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// Mirrors HALL_TABLES in app/pages/con/hall.ts: the tables on the main hall floor
+// plan, in plan order. A vendor can only sit at one of these — the page has
+// nowhere to draw any other.
+const CON_HALL_TABLES = ([["A", 15], ["B", 15], ["C", 15], ["D", 15], ["E", 3]] as const)
+    .flatMap(([row, count]) => Array.from({length: count}, (_, i) => `${row}${i + 1}`));
 
 interface LocalizedText {
     en: string;
@@ -755,13 +760,27 @@ function buildConGuests(raw: unknown) {
 function buildConVendors(raw: unknown) {
     const v = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
     const cta = v.cta && typeof v.cta === "object" ? v.cta as Record<string, unknown> : {};
+    const seen = new Set<string>();
+    const tables = validateConArray(v.tables, "vendor tables", CON_HALL_TABLES.length).map(vendor => {
+        const table = typeof vendor.table === "string" ? vendor.table : "";
+        if (!CON_HALL_TABLES.includes(table)) {
+            throw new HttpsError("invalid-argument", `"${table}" is not a table on the floor plan.`);
+        }
+        if (seen.has(table)) {
+            throw new HttpsError("invalid-argument", `Table ${table} is listed twice.`);
+        }
+        seen.add(table);
+        return {
+            table,
+            name: sanitizeDisplayText(validateStr(vendor.name, `Table ${table} name`, 120, true)),
+            link: validateConLink(vendor.link, `Table ${table} link`),
+        };
+    })
+        // Stored in plan order, which is the order the editor keeps its draft in.
+        .sort((a, b) => CON_HALL_TABLES.indexOf(a.table) - CON_HALL_TABLES.indexOf(b.table));
+
     return {
-        list: validateConArray(v.list, "vendors", CON_LIMITS.vendors).map(vendor => ({
-            name: sanitizeDisplayText(validateStr(vendor.name, "vendor name", 120, true)),
-            kind: validateLocalized(vendor.kind, "vendor kind", 120),
-            handle: sanitizeDisplayText(validateStr(vendor.handle, "vendor handle", 120)),
-            link: validateConLink(vendor.link, "vendor link"),
-        })),
+        tables,
         cta: {
             heading: validateLocalized(cta.heading, "vendor CTA heading", 200),
             body: validateLocalized(cta.body, "vendor CTA body", 1000),

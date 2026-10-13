@@ -1,4 +1,4 @@
-import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
+import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveConContent, callUploadAdminImage, callUploadConVideo } from '~/lib/firebase';
 import { type ConContent, type ConContentSection, refreshConContent, useConDraft, } from '~/lib/conContent';
@@ -13,11 +13,14 @@ import {
     ROOM_ACCENTS,
     type RoomAccent,
 } from '~/pages/con/content';
+import { byHallOrder, HALL_ROWS, HALL_TABLES, type HallRow, rowOf } from '~/pages/con/hall';
+import { HallMap } from '~/pages/con/HallMap';
 import { type Localized, useT } from '~/pages/con/i18n';
 import { formatPrice, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/con/utils';
 import { type ShowToast, validateVideoFile } from './utils';
 import { ImageUploadField } from './ImageUploadField';
 import { SectionNav } from './SectionNav';
+import { readVendorSheet } from './vendorImport';
 
 /**
  * Editor for the public /con page's copy. Everything here is stored in
@@ -1174,89 +1177,211 @@ const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) =>
     );
 };
 
+type VendorDraft = ConContent['vendors']['tables'][number];
+
 const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) => {
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('vendors', content.vendors, loading, showToast);
     const {draft, setDraft} = editor;
+    const [openRows, setOpenRows] = useState<ReadonlySet<HallRow>>(new Set());
+    const [current, setCurrent] = useState<string | null>(null);
+    const [importing, setImporting] = useState(false);
+    const nameInputs = useRef(new Map<string, HTMLInputElement>());
 
-    const update = (index: number, next: ConContent['vendors']['list'][number]) =>
-        setDraft(prev => ({...prev, list: replaceAt(prev.list, index, next)}));
+    const byTable = useMemo(() => new Map(draft.tables.map(vendor => [vendor.table, vendor])), [draft.tables]);
+
+    /**
+     * The draft lists only tables someone is at, in plan order — the shape the
+     * server stores, so a table filled in and cleared again reads as no change.
+     * A table with nothing typed in it is an open table, not a vendor without a
+     * name; one with only a link is kept, and Save says it needs a name.
+     */
+    const setTable = (table: string, patch: Partial<Pick<VendorDraft, 'name' | 'link'>>) =>
+        setDraft(prev => {
+            const was = prev.tables.find(vendor => vendor.table === table);
+            const name = patch.name ?? was?.name ?? '';
+            const link = patch.link ?? was?.link ?? '';
+            const rest = prev.tables.filter(vendor => vendor.table !== table);
+            if (!name && !link) return {...prev, tables: rest};
+            const next: VendorDraft = link ? {table, name, link} : {table, name};
+            return {...prev, tables: [...rest, next].sort((a, b) => byHallOrder(a.table, b.table))};
+        });
+
+    const setRowOpen = (row: HallRow, open: boolean) =>
+        setOpenRows(prev => {
+            if (prev.has(row) === open) return prev;
+            const next = new Set(prev);
+            if (open) next.add(row);
+            else next.delete(row);
+            return next;
+        });
+
+    /** From the plan: open the table's row and put the cursor in its name. */
+    const jumpTo = (table: string) => {
+        setRowOpen(rowOf(table), true);
+        setCurrent(table);
+        // After the row has rendered open — a closed <details> hides its inputs.
+        requestAnimationFrame(() => {
+            const input = nameInputs.current.get(table);
+            input?.focus({preventScroll: true});
+            input?.scrollIntoView({block: 'center', behavior: 'smooth'});
+        });
+    };
+
+    const importSheet = async (file: File) => {
+        setImporting(true);
+        try {
+            const found = await readVendorSheet(file);
+            if (found.length === 0) {
+                showToast(
+                    isEnglish
+                        ? 'No tables found in that file. Each table needs a cell like “A1 Name”.'
+                        : '文件中未找到任何桌位。每个桌位需要一个形如「A1 名称」的单元格。',
+                    'error',
+                );
+                return;
+            }
+            setDraft(prev => {
+                // Links are not in the sheet, so each follows its vendor's name —
+                // including to a new table — rather than staying with a table that
+                // may now be somebody else's.
+                const links = new Map(prev.tables.flatMap(v => (v.link ? [[v.name, v.link] as const] : [])));
+                return {
+                    ...prev,
+                    tables: found.map(({table, name}) => {
+                        const link = links.get(name);
+                        return link ? {table, name, link} : {table, name};
+                    }),
+                };
+            });
+            setOpenRows(new Set());
+            showToast(
+                isEnglish
+                    ? `Read ${found.length} tables from ${file.name}. Check the plan, then Save.`
+                    : `已从 ${file.name} 读取 ${found.length} 个桌位。请检查平面图后保存。`,
+                'success',
+            );
+        } catch (e) {
+            console.error('[vendors] import failed', e);
+            showToast(
+                isEnglish ? 'Could not read that file. Use .xlsx or .csv.' : '无法读取该文件，请使用 .xlsx 或 .csv。',
+                'error',
+            );
+        } finally {
+            setImporting(false);
+        }
+    };
 
     return (
         <SectionShell
             section="vendors"
             helper={{
-                en: 'The table list and the “want a table?” callout underneath it.',
-                zh: '摊位列表，以及下方「想要摊位？」的提示区块。',
+                en: 'Who is at each table on the main hall floor plan, and the “want a table?” callout under it. Type a name to put a vendor at a table, or clear it to leave the table open. Click a table on the plan to jump to it. The tables themselves are fixed to HUB’s layout.',
+                zh: '主会场平面图上各桌的摊主，以及下方「想要摊位？」的提示区块。输入名称即可将摊主安排到该桌，清空则该桌空置。点击平面图上的桌位可直接跳转。桌位布局按 HUB 场地固定。',
             }}
             editor={editor}
+            busy={importing}
+            busyLabel={{en: 'Reading the spreadsheet...', zh: '正在读取表格...'}}
             readOnly={readOnly}
         >
             <HiddenSectionNote content={content} section="vendors"/>
-            <div className="admin-con-list">
-                {draft.list.length === 0 && <EmptyRow label={{en: 'No tables listed yet.', zh: '暂无摊位。'}}/>}
 
-                {draft.list.map((vendor, index) => (
-                    <div key={index} className="admin-con-card">
-                        <div className="admin-con-card-head">
-                            <span className="admin-con-card-title">
-                                {vendor.name || (isEnglish ? `Table ${index + 1}` : `摊位 ${index + 1}`)}
-                            </span>
-                            <RowActions
-                                index={index}
-                                count={draft.list.length}
-                                onMove={delta => setDraft(prev => ({...prev, list: moveAt(prev.list, index, delta)}))}
-                                onRemove={() => setDraft(prev => ({...prev, list: removeAt(prev.list, index)}))}
-                                readOnly={readOnly}
+            <div className="admin-con-card">
+                <div className="admin-con-card-head">
+                    <span className="admin-con-card-title">
+                        {isEnglish
+                            ? `${draft.tables.length} of ${HALL_TABLES.length} tables taken`
+                            : `已安排 ${draft.tables.length} / ${HALL_TABLES.length} 个桌位`}
+                    </span>
+                    {!readOnly && (
+                        <label className={`admin-btn admin-btn--chip admin-avatar-choose admin-con-import${
+                            importing ? ' admin-avatar-choose-busy' : ''}`}>
+                            <input
+                                type="file"
+                                accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                disabled={importing || editor.saving}
+                                onChange={e => {
+                                    const file = e.target.files?.[0];
+                                    // Cleared so picking the same file again still fires.
+                                    e.target.value = '';
+                                    if (file) void importSheet(file);
+                                }}
                             />
-                        </div>
+                            {isEnglish ? 'Import spreadsheet' : '导入表格'}
+                        </label>
+                    )}
+                </div>
+                {!readOnly && (
+                    <p className="admin-helper-text admin-con-vendor-import-hint">
+                        {isEnglish
+                            ? 'Importing replaces the whole table list with the sheet’s: any cell reading “A1 Name”, or a table code with the name in the next cell. Nothing is saved until you press Save.'
+                            : '导入会用表格内容替换整个桌位列表：任何形如「A1 名称」的单元格，或桌号与右侧单元格中的名称。点击「保存」前不会存储任何内容。'}
+                    </p>
+                )}
 
-                        <div className="admin-form-grid">
-                            <label>
-                                <span>{isEnglish ? 'Table / name' : '摊位名称'}</span>
-                                <input
-                                    className="admin-input"
-                                    value={vendor.name}
-                                    onChange={e => !readOnly && update(index, {...vendor, name: e.target.value})}
-                                    readOnly={readOnly}
-                                />
-                            </label>
-                            <label>
-                                <span>{isEnglish ? 'Handle (optional)' : '社交账号（可选）'}</span>
-                                <input
-                                    className="admin-input"
-                                    value={vendor.handle ?? ''}
-                                    onChange={e => !readOnly && update(index, {...vendor, handle: e.target.value})}
-                                    readOnly={readOnly}
-                                    placeholder="@artist"
-                                />
-                            </label>
-                            <LocalizedField
-                                label={{en: 'Sells', zh: '售卖内容'}}
-                                value={vendor.kind}
-                                onChange={next => update(index, {...vendor, kind: next})}
-                                readOnly={readOnly}
-                            />
-                            <label className="admin-form-grid-full">
-                                <span>{isEnglish ? 'Link (optional)' : '链接（可选）'}</span>
-                                <input
-                                    className="admin-input"
-                                    type="url"
-                                    value={vendor.link ?? ''}
-                                    onChange={e => !readOnly && update(index, {...vendor, link: e.target.value})}
-                                    readOnly={readOnly}
-                                    placeholder="https://..."
-                                />
-                            </label>
-                        </div>
-                    </div>
-                ))}
-
-                <AddButton
-                    label={{en: 'table', zh: '摊位'}}
-                    onClick={() => setDraft(prev => ({...prev, list: [...prev.list, {name: '', kind: BLANK}]}))}
-                    readOnly={readOnly}
+                <HallMap
+                    vendors={byTable}
+                    selected={current}
+                    onSelect={jumpTo}
+                    pickOpen
+                    label={isEnglish ? 'Main hall floor plan' : '主会场平面图'}
                 />
+            </div>
+
+            <div className="admin-con-list admin-mt-12">
+                {HALL_ROWS.map(({letter}) => {
+                    const tables = HALL_TABLES.filter(table => rowOf(table) === letter);
+                    const taken = tables.filter(table => byTable.has(table)).length;
+                    return (
+                        <details
+                            key={letter}
+                            className="admin-con-card admin-con-vendor-row"
+                            open={openRows.has(letter)}
+                            onToggle={e => setRowOpen(letter, e.currentTarget.open)}
+                        >
+                            <summary className="admin-con-card-title">
+                                {isEnglish ? `Row ${letter}` : `${letter} 排`}
+                                <span className="admin-con-dirty">
+                                    {isEnglish ? `${taken} of ${tables.length} taken` : `已安排 ${taken} / ${tables.length}`}
+                                </span>
+                            </summary>
+
+                            <div className="admin-con-vendor-tables">
+                                {tables.map(table => {
+                                    const vendor = byTable.get(table);
+                                    return (
+                                        <div key={table} className="admin-con-vendor-table">
+                                            <span className="sbc-table-code">{table}</span>
+                                            <input
+                                                ref={el => {
+                                                    if (el) nameInputs.current.set(table, el);
+                                                    else nameInputs.current.delete(table);
+                                                }}
+                                                className="admin-input admin-input--sm"
+                                                value={vendor?.name ?? ''}
+                                                onChange={e => !readOnly && setTable(table, {name: e.target.value})}
+                                                onFocus={() => setCurrent(table)}
+                                                readOnly={readOnly}
+                                                placeholder={isEnglish ? 'Open table' : '空桌'}
+                                                aria-label={isEnglish ? `Table ${table} vendor` : `${table} 桌摊主`}
+                                            />
+                                            <input
+                                                className="admin-input admin-input--sm"
+                                                type="url"
+                                                value={vendor?.link ?? ''}
+                                                onChange={e => !readOnly && setTable(table, {link: e.target.value})}
+                                                onFocus={() => setCurrent(table)}
+                                                readOnly={readOnly}
+                                                placeholder={isEnglish ? 'Link (optional)' : '链接（可选）'}
+                                                aria-label={isEnglish ? `Table ${table} link` : `${table} 桌链接`}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </details>
+                    );
+                })}
             </div>
 
             <div className="admin-con-card admin-mt-12">
