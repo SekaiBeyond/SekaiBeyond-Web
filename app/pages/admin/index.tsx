@@ -42,6 +42,18 @@ const TAB_ALIASES: Record<string, Tab> = {
     policy: 'config',
 };
 
+const ADMIN_TABS: {id: Tab; en: string; zh: string; generalStaffOnly?: boolean}[] = [
+    {id: 'users', en: 'Users Management', zh: '用户管理', generalStaffOnly: true},
+    {id: 'events', en: 'Events', zh: '活动管理'},
+    {id: 'locations', en: 'Locations', zh: '场地管理', generalStaffOnly: true},
+    {id: 'badges', en: 'Badges', zh: '徽章', generalStaffOnly: true},
+    {id: 'passports', en: 'Passports', zh: '通行证', generalStaffOnly: true},
+    {id: 'config', en: 'Site Config', zh: '网站配置', generalStaffOnly: true},
+    {id: 'con', en: 'Con Content', zh: '漫展内容', generalStaffOnly: true},
+    {id: 'tools', en: 'Tools', zh: '工具', generalStaffOnly: true},
+    {id: 'records', en: 'Records', zh: '操作记录', generalStaffOnly: true},
+];
+
 export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
@@ -296,76 +308,18 @@ export const AdminPage = () => {
             </nav>
             <div className="profile-page admin-page">
                 <div className="admin-tabs">
-                    {(isCoreStaffOrAbove || isStaffGroup) && (
-                        <button
-                            className={`admin-tab ${activeTab === 'users' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('users')}
-                        >
-                            {isEnglish ? 'Users Management' : '用户管理'}
-                        </button>
-                    )}
-                    <button
-                        className={`admin-tab ${activeTab === 'events' ? 'admin-tab-active' : ''}`}
-                        onClick={() => setActiveTab('events')}
-                    >
-                        {isEnglish ? 'Events' : '活动管理'}
-                    </button>
-                    {(isCoreStaffOrAbove || isStaffGroup) && (
-                        <button
-                            className={`admin-tab ${activeTab === 'locations' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('locations')}
-                        >
-                            {isEnglish ? 'Locations' : '场地管理'}
-                        </button>
-                    )}
-                    {(isCoreStaffOrAbove || isStaffGroup) && (
-                        <button
-                            className={`admin-tab ${activeTab === 'badges' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('badges')}
-                        >
-                            {isEnglish ? 'Badges' : '徽章'}
-                        </button>
-                    )}
-                    {(isCoreStaffOrAbove || isStaffGroup) && (
-                        <button
-                            className={`admin-tab ${activeTab === 'passports' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('passports')}
-                        >
-                            {isEnglish ? 'Passports' : '通行证'}
-                        </button>
-                    )}
-                    {(isCoreStaffOrAbove || isStaffGroup) && (
-                        <button
-                            className={`admin-tab ${activeTab === 'config' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('config')}
-                        >
-                            {isEnglish ? 'Site Config' : '网站配置'}
-                        </button>
-                    )}
-                    {(isCoreStaffOrAbove || isStaffGroup) && (
-                        <button
-                            className={`admin-tab ${activeTab === 'con' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('con')}
-                        >
-                            {isEnglish ? 'Con Content' : '漫展内容'}
-                        </button>
-                    )}
-                    {(isCoreStaffOrAbove || isStaffGroup) && (
-                        <button
-                            className={`admin-tab ${activeTab === 'tools' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('tools')}
-                        >
-                            {isEnglish ? 'Tools' : '工具'}
-                        </button>
-                    )}
-                    {(isCoreStaffOrAbove || isStaffGroup) && (
-                        <button
-                            className={`admin-tab ${activeTab === 'records' ? 'admin-tab-active' : ''}`}
-                            onClick={() => setActiveTab('records')}
-                        >
-                            {isEnglish ? 'Records' : '操作记录'}
-                        </button>
-                    )}
+                    {ADMIN_TABS.map(tab => {
+                        if (tab.generalStaffOnly && !isCoreStaffOrAbove && !isStaffGroup) return null;
+                        return (
+                            <button
+                                key={tab.id}
+                                className={`admin-tab ${activeTab === tab.id ? 'admin-tab-active' : ''}`}
+                                onClick={() => setActiveTab(tab.id)}
+                            >
+                                {isEnglish ? tab.en : tab.zh}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {activeTab === 'users' && (isCoreStaffOrAbove || isStaffGroup) && (

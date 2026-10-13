@@ -109,7 +109,7 @@ export const buildUserListQuery = (opts: {
     return query(users, ...clauses);
 };
 
-export const USER_SEARCH_LIMIT = 10;
+const USER_SEARCH_LIMIT = 10;
 
 // Shared by every admin surface that looks a user up, so they all match the same way.
 // Both displayName and email are matched as prefixes: Firestore has no substring search,

@@ -5,8 +5,8 @@ import { downloadBlob } from '~/lib/zip';
 // Error correction and quiet-zone width, shared by every QR this app draws —
 // the on-screen preview, the QR sticker PNG, and the passport sticker PNG — so a
 // printed code always encodes the way the preview showed it.
-export const QR_LEVEL = 'M' as const;
-export const QR_MARGIN = 2;
+const QR_LEVEL = 'M' as const;
+const QR_MARGIN = 2;
 
 /**
  * Backing-buffer resolution used when a QR is exported to PNG. Rendered only
@@ -14,7 +14,7 @@ export const QR_MARGIN = 2;
  * hold a large canvas in memory; qrcode.react further multiplies this by
  * devicePixelRatio, keeping the file crisp when scaled up or printed.
  */
-export const QR_EXPORT_SIZE = 1024;
+const QR_EXPORT_SIZE = 1024;
 
 type QrPreviewProps = {
     /** Value encoded into the QR. */

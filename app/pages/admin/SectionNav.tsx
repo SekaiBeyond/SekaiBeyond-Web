@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 
-export interface NavSection {
+interface NavSection {
     /** The DOM id of the element the section starts at. */
     id: string;
     label: string;

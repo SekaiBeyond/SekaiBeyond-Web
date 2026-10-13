@@ -6,7 +6,7 @@
  * rather than being reimplemented per chart.
  */
 
-export type Granularity = 'hour' | 'day' | 'week';
+type Granularity = 'hour' | 'day' | 'week';
 
 const startOfHour = (d: Date): Date =>
     new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours());

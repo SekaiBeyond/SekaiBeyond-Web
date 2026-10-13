@@ -13,7 +13,7 @@ import { parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
  *   scan counts compare click-through per platform, never has a map spot.
  * Not persisted — derived from whether a saved code has a platform tag.
  */
-export type QrKind = 'location' | 'social';
+type QrKind = 'location' | 'social';
 
 export interface QrDraft {
     label: string;
@@ -63,7 +63,7 @@ export function qrToDraft(code: QrCode): QrDraft {
     };
 }
 
-export interface QrSavePayload {
+interface QrSavePayload {
     label: string;
     labelCn: string;
     targetUrl: string;

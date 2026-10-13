@@ -113,7 +113,7 @@ export const ticketStatusCounts = (a: AttendeeData) => {
     return {used, voided, remaining: a.ticketCount - used - voided};
 };
 
-export const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
+const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
 
 export const usesContactEmail = (template: Pick<EmailTemplate, 'subject' | 'bodyHtml'>): boolean =>
     [template.subject, template.bodyHtml].some(t => t.search(CONTACT_EMAIL_PLACEHOLDER) !== -1);

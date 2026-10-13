@@ -1,34 +1,16 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import {
-    callArchiveUpcomingEvent,
-    callCancelUpcomingEventDeletion,
-    callRequestUpcomingEventDeletion,
-    callSaveUpcomingEvent,
-    callSetUpcomingEventPublished,
-    callUploadAdminImage,
-} from '~/lib/firebase';
+import { callSaveUpcomingEvent, callUploadAdminImage } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
-import { eventLocationDisplay, useVenues } from '~/lib/venues';
-import type { UserRecord } from './types';
+import { useVenues } from '~/lib/venues';
 import { formatSiteTime, parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
-import { fetchEventAttendees, fetchEventStaffCount, refreshAfterSave } from './utils';
+import { refreshAfterSave } from './utils';
 import { BilingualFormField } from './BilingualFormField';
-import { ClaimCodeSection } from './ClaimCodeSection';
 import { LocationFormField } from './LocationFormField';
-import { EventAttendeesList } from './EventAttendeesList';
-import { EventStaffSection } from './EventStaffSection';
 import { ImageUploadField } from './ImageUploadField';
 import { ImageCropModal } from './ImageCropModal';
-import { TagMultiSelect } from './TagMultiSelect';
-import { TicketsSubtab } from './tickets/TicketsSubtab';
-import {
-    DeleteOrCancelButton,
-    PendingDeletionNote,
-    PublishToggleButton,
-    useEventLifecycle,
-} from './useEventLifecycle';
+import { UpcomingEventDetailView } from './UpcomingEventDetailView';
 
 interface UpcomingEventsTabProps {
     upcomingEvents: UpcomingEvent[];
@@ -87,6 +69,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     useEffect(() => {
         onDetailChange?.(selectedEvent !== null);
     }, [selectedEvent, onDetailChange]);
+
     const [showForm, setShowForm] = useState(false);
     const [editingEvent, setEditingEvent] = useState<UpcomingEvent | null>(null);
     const [form, setForm] = useState<EventForm>(emptyForm);
@@ -96,49 +79,9 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [emailHeaderBgPreview, setEmailHeaderBgPreview] = useState<string | null>(null);
     const [showPosterCropModal, setShowPosterCropModal] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [showArchive, setShowArchive] = useState(false);
-    const [archiveTagIds, setArchiveTagIds] = useState<string[]>([]);
-    const [archiving, setArchiving] = useState(false);
-    const [eventSubTab, setEventSubTab] = useState<'codes' | 'attendees' | 'staff' | 'tickets'>('codes');
-    const {deletionBusyId, requestDeleteEvent, cancelDeleteEvent, togglePublish} = useEventLifecycle({
-        requestDeletion: callRequestUpcomingEventDeletion,
-        cancelDeletion: callCancelUpcomingEventDeletion,
-        setPublished: callSetUpcomingEventPublished,
-        refresh: refreshEvents,
-        showToast,
-    });
-    const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
-    const [searchingAttendees, setSearchingAttendees] = useState(false);
-    const [staffCount, setStaffCount] = useState<number | null>(null);
-    const selectGenRef = useRef(0);
-
-    const loadEventAttendees = async (eventId: string) => {
-        setSearchingAttendees(true);
-        try {
-            setEventAttendees(await fetchEventAttendees(eventId));
-        } catch {
-            showToast(isEnglish ? 'Failed to load attendees.' : '加载参加者失败。', 'error');
-        } finally {
-            setSearchingAttendees(false);
-        }
-    };
 
     const selectEvent = (eventId: string) => {
-        const gen = ++selectGenRef.current;
         setSelectedEvent(eventId);
-        setShowArchive(false);
-        setArchiveTagIds([]);
-        const evt = upcomingEvents.find(e => e.id === eventId);
-        setEventSubTab(evt?.paid ? 'tickets' : 'codes');
-        setEventAttendees([]);
-        setStaffCount(null);
-        void fetchEventStaffCount(eventId)
-            .then(c => {
-                if (selectGenRef.current === gen) setStaffCount(c);
-            })
-            .catch(() => {
-                /* Non-fatal — count badge just won't appear. */
-            });
     };
     useImperativeHandle(forwardedRef, () => ({selectEvent}));
 
@@ -258,30 +201,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         }
     };
 
-    const archiveEvent = async (event: UpcomingEvent) => {
-        setArchiving(true);
-        try {
-            await callArchiveUpcomingEvent({eventId: event.id, tagIds: archiveTagIds});
-            await refreshAfterSave(() => Promise.all([refreshEvents(), refreshPastEvents()]), showToast, isEnglish);
-            setSelectedEvent(null);
-            setShowArchive(false);
-            setArchiveTagIds([]);
-            showToast(isEnglish ? 'Event archived.' : '活动已归档。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to archive event.' : '归档活动失败。', 'error');
-        } finally {
-            setArchiving(false);
-        }
-    };
-
     const selectedEvt = selectedEvent ? upcomingEvents.find(e => e.id === selectedEvent) ?? null : null;
-    // The sub-tab chosen on selection can belong to the other kind of event: a
-    // link into the panel selects before the event list has loaded, and an open
-    // event can be switched to or from paid. Derived rather than corrected in an
-    // effect, so the panel never renders a tab the event doesn't have.
-    const subTab = selectedEvt?.paid && (eventSubTab === 'codes' || eventSubTab === 'attendees') ? 'tickets'
-        : selectedEvt && !selectedEvt.paid && eventSubTab === 'tickets' ? 'codes'
-            : eventSubTab;
 
     return (
         <div className="admin-section">
@@ -533,202 +453,30 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                         ))}
                     </div>
                 </>
+            ) : selectedEvt ? (
+                <UpcomingEventDetailView
+                    key={selectedEvt.id}
+                    event={selectedEvt}
+                    venues={venues}
+                    tags={tags}
+                    readOnly={readOnly}
+                    showToast={showToast}
+                    refreshEvents={refreshEvents}
+                    refreshPastEvents={refreshPastEvents}
+                    onBack={() => setSelectedEvent(null)}
+                    onEdit={evt => {
+                        setSelectedEvent(null);
+                        openEdit(evt);
+                    }}
+                />
             ) : (
                 <div className="admin-event-detail">
                     <button
                         className="admin-btn admin-btn--link"
-                        onClick={() => {
-                            setSelectedEvent(null);
-                            setShowArchive(false);
-                            setArchiveTagIds([]);
-                        }}
+                        onClick={() => setSelectedEvent(null)}
                     >
                         &larr; {isEnglish ? 'All Upcoming Events' : '所有活动预告'}
                     </button>
-
-                    {selectedEvt && (
-                        <>
-                            <div className="admin-event-detail-header">
-                                {selectedEvt.poster && (
-                                    <img src={selectedEvt.poster} alt="" className="admin-event-detail-img"/>
-                                )}
-                                <div>
-                                    <h3>{isEnglish ? selectedEvt.title : (selectedEvt.titleCn || selectedEvt.title)}</h3>
-                                    <p className="admin-event-detail-meta">
-                                        <span>
-                                            {formatSiteTime(selectedEvt.startAt, isEnglish, {
-                                                year: 'numeric', month: 'long', day: 'numeric',
-                                                hour: 'numeric', minute: 'numeric',
-                                            })}
-                                        </span>
-                                        <span>{eventLocationDisplay(selectedEvt.location, selectedEvt.locationCn, selectedEvt.venueId, venues, isEnglish)}</span>
-                                    </p>
-                                    <p className="admin-description-text">
-                                        {isEnglish ? selectedEvt.description : (selectedEvt.descriptionCn || selectedEvt.description)}
-                                    </p>
-                                </div>
-                            </div>
-                            {!readOnly && (
-                                <>
-                                    <div className="admin-form-actions admin-section-mb">
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-edit"
-                                            onClick={() => {
-                                                setSelectedEvent(null);
-                                                openEdit(selectedEvt);
-                                            }}
-                                        >
-                                            {isEnglish ? 'Edit Event' : '编辑活动'}
-                                        </button>
-                                        <PublishToggleButton
-                                            published={selectedEvt.published}
-                                            onToggle={() => togglePublish(selectedEvt)}
-                                        />
-                                        <DeleteOrCancelButton
-                                            deleteAt={selectedEvt.deleteAt}
-                                            busy={deletionBusyId === selectedEvt.id}
-                                            onRequest={() => requestDeleteEvent(selectedEvt)}
-                                            onCancel={() => cancelDeleteEvent(selectedEvt)}
-                                        />
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-archive"
-                                            onClick={() => setShowArchive(!showArchive)}
-                                        >
-                                            {isEnglish ? 'Archive to Past Events' : '归档到往期活动'}
-                                        </button>
-                                    </div>
-                                    <PendingDeletionNote deleteAt={selectedEvt.deleteAt}/>
-                                </>
-                            )}
-                            {!readOnly && showArchive && (
-                                <div className="admin-create-badge-form admin-section-mb">
-                                    <h4 className="admin-badges-title">
-                                        {isEnglish ? 'Archive Event' : '归档活动'}
-                                    </h4>
-                                    <p className="admin-helper-text">
-                                        {isEnglish
-                                            ? 'This will move the event from Upcoming to Past Events. You can optionally add one or more labels (e.g. "Workshop", "Convention").'
-                                            : '此操作会将活动从预告移到往期活动。你可以选填一个或多个标签（如"工作坊"、"展会"）。'}
-                                    </p>
-                                    <div className="admin-form-grid">
-                                        <TagMultiSelect
-                                            tags={tags}
-                                            selected={archiveTagIds}
-                                            onChange={setArchiveTagIds}
-                                            isEnglish={isEnglish}
-                                        />
-                                    </div>
-                                    <div className="admin-btn-row admin-mt-12">
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-archive"
-                                            onClick={() => archiveEvent(selectedEvt)}
-                                            disabled={archiving}
-                                        >
-                                            {archiving
-                                                ? (isEnglish ? 'Archiving...' : '归档中...')
-                                                : (isEnglish ? 'Confirm Archive' : '确认归档')}
-                                        </button>
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-cancel"
-                                            onClick={() => setShowArchive(false)}
-                                        >
-                                            {isEnglish ? 'Cancel' : '取消'}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="admin-sub-tabs">
-                                {!selectedEvt.paid && (
-                                    <button
-                                        className={`admin-sub-tab ${subTab === 'codes' ? 'admin-sub-tab-active' : ''}`}
-                                        onClick={() => setEventSubTab('codes')}
-                                    >
-                                        {isEnglish ? 'Check-in Code' : '签到码'}
-                                    </button>
-                                )}
-                                {!selectedEvt.paid && (
-                                    <button
-                                        className={`admin-sub-tab ${subTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
-                                        onClick={() => {
-                                            setEventSubTab('attendees');
-                                            loadEventAttendees(selectedEvent!).then();
-                                        }}
-                                    >
-                                        {isEnglish ? 'Attendees' : '参加者'}
-                                        {eventAttendees.length > 0 && (
-                                            <span className="admin-sub-tab-count">{eventAttendees.length}</span>
-                                        )}
-                                    </button>
-                                )}
-                                {selectedEvt.paid && (
-                                    <button
-                                        className={`admin-sub-tab ${subTab === 'tickets' ? 'admin-sub-tab-active' : ''}`}
-                                        onClick={() => setEventSubTab('tickets')}
-                                    >
-                                        {isEnglish ? 'Tickets' : '门票'}
-                                    </button>
-                                )}
-                                <button
-                                    className={`admin-sub-tab ${subTab === 'staff' ? 'admin-sub-tab-active' : ''}`}
-                                    onClick={() => setEventSubTab('staff')}
-                                >
-                                    {isEnglish ? 'Staff' : '工作人员'}
-                                    {staffCount != null && staffCount > 0 && (
-                                        <span className="admin-sub-tab-count">{staffCount}</span>
-                                    )}
-                                </button>
-                            </div>
-
-                            {subTab === 'codes' && !selectedEvt.paid && (
-                                <ClaimCodeSection
-                                    eventId={selectedEvt.id}
-                                    variant="checkin"
-                                    showToast={showToast}
-                                    readOnly={readOnly}
-                                />
-                            )}
-
-                            {subTab === 'attendees' && !selectedEvt.paid && (
-                                <EventAttendeesList
-                                    loading={searchingAttendees}
-                                    attendees={eventAttendees}
-                                    eventId={selectedEvt.id}
-                                    onReload={() => loadEventAttendees(selectedEvt.id)}
-                                    showToast={showToast}
-                                    readOnly={readOnly}
-                                />
-                            )}
-
-                            {subTab === 'staff' && !readOnly && (
-                                <ClaimCodeSection
-                                    eventId={selectedEvt.id}
-                                    variant="staff"
-                                    showToast={showToast}
-                                    eventEndAt={selectedEvt.endAt}
-                                />
-                            )}
-                            {subTab === 'staff' && (
-                                <EventStaffSection
-                                    eventId={selectedEvt.id}
-                                    showToast={showToast}
-                                    readOnly={readOnly}
-                                    onCountChange={setStaffCount}
-                                />
-                            )}
-
-                            {subTab === 'tickets' && selectedEvt.paid && (
-                                <TicketsSubtab
-                                    event={selectedEvt}
-                                    readOnly={readOnly}
-                                    // Read-only here means the staff group, or event staff, who are
-                                    // shown only their own events: both scan on the event's day(s).
-                                    scanAccess={readOnly ? 'event-days' : 'always'}
-                                    showToast={showToast}
-                                />
-                            )}
-                        </>
-                    )}
                 </div>
             )}
         </div>

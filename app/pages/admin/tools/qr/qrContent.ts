@@ -12,7 +12,7 @@ export type QrFieldKey =
     | 'subject' | 'message' | 'label' | 'security' | 'password' | 'hidden'
     | 'org' | 'title' | 'phone' | 'email' | 'website' | 'address' | 'note';
 
-export interface QrContent {
+interface QrContent {
     kind: QrContentKind;
     /** The one-line gist: a link's site, a network's name, a contact's name. */
     headline: string;
