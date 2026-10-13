@@ -20,7 +20,6 @@ import { formatPrice, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pa
 import { type ShowToast, validateVideoFile } from './utils';
 import { ImageUploadField } from './ImageUploadField';
 import { SectionNav } from './SectionNav';
-import { readVendorSheet } from './vendorImport';
 
 /**
  * Editor for the public /con page's copy. Everything here is stored in
@@ -1185,7 +1184,6 @@ const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) =
     const {draft, setDraft} = editor;
     const [openRows, setOpenRows] = useState<ReadonlySet<HallRow>>(new Set());
     const [current, setCurrent] = useState<string | null>(null);
-    const [importing, setImporting] = useState(false);
     const nameInputs = useRef(new Map<string, HTMLInputElement>());
 
     const byTable = useMemo(() => new Map(draft.tables.map(vendor => [vendor.table, vendor])), [draft.tables]);
@@ -1228,50 +1226,6 @@ const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) =
         });
     };
 
-    const importSheet = async (file: File) => {
-        setImporting(true);
-        try {
-            const found = await readVendorSheet(file);
-            if (found.length === 0) {
-                showToast(
-                    isEnglish
-                        ? 'No tables found in that file. Each table needs a cell like “A1 Name”.'
-                        : '文件中未找到任何桌位。每个桌位需要一个形如「A1 名称」的单元格。',
-                    'error',
-                );
-                return;
-            }
-            setDraft(prev => {
-                // Links are not in the sheet, so each follows its vendor's name —
-                // including to a new table — rather than staying with a table that
-                // may now be somebody else's.
-                const links = new Map(prev.tables.flatMap(v => (v.link ? [[v.name, v.link] as const] : [])));
-                return {
-                    ...prev,
-                    tables: found.map(({table, name}) => {
-                        const link = links.get(name);
-                        return link ? {table, name, link} : {table, name};
-                    }),
-                };
-            });
-            setOpenRows(new Set());
-            showToast(
-                isEnglish
-                    ? `Read ${found.length} tables from ${file.name}. Check the plan, then Save.`
-                    : `已从 ${file.name} 读取 ${found.length} 个桌位。请检查平面图后保存。`,
-                'success',
-            );
-        } catch (e) {
-            console.error('[vendors] import failed', e);
-            showToast(
-                isEnglish ? 'Could not read that file. Use .xlsx or .csv.' : '无法读取该文件，请使用 .xlsx 或 .csv。',
-                'error',
-            );
-        } finally {
-            setImporting(false);
-        }
-    };
-
     return (
         <SectionShell
             section="vendors"
@@ -1280,8 +1234,6 @@ const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) =
                 zh: '主会场平面图上各桌的摊主，以及下方「想要摊位？」的提示区块。输入名称即可将摊主安排到该桌，清空则该桌空置。点击平面图上的桌位可直接跳转。桌位布局按 HUB 场地固定。',
             }}
             editor={editor}
-            busy={importing}
-            busyLabel={{en: 'Reading the spreadsheet...', zh: '正在读取表格...'}}
             readOnly={readOnly}
         >
             <div className="admin-con-card">
@@ -1291,31 +1243,7 @@ const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) =
                             ? `${draft.tables.length} of ${HALL_TABLES.length} tables taken`
                             : `已安排 ${draft.tables.length} / ${HALL_TABLES.length} 个桌位`}
                     </span>
-                    {!readOnly && (
-                        <label className={`admin-btn admin-btn--chip admin-avatar-choose admin-con-import${
-                            importing ? ' admin-avatar-choose-busy' : ''}`}>
-                            <input
-                                type="file"
-                                accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                disabled={importing || editor.saving}
-                                onChange={e => {
-                                    const file = e.target.files?.[0];
-                                    // Cleared so picking the same file again still fires.
-                                    e.target.value = '';
-                                    if (file) void importSheet(file);
-                                }}
-                            />
-                            {isEnglish ? 'Import spreadsheet' : '导入表格'}
-                        </label>
-                    )}
                 </div>
-                {!readOnly && (
-                    <p className="admin-helper-text admin-con-vendor-import-hint">
-                        {isEnglish
-                            ? 'Importing replaces the whole table list with the sheet’s: any cell reading “A1 Name”, or a table code with the name in the next cell. Nothing is saved until you press Save.'
-                            : '导入会用表格内容替换整个桌位列表：任何形如「A1 名称」的单元格，或桌号与右侧单元格中的名称。点击「保存」前不会存储任何内容。'}
-                    </p>
-                )}
 
                 <HallMap
                     vendors={byTable}

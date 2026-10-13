@@ -5164,14 +5164,6 @@ select.admin-tickets-tag:focus {
 /* Artist alley editor: the /con floor plan as an overview, then one collapsible
    row of tables each, every table a single line — sixty-three of them as cards
    would be pages long. */
-.admin-con-import {
-    margin-left: auto;
-}
-
-.admin-con-vendor-import-hint {
-    margin-top: -4px;
-}
-
 .admin-con-vendor-row > summary {
     cursor: pointer;
 }

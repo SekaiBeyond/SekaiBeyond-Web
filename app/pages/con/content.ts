@@ -433,10 +433,10 @@ export interface Vendor {
 }
 
 /**
- * Empty on purpose. The table list is entered or imported in Admin → Con
- * Content → Artist Alley, where it stays in the staff-only draft until the page
- * is published — anything written here would ship in the public bundle whatever
- * that switch says. Until then the floor plan shows every table open.
+ * Empty on purpose. The table list is entered in Admin → Con Content → Artist
+ * Alley, where it stays in the staff-only draft until the page is published —
+ * anything written here would ship in the public bundle whatever that switch
+ * says. Until then the floor plan shows every table open.
  */
 export const VENDORS: Vendor[] = [];
 
