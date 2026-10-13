@@ -441,12 +441,19 @@ export interface Vendor {
 export const VENDORS: Vendor[] = [];
 
 export interface VendorCta {
+    /**
+     * Whether the callout shows at all, ticked in Admin → Con Content → Artist
+     * Alley. Off unless explicitly turned on: a recruiting call left up after the
+     * tables are taken reads as an offer the con can't keep.
+     */
+    visible: boolean
     heading: Localized
     body: Localized
     label: Localized
 }
 
 export const VENDOR_CTA: VendorCta = {
+    visible: false,
     heading: {en: 'Want a table?', zh: '想要摊位？'},
     body: {
         en: 'Artist alley applications open a few weeks before the con. Registered members get first pick of tables.',

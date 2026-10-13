@@ -197,6 +197,9 @@ const readVendors = (raw: unknown): ConContent['vendors'] => {
             return true;
         }),
         cta: {
+            // Only an explicit true shows it, as with `published`: a callout saved
+            // before the switch existed stays off rather than reappearing.
+            visible: cta.visible === true,
             heading: loc(cta.heading, VENDOR_CTA.heading),
             body: loc(cta.body, VENDOR_CTA.body),
             label: loc(cta.label, VENDOR_CTA.label),

@@ -1388,7 +1388,17 @@ const VendorsSection = ({content, loading, showToast, readOnly}: SectionProps) =
                         {isEnglish ? 'Tabling callout' : '摊位招募区块'}
                     </span>
                 </div>
-                <div className="admin-form-grid">
+                <label className="admin-checkbox-label">
+                    <input
+                        type="checkbox"
+                        checked={draft.cta.visible}
+                        onChange={e => !readOnly
+                            && setDraft(prev => ({...prev, cta: {...prev.cta, visible: e.target.checked}}))}
+                        disabled={readOnly}
+                    />
+                    <span>{isEnglish ? 'Show the callout on /con' : '在 /con 显示该区块'}</span>
+                </label>
+                <div className="admin-form-grid admin-mt-12">
                     <LocalizedField
                         label={{en: 'Heading', zh: '标题'}}
                         value={draft.cta.heading}

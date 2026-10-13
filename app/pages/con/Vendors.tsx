@@ -243,18 +243,20 @@ export const Vendors = () => {
                 </div>
             )}
 
-            <div className="sbc-callout">
-                <div>
-                    <h3 className="sbc-callout-title">{t(cta.heading)}</h3>
-                    <p className="sbc-callout-body">{t(cta.body)}</p>
+            {cta.visible && (
+                <div className="sbc-callout">
+                    <div>
+                        <h3 className="sbc-callout-title">{t(cta.heading)}</h3>
+                        <p className="sbc-callout-body">{t(cta.body)}</p>
+                    </div>
+                    {config.contactEmail && (
+                        <a className="btn btn-secondary" href={`mailto:${config.contactEmail}`}>
+                            <span>{t(cta.label)}</span>
+                            <LuMail aria-hidden="true"/>
+                        </a>
+                    )}
                 </div>
-                {config.contactEmail && (
-                    <a className="btn btn-secondary" href={`mailto:${config.contactEmail}`}>
-                        <span>{t(cta.label)}</span>
-                        <LuMail aria-hidden="true"/>
-                    </a>
-                )}
-            </div>
+            )}
         </section>
     );
 };

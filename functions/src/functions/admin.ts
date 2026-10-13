@@ -782,6 +782,7 @@ function buildConVendors(raw: unknown) {
     return {
         tables,
         cta: {
+            visible: cta.visible === true,
             heading: validateLocalized(cta.heading, "vendor CTA heading", 200),
             body: validateLocalized(cta.body, "vendor CTA body", 1000),
             label: validateLocalized(cta.label, "vendor CTA label", 120),
