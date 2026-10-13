@@ -1003,13 +1003,6 @@ const ScheduleSection = ({content, loading, showToast, readOnly}: SectionProps) 
                                 onChange={next => update(index, {...item, title: next})}
                                 readOnly={readOnly}
                             />
-                            <LocalizedField
-                                label={{en: 'Detail (optional)', zh: '详情（可选）'}}
-                                value={item.detail ?? BLANK}
-                                onChange={next => update(index, {...item, detail: next})}
-                                readOnly={readOnly}
-                                multiline
-                            />
                         </div>
                     </div>
                 ))}

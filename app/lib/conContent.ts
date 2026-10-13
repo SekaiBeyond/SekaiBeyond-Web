@@ -162,7 +162,6 @@ const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({
     end: optStr(item.end),
     room: optStr(item.room),
     title: loc(item.title),
-    detail: item.detail ? loc(item.detail) : undefined,
 });
 
 const readSchedule = (raw: unknown): ScheduleItem[] => list(raw, SCHEDULE, readScheduleItem);

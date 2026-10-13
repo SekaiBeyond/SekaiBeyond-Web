@@ -794,7 +794,7 @@
 }
 
 .sbc-grid-event-time {
-    font-size: 0.72rem;
+    font-size: 0.85rem;
     font-weight: 700;
     letter-spacing: 0.4px;
     color: var(--sbc-accent-ink);
@@ -806,13 +806,6 @@
     font-weight: 700;
     line-height: 1.3;
     color: var(--sbc-heading);
-}
-
-.sbc-grid-event-detail {
-    font-size: 0.8rem;
-    font-weight: 500;
-    line-height: 1.55;
-    color: var(--color-text-body);
 }
 
 /* Read aloud, never drawn. The column header is what says which room an item is
@@ -929,10 +922,6 @@
     border-radius: 14px;
     border-left: 3px solid var(--sbc-accent-ink);
     background: var(--sbc-accent-tint);
-}
-
-.sbc-tba-card > .sbc-grid-event-detail {
-    margin-top: 7px;
 }
 
 .sbc-guest-grid {

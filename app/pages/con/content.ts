@@ -258,7 +258,6 @@ export interface ScheduleItem {
      */
     room?: string
     title: Localized
-    detail?: Localized
 }
 
 /**
@@ -272,10 +271,6 @@ export const SCHEDULE: ScheduleItem[] = [
         end: '18:00',
         room: 'main-hall',
         title: {en: 'Marketplace', zh: '市集'},
-        detail: {
-            en: 'Doors open and the tables go live. The marketplace runs straight through to 18:00 — come early for the best pick.',
-            zh: '开场，摊位同时开放。市集一直营业至 18:00，建议早到，好货先得。',
-        },
     },
     {
         start: '12:00',
@@ -300,7 +295,6 @@ export const SCHEDULE: ScheduleItem[] = [
         end: '16:30',
         room: 'hub-214',
         title: {en: 'Maid Café', zh: '女仆咖啡'},
-        detail: {en: 'Hosted by ACGNUW.', zh: '由 ACGNUW 呈现。'},
     },
     {
         start: '13:30',
@@ -352,10 +346,6 @@ export const SCHEDULE: ScheduleItem[] = [
     },
     {
         title: {en: 'TWIG VTuber Concert', zh: 'TWIG VTuber 演唱会'},
-        detail: {
-            en: 'A one-hour set. Room and start time are still being confirmed.',
-            zh: '演出时长约一小时，场地与开始时间仍在确认中。',
-        },
     },
 ];
 

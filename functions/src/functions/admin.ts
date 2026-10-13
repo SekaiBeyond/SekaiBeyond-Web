@@ -726,19 +726,15 @@ function buildConSchedule(raw: unknown) {
         // Required of a scheduled item, which has to be drawn in some column, and
         // dropped from a TBA one: a con books the hour and the room together, so a
         // slot still waiting on the hour has no room to name yet. Stored only when
-        // there is one, like detail below.
+        // there is one.
         const room = hasStart
             ? sanitizeDisplayText(validateStr(item.room, "item room", 60, true))
             : "";
 
-        const detail = validateLocalized(item.detail, "item detail", 1000);
         return {
             ...times,
             ...(room ? {room} : {}),
             title: validateLocalized(item.title, "item title", 200, true),
-            // Stored only when written, so the page's `item.detail &&` check
-            // keeps meaning "there is a detail line" rather than "the key exists".
-            ...(detail.en || detail.zh ? {detail} : {}),
         };
     })
         // Stored in start order, so the editor has no reorder buttons to keep in
