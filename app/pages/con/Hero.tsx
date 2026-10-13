@@ -33,8 +33,6 @@ export const Hero = () => {
     const sparks = useMemo(generateSparkStyles, []);
 
     const allowsMotion = useMediaQuery('(prefers-reduced-motion: no-preference)');
-
-    // Muted + playsinline, so phones autoplay it too.
     const showClip = Boolean(heroVideo.webm) && allowsMotion;
 
     return (
@@ -55,7 +53,8 @@ export const Hero = () => {
                     // Keyed on the source so swapping the clip in the admin panel
                     // remounts the element; React alone would leave <video> playing
                     // the file it already loaded, since changing a <source> child
-                    // does nothing without a .load() call.
+                    // does nothing without a .load() call. Muted + playsInline, so
+                    // phones autoplay it too.
                     <video
                         key={heroVideo.webm}
                         className="sbc-hero-clip"

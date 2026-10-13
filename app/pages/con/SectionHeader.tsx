@@ -1,5 +1,4 @@
-import type { Localized } from '~/pages/con/i18n';
-import { useT } from '~/pages/con/i18n';
+import { type Localized, useT } from '~/pages/con/i18n';
 
 interface SectionHeaderProps {
     title: Localized;

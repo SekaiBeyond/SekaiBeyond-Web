@@ -20,7 +20,7 @@ export const useMediaQuery = (query: string) => {
     return matches;
 };
 
-export interface Countdown {
+interface CountdownState {
     days: number;
     hours: number;
     minutes: number;
@@ -31,7 +31,7 @@ export interface Countdown {
     ended: boolean;
 }
 
-const remainingFrom = (target: number, end: number): Countdown => {
+const remainingFrom = (target: number, end: number): CountdownState => {
     const now = Date.now();
     const ended = Number.isFinite(end) && now > end;
     const diff = target - now;
@@ -57,11 +57,13 @@ const remainingFrom = (target: number, end: number): Countdown => {
 /**
  * Counts down to `isoDate`, ticking once a second, and reports when `endIsoDate`
  * has passed too. Both are read as parseSiteTime reads them, so the count ends
- * when the con opens, not when that hour comes round on the viewer's clock. The timer exists only to move something on screen, so it stops
- * once the con has ended — until then it has to keep running even after the start
- * time, because the live → ended transition is what it drives.
+ * when the con opens, not when that hour comes round on the viewer's clock.
+ *
+ * The timer exists only to move something on screen, so it stops once the con
+ * has ended — until then it has to keep running even after the start time,
+ * because the live → ended transition is what it drives.
  */
-export const useCountdown = (isoDate: string, endIsoDate: string): Countdown => {
+export const useCountdown = (isoDate: string, endIsoDate: string): CountdownState => {
     const target = parseSiteTime(isoDate).getTime();
     const end = parseSiteTime(endIsoDate).getTime();
     const [countdown, setCountdown] = useState(() => remainingFrom(target, end));
@@ -90,8 +92,9 @@ const MAX_TIMEOUT = 2 ** 31 - 1;
 
 /**
  * The current time, re-read the moment each of `isoDates` (read as parseSiteTime
- * reads them) passes and at no other time. Lets a page left open across an early bird deadline switch to the
- * regular price without ticking every second to catch it.
+ * reads them) passes and at no other time. Lets a page left open across an early
+ * bird deadline switch to the regular price without ticking every second to
+ * catch it.
  */
 export const useNowAcross = (isoDates: string[]) => {
     const [now, setNow] = useState(() => Date.now());

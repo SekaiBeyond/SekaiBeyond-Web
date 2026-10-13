@@ -50,8 +50,9 @@ export const Tickets = () => {
                                     <p className="sbc-ticket-price">{formatPrice(earlyBird.price, currentLanguage)}</p>
                                     <p className="sbc-ticket-earlybird">
                                         {t({en: 'Ends', zh: '截止于'})}{' '}
-                                        <time
-                                            dateTime={earlyBird.endsAt}>{formatDeadline(earlyBird.endsAt, currentLanguage)}</time>
+                                        <time dateTime={earlyBird.endsAt}>
+                                            {formatDeadline(earlyBird.endsAt, currentLanguage)}
+                                        </time>
                                         {t({en: ' — then ', zh: '，之后为 '})}
                                         <strong>{formatPrice(tier.price, currentLanguage)}</strong>
                                     </p>

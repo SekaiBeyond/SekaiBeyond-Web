@@ -95,6 +95,12 @@ export const sessionBounds = (session: InPersonSession) => ({
 
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+/** "13:30" → 810 minutes past midnight, or null for anything that is not HH:MM. */
+export const parseClockTime = (time: string | undefined): number | null => {
+    const parts = time ? HHMM.exec(time) : null;
+    return parts ? Number(parts[1]) * 60 + Number(parts[2]) : null;
+};
+
 /**
  * "13:30" → "1:30 PM" / "13:30". Schedule items store a bare clock time with no
  * date to hang it on, so the day below is arbitrary — only the time is read back.
@@ -104,14 +110,14 @@ const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
  * rendering "Invalid Date" where a time should be.
  */
 export const formatClockTime = (time: string, lang: ConLanguage) => {
-    const parts = HHMM.exec(time);
-    if (!parts) return time;
+    const minutes = parseClockTime(time);
+    if (minutes === null) return time;
 
-    const clock = new Date(2000, 0, 1, Number(parts[1]), Number(parts[2]));
+    const clock = new Date(2000, 0, 1, Math.floor(minutes / 60), minutes % 60);
     return clock.toLocaleTimeString(locales[lang], TIME_OPTIONS);
 };
 
-/** Zero-pads countdown segments so the digits stop jumping around. */
+/** Zero-pads to two digits: countdown segments, and hours and minutes in HH:MM. */
 export const pad = (value: number) => String(value).padStart(2, '0');
 
 /**

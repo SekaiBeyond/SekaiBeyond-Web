@@ -67,6 +67,7 @@ export const Vendors = () => {
     };
 
     const rowName = (letter: HallRow) => t({en: `Row ${letter}`, zh: `${letter} 排`});
+    const searchLabel = t({en: 'Find a vendor or table', zh: '搜索摊主或桌号'});
 
     return (
         <section id="vendors" className="sbc-section" ref={sectionRef}>
@@ -102,8 +103,8 @@ export const Vendors = () => {
                                 type="search"
                                 value={query}
                                 onChange={e => setQuery(e.target.value)}
-                                placeholder={t({en: 'Find a vendor or table', zh: '搜索摊主或桌号'})}
-                                aria-label={t({en: 'Find a vendor or table', zh: '搜索摊主或桌号'})}
+                                placeholder={searchLabel}
+                                aria-label={searchLabel}
                             />
                         </label>
                     )}

@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { type RoomAccent, type ScheduleItem, useConContent } from '~/lib/conContent';
-import type { Localized } from '~/pages/con/i18n';
-import { useT } from '~/pages/con/i18n';
-import { formatClockTime, pad } from '~/pages/con/utils';
+import { type Localized, useT } from '~/pages/con/i18n';
+import { formatClockTime, pad, parseClockTime } from '~/pages/con/utils';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
 /** How many minutes one grid row covers. Every time the admin panel accepts lands
@@ -13,32 +12,24 @@ const SLOT_MINUTES = 5;
 /** Drawn height of an item that has a start but no end. */
 const OPEN_ENDED_MINUTES = 60;
 
-const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-/** "13:30" → 810. Anything that is not a clock time reads as unscheduled. */
-const minutesOf = (time: string | undefined): number | null => {
-    const parts = time ? HHMM.exec(time) : null;
-    return parts ? Number(parts[1]) * 60 + Number(parts[2]) : null;
-};
-
 /** 810 → "13:30", back into the shape `formatClockTime` localises. */
 const clockOf = (minutes: number) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
 
 interface Placed {
-    item: ScheduleItem
-    start: number
-    end: number
+    item: ScheduleItem;
+    start: number;
+    end: number;
     /** Which sub-column of its room the item sits in. 0 unless something overlaps. */
-    lane: number
+    lane: number;
 }
 
 interface Track {
-    name: Localized
-    accent: RoomAccent
-    items: Placed[]
-    lanes: number
+    name: Localized;
+    accent: RoomAccent;
+    items: Placed[];
+    lanes: number;
     /** Index of this track's first lane among every lane in the grid. */
-    offset: number
+    offset: number;
 }
 
 /**
@@ -91,10 +82,10 @@ export const Schedule = () => {
         for (const item of content.schedule) {
             if (activeRoom !== null && item.room !== activeRoom) continue;
 
-            const start = minutesOf(item.start);
+            const start = parseClockTime(item.start);
             if (start === null) continue;
 
-            const stop = minutesOf(item.end);
+            const stop = parseClockTime(item.end);
             const end = stop !== null && stop > start ? stop : start + OPEN_ENDED_MINUTES;
             const placed: Placed = {item, start, end, lane: 0};
 
@@ -134,7 +125,7 @@ export const Schedule = () => {
      */
     const unscheduled = useMemo(
         () => content.schedule.filter(item =>
-            minutesOf(item.start) === null && (activeRoom === null || item.room === activeRoom)),
+            parseClockTime(item.start) === null && (activeRoom === null || item.room === activeRoom)),
         [content.schedule, activeRoom],
     );
 
@@ -142,13 +133,16 @@ export const Schedule = () => {
     // clock — the columns the grid draws — so neither a room added ahead of its
     // programming nor one holding only unscheduled items makes the subtitle promise
     // a track the schedule doesn't show.
-    const tracks = useMemo(() => {
+    const trackCount = useMemo(() => {
         const timed = new Set(content.schedule.flatMap(item =>
-            item.room && minutesOf(item.start) !== null ? [item.room] : []));
+            item.room && parseClockTime(item.start) !== null ? [item.room] : []));
         return content.rooms.filter(room => timed.has(room.id)).length;
     }, [content.rooms, content.schedule]);
-    const trackLine = tracks > 0
-        ? {en: `One day, ${tracks} ${tracks === 1 ? 'track' : 'tracks'}. `, zh: `一天，${tracks} 条线路。`}
+    const trackLine = trackCount > 0
+        ? {
+            en: `One day, ${trackCount} ${trackCount === 1 ? 'track' : 'tracks'}. `,
+            zh: `一天，${trackCount} 条线路。`,
+        }
         : {en: '', zh: ''};
 
     // The header row sits above the slots, and grid lines are 1-based. Start times

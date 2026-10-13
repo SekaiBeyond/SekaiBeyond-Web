@@ -1,9 +1,8 @@
-import type { ChangeEvent, PointerEvent } from 'react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { type ChangeEvent, type PointerEvent, useEffect, useId, useRef, useState } from 'react';
 import { FiDownload, FiPlus, FiRotateCcw, FiRotateCw, FiUpload, FiX } from 'react-icons/fi';
 import { QRCodeCanvas } from 'qrcode.react';
 import { SectionHeader } from '~/pages/con/SectionHeader';
-import { useT } from '~/pages/con/i18n';
+import { type Localized, useT } from '~/pages/con/i18n';
 
 const CANVAS_WIDTH = 1080;
 const CANVAS_HEIGHT = 1350;
@@ -34,20 +33,24 @@ type GestureStart =
     | {kind: 'pan'; pointerId: number; x: number; y: number; transform: PhotoTransform}
     | {kind: 'pinch'; distance: number; angle: number; midpointX: number; midpointY: number; transform: PhotoTransform};
 
-type CardTitlePreset = 'cosplay' | 'vendor' | 'performer' | 'panel' | 'custom';
+/**
+ * The preset card titles: `title` is what is drawn on the card (always English,
+ * to match the artwork), `label` is how the menu offers it.
+ */
+const CARD_TITLE_PRESETS = {
+    cosplay: {title: 'Cosplay Lineup', label: {en: 'Cosplay Lineup', zh: 'Cosplay 阵容'}},
+    vendor: {title: 'Artist Alley', label: {en: 'Vendor / Artist Alley', zh: '摊主 / 创作者市集'}},
+    performer: {title: 'Performers', label: {en: 'Performer', zh: '表演者'}},
+    panel: {title: 'Panel', label: {en: 'Panel', zh: 'Panel 专题'}},
+} satisfies Record<string, {title: string; label: Localized}>;
 
-const CARD_TITLE_PRESETS: Record<Exclude<CardTitlePreset, 'custom'>, string> = {
-    cosplay: 'Cosplay Lineup',
-    vendor: 'Artist Alley',
-    performer: 'Performers',
-    panel: 'Panel',
-};
+type CardTitlePreset = keyof typeof CARD_TITLE_PRESETS | 'custom';
 
 type TitleFont = {family: string; size: number};
 type UploadedFont = TitleFont & {name: string; face: FontFace};
 
 // The longest preset title, and how wide every font draws it.
-const TITLE_SAMPLE = CARD_TITLE_PRESETS.cosplay;
+const TITLE_SAMPLE = CARD_TITLE_PRESETS.cosplay.title;
 const TITLE_SAMPLE_WIDTH = 690;
 // Open-licensed (SIL OFL or Apache) Google Fonts only: visitors type their own
 // titles here, which commercial webfont licenses forbid. Each size draws
@@ -90,15 +93,21 @@ const measureTitleSize = (family: string) => {
     return width > 0 ? Math.min(260, Math.max(52, Math.round(100 * TITLE_SAMPLE_WIDTH / width))) : TITLE_FONTS[0].size;
 };
 
+/** A horizontally centred line of text, and the room it may take up. */
+interface TextBox {
+    centerY: number;
+    maxWidth: number;
+    maxHeight: number;
+    /** Font size to start from; it steps down towards `minSize` until the text fits. */
+    size: number;
+    minSize: number;
+    fontFamily: string;
+}
+
 const drawCenteredText = (
     context: CanvasRenderingContext2D,
     text: string,
-    centerY: number,
-    maxWidth: number,
-    preferredSize: number,
-    minimumSize: number,
-    maxHeight: number,
-    fontFamily: string,
+    {centerY, maxWidth, maxHeight, size: preferredSize, minSize, fontFamily}: TextBox,
 ) => {
     const content = text.trim();
     if (!content) return;
@@ -112,7 +121,7 @@ const drawCenteredText = (
     context.fillStyle = TEXT_COLOR;
     setCanvasFont(size);
     let metrics = context.measureText(content);
-    while (size > minimumSize && (
+    while (size > minSize && (
         metrics.width > maxWidth
         || metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent > maxHeight
     )) {
@@ -128,12 +137,26 @@ const normalizeAngle = (angle: number) => ((angle + 180) % 360 + 360) % 360 - 18
 
 const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 
+type Frame = {left: number; top: number; width: number; height: number};
+
 // The artwork is almost exactly 4:5: fit it whole and centred, without distorting it.
-const fitOverlay = (sourceWidth: number, sourceHeight: number) => {
+const fitOverlay = (sourceWidth: number, sourceHeight: number): Frame => {
     const scale = Math.min(CANVAS_WIDTH / sourceWidth, CANVAS_HEIGHT / sourceHeight);
     const width = sourceWidth * scale;
     const height = sourceHeight * scale;
     return {left: (CANVAS_WIDTH - width) / 2, top: (CANVAS_HEIGHT - height) / 2, width, height};
+};
+
+/** Where the overlay's photo opening lands on the card, given where the overlay is drawn. */
+const photoWindowIn = (frame: Frame) => {
+    const scaleX = frame.width / PHOTO_WINDOW.sourceWidth;
+    const scaleY = frame.height / PHOTO_WINDOW.sourceHeight;
+    return {
+        width: (PHOTO_WINDOW.right - PHOTO_WINDOW.left) * scaleX,
+        height: (PHOTO_WINDOW.bottom - PHOTO_WINDOW.top) * scaleY,
+        centerX: frame.left + (PHOTO_WINDOW.left + PHOTO_WINDOW.right) / 2 * scaleX,
+        centerY: frame.top + (PHOTO_WINDOW.top + PHOTO_WINDOW.bottom) / 2 * scaleY,
+    };
 };
 
 const measurePinch = (first: PointerPoint, second: PointerPoint) => {
@@ -147,7 +170,19 @@ const measurePinch = (first: PointerPoint, second: PointerPoint) => {
     };
 };
 
-export const Lineup = () => {
+/** The chosen file, with the input cleared so someone can choose the same file again. */
+const takeFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    return file;
+};
+
+/**
+ * The share card maker: a visitor's photo inside the con's frame artwork, with a
+ * title, optional extra line, and a QR back to this section. Everything is drawn
+ * on a canvas in the browser; nothing is uploaded.
+ */
+export const ShareCard = () => {
     const t = useT();
     const qrHeading = t({en: 'MAKE YOUR OWN', zh: '制作你的分享卡'});
     const qrPrompt = t({en: 'Scan to start', zh: '扫码开始制作'});
@@ -211,7 +246,7 @@ export const Lineup = () => {
         };
     }, []);
 
-    const title = titlePreset === 'custom' ? customTitle : CARD_TITLE_PRESETS[titlePreset];
+    const title = titlePreset === 'custom' ? customTitle : CARD_TITLE_PRESETS[titlePreset].title;
 
     useEffect(() => {
         let cancelled = false;
@@ -261,14 +296,11 @@ export const Lineup = () => {
 
         if (photo) {
             // Fit the whole photo into the frame's transparent opening by default.
-            const windowWidth = (PHOTO_WINDOW.right - PHOTO_WINDOW.left) / PHOTO_WINDOW.sourceWidth * frame.width;
-            const windowHeight = (PHOTO_WINDOW.bottom - PHOTO_WINDOW.top) / PHOTO_WINDOW.sourceHeight * frame.height;
-            const windowCenterX = frame.left + (PHOTO_WINDOW.left + PHOTO_WINDOW.right) / 2 / PHOTO_WINDOW.sourceWidth * frame.width;
-            const windowCenterY = frame.top + (PHOTO_WINDOW.top + PHOTO_WINDOW.bottom) / 2 / PHOTO_WINDOW.sourceHeight * frame.height;
-            const fitScale = Math.min(windowWidth / photo.width, windowHeight / photo.height);
+            const opening = photoWindowIn(frame);
+            const fitScale = Math.min(opening.width / photo.width, opening.height / photo.height);
             const scale = fitScale * transform.zoom;
             context.save();
-            context.translate(windowCenterX + transform.offsetX, windowCenterY + transform.offsetY);
+            context.translate(opening.centerX + transform.offsetX, opening.centerY + transform.offsetY);
             context.rotate(transform.rotation * Math.PI / 180);
             context.drawImage(photo, -photo.width * scale / 2, -photo.height * scale / 2,
                 photo.width * scale, photo.height * scale);
@@ -278,19 +310,24 @@ export const Lineup = () => {
         if (overlay) context.drawImage(overlay, frame.left, frame.top, frame.width, frame.height);
 
         if (readyFamily === titleFont.family) {
-            // 760 wide keeps a long title clear of the artwork's top-left corner bracket (x 63–134).
-            drawCenteredText(context, title, 160, 760, titleFont.size, 52, 210, titleFontStack(titleFont.family));
+            drawCenteredText(context, title, {
+                centerY: 160,
+                // 760 wide keeps a long title clear of the artwork's top-left corner bracket (x 63–134).
+                maxWidth: 760,
+                maxHeight: 210,
+                size: titleFont.size,
+                minSize: 52,
+                fontFamily: titleFontStack(titleFont.family),
+            });
             if (extraTextEnabled) {
-                drawCenteredText(
-                    context,
-                    extraText,
-                    280,
-                    850,
-                    EXTRA_TEXT_SIZE,
-                    24,
-                    58,
-                    titleFontStack(EXTRA_TEXT_FONT),
-                );
+                drawCenteredText(context, extraText, {
+                    centerY: 280,
+                    maxWidth: 850,
+                    maxHeight: 58,
+                    size: EXTRA_TEXT_SIZE,
+                    minSize: 24,
+                    fontFamily: titleFontStack(EXTRA_TEXT_FONT),
+                });
             }
         }
 
@@ -310,10 +347,19 @@ export const Lineup = () => {
         }
     }, [photo, overlay, transform, titleFont, readyFamily, fontLoads, title, extraTextEnabled, extraText, shareUrl, qrHeading, qrPrompt]);
 
+    const applyTransform = (next: PhotoTransform) => {
+        transformRef.current = next;
+        setTransform(next);
+    };
+
+    const updateTransform = (changes: Partial<PhotoTransform>) =>
+        applyTransform({...transformRef.current, ...changes});
+
+    const rotateBy = (degrees: number) =>
+        updateTransform({rotation: normalizeAngle(transformRef.current.rotation + degrees)});
+
     const onFontSelected = async (event: ChangeEvent<HTMLInputElement>) => {
-        const file = event.currentTarget.files?.[0];
-        // Clearing the input lets someone choose the same file again.
-        event.currentTarget.value = '';
+        const file = takeFile(event);
         if (!file) return;
 
         const token = ++fontUploadToken.current;
@@ -350,19 +396,14 @@ export const Lineup = () => {
     };
 
     const onPhotoSelected = async (event: ChangeEvent<HTMLInputElement>) => {
-        const file = event.currentTarget.files?.[0];
-        // Clearing the input lets someone choose the same file again.
-        event.currentTarget.value = '';
+        const file = takeFile(event);
         if (!file) return;
 
         const token = ++photoLoadToken.current;
         setError('');
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
             setLoading(false);
-            setError(t({
-                en: 'Choose a JPG, PNG, or WebP image.',
-                zh: '请选择 JPG、PNG 或 WebP 图片。',
-            }));
+            setError(t({en: 'Choose a JPG, PNG, or WebP image.', zh: '请选择 JPG、PNG 或 WebP 图片。'}));
             return;
         }
         if (file.size > MAX_FILE_BYTES) {
@@ -400,11 +441,6 @@ export const Lineup = () => {
         } finally {
             if (token === photoLoadToken.current) setLoading(false);
         }
-    };
-
-    const applyTransform = (next: PhotoTransform) => {
-        transformRef.current = next;
-        setTransform(next);
     };
 
     const beginGesture = () => {
@@ -465,9 +501,7 @@ export const Lineup = () => {
         beginGesture();
     };
 
-    const resetPhoto = () => {
-        applyTransform(DEFAULT_TRANSFORM);
-    };
+    const canSave = !!photo && !loading && !overlayLoading && !overlayError && readyFamily === titleFont.family;
 
     const downloadPng = () => {
         const canvas = canvasRef.current;
@@ -475,10 +509,7 @@ export const Lineup = () => {
 
         canvas.toBlob(blob => {
             if (!blob) {
-                setError(t({
-                    en: 'The image could not be exported. Please try again.',
-                    zh: '导出失败，请重试。',
-                }));
+                setError(t({en: 'The image could not be exported. Please try again.', zh: '导出失败，请重试。'}));
                 return;
             }
             const url = URL.createObjectURL(blob);
@@ -506,6 +537,8 @@ export const Lineup = () => {
     );
 
     return (
+        // `lineup` is the anchor the nav links to and every printed QR code opens
+        // at, so it outlives the section's name.
         <section id="lineup" className="sbc-section sbc-lineup-section">
             <SectionHeader
                 title={{en: 'Share Card', zh: '活动分享卡'}}
@@ -549,10 +582,11 @@ export const Lineup = () => {
                 <div className="sbc-lineup-controls">
                     <div className="sbc-lineup-upload-card">
                         <div className="sbc-lineup-upload-copy">
-                            <strong>{t({
-                                en: photo ? 'Photo ready to edit' : 'Start with a photo',
-                                zh: photo ? '照片已就绪' : '从一张照片开始'
-                            })}</strong>
+                            <strong>
+                                {photo
+                                    ? t({en: 'Photo ready to edit', zh: '照片已就绪'})
+                                    : t({en: 'Start with a photo', zh: '从一张照片开始'})}
+                            </strong>
                             <span>{t({
                                 en: 'JPG, PNG, or WebP · up to 20 MB',
                                 zh: 'JPG、PNG 或 WebP · 最大 20 MB'
@@ -561,11 +595,16 @@ export const Lineup = () => {
                         <div className="sbc-lineup-file-actions">
                             <label className="btn sbc-lineup-upload-button" htmlFor={inputId}>
                                 <FiUpload aria-hidden="true"/>
-                                {t({en: photo ? 'Change photo' : 'Choose photo', zh: photo ? '更换照片' : '选择照片'})}
+                                {photo
+                                    ? t({en: 'Change photo', zh: '更换照片'})
+                                    : t({en: 'Choose photo', zh: '选择照片'})}
                             </label>
-                            <button type="button" className="btn btn-primary sbc-lineup-download"
-                                    disabled={!photo || loading || overlayLoading || overlayError || readyFamily !== titleFont.family}
-                                    onClick={downloadPng}>
+                            <button
+                                type="button"
+                                className="btn btn-primary sbc-lineup-download"
+                                disabled={!canSave}
+                                onClick={downloadPng}
+                            >
                                 <FiDownload aria-hidden="true"/>
                                 {t({en: 'Save PNG', zh: '保存 PNG'})}
                             </button>
@@ -579,10 +618,11 @@ export const Lineup = () => {
                         />
                     </div>
 
-                    {loading && <p className="sbc-lineup-status" role="status">{t({
-                        en: 'Opening photo…',
-                        zh: '正在读取照片…'
-                    })}</p>}
+                    {loading && (
+                        <p className="sbc-lineup-status" role="status">
+                            {t({en: 'Opening photo…', zh: '正在读取照片…'})}
+                        </p>
+                    )}
                     {overlayLoading && (
                         <p className="sbc-lineup-status" role="status">
                             {t({en: 'Loading the share card design…', zh: '正在加载分享卡片设计…'})}
@@ -592,7 +632,7 @@ export const Lineup = () => {
                         <p className="sbc-lineup-error" role="alert">
                             {t({
                                 en: 'The share card design could not be loaded. Refresh the page to try again.',
-                                zh: '无法加载分享卡片设计，请刷新页面重试。'
+                                zh: '无法加载分享卡片设计，请刷新页面重试。',
                             })}
                         </p>
                     )}
@@ -609,23 +649,18 @@ export const Lineup = () => {
                                 aria-label={t({en: 'Card title', zh: '卡片标题'})}
                                 onChange={event => setTitlePreset(event.currentTarget.value as CardTitlePreset)}
                             >
-                                <option value="cosplay">{t({en: 'Cosplay Lineup', zh: 'Cosplay 阵容'})}</option>
-                                <option value="vendor">{t({
-                                    en: 'Vendor / Artist Alley',
-                                    zh: '摊主 / 创作者市集'
-                                })}</option>
-                                <option value="performer">{t({en: 'Performer', zh: '表演者'})}</option>
-                                <option value="panel">{t({en: 'Panel', zh: 'Panel 专题'})}</option>
+                                {Object.entries(CARD_TITLE_PRESETS).map(([key, preset]) => (
+                                    <option key={key} value={key}>{t(preset.label)}</option>
+                                ))}
                                 <option value="custom">{t({en: 'Custom title…', zh: '自定义标题…'})}</option>
                             </select>
                         </label>
 
                         {titlePreset === 'custom' && (
                             <label className="sbc-lineup-control">
-                                <span className="sbc-lineup-control-heading">{t({
-                                    en: 'Your title',
-                                    zh: '自定义标题'
-                                })}</span>
+                                <span className="sbc-lineup-control-heading">
+                                    {t({en: 'Your title', zh: '自定义标题'})}
+                                </span>
                                 <input
                                     className="sbc-lineup-text-input"
                                     type="text"
@@ -638,17 +673,17 @@ export const Lineup = () => {
                         )}
 
                         <fieldset className="sbc-lineup-font-picker">
-                            <legend className="sbc-lineup-control-heading">{t({
-                                en: 'Title font',
-                                zh: '标题字体'
-                            })}</legend>
+                            <legend className="sbc-lineup-control-heading">
+                                {t({en: 'Title font', zh: '标题字体'})}
+                            </legend>
                             <div className="sbc-lineup-font-options">
                                 {TITLE_FONTS.map(font => fontOption(font, font.family))}
                                 {/* An added font takes the upload tile's place, keeping the grid at two rows. */}
                                 {uploadedFont ? fontOption(uploadedFont, uploadedFont.name) : (
                                     <label
                                         className="sbc-lineup-font-option sbc-lineup-font-upload sbc-lineup-font-file-trigger"
-                                        htmlFor={fontInputId}>
+                                        htmlFor={fontInputId}
+                                    >
                                         <FiPlus aria-hidden="true"/>
                                         {t({en: 'Your own font', zh: '自己的字体'})}
                                     </label>
@@ -661,10 +696,11 @@ export const Lineup = () => {
                                 accept=".ttf,.otf,.woff,.woff2"
                                 onChange={onFontSelected}
                             />
-                            {fontOpening && <p className="sbc-lineup-status" role="status">{t({
-                                en: 'Opening font…',
-                                zh: '正在读取字体…'
-                            })}</p>}
+                            {fontOpening && (
+                                <p className="sbc-lineup-status" role="status">
+                                    {t({en: 'Opening font…', zh: '正在读取字体…'})}
+                                </p>
+                            )}
                             {fontError && <p className="sbc-lineup-error" role="alert">{fontError}</p>}
                             <p className="sbc-lineup-font-note">
                                 {t({
@@ -674,8 +710,10 @@ export const Lineup = () => {
                                 {uploadedFont && (
                                     <>
                                         {' '}
-                                        <label className="sbc-lineup-font-change sbc-lineup-font-file-trigger"
-                                               htmlFor={fontInputId}>
+                                        <label
+                                            className="sbc-lineup-font-change sbc-lineup-font-file-trigger"
+                                            htmlFor={fontInputId}
+                                        >
                                             {t({en: 'Choose another file', zh: '换一个文件'})}
                                         </label>
                                     </>
@@ -691,17 +729,15 @@ export const Lineup = () => {
                                 onClick={() => setExtraTextEnabled(enabled => !enabled)}
                             >
                                 {extraTextEnabled ? <FiX aria-hidden="true"/> : <FiPlus aria-hidden="true"/>}
-                                {t({
-                                    en: extraTextEnabled ? 'Remove extra text' : 'Add text',
-                                    zh: extraTextEnabled ? '移除补充文字' : '添加文字'
-                                })}
+                                {extraTextEnabled
+                                    ? t({en: 'Remove extra text', zh: '移除补充文字'})
+                                    : t({en: 'Add text', zh: '添加文字'})}
                             </button>
                             {extraTextEnabled && (
                                 <label className="sbc-lineup-control">
-                                    <span className="sbc-lineup-control-heading">{t({
-                                        en: 'Extra text',
-                                        zh: '补充文字'
-                                    })}</span>
+                                    <span className="sbc-lineup-control-heading">
+                                        {t({en: 'Extra text', zh: '补充文字'})}
+                                    </span>
                                     <input
                                         className="sbc-lineup-text-input"
                                         type="text"
@@ -722,15 +758,16 @@ export const Lineup = () => {
                             aria-expanded={fineTuneOpen}
                             onClick={() => setFineTuneOpen(open => !open)}
                         >
-                            {t({
-                                en: fineTuneOpen ? 'Hide fine-tune sliders' : 'Fine-tune sliders',
-                                zh: fineTuneOpen ? '收起精细调整' : '精细调整滑杆'
-                            })}
+                            {fineTuneOpen
+                                ? t({en: 'Hide fine-tune sliders', zh: '收起精细调整'})
+                                : t({en: 'Fine-tune sliders', zh: '精细调整滑杆'})}
                         </button>
                     )}
 
                     <div
-                        className={`sbc-lineup-adjustments${photo ? '' : ' sbc-lineup-adjustments--disabled'}${fineTuneOpen ? ' sbc-lineup-adjustments--open' : ''}`}>
+                        className={`sbc-lineup-adjustments${photo ? '' : ' sbc-lineup-adjustments--disabled'}${
+                            fineTuneOpen ? ' sbc-lineup-adjustments--open' : ''}`}
+                    >
                         <div className="sbc-lineup-adjustment-grid">
                             <label className="sbc-lineup-control">
                                 <span className="sbc-lineup-control-heading">
@@ -745,10 +782,7 @@ export const Lineup = () => {
                                     value={transform.zoom}
                                     disabled={!photo}
                                     aria-label={t({en: 'Photo size', zh: '照片大小'})}
-                                    onChange={event => applyTransform({
-                                        ...transformRef.current,
-                                        zoom: Number(event.currentTarget.value)
-                                    })}
+                                    onChange={event => updateTransform({zoom: Number(event.currentTarget.value)})}
                                 />
                             </label>
 
@@ -766,33 +800,36 @@ export const Lineup = () => {
                                     value={transform.rotation}
                                     disabled={!photo}
                                     aria-label={t({en: 'Photo rotation', zh: '照片旋转角度'})}
-                                    onChange={event => applyTransform({
-                                        ...transformRef.current,
-                                        rotation: Number(event.currentTarget.value)
-                                    })}
+                                    onChange={event => updateTransform({rotation: Number(event.currentTarget.value)})}
                                 />
                             </label>
                         </div>
 
                         <div className="sbc-lineup-control-actions">
-                            <button type="button" className="sbc-lineup-secondary-button" disabled={!photo}
-                                    onClick={() => applyTransform({
-                                        ...transformRef.current,
-                                        rotation: normalizeAngle(transformRef.current.rotation - 90)
-                                    })}>
+                            <button
+                                type="button"
+                                className="sbc-lineup-secondary-button"
+                                disabled={!photo}
+                                onClick={() => rotateBy(-90)}
+                            >
                                 <FiRotateCcw aria-hidden="true"/>
                                 {t({en: 'Rotate left', zh: '向左旋转'})}
                             </button>
-                            <button type="button" className="sbc-lineup-secondary-button" disabled={!photo}
-                                    onClick={() => applyTransform({
-                                        ...transformRef.current,
-                                        rotation: normalizeAngle(transformRef.current.rotation + 90)
-                                    })}>
+                            <button
+                                type="button"
+                                className="sbc-lineup-secondary-button"
+                                disabled={!photo}
+                                onClick={() => rotateBy(90)}
+                            >
                                 <FiRotateCw aria-hidden="true"/>
                                 {t({en: 'Rotate right', zh: '向右旋转'})}
                             </button>
-                            <button type="button" className="sbc-lineup-reset-button" disabled={!photo}
-                                    onClick={resetPhoto}>
+                            <button
+                                type="button"
+                                className="sbc-lineup-reset-button"
+                                disabled={!photo}
+                                onClick={() => applyTransform(DEFAULT_TRANSFORM)}
+                            >
                                 {t({en: 'Reset', zh: '重置'})}
                             </button>
                         </div>
