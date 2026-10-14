@@ -1,11 +1,21 @@
-import { Timestamp } from "firebase-admin/firestore";
-import { onCall } from "firebase-functions/v2/https";
+import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { requireAdmin, requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
 import { recordDoc, recordRef } from "../utils/records";
 import { SITE_TIME_ZONE, siteDay } from "../utils/siteTime";
-import { fetchUwEventPricing, fetchUwLots, fetchWalkingTimes, type UwLot, type WalkingTime } from "../utils/uwParking";
+import {
+    fetchUwBuilding,
+    fetchUwEventPricing,
+    fetchUwLots,
+    fetchWalkingTimes,
+    lotCodesInText,
+    UW_BUILDING_CODE_RE,
+    type UwBuilding,
+    type UwLot,
+    type WalkingTime,
+} from "../utils/uwParking";
 
 // The parking guide's synced copy of UW's data. Publicly readable: it holds only
 // what UW already publishes, plus walking times from venues that are public too.
@@ -29,6 +39,36 @@ interface VenueWalking {
 
 const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err);
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// How many walking-nearest lots a building lookup suggests.
+const NEAREST_LOT_COUNT = 8;
+
+/** The synced visitor lots, or none before the first sync. */
+async function syncedLots(): Promise<UwLot[]> {
+    const lots = (await PARKING_DOC.get()).data()?.lots;
+    return Array.isArray(lots) ? lots : [];
+}
+
+/**
+ * Measures a saved venue's walking times unless it already has them from this
+ * spot, so a new or moved venue has them before the nightly sync. Does nothing
+ * before the first sync.
+ */
+export async function refreshVenueWalking(venueId: string, lat: number, lng: number): Promise<void> {
+    if (lat === 0 && lng === 0) return;
+    const data = (await PARKING_DOC.get()).data();
+    const lots: UwLot[] = Array.isArray(data?.lots) ? data.lots : [];
+    const current = data?.walking?.[venueId] as VenueWalking | undefined;
+    if (lots.length === 0 || (current?.lat === lat && current?.lng === lng)) return;
+    const walking: VenueWalking = {lat, lng, lots: await fetchWalkingTimes({lat, lng}, lots)};
+    await PARKING_DOC.update(new FieldPath("walking", venueId), walking);
+}
+
+/** Drops a deleted venue's walking times. */
+export async function dropVenueWalking(venueId: string): Promise<void> {
+    const snap = await PARKING_DOC.get();
+    if (!snap.exists || !snap.data()?.walking?.[venueId]) return;
+    await PARKING_DOC.update(new FieldPath("walking", venueId), FieldValue.delete());
+}
 
 /**
  * Refreshes uwParking/current. Each source is refreshed on its own: one that
@@ -103,7 +143,7 @@ export const uwParkingNightlySync = onSchedule({
     if (summary.errors.length > 0) console.warn("uwParkingNightlySync: kept the last good copy of", summary.errors);
 });
 
-// The same sync on demand, for an admin who has just added or moved a venue.
+// The same sync on demand, e.g. right after a UW change the nightly run has not picked up yet.
 export const syncUwParking = onCall({maxInstances: 2, timeoutSeconds: 300}, async (request) => {
     const uid = await requireAuth(request);
     const callerSnap = await requireAdmin(uid);
@@ -114,4 +154,46 @@ export const syncUwParking = onCall({maxInstances: 2, timeoutSeconds: 300}, asyn
         lotCount: summary.lotCount,
     }));
     return summary;
+});
+
+/**
+ * What the venue editor needs to set a venue up from a UW building code: where
+ * the building is, UW's own parking note for it, the visitor lots that note
+ * names, and the visitor lots nearest on foot.
+ */
+export const lookUpUwBuilding = onCall({maxInstances: 5, timeoutSeconds: 60}, async (request) => {
+    const uid = await requireAuth(request);
+    await requireAdmin(uid);
+    const raw = (request.data as {code?: unknown})?.code;
+    const code = typeof raw === "string" ? raw.trim().toUpperCase() : "";
+    if (!UW_BUILDING_CODE_RE.test(code)) {
+        throw new HttpsError("invalid-argument", "Enter a UW building code, like HUB or KNE.");
+    }
+
+    let building: UwBuilding | null;
+    try {
+        building = await fetchUwBuilding(code);
+    } catch (err) {
+        console.error("lookUpUwBuilding:", code, err);
+        throw new HttpsError("unavailable", "UW's building map didn't answer. Try again in a minute.");
+    }
+    if (!building) throw new HttpsError("not-found", `UW has no Seattle building with the code ${code}.`);
+
+    const lots = await syncedLots();
+    const visitorCodes = new Set(lots.map(l => l.code));
+    const recommendedLots = lotCodesInText(building.parkingTip).filter(c => visitorCodes.has(c));
+    let nearestLots: {code: string; seconds: number; meters: number}[] = [];
+    if (lots.length > 0) {
+        try {
+            const times = await fetchWalkingTimes(building, lots);
+            nearestLots = Object.entries(times)
+                .map(([lotCode, t]) => ({code: lotCode, ...t}))
+                .sort((a, b) => a.seconds - b.seconds)
+                .slice(0, NEAREST_LOT_COUNT);
+        } catch (err) {
+            // The building itself was found; the editor can still be filled in by hand.
+            console.warn("lookUpUwBuilding: walking times failed for", code, err);
+        }
+    }
+    return {building, recommendedLots, nearestLots};
 });

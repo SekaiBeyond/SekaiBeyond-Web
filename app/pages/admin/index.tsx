@@ -20,6 +20,7 @@ import { UpcomingEventsTab, type UpcomingEventsTabHandle } from './UpcomingEvent
 import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { TagsTab } from './TagsTab';
 import { VenuesTab } from './VenuesTab';
+import { UwParkingStatus } from './UwParkingStatus';
 import { LocationsMap } from './LocationsMap';
 import { ParkingLotsTab } from './ParkingLotsTab';
 import { ParkingRatesTab } from './ParkingRatesTab';
@@ -413,6 +414,12 @@ export const AdminPage = () => {
                                 readOnly={isStaffGroup}
                             />
                         </div>
+                        <div id="admin-sec-uw-parking">
+                            <h2 className="admin-section-header admin-section-mt">
+                                {isEnglish ? 'UW Parking Data' : 'UW 停车数据'}
+                            </h2>
+                            <UwParkingStatus showToast={showToast} readOnly={isStaffGroup}/>
+                        </div>
                         <div id="admin-sec-venues">
                             <h2 className="admin-section-header admin-section-mt">
                                 {isEnglish ? 'Venues' : '场地'}
@@ -456,6 +463,7 @@ export const AdminPage = () => {
                         <SectionNav
                             sections={[
                                 {id: 'admin-sec-map', label: isEnglish ? 'Overview Map' : '总览地图'},
+                                {id: 'admin-sec-uw-parking', label: isEnglish ? 'UW Parking Data' : 'UW 停车数据'},
                                 {id: 'admin-sec-venues', label: isEnglish ? 'Venues' : '场地'},
                                 {id: 'admin-sec-parking-rates', label: isEnglish ? 'Parking Rates' : '停车费率'},
                                 {id: 'admin-sec-parking-lots', label: isEnglish ? 'Parking Lots' : '停车场'},

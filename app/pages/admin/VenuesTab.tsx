@@ -1,20 +1,32 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeleteVenue, callSaveVenue } from '~/lib/firebase';
-import { lotBadgeChar, lotTypeLabel, type ParkingLot } from '~/lib/parkingLots';
-import type { Venue, VenueLotLink } from '~/lib/venues';
-import { UW_CAMPUS_CENTER } from '~/lib/venues';
+import { callDeleteVenue, callLookUpUwBuilding, callSaveVenue, type UwBuildingLookup } from '~/lib/firebase';
+import type { ParkingLot } from '~/lib/parkingLots';
+import { type UwLot, type UwParkingData, useUwParking, uwLotTypeLabel, walkMinutes } from '~/lib/uwParking';
+import type { SuggestedLot, Venue, VenueLotLink } from '~/lib/venues';
+import { haversineMiles, UW_CAMPUS_CENTER } from '~/lib/venues';
 import { BilingualFormField } from './BilingualFormField';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
 import { MapPicker } from './MapPicker';
 import { type LocationListHandle, useCardHighlight } from './useCardHighlight';
 import { refreshAfterSave } from './utils';
 
+/** The server's cap on suggested lots per venue. */
+const MAX_SUGGESTED_LOTS = 10;
+/** How many lots the editor fills in from a building lookup when the list is empty. */
+const PREFILL_COUNT = 3;
+/** How close an old linked lot must be to a UW lot to count as the same place. */
+const SAME_LOT_METERS = 80;
+const METERS_PER_MILE = 1609.34;
+
 interface VenueDraft {
     nameEn: string;
     nameCn: string;
     lat: number;
     lng: number;
+    buildingCode: string;
+    suggestedLots: SuggestedLot[];
+    /** The old guide's links. Not edited here any more, only carried through saves until that guide retires. */
     parkingLots: VenueLotLink[];
 }
 
@@ -24,6 +36,8 @@ function venueToDraft(v: Venue): VenueDraft {
         nameCn: v.nameCn,
         lat: v.lat,
         lng: v.lng,
+        buildingCode: v.buildingCode,
+        suggestedLots: v.suggestedLots.map(s => ({...s})),
         parkingLots: v.parkingLots.map(l => ({...l})),
     };
 }
@@ -34,12 +48,30 @@ function emptyDraft(): VenueDraft {
         nameCn: '',
         lat: UW_CAMPUS_CENTER.lat,
         lng: UW_CAMPUS_CENTER.lng,
+        buildingCode: '',
+        suggestedLots: [],
         parkingLots: [],
     };
 }
 
+function draftToPayload(draft: VenueDraft) {
+    return {
+        nameEn: draft.nameEn.trim(),
+        nameCn: draft.nameCn.trim(),
+        lat: draft.lat,
+        lng: draft.lng,
+        parkingLots: draft.parkingLots,
+        buildingCode: draft.buildingCode.trim().toUpperCase(),
+        suggestedLots: draft.suggestedLots.map(s => ({code: s.code, noteEn: s.noteEn.trim(), noteCn: s.noteCn.trim()})),
+    };
+}
+
+const metersBetween = (a: {lat: number; lng: number}, b: {lat: number; lng: number}) =>
+    haversineMiles(a.lat, a.lng, b.lat, b.lng) * METERS_PER_MILE;
+
 interface VenuesTabProps {
     venues: Venue[];
+    /** The old guide's lots, used only to suggest matching UW lots for venues still linked to them. */
     parkingLots: ParkingLot[];
     refreshVenues: () => Promise<void>;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
@@ -49,6 +81,7 @@ interface VenuesTabProps {
 export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
     {venues, parkingLots, refreshVenues, showToast, readOnly = false}, ref) => {
     const {isEnglish} = useLanguage();
+    const {parking, refresh: refreshParking} = useUwParking();
     const {highlightedId, registerCard, highlight} = useCardHighlight();
     const [showCreate, setShowCreate] = useState(false);
     const [createDraft, setCreateDraft] = useState<VenueDraft>(emptyDraft());
@@ -59,13 +92,17 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
 
     const validateDraft = (draft: VenueDraft): string | null => {
         if (!draft.nameEn.trim()) return isEnglish ? 'English name is required.' : '英文名称是必填项。';
-        const ids = new Set<string>();
-        for (const link of draft.parkingLots) {
-            if (!link.lotId) return isEnglish ? 'Every linked lot must reference a parking lot.' : '每个关联停车场必须选择一个停车场。';
-            if (ids.has(link.lotId)) return isEnglish ? `Duplicate lot link ("${link.lotId}").` : `重复的停车场关联（"${link.lotId}"）。`;
-            ids.add(link.lotId);
+        const code = draft.buildingCode.trim();
+        if (code && !/^[A-Za-z0-9]{2,8}$/.test(code)) {
+            return isEnglish ? 'A UW building code is 2–8 letters or digits, like HUB.' : 'UW 建筑代码为 2–8 位字母或数字，例如 HUB。';
         }
         return null;
+    };
+
+    // Saving a new or moved venue re-measures its walking times on the server.
+    const afterSave = async () => {
+        await refreshAfterSave(refreshVenues, showToast, isEnglish);
+        await refreshParking().catch(() => undefined);
     };
 
     const createVenue = async () => {
@@ -76,14 +113,8 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         }
         setSaving(true);
         try {
-            await callSaveVenue({
-                nameEn: createDraft.nameEn.trim(),
-                nameCn: createDraft.nameCn.trim(),
-                lat: createDraft.lat,
-                lng: createDraft.lng,
-                parkingLots: createDraft.parkingLots,
-            });
-            await refreshAfterSave(refreshVenues, showToast, isEnglish);
+            await callSaveVenue(draftToPayload(createDraft));
+            await afterSave();
             setCreateDraft(emptyDraft());
             setShowCreate(false);
             showToast(isEnglish ? 'Venue created.' : '场地已创建。', 'success');
@@ -118,15 +149,8 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         }
         setSaving(true);
         try {
-            await callSaveVenue({
-                venueId: editingId,
-                nameEn: editDraft.nameEn.trim(),
-                nameCn: editDraft.nameCn.trim(),
-                lat: editDraft.lat,
-                lng: editDraft.lng,
-                parkingLots: editDraft.parkingLots,
-            });
-            await refreshAfterSave(refreshVenues, showToast, isEnglish);
+            await callSaveVenue({venueId: editingId, ...draftToPayload(editDraft)});
+            await afterSave();
             setEditingId(null);
             showToast(isEnglish ? 'Venue updated.' : '场地已更新。', 'success');
         } catch (e: any) {
@@ -144,7 +168,7 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         setDeletingId(venue.id);
         try {
             await callDeleteVenue({venueId: venue.id});
-            await refreshAfterSave(refreshVenues, showToast, isEnglish);
+            await afterSave();
             if (editingId === venue.id) setEditingId(null);
             showToast(isEnglish ? 'Venue deleted.' : '场地已删除。', 'warning');
         } catch {
@@ -158,8 +182,8 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         <div className="admin-section">
             <p className="admin-helper-text admin-section-intro">
                 {isEnglish
-                    ? 'Venues power the parking guide. Each venue links to one or more parking lots (managed in the Parking Lots section). Pick a venue for an event from the Venue selector in the event editor to give it a parking guide.'
-                    : '场地数据用于停车指南。每个场地关联一个或多个停车场（在停车场区块管理）。在活动编辑器的“场地”选择器中为活动选择场地，即可为其生成停车指南。'}
+                    ? 'Venues power the parking guide. Give each venue its UW building code to place it, then pick the UW lots to suggest, best first. Rates, hours and walking times come from UW data automatically. Pick a venue for an event from the Venue selector in the event editor.'
+                    : '场地数据用于停车指南。为每个场地填写 UW 建筑代码以确定位置，然后按推荐顺序选择 UW 停车场。费率、收费时间和步行时间会自动从 UW 数据获取。在活动编辑器的“场地”选择器中为活动选择场地。'}
             </p>
 
             {!readOnly && (
@@ -177,7 +201,9 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                     <VenueForm
                         draft={createDraft}
                         setDraft={setCreateDraft}
-                        availableLots={parkingLots}
+                        venueId={null}
+                        parking={parking}
+                        oldLots={parkingLots}
                         isEnglish={isEnglish}
                     />
                 </CreateSection>
@@ -200,7 +226,9 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                                     <VenueForm
                                         draft={editDraft}
                                         setDraft={setEditDraft}
-                                        availableLots={parkingLots}
+                                        venueId={venue.id}
+                                        parking={parking}
+                                        oldLots={parkingLots}
                                         isEnglish={isEnglish}
                                     />
                                     <CardSaveCancel
@@ -212,14 +240,17 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                                 </>
                             ) : (
                                 <>
-                                    <span className="admin-event-card-title">{venue.nameEn}</span>
+                                    <span className="admin-event-card-title">
+                                        {venue.nameEn}
+                                        {venue.buildingCode && <span className="admin-uw-code-chip">{venue.buildingCode}</span>}
+                                    </span>
                                     {venue.nameCn && (
                                         <span className="admin-event-card-date">{venue.nameCn}</span>
                                     )}
                                     <span className="admin-helper-text admin-card-meta">
-                                        {isEnglish
-                                            ? `${venue.parkingLots.length} parking lot${venue.parkingLots.length === 1 ? '' : 's'}`
-                                            : `${venue.parkingLots.length} 个停车场`}
+                                        {venue.suggestedLots.length > 0
+                                            ? `${isEnglish ? 'Suggested lots' : '推荐停车场'}: ${venue.suggestedLots.map(s => s.code).join(' · ')}`
+                                            : (isEnglish ? 'No suggested lots yet' : '尚未选择推荐停车场')}
                                     </span>
                                     {!readOnly && (
                                         <CardEditDeleteActions
@@ -242,29 +273,175 @@ VenuesTab.displayName = 'VenuesTab';
 interface VenueFormProps {
     draft: VenueDraft;
     setDraft: (updater: (prev: VenueDraft) => VenueDraft) => void;
-    availableLots: ParkingLot[];
+    /** The venue being edited, or null while creating one. */
+    venueId: string | null;
+    parking: UwParkingData;
+    oldLots: ParkingLot[];
     isEnglish: boolean;
 }
 
-const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) => {
-    const updateLink = (index: number, patch: Partial<VenueLotLink>) => {
-        setDraft(prev => {
-            const lots = [...prev.parkingLots];
-            lots[index] = {...lots[index], ...patch};
-            return {...prev, parkingLots: lots};
-        });
+const VenueForm = ({draft, setDraft, venueId, parking, oldLots, isEnglish}: VenueFormProps) => {
+    const [lookingUp, setLookingUp] = useState(false);
+    const [lookup, setLookup] = useState<UwBuildingLookup | null>(null);
+    const [lookupError, setLookupError] = useState<string | null>(null);
+
+    const lotByCode = new Map(parking.lots.map(l => [l.code, l]));
+    const chosen = new Set(draft.suggestedLots.map(s => s.code));
+    const full = draft.suggestedLots.length >= MAX_SUGGESTED_LOTS;
+    const here = {lat: draft.lat, lng: draft.lng};
+    const sameSpot = (p: {lat: number; lng: number}) => metersBetween(p, here) < 1;
+
+    // Walking time from the venue as it stands in the form: from a lookup of this
+    // spot, from the last sync if the venue hasn't moved, or else a straight-line estimate.
+    const synced = venueId ? parking.walking[venueId] : undefined;
+    const walkLabel = (lot: UwLot): string => {
+        const fromLookup = lookup && sameSpot(lookup.building) ? lookup.nearestLots.find(n => n.code === lot.code) : undefined;
+        const fromSync = synced && sameSpot(synced) ? synced.lots[lot.code] : undefined;
+        const walk = fromLookup ?? fromSync;
+        if (walk) return isEnglish ? `${walkMinutes(walk.seconds)} min walk` : `步行 ${walkMinutes(walk.seconds)} 分钟`;
+        const m = Math.round(metersBetween(lot, here) / 10) * 10;
+        return isEnglish ? `~${m} m away` : `约 ${m} 米`;
     };
-    const addLink = () => setDraft(prev => ({
+
+    const addLots = (codes: string[]) => setDraft(prev => {
+        const have = new Set(prev.suggestedLots.map(s => s.code));
+        const added = codes.filter(c => !have.has(c)).map(code => ({code, noteEn: '', noteCn: ''}));
+        return {...prev, suggestedLots: [...prev.suggestedLots, ...added].slice(0, MAX_SUGGESTED_LOTS)};
+    });
+    const updateLot = (index: number, patch: Partial<SuggestedLot>) => setDraft(prev => {
+        const lots = [...prev.suggestedLots];
+        lots[index] = {...lots[index], ...patch};
+        return {...prev, suggestedLots: lots};
+    });
+    const moveLot = (index: number, by: -1 | 1) => setDraft(prev => {
+        const lots = [...prev.suggestedLots];
+        const target = index + by;
+        if (target < 0 || target >= lots.length) return prev;
+        [lots[index], lots[target]] = [lots[target], lots[index]];
+        return {...prev, suggestedLots: lots};
+    });
+    const removeLot = (index: number) => setDraft(prev => ({
         ...prev,
-        parkingLots: [...prev.parkingLots, {lotId: ''}],
+        suggestedLots: prev.suggestedLots.filter((_, i) => i !== index),
     }));
-    const removeLink = (index: number) => setDraft(prev => ({
-        ...prev,
-        parkingLots: prev.parkingLots.filter((_, i) => i !== index),
-    }));
+
+    const lookUp = async () => {
+        const code = draft.buildingCode.trim().toUpperCase();
+        if (!code) return;
+        setLookingUp(true);
+        setLookupError(null);
+        try {
+            const {data} = await callLookUpUwBuilding({code});
+            setLookup(data);
+            const {building} = data;
+            // An empty list is filled from UW's note first, then the nearest lots on foot.
+            const prefill = [...data.recommendedLots, ...data.nearestLots.map(n => n.code)]
+                .filter((c, i, all) => all.indexOf(c) === i)
+                .slice(0, PREFILL_COUNT);
+            setDraft(prev => ({
+                ...prev,
+                buildingCode: building.code,
+                lat: building.lat,
+                lng: building.lng,
+                nameEn: prev.nameEn.trim() ? prev.nameEn : building.name,
+                suggestedLots: prev.suggestedLots.length > 0
+                    ? prev.suggestedLots
+                    : prefill.map(c => ({code: c, noteEn: '', noteCn: ''})),
+            }));
+        } catch (e: any) {
+            setLookup(null);
+            setLookupError(e?.message ?? (isEnglish ? 'Lookup failed.' : '查询失败。'));
+        } finally {
+            setLookingUp(false);
+        }
+    };
+
+    // Suggestions, each skipping lots already on the list.
+    const fresh = (codes: string[]) => codes.filter(c => !chosen.has(c) && lotByCode.has(c));
+    const uwPicks = lookup ? fresh(lookup.recommendedLots) : [];
+    const nearest = fresh(
+        lookup && sameSpot(lookup.building)
+            ? lookup.nearestLots.map(n => n.code)
+            : [...parking.lots].sort((a, b) => metersBetween(a, here) - metersBetween(b, here)).map(l => l.code),
+    ).slice(0, 6);
+    // Venues still linked to the old guide's lots: the UW lot at the same spot as each.
+    const fromOldLinks = fresh(draft.parkingLots
+        .map(link => oldLots.find(l => l.id === link.lotId))
+        .flatMap(old => {
+            if (!old) return [];
+            const match = parking.lots
+                .map(l => ({code: l.code, m: metersBetween(l, old)}))
+                .sort((a, b) => a.m - b.m)[0];
+            return match && match.m <= SAME_LOT_METERS ? [match.code] : [];
+        }));
+
+    const lotsByDistance = [...parking.lots].sort((a, b) => metersBetween(a, here) - metersBetween(b, here));
+
+    const chipRow = (label: string, codes: string[]) => codes.length > 0 && (
+        <div className="admin-venue-suggest">
+            <span className="admin-venue-suggest-label">{label}</span>
+            {codes.map(code => (
+                <button
+                    key={code}
+                    type="button"
+                    className="admin-venue-suggest-chip"
+                    onClick={() => addLots([code])}
+                    disabled={full}
+                >
+                    + {code}
+                    <span>{walkLabel(lotByCode.get(code)!)}</span>
+                </button>
+            ))}
+        </div>
+    );
 
     return (
         <>
+            <div className="admin-field-section">
+                <span className="admin-field-label">{isEnglish ? 'UW Building' : 'UW 建筑'}</span>
+                <div className="admin-uw-building-row">
+                    <input
+                        value={draft.buildingCode}
+                        onChange={e => setDraft(prev => ({...prev, buildingCode: e.target.value.toUpperCase()}))}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                lookUp();
+                            }
+                        }}
+                        className="admin-input admin-uw-building-input"
+                        placeholder={isEnglish ? 'e.g. HUB' : '例如：HUB'}
+                        maxLength={8}
+                        aria-label={isEnglish ? 'UW building code' : 'UW 建筑代码'}
+                    />
+                    <button
+                        type="button"
+                        className="admin-venue-lot-add"
+                        onClick={lookUp}
+                        disabled={lookingUp || !draft.buildingCode.trim()}
+                    >
+                        {lookingUp ? (isEnglish ? 'Looking up…' : '查询中…') : (isEnglish ? 'Look up' : '查询')}
+                    </button>
+                </div>
+                <p className="admin-helper-text admin-mt-8">
+                    {isEnglish
+                        ? 'The building’s UW code, as in room numbers like HUB 214 or KNE 120. Look up sets the location and fills in suggested lots.'
+                        : '建筑的 UW 代码，即教室编号中的字母，例如 HUB 214、KNE 120。查询后会自动设置位置并填入推荐停车场。'}
+                </p>
+                {lookupError && <div className="admin-uw-note admin-uw-note--error">{lookupError}</div>}
+                {lookup && (
+                    <div className="admin-uw-note">
+                        <strong>{lookup.building.name}</strong>
+                        {lookup.building.address && <> · {lookup.building.address}</>}
+                        <div>
+                            {lookup.building.parkingTip
+                                ? (isEnglish ? `UW’s parking note: “${lookup.building.parkingTip}”` : `UW 停车提示：“${lookup.building.parkingTip}”`)
+                                : (isEnglish ? 'UW has no parking note for this building.' : 'UW 未提供此建筑的停车提示。')}
+                        </div>
+                    </div>
+                )}
+            </div>
+
             <div className="admin-form-grid">
                 <BilingualFormField
                     label="Name" labelCn="名称"
@@ -289,75 +466,121 @@ const VenueForm = ({draft, setDraft, availableLots, isEnglish}: VenueFormProps) 
             <div className="admin-venue-lots">
                 <div className="admin-venue-lots-header">
                     <span className="admin-venue-lots-title">
-                        {isEnglish ? 'Linked Parking Lots' : '关联停车场'}
-                        {draft.parkingLots.length > 0 && (
-                            <span className="admin-venue-lots-count">{draft.parkingLots.length}</span>
+                        {isEnglish ? 'Suggested Parking Lots' : '推荐停车场'}
+                        {draft.suggestedLots.length > 0 && (
+                            <span className="admin-venue-lots-count">{draft.suggestedLots.length}</span>
                         )}
                     </span>
-                    <button
-                        type="button"
-                        className="admin-venue-lot-add"
-                        onClick={addLink}
-                        disabled={availableLots.length === 0}
+                    <select
+                        className="admin-input admin-venue-lot-picker"
+                        value=""
+                        onChange={e => e.target.value && addLots([e.target.value])}
+                        disabled={full || parking.lots.length === 0}
+                        aria-label={isEnglish ? 'Add a lot' : '添加停车场'}
                     >
-                        {isEnglish ? '+ Link a lot' : '+ 关联停车场'}
-                    </button>
+                        <option value="">{isEnglish ? '+ Add a lot…' : '+ 添加停车场…'}</option>
+                        {lotsByDistance.filter(l => !chosen.has(l.code)).map(l => (
+                            <option key={l.code} value={l.code}>
+                                {l.code}{l.name !== l.code ? ` · ${l.name}` : ''} · {walkLabel(l)}
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
-                {availableLots.length === 0 ? (
+                {parking.lots.length === 0 ? (
                     <div className="admin-venue-lot-empty">
                         {isEnglish
-                            ? 'No parking lots exist yet. Create one in the Parking Lots section first.'
-                            : '尚无停车场。请先在"停车场"区块创建。'}
-                    </div>
-                ) : draft.parkingLots.length === 0 ? (
-                    <div className="admin-venue-lot-empty">
-                        {isEnglish
-                            ? 'No lots linked yet. Click "Link a lot" to add one.'
-                            : '尚未关联停车场。点击"关联停车场"添加。'}
+                            ? 'UW parking data hasn’t synced yet. Use Sync now in the UW Parking Data section first.'
+                            : 'UW 停车数据尚未同步。请先在“UW 停车数据”区块点击“立即同步”。'}
                     </div>
                 ) : (
-                    <div className="admin-venue-lot-list">
-                        {draft.parkingLots.map((link, i) => {
-                            const lot = availableLots.find(l => l.id === link.lotId);
-                            const badge = lot ? lotBadgeChar(lot.type) : '·';
-                            const typeLabel = lot ? lotTypeLabel(lot.type, isEnglish) : '';
-                            return (
-                                <div key={i} className="admin-venue-lot-card">
-                                    <div
-                                        className="admin-venue-lot-badge"
-                                        data-type={lot?.type ?? 'empty'}
-                                        title={typeLabel}
-                                    >
-                                        {badge}
-                                    </div>
-                                    <div className="admin-venue-lot-body">
-                                        <select
-                                            value={link.lotId}
-                                            onChange={e => updateLink(i, {lotId: e.target.value})}
-                                            className="admin-input admin-venue-lot-select"
-                                        >
-                                            <option value="">{isEnglish ? '— Select a lot —' : '— 请选择 —'}</option>
-                                            {availableLots.map(opt => (
-                                                <option key={opt.id} value={opt.id}>
-                                                    {isEnglish ? opt.name : (opt.nameCn || opt.name)}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        className="admin-venue-lot-remove"
-                                        onClick={() => removeLink(i)}
-                                        title={isEnglish ? 'Remove lot' : '删除停车场'}
-                                        aria-label={isEnglish ? 'Remove lot' : '删除停车场'}
-                                    >
-                                        ×
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </div>
+                    <>
+                        {chipRow(isEnglish ? 'UW recommends' : 'UW 推荐', uwPicks)}
+                        {chipRow(isEnglish ? 'From the old linked lots' : '来自原关联停车场', fromOldLinks)}
+                        {chipRow(isEnglish ? 'Nearest' : '最近', nearest)}
+
+                        {draft.suggestedLots.length === 0 ? (
+                            <div className="admin-venue-lot-empty">
+                                {isEnglish
+                                    ? 'No suggested lots yet. Look up the building, tap a suggestion, or add a lot.'
+                                    : '尚未选择推荐停车场。可查询建筑、点击上方建议或手动添加。'}
+                            </div>
+                        ) : (
+                            <div className="admin-venue-lot-list">
+                                {draft.suggestedLots.map((s, i) => {
+                                    const lot = lotByCode.get(s.code);
+                                    return (
+                                        <div key={s.code} className="admin-venue-lot-card admin-venue-lot-card--suggested">
+                                            <div
+                                                className="admin-venue-lot-badge"
+                                                data-type={lot && /Garage/.test(lot.type) ? 'garage' : 'general'}
+                                            >
+                                                {i + 1}
+                                            </div>
+                                            <div className="admin-venue-lot-main">
+                                                <div className="admin-venue-lot-head">
+                                                    <span className="admin-venue-lot-code">{s.code}</span>
+                                                    {lot ? (
+                                                        <>
+                                                            <span className="admin-venue-lot-name">
+                                                                {lot.name !== lot.code ? `${lot.name} · ` : ''}{uwLotTypeLabel(lot.type, isEnglish)}
+                                                            </span>
+                                                            <span className="admin-venue-lot-walk">{walkLabel(lot)}</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="admin-venue-lot-missing">
+                                                            {isEnglish ? 'No longer a UW visitor lot; the guide skips it.' : '已不再是 UW 访客停车场，停车指南将跳过。'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="admin-venue-lot-notes">
+                                                    <input
+                                                        value={s.noteEn}
+                                                        onChange={e => updateLot(i, {noteEn: e.target.value})}
+                                                        className="admin-input"
+                                                        maxLength={300}
+                                                        placeholder={isEnglish ? 'Note (English), optional' : '提示（英文），可选'}
+                                                    />
+                                                    <input
+                                                        value={s.noteCn}
+                                                        onChange={e => updateLot(i, {noteCn: e.target.value})}
+                                                        className="admin-input"
+                                                        maxLength={300}
+                                                        placeholder={isEnglish ? 'Note (Chinese), optional' : '提示（中文），可选'}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="admin-venue-lot-actions">
+                                                <button
+                                                    type="button"
+                                                    className="admin-venue-lot-move"
+                                                    onClick={() => moveLot(i, -1)}
+                                                    disabled={i === 0}
+                                                    aria-label={isEnglish ? 'Move up' : '上移'}
+                                                    title={isEnglish ? 'Move up' : '上移'}
+                                                >↑</button>
+                                                <button
+                                                    type="button"
+                                                    className="admin-venue-lot-move"
+                                                    onClick={() => moveLot(i, 1)}
+                                                    disabled={i === draft.suggestedLots.length - 1}
+                                                    aria-label={isEnglish ? 'Move down' : '下移'}
+                                                    title={isEnglish ? 'Move down' : '下移'}
+                                                >↓</button>
+                                                <button
+                                                    type="button"
+                                                    className="admin-venue-lot-remove"
+                                                    onClick={() => removeLot(i)}
+                                                    title={isEnglish ? 'Remove lot' : '删除停车场'}
+                                                    aria-label={isEnglish ? 'Remove lot' : '删除停车场'}
+                                                >×</button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </>

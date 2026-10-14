@@ -245,3 +245,113 @@ export async function fetchWalkingTimes(
     });
     return times;
 }
+
+// UW Facilities' public ArcGIS layers: building outlines, and the accessibility
+// guide's per-building notes, which include the parking UW recommends for it.
+const UW_GIS = "https://gis.maps.uw.edu/federated/rest/services";
+const UW_BUILDINGS_LAYER = `${UW_GIS}/BaseComponents/UW_Seattle_Buildings_and_Paths/FeatureServer/1/query`;
+const UW_BUILDING_INFO_LAYER = `${UW_GIS}/PublicData/PUBLIC_ADA/MapServer/6/query`;
+
+export interface UwBuilding {
+    code: string;
+    name: string;
+    address: string;
+    /** The building's footprint centroid. */
+    lat: number;
+    lng: number;
+    /** UW's own parking note for the building, e.g. "N22: Pay at Gatehouse", or ''. */
+    parkingTip: string;
+}
+
+/**
+ * Lot codes named in UW's parking notes, written the way the lot data writes
+ * them: "N22", "C9" → "C09", and "Central Plaza Garage (C1-C5)" → C01…C05.
+ */
+export function lotCodesInText(note: string): string[] {
+    const codes: string[] = [];
+    const add = (letter: string, n: number) => {
+        const code = `${letter}${String(n).padStart(2, "0")}`;
+        if (!codes.includes(code)) codes.push(code);
+    };
+    for (const m of note.toUpperCase().matchAll(/\b([CENSW])(\d{1,2})(?:\s*[-–]\s*\1?(\d{1,2}))?\b/g)) {
+        const from = Number(m[2]);
+        const to = m[3] ? Number(m[3]) : from;
+        // A range is a run of numbered sections ("C1-C5"); anything wider is not one.
+        if (to < from || to - from > 10) continue;
+        for (let n = from; n <= to; n++) add(m[1], n);
+    }
+    return codes;
+}
+
+function ringCentroid(ring: unknown): {area: number; x: number; y: number} | null {
+    if (!Array.isArray(ring) || ring.length < 4) return null;
+    let a = 0, cx = 0, cy = 0;
+    for (let i = 0; i + 1 < ring.length; i++) {
+        const p = ring[i], q = ring[i + 1];
+        if (!Array.isArray(p) || !Array.isArray(q)) return null;
+        const [x1, y1, x2, y2] = [num(p[0]), num(p[1]), num(q[0]), num(q[1])];
+        if (x1 === null || y1 === null || x2 === null || y2 === null) return null;
+        const c = x1 * y2 - x2 * y1;
+        a += c;
+        cx += (x1 + x2) * c;
+        cy += (y1 + y2) * c;
+    }
+    if (a === 0) return null;
+    return {area: Math.abs(a / 2), x: cx / (3 * a), y: cy / (3 * a)};
+}
+
+/** A UW Seattle building by its code, or null when UW has no active building with that code. */
+export async function fetchUwBuilding(code: string): Promise<UwBuilding | null> {
+    if (!UW_BUILDING_CODE_RE.test(code)) return null;
+    const buildingQuery = new URLSearchParams({
+        where: `FacCode='${code}' AND FeatureStatus='Active'`,
+        outFields: "FacCode,FacName,Address",
+        outSR: "4326",
+        f: "geojson",
+    });
+    const infoQuery = new URLSearchParams({
+        where: `FacilityCode='${code}'`,
+        outFields: "Parking",
+        returnGeometry: "false",
+        f: "json",
+    });
+    const [buildings, info] = await Promise.all([
+        fetchJson(`${UW_BUILDINGS_LAYER}?${buildingQuery}`),
+        // The parking note is a nicety; a building is still found without it.
+        fetchJson(`${UW_BUILDING_INFO_LAYER}?${infoQuery}`).catch(() => null),
+    ]);
+    if (!isRecord(buildings) || !Array.isArray(buildings.features)) {
+        throw new Error("UW's building layer returned no features list");
+    }
+
+    // A building can come back as several parts; weight their centroids by area.
+    let name = "", address = "", area = 0, x = 0, y = 0;
+    for (const feature of buildings.features) {
+        if (!isRecord(feature) || !isRecord(feature.geometry)) continue;
+        const props = isRecord(feature.properties) ? feature.properties : {};
+        name ||= text(props.FacName);
+        address ||= text(props.Address, 200);
+        const geometry = feature.geometry;
+        const polygons = geometry.type === "Polygon" ? [geometry.coordinates]
+            : geometry.type === "MultiPolygon" && Array.isArray(geometry.coordinates) ? geometry.coordinates : [];
+        for (const polygon of polygons) {
+            const c = Array.isArray(polygon) ? ringCentroid(polygon[0]) : null;
+            if (!c) continue;
+            area += c.area;
+            x += c.x * c.area;
+            y += c.y * c.area;
+        }
+    }
+    if (area === 0) return null;
+
+    const attributes = isRecord(info) && Array.isArray(info.features) && isRecord(info.features[0])
+        && isRecord(info.features[0].attributes) ? info.features[0].attributes : {};
+    return {
+        code,
+        name: name || code,
+        address,
+        lat: Number((y / area).toFixed(6)),
+        lng: Number((x / area).toFixed(6)),
+        parkingTip: text(attributes.Parking, 300),
+    };
+}

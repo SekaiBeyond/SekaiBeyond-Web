@@ -493,7 +493,28 @@ export const callSaveVenue = (data: {
     lat: number;
     lng: number;
     parkingLots: Array<{lotId: string}>;
+    buildingCode?: string;
+    suggestedLots?: Array<{code: string; noteEn: string; noteCn: string}>;
 }) => httpsCallable<typeof data, {venueId: string}>(getFunctions(), 'saveVenue')(data);
+
+export interface UwBuildingLookup {
+    building: {code: string; name: string; address: string; lat: number; lng: number; parkingTip: string};
+    /** Visitor lots named in UW's parking note for the building. */
+    recommendedLots: string[];
+    /** Visitor lots nearest on foot, closest first. */
+    nearestLots: Array<{code: string; seconds: number; meters: number}>;
+}
+
+export const callLookUpUwBuilding = (data: {code: string}) =>
+    httpsCallable<typeof data, UwBuildingLookup>(getFunctions(), 'lookUpUwBuilding')(data);
+
+export const callSyncUwParking = () =>
+    httpsCallable<Record<string, never>, {
+        lotCount: number;
+        pricingDayCount: number;
+        walkingVenueCount: number;
+        errors: string[];
+    }>(getFunctions(), 'syncUwParking')({});
 
 export const callDeleteVenue = (data: {venueId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteVenue')(data);

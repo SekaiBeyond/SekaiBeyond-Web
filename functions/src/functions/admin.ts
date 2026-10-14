@@ -34,6 +34,7 @@ import {
     validateUrl
 } from "../utils/validation";
 import { UW_BUILDING_CODE_RE, UW_LOT_CODE_RE } from "../utils/uwParking";
+import { dropVenueWalking, refreshVenueWalking } from "./parking";
 
 export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -1305,7 +1306,7 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
 
     const docId = venueId ?? db.collection("venues").doc().id;
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         if (venueId) {
             const existing = await txn.get(db.collection("venues").doc(venueId));
             if (!existing.exists) throw new HttpsError("not-found", "Venue not found.");
@@ -1331,8 +1332,13 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
             venueId: docId,
             venueName: nameEn,
         }));
-        return {venueId: docId};
     });
+
+    // A new or moved venue gets walking times now rather than at the nightly sync.
+    // Best effort: the save has committed, and the next sync measures it anyway.
+    await refreshVenueWalking(docId, lat, lng)
+        .catch(err => console.error("saveVenue: walking times not refreshed for", docId, err));
+    return {venueId: docId};
 });
 export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -1341,7 +1347,7 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
 
     const venueId = validateDocId((request.data as {venueId?: string})?.venueId, "venueId");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const venueSnap = await txn.get(db.collection("venues").doc(venueId));
         if (!venueSnap.exists) throw new HttpsError("not-found", "Venue not found.");
 
@@ -1351,8 +1357,11 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
             performedByName: callerSnap.data()?.displayName ?? "",
             venueName: venueSnap.data()?.nameEn ?? venueId,
         }));
-        return {deleted: true};
     });
+    // Best effort, like the refresh on save; the nightly sync drops it otherwise.
+    await dropVenueWalking(venueId)
+        .catch(err => console.error("deleteVenue: walking times not dropped for", venueId, err));
+    return {deleted: true};
 });
 export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
