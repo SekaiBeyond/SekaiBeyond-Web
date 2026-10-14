@@ -2,11 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AdvancedMarker, APIProvider, InfoWindow, Map, useMap } from '@vis.gl/react-google-maps';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_MAP_ID } from '~/lib/googleMaps';
-import { lotBadgeChar, lotTypeLabel, lotTypeShortLabel, type ParkingLot } from '~/lib/parkingLots';
-import { NO_RATE_COLOR, type ParkingRate, rateColorById, rateLabel } from '~/lib/parkingRates';
+import { type UwLot, useUwParking, uwLotGlyph, uwLotTypeLabel } from '~/lib/uwParking';
 import { DEFAULT_ZOOM, hasCoordinates, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
 
-/** Which marker's popup is currently open on the overview map. */
+/** Which marker's popup is currently open on the overview map: a venue by ID, a lot by UW code. */
 type MapSelection = {kind: 'venue' | 'lot'; id: string};
 
 /** One row in the combined venue + parking-lot search dropdown. */
@@ -15,11 +14,13 @@ interface SearchItem {
     id: string;
     name: string;
     meta: string;
-    badgeType: 'venue' | ParkingLot['type'];
+    badgeType: 'venue' | 'garage' | 'lot';
     badgeChar: string;
     /** False when the item has no coordinates — picking it jumps to its list card instead. */
     mappable: boolean;
 }
+
+const isGarage = (lot: UwLot) => /Garage/.test(lot.type);
 
 /**
  * Headless helper that lives inside the Map and pans it to the given point whenever it
@@ -36,8 +37,8 @@ const MapPanner = ({target}: {target: {lat: number; lng: number; nonce: number} 
 };
 
 /**
- * Searchable finder over every venue and parking lot. Picking a mappable item focuses it
- * on the overview map; items without coordinates jump straight to their list card.
+ * Searchable finder over every venue and UW parking lot. Picking a mappable item focuses it
+ * on the overview map; venues without coordinates jump straight to their list card.
  */
 interface LocationSearchProps {
     items: SearchItem[];
@@ -125,7 +126,7 @@ const LocationSearch = ({items, onPick, isEnglish}: LocationSearchProps) => {
                             {venueResults.map(renderOption)}
                             {lotResults.length > 0 && (
                                 <div className="admin-locmap-search-group">
-                                    {isEnglish ? 'Parking Lots' : '停车场'}
+                                    {isEnglish ? 'UW Visitor Lots' : 'UW 访客停车场'}
                                 </div>
                             )}
                             {lotResults.map(renderOption)}
@@ -139,127 +140,90 @@ const LocationSearch = ({items, onPick, isEnglish}: LocationSearchProps) => {
 
 /**
  * Interactive overview map for the admin Locations tab, modeled on the public parking
- * guide. Plots every venue (star) and parking lot (P / G / ♿) on one map; selecting a
- * venue highlights its linked lots, and each popup can jump to the matching card in the
- * lists below via `onShowVenue` / `onShowLot`.
+ * guide. Plots every venue (star) and UW visitor lot (P / G) on one map; selecting a
+ * venue highlights its suggested lots, and a venue's popup can jump to its card in the
+ * list below via `onShowVenue` / `onEditVenue`.
  */
 interface LocationsMapProps {
     venues: Venue[];
-    parkingLots: ParkingLot[];
-    parkingRates: ParkingRate[];
     onShowVenue: (venueId: string) => void;
-    onShowLot: (lotId: string) => void;
     /** Jump to the card AND open its inline edit form. */
     onEditVenue: (venueId: string) => void;
-    onEditLot: (lotId: string) => void;
     readOnly?: boolean;
 }
 
-export const LocationsMap = ({
-                                 venues,
-                                 parkingLots,
-                                 parkingRates,
-                                 onShowVenue,
-                                 onShowLot,
-                                 onEditVenue,
-                                 onEditLot,
-                                 readOnly = false,
-                             }: LocationsMapProps) => {
+export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false}: LocationsMapProps) => {
     const {isEnglish} = useLanguage();
+    const {parking} = useUwParking();
     const [selected, setSelected] = useState<MapSelection | null>(null);
     const [focus, setFocus] = useState<{lat: number; lng: number; nonce: number} | null>(null);
     const focusNonce = useRef(0);
 
+    const lots = parking.lots;
     const mappableVenues = venues.filter(v => hasCoordinates(v.lat, v.lng));
-    const mappableLots = parkingLots.filter(l => hasCoordinates(l.lat, l.lng));
-    const unmappedCount = (venues.length - mappableVenues.length) + (parkingLots.length - mappableLots.length);
+    const unmappedCount = venues.length - mappableVenues.length;
 
     const selectedVenue = selected?.kind === 'venue'
         ? mappableVenues.find(v => v.id === selected.id) ?? null
         : null;
-    // Lots linked to the selected venue get the parking guide's highlight treatment.
-    const linkedLotIds = useMemo(
-        () => new Set(selectedVenue?.parkingLots.map(l => l.lotId) ?? []),
+    // The selected venue's suggested lots get the parking guide's highlight treatment.
+    const suggestedCodes = useMemo(
+        () => new Set(selectedVenue?.suggestedLots.map(s => s.code) ?? []),
         [selectedVenue],
     );
 
-    const rateById = useMemo(() => {
-        const lookup: Record<string, ParkingRate> = {};
-        for (const r of parkingRates) lookup[r.id] = r;
-        return lookup;
-    }, [parkingRates]);
-    // Marker colors encode the price tier (UW parking-map style); grey = no rate assigned.
-    const colorById = useMemo(() => rateColorById(parkingRates), [parkingRates]);
-    const lotColor = (lot: ParkingLot) =>
-        (lot.rateId && colorById[lot.rateId]) || NO_RATE_COLOR;
-    const hasUnratedLot = mappableLots.some(l => !l.rateId || !colorById[l.rateId]);
-
     const venueName = (v: Venue) => isEnglish ? v.nameEn : (v.nameCn || v.nameEn);
-    const lotName = (l: ParkingLot) => isEnglish ? l.name : (l.nameCn || l.name);
+    const lotTitle = (lot: UwLot) => lot.name !== lot.code ? `${lot.code} · ${lot.name}` : lot.code;
 
     const searchItems: SearchItem[] = [
         ...venues.map(v => {
-            const n = v.parkingLots.length;
+            const n = v.suggestedLots.length;
             return {
                 kind: 'venue' as const,
                 id: v.id,
                 name: venueName(v),
                 meta: isEnglish
-                    ? `Venue · ${n} lot${n === 1 ? '' : 's'}`
-                    : `场地 · ${n} 个停车场`,
+                    ? `Venue · ${n} suggested lot${n === 1 ? '' : 's'}`
+                    : `场地 · ${n} 个推荐停车场`,
                 badgeType: 'venue' as const,
                 badgeChar: '⭐',
                 mappable: hasCoordinates(v.lat, v.lng),
             };
         }),
-        ...parkingLots.map(l => {
-            const rate = l.rateId ? rateById[l.rateId] : undefined;
-            return {
-                kind: 'lot' as const,
-                id: l.id,
-                name: lotName(l),
-                meta: lotTypeShortLabel(l.type, isEnglish) + (rate ? ` · ${rateLabel(rate, isEnglish)}` : ''),
-                badgeType: l.type,
-                badgeChar: lotBadgeChar(l.type),
-                mappable: hasCoordinates(l.lat, l.lng),
-            };
-        }),
+        ...lots.map(lot => ({
+            kind: 'lot' as const,
+            id: lot.code,
+            name: lotTitle(lot),
+            meta: uwLotTypeLabel(lot.type, isEnglish),
+            badgeType: isGarage(lot) ? 'garage' as const : 'lot' as const,
+            badgeChar: uwLotGlyph(lot.type),
+            mappable: true,
+        })),
     ];
 
     const pickSearchItem = (item: SearchItem) => {
         if (!item.mappable) {
-            // Nothing to focus on the map — send the admin straight to the list card.
-            if (item.kind === 'venue') onShowVenue(item.id);
-            else onShowLot(item.id);
+            // Nothing to focus on the map — send the admin straight to the venue's card.
+            onShowVenue(item.id);
             return;
         }
         const target = item.kind === 'venue'
             ? mappableVenues.find(v => v.id === item.id)
-            : mappableLots.find(l => l.id === item.id);
+            : lots.find(l => l.code === item.id);
         if (!target) return;
         setSelected({kind: item.kind, id: item.id});
         setFocus({lat: target.lat, lng: target.lng, nonce: ++focusNonce.current});
     };
 
-    const jumpToList = (sel: MapSelection) => {
-        setSelected(null);
-        if (sel.kind === 'venue') onShowVenue(sel.id);
-        else onShowLot(sel.id);
-    };
-
-    const jumpToEdit = (sel: MapSelection) => {
-        setSelected(null);
-        if (sel.kind === 'venue') onEditVenue(sel.id);
-        else onEditLot(sel.id);
-    };
-
-    /** "Show in list" + (unless read-only) "Edit" actions shared by both popup kinds. */
-    const popupActions = (sel: MapSelection) => (
+    const venueActions = (venueId: string) => (
         <div className="admin-locmap-popup-actions">
             <button
                 type="button"
                 className="admin-locmap-popup-btn admin-locmap-popup-btn--secondary"
-                onClick={() => jumpToList(sel)}
+                onClick={() => {
+                    setSelected(null);
+                    onShowVenue(venueId);
+                }}
             >
                 {isEnglish ? 'Show in list ↓' : '在列表中显示 ↓'}
             </button>
@@ -267,7 +231,10 @@ export const LocationsMap = ({
                 <button
                     type="button"
                     className="admin-locmap-popup-btn"
-                    onClick={() => jumpToEdit(sel)}
+                    onClick={() => {
+                        setSelected(null);
+                        onEditVenue(venueId);
+                    }}
                 >
                     {isEnglish ? 'Edit' : '编辑'}
                 </button>
@@ -275,13 +242,13 @@ export const LocationsMap = ({
         </div>
     );
 
-    if (venues.length === 0 && parkingLots.length === 0) {
+    if (venues.length === 0 && lots.length === 0) {
         return (
             <div className="admin-section">
                 <p className="admin-no-results">
                     {isEnglish
-                        ? 'Nothing to map yet — create a venue or parking lot below.'
-                        : '暂无可显示的地点 — 请在下方创建场地或停车场。'}
+                        ? 'Nothing to map yet — create a venue below, or sync UW’s parking data.'
+                        : '暂无可显示的地点 — 请在下方创建场地，或同步 UW 停车数据。'}
                 </p>
             </div>
         );
@@ -289,7 +256,7 @@ export const LocationsMap = ({
 
     // Frame the map on everything that has coordinates; with fewer than two points a
     // bounds box degenerates, so fall back to a plain center + zoom.
-    const points = [...mappableVenues, ...mappableLots];
+    const points = [...mappableVenues, ...lots];
     const mapBounds = points.length > 1
         ? {
             north: Math.max(...points.map(p => p.lat)),
@@ -303,8 +270,8 @@ export const LocationsMap = ({
         <div className="admin-section admin-locmap">
             <p className="admin-helper-text admin-section-intro">
                 {isEnglish
-                    ? 'Every venue (⭐) and parking lot on one map. Click a venue to highlight its linked lots, or search to find a location; popups jump to the matching card below.'
-                    : '所有场地（⭐）与停车场都在同一张地图上。点击场地可高亮其关联停车场，或使用搜索定位；弹窗可跳转到下方对应卡片。'}
+                    ? 'Every venue (⭐) and UW visitor lot on one map. Click a venue to highlight its suggested lots, or search to find a location; a venue’s popup jumps to its card below.'
+                    : '所有场地（⭐）与 UW 访客停车场都在同一张地图上。点击场地可高亮其推荐停车场，或使用搜索定位；场地弹窗可跳转到下方对应卡片。'}
             </p>
 
             <div className="admin-locmap-toolbar">
@@ -314,31 +281,14 @@ export const LocationsMap = ({
                         <span className="admin-locmap-legend-dot" data-type="venue">⭐</span>
                         {isEnglish ? 'Venue' : '场地'}
                     </span>
-                    {/* Glyph = lot type; color = rate tier (below), like the UW parking map. */}
                     <span className="admin-locmap-legend-item">
-                        <span className="admin-locmap-legend-dot" data-kind="glyph">P</span>
-                        {lotTypeShortLabel('general', isEnglish)}
+                        <span className="admin-locmap-legend-dot" data-type="lot">P</span>
+                        {isEnglish ? 'Surface lot' : '地面停车场'}
                     </span>
                     <span className="admin-locmap-legend-item">
-                        <span className="admin-locmap-legend-dot" data-kind="glyph">G</span>
-                        {lotTypeShortLabel('garage', isEnglish)}
+                        <span className="admin-locmap-legend-dot" data-type="garage">G</span>
+                        {isEnglish ? 'Garage' : '停车楼'}
                     </span>
-                    <span className="admin-locmap-legend-item">
-                        <span className="admin-locmap-legend-dot" data-kind="glyph">♿</span>
-                        {lotTypeShortLabel('disabled', isEnglish)}
-                    </span>
-                    {parkingRates.map(rate => (
-                        <span key={rate.id} className="admin-locmap-legend-item">
-                            <span className="admin-locmap-legend-dot" style={{background: colorById[rate.id]}}/>
-                            {rateLabel(rate, isEnglish)}
-                        </span>
-                    ))}
-                    {hasUnratedLot && (
-                        <span className="admin-locmap-legend-item">
-                            <span className="admin-locmap-legend-dot" style={{background: NO_RATE_COLOR}}/>
-                            {isEnglish ? 'No rate' : '无费率'}
-                        </span>
-                    )}
                 </div>
             </div>
 
@@ -381,58 +331,55 @@ export const LocationsMap = ({
                                                 <div className="parking-popup-type">{venue.nameCn}</div>
                                             )}
                                             <div className="parking-popup-type">
-                                                {venue.parkingLots.length > 0
+                                                {venue.suggestedLots.length > 0
                                                     ? (isEnglish
-                                                        ? `${venue.parkingLots.length} linked lot${venue.parkingLots.length === 1 ? '' : 's'} — highlighted on the map`
-                                                        : `${venue.parkingLots.length} 个关联停车场 — 已在地图上高亮`)
-                                                    : (isEnglish ? 'No linked lots' : '无关联停车场')}
+                                                        ? `Suggested lots: ${venue.suggestedLots.map(s => s.code).join(' · ')} — highlighted on the map`
+                                                        : `推荐停车场：${venue.suggestedLots.map(s => s.code).join(' · ')} — 已在地图上高亮`)
+                                                    : (isEnglish ? 'No suggested lots' : '无推荐停车场')}
                                             </div>
-                                            {popupActions({kind: 'venue', id: venue.id})}
+                                            {venueActions(venue.id)}
                                         </div>
                                     </InfoWindow>
                                 )}
                             </div>
                         ))}
 
-                        {/* Parking lot markers — lots linked to the selected venue are highlighted. */}
-                        {mappableLots.map(lot => {
-                            const linked = linkedLotIds.has(lot.id);
-                            const typeLabel = lotTypeLabel(lot.type, isEnglish);
-                            const rate = lot.rateId ? rateById[lot.rateId] : undefined;
+                        {/* UW lot markers — the selected venue's suggested lots are highlighted. */}
+                        {lots.map(lot => {
+                            const suggested = suggestedCodes.has(lot.code);
+                            const typeLabel = uwLotTypeLabel(lot.type, isEnglish);
                             return (
-                                <div key={lot.id}>
+                                <div key={lot.code}>
                                     <AdvancedMarker
                                         position={{lat: lot.lat, lng: lot.lng}}
-                                        onClick={() => setSelected({kind: 'lot', id: lot.id})}
-                                        zIndex={selected?.kind === 'lot' && selected.id === lot.id ? 4 : linked ? 2 : 1}
+                                        onClick={() => setSelected({kind: 'lot', id: lot.code})}
+                                        zIndex={selected?.kind === 'lot' && selected.id === lot.code ? 4 : suggested ? 2 : 1}
                                     >
-                                        <div className={`parking-marker-lot-inner${linked ? ' is-linked' : ''}`}>
-                                            <div className="parking-marker-p" style={{background: lotColor(lot)}}>
-                                                {lotBadgeChar(lot.type)}
+                                        <div className={`parking-marker-lot-inner${suggested ? ' is-linked' : ''}`}>
+                                            <div className={`parking-marker-p${isGarage(lot) ? ' is-garage' : ''}`}>
+                                                {uwLotGlyph(lot.type)}
                                             </div>
-                                            {linked && (
+                                            {suggested && (
                                                 <div className="parking-marker-label">
-                                                    {lot.name.split(' ')[0] ?? ''}<span>{typeLabel}</span>
+                                                    {lot.code}<span>{typeLabel}</span>
                                                 </div>
                                             )}
                                         </div>
                                     </AdvancedMarker>
 
-                                    {selected?.kind === 'lot' && selected.id === lot.id && (
+                                    {selected?.kind === 'lot' && selected.id === lot.code && (
                                         <InfoWindow
                                             position={{lat: lot.lat, lng: lot.lng}}
                                             onCloseClick={() => setSelected(null)}
                                             pixelOffset={[0, -52]}
                                         >
                                             <div className="parking-popup-content">
-                                                <div className="parking-popup-title">{lot.name}</div>
-                                                {lot.nameCn && (
-                                                    <div className="parking-popup-type">{lot.nameCn}</div>
-                                                )}
+                                                <div className="parking-popup-title">{lotTitle(lot)}</div>
                                                 <div className="parking-popup-type">
-                                                    {typeLabel}{rate ? ` · ${rateLabel(rate, isEnglish)}` : ''}
+                                                    {typeLabel} · {lot.access === 'Pay to Park'
+                                                        ? (isEnglish ? 'Pay to park' : '付费停车')
+                                                        : (isEnglish ? 'Permit or pay' : '持证或付费')}
                                                 </div>
-                                                {popupActions({kind: 'lot', id: lot.id})}
                                             </div>
                                         </InfoWindow>
                                     )}
@@ -446,8 +393,8 @@ export const LocationsMap = ({
             {unmappedCount > 0 && (
                 <p className="admin-helper-text admin-locmap-hint">
                     {isEnglish
-                        ? `${unmappedCount} location${unmappedCount === 1 ? ' has' : 's have'} no coordinates set and only appear${unmappedCount === 1 ? 's' : ''} in the lists below.`
-                        : `${unmappedCount} 个地点未设置坐标，仅显示在下方列表中。`}
+                        ? `${unmappedCount} venue${unmappedCount === 1 ? ' has' : 's have'} no coordinates set and only appear${unmappedCount === 1 ? 's' : ''} in the list below.`
+                        : `${unmappedCount} 个场地未设置坐标，仅显示在下方列表中。`}
                 </p>
             )}
         </div>

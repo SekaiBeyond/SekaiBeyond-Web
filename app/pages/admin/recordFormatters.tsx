@@ -3,8 +3,6 @@ import { GROUP_LABELS, type UserGroup } from '~/components/AuthProvider';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Venue } from '~/lib/venues';
-import type { ParkingLot } from '~/lib/parkingLots';
-import { type ParkingRate, rateLabel } from '~/lib/parkingRates';
 import { ticketTypeLabel } from './tickets/types';
 import { type ActivityRecord, type BadgeDef, RECORD_CATEGORIES, type RecordCategory } from './types';
 
@@ -29,15 +27,11 @@ export interface RecordFormatContext {
     upcomingEvents: UpcomingEvent[];
     badgeDefs: BadgeDef[];
     venues: Venue[];
-    parkingLots: ParkingLot[];
-    parkingRates: ParkingRate[];
     onLookupUser: (uid: string) => void;
     onSelectBadge: (badgeId: string) => void;
     onSelectEvent: (eventId: string) => void;
     onSelectUpcomingEvent: (eventId: string) => void;
     onSelectVenue: (venueId: string) => void;
-    onSelectParkingLot: (lotId: string) => void;
-    onSelectParkingRate: (rateId: string) => void;
 }
 
 export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): ReactNode {
@@ -47,15 +41,11 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         upcomingEvents,
         badgeDefs,
         venues,
-        parkingLots,
-        parkingRates,
         onLookupUser,
         onSelectBadge,
         onSelectEvent,
         onSelectUpcomingEvent,
         onSelectVenue,
-        onSelectParkingLot,
-        onSelectParkingRate,
     } = ctx;
 
     const clickable = (label: ReactNode, onClick?: () => void): ReactNode => onClick
@@ -89,18 +79,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         const venue = venues.find(v => v.id === venueId);
         if (venue) return clickable(localized(venue.nameEn, venue.nameCn), () => onSelectVenue(venue.id));
         return clickable(storedName ?? '');
-    };
-
-    const clickableLot = (lotId?: string, storedName?: string): ReactNode => {
-        const lot = parkingLots.find(l => l.id === lotId);
-        if (lot) return clickable(localized(lot.name, lot.nameCn), () => onSelectParkingLot(lot.id));
-        return clickable(storedName ?? '');
-    };
-
-    const clickableRate = (rateId?: string, storedLabel?: string): ReactNode => {
-        const rate = parkingRates.find(r => r.id === rateId);
-        if (rate) return clickable(rateLabel(rate, isEnglish), () => onSelectParkingRate(rate.id));
-        return clickable(storedLabel ?? '');
     };
 
     // A record can outlive a group's rename, so its group may have no label left.
@@ -351,14 +329,16 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>deleted venue {r.venueName ?? ''}</>
                 : <>删除了场地 {r.venueName ?? ''}</>;
+        // Hand-entered lots and rates gave way to UW's own data; their history
+        // still reads, by the names the records were written with.
         case 'parkinglot-create':
             return isEnglish
-                ? <>created parking lot {clickableLot(r.lotId, r.lotName)}</>
-                : <>创建了停车场 {clickableLot(r.lotId, r.lotName)}</>;
+                ? <>created parking lot {r.lotName ?? ''}</>
+                : <>创建了停车场 {r.lotName ?? ''}</>;
         case 'parkinglot-edit':
             return isEnglish
-                ? <>edited parking lot {clickableLot(r.lotId, r.lotName)}</>
-                : <>编辑了停车场 {clickableLot(r.lotId, r.lotName)}</>;
+                ? <>edited parking lot {r.lotName ?? ''}</>
+                : <>编辑了停车场 {r.lotName ?? ''}</>;
         case 'parkinglot-delete': {
             const unlinked = r.unlinkedFrom ?? 0;
             if (unlinked > 0) {
@@ -373,12 +353,12 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         }
         case 'parkingrate-create':
             return isEnglish
-                ? <>created parking rate {clickableRate(r.rateId, r.rateLabel)}</>
-                : <>创建了停车费率 {clickableRate(r.rateId, r.rateLabel)}</>;
+                ? <>created parking rate {r.rateLabel ?? ''}</>
+                : <>创建了停车费率 {r.rateLabel ?? ''}</>;
         case 'parkingrate-edit':
             return isEnglish
-                ? <>edited parking rate {clickableRate(r.rateId, r.rateLabel)}</>
-                : <>编辑了停车费率 {clickableRate(r.rateId, r.rateLabel)}</>;
+                ? <>edited parking rate {r.rateLabel ?? ''}</>
+                : <>编辑了停车费率 {r.rateLabel ?? ''}</>;
         case 'parkingrate-delete': {
             const unlinked = r.unlinkedFrom ?? 0;
             if (unlinked > 0) {

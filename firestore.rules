@@ -172,18 +172,10 @@ service cloud.firestore {
             allow read: if true;
         }
 
-        // Parking lots (shared across venues) — publicly readable; writes via Cloud Functions
-        match /parkingLots/{lotId} {
-            allow read: if true;
-        }
-
-        // Parking rate tiers (shared across lots) — publicly readable; writes via Cloud Functions
-        match /parkingRates/{rateId} {
-            allow read: if true;
-        }
-
-        // The parking guide's synced copy of UW's lots, event pricing and walking
-        // times (uwParking/current). Publicly readable; written only by the sync functions.
+        // The parking guide's synced copy of UW's lots, event pricing, walking times
+        // and venue outlines (uwParking/current). Publicly readable; written only by
+        // the sync functions. It replaced the hand-entered parkingLots and parkingRates,
+        // which the default deny now covers.
         match /uwParking/{docId} {
             allow read: if true;
         }

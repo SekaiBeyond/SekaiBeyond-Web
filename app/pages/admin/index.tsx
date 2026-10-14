@@ -11,8 +11,6 @@ import { useAllUpcomingEvents, useUpcomingEventsByIds } from '~/lib/upcomingEven
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTags } from '~/lib/tags';
 import { useVenues } from '~/lib/venues';
-import { useParkingLots } from '~/lib/parkingLots';
-import { useParkingRates } from '~/lib/parkingRates';
 import type { BadgeDef, Tab } from './types';
 import { UsersTab, type UsersTabHandle } from './UsersTab';
 import { EventsTab, type EventsTabHandle } from './EventsTab';
@@ -22,15 +20,13 @@ import { TagsTab } from './TagsTab';
 import { VenuesTab } from './VenuesTab';
 import { UwParkingStatus } from './UwParkingStatus';
 import { LocationsMap } from './LocationsMap';
-import { ParkingLotsTab } from './ParkingLotsTab';
-import { ParkingRatesTab } from './ParkingRatesTab';
 import { PassportsTab } from './passports/PassportsTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
 import { ConContentTab } from './ConContentTab';
 import { SectionNav } from './SectionNav';
-import type { CardHighlightHandle, LocationListHandle } from './useCardHighlight';
+import type { LocationListHandle } from './useCardHighlight';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
 
 /** Every tab a link can name, and the older names now folded into another tab. */
@@ -100,8 +96,6 @@ export const AdminPage = () => {
     const {toasts, showToast} = useToasts();
     const {tags, refresh: refreshTags} = useTags();
     const {venues, refresh: refreshVenues} = useVenues();
-    const {parkingLots, refresh: refreshParkingLots} = useParkingLots();
-    const {parkingRates, refresh: refreshParkingRates} = useParkingRates();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const urlParamsHandled = useRef(false);
@@ -111,8 +105,6 @@ export const AdminPage = () => {
     const upcomingTabRef = useRef<UpcomingEventsTabHandle>(null);
     const badgesTabRef = useRef<BadgesTabHandle>(null);
     const venuesTabRef = useRef<LocationListHandle>(null);
-    const parkingLotsTabRef = useRef<LocationListHandle>(null);
-    const parkingRatesTabRef = useRef<CardHighlightHandle>(null);
     // Cross-tab "jump to this card" requests. Held in state (not a ref) with a
     // nonce so the effect below fires after the target tab has mounted — and
     // re-fires even when the target tab is already active (e.g. map → list jumps).
@@ -210,24 +202,9 @@ export const AdminPage = () => {
         queueAction('selectVenue', venueId);
     }, [queueAction]);
 
-    const handleSelectParkingLot = useCallback((lotId: string) => {
-        setActiveTab('locations');
-        queueAction('selectParkingLot', lotId);
-    }, [queueAction]);
-
-    const handleSelectParkingRate = useCallback((rateId: string) => {
-        setActiveTab('locations');
-        queueAction('selectParkingRate', rateId);
-    }, [queueAction]);
-
     const handleEditVenue = useCallback((venueId: string) => {
         setActiveTab('locations');
         queueAction('editVenue', venueId);
-    }, [queueAction]);
-
-    const handleEditParkingLot = useCallback((lotId: string) => {
-        setActiveTab('locations');
-        queueAction('editParkingLot', lotId);
     }, [queueAction]);
 
     // Execute pending jump actions after the target tab mounts (same commit:
@@ -252,17 +229,8 @@ export const AdminPage = () => {
             case 'selectVenue':
                 venuesTabRef.current?.highlight(action.id);
                 break;
-            case 'selectParkingLot':
-                parkingLotsTabRef.current?.highlight(action.id);
-                break;
-            case 'selectParkingRate':
-                parkingRatesTabRef.current?.highlight(action.id);
-                break;
             case 'editVenue':
                 venuesTabRef.current?.openEdit(action.id);
-                break;
-            case 'editParkingLot':
-                parkingLotsTabRef.current?.openEdit(action.id);
                 break;
         }
     }, [pendingAction]);
@@ -405,12 +373,8 @@ export const AdminPage = () => {
                             </h2>
                             <LocationsMap
                                 venues={venues}
-                                parkingLots={parkingLots}
-                                parkingRates={parkingRates}
                                 onShowVenue={handleSelectVenue}
-                                onShowLot={handleSelectParkingLot}
                                 onEditVenue={handleEditVenue}
-                                onEditLot={handleEditParkingLot}
                                 readOnly={isStaffGroup}
                             />
                         </div>
@@ -427,34 +391,6 @@ export const AdminPage = () => {
                             <VenuesTab
                                 ref={venuesTabRef}
                                 venues={venues}
-                                parkingLots={parkingLots}
-                                refreshVenues={refreshVenues}
-                                showToast={showToast}
-                                readOnly={isStaffGroup}
-                            />
-                        </div>
-                        <div id="admin-sec-parking-rates">
-                            <h2 className="admin-section-header admin-section-mt">
-                                {isEnglish ? 'Parking Rates' : '停车费率'}
-                            </h2>
-                            <ParkingRatesTab
-                                ref={parkingRatesTabRef}
-                                parkingRates={parkingRates}
-                                refreshParkingRates={refreshParkingRates}
-                                refreshParkingLots={refreshParkingLots}
-                                showToast={showToast}
-                                readOnly={isStaffGroup}
-                            />
-                        </div>
-                        <div id="admin-sec-parking-lots">
-                            <h2 className="admin-section-header admin-section-mt">
-                                {isEnglish ? 'Parking Lots' : '停车场'}
-                            </h2>
-                            <ParkingLotsTab
-                                ref={parkingLotsTabRef}
-                                parkingLots={parkingLots}
-                                parkingRates={parkingRates}
-                                refreshParkingLots={refreshParkingLots}
                                 refreshVenues={refreshVenues}
                                 showToast={showToast}
                                 readOnly={isStaffGroup}
@@ -465,8 +401,6 @@ export const AdminPage = () => {
                                 {id: 'admin-sec-map', label: isEnglish ? 'Overview Map' : '总览地图'},
                                 {id: 'admin-sec-uw-parking', label: isEnglish ? 'UW Parking Data' : 'UW 停车数据'},
                                 {id: 'admin-sec-venues', label: isEnglish ? 'Venues' : '场地'},
-                                {id: 'admin-sec-parking-rates', label: isEnglish ? 'Parking Rates' : '停车费率'},
-                                {id: 'admin-sec-parking-lots', label: isEnglish ? 'Parking Lots' : '停车场'},
                             ]}
                         />
                     </>
@@ -506,15 +440,11 @@ export const AdminPage = () => {
                         upcomingEvents={upcomingEvents}
                         badgeDefs={badgeDefs}
                         venues={venues}
-                        parkingLots={parkingLots}
-                        parkingRates={parkingRates}
                         onLookupUser={handleLookupUser}
                         onSelectBadge={handleSelectBadge}
                         onSelectEvent={handleSelectEvent}
                         onSelectUpcomingEvent={handleSelectUpcomingEvent}
                         onSelectVenue={handleSelectVenue}
-                        onSelectParkingLot={handleSelectParkingLot}
-                        onSelectParkingRate={handleSelectParkingRate}
                     />
                 )}
 

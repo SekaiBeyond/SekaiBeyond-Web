@@ -1076,161 +1076,6 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
     return {saved: true};
 });
 
-const PARKING_LOT_TYPES = ["general", "disabled", "garage"] as const;
-
-export const saveParkingLot = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
-
-    const input = request.data as Record<string, unknown>;
-    const lotId = input.lotId ? validateDocId(input.lotId, "lotId") : null;
-    const name = sanitizeDisplayText(validateStr(input.name, "name", 200, true));
-    const nameCn = sanitizeDisplayText(validateStr(input.nameCn, "nameCn", 200));
-    const type = typeof input.type === "string" && (PARKING_LOT_TYPES as readonly string[]).includes(input.type)
-        ? input.type as typeof PARKING_LOT_TYPES[number]
-        : null;
-    if (!type) throw new HttpsError("invalid-argument", `type must be one of ${PARKING_LOT_TYPES.join(", ")}.`);
-    const lat = validateCoordinate(input.lat, "lat", -90, 90);
-    const lng = validateCoordinate(input.lng, "lng", -180, 180);
-    // rateId links to a parkingRates tier; "" means no rate assigned.
-    const rateId = typeof input.rateId === "string" && input.rateId.trim()
-        ? validateDocId(input.rateId, "rateId")
-        : "";
-
-    const docId = lotId ?? db.collection("parkingLots").doc().id;
-
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        if (lotId) {
-            const existing = await txn.get(db.collection("parkingLots").doc(lotId));
-            if (!existing.exists) throw new HttpsError("not-found", "Parking lot not found.");
-        }
-        if (rateId) {
-            const rateSnap = await txn.get(db.collection("parkingRates").doc(rateId));
-            if (!rateSnap.exists) throw new HttpsError("not-found", "Parking rate not found.");
-        }
-
-        const ref = db.collection("parkingLots").doc(docId);
-        const data = {name, nameCn, type, lat, lng, rateId};
-        if (lotId) {
-            txn.update(ref, data);
-        } else {
-            txn.set(ref, data);
-        }
-        txn.set(recordRef(), recordDoc(lotId ? "parkinglot-edit" : "parkinglot-create", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            lotId: docId,
-            lotName: name,
-        }));
-        return {lotId: docId};
-    });
-});
-export const deleteParkingLot = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
-
-    const lotId = validateDocId((request.data as {lotId?: string})?.lotId, "lotId");
-
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        const lotSnap = await txn.get(db.collection("parkingLots").doc(lotId));
-        if (!lotSnap.exists) throw new HttpsError("not-found", "Parking lot not found.");
-
-        // Cascade unlink: remove this lotId from every venue that references it.
-        const venuesSnap = await txn.get(db.collection("venues"));
-        let unlinkedFrom = 0;
-        for (const doc of venuesSnap.docs) {
-            const lots = Array.isArray(doc.data().parkingLots) ? doc.data().parkingLots : [];
-            const filtered = lots.filter((l: any) => l?.lotId !== lotId);
-            if (filtered.length !== lots.length) {
-                txn.update(doc.ref, {parkingLots: filtered});
-                unlinkedFrom++;
-            }
-        }
-
-        txn.delete(db.collection("parkingLots").doc(lotId));
-        txn.set(recordRef(), recordDoc("parkinglot-delete", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            lotName: lotSnap.data()?.name ?? lotId,
-            unlinkedFrom,
-        }));
-        return {deleted: true, unlinkedFrom};
-    });
-});
-
-export const saveParkingRate = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
-
-    const input = request.data as Record<string, unknown>;
-    const rateId = input.rateId ? validateDocId(input.rateId, "rateId") : null;
-    const labelEn = sanitizeDisplayText(validateStr(input.labelEn, "labelEn", 200, true));
-    const labelCn = sanitizeDisplayText(validateStr(input.labelCn, "labelCn", 200));
-    if (!labelEn) throw new HttpsError("invalid-argument", "labelEn is required.");
-    // Marker color for lots on this tier; "" defers to the client-side preset fallback.
-    const color = typeof input.color === "string" ? input.color.trim().toLowerCase() : "";
-    if (color && !/^#[0-9a-f]{6}$/.test(color)) {
-        throw new HttpsError("invalid-argument", "color must be a hex color like #4b2e83.");
-    }
-
-    const docId = rateId ?? db.collection("parkingRates").doc().id;
-
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        if (rateId) {
-            const existing = await txn.get(db.collection("parkingRates").doc(rateId));
-            if (!existing.exists) throw new HttpsError("not-found", "Parking rate not found.");
-        }
-
-        const ref = db.collection("parkingRates").doc(docId);
-        if (rateId) {
-            // Preserve the existing display order on edit; only labels and color change.
-            txn.update(ref, {labelEn, labelCn, color});
-        } else {
-            txn.set(ref, {labelEn, labelCn, color, order: Date.now()});
-        }
-        txn.set(recordRef(), recordDoc(rateId ? "parkingrate-edit" : "parkingrate-create", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            rateId: docId,
-            rateLabel: labelEn,
-        }));
-        return {rateId: docId};
-    });
-});
-
-export const deleteParkingRate = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
-
-    const rateId = validateDocId((request.data as {rateId?: string})?.rateId, "rateId");
-
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        const rateSnap = await txn.get(db.collection("parkingRates").doc(rateId));
-        if (!rateSnap.exists) throw new HttpsError("not-found", "Parking rate not found.");
-
-        // Cascade unlink: clear this rateId from every lot that references it.
-        const lotsSnap = await txn.get(db.collection("parkingLots").where("rateId", "==", rateId));
-        let unlinkedFrom = 0;
-        for (const doc of lotsSnap.docs) {
-            txn.update(doc.ref, {rateId: ""});
-            unlinkedFrom++;
-        }
-
-        txn.delete(db.collection("parkingRates").doc(rateId));
-        txn.set(recordRef(), recordDoc("parkingrate-delete", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            rateLabel: rateSnap.data()?.labelEn ?? rateId,
-            unlinkedFrom,
-        }));
-        return {deleted: true, unlinkedFrom};
-    });
-});
-
 const MAX_SUGGESTED_LOTS = 10;
 
 /**
@@ -1288,20 +1133,6 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     const lat = validateCoordinate(input.lat, "lat", -90, 90);
     const lng = validateCoordinate(input.lng, "lng", -180, 180);
 
-    const rawLots = Array.isArray(input.parkingLots) ? input.parkingLots : [];
-    if (rawLots.length > 50) {
-        throw new HttpsError("invalid-argument", "Too many parking lots (max 50).");
-    }
-    const parkingLots = rawLots.map((link: any, i: number) => ({
-        lotId: validateDocId(link?.lotId, `parkingLots[${i}].lotId`),
-    }));
-    const seenLotIds = new Set<string>();
-    for (const l of parkingLots) {
-        if (seenLotIds.has(l.lotId)) {
-            throw new HttpsError("invalid-argument", `Duplicate lotId in parkingLots: ${l.lotId}.`);
-        }
-        seenLotIds.add(l.lotId);
-    }
     const uwFields = venueUwFields(input);
 
     const docId = venueId ?? db.collection("venues").doc().id;
@@ -1316,17 +1147,11 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
             buildingCode = uwFields.buildingCode ?? (typeof current === "string" ? current : "");
         }
 
-        for (const link of parkingLots) {
-            const lotSnap = await txn.get(db.collection("parkingLots").doc(link.lotId));
-            if (!lotSnap.exists) {
-                throw new HttpsError("not-found", `Referenced parking lot not found: ${link.lotId}.`);
-            }
-        }
-
         const ref = db.collection("venues").doc(docId);
-        const data = {nameEn, nameCn, lat, lng, parkingLots, ...uwFields};
+        const data = {nameEn, nameCn, lat, lng, ...uwFields};
         if (venueId) {
-            txn.update(ref, data);
+            // Clears the old guide's lot links from a venue saved before they retired.
+            txn.update(ref, {...data, parkingLots: FieldValue.delete()});
         } else {
             txn.set(ref, data);
         }

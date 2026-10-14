@@ -1,9 +1,8 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteVenue, callLookUpUwBuilding, callSaveVenue, type UwBuildingLookup } from '~/lib/firebase';
-import type { ParkingLot } from '~/lib/parkingLots';
 import { type UwLot, type UwParkingData, useUwParking, uwLotTypeLabel, walkMinutes } from '~/lib/uwParking';
-import type { SuggestedLot, Venue, VenueLotLink } from '~/lib/venues';
+import type { SuggestedLot, Venue } from '~/lib/venues';
 import { haversineMiles, UW_CAMPUS_CENTER } from '~/lib/venues';
 import { BilingualFormField } from './BilingualFormField';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
@@ -15,8 +14,6 @@ import { refreshAfterSave } from './utils';
 const MAX_SUGGESTED_LOTS = 10;
 /** How many lots the editor fills in from a building lookup when the list is empty. */
 const PREFILL_COUNT = 3;
-/** How close an old linked lot must be to a UW lot to count as the same place. */
-const SAME_LOT_METERS = 80;
 const METERS_PER_MILE = 1609.34;
 
 interface VenueDraft {
@@ -26,8 +23,6 @@ interface VenueDraft {
     lng: number;
     buildingCode: string;
     suggestedLots: SuggestedLot[];
-    /** The old guide's links. Not edited here any more, only carried through saves until that guide retires. */
-    parkingLots: VenueLotLink[];
 }
 
 function venueToDraft(v: Venue): VenueDraft {
@@ -38,7 +33,6 @@ function venueToDraft(v: Venue): VenueDraft {
         lng: v.lng,
         buildingCode: v.buildingCode,
         suggestedLots: v.suggestedLots.map(s => ({...s})),
-        parkingLots: v.parkingLots.map(l => ({...l})),
     };
 }
 
@@ -50,7 +44,6 @@ function emptyDraft(): VenueDraft {
         lng: UW_CAMPUS_CENTER.lng,
         buildingCode: '',
         suggestedLots: [],
-        parkingLots: [],
     };
 }
 
@@ -60,7 +53,6 @@ function draftToPayload(draft: VenueDraft) {
         nameCn: draft.nameCn.trim(),
         lat: draft.lat,
         lng: draft.lng,
-        parkingLots: draft.parkingLots,
         buildingCode: draft.buildingCode.trim().toUpperCase(),
         suggestedLots: draft.suggestedLots.map(s => ({code: s.code, noteEn: s.noteEn.trim(), noteCn: s.noteCn.trim()})),
     };
@@ -71,15 +63,13 @@ const metersBetween = (a: {lat: number; lng: number}, b: {lat: number; lng: numb
 
 interface VenuesTabProps {
     venues: Venue[];
-    /** The old guide's lots, used only to suggest matching UW lots for venues still linked to them. */
-    parkingLots: ParkingLot[];
     refreshVenues: () => Promise<void>;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     readOnly?: boolean;
 }
 
 export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
-    {venues, parkingLots, refreshVenues, showToast, readOnly = false}, ref) => {
+    {venues, refreshVenues, showToast, readOnly = false}, ref) => {
     const {isEnglish} = useLanguage();
     const {parking, refresh: refreshParking} = useUwParking();
     const {highlightedId, registerCard, highlight} = useCardHighlight();
@@ -203,7 +193,6 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                         setDraft={setCreateDraft}
                         venueId={null}
                         parking={parking}
-                        oldLots={parkingLots}
                         isEnglish={isEnglish}
                     />
                 </CreateSection>
@@ -228,7 +217,6 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                                         setDraft={setEditDraft}
                                         venueId={venue.id}
                                         parking={parking}
-                                        oldLots={parkingLots}
                                         isEnglish={isEnglish}
                                     />
                                     <CardSaveCancel
@@ -276,11 +264,10 @@ interface VenueFormProps {
     /** The venue being edited, or null while creating one. */
     venueId: string | null;
     parking: UwParkingData;
-    oldLots: ParkingLot[];
     isEnglish: boolean;
 }
 
-const VenueForm = ({draft, setDraft, venueId, parking, oldLots, isEnglish}: VenueFormProps) => {
+const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProps) => {
     const [lookingUp, setLookingUp] = useState(false);
     const [lookup, setLookup] = useState<UwBuildingLookup | null>(null);
     const [lookupError, setLookupError] = useState<string | null>(null);
@@ -364,16 +351,6 @@ const VenueForm = ({draft, setDraft, venueId, parking, oldLots, isEnglish}: Venu
             ? lookup.nearestLots.map(n => n.code)
             : [...parking.lots].sort((a, b) => metersBetween(a, here) - metersBetween(b, here)).map(l => l.code),
     ).slice(0, 6);
-    // Venues still linked to the old guide's lots: the UW lot at the same spot as each.
-    const fromOldLinks = fresh(draft.parkingLots
-        .map(link => oldLots.find(l => l.id === link.lotId))
-        .flatMap(old => {
-            if (!old) return [];
-            const match = parking.lots
-                .map(l => ({code: l.code, m: metersBetween(l, old)}))
-                .sort((a, b) => a.m - b.m)[0];
-            return match && match.m <= SAME_LOT_METERS ? [match.code] : [];
-        }));
 
     const lotsByDistance = [...parking.lots].sort((a, b) => metersBetween(a, here) - metersBetween(b, here));
 
@@ -496,7 +473,6 @@ const VenueForm = ({draft, setDraft, venueId, parking, oldLots, isEnglish}: Venu
                 ) : (
                     <>
                         {chipRow(isEnglish ? 'UW recommends' : 'UW 推荐', uwPicks)}
-                        {chipRow(isEnglish ? 'From the old linked lots' : '来自原关联停车场', fromOldLinks)}
                         {chipRow(isEnglish ? 'Nearest' : '最近', nearest)}
 
                         {draft.suggestedLots.length === 0 ? (

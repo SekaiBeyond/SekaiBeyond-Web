@@ -15,8 +15,6 @@ import { getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Venue } from '~/lib/venues';
-import type { ParkingLot } from '~/lib/parkingLots';
-import type { ParkingRate } from '~/lib/parkingRates';
 import { type ActivityRecord, type BadgeDef, RECORD_CATEGORIES, type RecordCategory } from './types';
 import { CATEGORY_BY_TYPE, formatRecordLabel, type RecordFormatContext } from './recordFormatters';
 
@@ -54,15 +52,11 @@ interface RecordsTabProps {
     upcomingEvents: UpcomingEvent[];
     badgeDefs: BadgeDef[];
     venues: Venue[];
-    parkingLots: ParkingLot[];
-    parkingRates: ParkingRate[];
     onLookupUser: (uid: string) => void;
     onSelectBadge: (badgeId: string) => void;
     onSelectEvent: (eventId: string) => void;
     onSelectUpcomingEvent: (eventId: string) => void;
     onSelectVenue: (venueId: string) => void;
-    onSelectParkingLot: (lotId: string) => void;
-    onSelectParkingRate: (rateId: string) => void;
 }
 
 export const RecordsTab = ({
@@ -70,15 +64,11 @@ export const RecordsTab = ({
                                upcomingEvents,
                                badgeDefs,
                                venues,
-                               parkingLots,
-                               parkingRates,
                                onLookupUser,
                                onSelectBadge,
                                onSelectEvent,
                                onSelectUpcomingEvent,
                                onSelectVenue,
-                               onSelectParkingLot,
-                               onSelectParkingRate,
                            }: RecordsTabProps) => {
     const {isEnglish} = useLanguage();
     const [records, setRecords] = useState<ActivityRecord[]>([]);
@@ -149,15 +139,11 @@ export const RecordsTab = ({
         upcomingEvents,
         badgeDefs,
         venues,
-        parkingLots,
-        parkingRates,
         onLookupUser,
         onSelectBadge,
         onSelectEvent,
         onSelectUpcomingEvent,
         onSelectVenue,
-        onSelectParkingLot,
-        onSelectParkingRate,
     };
 
     return (

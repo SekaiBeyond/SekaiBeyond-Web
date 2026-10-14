@@ -514,7 +514,6 @@ export const callSaveVenue = (data: {
     nameCn: string;
     lat: number;
     lng: number;
-    parkingLots: Array<{lotId: string}>;
     buildingCode?: string;
     suggestedLots?: Array<{code: string; noteEn: string; noteCn: string}>;
 }) => httpsCallable<typeof data, {venueId: string}>(getFunctions(), 'saveVenue')(data);
@@ -540,25 +539,6 @@ export const callSyncUwParking = () =>
 
 export const callDeleteVenue = (data: {venueId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteVenue')(data);
-
-export const callSaveParkingLot = (data: {
-    lotId?: string;
-    name: string;
-    nameCn: string;
-    type: 'general' | 'disabled' | 'garage';
-    lat: number;
-    lng: number;
-    rateId: string;
-}) => httpsCallable<typeof data, {lotId: string}>(getFunctions(), 'saveParkingLot')(data);
-
-export const callDeleteParkingLot = (data: {lotId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean; unlinkedFrom: number}>(getFunctions(), 'deleteParkingLot')(data);
-
-export const callSaveParkingRate = (data: {rateId?: string; labelEn: string; labelCn: string; color: string}) =>
-    httpsCallable<typeof data, {rateId: string}>(getFunctions(), 'saveParkingRate')(data);
-
-export const callDeleteParkingRate = (data: {rateId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean; unlinkedFrom: number}>(getFunctions(), 'deleteParkingRate')(data);
 
 export const callSaveQrCode = (data: {
     qrId?: string;

@@ -1,9 +1,5 @@
 import { createCollectionCache } from './collectionCache';
 
-export interface VenueLotLink {
-    lotId: string;
-}
-
 /** A UW lot the organizers suggest for a venue, by UW facility code, with an optional note. */
 export interface SuggestedLot {
     code: string;
@@ -17,10 +13,9 @@ export interface Venue {
     nameCn: string;
     lat: number;
     lng: number;
-    parkingLots: VenueLotLink[];
     /** UW building code (e.g. "HUB"), or '' when not set. */
     buildingCode: string;
-    /** UW lots to suggest, best first; they replace parkingLots once the guide reads UW's data. */
+    /** UW lots the parking guide suggests for the venue, best first. */
     suggestedLots: SuggestedLot[];
 }
 
@@ -73,12 +68,6 @@ export function formatDistanceEstimate(miles: number, isEnglish: boolean): strin
 
 const cache = createCollectionCache<Venue>('venues', docSnap => {
     const data = docSnap.data();
-    const rawLots = Array.isArray(data.parkingLots) ? data.parkingLots : [];
-    const parkingLots: VenueLotLink[] = rawLots
-        .map((link: any) => ({
-            lotId: typeof link?.lotId === 'string' ? link.lotId : '',
-        }))
-        .filter((link: VenueLotLink) => link.lotId.length > 0);
     const rawSuggested = Array.isArray(data.suggestedLots) ? data.suggestedLots : [];
     const suggestedLots: SuggestedLot[] = rawSuggested
         .map((s: any) => ({
@@ -93,7 +82,6 @@ const cache = createCollectionCache<Venue>('venues', docSnap => {
         nameCn: data.nameCn ?? '',
         lat: typeof data.lat === 'number' ? data.lat : 0,
         lng: typeof data.lng === 'number' ? data.lng : 0,
-        parkingLots,
         buildingCode: typeof data.buildingCode === 'string' ? data.buildingCode : '',
         suggestedLots,
     };

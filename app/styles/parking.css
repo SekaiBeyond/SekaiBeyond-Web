@@ -1499,8 +1499,7 @@ button.parking-tag {
     gap: 2px;
 }
 
-/* The background color is set inline per lot: it encodes the lot's rate tier
-   (UW parking-map style), with a grey fallback when no rate is assigned. */
+/* Orange for surface lots, indigo for garages, as in the map's search badges. */
 .parking-marker-p {
     width: 32px;
     height: 32px;
@@ -1516,7 +1515,11 @@ button.parking-tag {
     border: 2px solid white;
 }
 
-/* Lots linked to this venue are strongly highlighted — bigger pin, white + brand
+.parking-marker-p.is-garage {
+    background: #6c63ff;
+}
+
+/* The selected venue's suggested lots are strongly highlighted — bigger pin, white + brand
    ring, and a soft pulse — so they stand out among all the lots without dimming the
    others. */
 .parking-marker-lot-inner.is-linked {
@@ -1531,7 +1534,7 @@ button.parking-tag {
     animation: parking-lot-highlight 2s ease-in-out infinite;
 }
 
-/* Linked lots get a colored label instead of the plain white one. */
+/* Suggested lots get a colored label instead of the plain white one. */
 .parking-marker-lot-inner.is-linked .parking-marker-label {
     background: var(--gradient-primary);
     color: #fff;
