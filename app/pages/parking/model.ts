@@ -1,4 +1,12 @@
-import { clockMinutes, DAY_MINUTES, type LotStatus, lotStatus, type ParkingWindow } from '~/lib/parkingStatus';
+import {
+    clockMinutes,
+    DAY_MINUTES,
+    type LotStatus,
+    lotStatus,
+    type ParkingWindow,
+    type Rate,
+    ratesDuring
+} from '~/lib/parkingStatus';
 import { siteDay, toDatetimeLocal } from '~/lib/siteTime';
 import type { UwLot, UwParkingData, WalkingTime } from '~/lib/uwParking';
 import { hasCoordinates, haversineMiles, type Venue } from '~/lib/venues';
@@ -17,7 +25,13 @@ export interface GuideEvent {
 /** One lot as the guide shows it from the selected venue. */
 export interface LotView {
     lot: UwLot;
+    /** During the event, or right now when there's no event. */
     status: LotStatus;
+    /** What a visitor pays during the event (or now): none when it's free, permits only or event-priced. */
+    rates: Rate[];
+    /** Right now, whatever the event; the same as `status` when there's no event. */
+    now: LotStatus;
+    nowRates: Rate[];
     /** Place among the venue's suggested lots, from 1; 0 when not suggested. */
     rank: number;
     /** The organizers' note on a suggested lot, if they left one. */
@@ -67,8 +81,11 @@ function venueWalking(parking: UwParkingData, venue: Venue): Record<string, Walk
     return walking && walking.lat === venue.lat && walking.lng === venue.lng ? walking.lots : null;
 }
 
-/** Every visitor lot as seen from `venue` during `window`, nearest on foot first. */
-export function lotViews(parking: UwParkingData, venue: Venue, window: ParkingWindow): LotView[] {
+const ratesOver = (lot: UwLot, status: LotStatus, window: ParkingWindow) =>
+    status.kind === 'event' ? [] : ratesDuring(lot, status.dow, window.start, window.end);
+
+/** Every visitor lot as seen from `venue` during `window` and at `nowWin`, nearest on foot first. */
+export function lotViews(parking: UwParkingData, venue: Venue, window: ParkingWindow, nowWin: ParkingWindow): LotView[] {
     const walking = venueWalking(parking, venue);
     const located = hasCoordinates(venue.lat, venue.lng);
     // Ranked among the suggestions UW still lists, so a dropped lot leaves no gap.
@@ -79,11 +96,20 @@ export function lotViews(parking: UwParkingData, venue: Venue, window: ParkingWi
         const suggested = pick >= 0 ? picks[pick] : null;
         const walk = walking?.[lot.code] ?? null;
         const miles = located ? haversineMiles(venue.lat, venue.lng, lot.lat, lot.lng) : null;
+        const status = lotStatus(lot, window, parking.eventPricing);
+        const now = window.isNow ? status : lotStatus(lot, nowWin, parking.eventPricing);
         return {
             lot,
-            status: lotStatus(lot, window, parking.eventPricing),
+            status,
+            rates: ratesOver(lot, status, window),
+            now,
+            // The rates of this minute, though `now` looks ahead to the rest of the day.
+            nowRates: ratesOver(lot, now, {...nowWin, end: nowWin.start + 1}),
             rank: pick + 1,
-            note: suggested && (suggested.noteEn || suggested.noteCn) ? {en: suggested.noteEn, zh: suggested.noteCn} : null,
+            note: suggested && (suggested.noteEn || suggested.noteCn) ? {
+                en: suggested.noteEn,
+                zh: suggested.noteCn
+            } : null,
             walk,
             miles,
             sortSeconds: walk?.seconds

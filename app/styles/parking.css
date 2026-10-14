@@ -349,23 +349,6 @@
     text-align: center;
     font-size: 14px;
     font-weight: 600;
-    color: var(--color-text-secondary);
-}
-
-.parking-map-recenter {
-    position: absolute;
-    top: 14px;
-    left: 14px;
-    z-index: 2;
-    max-width: calc(100% - 90px);
-    padding: 8px 16px;
-    font-size: 13px;
-}
-
-.parking-map-recenter-name {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 /* Legend overlaid on the map, like the UW parking map's LEGEND box.
@@ -721,6 +704,59 @@
     --dot: var(--parking-event);
 }
 
+/* How a lot is right now, under its status for the event. Plain inline text, so it wraps like a sentence. */
+.parking-now {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+}
+
+.parking-now::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 6px;
+    border-radius: 3px;
+    vertical-align: 1px;
+    background: var(--dot);
+}
+
+.parking-now b {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink);
+}
+
+.parking-now--free {
+    --dot: var(--parking-free);
+    --ink: var(--parking-free-ink);
+}
+
+.parking-now--part {
+    --dot: var(--parking-part);
+    --ink: var(--parking-part-ink);
+}
+
+.parking-now--paid {
+    --dot: var(--parking-paid);
+    --ink: var(--parking-paid-ink);
+}
+
+.parking-now--permit {
+    --dot: var(--parking-permit);
+    --ink: var(--parking-permit-ink);
+}
+
+.parking-now--event {
+    --dot: var(--parking-event);
+    --ink: var(--parking-event-ink);
+}
+
 /* All-lots search, filters and list */
 .parking-lot-search-field {
     display: flex;
@@ -1037,6 +1073,14 @@
     font-weight: 800;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+/* Which hours a rate is for, when a lot has both daytime and evening rates. */
+.parking-rate small {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.35;
     color: var(--color-text-secondary);
 }
 

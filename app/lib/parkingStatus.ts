@@ -118,9 +118,9 @@ function clip(day: Stretch[], start: number, end: number): Stretch[] {
 /** The event-rate day covering this lot during the window, if there is one. */
 export function eventPricingFor(lot: UwLot, window: ParkingWindow, pricing: UwEventPricing[]): UwEventPricing | null {
     return pricing.find(p => p.date === window.date
-        && (p.allLots || p.lots.includes(lot.code))
-        && (p.start === null || p.end === null
-            || (clockMinutes(p.start) < window.end && (clockMinutes(p.end) || DAY_MINUTES) > window.start)))
+            && (p.allLots || p.lots.includes(lot.code))
+            && (p.start === null || p.end === null
+                || (clockMinutes(p.start) < window.end && (clockMinutes(p.end) || DAY_MINUTES) > window.start)))
         ?? null;
 }
 
@@ -149,4 +149,58 @@ export function lotStatus(lot: UwLot, window: ParkingWindow, pricing: UwEventPri
     // A moment is colored by how it is now; an event by how much of it costs or is closed.
     if (window.isNow) return status(KIND_OF[first.segment], phrase);
     return status(stretches.some(s => s.segment === 'pay') ? 'part' : 'permit', phrase);
+}
+
+/**
+ * UW's visitor rates come in two periods (transportation.uw.edu/park/visitor):
+ * the hourly and daily rates are for weekdays 6 am – 4 pm, and the night rate,
+ * UW's "nights & weekends" rate, for weekdays 4 – 9 pm and Saturdays 7 am – noon.
+ * Outside both (E01's paid hours run around the clock) no period says which applies.
+ */
+export const DAY_RATE_HOURS: [number, number] = [6 * 60, 16 * 60];
+export const NIGHT_RATE_HOURS = {weekday: [16 * 60, 21 * 60], saturday: [7 * 60, 12 * 60]} as const;
+
+export type RateUnit = 'hour' | 'day' | 'night';
+
+export interface Rate {
+    unit: RateUnit;
+    amount: number;
+}
+
+/** Every rate UW lists for the lot: hourly, daily, then night. */
+export function listedRates(lot: UwLot): Rate[] {
+    const {hourly, daily, night} = lot.rates;
+    const rates: Rate[] = [];
+    if (hourly) rates.push({unit: 'hour', amount: hourly});
+    if (daily) rates.push({unit: 'day', amount: daily});
+    if (night) rates.push({unit: 'night', amount: night});
+    return rates;
+}
+
+const overlaps = (a: number, b: number, [c, d]: readonly [number, number]) => a < d && b > c;
+
+/**
+ * The rates a visitor pays at the lot between `start` and `end` on day `dow`:
+ * only for time the lot charges, and only those of the rate periods that time
+ * falls in. When the lot lists no rate for those periods, it gets whatever it
+ * does list, since UW's data is what the gate charges. Empty when nothing is
+ * paid then (free, permits only, or a Sunday).
+ */
+export function ratesDuring(lot: UwLot, dow: number, start: number, end: number): Rate[] {
+    const paid = daySchedule(lot, dow).filter(s => s.segment === 'pay' && s.end > start && s.start < end)
+        .map(s => [Math.max(s.start, start), Math.min(s.end, end)] as [number, number]);
+    if (paid.length === 0) return [];
+    const weekday = dow >= 1 && dow <= 5;
+    const dayPeriod = weekday && paid.some(([a, b]) => overlaps(a, b, DAY_RATE_HOURS));
+    const nightHours = weekday ? NIGHT_RATE_HOURS.weekday : dow === 6 ? NIGHT_RATE_HOURS.saturday : null;
+    const nightPeriod = nightHours !== null && paid.some(([a, b]) => overlaps(a, b, nightHours));
+    const all = listedRates(lot);
+    const inPeriod = all.filter(r => r.unit === 'night' ? nightPeriod : dayPeriod);
+    return inPeriod.length > 0 ? inPeriod : all;
+}
+
+/** The rates a visitor can ever pay at the lot in a week, which leaves out any whose period the lot is never paid in. */
+export function weeklyRates(lot: UwLot): Rate[] {
+    const units = new Set([...ratesDuring(lot, 1, 0, DAY_MINUTES), ...ratesDuring(lot, 6, 0, DAY_MINUTES)].map(r => r.unit));
+    return listedRates(lot).filter(r => units.has(r.unit));
 }

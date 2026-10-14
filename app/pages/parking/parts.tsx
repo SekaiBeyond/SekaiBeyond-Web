@@ -1,5 +1,5 @@
-import type { LotStatus } from '~/lib/parkingStatus';
-import { type UwLot, uwLotGlyph, walkMinutes } from '~/lib/uwParking';
+import type { LotStatus, Rate } from '~/lib/parkingStatus';
+import { uwLotGlyph, walkMinutes } from '~/lib/uwParking';
 import { siteDay } from '~/lib/siteTime';
 import { formatDistanceEstimate, PARKING_INFO_URL } from '~/lib/venues';
 import type { LotView } from './model';
@@ -9,15 +9,22 @@ export const StatusPill = ({status, tx}: {status: LotStatus; tx: ParkingText}) =
     <span className={`parking-status parking-s-${status.kind}`}>{tx.status(status)}</span>
 );
 
-/** "$5/hr · $21/day · $7 night", or '' when UW lists no visitor rate. */
-export function rateText(lot: UwLot, tx: ParkingText): string {
-    const {hourly, daily, night} = lot.rates;
-    const parts: string[] = [];
-    if (hourly) parts.push(tx.money(hourly) + (tx.isEnglish ? '/hr' : '/小时'));
-    if (daily) parts.push(tx.money(daily) + (tx.isEnglish ? '/day' : '/天'));
-    if (night) parts.push(tx.money(night) + (tx.isEnglish ? ' night' : ' 夜间'));
-    return parts.join(' · ');
-}
+/** "💲 $5/hr · $21/day": what a visitor pays then; nothing when they don't pay, or can't park. */
+export const RatesLine = ({rates, tx}: {rates: Rate[]; tx: ParkingText}) =>
+    rates.length > 0 ? <span className="parking-rate-line">💲 {tx.rates(rates)}</span> : null;
+
+/**
+ * How the lot is right now, beside how it will be during the event: "Now ·
+ * Permits only until 4 pm, then pay", "Now · $7 flat · Pay until 9 pm, then free".
+ * The price comes first, as it's this minute's; the rest says what changes later.
+ */
+export const NowLine = ({view, tx}: {view: LotView; tx: ParkingText}) => (
+    <span className={`parking-now parking-now--${view.now.kind}`}>
+        <b>{tx.t('nowLabel')}</b>
+        {view.nowRates.length > 0 && ` · ${tx.rates(view.nowRates)}`}
+        {` · ${tx.status(view.now, true)}`}
+    </span>
+);
 
 /**
  * How far a lot is: "2 min walk to HUB" (`venueName` given), "2 min walk", or

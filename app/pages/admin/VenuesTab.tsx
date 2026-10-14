@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteVenue, callLookUpUwBuilding, callSaveVenue, type UwBuildingLookup } from '~/lib/firebase';
-import { type UwLot, type UwParkingData, useUwParking, uwLotTypeLabel, walkMinutes } from '~/lib/uwParking';
+import { useUwParking, type UwLot, uwLotTypeLabel, type UwParkingData, walkMinutes } from '~/lib/uwParking';
 import type { SuggestedLot, Venue } from '~/lib/venues';
 import { haversineMiles, UW_CAMPUS_CENTER } from '~/lib/venues';
 import { BilingualFormField } from './BilingualFormField';
@@ -230,7 +230,8 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                                 <>
                                     <span className="admin-event-card-title">
                                         {venue.nameEn}
-                                        {venue.buildingCode && <span className="admin-uw-code-chip">{venue.buildingCode}</span>}
+                                        {venue.buildingCode &&
+                                            <span className="admin-uw-code-chip">{venue.buildingCode}</span>}
                                     </span>
                                     {venue.nameCn && (
                                         <span className="admin-event-card-date">{venue.nameCn}</span>
@@ -486,7 +487,8 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
                                 {draft.suggestedLots.map((s, i) => {
                                     const lot = lotByCode.get(s.code);
                                     return (
-                                        <div key={s.code} className="admin-venue-lot-card admin-venue-lot-card--suggested">
+                                        <div key={s.code}
+                                             className="admin-venue-lot-card admin-venue-lot-card--suggested">
                                             <div
                                                 className="admin-venue-lot-badge"
                                                 data-type={lot && /Garage/.test(lot.type) ? 'garage' : 'general'}
@@ -501,7 +503,8 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
                                                             <span className="admin-venue-lot-name">
                                                                 {lot.name !== lot.code ? `${lot.name} · ` : ''}{uwLotTypeLabel(lot.type, isEnglish)}
                                                             </span>
-                                                            <span className="admin-venue-lot-walk">{walkLabel(lot)}</span>
+                                                            <span
+                                                                className="admin-venue-lot-walk">{walkLabel(lot)}</span>
                                                         </>
                                                     ) : (
                                                         <span className="admin-venue-lot-missing">
@@ -534,7 +537,8 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
                                                     disabled={i === 0}
                                                     aria-label={isEnglish ? 'Move up' : '上移'}
                                                     title={isEnglish ? 'Move up' : '上移'}
-                                                >↑</button>
+                                                >↑
+                                                </button>
                                                 <button
                                                     type="button"
                                                     className="admin-venue-lot-move"
@@ -542,14 +546,16 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
                                                     disabled={i === draft.suggestedLots.length - 1}
                                                     aria-label={isEnglish ? 'Move down' : '下移'}
                                                     title={isEnglish ? 'Move down' : '下移'}
-                                                >↓</button>
+                                                >↓
+                                                </button>
                                                 <button
                                                     type="button"
                                                     className="admin-venue-lot-remove"
                                                     onClick={() => removeLot(i)}
                                                     title={isEnglish ? 'Remove lot' : '删除停车场'}
                                                     aria-label={isEnglish ? 'Remove lot' : '删除停车场'}
-                                                >×</button>
+                                                >×
+                                                </button>
                                             </div>
                                         </div>
                                     );

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { createMap, type MapLibreMap, prefersReducedMotion, useMarkerElements, usePopup } from '~/lib/maplibre';
-import { type UwLot, useUwParking, uwLotGlyph, uwLotTypeLabel } from '~/lib/uwParking';
+import { useUwParking, type UwLot, uwLotGlyph, uwLotTypeLabel } from '~/lib/uwParking';
 import { DEFAULT_ZOOM, hasCoordinates, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
 
 /** Which marker's popup is currently open on the overview map: a venue by ID, a lot by UW code. */
@@ -441,8 +441,8 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
                         <div className="admin-locmap-popup-title">{lotTitle(selectedLot)}</div>
                         <div className="admin-locmap-popup-meta">
                             {uwLotTypeLabel(selectedLot.type, isEnglish)} · {selectedLot.access === 'Pay to Park'
-                                ? (isEnglish ? 'Pay to park' : '付费停车')
-                                : (isEnglish ? 'Permit or pay' : '持证或付费')}
+                            ? (isEnglish ? 'Pay to park' : '付费停车')
+                            : (isEnglish ? 'Permit or pay' : '持证或付费')}
                         </div>
                     </div>
                 ) : null,

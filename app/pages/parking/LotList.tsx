@@ -3,7 +3,7 @@ import { clockMinutes, type ParkingWindow } from '~/lib/parkingStatus';
 import { type UwEventPricing, uwLotGlyph } from '~/lib/uwParking';
 import type { Venue } from '~/lib/venues';
 import { type GuideEvent, LOT_FILTERS, type LotFilter, lotSubtitle, type LotView } from './model';
-import { rateText, StatusPill, walkText } from './parts';
+import { NowLine, RatesLine, StatusPill, walkText } from './parts';
 import type { ParkingText } from './text';
 
 const UW_EVENT_CALENDAR_URL = 'https://transportation.uw.edu/park/events/calendar';
@@ -44,16 +44,22 @@ function EventWhen({event, tx}: {event: GuideEvent; tx: ParkingText}) {
 
 /** The guide's list view: the event, UW event-rate warnings, the suggested lots, then every lot. */
 export const LotList = (props: LotListProps) => {
-    const {event, parkingWindow, venue, eventVenue, venueName, eventPricing, views, visibleViews, query, onQuery, filters,
-        onToggleFilter, hotCode, onHot, onOpenLot, onSelectVenue, tx} = props;
+    const {
+        event, parkingWindow, venue, eventVenue, venueName, eventPricing, views, visibleViews, query, onQuery, filters,
+        onToggleFilter, hotCode, onHot, onOpenLot, onSelectVenue, tx
+    } = props;
     const picks = views.filter(v => v.rank > 0).sort((a, b) => a.rank - b.rank);
     const banners = eventPricing.filter(p => p.date === parkingWindow.date);
     const name = venueName(venue);
 
     // Hovering a lot in the list lights up its pin and shows its card on the map.
     const hoverProps = (code: string) => ({
-        onPointerEnter: (e: PointerEvent) => { if (e.pointerType === 'mouse') onHot(code); },
-        onPointerLeave: (e: PointerEvent) => { if (e.pointerType === 'mouse') onHot(null); },
+        onPointerEnter: (e: PointerEvent) => {
+            if (e.pointerType === 'mouse') onHot(code);
+        },
+        onPointerLeave: (e: PointerEvent) => {
+            if (e.pointerType === 'mouse') onHot(null);
+        },
         onClick: () => onOpenLot(code),
     });
 
@@ -65,21 +71,24 @@ export const LotList = (props: LotListProps) => {
                     {event ? (
                         <>
                             <span className="parking-eyebrow">{tx.t('yourEvent')}</span>
-                            <span className="parking-event-title">{tx.isEnglish ? event.title.en || event.title.zh : event.title.zh || event.title.en}</span>
+                            <span
+                                className="parking-event-title">{tx.isEnglish ? event.title.en || event.title.zh : event.title.zh || event.title.en}</span>
                             <span className="parking-meta"><EventWhen event={event} tx={tx}/></span>
                             {eventVenue && <span className="parking-meta">📍 {venueName(eventVenue)}</span>}
                         </>
                     ) : (
                         <>
                             <span className="parking-eyebrow">{tx.t('rightNow')}</span>
-                            <span className="parking-meta"><strong>{tx.date(parkingWindow.date)}</strong> · {tx.time(parkingWindow.start)}</span>
+                            <span
+                                className="parking-meta"><strong>{tx.date(parkingWindow.date)}</strong> · {tx.time(parkingWindow.start)}</span>
                             <span className="parking-meta">{tx.t('rightNowSub')}</span>
                         </>
                     )}
                     {eventVenue && eventVenue.id !== venue.id && (
                         <span className="parking-meta">
                             {tx.t('otherVenue', {v: name})}{' '}
-                            <button type="button" className="parking-linkish" onClick={() => onSelectVenue(eventVenue.id)}>
+                            <button type="button" className="parking-linkish"
+                                    onClick={() => onSelectVenue(eventVenue.id)}>
                                 {tx.t('backToEventVenue', {v: venueName(eventVenue)})}
                             </button>
                         </span>
@@ -94,9 +103,15 @@ export const LotList = (props: LotListProps) => {
                         <span>
                             {p.allLots
                                 ? tx.t('bannerAll', {d: tx.date(p.date), p: p.price, when: tx.pricingWhen(p)})
-                                : tx.t('bannerSome', {d: tx.date(p.date), p: p.price, lots: p.lots.join(', '), when: tx.pricingWhen(p)})}
+                                : tx.t('bannerSome', {
+                                    d: tx.date(p.date),
+                                    p: p.price,
+                                    lots: p.lots.join(', '),
+                                    when: tx.pricingWhen(p)
+                                })}
                         </span>
-                        <a href={UW_EVENT_CALENDAR_URL} target="_blank" rel="noopener noreferrer">{tx.t('bannerSrc')} ↗</a>
+                        <a href={UW_EVENT_CALENDAR_URL} target="_blank"
+                           rel="noopener noreferrer">{tx.t('bannerSrc')} ↗</a>
                     </div>
                 </div>
             ))}
@@ -109,7 +124,6 @@ export const LotList = (props: LotListProps) => {
                     </div>
                     {picks.map(view => {
                         const {lot} = view;
-                        const rates = rateText(lot, tx);
                         const walk = walkText(view, tx, {venueName: name});
                         return (
                             <button
@@ -125,8 +139,9 @@ export const LotList = (props: LotListProps) => {
                                     </span>
                                     <span className="parking-lot-type">{tx.lotType(lot.type)}</span>
                                     <StatusPill status={view.status} tx={tx}/>
+                                    <RatesLine rates={view.rates} tx={tx}/>
+                                    {!parkingWindow.isNow && <NowLine view={view} tx={tx}/>}
                                     {walk && <span className="parking-dist">📍 {walk}</span>}
-                                    {rates && <span className="parking-rate-line">💲 {rates}</span>}
                                 </span>
                             </button>
                         );

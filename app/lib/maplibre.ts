@@ -28,7 +28,7 @@ setWorkerUrl(maplibreWorkerUrl);
 
 export const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
-export type {MapLibreMap};
+export type { MapLibreMap };
 
 /**
  * A map in `container` with the site's defaults: no rotation or tilt, zoom
@@ -146,7 +146,10 @@ export function useMarkerElements(
 }
 
 /** A popup for the map, with an element to portal its content into. Opening and closing are the caller's. */
-export function usePopup(map: MapLibreMap | null, options: PopupOptions): {popup: Popup | null; content: HTMLElement | null} {
+export function usePopup(map: MapLibreMap | null, options: PopupOptions): {
+    popup: Popup | null;
+    content: HTMLElement | null
+} {
     const [made, setMade] = useState<{popup: Popup | null; content: HTMLElement | null}>({popup: null, content: null});
     const firstOptions = useRef(options);
 

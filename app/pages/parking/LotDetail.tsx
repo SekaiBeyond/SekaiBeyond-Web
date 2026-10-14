@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { clockMinutes, DAY_MINUTES, daySchedule, type ParkingWindow } from '~/lib/parkingStatus';
+import { clockMinutes, DAY_MINUTES, daySchedule, type ParkingWindow, weeklyRates } from '~/lib/parkingStatus';
 import type { ClockRange } from '~/lib/uwParking';
-import { Footer, StatusPill, walkText } from './parts';
+import { Footer, NowLine, RatesLine, StatusPill, walkText } from './parts';
 import type { LotView } from './model';
 import type { ParkingText } from './text';
 
@@ -41,13 +41,23 @@ const rangeOf = (range: ClockRange, tx: ParkingText) =>
 
 const SectionHead = ({icon, title, tone = 'info'}: {icon: string; title: string; tone?: 'info' | 'time'}) => (
     <div className="parking-detail-head">
-        <span className={`parking-info-icon parking-info-icon--small parking-info-icon--${tone}`} aria-hidden="true">{icon}</span>
+        <span className={`parking-info-icon parking-info-icon--small parking-info-icon--${tone}`}
+              aria-hidden="true">{icon}</span>
         <h3>{title}</h3>
     </div>
 );
 
 /** Everything about one lot, in place of the list. */
-export const LotDetail = ({view, parkingWindow, venueName, listedCodes, generatedAt, onBack, onOpenLot, tx}: LotDetailProps) => {
+export const LotDetail = ({
+                              view,
+                              parkingWindow,
+                              venueName,
+                              listedCodes,
+                              generatedAt,
+                              onBack,
+                              onOpenLot,
+                              tx
+                          }: LotDetailProps) => {
     const {lot, status, rank, note} = view;
     const [copied, setCopied] = useState(false);
     const zoneRef = useRef<HTMLSpanElement>(null);
@@ -55,14 +65,20 @@ export const LotDetail = ({view, parkingWindow, venueName, listedCodes, generate
     useEffect(() => () => clearTimeout(copiedTimer.current), []);
     useEffect(() => setCopied(false), [lot.code]);
 
-    const rates = ([['hourly', lot.rates.hourly], ['daily', lot.rates.daily], ['night', lot.rates.night]] as const)
-        .filter(([, value]) => !!value);
+    // Only rates the lot can charge: W28 lists daytime rates, but it's permits only then.
+    const rates = weeklyRates(lot);
+    // When it has both kinds, each says which hours it's for.
+    const ratePeriods = rates.some(r => r.unit === 'night') && rates.some(r => r.unit !== 'night');
+    const rateLabel = {hour: 'hourly', day: 'daily', night: 'night'} as const;
     const stalls = ([['standard', 'P'], ['compact', 'C'], ['accessible', '♿'], ['motorcycle', 'M'], ['ev', '⚡']] as const)
         .filter(([key]) => (lot.stalls[key] ?? 0) > 0);
     const services = ([['zipcar', lot.zipcar], ['ucar', lot.ucar], ['dar', lot.dialARide]] as const).filter(([, on]) => on);
     const clearance = lot.clearanceInches
         ? tx.isEnglish
-            ? tx.t('clearance', {ft: `${Math.floor(lot.clearanceInches / 12)}′${lot.clearanceInches % 12}″`, in: lot.clearanceInches})
+            ? tx.t('clearance', {
+                ft: `${Math.floor(lot.clearanceInches / 12)}′${lot.clearanceInches % 12}″`,
+                in: lot.clearanceInches
+            })
             : tx.t('clearance', {m: (lot.clearanceInches * 0.0254).toFixed(2), in: lot.clearanceInches})
         : '';
     const walk = walkText(view, tx, {venueName});
@@ -108,9 +124,12 @@ export const LotDetail = ({view, parkingWindow, venueName, listedCodes, generate
             <section className="parking-info-card parking-detail-card">
                 <SectionHead icon="🕐" title={tx.t(parkingWindow.isNow ? 'secNow' : 'secEvent')} tone="time"/>
                 <StatusPill status={status} tx={tx}/>
+                <RatesLine rates={view.rates} tx={tx}/>
                 <p>{whyText(view, parkingWindow, tx)}</p>
+                {!parkingWindow.isNow && <NowLine view={view} tx={tx}/>}
                 {walk && (
-                    <span className="parking-dist">📍 {walk}{view.walk && ` · ${view.walk.meters} ${tx.isEnglish ? 'm' : '米'}`}</span>
+                    <span
+                        className="parking-dist">📍 {walk}{view.walk && ` · ${view.walk.meters} ${tx.isEnglish ? 'm' : '米'}`}</span>
                 )}
                 {note && (
                     <div className="parking-note">
@@ -129,10 +148,11 @@ export const LotDetail = ({view, parkingWindow, venueName, listedCodes, generate
                 <SectionHead icon="💲" title={tx.t('secRates')} tone="time"/>
                 {rates.length > 0 ? (
                     <div className="parking-rates">
-                        {rates.map(([key, value]) => (
-                            <div key={key} className="parking-rate">
-                                <b>{tx.money(value!)}</b>
-                                <span>{tx.t(key)}</span>
+                        {rates.map(rate => (
+                            <div key={rate.unit} className="parking-rate">
+                                <b>{tx.money(rate.amount)}</b>
+                                <span>{tx.t(rateLabel[rate.unit])}</span>
+                                {ratePeriods && <small>{tx.rateWhen(rate)}</small>}
                             </div>
                         ))}
                     </div>
@@ -183,7 +203,8 @@ export const LotDetail = ({view, parkingWindow, venueName, listedCodes, generate
                     <div className="parking-stalls">
                         {stalls.map(([key, glyph]) => (
                             <div key={key} className="parking-stall">
-                                <span className={`parking-info-icon parking-info-icon--small parking-stall--${key}`} aria-hidden="true">{glyph}</span>
+                                <span className={`parking-info-icon parking-info-icon--small parking-stall--${key}`}
+                                      aria-hidden="true">{glyph}</span>
                                 <div>
                                     <b>{lot.stalls[key]}</b>
                                     <span>{tx.t(`s_${key}`)}</span>
@@ -207,7 +228,8 @@ export const LotDetail = ({view, parkingWindow, venueName, listedCodes, generate
                     <p>{tx.t('overflowLead')}</p>
                     <div className="parking-tags">
                         {lot.overflowLots.map(code => listedCodes.has(code) ? (
-                            <button key={code} type="button" className="parking-tag" onClick={() => onOpenLot(code)}>{code}</button>
+                            <button key={code} type="button" className="parking-tag"
+                                    onClick={() => onOpenLot(code)}>{code}</button>
                         ) : (
                             <span key={code} className="parking-tag">{code}</span>
                         ))}
@@ -229,7 +251,8 @@ export const LotDetail = ({view, parkingWindow, venueName, listedCodes, generate
                     <SectionHead icon="📷" title={tx.t('secTour')}/>
                     <p>{tx.t('tourSub')}</p>
                     <div className="parking-actions">
-                        <a className="parking-ghost" href={UW_PARKING_MAP_URL} target="_blank" rel="noopener noreferrer">
+                        <a className="parking-ghost" href={UW_PARKING_MAP_URL} target="_blank"
+                           rel="noopener noreferrer">
                             🔄 {tx.t('tour')} ↗
                         </a>
                     </div>

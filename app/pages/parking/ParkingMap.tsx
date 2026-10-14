@@ -12,7 +12,7 @@ import {
 import type { VenueOutline } from '~/lib/uwParking';
 import { hasCoordinates, type Venue } from '~/lib/venues';
 import { localizedVenueName, lotSubtitle, type LotView } from './model';
-import { pinGlyph, rateText, StatusPill, walkText } from './parts';
+import { pinGlyph, RatesLine, StatusPill, walkText } from './parts';
 import type { ParkingText } from './text';
 
 const ATTRIBUTION = 'UW Transportation Services · UW Facilities GIS';
@@ -97,8 +97,10 @@ function outlineData(outline: VenueOutline | null): OutlineData {
 }
 
 export const ParkingMap = (props: ParkingMapProps) => {
-    const {ref, views, visibleCodes, venues, venue, outline, eventVenueId, selectedCode, hotCode, hover, setHover,
-        isNow, onOpenLot, onSelectVenue, tx} = props;
+    const {
+        ref, views, visibleCodes, venues, venue, outline, eventVenueId, selectedCode, hotCode, hover, setHover,
+        isNow, onOpenLot, onSelectVenue, tx
+    } = props;
     const containerRef = useRef<HTMLDivElement>(null);
     const [map, setMap] = useState<MapLibreMap | null>(null);
     const [styleReady, setStyleReady] = useState(false);
@@ -119,7 +121,10 @@ export const ParkingMap = (props: ParkingMapProps) => {
 
     const fitVenue = (animate: boolean) => {
         const bounds = map && venueBounds(latest.current.venue, latest.current.views);
-        if (map && bounds) map.fitBounds(bounds, {padding: fitPadding(), duration: animate && !prefersReducedMotion() ? 700 : 0});
+        if (map && bounds) map.fitBounds(bounds, {
+            padding: fitPadding(),
+            duration: animate && !prefersReducedMotion() ? 700 : 0
+        });
     };
 
     useImperativeHandle(ref, () => ({
@@ -197,9 +202,16 @@ export const ParkingMap = (props: ParkingMapProps) => {
     }, []);
 
     // Lot pins and venue stars, rendered into the markers' wrappers below.
-    const {elements: lotElements} = useMarkerElements(map, views.map(v => ({key: v.lot.code, lng: v.lot.lng, lat: v.lot.lat})));
+    const {elements: lotElements} = useMarkerElements(map, views.map(v => ({
+        key: v.lot.code,
+        lng: v.lot.lng,
+        lat: v.lot.lat
+    })));
     const mappedVenues = venues.filter(v => hasCoordinates(v.lat, v.lng));
-    const {elements: venueElements, markers: venueMarkers} = useMarkerElements(map, mappedVenues.map(v => ({key: v.id, ...v})));
+    const {
+        elements: venueElements,
+        markers: venueMarkers
+    } = useMarkerElements(map, mappedVenues.map(v => ({key: v.id, ...v})));
 
     // Stacking and visibility live on the wrapper, the element MapLibre stacks.
     useEffect(() => {
@@ -254,7 +266,6 @@ export const ParkingMap = (props: ParkingMapProps) => {
 
     const hoveredView = hover?.kind === 'lot' ? views.find(v => v.lot.code === hover.code) : undefined;
     const hoveredVenue = hover?.kind === 'venue' ? venues.find(v => v.id === hover.id) : undefined;
-    const venueName = localizedVenueName(venue, tx.isEnglish);
     const hasPicks = views.some(v => v.rank > 0);
 
     return (
@@ -262,30 +273,31 @@ export const ParkingMap = (props: ParkingMapProps) => {
             <div ref={containerRef} className="parking-map"/>
             {failed && <div className="parking-map-failed">{tx.t('mapFailed')}</div>}
 
-            {map && (
-                <button type="button" className="parking-back-btn parking-map-recenter" onClick={() => fitVenue(true)}>
-                    <span aria-hidden="true">⭐</span>
-                    <span className="parking-map-recenter-name">{tx.t('recenter', {v: venueName})}</span>
-                </button>
-            )}
-
             {/* Translucent "glass" and click-through, so any marker behind it stays
                 visible and usable rather than being hidden. */}
             <div className="parking-map-legend">
                 <div className="parking-map-legend-title">{tx.t(isNow ? 'legendNow' : 'legendEvent')}</div>
-                <div className="parking-map-legend-item"><span className="parking-map-legend-dot parking-k-free">P</span>{tx.t('lg_free')}</div>
+                <div className="parking-map-legend-item"><span
+                    className="parking-map-legend-dot parking-k-free">P</span>{tx.t('lg_free')}</div>
                 {!isNow && (
-                    <div className="parking-map-legend-item"><span className="parking-map-legend-dot parking-k-part">P</span>{tx.t('lg_part')}</div>
+                    <div className="parking-map-legend-item"><span
+                        className="parking-map-legend-dot parking-k-part">P</span>{tx.t('lg_part')}</div>
                 )}
-                <div className="parking-map-legend-item"><span className="parking-map-legend-dot parking-k-paid">P</span>{tx.t('lg_paid')}</div>
-                <div className="parking-map-legend-item"><span className="parking-map-legend-dot parking-k-permit">P</span>{tx.t('lg_permit')}</div>
-                <div className="parking-map-legend-item"><span className="parking-map-legend-dot parking-k-event">P</span>{tx.t('lg_event')}</div>
+                <div className="parking-map-legend-item"><span
+                    className="parking-map-legend-dot parking-k-paid">P</span>{tx.t('lg_paid')}</div>
+                <div className="parking-map-legend-item"><span
+                    className="parking-map-legend-dot parking-k-permit">P</span>{tx.t('lg_permit')}</div>
+                <div className="parking-map-legend-item"><span
+                    className="parking-map-legend-dot parking-k-event">P</span>{tx.t('lg_event')}</div>
                 {hasPicks && (
-                    <div className="parking-map-legend-item is-optional"><span className="parking-map-legend-dot is-pick">1</span>{tx.t('lg_pick')}</div>
+                    <div className="parking-map-legend-item is-optional"><span
+                        className="parking-map-legend-dot is-pick">1</span>{tx.t('lg_pick')}</div>
                 )}
-                <div className="parking-map-legend-item is-optional"><span className="parking-map-legend-star">⭐</span>{tx.t('lg_venue')}</div>
+                <div className="parking-map-legend-item is-optional"><span
+                    className="parking-map-legend-star">⭐</span>{tx.t('lg_venue')}</div>
                 {mappedVenues.length > 1 && (
-                    <div className="parking-map-legend-item is-optional"><span className="parking-map-legend-star is-other">⭐</span>{tx.t('lg_other')}</div>
+                    <div className="parking-map-legend-item is-optional"><span
+                        className="parking-map-legend-star is-other">⭐</span>{tx.t('lg_other')}</div>
                 )}
             </div>
 
@@ -300,13 +312,21 @@ export const ParkingMap = (props: ParkingMapProps) => {
                             type="button"
                             className={`parking-pin parking-k-${status.kind}${lot.code === selectedCode ? ' is-selected' : ''}${lot.code === hotCode ? ' is-hot' : ''}`}
                             aria-label={[lot.code, tx.status(status), walkText(view, tx)].filter(Boolean).join(', ')}
-                            onPointerDown={e => { lastPointer.current = e.pointerType; }}
-                            onKeyDown={() => { lastPointer.current = 'keyboard'; }}
-                            onPointerEnter={e => { if (e.pointerType === 'mouse') showLot(lot.code, false); }}
+                            onPointerDown={e => {
+                                lastPointer.current = e.pointerType;
+                            }}
+                            onKeyDown={() => {
+                                lastPointer.current = 'keyboard';
+                            }}
+                            onPointerEnter={e => {
+                                if (e.pointerType === 'mouse') showLot(lot.code, false);
+                            }}
                             onPointerLeave={e => {
                                 if (e.pointerType === 'mouse') leave(h => h.kind === 'lot' && h.code === lot.code);
                             }}
-                            onFocus={() => { if (!touchLike()) showLot(lot.code, false); }}
+                            onFocus={() => {
+                                if (!touchLike()) showLot(lot.code, false);
+                            }}
                             onBlur={() => leave(h => h.kind === 'lot' && h.code === lot.code)}
                             onClick={() => {
                                 // A tap shows the card first; a second tap, or its Details button, opens the lot.
@@ -340,14 +360,22 @@ export const ParkingMap = (props: ParkingMapProps) => {
                         className={`parking-vpin${current ? ' is-current' : ''}`}
                         aria-label={current ? name : `${name}: ${tx.t('venueHover')}`}
                         aria-current={current || undefined}
-                        onPointerDown={e => { lastPointer.current = e.pointerType; }}
-                        onPointerEnter={e => { if (e.pointerType === 'mouse' && !current) setHover({kind: 'venue', id: v.id}); }}
+                        onPointerDown={e => {
+                            lastPointer.current = e.pointerType;
+                        }}
+                        onPointerEnter={e => {
+                            if (e.pointerType === 'mouse' && !current) setHover({kind: 'venue', id: v.id});
+                        }}
                         onPointerLeave={e => {
                             if (e.pointerType === 'mouse') leave(h => h.kind === 'venue' && h.id === v.id);
                         }}
-                        onFocus={() => { if (!current && !touchLike()) setHover({kind: 'venue', id: v.id}); }}
+                        onFocus={() => {
+                            if (!current && !touchLike()) setHover({kind: 'venue', id: v.id});
+                        }}
                         onBlur={() => leave(h => h.kind === 'venue' && h.id === v.id)}
-                        onClick={() => { if (!current) onSelectVenue(v.id); }}
+                        onClick={() => {
+                            if (!current) onSelectVenue(v.id);
+                        }}
                     >
                         <span className="parking-vpin-dot" aria-hidden="true">⭐</span>
                         <span className="parking-vpin-label">{name}</span>
@@ -388,9 +416,13 @@ export const ParkingMap = (props: ParkingMapProps) => {
 };
 
 /** The quick card a lot shows on hover, focus or a first tap. */
-const LotCard = ({view, pinned, onDetails, tx}: {view: LotView; pinned: boolean; onDetails: () => void; tx: ParkingText}) => {
+const LotCard = ({view, pinned, onDetails, tx}: {
+    view: LotView;
+    pinned: boolean;
+    onDetails: () => void;
+    tx: ParkingText
+}) => {
     const {lot, status, rank} = view;
-    const rates = rateText(lot, tx);
     const walk = walkText(view, tx);
     return (
         <div className="parking-hc">
@@ -400,7 +432,11 @@ const LotCard = ({view, pinned, onDetails, tx}: {view: LotView; pinned: boolean;
                 {rank > 0 && <span className="parking-pick-badge">{tx.t('pick', {n: rank})}</span>}
             </div>
             <StatusPill status={status} tx={tx}/>
-            {rates && <div className="parking-rate-line">💲 {rates}</div>}
+            {view.nowRates.length > 0 ? (
+                <RatesLine rates={view.nowRates} tx={tx}/>
+            ) : view.now.kind === 'permit' ? (
+                <span className="parking-rate-line">🎫 {tx.t('st_now_permit')}</span>
+            ) : null}
             <div className="parking-hc-facts">
                 {walk && <span className="parking-dist">📍 {walk}</span>}
                 {!!lot.stalls.accessible && <span title={tx.t('s_accessible')}>♿ {lot.stalls.accessible}</span>}

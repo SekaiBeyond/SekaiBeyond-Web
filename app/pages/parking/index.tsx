@@ -44,7 +44,7 @@ const Notice = ({icon, title, desc, inline}: {icon: string; title: string; desc:
 
 type EventLoad = {state: 'loading'} | {state: 'missing'} | {state: 'ready'; event: GuideEvent | null};
 
-// How often the "right now" statuses move on, when there's no event to plan around.
+// How often the "right now" statuses move on.
 const NOW_TICK_MS = 60_000;
 
 export const ParkingGuide = () => {
@@ -114,16 +114,20 @@ export const ParkingGuide = () => {
     const venue = resolveVenueById(selectedVenueId, venues);
     const eventVenue = resolveVenueById(eventVenueId, venues);
 
-    // Without an event, statuses are for this minute, and move on with the clock.
+    // Each lot also shows how it is right now, so the clock moves the guide on.
+    // Without an event, statuses are for this minute.
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
-        if (event) return;
         const id = setInterval(() => setNow(new Date()), NOW_TICK_MS);
         return () => clearInterval(id);
-    }, [event]);
-    const parkingWindow = useMemo(() => (event && eventWindow(event)) || nowWindow(now), [event, now]);
+    }, []);
+    const thisMinute = useMemo(() => nowWindow(now), [now]);
+    const parkingWindow = useMemo(() => (event && eventWindow(event)) || thisMinute, [event, thisMinute]);
 
-    const views = useMemo(() => venue ? lotViews(parking, venue, parkingWindow) : [], [parking, venue, parkingWindow]);
+    const views = useMemo(
+        () => venue ? lotViews(parking, venue, parkingWindow, thisMinute) : [],
+        [parking, venue, parkingWindow, thisMinute],
+    );
     const [query, setQuery] = useState('');
     const [filters, setFilters] = useState<ReadonlySet<LotFilter>>(new Set());
     const visibleViews = useMemo(() => views.filter(v => matchesFilters(v, query, filters)), [views, query, filters]);

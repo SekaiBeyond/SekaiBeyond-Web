@@ -119,7 +119,12 @@ const cache = createValueCache<UwParkingData>('uwParking', async () => {
     };
 }, EMPTY);
 
-export function useUwParking(): {parking: UwParkingData; loading: boolean; failed: boolean; refresh: () => Promise<void>} {
+export function useUwParking(): {
+    parking: UwParkingData;
+    loading: boolean;
+    failed: boolean;
+    refresh: () => Promise<void>
+} {
     const {value: parking, loading, error, refresh} = cache.useValue();
     return {parking, loading, failed: error !== null, refresh};
 }
