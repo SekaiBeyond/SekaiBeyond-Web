@@ -34,6 +34,7 @@ const NAV_LINKS: NavLink[] = [
     {id: 'schedule', label: {en: 'Schedule', zh: '活动日程'}},
     {id: 'lineup', label: {en: 'Share Card', zh: '分享卡'}},
     {id: 'guests', label: {en: 'Guests', zh: '嘉宾'}},
+    {id: 'cafe', label: {en: 'Maid Café', zh: '女仆咖啡'}},
     {id: 'vendors', label: {en: 'Artist Alley', zh: '创作者市集'}},
     {id: 'faq', label: {en: 'FAQ', zh: '常见问题'}},
 ];
@@ -133,6 +134,31 @@ export interface Guest {
     link?: string
 }
 
+/** One of the maids at the café, shown on the page as their poster. */
+export interface Maid {
+    name: string
+    /** Blank until uploaded — a maid can be announced before their poster is drawn. */
+    poster: string
+}
+
+/**
+ * The maid café, with a poster of its own and one for each maid. Every poster is
+ * uploaded in Admin → Con Content → Maid Café.
+ */
+export interface MaidCafe {
+    /** This edition's theme, e.g. "Trick or Treat Tea Time". */
+    theme: Localized
+    intro: Localized
+    /** Where in the venue, e.g. "HUB 214". */
+    location: Localized
+    /** HH:MM on the con's day, both or neither — blank until the hours are set. */
+    start: string
+    end: string
+    /** The café's own poster. Blank until one is uploaded. */
+    poster: string
+    maids: Maid[]
+}
+
 /** Who is at a table on the main hall floor plan (con/hall.ts). */
 export interface Vendor {
     /** A table on the floor plan, e.g. "A1" — one of HALL_TABLES. One vendor per table. */
@@ -229,6 +255,7 @@ export interface ConContent {
     rooms: Room[];
     schedule: ScheduleItem[];
     guests: Guest[];
+    cafe: MaidCafe;
     vendors: {tables: Vendor[]; cta: VendorCta};
     tickets: TicketTier[];
     ticketFee: TicketFee;
@@ -256,6 +283,7 @@ export const DEFAULT_CON_CONTENT: ConContent = {
     rooms: [],
     schedule: [],
     guests: [],
+    cafe: {theme: BLANK, intro: BLANK, location: BLANK, start: '', end: '', poster: '', maids: []},
     vendors: {tables: [], cta: {visible: false, heading: BLANK, body: BLANK, label: BLANK}},
     tickets: [],
     ticketFee: {percent: 0, flat: 0},
@@ -353,6 +381,19 @@ const readGuests = (raw: unknown): Guest[] =>
         link: optStr(guest.link),
     }));
 
+const readCafe = (raw: unknown): MaidCafe => {
+    const c = obj(raw);
+    return {
+        theme: loc(c.theme),
+        intro: loc(c.intro),
+        location: loc(c.location),
+        start: str(c.start),
+        end: str(c.end),
+        poster: str(c.poster),
+        maids: list(c.maids, maid => ({name: str(maid.name), poster: str(maid.poster)})),
+    };
+};
+
 const readVendors = (raw: unknown): ConContent['vendors'] => {
     const v = obj(raw);
     const cta = obj(v.cta);
@@ -434,6 +475,7 @@ const readSections = (data: Record<string, unknown>): Omit<ConContent, 'settings
     rooms: readRooms(data.rooms),
     schedule: readSchedule(data.schedule),
     guests: readGuests(data.guests),
+    cafe: readCafe(data.cafe),
     vendors: readVendors(data.vendors),
     tickets: readTickets(data.tickets),
     ticketFee: readTicketFee(data.ticketFee),

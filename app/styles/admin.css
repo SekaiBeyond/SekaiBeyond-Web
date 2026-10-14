@@ -5161,6 +5161,83 @@ select.admin-tickets-tag:focus {
     color: var(--color-primary);
 }
 
+/* Maid café editor: the café's poster beside its details, the way a passport
+   design's cover sits beside its fields, then a card per maid around their poster. */
+.admin-con-cafe {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+
+/* Top-aligned, as in the passport editor: a stretched label would grow the
+   intro's textarea to the height of the poster beside it. */
+.admin-con-cafe .admin-form-grid {
+    align-items: start;
+    margin-bottom: 0;
+}
+
+.admin-con-cafe-poster {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-con-cafe-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-con-cafe-clear {
+    align-self: flex-start;
+    padding: 0;
+    font-size: 12px;
+}
+
+.admin-con-maids-title {
+    margin: 24px 0 12px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-con-maids {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.admin-con-maid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.admin-con-maid .admin-con-card-head {
+    margin-bottom: 0;
+}
+
+.admin-con-maid label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.admin-con-maid label span {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+@media (max-width: 600px) {
+    .admin-con-cafe {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Artist alley editor: the /con floor plan as an overview, then one collapsible
    row of tables each, every table a single line — sixty-three of them as cards
    would be pages long. */

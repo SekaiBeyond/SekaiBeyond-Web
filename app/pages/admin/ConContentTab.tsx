@@ -5,6 +5,7 @@ import { SectionNav } from './SectionNav';
 import { conSectionId, SECTION_LABELS, SECTION_ORDER, type SectionProps, } from './conContentShared';
 import { EventSection, HeroVideoSection, RoomsSection, SettingsSection, } from './ConEventSections';
 import { GuestsSection, ScheduleSection } from './ConScheduleGuestSections';
+import { CafeSection } from './ConCafeSection';
 import { VendorsSection } from './ConVendorsSection';
 import { InPersonSalesSection, TicketFeeSection, TicketsSection, } from './ConTicketsSections';
 import { FaqSection } from './ConFaqSection';
@@ -79,6 +80,8 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
             <ScheduleSection {...sectionProps}/>
             <div className="admin-divider"/>
             <GuestsSection {...sectionProps}/>
+            <div className="admin-divider"/>
+            <CafeSection {...sectionProps}/>
             <div className="admin-divider"/>
             <VendorsSection {...sectionProps}/>
             <div className="admin-divider"/>

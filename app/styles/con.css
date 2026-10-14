@@ -991,6 +991,268 @@
 }
 
 /*
+ * Maid café: the café's poster beside its theme, room and hours, then a poster
+ * for each maid. Every poster is drawn at 17:22 — US Letter, the shape they are
+ * printed at and cropped to on upload — so none of them is trimmed here.
+ */
+.sbc-cafe {
+    display: grid;
+    grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+    align-items: center;
+    gap: 32px 56px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.sbc-cafe--text-only {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 680px;
+    text-align: center;
+}
+
+.sbc-poster {
+    display: block;
+    width: 100%;
+    aspect-ratio: 17 / 22;
+    object-fit: cover;
+    border: 1px solid var(--sbc-line);
+    border-radius: 14px;
+    background: #fdf6f9;
+    box-shadow: var(--shadow-soft);
+}
+
+.sbc-poster--placeholder {
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: var(--gradient-primary);
+    color: #fff;
+    font-family: var(--font-display);
+    font-size: 3.4rem;
+}
+
+/* A poster is a button that opens it full size. */
+.sbc-poster-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: zoom-in;
+}
+
+.sbc-poster-btn:focus-visible {
+    outline: none;
+}
+
+.sbc-poster-btn:focus-visible .sbc-poster {
+    outline: 3px solid var(--color-primary);
+    outline-offset: 3px;
+}
+
+.sbc-cafe-poster .sbc-poster {
+    border-radius: var(--sbc-radius-card);
+    box-shadow: 0 18px 44px rgba(255, 120, 170, 0.22);
+}
+
+.sbc-cafe-eyebrow {
+    margin-bottom: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-primary);
+}
+
+.sbc-cafe-theme {
+    margin-bottom: 20px;
+    font-family: var(--font-display);
+    font-size: clamp(1.8rem, 3.6vw, 2.5rem);
+    font-weight: 400;
+    line-height: 1.2;
+    color: var(--sbc-heading);
+}
+
+.sbc-cafe-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 22px;
+    padding: 0;
+    list-style: none;
+}
+
+.sbc-cafe--text-only .sbc-cafe-facts {
+    justify-content: center;
+}
+
+.sbc-cafe-facts li {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: var(--sbc-pill);
+    background: rgba(255, 107, 157, 0.1);
+    color: var(--sbc-heading);
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.sbc-cafe-facts svg {
+    flex-shrink: 0;
+    color: var(--color-primary);
+}
+
+.sbc-cafe-intro {
+    font-size: 1.02rem;
+    font-weight: 500;
+    line-height: 1.85;
+    color: var(--color-text-body);
+}
+
+.sbc-cafe + .sbc-maids {
+    margin-top: 64px;
+    padding-top: 48px;
+    border-top: 1px solid var(--sbc-line);
+}
+
+.sbc-maids-title {
+    margin-bottom: 28px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    text-align: center;
+    color: var(--sbc-heading);
+}
+
+/* Flex rather than grid so a short last row sits centred under the full ones. */
+.sbc-maid-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 32px 24px;
+    padding: 0;
+    list-style: none;
+}
+
+.sbc-maid-grid > li {
+    flex: 0 1 250px;
+    min-width: 0;
+}
+
+.sbc-maid-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    text-align: center;
+}
+
+.sbc-maid-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--sbc-heading);
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .sbc-poster-btn .sbc-poster {
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .sbc-poster-btn:hover .sbc-poster {
+        transform: translateY(-4px);
+        box-shadow: 0 16px 36px rgba(255, 120, 170, 0.28);
+    }
+}
+
+/* The poster viewer. Above the navbar (1000) and the preview banner (1001). */
+.sbc-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 84px;
+    background: rgba(18, 18, 42, 0.9);
+}
+
+.sbc-viewer-figure {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    max-height: 100%;
+    margin: 0;
+}
+
+.sbc-viewer-figure img {
+    display: block;
+    max-width: 100%;
+    max-height: calc(100vh - 110px);
+    max-height: calc(100dvh - 110px);
+    border-radius: 12px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.sbc-viewer-figure figcaption {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.sbc-viewer-count {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.sbc-viewer-btn {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.sbc-viewer-btn:hover {
+    background: rgba(255, 255, 255, 0.26);
+}
+
+.sbc-viewer-btn:focus-visible {
+    outline: 3px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.sbc-viewer-close {
+    top: 16px;
+    right: 16px;
+}
+
+.sbc-viewer-nav {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.sbc-viewer-nav--prev {
+    left: 20px;
+}
+
+.sbc-viewer-nav--next {
+    right: 20px;
+}
+
+/*
  * Artist alley: the main hall floor plan, a panel under it naming whoever is at
  * the table picked, and a directory of every table below. The plan's geometry
  * lives in con/hall.ts as one CSS grid. Every item carries its grid lines for
@@ -2105,6 +2367,63 @@ button.sbc-hall-table:hover {
     .sbc-guest-card {
         padding: 18px;
         gap: 16px;
+    }
+
+    .sbc-cafe {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 28px;
+        text-align: center;
+    }
+
+    .sbc-cafe-poster {
+        justify-self: center;
+        width: min(100%, 300px);
+    }
+
+    .sbc-cafe-facts {
+        justify-content: center;
+    }
+
+    .sbc-cafe + .sbc-maids {
+        margin-top: 44px;
+        padding-top: 36px;
+    }
+
+    /* Two to a row: one poster a screen tall is a lot of scrolling to see a line-up. */
+    .sbc-maid-grid {
+        gap: 24px 14px;
+    }
+
+    .sbc-maid-grid > li {
+        flex-basis: calc((100% - 14px) / 2);
+    }
+
+    .sbc-maid-name {
+        font-size: 0.95rem;
+    }
+
+    /* The arrows move under the poster, out of the way of a thumb on its edges. */
+    .sbc-viewer {
+        padding: 72px 12px 88px;
+    }
+
+    .sbc-viewer-figure img {
+        max-height: calc(100vh - 200px);
+        max-height: calc(100dvh - 200px);
+    }
+
+    .sbc-viewer-nav {
+        top: auto;
+        bottom: 20px;
+        transform: none;
+    }
+
+    .sbc-viewer-nav--prev {
+        left: calc(50% - 60px);
+    }
+
+    .sbc-viewer-nav--next {
+        right: calc(50% - 60px);
     }
 
     .sbc-hall-card {

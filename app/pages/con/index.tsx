@@ -10,6 +10,7 @@ import { About } from '~/pages/con/About';
 import { Schedule } from '~/pages/con/Schedule';
 import { ShareCard } from '~/pages/con/ShareCard';
 import { Guests } from '~/pages/con/Guests';
+import { MaidCafe } from '~/pages/con/MaidCafe';
 import { Vendors } from '~/pages/con/Vendors';
 import { Faq } from '~/pages/con/Faq';
 import { Footer } from '~/pages/con/Footer';
@@ -76,6 +77,7 @@ export const ConPage = () => {
                 <Schedule/>
                 <ShareCard/>
                 {!hidden.includes('guests') && <Guests/>}
+                <MaidCafe/>
                 {!hidden.includes('vendors') && <Vendors/>}
                 <Faq/>
             </main>

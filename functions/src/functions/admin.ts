@@ -483,7 +483,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
 const CON_ROOM_ACCENTS = ["pink", "violet", "amber", "sky", "mint", "slate"] as const;
 
 const CON_SECTIONS = [
-    "settings", "event", "heroVideo", "rooms", "schedule", "guests", "vendors", "tickets", "ticketFee",
+    "settings", "event", "heroVideo", "rooms", "schedule", "guests", "cafe", "vendors", "tickets", "ticketFee",
     "inPersonSales", "faq",
 ] as const;
 type ConSection = typeof CON_SECTIONS[number];
@@ -498,6 +498,7 @@ const CON_LIMITS = {
     rooms: 24,
     scheduleItems: 120,
     guests: 60,
+    maids: 40,
     tickets: 8,
     perks: 12,
     inPersonSessions: 30,
@@ -554,7 +555,7 @@ function requireISODate(raw: unknown, name: string): string {
 }
 
 /**
- * Con assets — guest photos and the hero clip — come from two places:
+ * Con assets — guest photos, café posters and the hero clip — come from two places:
  * an admin upload (a Storage download URL) or a file committed under public/ (a
  * root-relative path). Anything else — an off-site URL, a traversal attempt — is
  * rejected, so nothing the page loads is served from a host we do not control.
@@ -753,6 +754,38 @@ function buildConGuests(raw: unknown) {
     }));
 }
 
+/**
+ * The maid café. Its hours are both or neither, like a schedule item's, and every
+ * poster is optional: a maid can be announced before their poster is drawn.
+ */
+function buildConCafe(raw: unknown) {
+    const c = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const hasStart = c.start !== undefined && c.start !== null && c.start !== "";
+    const hasEnd = c.end !== undefined && c.end !== null && c.end !== "";
+    if (hasStart !== hasEnd) {
+        throw new HttpsError("invalid-argument", "The café needs both an opening and a closing time, or neither.");
+    }
+    const start = hasStart ? validateConTime(c.start, "café opening time") : "";
+    const end = hasEnd ? validateConTime(c.end, "café closing time") : "";
+    // HH:MM sorts chronologically, as in buildConSchedule.
+    if (start && end <= start) {
+        throw new HttpsError("invalid-argument", `The café closes at ${end}, which is not after its ${start} opening.`);
+    }
+
+    return {
+        theme: validateLocalized(c.theme, "café theme", 120),
+        intro: validateLocalized(c.intro, "café intro", 1000),
+        location: validateLocalized(c.location, "café location", 120),
+        start,
+        end,
+        poster: validateConAsset(c.poster, "café poster"),
+        maids: validateConArray(c.maids, "maids", CON_LIMITS.maids).map(maid => ({
+            name: sanitizeDisplayText(validateStr(maid.name, "maid name", 120, true)),
+            poster: validateConAsset(maid.poster, "maid poster"),
+        })),
+    };
+}
+
 function buildConVendors(raw: unknown) {
     const v = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
     const cta = v.cta && typeof v.cta === "object" ? v.cta as Record<string, unknown> : {};
@@ -895,6 +928,7 @@ const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
     rooms: buildConRooms,
     schedule: buildConSchedule,
     guests: buildConGuests,
+    cafe: buildConCafe,
     vendors: buildConVendors,
     tickets: buildConTickets,
     ticketFee: buildConTicketFee,
@@ -902,15 +936,21 @@ const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
     faq: buildConFaq,
 };
 
-/** Where the con editor uploads to: the hero clip, and the guests' photos. */
+/** Where the con editor uploads to: the hero clip and the café posters under con/,
+ *  and the guests' photos. */
 const CON_ASSET_PREFIXES = ["con/", "config/con-guest-"];
 
 /** Every file URL con content points at. Root-relative public/ paths come along
  *  too; deleteStorageFile passes over anything that is not a Storage URL. */
 function conAssetUrls(content: Record<string, any>): string[] {
     const guests: any[] = Array.isArray(content.guests) ? content.guests : [];
-    return [content.heroVideo?.webm, ...guests.map(guest => guest?.avatar)]
-        .filter((url): url is string => typeof url === "string" && url !== "");
+    const maids: any[] = Array.isArray(content.cafe?.maids) ? content.cafe.maids : [];
+    return [
+        content.heroVideo?.webm,
+        ...guests.map(guest => guest?.avatar),
+        content.cafe?.poster,
+        ...maids.map(maid => maid?.poster),
+    ].filter((url): url is string => typeof url === "string" && url !== "");
 }
 
 /**
@@ -1019,9 +1059,9 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             conSection: sections.join(", "),
         }));
 
-        // Each upload writes a new time-stamped object, so a clip or photo this
-        // save replaces — or a removed guest's photo — is left behind and deleted
-        // once the save commits. Both documents now name the clip and photos that
+        // Each upload writes a new time-stamped object, so a clip, photo or poster
+        // this save replaces — or a removed guest's or maid's — is left behind and
+        // deleted once the save commits. Both documents now name the files that
         // `merged` does, so one it no longer names is referenced by neither.
         const stillReferenced = new Set(conAssetUrls(merged));
         return [...new Set(conAssetUrls(stored))].filter(url => !stillReferenced.has(url));

@@ -20,8 +20,8 @@ interface ImageUploadFieldProps {
     // 'avatar' swaps the labelled file input for a round preview beside a styled button,
     // so the admin sees the same circular crop the site renders. The caller owns the field
     // label in this variant, since it also owns the controls that sit beside it.
-    // 'cover' does the same for a passport cover: a 3:4 frame, which is the only shape
-    // the site ever shows one in, over its button.
+    // 'cover' does the same for a passport cover or a poster: a frame in the shape the
+    // site shows it in — `cropAspect`, or 3:4 without one — over its button.
     variant?: 'field' | 'avatar' | 'cover';
     // Shown in the avatar preview when there is no image yet — the same default the
     // public page falls back to, so an empty picker tells the truth about the result.
@@ -106,15 +106,16 @@ export const ImageUploadField = ({
 
     if (variant === 'avatar' || variant === 'cover') {
         const cover = variant === 'cover';
+        const frame = cover && cropAspect ? {aspectRatio: String(cropAspect)} : undefined;
         // A cover is cropped to the shape the site shows it in, so the crop is
         // the whole story; without one it is only trimmed to fit at display
         // time, which is a different promise and worth saying differently.
         const hint = {
             en: `Any image up to ${imageMb} MB.` + (cropAspect
-                ? cover ? " You'll crop it to 3:4 before it's saved." : " You'll crop it before it's saved."
+                ? cover ? " You'll crop it to this frame before it's saved." : " You'll crop it before it's saved."
                 : cover ? ' Shown at 3:4, trimmed to fill.' : ''),
             zh: `任意图片，最大 ${imageMb} MB。` + (cropAspect
-                ? cover ? '保存前需裁剪为 3:4。' : '保存前需先裁剪。'
+                ? cover ? '保存前需按此框裁剪。' : '保存前需先裁剪。'
                 : cover ? '按 3:4 显示，超出部分会被裁切。' : ''),
         };
         return (
@@ -122,10 +123,10 @@ export const ImageUploadField = ({
                 <div className={`admin-avatar-field${cover ? ' admin-avatar-field--cover' : ''}`}>
                     {cover ? (
                         preview ? (
-                            <img className="admin-cover-preview" src={preview} alt=""/>
+                            <img className="admin-cover-preview" src={preview} alt="" style={frame}/>
                         ) : (
-                            <div className="admin-cover-preview admin-cover-preview--empty">
-                                {isEnglish ? 'No cover art yet' : '尚无封面图'}
+                            <div className="admin-cover-preview admin-cover-preview--empty" style={frame}>
+                                {isEnglish ? 'No image yet' : '尚无图片'}
                             </div>
                         )
                     ) : (

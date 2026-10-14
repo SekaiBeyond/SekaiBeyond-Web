@@ -18,6 +18,7 @@ export const SECTION_LABELS: Record<ConContentSection, Localized> = {
     rooms: {en: 'Rooms', zh: '场地房间'},
     schedule: {en: 'Schedule', zh: '活动日程'},
     guests: {en: 'Guests & Performers', zh: '嘉宾与演出者'},
+    cafe: {en: 'Maid Café', zh: '女仆咖啡'},
     vendors: {en: 'Artist Alley', zh: '创作者市集'},
     tickets: {en: 'Tickets', zh: '门票'},
     ticketFee: {en: 'Online Transaction Fee', zh: '线上交易手续费'},
@@ -27,7 +28,7 @@ export const SECTION_LABELS: Record<ConContentSection, Localized> = {
 
 /** The section navigator's order — keep it matching the order ConContentTab renders them in. */
 export const SECTION_ORDER: ConContentSection[] = [
-    'settings', 'event', 'heroVideo', 'rooms', 'schedule', 'guests', 'vendors', 'tickets', 'ticketFee',
+    'settings', 'event', 'heroVideo', 'rooms', 'schedule', 'guests', 'cafe', 'vendors', 'tickets', 'ticketFee',
     'inPersonSales', 'faq',
 ];
 
@@ -300,9 +301,13 @@ interface RowActionsProps {
     index?: number;
     count?: number;
     onMove?: (delta: number) => void;
+    /** Arrows pointing ← → rather than ↑ ↓, for rows laid out side by side. */
+    horizontal?: boolean;
 }
 
-export const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly, disabled}: RowActionsProps) => {
+export const RowActions = (
+    {index = 0, count = 0, onMove, onRemove, readOnly, disabled, horizontal}: RowActionsProps,
+) => {
     const {isEnglish} = useLanguage();
     if (readOnly) return null;
 
@@ -315,18 +320,18 @@ export const RowActions = ({index = 0, count = 0, onMove, onRemove, readOnly, di
                         className="admin-con-icon-btn"
                         onClick={() => onMove(-1)}
                         disabled={disabled || index === 0}
-                        aria-label={isEnglish ? 'Move up' : '上移'}
+                        aria-label={horizontal ? (isEnglish ? 'Move left' : '左移') : (isEnglish ? 'Move up' : '上移')}
                     >
-                        ↑
+                        {horizontal ? '←' : '↑'}
                     </button>
                     <button
                         type="button"
                         className="admin-con-icon-btn"
                         onClick={() => onMove(1)}
                         disabled={disabled || index === count - 1}
-                        aria-label={isEnglish ? 'Move down' : '下移'}
+                        aria-label={horizontal ? (isEnglish ? 'Move right' : '右移') : (isEnglish ? 'Move down' : '下移')}
                     >
-                        ↓
+                        {horizontal ? '→' : '↓'}
                     </button>
                 </>
             )}
