@@ -2,6 +2,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import {
     AttributionControl,
     type FilterSpecification,
+    type LayerSpecification,
     Map as MapLibreMap,
     type MapOptions,
     Marker,
@@ -10,6 +11,7 @@ import {
     Popup,
     type PopupOptions,
     setWorkerUrl,
+    type StyleSpecification,
 } from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { useEffect, useRef, useState } from 'react';
@@ -31,8 +33,8 @@ export type {MapLibreMap};
 /**
  * A map in `container` with the site's defaults: no rotation or tilt, zoom
  * buttons top-right, compact attribution bottom-right (`attribution` adds to
- * OpenStreetMap's), and the base map tidied once loaded. Null when MapLibre
- * can't start, which almost always means no WebGL.
+ * OpenStreetMap's), and the base map tidied before it's drawn. Null when
+ * MapLibre can't start, which almost always means no WebGL.
  */
 export function createMap(
     container: HTMLElement,
@@ -41,7 +43,6 @@ export function createMap(
     let map: MapLibreMap;
     try {
         map = new MapLibreMap({
-            style: MAP_STYLE_URL,
             maxZoom: 19.5,
             dragRotate: false,
             pitchWithRotate: false,
@@ -58,23 +59,35 @@ export function createMap(
     map.keyboard.disableRotation();
     map.addControl(new NavigationControl({showCompass: false}), 'top-right');
     map.addControl(new AttributionControl({compact: true, customAttribution: attribution}), 'bottom-right');
-    map.on('load', () => tidyBaseMap(map));
+    // Some places in the style ask for icons its sprite doesn't have; a blank
+    // stand-in leaves their names showing and keeps MapLibre from warning per icon.
+    map.setMissingStyleImageResolver(id => {
+        if (!map.hasImage(id)) map.addImage(id, {width: 1, height: 1, data: new Uint8Array(4)});
+    });
+    map.setStyle(MAP_STYLE_URL, {transformStyle: (_previous, next) => tidyStyle(next)});
     return map;
 }
 
 /**
- * Flat buildings, as a campus map reads best, rather than the style's 3D ones;
- * and no OpenStreetMap parking icons, which would sit beside the guide's own
- * pins and include lots visitors can't use.
+ * The base map as the site wants it, applied before anything is drawn: flat
+ * buildings rather than the style's 3D ones, as a campus map reads best; no
+ * OpenStreetMap parking icons, which would sit beside the guide's own pins
+ * and include lots visitors can't use; and no highway shields, which campus
+ * maps don't need and whose filters warn on every tile.
  */
-function tidyBaseMap(map: MapLibreMap): void {
-    if (map.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', 'none');
-    if (map.getLayer('building')) map.setLayerZoomRange('building', 13, 24);
+function tidyStyle(style: StyleSpecification): StyleSpecification {
     const notParking = ['!=', ['get', 'class'], 'parking'] as FilterSpecification;
-    for (const layer of map.getStyle().layers) {
-        if (!('source-layer' in layer) || layer['source-layer'] !== 'poi') continue;
-        map.setFilter(layer.id, layer.filter ? ['all', layer.filter, notParking] as FilterSpecification : notParking);
-    }
+    const layers = style.layers
+        .filter(layer => layer.id !== 'building-3d' && !layer.id.includes('shield'))
+        .map((layer): LayerSpecification => {
+            if (layer.id === 'building') return {...layer, maxzoom: 24};
+            if ('source-layer' in layer && layer['source-layer'] === 'poi') {
+                const filter = layer.filter ? ['all', layer.filter, notParking] as FilterSpecification : notParking;
+                return {...layer, filter} as LayerSpecification;
+            }
+            return layer;
+        });
+    return {...style, layers};
 }
 
 /** The first label layer above the buildings: a layer added before it sits on the buildings, under the labels. */
