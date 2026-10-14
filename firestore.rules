@@ -182,6 +182,12 @@ service cloud.firestore {
             allow read: if true;
         }
 
+        // The parking guide's synced copy of UW's lots, event pricing and walking
+        // times (uwParking/current). Publicly readable; written only by the sync functions.
+        match /uwParking/{docId} {
+            allow read: if true;
+        }
+
         // Managed QR codes — staff+ can read for the admin dashboard / link flow.
         // Public scanners never read these directly; they hit the recordQrScan
         // Cloud Function, which returns the redirect target. All writes (and the

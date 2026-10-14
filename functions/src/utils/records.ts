@@ -77,6 +77,7 @@ export type RecordType =
     | "parkingrate-create"
     | "parkingrate-edit"
     | "parkingrate-delete"
+    | "parking-sync"
     | "passport-generate"
     | "passport-claim"
     | "passport-delete"
@@ -135,6 +136,8 @@ export interface RecordFields {
     conSection?: string;
     configSections?: string[];
     unlinkedFrom?: number;
+    /** How many visitor lots a parking sync left the guide with. */
+    lotCount?: number;
     /** Event check-in codes only: badge and staff codes are core-staff+, and all staff read records. */
     code?: string;
     oldGroup?: string;

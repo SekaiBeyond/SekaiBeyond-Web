@@ -4,6 +4,13 @@ export interface VenueLotLink {
     lotId: string;
 }
 
+/** A UW lot the organizers suggest for a venue, by UW facility code, with an optional note. */
+export interface SuggestedLot {
+    code: string;
+    noteEn: string;
+    noteCn: string;
+}
+
 export interface Venue {
     id: string;
     nameEn: string;
@@ -11,6 +18,10 @@ export interface Venue {
     lat: number;
     lng: number;
     parkingLots: VenueLotLink[];
+    /** UW building code (e.g. "HUB"), or '' when not set. */
+    buildingCode: string;
+    /** UW lots to suggest, best first; they replace parkingLots once the guide reads UW's data. */
+    suggestedLots: SuggestedLot[];
 }
 
 // These are the values to change if the parking guide is ever used off the UW campus.
@@ -68,6 +79,14 @@ const cache = createCollectionCache<Venue>('venues', docSnap => {
             lotId: typeof link?.lotId === 'string' ? link.lotId : '',
         }))
         .filter((link: VenueLotLink) => link.lotId.length > 0);
+    const rawSuggested = Array.isArray(data.suggestedLots) ? data.suggestedLots : [];
+    const suggestedLots: SuggestedLot[] = rawSuggested
+        .map((s: any) => ({
+            code: typeof s?.code === 'string' ? s.code : '',
+            noteEn: typeof s?.noteEn === 'string' ? s.noteEn : '',
+            noteCn: typeof s?.noteCn === 'string' ? s.noteCn : '',
+        }))
+        .filter((s: SuggestedLot) => s.code.length > 0);
     return {
         id: docSnap.id,
         nameEn: data.nameEn ?? '',
@@ -75,6 +94,8 @@ const cache = createCollectionCache<Venue>('venues', docSnap => {
         lat: typeof data.lat === 'number' ? data.lat : 0,
         lng: typeof data.lng === 'number' ? data.lng : 0,
         parkingLots,
+        buildingCode: typeof data.buildingCode === 'string' ? data.buildingCode : '',
+        suggestedLots,
     };
 });
 

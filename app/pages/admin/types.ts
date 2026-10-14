@@ -106,7 +106,8 @@ export const RECORD_CATEGORIES = {
         en: 'Location', zh: '场地',
         types: ['venue-create', 'venue-edit', 'venue-delete',
             'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
-            'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
+            'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete',
+            'parking-sync'],
     },
     passport: {
         en: 'Passport', zh: '通行证',
@@ -172,6 +173,7 @@ export interface ActivityRecord {
     /** The Site Config sections a config-update saved (keys of CONFIG_SECTION_LABELS). */
     configSections?: string[];
     unlinkedFrom?: number;
+    lotCount?: number;
     /** Event check-in codes only; see RecordFields.code. */
     code?: string;
     oldGroup?: UserGroup;

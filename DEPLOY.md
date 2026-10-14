@@ -144,6 +144,8 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
 13. Configure **Google Maps Platform** — the **Parking Guide** page and the admin panel's maps (the Locations map, the **Map Picker** for venues and parking lots, and the QR spots map) render interactive maps via `@vis.gl/react-google-maps`, keyed by `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID`. Without these, the map silently fails to load (the script request goes out with an empty `key=`, and the Maps JS API logs `The Google Maps JavaScript API could not load`).
 
+    > **Parking data:** lot details, UW's event-parking days and walking times come from UW Transportation Services and OpenStreetMap, not Google. The `uwParkingNightlySync` scheduled function copies them into `uwParking/current` every day at 5:30 PM Pacific; it deploys with the other functions and needs no keys. To fill it right after the first deploy, use **Force run** on its job in [Cloud Scheduler](https://console.cloud.google.com/cloudscheduler).
+
     **Step A — Enable the API and create a browser key**
 
     1. In [Google Cloud Console](https://console.cloud.google.com) (same project as Firebase), go to **APIs & Services** > **Library** and enable **Maps JavaScript API**.
@@ -223,7 +225,7 @@ The `VITE_*` secrets are injected as build-time environment variables. `FIREBASE
 4. Grant these roles:
    - **Firebase Admin** (broad, simplest), or more narrowly: **Firebase Hosting Admin**, **Cloud Functions Admin**, **Firebase Rules Admin**, **Storage Admin**
    - **Secret Manager Admin** (`roles/secretmanager.admin`) — required to deploy the secret-bound email functions; not covered by Firebase Admin (see [Step 10](#1-firebase-project))
-   - **Cloud Scheduler Admin** (`roles/cloudscheduler.admin`) — required to create/update the Cloud Scheduler job behind the `scheduledMailDrain` scheduled function; not covered by Firebase Admin or Cloud Functions Admin. Without it, deploys that change the function's schedule fail with `403 ... lacks IAM permission "cloudscheduler.jobs.update"`.
+   - **Cloud Scheduler Admin** (`roles/cloudscheduler.admin`) — required to create/update the Cloud Scheduler jobs behind the `scheduledMailDrain` and `uwParkingNightlySync` scheduled functions; not covered by Firebase Admin or Cloud Functions Admin. Without it, deploys that change the function's schedule fail with `403 ... lacks IAM permission "cloudscheduler.jobs.update"`.
    - **Service Account User**
 5. After creating, open the service account, go to the **Keys** tab, click **Add Key** > **Create new key** > **JSON**, and download the file
 6. Paste the entire file contents into the `FIREBASE_SERVICE_ACCOUNT` secret value in GitHub

@@ -391,6 +391,12 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>deleted parking rate {r.rateLabel ?? ''}</>
                 : <>删除了停车费率 {r.rateLabel ?? ''}</>;
         }
+        case 'parking-sync': {
+            const lots = r.lotCount ?? 0;
+            return isEnglish
+                ? <>synced UW parking data ({lots} visitor lot{lots === 1 ? '' : 's'})</>
+                : <>同步了 UW 停车数据（{lots} 个访客停车场）</>;
+        }
         case 'account-deletion-requested': {
             const selfRequest = r.performedBy && r.targetUid && r.performedBy === r.targetUid;
             if (selfRequest) {

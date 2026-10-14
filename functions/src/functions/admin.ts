@@ -33,6 +33,7 @@ import {
     validateStr,
     validateUrl
 } from "../utils/validation";
+import { UW_BUILDING_CODE_RE, UW_LOT_CODE_RE } from "../utils/uwParking";
 
 export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -1229,6 +1230,51 @@ export const deleteParkingRate = onCall({maxInstances: 10}, async (request) => {
     });
 });
 
+const MAX_SUGGESTED_LOTS = 10;
+
+/**
+ * A venue's UW fields from a save: its building code and the UW lots suggested
+ * for it, by facility code. Each is written only when the save sends it, so a
+ * save from an editor that predates them keeps what the venue already has.
+ * Codes are checked for shape only; a lot UW later drops is skipped by the guide.
+ */
+function venueUwFields(input: Record<string, unknown>): {
+    buildingCode?: string;
+    suggestedLots?: {code: string; noteEn: string; noteCn: string}[];
+} {
+    const fields: ReturnType<typeof venueUwFields> = {};
+    if (input.buildingCode !== undefined) {
+        const code = validateStr(input.buildingCode, "buildingCode", 8).trim().toUpperCase();
+        if (code && !UW_BUILDING_CODE_RE.test(code)) {
+            throw new HttpsError("invalid-argument", `Invalid buildingCode: ${code}.`);
+        }
+        fields.buildingCode = code;
+    }
+    if (input.suggestedLots !== undefined) {
+        if (!Array.isArray(input.suggestedLots)) {
+            throw new HttpsError("invalid-argument", "suggestedLots must be a list.");
+        }
+        if (input.suggestedLots.length > MAX_SUGGESTED_LOTS) {
+            throw new HttpsError("invalid-argument", `Too many suggested lots (max ${MAX_SUGGESTED_LOTS}).`);
+        }
+        const seen = new Set<string>();
+        fields.suggestedLots = input.suggestedLots.map((lot: any, i: number) => {
+            const code = validateStr(lot?.code, `suggestedLots[${i}].code`, 12, true).trim().toUpperCase();
+            if (!UW_LOT_CODE_RE.test(code)) {
+                throw new HttpsError("invalid-argument", `Invalid UW lot code: ${code}.`);
+            }
+            if (seen.has(code)) throw new HttpsError("invalid-argument", `Duplicate suggested lot: ${code}.`);
+            seen.add(code);
+            return {
+                code,
+                noteEn: sanitizeDisplayText(validateStr(lot?.noteEn, `suggestedLots[${i}].noteEn`, 300)),
+                noteCn: sanitizeDisplayText(validateStr(lot?.noteCn, `suggestedLots[${i}].noteCn`, 300)),
+            };
+        });
+    }
+    return fields;
+}
+
 export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
     const uid = request.auth.uid;
@@ -1255,6 +1301,7 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
         }
         seenLotIds.add(l.lotId);
     }
+    const uwFields = venueUwFields(input);
 
     const docId = venueId ?? db.collection("venues").doc().id;
 
@@ -1272,7 +1319,7 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
         }
 
         const ref = db.collection("venues").doc(docId);
-        const data = {nameEn, nameCn, lat, lng, parkingLots};
+        const data = {nameEn, nameCn, lat, lng, parkingLots, ...uwFields};
         if (venueId) {
             txn.update(ref, data);
         } else {
