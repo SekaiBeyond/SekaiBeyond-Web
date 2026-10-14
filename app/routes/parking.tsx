@@ -1,5 +1,5 @@
 import type { Route } from "./+types/parking";
-import { ParkingGuide } from "~/pages/ParkingGuide";
+import { ParkingGuide } from "~/pages/parking";
 
 export function meta({}: Route.MetaArgs) {
     return [

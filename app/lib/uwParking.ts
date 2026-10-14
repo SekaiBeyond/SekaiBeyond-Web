@@ -38,7 +38,10 @@ export interface UwLot {
     zipcar: boolean;
     ucar: boolean;
     dialARide: boolean;
+    /** When visitors can pay to park. Null on a day with no paid hours. */
     paidHours: {weekday: ClockRange | null; saturday: ClockRange | null};
+    /** When a permit is required; outside paidHours, a visitor can't park then. */
+    permitHours: {weekday: ClockRange | null; saturday: ClockRange | null};
     gateHours: ClockRange | null;
     hasTour: boolean;
 }
@@ -65,6 +68,16 @@ export interface VenueWalking {
     lots: Record<string, WalkingTime>;
 }
 
+/**
+ * A venue's building footprint. Each polygon maps ring index to a flat
+ * [lng, lat, lng, lat, …] list (Firestore can't nest arrays), outline first.
+ */
+export interface VenueOutline {
+    /** The UW building code it was looked up by. */
+    code: string;
+    polygons: Record<string, number[]>[];
+}
+
 export interface UwParkingData {
     lots: UwLot[];
     /** When UW generated the lot file, as UW writes it. */
@@ -72,6 +85,8 @@ export interface UwParkingData {
     lotsSyncedAt: Date | null;
     eventPricing: UwEventPricing[];
     walking: Record<string, VenueWalking>;
+    /** Keyed by venue document ID, like walking. */
+    outlines: Record<string, VenueOutline>;
     lastRunAt: Date | null;
     /** Sources the last sync could not refresh; their previous copy was kept. */
     lastRunErrors: string[];
@@ -83,6 +98,7 @@ const EMPTY: UwParkingData = {
     lotsSyncedAt: null,
     eventPricing: [],
     walking: {},
+    outlines: {},
     lastRunAt: null,
     lastRunErrors: [],
 };
@@ -97,6 +113,7 @@ const cache = createValueCache<UwParkingData>('uwParking', async () => {
         lotsSyncedAt: toDate(data.lotsSyncedAt),
         eventPricing: Array.isArray(data.eventPricing) ? data.eventPricing : [],
         walking: data.walking && typeof data.walking === 'object' ? data.walking : {},
+        outlines: data.outlines && typeof data.outlines === 'object' ? data.outlines : {},
         lastRunAt: toDate(data.lastRunAt),
         lastRunErrors: Array.isArray(data.lastRunErrors) ? data.lastRunErrors.filter((e: unknown) => typeof e === 'string') : [],
     };

@@ -1,8 +1,21 @@
 import { type FirebaseApp, FirebaseError, initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
-import { type Auth, getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
-import { type Firestore, getFirestore } from "firebase/firestore";
-import { type Functions, type FunctionsError, getFunctions as _getFunctions, httpsCallable } from "firebase/functions";
+import {
+    type Auth,
+    connectAuthEmulator,
+    getAuth,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signOut as firebaseSignOut,
+} from "firebase/auth";
+import { connectFirestoreEmulator, type Firestore, getFirestore } from "firebase/firestore";
+import {
+    connectFunctionsEmulator,
+    type Functions,
+    type FunctionsError,
+    getFunctions as _getFunctions,
+    httpsCallable,
+} from "firebase/functions";
 import type { ConEdition, SocialLinks, TeamMemberConfig } from "./siteConfig";
 import type { UploadLimits } from "./uploadLimits";
 import type { ConContent } from "./conContent";
@@ -32,6 +45,12 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+// For trying the site against the local Firebase emulators (Auth, Firestore and
+// Functions on their default ports) rather than production. Pair it with a demo-
+// VITE_FIREBASE_PROJECT_ID, which the emulators treat as offline-only. App Check
+// is left off: the emulators don't enforce it.
+const USE_EMULATORS = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true';
+
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
@@ -54,7 +73,7 @@ function getFirebaseApp() {
                         : import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN;
             }
 
-            if (siteKey) {
+            if (siteKey && !USE_EMULATORS) {
                 initializeAppCheck(app, {
                     provider: new ReCaptchaV3Provider(siteKey),
                     isTokenAutoRefreshEnabled: true,
@@ -68,6 +87,7 @@ function getFirebaseApp() {
 export function getFirebaseAuth() {
     if (!auth) {
         auth = getAuth(getFirebaseApp());
+        if (USE_EMULATORS) connectAuthEmulator(auth, 'http://127.0.0.1:9099', {disableWarnings: true});
     }
     return auth;
 }
@@ -75,6 +95,7 @@ export function getFirebaseAuth() {
 export function getFirebaseDb() {
     if (!db) {
         db = getFirestore(getFirebaseApp());
+        if (USE_EMULATORS) connectFirestoreEmulator(db, '127.0.0.1', 8080);
     }
     return db;
 }
@@ -82,6 +103,7 @@ export function getFirebaseDb() {
 function getFunctions() {
     if (!functions) {
         functions = _getFunctions(getFirebaseApp());
+        if (USE_EMULATORS) connectFunctionsEmulator(functions, '127.0.0.1', 5001);
     }
     return functions;
 }

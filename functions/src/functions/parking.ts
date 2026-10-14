@@ -7,12 +7,14 @@ import { recordDoc, recordRef } from "../utils/records";
 import { SITE_TIME_ZONE, siteDay } from "../utils/siteTime";
 import {
     fetchUwBuilding,
+    fetchUwBuildingOutline,
     fetchUwEventPricing,
     fetchUwLots,
     fetchWalkingTimes,
     lotCodesInText,
     UW_BUILDING_CODE_RE,
     type UwBuilding,
+    type UwBuildingOutline,
     type UwLot,
     type WalkingTime,
 } from "../utils/uwParking";
@@ -49,25 +51,55 @@ async function syncedLots(): Promise<UwLot[]> {
 }
 
 /**
- * Measures a saved venue's walking times unless it already has them from this
- * spot, so a new or moved venue has them before the nightly sync. Does nothing
- * before the first sync.
+ * Brings a saved venue's walking times and building outline up to date, unless
+ * they were already taken from this spot and this building, so a new or changed
+ * venue has them before the nightly sync. Does nothing before the first sync.
  */
-export async function refreshVenueWalking(venueId: string, lat: number, lng: number): Promise<void> {
-    if (lat === 0 && lng === 0) return;
+export async function refreshVenueParking(
+    venueId: string,
+    venue: {lat: number; lng: number; buildingCode: string},
+): Promise<void> {
     const data = (await PARKING_DOC.get()).data();
-    const lots: UwLot[] = Array.isArray(data?.lots) ? data.lots : [];
-    const current = data?.walking?.[venueId] as VenueWalking | undefined;
-    if (lots.length === 0 || (current?.lat === lat && current?.lng === lng)) return;
-    const walking: VenueWalking = {lat, lng, lots: await fetchWalkingTimes({lat, lng}, lots)};
-    await PARKING_DOC.update(new FieldPath("walking", venueId), walking);
+    if (!data) return;
+    const lots: UwLot[] = Array.isArray(data.lots) ? data.lots : [];
+    const walking = data.walking?.[venueId] as VenueWalking | undefined;
+    const outline = data.outlines?.[venueId] as UwBuildingOutline | undefined;
+    const {lat, lng, buildingCode} = venue;
+
+    const refreshWalking = lots.length > 0 && !(lat === 0 && lng === 0)
+        && !(walking?.lat === lat && walking?.lng === lng);
+    const refreshOutline = (outline?.code ?? "") !== buildingCode;
+    const [walkingResult, outlineResult] = await Promise.allSettled([
+        refreshWalking ? fetchWalkingTimes({lat, lng}, lots) : null,
+        refreshOutline && buildingCode ? fetchUwBuildingOutline(buildingCode) : null,
+    ]);
+
+    const updates: [FieldPath, unknown][] = [];
+    if (refreshWalking && walkingResult.status === "fulfilled" && walkingResult.value) {
+        updates.push([new FieldPath("walking", venueId), {lat, lng, lots: walkingResult.value} satisfies VenueWalking]);
+    }
+    if (refreshOutline && outlineResult.status === "fulfilled") {
+        updates.push([new FieldPath("outlines", venueId), outlineResult.value ?? FieldValue.delete()]);
+    }
+    if (updates.length > 0) {
+        const [[field, value], ...rest] = updates;
+        await PARKING_DOC.update(field, value, ...rest.flat());
+    }
+    // Whatever did refresh is saved; a failed source waits for the nightly sync.
+    for (const result of [walkingResult, outlineResult]) {
+        if (result.status === "rejected") throw result.reason;
+    }
 }
 
-/** Drops a deleted venue's walking times. */
-export async function dropVenueWalking(venueId: string): Promise<void> {
-    const snap = await PARKING_DOC.get();
-    if (!snap.exists || !snap.data()?.walking?.[venueId]) return;
-    await PARKING_DOC.update(new FieldPath("walking", venueId), FieldValue.delete());
+/** Drops a deleted venue's walking times and building outline. */
+export async function dropVenueParking(venueId: string): Promise<void> {
+    const data = (await PARKING_DOC.get()).data();
+    const updates = (["walking", "outlines"] as const)
+        .filter(field => data?.[field]?.[venueId])
+        .map((field): [FieldPath, unknown] => [new FieldPath(field, venueId), FieldValue.delete()]);
+    if (updates.length === 0) return;
+    const [[field, value], ...rest] = updates;
+    await PARKING_DOC.update(field, value, ...rest.flat());
 }
 
 /**
@@ -101,10 +133,10 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
 
     // Measured from every venue with a location. A venue whose call fails keeps
     // its last times; a deleted venue's are dropped with it.
+    const venues = await db.collection("venues").get();
     const previousWalking = (previous.walking ?? {}) as Record<string, VenueWalking>;
     const walking: Record<string, VenueWalking> = {};
     if (lots.length > 0) {
-        const venues = await db.collection("venues").get();
         let calls = 0;
         for (const venue of venues.docs) {
             const {lat, lng, nameEn} = venue.data();
@@ -120,8 +152,25 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
         update.walking = walking;
     }
 
+    // The footprint of each venue's building, for the guide's venue highlight. Like
+    // walking times, a failed lookup keeps the last outline for the same building.
+    const previousOutlines = (previous.outlines ?? {}) as Record<string, UwBuildingOutline>;
+    const outlines: Record<string, UwBuildingOutline> = {};
+    for (const venue of venues.docs) {
+        const {buildingCode, nameEn} = venue.data();
+        if (typeof buildingCode !== "string" || !buildingCode) continue;
+        try {
+            const outline = await fetchUwBuildingOutline(buildingCode);
+            if (outline) outlines[venue.id] = outline;
+        } catch (err) {
+            errors.push(`Outline for ${nameEn || venue.id}: ${errorMessage(err)}`);
+            if (previousOutlines[venue.id]?.code === buildingCode) outlines[venue.id] = previousOutlines[venue.id];
+        }
+    }
+    update.outlines = outlines;
+
     Object.assign(update, {lastRunAt: now, lastRunErrors: errors});
-    // mergeFields writes each listed field whole, so `walking` loses deleted venues
+    // mergeFields writes each listed field whole, so `walking` and `outlines` lose deleted venues
     // (a plain merge would deep-merge it), and a failed source's fields stay as they were.
     await PARKING_DOC.set(update, {mergeFields: Object.keys(update)});
 

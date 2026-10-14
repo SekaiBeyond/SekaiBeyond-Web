@@ -34,7 +34,7 @@ import {
     validateUrl
 } from "../utils/validation";
 import { UW_BUILDING_CODE_RE, UW_LOT_CODE_RE } from "../utils/uwParking";
-import { dropVenueWalking, refreshVenueWalking } from "./parking";
+import { dropVenueParking, refreshVenueParking } from "./parking";
 
 export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -1305,11 +1305,15 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     const uwFields = venueUwFields(input);
 
     const docId = venueId ?? db.collection("venues").doc().id;
+    let buildingCode = uwFields.buildingCode ?? "";
 
     await adminTransaction(uid, async (txn, callerSnap) => {
         if (venueId) {
             const existing = await txn.get(db.collection("venues").doc(venueId));
             if (!existing.exists) throw new HttpsError("not-found", "Venue not found.");
+            // A save that leaves the code out keeps the one the venue has.
+            const current = existing.data()?.buildingCode;
+            buildingCode = uwFields.buildingCode ?? (typeof current === "string" ? current : "");
         }
 
         for (const link of parkingLots) {
@@ -1334,10 +1338,11 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
         }));
     });
 
-    // A new or moved venue gets walking times now rather than at the nightly sync.
-    // Best effort: the save has committed, and the next sync measures it anyway.
-    await refreshVenueWalking(docId, lat, lng)
-        .catch(err => console.error("saveVenue: walking times not refreshed for", docId, err));
+    // A new, moved or re-coded venue gets walking times and its building outline now
+    // rather than at the nightly sync. Best effort: the save has committed, and the
+    // next sync refreshes them anyway.
+    await refreshVenueParking(docId, {lat, lng, buildingCode})
+        .catch(err => console.error("saveVenue: parking data not refreshed for", docId, err));
     return {venueId: docId};
 });
 export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
@@ -1359,8 +1364,8 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
         }));
     });
     // Best effort, like the refresh on save; the nightly sync drops it otherwise.
-    await dropVenueWalking(venueId)
-        .catch(err => console.error("deleteVenue: walking times not dropped for", venueId, err));
+    await dropVenueParking(venueId)
+        .catch(err => console.error("deleteVenue: parking data not dropped for", venueId, err));
     return {deleted: true};
 });
 export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {

@@ -63,8 +63,13 @@ export interface UwLot {
     zipcar: boolean;
     ucar: boolean;
     dialARide: boolean;
-    /** When visitors must pay, as HH:mm on the site clock. Null on a day with no paid hours. */
+    /** When visitors can pay to park, as HH:mm on the site clock. Null on a day with no paid hours. */
     paidHours: {weekday: ClockRange | null; saturday: ClockRange | null};
+    /**
+     * When a permit is required. Usually the same as paidHours, but on some lots
+     * it starts earlier or ends later, and outside paidHours a visitor can't park.
+     */
+    permitHours: {weekday: ClockRange | null; saturday: ClockRange | null};
     /** When a gated garage is open, if UW lists it. */
     gateHours: ClockRange | null;
     /** Whether UW's map has a 360° photo tour of the lot. */
@@ -150,6 +155,10 @@ function toVisitorLot(raw: unknown): UwLot | null {
         paidHours: {
             weekday: clockRange(raw.payByPhoneWeekdayStart, raw.payByPhoneWeekdayEnd),
             saturday: clockRange(raw.payByPhoneSaturdayStart, raw.payByPhoneSaturdayEnd),
+        },
+        permitHours: {
+            weekday: clockRange(raw.permitWeekdayStart, raw.permitWeekdayEnd),
+            saturday: clockRange(raw.permitSaturdayStart, raw.permitSaturdayEnd),
         },
         gateHours: clockRange(raw.physicalAccessStart, raw.physicalAccessEnd),
         hasTour: isRecord(raw.tour) && raw.tour.hasImages === true,
@@ -300,42 +309,53 @@ function ringCentroid(ring: unknown): {area: number; x: number; y: number} | nul
     return {area: Math.abs(a / 2), x: cx / (3 * a), y: cy / (3 * a)};
 }
 
-/** A UW Seattle building by its code, or null when UW has no active building with that code. */
-export async function fetchUwBuilding(code: string): Promise<UwBuilding | null> {
-    if (!UW_BUILDING_CODE_RE.test(code)) return null;
-    const buildingQuery = new URLSearchParams({
+/** The active parts of a UW Seattle building, as GeoJSON features in lng/lat. */
+async function fetchBuildingFeatures(code: string): Promise<Record<string, unknown>[]> {
+    const query = new URLSearchParams({
         where: `FacCode='${code}' AND FeatureStatus='Active'`,
         outFields: "FacCode,FacName,Address",
         outSR: "4326",
         f: "geojson",
     });
+    const buildings = await fetchJson(`${UW_BUILDINGS_LAYER}?${query}`);
+    if (!isRecord(buildings) || !Array.isArray(buildings.features)) {
+        throw new Error("UW's building layer returned no features list");
+    }
+    return buildings.features.filter(isRecord);
+}
+
+/** A feature's polygons, each a list of rings, whether it is a Polygon or a MultiPolygon. */
+function polygonsOf(feature: Record<string, unknown>): unknown[][] {
+    const geometry = feature.geometry;
+    if (!isRecord(geometry) || !Array.isArray(geometry.coordinates)) return [];
+    if (geometry.type === "Polygon") return [geometry.coordinates];
+    if (geometry.type === "MultiPolygon") return geometry.coordinates.filter(Array.isArray);
+    return [];
+}
+
+/** A UW Seattle building by its code, or null when UW has no active building with that code. */
+export async function fetchUwBuilding(code: string): Promise<UwBuilding | null> {
+    if (!UW_BUILDING_CODE_RE.test(code)) return null;
     const infoQuery = new URLSearchParams({
         where: `FacilityCode='${code}'`,
         outFields: "Parking",
         returnGeometry: "false",
         f: "json",
     });
-    const [buildings, info] = await Promise.all([
-        fetchJson(`${UW_BUILDINGS_LAYER}?${buildingQuery}`),
+    const [features, info] = await Promise.all([
+        fetchBuildingFeatures(code),
         // The parking note is a nicety; a building is still found without it.
         fetchJson(`${UW_BUILDING_INFO_LAYER}?${infoQuery}`).catch(() => null),
     ]);
-    if (!isRecord(buildings) || !Array.isArray(buildings.features)) {
-        throw new Error("UW's building layer returned no features list");
-    }
 
     // A building can come back as several parts; weight their centroids by area.
     let name = "", address = "", area = 0, x = 0, y = 0;
-    for (const feature of buildings.features) {
-        if (!isRecord(feature) || !isRecord(feature.geometry)) continue;
+    for (const feature of features) {
         const props = isRecord(feature.properties) ? feature.properties : {};
         name ||= text(props.FacName);
         address ||= text(props.Address, 200);
-        const geometry = feature.geometry;
-        const polygons = geometry.type === "Polygon" ? [geometry.coordinates]
-            : geometry.type === "MultiPolygon" && Array.isArray(geometry.coordinates) ? geometry.coordinates : [];
-        for (const polygon of polygons) {
-            const c = Array.isArray(polygon) ? ringCentroid(polygon[0]) : null;
+        for (const polygon of polygonsOf(feature)) {
+            const c = ringCentroid(polygon[0]);
             if (!c) continue;
             area += c.area;
             x += c.x * c.area;
@@ -345,7 +365,7 @@ export async function fetchUwBuilding(code: string): Promise<UwBuilding | null> 
     if (area === 0) return null;
 
     const attributes = isRecord(info) && Array.isArray(info.features) && isRecord(info.features[0])
-        && isRecord(info.features[0].attributes) ? info.features[0].attributes : {};
+    && isRecord(info.features[0].attributes) ? info.features[0].attributes : {};
     return {
         code,
         name: name || code,
@@ -354,4 +374,42 @@ export async function fetchUwBuilding(code: string): Promise<UwBuilding | null> 
         lng: Number((x / area).toFixed(6)),
         parkingTip: text(attributes.Parking, 300),
     };
+}
+
+/**
+ * A building's footprint, shaped for Firestore, which can't hold an array in an
+ * array: each polygon maps ring index to a flat [lng, lat, lng, lat, …] list,
+ * the outline first and any courtyards after it.
+ */
+export interface UwBuildingOutline {
+    code: string;
+    polygons: Record<string, number[]>[];
+}
+
+// Six decimals of a degree is about 10 cm, far finer than the map ever shows.
+const roundCoord = (n: number) => Math.round(n * 1e6) / 1e6;
+
+/** A UW Seattle building's footprint, or null when UW has no active building with that code. */
+export async function fetchUwBuildingOutline(code: string): Promise<UwBuildingOutline | null> {
+    if (!UW_BUILDING_CODE_RE.test(code)) return null;
+    const polygons: Record<string, number[]>[] = [];
+    for (const feature of await fetchBuildingFeatures(code)) {
+        for (const polygon of polygonsOf(feature)) {
+            const rings: Record<string, number[]> = {};
+            polygon.forEach((ring, i) => {
+                if (!Array.isArray(ring) || ring.length < 4) return;
+                const flat: number[] = [];
+                for (const point of ring) {
+                    const lng = Array.isArray(point) ? num(point[0]) : null;
+                    const lat = Array.isArray(point) ? num(point[1]) : null;
+                    if (lng === null || lat === null) return;
+                    flat.push(roundCoord(lng), roundCoord(lat));
+                }
+                rings[String(i)] = flat;
+            });
+            // A polygon whose outline didn't parse is dropped whole; its holes mean nothing alone.
+            if (rings["0"]) polygons.push(rings);
+        }
+    }
+    return polygons.length > 0 ? {code, polygons} : null;
 }
