@@ -22,7 +22,8 @@ export interface Venue {
 // These are the values to change if the parking guide is ever used off the UW campus.
 /** Default map center (UW campus center) when no venue-specific center is available. */
 export const UW_CAMPUS_CENTER = {lat: 47.6553, lng: -122.3035};
-export const DEFAULT_ZOOM = 17;
+/** A few blocks across: about the zoom Google Maps calls 17, as MapLibre counts it. */
+export const DEFAULT_ZOOM = 16;
 /** External "more info" link shown on the parking guide. */
 export const PARKING_INFO_URL = 'https://transportation.uw.edu/park/visitor';
 

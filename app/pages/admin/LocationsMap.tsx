@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AdvancedMarker, APIProvider, InfoWindow, Map, useMap } from '@vis.gl/react-google-maps';
+import { createPortal } from 'react-dom';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_MAP_ID } from '~/lib/googleMaps';
+import { createMap, type MapLibreMap, prefersReducedMotion, useMarkerElements, usePopup } from '~/lib/maplibre';
 import { type UwLot, useUwParking, uwLotGlyph, uwLotTypeLabel } from '~/lib/uwParking';
 import { DEFAULT_ZOOM, hasCoordinates, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
 
@@ -21,20 +21,6 @@ interface SearchItem {
 }
 
 const isGarage = (lot: UwLot) => /Garage/.test(lot.type);
-
-/**
- * Headless helper that lives inside the Map and pans it to the given point whenever it
- * changes — used to focus an item picked from the search. The nonce lets re-picking the
- * same item pan again after the user has dragged away.
- */
-const MapPanner = ({target}: {target: {lat: number; lng: number; nonce: number} | null}) => {
-    const map = useMap();
-    useEffect(() => {
-        if (!map || !target) return;
-        map.panTo({lat: target.lat, lng: target.lng});
-    }, [map, target]);
-    return null;
-};
 
 /**
  * Searchable finder over every venue and UW parking lot. Picking a mappable item focuses it
@@ -138,11 +124,17 @@ const LocationSearch = ({items, onPick, isEnglish}: LocationSearchProps) => {
     );
 };
 
+
+// Lot codes appear beside every pin from this zoom; the selected venue's suggested lots always show theirs.
+const LABEL_ZOOM = 17.4;
+// Picking a location from the search zooms to at least this.
+const FOCUS_ZOOM = 16.5;
+
 /**
  * Interactive overview map for the admin Locations tab, modeled on the public parking
- * guide. Plots every venue (star) and UW visitor lot (P / G) on one map; selecting a
- * venue highlights its suggested lots, and a venue's popup can jump to its card in the
- * list below via `onShowVenue` / `onEditVenue`.
+ * guide and drawn with its pins. Plots every venue (star) and UW visitor lot (P / G) on
+ * one map; selecting a venue highlights its suggested lots, and a venue's popup can jump
+ * to its card in the list below via `onShowVenue` / `onEditVenue`.
  */
 interface LocationsMapProps {
     venues: Venue[];
@@ -156,12 +148,24 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
     const {isEnglish} = useLanguage();
     const {parking} = useUwParking();
     const [selected, setSelected] = useState<MapSelection | null>(null);
-    const [focus, setFocus] = useState<{lat: number; lng: number; nonce: number} | null>(null);
-    const focusNonce = useRef(0);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [map, setMap] = useState<MapLibreMap | null>(null);
+    const [failed, setFailed] = useState(false);
+    // Until the admin moves the map, it keeps framing everything as venues and lots arrive.
+    const userMoved = useRef(false);
+    const {popup, content: popupContent} = usePopup(map, {
+        closeButton: true,
+        closeOnClick: false,
+        offset: 26,
+        maxWidth: '300px',
+        className: 'admin-locmap-popup',
+    });
 
     const lots = parking.lots;
     const mappableVenues = venues.filter(v => hasCoordinates(v.lat, v.lng));
     const unmappedCount = venues.length - mappableVenues.length;
+    // Venues and lots load after the first render; the map's container only exists once there are some.
+    const empty = venues.length === 0 && lots.length === 0;
 
     const selectedVenue = selected?.kind === 'venue'
         ? mappableVenues.find(v => v.id === selected.id) ?? null
@@ -174,6 +178,96 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
 
     const venueName = (v: Venue) => isEnglish ? v.nameEn : (v.nameCn || v.nameEn);
     const lotTitle = (lot: UwLot) => lot.name !== lot.code ? `${lot.code} · ${lot.name}` : lot.code;
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+        const created = createMap(container, {
+            attribution: 'UW Transportation Services',
+            center: [UW_CAMPUS_CENTER.lng, UW_CAMPUS_CENTER.lat],
+            zoom: DEFAULT_ZOOM - 1,
+        });
+        if (!created) {
+            setFailed(true);
+            return;
+        }
+        created.on('movestart', e => {
+            if ('originalEvent' in e && e.originalEvent) userMoved.current = true;
+        });
+        // A click on the map itself closes the open popup; one on a marker or the popup doesn't.
+        created.on('click', e => {
+            const target = e.originalEvent.target;
+            if (target instanceof Element && target.closest('.maplibregl-marker, .maplibregl-popup')) return;
+            setSelected(null);
+        });
+        const zoomClass = () => container.classList.toggle('is-zoomed-in', created.getZoom() >= LABEL_ZOOM);
+        created.on('zoom', zoomClass);
+        zoomClass();
+        setMap(created);
+        return () => {
+            created.remove();
+            setMap(null);
+        };
+    }, [empty]);
+
+    // Frame everything that has coordinates.
+    const points = [...mappableVenues, ...lots];
+    const pointsKey = points.map(p => `${p.lng},${p.lat}`).join(';');
+    useEffect(() => {
+        if (!map || userMoved.current || points.length === 0) return;
+        if (points.length === 1) {
+            map.jumpTo({center: [points[0].lng, points[0].lat], zoom: DEFAULT_ZOOM});
+            return;
+        }
+        const lngs = points.map(p => p.lng), lats = points.map(p => p.lat);
+        map.fitBounds(
+            [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+            {padding: 60, maxZoom: 17, duration: 0},
+        );
+    }, [map, pointsKey]);
+
+    const {elements: venueElements, markers: venueMarkers} = useMarkerElements(
+        map, mappableVenues.map(v => ({key: v.id, lng: v.lng, lat: v.lat})));
+    const {elements: lotElements} = useMarkerElements(
+        map, lots.map(l => ({key: l.code, lng: l.lng, lat: l.lat})));
+
+    // Stacking lives on the wrappers, the elements MapLibre stacks; the selected
+    // venue's bigger star sits a little higher so its middle stays on the venue.
+    useEffect(() => {
+        for (const [id, element] of Object.entries(venueElements)) {
+            const current = selectedVenue?.id === id;
+            element.style.zIndex = current ? '7' : '4';
+            venueMarkers[id]?.setOffset([0, current ? -20 : -15]);
+        }
+    }, [venueElements, venueMarkers, selectedVenue]);
+    useEffect(() => {
+        for (const [code, element] of Object.entries(lotElements)) {
+            const open = selected?.kind === 'lot' && selected.id === code;
+            element.style.zIndex = open ? '6' : suggestedCodes.has(code) ? '5' : '1';
+        }
+    }, [lotElements, selected, suggestedCodes]);
+
+    // The popup follows the selection; closing it with its × clears the selection.
+    const selectedPoint = selected?.kind === 'venue'
+        ? mappableVenues.find(v => v.id === selected.id)
+        : selected ? lots.find(l => l.code === selected.id) : undefined;
+    useEffect(() => {
+        if (!map || !popup) return;
+        if (!selectedPoint) {
+            popup.remove();
+            return;
+        }
+        popup.setLngLat([selectedPoint.lng, selectedPoint.lat]);
+        if (!popup.isOpen()) popup.addTo(map);
+    }, [map, popup, selectedPoint?.lng, selectedPoint?.lat]);
+    useEffect(() => {
+        if (!popup) return;
+        const onClose = () => setSelected(null);
+        popup.on('close', onClose);
+        return () => {
+            popup.off('close', onClose);
+        };
+    }, [popup]);
 
     const searchItems: SearchItem[] = [
         ...venues.map(v => {
@@ -210,9 +304,14 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
         const target = item.kind === 'venue'
             ? mappableVenues.find(v => v.id === item.id)
             : lots.find(l => l.code === item.id);
-        if (!target) return;
+        if (!target || !map) return;
         setSelected({kind: item.kind, id: item.id});
-        setFocus({lat: target.lat, lng: target.lng, nonce: ++focusNonce.current});
+        userMoved.current = true;
+        map.easeTo({
+            center: [target.lng, target.lat],
+            zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
+            duration: prefersReducedMotion() ? 0 : 600,
+        });
     };
 
     const venueActions = (venueId: string) => (
@@ -242,7 +341,7 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
         </div>
     );
 
-    if (venues.length === 0 && lots.length === 0) {
+    if (empty) {
         return (
             <div className="admin-section">
                 <p className="admin-no-results">
@@ -254,17 +353,7 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
         );
     }
 
-    // Frame the map on everything that has coordinates; with fewer than two points a
-    // bounds box degenerates, so fall back to a plain center + zoom.
-    const points = [...mappableVenues, ...lots];
-    const mapBounds = points.length > 1
-        ? {
-            north: Math.max(...points.map(p => p.lat)),
-            south: Math.min(...points.map(p => p.lat)),
-            east: Math.max(...points.map(p => p.lng)),
-            west: Math.min(...points.map(p => p.lng)),
-        }
-        : null;
+    const selectedLot = selected?.kind === 'lot' ? lots.find(l => l.code === selected.id) : undefined;
 
     return (
         <div className="admin-section admin-locmap">
@@ -292,103 +381,73 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
                 </div>
             </div>
 
-            <div className="admin-locmap-canvas">
-                <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
-                    <Map
-                        defaultBounds={mapBounds ? {...mapBounds, padding: 80} : undefined}
-                        defaultCenter={mapBounds ? undefined : (points[0] ?? UW_CAMPUS_CENTER)}
-                        defaultZoom={mapBounds ? undefined : DEFAULT_ZOOM}
-                        mapId={GOOGLE_MAPS_MAP_ID}
-                        gestureHandling="greedy"
-                        disableDefaultUI={true}
-                        zoomControl={true}
-                    >
-                        <MapPanner target={focus}/>
-
-                        {/* Venue markers */}
-                        {mappableVenues.map(venue => (
-                            <div key={venue.id}>
-                                <AdvancedMarker
-                                    position={{lat: venue.lat, lng: venue.lng}}
-                                    onClick={() => setSelected({kind: 'venue', id: venue.id})}
-                                    zIndex={selectedVenue?.id === venue.id ? 5 : 3}
-                                >
-                                    <div className="admin-locmap-venue-marker">
-                                        <div className="parking-marker-venue-inner">⭐</div>
-                                        <div className="parking-marker-label">{venueName(venue)}</div>
-                                    </div>
-                                </AdvancedMarker>
-
-                                {selected?.kind === 'venue' && selected.id === venue.id && (
-                                    <InfoWindow
-                                        position={{lat: venue.lat, lng: venue.lng}}
-                                        onCloseClick={() => setSelected(null)}
-                                        pixelOffset={[0, -80]}
-                                    >
-                                        <div className="parking-popup-content">
-                                            <div className="parking-popup-title">{venue.nameEn}</div>
-                                            {venue.nameCn && (
-                                                <div className="parking-popup-type">{venue.nameCn}</div>
-                                            )}
-                                            <div className="parking-popup-type">
-                                                {venue.suggestedLots.length > 0
-                                                    ? (isEnglish
-                                                        ? `Suggested lots: ${venue.suggestedLots.map(s => s.code).join(' · ')} — highlighted on the map`
-                                                        : `推荐停车场：${venue.suggestedLots.map(s => s.code).join(' · ')} — 已在地图上高亮`)
-                                                    : (isEnglish ? 'No suggested lots' : '无推荐停车场')}
-                                            </div>
-                                            {venueActions(venue.id)}
-                                        </div>
-                                    </InfoWindow>
-                                )}
-                            </div>
-                        ))}
-
-                        {/* UW lot markers — the selected venue's suggested lots are highlighted. */}
-                        {lots.map(lot => {
-                            const suggested = suggestedCodes.has(lot.code);
-                            const typeLabel = uwLotTypeLabel(lot.type, isEnglish);
-                            return (
-                                <div key={lot.code}>
-                                    <AdvancedMarker
-                                        position={{lat: lot.lat, lng: lot.lng}}
-                                        onClick={() => setSelected({kind: 'lot', id: lot.code})}
-                                        zIndex={selected?.kind === 'lot' && selected.id === lot.code ? 4 : suggested ? 2 : 1}
-                                    >
-                                        <div className={`parking-marker-lot-inner${suggested ? ' is-linked' : ''}`}>
-                                            <div className={`parking-marker-p${isGarage(lot) ? ' is-garage' : ''}`}>
-                                                {uwLotGlyph(lot.type)}
-                                            </div>
-                                            {suggested && (
-                                                <div className="parking-marker-label">
-                                                    {lot.code}<span>{typeLabel}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </AdvancedMarker>
-
-                                    {selected?.kind === 'lot' && selected.id === lot.code && (
-                                        <InfoWindow
-                                            position={{lat: lot.lat, lng: lot.lng}}
-                                            onCloseClick={() => setSelected(null)}
-                                            pixelOffset={[0, -52]}
-                                        >
-                                            <div className="parking-popup-content">
-                                                <div className="parking-popup-title">{lotTitle(lot)}</div>
-                                                <div className="parking-popup-type">
-                                                    {typeLabel} · {lot.access === 'Pay to Park'
-                                                        ? (isEnglish ? 'Pay to park' : '付费停车')
-                                                        : (isEnglish ? 'Permit or pay' : '持证或付费')}
-                                                </div>
-                                            </div>
-                                        </InfoWindow>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </Map>
-                </APIProvider>
+            <div ref={containerRef} className="admin-locmap-canvas">
+                {failed && (
+                    <div className="admin-map-failed">
+                        {isEnglish ? 'The map couldn’t load. Reload the page to try again.' : '地图加载失败，请刷新页面重试。'}
+                    </div>
+                )}
             </div>
+
+            {mappableVenues.map(venue => venueElements[venue.id] && createPortal(
+                <button
+                    type="button"
+                    className={`parking-vpin${selectedVenue?.id === venue.id ? ' is-current' : ''}`}
+                    aria-label={venueName(venue)}
+                    onClick={() => setSelected({kind: 'venue', id: venue.id})}
+                >
+                    <span className="parking-vpin-dot" aria-hidden="true">⭐</span>
+                    <span className="parking-vpin-label">{venueName(venue)}</span>
+                </button>,
+                venueElements[venue.id],
+                venue.id,
+            ))}
+
+            {lots.map(lot => lotElements[lot.code] && createPortal(
+                <div className={`parking-pin-wrap${suggestedCodes.has(lot.code) ? ' is-pick' : ''}`}>
+                    <button
+                        type="button"
+                        className={`parking-pin admin-locmap-pin${isGarage(lot) ? ' is-garage' : ''}${selectedLot?.code === lot.code ? ' is-selected' : ''}`}
+                        aria-label={`${lot.code}, ${uwLotTypeLabel(lot.type, isEnglish)}`}
+                        onClick={() => setSelected({kind: 'lot', id: lot.code})}
+                    >
+                        {uwLotGlyph(lot.type)}
+                    </button>
+                    <div className="parking-pin-label" aria-hidden="true">
+                        {lot.code}
+                        {suggestedCodes.has(lot.code) && <span>{uwLotTypeLabel(lot.type, isEnglish)}</span>}
+                    </div>
+                </div>,
+                lotElements[lot.code],
+                lot.code,
+            ))}
+
+            {popupContent && createPortal(
+                selectedVenue ? (
+                    <div className="admin-locmap-popup-body">
+                        <div className="admin-locmap-popup-title">{selectedVenue.nameEn}</div>
+                        {selectedVenue.nameCn && <div className="admin-locmap-popup-meta">{selectedVenue.nameCn}</div>}
+                        <div className="admin-locmap-popup-meta">
+                            {selectedVenue.suggestedLots.length > 0
+                                ? (isEnglish
+                                    ? `Suggested lots: ${selectedVenue.suggestedLots.map(s => s.code).join(' · ')} — highlighted on the map`
+                                    : `推荐停车场：${selectedVenue.suggestedLots.map(s => s.code).join(' · ')} — 已在地图上高亮`)
+                                : (isEnglish ? 'No suggested lots' : '无推荐停车场')}
+                        </div>
+                        {venueActions(selectedVenue.id)}
+                    </div>
+                ) : selectedLot ? (
+                    <div className="admin-locmap-popup-body">
+                        <div className="admin-locmap-popup-title">{lotTitle(selectedLot)}</div>
+                        <div className="admin-locmap-popup-meta">
+                            {uwLotTypeLabel(selectedLot.type, isEnglish)} · {selectedLot.access === 'Pay to Park'
+                                ? (isEnglish ? 'Pay to park' : '付费停车')
+                                : (isEnglish ? 'Permit or pay' : '持证或付费')}
+                        </div>
+                    </div>
+                ) : null,
+                popupContent,
+            )}
 
             {unmappedCount > 0 && (
                 <p className="admin-helper-text admin-locmap-hint">

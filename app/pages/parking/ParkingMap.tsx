@@ -1,30 +1,20 @@
-import 'maplibre-gl/dist/maplibre-gl.css';
-import {
-    AttributionControl,
-    type FilterSpecification,
-    type GeoJSONSource,
-    type LngLatBoundsLike,
-    Map as MapLibreMap,
-    Marker,
-    NavigationControl,
-    type PaddingOptions,
-    Popup,
-    setWorkerUrl,
-} from 'maplibre-gl';
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import type { GeoJSONSource, LngLatBoundsLike, PaddingOptions } from 'maplibre-gl';
 import { type Dispatch, type Ref, type SetStateAction, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import {
+    createMap,
+    firstLabelAboveBuildings,
+    type MapLibreMap,
+    prefersReducedMotion,
+    useMarkerElements,
+    usePopup,
+} from '~/lib/maplibre';
 import type { VenueOutline } from '~/lib/uwParking';
 import { hasCoordinates, type Venue } from '~/lib/venues';
 import { localizedVenueName, lotSubtitle, type LotView } from './model';
 import { pinGlyph, rateText, StatusPill, walkText } from './parts';
 import type { ParkingText } from './text';
 
-// MapLibre looks for its worker beside its own script, which the bundle moves.
-setWorkerUrl(maplibreWorkerUrl);
-
-// OpenFreeMap: OpenStreetMap tiles with no key, no billing and no request limit.
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 const ATTRIBUTION = 'UW Transportation Services · UW Facilities GIS';
 // Lot codes appear beside the plain pins from this zoom; suggested lots always show theirs.
 const LABEL_ZOOM = 17.4;
@@ -59,7 +49,6 @@ interface ParkingMapProps {
     tx: ParkingText;
 }
 
-const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const narrowScreen = () => window.matchMedia('(max-width: 1024px)').matches;
 
 // Extra room around the framed points, and on desktop room on the left for the legend.
@@ -114,11 +103,14 @@ export const ParkingMap = (props: ParkingMapProps) => {
     const [map, setMap] = useState<MapLibreMap | null>(null);
     const [styleReady, setStyleReady] = useState(false);
     const [failed, setFailed] = useState(false);
-    const [lotElements, setLotElements] = useState<Record<string, HTMLElement>>({});
-    const [venueElements, setVenueElements] = useState<Record<string, HTMLElement>>({});
-    const venueMarkers = useRef<Record<string, Marker>>({});
-    const popup = useRef<Popup | null>(null);
-    const [popupContent, setPopupContent] = useState<HTMLElement | null>(null);
+    const {popup: card, content: popupContent} = usePopup(map, {
+        closeButton: false,
+        closeOnClick: false,
+        offset: 24,
+        maxWidth: '300px',
+        className: 'parking-hover-popup',
+        focusAfterOpen: false,
+    });
     // How the last pin was reached: a tap shows its card first, a click or Enter opens it.
     const lastPointer = useRef('mouse');
     // The map's own handlers outlive renders, so they read the props through this.
@@ -127,7 +119,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
 
     const fitVenue = (animate: boolean) => {
         const bounds = map && venueBounds(latest.current.venue, latest.current.views);
-        if (map && bounds) map.fitBounds(bounds, {padding: fitPadding(), duration: animate && !reducedMotion() ? 700 : 0});
+        if (map && bounds) map.fitBounds(bounds, {padding: fitPadding(), duration: animate && !prefersReducedMotion() ? 700 : 0});
     };
 
     useImperativeHandle(ref, () => ({
@@ -138,12 +130,12 @@ export const ParkingMap = (props: ParkingMapProps) => {
             map.easeTo({
                 center: [view.lot.lng, view.lot.lat],
                 zoom: Math.max(map.getZoom(), LOT_ZOOM),
-                duration: reducedMotion() ? 0 : 600,
+                duration: prefersReducedMotion() ? 0 : 600,
             });
         },
     }));
 
-    // The map, its controls and the hover card, made once.
+    // The map and its handlers, made once.
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -153,57 +145,22 @@ export const ParkingMap = (props: ParkingMapProps) => {
             ...firstViews.map(v => [v.lot.lng, v.lot.lat] as Point),
             ...allVenues.filter(v => hasCoordinates(v.lat, v.lng)).map(v => [v.lng, v.lat] as Point),
         ];
-        let created: MapLibreMap;
-        try {
-            created = new MapLibreMap({
-                container,
-                style: STYLE_URL,
-                bounds: venueBounds(firstVenue, firstViews) ?? undefined,
-                fitBoundsOptions: {padding: fitPadding()},
-                maxBounds: points.length > 0 ? boundsAround(points, 0.012, 0.008) : undefined,
-                minZoom: 14,
-                maxZoom: 19.5,
-                dragRotate: false,
-                pitchWithRotate: false,
-                touchPitch: false,
-                attributionControl: false,
-            });
-        } catch (err) {
-            // No WebGL, most likely; the list beside the map still works.
-            console.error('[ParkingMap] map failed to start:', err);
+        const created = createMap(container, {
+            attribution: ATTRIBUTION,
+            bounds: venueBounds(firstVenue, firstViews) ?? undefined,
+            fitBoundsOptions: {padding: fitPadding()},
+            maxBounds: points.length > 0 ? boundsAround(points, 0.012, 0.008) : undefined,
+            minZoom: 14,
+        });
+        if (!created) {
+            // The list beside the map still works.
             setFailed(true);
             return;
         }
-        created.touchZoomRotate.disableRotation();
-        created.keyboard.disableRotation();
-        created.addControl(new NavigationControl({showCompass: false}), 'top-right');
-        created.addControl(new AttributionControl({compact: true, customAttribution: ATTRIBUTION}), 'bottom-right');
-
-        const content = document.createElement('div');
-        popup.current = new Popup({
-            closeButton: false,
-            closeOnClick: false,
-            offset: 24,
-            maxWidth: '300px',
-            className: 'parking-hover-popup',
-            focusAfterOpen: false,
-        }).setDOMContent(content);
-        setPopupContent(content);
 
         created.on('load', () => {
-            // Flat buildings, as on the site's other maps, rather than the style's 3D ones.
-            if (created.getLayer('building-3d')) created.setLayoutProperty('building-3d', 'visibility', 'none');
-            if (created.getLayer('building')) created.setLayerZoomRange('building', 13, 24);
-            const layers = created.getStyle().layers;
-            // OpenStreetMap's own parking icons would sit beside the guide's pins, permit-only lots included.
-            for (const layer of layers) {
-                if (!('source-layer' in layer) || layer['source-layer'] !== 'poi') continue;
-                const notParking = ['!=', ['get', 'class'], 'parking'] as FilterSpecification;
-                created.setFilter(layer.id, layer.filter ? ['all', layer.filter, notParking] as FilterSpecification : notParking);
-            }
             // The venue's highlight goes over the buildings but under the labels.
-            const lastBuilding = layers.findLastIndex(l => 'source-layer' in l && l['source-layer'] === 'building');
-            const beforeId = layers.slice(lastBuilding + 1).find(l => l.type === 'symbol')?.id;
+            const beforeId = firstLabelAboveBuildings(created);
             created.addSource('venue-outline', {type: 'geojson', data: outlineData(null)});
             created.addLayer({
                 id: 'venue-fill', type: 'fill', source: 'venue-outline',
@@ -233,49 +190,16 @@ export const ParkingMap = (props: ParkingMapProps) => {
 
         setMap(created);
         return () => {
-            popup.current?.remove();
             created.remove();
             setMap(null);
             setStyleReady(false);
         };
     }, []);
 
-    // Lot pins. Each marker element is a bare wrapper MapLibre positions; the pin is
-    // rendered into it, so MapLibre's own classes and transform are left alone.
-    const lots = views.map(v => v.lot);
-    const lotsKey = lots.map(l => `${l.code}@${l.lat},${l.lng}`).sort().join(';');
-    useEffect(() => {
-        if (!map) return;
-        const markers: Marker[] = [];
-        const elements: Record<string, HTMLElement> = {};
-        for (const lot of latest.current.views.map(v => v.lot)) {
-            const element = document.createElement('div');
-            element.className = 'parking-marker';
-            // Anchored at the top, then lifted half a pin, so the pin's middle sits on the lot.
-            markers.push(new Marker({element, anchor: 'top', offset: [0, -15]}).setLngLat([lot.lng, lot.lat]).addTo(map));
-            elements[lot.code] = element;
-        }
-        setLotElements(elements);
-        return () => markers.forEach(m => m.remove());
-    }, [map, lotsKey]);
-
-    // Venue stars, the current one bigger.
+    // Lot pins and venue stars, rendered into the markers' wrappers below.
+    const {elements: lotElements} = useMarkerElements(map, views.map(v => ({key: v.lot.code, lng: v.lot.lng, lat: v.lot.lat})));
     const mappedVenues = venues.filter(v => hasCoordinates(v.lat, v.lng));
-    const venuesKey = mappedVenues.map(v => `${v.id}@${v.lat},${v.lng}`).join(';');
-    useEffect(() => {
-        if (!map) return;
-        const markers: Record<string, Marker> = {};
-        const elements: Record<string, HTMLElement> = {};
-        for (const v of latest.current.venues.filter(v => hasCoordinates(v.lat, v.lng))) {
-            const element = document.createElement('div');
-            element.className = 'parking-marker';
-            markers[v.id] = new Marker({element, anchor: 'top', offset: [0, -15]}).setLngLat([v.lng, v.lat]).addTo(map);
-            elements[v.id] = element;
-        }
-        venueMarkers.current = markers;
-        setVenueElements(elements);
-        return () => Object.values(markers).forEach(m => m.remove());
-    }, [map, venuesKey]);
+    const {elements: venueElements, markers: venueMarkers} = useMarkerElements(map, mappedVenues.map(v => ({key: v.id, ...v})));
 
     // Stacking and visibility live on the wrapper, the element MapLibre stacks.
     useEffect(() => {
@@ -291,9 +215,9 @@ export const ParkingMap = (props: ParkingMapProps) => {
         for (const [id, element] of Object.entries(venueElements)) {
             const current = id === venue.id;
             element.style.zIndex = current ? '7' : '4';
-            venueMarkers.current[id]?.setOffset([0, current ? -20 : -15]);
+            venueMarkers[id]?.setOffset([0, current ? -20 : -15]);
         }
-    }, [venueElements, venue.id]);
+    }, [venueElements, venueMarkers, venue.id]);
 
     // Switching venue moves the highlight and reframes the map.
     useEffect(() => {
@@ -309,7 +233,6 @@ export const ParkingMap = (props: ParkingMapProps) => {
 
     // The hover card follows `hover`; a pinned one takes clicks, a passing one lets them through.
     useEffect(() => {
-        const card = popup.current;
         if (!map || !card) return;
         const at = hover?.kind === 'lot'
             ? views.find(v => v.lot.code === hover.code)?.lot
@@ -322,7 +245,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
         if (!card.isOpen()) card.addTo(map);
         if (hover?.kind === 'lot' && hover.pinned) card.addClassName('is-pinned');
         else card.removeClassName('is-pinned');
-    }, [map, hover, views, venues]);
+    }, [map, card, hover, views, venues]);
 
     const showLot = (code: string, pinned: boolean) => setHover({kind: 'lot', code, pinned});
     const leave = (matches: (h: HoverTarget) => boolean) =>

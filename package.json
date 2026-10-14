@@ -14,7 +14,6 @@
   "dependencies": {
     "@react-router/node": "^8.4.0",
     "@react-router/serve": "^8.4.0",
-    "@vis.gl/react-google-maps": "^1.10.1",
     "firebase": "^12.19.0",
     "isbot": "^5.2.2",
     "jsqr": "^1.4.0",

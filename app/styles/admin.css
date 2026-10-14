@@ -3934,6 +3934,7 @@ select.admin-tickets-tag:focus {
 }
 
 .admin-map-picker-canvas {
+    position: relative;
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid var(--color-border);
@@ -3945,6 +3946,73 @@ select.admin-tickets-tag:focus {
 
 .admin-map-picker-coords {
     opacity: 0.7;
+}
+
+/* Shown in place of any admin map when MapLibre can't start (no WebGL). */
+.admin-map-failed {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+/* Place search above the map picker: type, then Enter or Search, then pick a result. */
+.admin-map-search {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-map-search-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.admin-map-search-row .admin-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-map-search-note {
+    margin: 0;
+}
+
+.admin-map-search-results {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border: 1px solid rgba(255, 107, 157, 0.2);
+    border-radius: 12px;
+    background: #fff;
+}
+
+.admin-map-search-result {
+    padding: 8px 10px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--color-text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-map-search-result:hover,
+.admin-map-search-result:focus-visible {
+    background: rgba(255, 107, 157, 0.08);
+}
+
+.admin-map-search-credit {
+    padding: 2px 10px 0;
+    font-size: 11px;
+    color: var(--color-text-light);
 }
 
 .admin-locmap {
@@ -4108,18 +4176,54 @@ select.admin-tickets-tag:focus {
 }
 
 .admin-locmap-canvas {
+    position: relative;
     height: 480px;
     border-radius: 14px;
     overflow: hidden;
     border: 2px solid rgba(255, 107, 157, 0.12);
 }
 
-/* Venue star + name chip stacked, like the guide's lot marker + label. */
-.admin-locmap-venue-marker {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
+/* Lot pins are the parking guide's, colored by type here rather than by status. */
+.admin-locmap-pin.parking-pin {
+    background: var(--color-accent);
+}
+
+.admin-locmap-pin.parking-pin.is-garage {
+    background: #6c63ff;
+}
+
+.admin-locmap-canvas.is-zoomed-in .parking-pin-label {
+    display: block;
+}
+
+.admin-locmap-popup {
+    z-index: 10;
+}
+
+.admin-locmap-popup .maplibregl-popup-content {
+    padding: 12px 30px 12px 14px;
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(255, 107, 157, 0.22);
+    font-family: var(--font-body);
+}
+
+.admin-locmap-popup .maplibregl-popup-close-button {
+    top: 4px;
+    right: 6px;
+    font-size: 18px;
+    color: var(--color-text-secondary);
+}
+
+.admin-locmap-popup-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-accent);
+}
+
+.admin-locmap-popup-meta {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
 }
 
 .admin-locmap-hint {
@@ -4177,6 +4281,7 @@ select.admin-tickets-tag:focus {
 }
 
 .admin-qr-map {
+    position: relative;
     width: 100%;
     border-radius: 12px;
     overflow: hidden;
@@ -4189,6 +4294,7 @@ select.admin-tickets-tag:focus {
     padding: 0 7px;
     border-radius: 13px;
     color: white;
+    font-family: inherit;
     font-size: 13px;
     font-weight: 700;
     display: flex;
@@ -4196,7 +4302,7 @@ select.admin-tickets-tag:focus {
     justify-content: center;
     border: 2px solid white;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-    transform: translateY(-50%);
+    cursor: pointer;
 }
 
 .admin-qr-list {

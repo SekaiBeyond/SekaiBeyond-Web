@@ -1,5 +1,6 @@
-.parking-page {
-    /* What the pins, pills and legend encode: parking during the event (or right now). */
+:root {
+    /* What the pins, pills and legend encode: parking during the event (or right now).
+       Global rather than on .parking-page, as the admin's maps reuse the guide's pins. */
     --parking-free: #4ecb71;
     --parking-free-ink: #23914a;
     --parking-free-soft: rgba(78, 203, 113, 0.14);
@@ -17,7 +18,9 @@
     --parking-event-ink: #c93a3a;
     --parking-event-soft: rgba(224, 85, 85, 0.12);
     --parking-badge-font: 'Fredoka', 'Quicksand', 'Noto Sans SC', sans-serif;
+}
 
+.parking-page {
     min-height: 100vh;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)),
     linear-gradient(135deg, #faf6e7 0%, #ffecdb 25%, #ffed92 50%, #ffbbd7 75%, #ace9ce 100%) fixed;
@@ -1474,118 +1477,6 @@ button.parking-tag {
     50% {
         box-shadow: 0 0 0 3px #fff, 0 0 0 8px rgba(255, 107, 157, 0.55), 0 7px 22px rgba(255, 107, 157, 0.75);
     }
-}
-
-/* Markers and popups on the admin's Locations map (Google Maps AdvancedMarker),
-   until it moves to MapLibre. */
-.parking-marker-venue-inner {
-    width: 40px;
-    height: 40px;
-    background: var(--gradient-primary);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    box-shadow: 0 4px 14px rgba(255, 107, 157, 0.45);
-    border: 3px solid white;
-    animation: parking-venue-pulse 2s ease-in-out infinite;
-}
-
-.parking-marker-lot-inner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-}
-
-/* Orange for surface lots, indigo for garages, as in the map's search badges. */
-.parking-marker-p {
-    width: 32px;
-    height: 32px;
-    background: var(--color-accent);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 18px;
-    font-weight: 800;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
-    border: 2px solid white;
-}
-
-.parking-marker-p.is-garage {
-    background: #6c63ff;
-}
-
-/* The selected venue's suggested lots are strongly highlighted — bigger pin, white + brand
-   ring, and a soft pulse — so they stand out among all the lots without dimming the
-   others. */
-.parking-marker-lot-inner.is-linked {
-    /* The scaled-up pin + ring overflow their layout box, so add room before the label. */
-    gap: 14px;
-}
-
-.parking-marker-lot-inner.is-linked .parking-marker-p {
-    transform: scale(1.28);
-    border-color: #fff;
-    box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--color-primary), 0 5px 16px rgba(255, 107, 157, 0.5);
-    animation: parking-lot-highlight 2s ease-in-out infinite;
-}
-
-/* Suggested lots get a colored label instead of the plain white one. */
-.parking-marker-lot-inner.is-linked .parking-marker-label {
-    background: var(--gradient-primary);
-    color: #fff;
-    font-weight: 800;
-    box-shadow: 0 3px 12px rgba(255, 107, 157, 0.45);
-}
-
-.parking-marker-lot-inner.is-linked .parking-marker-label span {
-    color: rgba(255, 255, 255, 0.9);
-}
-
-.parking-marker-label {
-    background: white;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--color-text);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    white-space: nowrap;
-    text-align: center;
-    line-height: 1.3;
-}
-
-.parking-marker-label span {
-    display: block;
-    font-size: 10px;
-    color: var(--color-text-secondary);
-    font-weight: 600;
-}
-
-.parking-popup-content {
-    font-family: var(--font-body);
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--color-text);
-    padding: 2px 4px;
-    min-width: 140px;
-}
-
-.parking-popup-title {
-    font-weight: 700;
-    font-size: 14px;
-    margin-bottom: 4px;
-    color: var(--color-accent);
-}
-
-.parking-popup-type {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    font-weight: 600;
 }
 
 /* Parking Guide button (on home page event card) */
