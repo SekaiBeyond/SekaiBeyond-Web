@@ -138,7 +138,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                                 ? (event.customButtonText || event.customButtonTextCn)
                                 : (event.customButtonTextCn || event.customButtonText)}</a>) : null}
                         {parkingVenue && (
-                            <a href={`/parking/venue/${encodeURIComponent(parkingVenue.id)}`}
+                            <a href={`/parking/event/${encodeURIComponent(event.id)}`}
                                className="btn btn-parking con-btn">
                                 <span className="parking-guide-link-icon">🅿️</span>
                                 {isEnglish ? 'Parking Guide' : '停车指南'}

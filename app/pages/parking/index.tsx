@@ -2,19 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { CON_NAME, useConContent } from '~/lib/conContent';
-import { parseSiteTime, siteDay, toDatetimeLocal } from '~/lib/siteTime';
+import { parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
 import { useUpcomingEvents } from '~/lib/upcomingEvents';
 import { useUwParking } from '~/lib/uwParking';
 import { PARKING_INFO_URL, resolveVenueById, useVenues, type Venue } from '~/lib/venues';
 import { LotDetail } from './LotDetail';
 import { LotList } from './LotList';
 import {
-    type EventDay,
     eventDays,
     firstSuggestion,
     fromUpcoming,
     type GuideEvent,
-    guideEvents,
     localizedVenueName,
     type LotFilter,
     lotViews,
@@ -48,64 +46,57 @@ const Notice = ({icon, title, desc}: {icon: string; title: string; desc: string}
 const NOW_TICK_MS = 60_000;
 
 export const ParkingGuide = () => {
-    // `/parking/venue/<venue id>` opens on a venue, and `/parking/lot/<lot code>` on a lot.
-    const {kind, id} = useParams<{kind: string; id: string}>();
-    const urlVenueId = kind === 'venue' ? id ?? '' : '';
-    const urlCode = kind === 'lot' ? id?.toUpperCase() ?? '' : '';
-    // The address names the lot open, or else the venue picked, so either can be linked to.
+    // `/parking/venue/<venue id>` opens on a venue, `/parking/lot/<lot code>` on a lot, and
+    // `/parking/event/<event id>` on an event, with `/lot/<lot code>` after it for a lot.
+    const [kind = '', id = '', sub = '', subId = ''] = (useParams()['*'] ?? '').split('/');
+    const urlVenueId = kind === 'venue' ? id : '';
+    const urlEventId = kind === 'event' ? id : '';
+    const urlCode = (kind === 'lot' ? id : urlEventId && sub === 'lot' ? subId : '').toUpperCase();
+    // The address names the event, the lot open, or else the venue picked, so any of them can be linked to.
     const navigate = useNavigate();
     const goTo = (path: string) => navigate(path, {replace: true, preventScrollReset: true});
     const venuePath = (venueId: string) => venueId ? `/parking/venue/${encodeURIComponent(venueId)}` : '/parking';
+    const eventPath = `/parking/event/${encodeURIComponent(urlEventId)}`;
     const tx = useParkingText();
     const {venues, loading: venuesLoading} = useVenues();
     const {parking, loading: parkingLoading} = useUwParking();
     const {content: con, loading: conLoading} = useConContent();
-    const {activeEvents, loading: eventsLoading} = useUpcomingEvents();
+    const {upcomingEvents, loading: eventsLoading} = useUpcomingEvents();
 
-    // The con, until it's over.
-    const conEvent = useMemo((): GuideEvent | null => {
-        const {date, endTime, venueId} = con.event;
-        if (!date) return null;
-        const start = toDatetimeLocal(parseSiteTime(date));
-        const end = endTime ? toDatetimeLocal(parseSiteTime(endTime)) : '';
-        if (!start || (end || start).slice(0, 10) < siteDay(new Date())) return null;
-        return {id: 'con', title: CON_NAME, venueId, start, end};
-    }, [con.event]);
-
-    // The guide shows parking right now, which the clock moves on, unless the
-    // visitor switches it to a day of one of the events.
+    // The guide shows parking right now, which the clock moves on, unless it's an event's guide.
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
         const id = setInterval(() => setNow(new Date()), NOW_TICK_MS);
         return () => clearInterval(id);
     }, []);
     const thisMinute = useMemo(() => nowWindow(now), [now]);
-    // Every event with a venue the guide can plan around, so any of them can be switched to.
-    const events = useMemo(() => guideEvents([...activeEvents.map(fromUpcoming), ...(conEvent ? [conEvent] : [])]
-        .filter(e => resolveVenueById(e.venueId, venues))), [activeEvents, conEvent, venues]);
-    const days = useMemo(() => events.flatMap(e => eventDays(e, thisMinute.date)), [events, thisMinute.date]);
-    const [shownKey, setShownKey] = useState<string | null>(null);
-    // The event last switched to stays the guide's event after switching back to right now.
-    const [eventKey, setEventKey] = useState<string | null>(null);
-    const shownDay = days.find(d => d.key === shownKey) ?? null;
+
+    // The event the address names: an upcoming event by its id, or the con as 'con'.
+    // Looked up among past ones too, so one that's over still names its venue.
+    const urlEvent = useMemo((): GuideEvent | null => {
+        if (!urlEventId) return null;
+        if (urlEventId === 'con') {
+            const {date, endTime, venueId} = con.event;
+            const start = date ? toDatetimeLocal(parseSiteTime(date)) : '';
+            const end = endTime ? toDatetimeLocal(parseSiteTime(endTime)) : '';
+            return {id: 'con', title: CON_NAME, venueId, start, end};
+        }
+        const upcoming = upcomingEvents.find(e => e.id === urlEventId);
+        return upcoming ? fromUpcoming(upcoming) : null;
+    }, [urlEventId, con.event, upcomingEvents]);
+    // Its days from today on, which its guide switches between, opening on the first.
+    const days = useMemo(() => urlEvent ? eventDays(urlEvent, thisMinute.date) : [], [urlEvent, thisMinute.date]);
+    // An event that's over, or isn't found, opens parking right now instead.
+    const event = days.length > 0 ? urlEvent : null;
+    const [dayKey, setDayKey] = useState<string | null>(null);
+    const shownDay = days.find(d => d.key === dayKey) ?? days[0] ?? null;
     const parkingWindow = shownDay?.window ?? thisMinute;
-    const event = events.find(e => e.id === eventKey) ?? null;
     const eventVenueId = event?.venueId ?? '';
 
-    // Which venue's parking guide is displayed: the one the address names, or none, the
-    // whole campus. A switch to another event's day moves it to the event's venue, and
-    // the switcher can change it.
-    const [selectedVenueId, setSelectedVenueId] = useState(urlVenueId);
-    const showDay = (day: EventDay | null) => {
-        setShownKey(day?.key ?? null);
-        if (!day) return;
-        setEventKey(day.event.id);
-        // Switching to an event with no venue keeps the one picked.
-        if (day.event.venueId && day.event.venueId !== eventVenueId) {
-            setSelectedVenueId(day.event.venueId);
-            goTo(venuePath(day.event.venueId));
-        }
-    };
+    // Which venue's parking guide is displayed: the one picked, else the one the address
+    // names or its event's, else none, the whole campus.
+    const [pickedVenueId, setPickedVenueId] = useState<string | null>(urlVenueId || null);
+    const selectedVenueId = pickedVenueId ?? urlEvent?.venueId ?? '';
     const venue = resolveVenueById(selectedVenueId, venues);
     const eventVenue = resolveVenueById(eventVenueId, venues);
 
@@ -129,8 +120,9 @@ export const ParkingGuide = () => {
     const listScroll = useRef(0);
 
     const selectVenue = (id: string) => {
-        setSelectedVenueId(id);
-        goTo(venuePath(id));
+        setPickedVenueId(id);
+        // An event's guide keeps the event's address while another venue is looked at.
+        goTo(event ? eventPath : venuePath(id));
         setHover(null);
         setHotCode(null);
         if (panelRef.current) panelRef.current.scrollTop = 0;
@@ -139,7 +131,7 @@ export const ParkingGuide = () => {
     const openLot = (code: string) => {
         const panel = panelRef.current;
         if (panel && !selectedCode) listScroll.current = panel.scrollTop;
-        if (code !== selectedCode) goTo(`/parking/lot/${encodeURIComponent(code)}`);
+        if (code !== selectedCode) goTo(`${event ? eventPath : '/parking'}/lot/${encodeURIComponent(code)}`);
         setHover(null);
         setHotCode(null);
         mapApi.current?.focusLot(code);
@@ -152,7 +144,7 @@ export const ParkingGuide = () => {
         }
     };
 
-    const closeLot = () => goTo(venuePath(venue?.id ?? ''));
+    const closeLot = () => goTo(event ? eventPath : venuePath(venue?.id ?? ''));
     useEffect(() => {
         if (!selectedCode && panelRef.current) panelRef.current.scrollTop = listScroll.current;
     }, [selectedCode]);
@@ -170,7 +162,8 @@ export const ParkingGuide = () => {
 
     const venueName = (v: Venue) => localizedVenueName(v, tx.isEnglish);
 
-    const loading = venuesLoading || parkingLoading || conLoading || eventsLoading;
+    // An event's guide waits for the events and the con, so it doesn't open on right now first.
+    const loading = venuesLoading || parkingLoading || (!!urlEventId && (conLoading || eventsLoading));
     if (loading) {
         return (
             <div className="parking-page">
@@ -233,7 +226,7 @@ export const ParkingGuide = () => {
                         hotCode={hotCode}
                         hover={hover}
                         setHover={setHover}
-                        isNow={parkingWindow.isNow}
+                        parkingWindow={parkingWindow}
                         onOpenLot={openLot}
                         onSelectVenue={selectVenue}
                         tx={tx}
@@ -242,59 +235,54 @@ export const ParkingGuide = () => {
 
                 <aside className="parking-info-panel" ref={panelRef} aria-label={tx.t('panelLabel')}>
                     {parking.lots.length === 0 ? (
-                        <>
-                            <div className="parking-info-card">
-                                <div className="parking-info-icon parking-info-icon--info">🅿️</div>
-                                <div className="parking-info-text parking-info-stack">
-                                    <span className="parking-lot-name">{tx.t('noDataTitle')}</span>
-                                    <span>{tx.t('noDataDesc')}</span>
-                                    <a href={PARKING_INFO_URL} target="_blank" rel="noopener noreferrer">
-                                        {PARKING_INFO_URL} ↗
-                                    </a>
-                                </div>
+                        <div className="parking-info-card">
+                            <div className="parking-info-icon parking-info-icon--info">🅿️</div>
+                            <div className="parking-info-text parking-info-stack">
+                                <span className="parking-lot-name">{tx.t('noDataTitle')}</span>
+                                <span>{tx.t('noDataDesc')}</span>
+                                <a href={PARKING_INFO_URL} target="_blank" rel="noopener noreferrer">
+                                    {PARKING_INFO_URL} ↗
+                                </a>
                             </div>
-                            <Footer generatedAt="" tx={tx}/>
-                        </>
+                        </div>
                     ) : selectedView ? (
                         <LotDetail
                             view={selectedView}
                             parkingWindow={parkingWindow}
                             venueName={venue ? venueName(venue) : ''}
                             listedCodes={listedCodes}
-                            generatedAt={parking.lotsGeneratedAt}
                             onBack={closeLot}
                             onOpenLot={openLot}
                             tx={tx}
                         />
                     ) : (
-                        <>
-                            <LotList
-                                event={event}
-                                parkingWindow={parkingWindow}
-                                days={days}
-                                shownDay={shownDay}
-                                onShowDay={showDay}
-                                venue={venue}
-                                eventVenue={eventVenue}
-                                venueName={venueName}
-                                eventPricing={parking.eventPricing}
-                                views={views}
-                                visibleViews={visibleViews}
-                                query={query}
-                                onQuery={setQuery}
-                                filters={filters}
-                                onToggleFilter={toggleFilter}
-                                hotCode={hotCode}
-                                onHot={hotLot}
-                                onOpenLot={openLot}
-                                onSelectVenue={selectVenue}
-                                tx={tx}
-                            />
-                            <Footer generatedAt={parking.lotsGeneratedAt} tx={tx}/>
-                        </>
+                        <LotList
+                            event={event}
+                            parkingWindow={parkingWindow}
+                            days={days}
+                            shownDay={shownDay}
+                            onShowDay={day => setDayKey(day.key)}
+                            venue={venue}
+                            eventVenue={eventVenue}
+                            venueName={venueName}
+                            eventPricing={parking.eventPricing}
+                            views={views}
+                            visibleViews={visibleViews}
+                            query={query}
+                            onQuery={setQuery}
+                            filters={filters}
+                            onToggleFilter={toggleFilter}
+                            hotCode={hotCode}
+                            onHot={hotLot}
+                            onOpenLot={openLot}
+                            onSelectVenue={selectVenue}
+                            tx={tx}
+                        />
                     )}
                 </aside>
             </div>
+
+            {parking.lots.length > 0 && <Footer generatedAt={parking.lotsGeneratedAt} tx={tx}/>}
         </div>
     );
 };

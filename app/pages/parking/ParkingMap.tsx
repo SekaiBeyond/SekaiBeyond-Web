@@ -9,6 +9,7 @@ import {
     useMarkerElements,
     usePopup,
 } from '~/lib/maplibre';
+import type { ParkingWindow } from '~/lib/parkingStatus';
 import type { VenueOutline } from '~/lib/uwParking';
 import { hasCoordinates, type Venue } from '~/lib/venues';
 import { localizedVenueName, lotSubtitle, type LotView } from './model';
@@ -44,7 +45,8 @@ interface ParkingMapProps {
     hotCode: string | null;
     hover: HoverTarget | null;
     setHover: Dispatch<SetStateAction<HoverTarget | null>>;
-    isNow: boolean;
+    /** Right now, or the event's hours on the day shown. */
+    parkingWindow: ParkingWindow;
     onOpenLot: (code: string) => void;
     onSelectVenue: (id: string) => void;
     tx: ParkingText;
@@ -101,8 +103,9 @@ function outlineData(outline: VenueOutline | null): OutlineData {
 export const ParkingMap = (props: ParkingMapProps) => {
     const {
         ref, views, visibleCodes, venues, venue, outline, eventVenueId, selectedCode, hotCode, hover, setHover,
-        isNow, onOpenLot, onSelectVenue, tx
+        parkingWindow, onOpenLot, onSelectVenue, tx
     } = props;
+    const {isNow} = parkingWindow;
     const containerRef = useRef<HTMLDivElement>(null);
     const [map, setMap] = useState<MapLibreMap | null>(null);
     const [styleReady, setStyleReady] = useState(false);
@@ -281,7 +284,9 @@ export const ParkingMap = (props: ParkingMapProps) => {
             {/* Translucent "glass" and click-through, so any marker behind it stays
                 visible and usable rather than being hidden. */}
             <div className="parking-map-legend">
-                <div className="parking-map-legend-title">{tx.t(isNow ? 'legendNow' : 'legendEvent')}</div>
+                <div className="parking-map-legend-title">
+                    {isNow ? tx.t('legendNow') : tx.t('legendEvent', {d: tx.date(parkingWindow.date)})}
+                </div>
                 <div className="parking-map-legend-item"><span
                     className="parking-map-legend-dot parking-k-free">P</span>{tx.t('lg_free')}</div>
                 {!isNow && (
@@ -399,6 +404,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
                         view={hoveredView}
                         pinned={hover?.kind === 'lot' && hover.pinned}
                         onDetails={() => onOpenLot(hoveredView.lot.code)}
+                        isNow={isNow}
                         tx={tx}
                     />
                 ) : hoveredVenue ? (
@@ -424,10 +430,11 @@ export const ParkingMap = (props: ParkingMapProps) => {
 };
 
 /** The quick card a lot shows on hover, focus or a first tap. */
-const LotCard = ({view, pinned, onDetails, tx}: {
+const LotCard = ({view, pinned, onDetails, isNow, tx}: {
     view: LotView;
     pinned: boolean;
     onDetails: () => void;
+    isNow: boolean;
     tx: ParkingText
 }) => {
     const {lot, status, rank} = view;
@@ -440,7 +447,7 @@ const LotCard = ({view, pinned, onDetails, tx}: {
                 {rank > 0 && <span className="parking-pick-badge">{tx.t('pick', {n: rank})}</span>}
             </div>
             <StatusPill status={status} tx={tx}/>
-            <RatesLine rates={view.rates} tx={tx}/>
+            <RatesLine rates={view.rates} isNow={isNow} tx={tx}/>
             <div className="parking-hc-facts">
                 {walk && <span className="parking-dist">📍 {walk}</span>}
                 {!!lot.stalls.accessible && <span title={tx.t('s_accessible')}>♿ {lot.stalls.accessible}</span>}

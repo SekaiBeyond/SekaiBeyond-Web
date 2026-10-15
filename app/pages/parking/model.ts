@@ -28,7 +28,7 @@ export interface GuideEvent {
 /** One lot as the guide shows it from the selected venue. */
 export interface LotView {
     lot: UwLot;
-    /** Right now, or during the event when the guide is showing the event's day. */
+    /** Right now, or during the event's hours on the day shown, on an event's guide. */
     status: LotStatus;
     /** What a visitor pays then: none when it's free, permits only or event-priced. */
     rates: Rate[];
@@ -48,7 +48,7 @@ export const LOT_FILTERS: LotFilter[] = ['free', 'ada', 'ev', 'moto', 'garage'];
 
 const toLocal = (value: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) ? value.slice(0, 16) : '';
 
-/** One day of an event, which the guide can be switched to. */
+/** One day of an event, which its guide can be switched to. */
 export interface EventDay {
     /** Stays the same as the events load and the clock moves on. */
     key: string;
@@ -89,19 +89,6 @@ export function eventDays(event: GuideEvent, today: string): EventDay[] {
     return days;
 }
 
-const sameEvent = (a: GuideEvent, b: GuideEvent) => a.id === b.id
-    // The con can be listed as an upcoming event too: one venue on one first day is one event.
-    || (!!a.venueId && a.venueId === b.venueId && a.start.slice(0, 10) === b.start.slice(0, 10));
-
-/** The events the guide offers by start, each once. */
-export function guideEvents(events: GuideEvent[]): GuideEvent[] {
-    const list: GuideEvent[] = [];
-    for (const event of [...events].sort((a, b) => a.start.localeCompare(b.start))) {
-        if (!list.some(e => sameEvent(e, event))) list.push(event);
-    }
-    return list;
-}
-
 export const fromUpcoming = (event: UpcomingEvent): GuideEvent => ({
     id: event.id,
     title: {en: event.title, zh: event.titleCn},
@@ -110,7 +97,7 @@ export const fromUpcoming = (event: UpcomingEvent): GuideEvent => ({
     end: toDatetimeLocal(event.endAt),
 });
 
-/** This minute on the site clock, which the guide shows unless switched to an event's day. */
+/** This minute on the site clock, which the guide shows unless it's an event's guide. */
 export function nowWindow(now: Date): ParkingWindow {
     const local = toDatetimeLocal(now);
     const start = clockMinutes(local.slice(11, 16));

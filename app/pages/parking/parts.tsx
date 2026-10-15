@@ -9,9 +9,16 @@ export const StatusPill = ({status, tx}: {status: LotStatus; tx: ParkingText}) =
     <span className={`parking-status parking-s-${status.kind}`}>{tx.status(status)}</span>
 );
 
-/** "💲 $5/hr · $21/day": what a visitor pays then; nothing when they don't pay, or can't park. */
-export const RatesLine = ({rates, tx}: {rates: Rate[]; tx: ParkingText}) =>
-    rates.length > 0 ? <span className="parking-rate-line">💲 {tx.rates(rates)}</span> : null;
+/**
+ * "💲 $5/hr · $21/day", or "💲 During your event: $5/hr · $21/day" on an event's guide: what a
+ * visitor pays then; nothing when they don't pay, or can't park.
+ */
+export const RatesLine = ({rates, isNow, tx}: {rates: Rate[]; isNow: boolean; tx: ParkingText}) =>
+    rates.length > 0 ? (
+        <span className="parking-rate-line">
+            💲 {isNow ? tx.rates(rates) : tx.t('ratesEvent', {r: tx.rates(rates)})}
+        </span>
+    ) : null;
 
 /**
  * How far a lot is: "2 min walk to HUB" (`venueName` given), "2 min walk", or
@@ -29,26 +36,20 @@ export function walkText(view: LotView, tx: ParkingText, options: {venueName?: s
 /** What a lot's pin shows: its rank among the suggestions, else P or G. */
 export const pinGlyph = (view: LotView) => view.rank ? String(view.rank) : uwLotGlyph(view.lot.type);
 
+/** Where the lot data comes from and when it was updated, at the bottom of the page; nothing without a date. */
 export const Footer = ({generatedAt, tx}: {generatedAt: string; tx: ParkingText}) => {
     const generated = new Date(generatedAt);
-    const updated = Number.isNaN(generated.getTime()) ? '' : tx.date(siteDay(generated));
-    const [before, after] = tx.t('credit', {d: updated}).split('{uw}');
+    if (Number.isNaN(generated.getTime())) return null;
+    const [before, after] = tx.t('credit', {d: tx.date(siteDay(generated))}).split('{uw}');
     return (
-        <div className="parking-panel-footer">
-            {updated && (
-                <small>
-                    {before}
-                    <a href={PARKING_INFO_URL} target="_blank" rel="noopener noreferrer">
-                        {tx.t('uw')}
-                    </a>
-                    {after}
-                </small>
-            )}
-            <span className="parking-footer-text">
-                <span className="parking-footer-sparkle">✦</span>
-                Sekai Beyond 2026
-                <span className="parking-footer-sparkle">✦</span>
-            </span>
-        </div>
+        <footer className="parking-footer">
+            <small>
+                {before}
+                <a href={PARKING_INFO_URL} target="_blank" rel="noopener noreferrer">
+                    {tx.t('uw')}
+                </a>
+                {after}
+            </small>
+        </footer>
     );
 };

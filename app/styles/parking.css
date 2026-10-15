@@ -579,7 +579,7 @@
     cursor: pointer;
 }
 
-/* Whether the guide shows parking right now or on one of the events' days. */
+/* Which of its days an event's guide shows. */
 .parking-when {
     display: flex;
     flex-wrap: wrap;
@@ -604,6 +604,18 @@
 .parking-when-select:focus-visible {
     outline: none;
     border-color: var(--color-primary);
+}
+
+/* On an event's guide, that its prices are the event's, not this minute's. */
+.parking-event-note {
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(255, 142, 83, 0.12);
+    font-size: 12.5px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--parking-paid-ink);
 }
 
 .parking-banner .parking-info-text {
@@ -942,6 +954,12 @@
     color: var(--color-text-secondary);
 }
 
+/* The day an event's prices are for, so it stands out from the heading. */
+.parking-detail-head h3 strong {
+    font-weight: 900;
+    color: var(--color-text);
+}
+
 .parking-detail-card p {
     margin: 0;
     font-size: 13.5px;
@@ -1170,40 +1188,32 @@ button.parking-tag {
     color: var(--color-primary);
 }
 
-.parking-panel-footer {
-    display: grid;
-    gap: 6px;
-    justify-items: center;
-    padding: 6px 4px 2px;
+/* The lot data's credit, under the map and the panel. */
+.parking-footer {
+    /* Above the fixed decorative blobs, like the content. */
+    position: relative;
+    z-index: 1;
+    max-width: 1700px;
+    margin: 20px auto 0;
+    padding: 0 40px;
     text-align: center;
 }
 
-.parking-panel-footer small {
+.parking-footer small {
     font-size: 11.5px;
     font-weight: 600;
     color: var(--color-text-secondary);
 }
 
-.parking-footer-text {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
+.parking-footer a {
+    color: var(--color-primary);
+    font-weight: 700;
+    text-decoration: none;
 }
 
-.parking-footer-sparkle {
-    font-size: 16px;
-    color: #feca57;
-    -webkit-text-fill-color: #feca57;
-    background: none;
-    -webkit-background-clip: initial;
-    background-clip: initial;
-    opacity: 0.9;
+.parking-footer a:hover {
+    color: var(--color-accent);
+    text-decoration: underline;
 }
 
 /* Map pins. MapLibre positions the bare .parking-marker wrapper; everything else
@@ -1596,6 +1606,10 @@ button.parking-tag {
     .parking-topbar {
         margin: 16px 20px 0;
     }
+
+    .parking-footer {
+        padding: 0 20px;
+    }
 }
 
 @media (max-width: 640px) {
@@ -1614,6 +1628,10 @@ button.parking-tag {
 
     .parking-topbar {
         margin: 12px 16px 0;
+    }
+
+    .parking-footer {
+        padding: 0 16px;
     }
 
     .parking-topbar .parking-back-btn {

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { clockMinutes, DAY_MINUTES, daySchedule, type ParkingWindow, weeklyRates } from '~/lib/parkingStatus';
 import type { ClockRange } from '~/lib/uwParking';
-import { Footer, RatesLine, StatusPill, walkText } from './parts';
+import { RatesLine, StatusPill, walkText } from './parts';
 import type { LotView } from './model';
 import type { ParkingText } from './text';
 
@@ -13,7 +13,6 @@ interface LotDetailProps {
     venueName: string;
     /** Codes of the lots the guide lists, so overflow lots among them can be opened. */
     listedCodes: ReadonlySet<string>;
-    generatedAt: string;
     onBack: () => void;
     onOpenLot: (code: string) => void;
     tx: ParkingText;
@@ -39,7 +38,7 @@ function whyText({status}: LotView, parkingWindow: ParkingWindow, tx: ParkingTex
 const rangeOf = (range: ClockRange, tx: ParkingText) =>
     tx.range(clockMinutes(range.start), clockMinutes(range.end) || DAY_MINUTES);
 
-const SectionHead = ({icon, title, tone = 'info'}: {icon: string; title: string; tone?: 'info' | 'time'}) => (
+const SectionHead = ({icon, title, tone = 'info'}: {icon: string; title: ReactNode; tone?: 'info' | 'time'}) => (
     <div className="parking-detail-head">
         <span className={`parking-info-icon parking-info-icon--small parking-info-icon--${tone}`}
               aria-hidden="true">{icon}</span>
@@ -53,7 +52,6 @@ export const LotDetail = ({
                               parkingWindow,
                               venueName,
                               listedCodes,
-                              generatedAt,
                               onBack,
                               onOpenLot,
                               tx
@@ -82,6 +80,8 @@ export const LotDetail = ({
             : tx.t('clearance', {m: (lot.clearanceInches * 0.0254).toFixed(2), in: lot.clearanceInches})
         : '';
     const walk = walkText(view, tx, {venueName});
+    // "For Sat, Oct 24", the date in bold.
+    const [forBefore, forAfter] = tx.t('secEvent').split('{d}');
     const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lot.lat},${lot.lng}&travelmode=driving`;
 
     const copyZone = () => {
@@ -122,9 +122,15 @@ export const LotDetail = ({
             </div>
 
             <section className="parking-info-card parking-detail-card">
-                <SectionHead icon="🕐" title={tx.t(parkingWindow.isNow ? 'secNow' : 'secEvent')} tone="time"/>
+                <SectionHead
+                    icon="🕐"
+                    title={parkingWindow.isNow
+                        ? tx.t('secNow')
+                        : <>{forBefore}<strong>{tx.date(parkingWindow.date)}</strong>{forAfter}</>}
+                    tone="time"
+                />
                 <StatusPill status={status} tx={tx}/>
-                <RatesLine rates={view.rates} tx={tx}/>
+                <RatesLine rates={view.rates} isNow={parkingWindow.isNow} tx={tx}/>
                 <p>{whyText(view, parkingWindow, tx)}</p>
                 {walk && (
                     <span
@@ -257,8 +263,6 @@ export const LotDetail = ({
                     </div>
                 </section>
             )}
-
-            <Footer generatedAt={generatedAt} tx={tx}/>
         </>
     );
 };
