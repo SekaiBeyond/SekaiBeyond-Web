@@ -55,10 +55,8 @@ export interface UwLot {
         motorcycle: number | null;
         ev: number | null;
     };
-    payByPhoneZone: number | null;
     clearanceInches: number | null;
     overflowLots: string[];
-    selfServe: boolean;
     zipcar: boolean;
     ucar: boolean;
     dialARide: boolean;
@@ -140,12 +138,10 @@ function toVisitorLot(raw: unknown): UwLot | null {
             motorcycle: count(raw.motorcycleStalls),
             ev: count(raw.evStalls),
         },
-        payByPhoneZone: count(raw.payByPhoneLocation),
         clearanceInches: count(raw.garageClearanceInches),
         overflowLots: Array.isArray(raw.overflowLots)
             ? raw.overflowLots.map(c => text(c, 12).toUpperCase()).filter(c => UW_LOT_CODE_RE.test(c))
             : [],
-        selfServe: raw.selfServeParking === true,
         zipcar: raw.zipcar === true,
         ucar: raw.uCAR === true,
         dialARide: raw.dialARide === true,

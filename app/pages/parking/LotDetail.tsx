@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { clockMinutes, DAY_MINUTES, daySchedule, type ParkingWindow, weeklyRates } from '~/lib/parkingStatus';
 import type { ClockRange } from '~/lib/uwParking';
 import { RatesLine, StatusPill, walkText } from './parts';
@@ -55,11 +55,6 @@ export const LotDetail = ({
                               tx
                           }: LotDetailProps) => {
     const {lot, status, rank, note} = view;
-    const [copied, setCopied] = useState(false);
-    const zoneRef = useRef<HTMLSpanElement>(null);
-    const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-    useEffect(() => () => clearTimeout(copiedTimer.current), []);
-    useEffect(() => setCopied(false), [lot.code]);
 
     // Only rates the lot can charge: W28 lists daytime rates, but it's permits only then.
     const rates = weeklyRates(lot);
@@ -83,25 +78,6 @@ export const LotDetail = ({
     const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lot.lat},${lot.lng}&travelmode=driving`;
     // A pin on the lot, without starting a route.
     const mapUrl = `https://www.google.com/maps/search/?api=1&query=${lot.lat},${lot.lng}`;
-
-    const copyZone = () => {
-        const done = () => {
-            setCopied(true);
-            clearTimeout(copiedTimer.current);
-            copiedTimer.current = setTimeout(() => setCopied(false), 1600);
-        };
-        // Without clipboard access, select the number so it can be copied by hand.
-        const selectIt = () => {
-            const selection = document.getSelection();
-            if (!zoneRef.current || !selection) return;
-            const range = document.createRange();
-            range.selectNodeContents(zoneRef.current);
-            selection.removeAllRanges();
-            selection.addRange(range);
-        };
-        if (navigator.clipboard) navigator.clipboard.writeText(String(lot.payByPhoneZone)).then(done, selectIt);
-        else selectIt();
-    };
 
     return (
         <>
@@ -186,24 +162,6 @@ export const LotDetail = ({
                     )}
                 </dl>
             </section>
-
-            {(lot.payByPhoneZone || lot.selfServe) && (
-                <section className="parking-info-card parking-detail-card">
-                    <SectionHead icon="📱" title={tx.t('secPay')}/>
-                    {!!lot.payByPhoneZone && (
-                        <div className="parking-zone">
-                            <div>
-                                <div className="parking-eyebrow">{tx.t('pbp')}</div>
-                                <span className="parking-zone-num" ref={zoneRef}>{lot.payByPhoneZone}</span>
-                            </div>
-                            <button type="button" className="parking-ghost" onClick={copyZone}>
-                                📋 <span aria-live="polite">{tx.t(copied ? 'copied' : 'copy')}</span>
-                            </button>
-                        </div>
-                    )}
-                    {lot.selfServe && <p>{tx.t('selfServe')}</p>}
-                </section>
-            )}
 
             {stalls.length > 0 && (
                 <section className="parking-info-card parking-detail-card">

@@ -31,10 +31,8 @@ export interface UwLot {
         motorcycle: number | null;
         ev: number | null;
     };
-    payByPhoneZone: number | null;
     clearanceInches: number | null;
     overflowLots: string[];
-    selfServe: boolean;
     zipcar: boolean;
     ucar: boolean;
     dialARide: boolean;

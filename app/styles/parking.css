@@ -1103,23 +1103,6 @@
     font-variant-numeric: tabular-nums;
 }
 
-.parking-zone {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-
-.parking-zone-num {
-    font-family: var(--parking-badge-font);
-    font-size: 26px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    color: var(--color-text);
-    user-select: all;
-    font-variant-numeric: tabular-nums;
-}
-
 .parking-stalls {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
