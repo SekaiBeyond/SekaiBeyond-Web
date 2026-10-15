@@ -8,6 +8,7 @@ import {
     type Rate,
     type Segment
 } from '~/lib/parkingStatus';
+import { uwLotTypeLabel } from '~/lib/uwParking';
 
 /**
  * The parking guide's copy in both site languages. Placeholders in braces are
@@ -280,12 +281,6 @@ const ZH: Record<TextKey, string> = {
     'st_free>permit': '{t} 前免费，之后仅限持证',
 };
 
-const LOT_TYPES: Record<string, {en: string; zh: string}> = {
-    'Surface Lot': {en: 'Surface lot', zh: '地面停车场'},
-    'Garage': {en: 'Garage', zh: '停车楼'},
-    'Underground Garage': {en: 'Underground garage', zh: '地下停车库'},
-};
-
 const AREAS: Record<string, {en: string; zh: string}> = {
     North: {en: 'North campus', zh: '北校区'},
     Central: {en: 'Central campus', zh: '中校区'},
@@ -367,7 +362,7 @@ function makeText(isEnglish: boolean) {
             .join(isEnglish ? ', ' : '，');
     };
 
-    const lotType = (type: string) => LOT_TYPES[type]?.[lang] ?? type;
+    const lotType = (type: string) => uwLotTypeLabel(type, isEnglish);
     const area = (name: string) => AREAS[name]?.[lang] ?? name;
 
     return {isEnglish, t, time, range, date, money, pricingWhen, status, rates, rateWhen, hours, lotType, area};

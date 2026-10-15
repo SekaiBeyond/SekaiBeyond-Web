@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { CON_NAME, useConContent } from '~/lib/conContent';
+import { prefersReducedMotion } from '~/lib/maplibre';
 import { parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
 import { useUpcomingEvents } from '~/lib/upcomingEvents';
 import { useUwParking } from '~/lib/uwParking';
@@ -20,7 +21,7 @@ import {
     nowWindow,
     offeredFilters,
 } from './model';
-import { type HoverTarget, ParkingMap, type ParkingMapApi } from './ParkingMap';
+import { type HoverTarget, narrowScreen, ParkingMap, type ParkingMapApi } from './ParkingMap';
 import { Footer } from './parts';
 import { type ParkingText, useParkingText } from './text';
 import { VenueSwitcher } from './VenueSwitcher';
@@ -155,9 +156,8 @@ export const ParkingGuide = () => {
         if (!panel) return;
         panel.scrollTop = 0;
         // Stacked under the map on narrow screens, the details would open out of sight.
-        if (window.matchMedia('(max-width: 1024px)').matches) {
-            const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            panel.scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block: 'start'});
+        if (narrowScreen()) {
+            panel.scrollIntoView({behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start'});
         }
     };
 

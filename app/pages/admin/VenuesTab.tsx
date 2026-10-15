@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteVenue, callLookUpUwBuilding, callSaveVenue, type UwBuildingLookup } from '~/lib/firebase';
-import { useUwParking, type UwLot, uwLotTypeLabel, type UwParkingData, walkMinutes } from '~/lib/uwParking';
+import { isGarage, useUwParking, type UwLot, uwLotTypeLabel, type UwParkingData, walkMinutes } from '~/lib/uwParking';
 import type { SuggestedLot, Venue } from '~/lib/venues';
 import { haversineMiles, UW_CAMPUS_CENTER } from '~/lib/venues';
 import { BilingualFormField } from './BilingualFormField';
@@ -347,13 +347,15 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
     // Suggestions, each skipping lots already on the list.
     const fresh = (codes: string[]) => codes.filter(c => !chosen.has(c) && lotByCode.has(c));
     const uwPicks = lookup ? fresh(lookup.recommendedLots) : [];
+    const lotsByDistance = parking.lots
+        .map(lot => ({lot, meters: metersBetween(lot, here)}))
+        .sort((a, b) => a.meters - b.meters)
+        .map(({lot}) => lot);
     const nearest = fresh(
         lookup && sameSpot(lookup.building)
             ? lookup.nearestLots.map(n => n.code)
-            : [...parking.lots].sort((a, b) => metersBetween(a, here) - metersBetween(b, here)).map(l => l.code),
+            : lotsByDistance.map(l => l.code),
     ).slice(0, 6);
-
-    const lotsByDistance = [...parking.lots].sort((a, b) => metersBetween(a, here) - metersBetween(b, here));
 
     const chipRow = (label: string, codes: string[]) => codes.length > 0 && (
         <div className="admin-venue-suggest">
@@ -491,7 +493,7 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
                                              className="admin-venue-lot-card admin-venue-lot-card--suggested">
                                             <div
                                                 className="admin-venue-lot-badge"
-                                                data-type={lot && /Garage/.test(lot.type) ? 'garage' : 'general'}
+                                                data-type={lot && isGarage(lot) ? 'garage' : 'general'}
                                             >
                                                 {i + 1}
                                             </div>

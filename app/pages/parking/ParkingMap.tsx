@@ -52,7 +52,8 @@ interface ParkingMapProps {
     tx: ParkingText;
 }
 
-const narrowScreen = () => window.matchMedia('(max-width: 1024px)').matches;
+/** Whether the guide is in the stacked layout parking.css switches to at 1024px. */
+export const narrowScreen = () => window.matchMedia('(max-width: 1024px)').matches;
 
 // Extra room around the framed points, and on desktop room on the left for the legend.
 const fitPadding = (): PaddingOptions => narrowScreen()

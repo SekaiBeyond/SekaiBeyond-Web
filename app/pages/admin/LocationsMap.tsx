@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { createMap, type MapLibreMap, prefersReducedMotion, useMarkerElements, usePopup } from '~/lib/maplibre';
-import { useUwParking, type UwLot, uwLotGlyph, uwLotTypeLabel } from '~/lib/uwParking';
+import { isGarage, useUwParking, type UwLot, uwLotGlyph, uwLotTypeLabel } from '~/lib/uwParking';
 import { DEFAULT_ZOOM, hasCoordinates, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
 
 /** Which marker's popup is currently open on the overview map: a venue by ID, a lot by UW code. */
@@ -20,7 +20,6 @@ interface SearchItem {
     mappable: boolean;
 }
 
-const isGarage = (lot: UwLot) => /Garage/.test(lot.type);
 
 /**
  * Searchable finder over every venue and UW parking lot. Picking a mappable item focuses it

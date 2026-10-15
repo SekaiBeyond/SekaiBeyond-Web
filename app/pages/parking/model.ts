@@ -9,7 +9,7 @@ import {
 } from '~/lib/parkingStatus';
 import { siteDay, toDatetimeLocal } from '~/lib/siteTime';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
-import type { UwLot, UwParkingData, WalkingTime } from '~/lib/uwParking';
+import { isGarage, type UwLot, type UwParkingData, type WalkingTime } from '~/lib/uwParking';
 import { hasCoordinates, haversineMiles, type Venue } from '~/lib/venues';
 import type { Localized } from '~/pages/con/i18n';
 
@@ -160,8 +160,6 @@ export function firstSuggestion(parking: UwParkingData, venue: Venue): {code: st
     if (!code) return null;
     return {code, walk: venueWalking(parking, venue)?.[code] ?? null};
 }
-
-export const isGarage = (lot: UwLot) => /Garage/.test(lot.type);
 
 export function matchesFilters(view: LotView, query: string, filters: ReadonlySet<LotFilter>): boolean {
     const q = query.trim().toLowerCase();

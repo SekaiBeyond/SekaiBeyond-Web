@@ -129,15 +129,22 @@ export function useUwParking(): {
     return {parking, loading, failed: error !== null, refresh};
 }
 
-/** Localized lot type (e.g. "Underground garage" / "地下停车库"). */
+const LOT_TYPES: Record<string, {en: string; zh: string}> = {
+    'Surface Lot': {en: 'Surface lot', zh: '地面停车场'},
+    'Garage': {en: 'Garage', zh: '停车楼'},
+    'Underground Garage': {en: 'Underground garage', zh: '地下停车库'},
+};
+
+/** Localized lot type (e.g. "Underground garage" / "地下停车库"), or UW's own words for a type it adds. */
 export function uwLotTypeLabel(type: string, isEnglish: boolean): string {
-    if (type === 'Underground Garage') return isEnglish ? 'Underground garage' : '地下停车库';
-    if (type === 'Garage') return isEnglish ? 'Garage' : '停车楼';
-    return isEnglish ? 'Surface lot' : '地面停车场';
+    return LOT_TYPES[type]?.[isEnglish ? 'en' : 'zh'] ?? type;
 }
 
+/** Whether UW calls the lot a garage of any kind. */
+export const isGarage = (lot: Pick<UwLot, 'type'>): boolean => /Garage/.test(lot.type);
+
 /** Badge glyph for a lot: G for garages, P for surface lots. */
-export const uwLotGlyph = (type: string): string => /Garage/.test(type) ? 'G' : 'P';
+export const uwLotGlyph = (type: string): string => isGarage({type}) ? 'G' : 'P';
 
 /** Whole minutes for a walk, never less than one. */
 export const walkMinutes = (seconds: number): number => Math.max(1, Math.round(seconds / 60));
