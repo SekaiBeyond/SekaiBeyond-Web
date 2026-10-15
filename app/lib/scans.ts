@@ -10,10 +10,8 @@ export interface ScanEvent {
 }
 
 /**
- * Most events are kept for a year (SCAN_RETENTION_DAYS), so a code that has been
- * out on a poster for a season can hold tens of thousands. This is the admin's
- * browser downloading them to draw a chart that buckets by the hour, so it reads
- * the newest slice rather than the lot.
+ * Scans are kept a year, so a poster's code can hold tens of thousands; the
+ * chart only needs the newest slice.
  */
 export const SCAN_FETCH_LIMIT = 5000;
 
@@ -28,8 +26,7 @@ export interface ScanHistory {
 /** The newest {@link SCAN_FETCH_LIMIT} scan events under one document. */
 export async function fetchScans(parentCollection: string, parentId: string): Promise<ScanHistory> {
     const db = getFirebaseDb();
-    // Newest-first with a limit is the only way to bound this; the chart wants
-    // them the other way round, so the slice is reversed on the way out.
+    // Newest first is the only way to bound this; reversed for the chart.
     const snap = await getDocs(query(
         collection(db, parentCollection, parentId, 'scans'),
         orderBy('scannedAt', 'desc'),

@@ -12,7 +12,7 @@ interface SocialLinkFormat {
 }
 
 // Mirrors SOCIAL_LINK_PATTERNS in functions/src/functions/admin.ts, which accepts
-// each `link` here and nothing else.
+// exactly these links.
 const SOCIAL_LINK_FORMATS: Record<SocialLinkKey, SocialLinkFormat> = {
     discord: {
         placeholder: {en: 'Invite code or link', zh: '邀请码或链接'},
@@ -52,8 +52,8 @@ const SOCIAL_LINK_FORMATS: Record<SocialLinkKey, SocialLinkFormat> = {
     },
 };
 
-// The Xiaohongshu app shares a profile as a short link that redirects to it. It
-// holds no ID to read here, so it is saved as is and the server follows it.
+// Xiaohongshu shares profiles as redirecting short links with no ID in them, so
+// one is saved as is for the server to follow.
 const XIAOHONGSHU_SHARE_HOSTS = ['xhslink.cn', 'xhslink.com'];
 
 export const socialLinkPlaceholder = (key: SocialLinkKey) => SOCIAL_LINK_FORMATS[key].placeholder;
@@ -79,9 +79,8 @@ export const isXiaohongshuShareLink = (link: string): boolean => {
 };
 
 /**
- * The link to save for what was typed into an account's field: its ID, @ID, or
- * any link to it, rebuilt in that account's one form. '' when blank, and null
- * when it is none of those.
+ * The link to save for what was typed: an ID, @ID or any link to the account,
+ * rebuilt in its one form. '' when blank, null when it's none of those.
  */
 export function toSocialLink(key: SocialLinkKey, input: string): string | null {
     const value = input.trim().replace(/^@/, '');

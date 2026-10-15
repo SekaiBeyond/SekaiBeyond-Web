@@ -125,8 +125,7 @@ const escapeHtml = (s: string): string => s
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-// Mirrors renderTicketQrBlock on the server — same spacing, same code size —
-// with a placeholder where each QR goes, since a sample has no ticket to draw.
+// Mirrors renderTicketQrBlock on the server, with placeholders for the QRs.
 const SAMPLE_TICKET_BLOCK = [
     {label: 'General Admission', color: '#ff6b9d', id: 'ticket-uuid-1'},
     {label: 'VIP', color: '#f39c12', id: 'ticket-uuid-2'},
@@ -139,10 +138,9 @@ const SAMPLE_TICKET_BLOCK = [
 ).join('\n');
 
 /**
- * Mirrors renderTemplate on the server, with sample values standing in for an
- * attendee: escaped where they land in the body, as typed in the subject.
- * contactEmail is Site Config's. While it is blank the placeholder is left in
- * place, so the preview shows what is missing instead of an empty gap.
+ * Mirrors renderTemplate on the server with sample attendee values, escaped in
+ * the body and raw in the subject. A blank contactEmail leaves its placeholder
+ * showing.
  */
 const fillSample = (text: string, event: UpcomingEvent, contactEmail: string, htmlContext: boolean): string => {
     const sub = htmlContext ? escapeHtml : (s: string) => s;
@@ -171,7 +169,7 @@ const fillSample = (text: string, event: UpcomingEvent, contactEmail: string, ht
 export const renderSampleSubject = (template: EmailTemplate, event: UpcomingEvent, contactEmail: string): string =>
     fillSample(template.subject, event, contactEmail, false);
 
-// Sanitized with the same allowlist the server applies at save time, so the
-// admin never sees content that wouldn't survive the save.
+// The server's save-time allowlist, so the preview shows only what survives a
+// save.
 export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEvent, contactEmail: string): string =>
     sanitizeEmailHtml(fillSample(template.bodyHtml, event, contactEmail, true));

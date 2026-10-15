@@ -47,9 +47,8 @@ export const ImageCropModal = ({
         if (isString) {
             img.crossOrigin = "anonymous";
         }
-        // A superseded load must not report back. StrictMode runs this effect twice
-        // in development, and the first run's object URL is revoked before its image
-        // loads — its error would otherwise stick over the second run's success.
+        // A superseded load must not report: under StrictMode the first run's URL is
+        // revoked before its image loads, and its error would stick.
         let stale = false;
         img.onload = () => {
             if (stale) return;

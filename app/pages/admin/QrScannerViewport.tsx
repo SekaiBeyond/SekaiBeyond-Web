@@ -11,9 +11,9 @@ interface QrScannerViewportProps {
 }
 
 /**
- * The camera preview + Start/Stop control row shared by the admin QR scanners.
- * Pair it with {@link useQrScanner}; the caller owns what a decoded code means
- * and renders its own result UI below this.
+ * The camera preview and Start/Stop row shared by the admin scanners, used with
+ * {@link useQrScanner}. The caller decides what a code means and renders the
+ * result.
  */
 export function QrScannerViewport({scanner, isEnglish, startDisabled, children}: QrScannerViewportProps) {
     const {videoRef, canvasRef, cameraActive, cameraError, startCamera, stopCamera} = scanner;

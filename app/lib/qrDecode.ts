@@ -33,9 +33,8 @@ export function loadJsQR(): Promise<JsQRFn> {
     return jsQRModule;
 }
 
-// Longest edge, in pixels, of each attempt. Phone photos run to 12MP and more,
-// which jsQR reads slowly, so smaller sizes go first; the larger ones are for
-// a code that only fills a corner of the frame.
+// Longest edge of each attempt, in pixels. jsQR is slow on 12MP photos, so
+// small sizes go first; large ones are for a code filling only a corner.
 const DECODE_SIZES = [800, 1600, 3200];
 
 export interface QrRect {
@@ -55,12 +54,9 @@ export interface QrRead {
 }
 
 /**
- * Finds a QR code in a still image — a photo or a screenshot — or returns null
- * when there is none to read. Nothing leaves the device.
- *
- * Each attempt draws the image on white with a margin around it: a transparent
- * PNG would otherwise read as black-on-black, and a code cropped right to its
- * edge has no quiet zone for jsQR to find it by.
+ * Finds a QR code in a photo or screenshot, or null; nothing leaves the device.
+ * Each attempt draws on white with a margin, since a transparent PNG would read
+ * black-on-black and a tightly cropped code has no quiet zone.
  */
 export async function decodeQrImage(image: Blob): Promise<QrRead | null> {
     const jsQR = await loadJsQR();
@@ -106,9 +102,8 @@ const SNAPSHOT_ASPECT = 16 / 10;
 const SNAPSHOT_MAX_WIDTH = 960;
 
 /**
- * Crops a frame to the area around a code it was read from, at 16:10, so a
- * scanner can show which code it read — a poster or a photo may hold several.
- * Only `bounds` of the frame is drawn; the crop is `backdrop` beyond it.
+ * Crops a frame at 16:10 around the code read, so a scanner can show which one
+ * it was. Only `bounds` is drawn; `backdrop` beyond it.
  */
 export function snapshotAround(
     frame: HTMLCanvasElement,

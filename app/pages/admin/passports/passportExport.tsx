@@ -4,18 +4,15 @@ import { buildZip, downloadBlob, type ZipEntry } from '~/lib/zip';
 import { canvasToPng, useQrCanvasBatch } from '../tools/qr/qrExport';
 
 /**
- * Print-shop exports for a set of passports: the CSV pairing each sticker with
- * its key slip, and the sticker artwork itself.
- *
- * Every PNG carries the human-readable passportId under the QR, so a sticker
- * that gets scuffed past scanning can still be typed into /p/<code> by hand.
+ * Print-shop exports for a set of passports: the CSV pairing stickers with key
+ * slips, and the sticker artwork. Every PNG prints the passportId under the QR,
+ * so a scuffed sticker can still be typed into /p/<code>.
  */
 
 /**
- * Half the QR tool's export size, deliberately. A sticker is printed at a couple
- * of centimetres, an export can be hundreds of them in one ZIP, and this is also
- * the width {@link LABEL_HEIGHT} is proportioned against — so it is the
- * resolution the sticker layout is defined at, not just a buffer size.
+ * Half the QR tool's export size: stickers are printed a couple of centimetres
+ * wide, by the hundred per ZIP. {@link LABEL_HEIGHT} is proportioned against it,
+ * so it defines the sticker layout.
  */
 const QR_SIZE = 512;
 const LABEL_HEIGHT = 96;
@@ -37,7 +34,7 @@ async function composePassportPng(source: HTMLCanvasElement, passportId: string)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     // Wide letter-spacing keeps the code readable at sticker size; the alphabet
-    // already excludes the glyph pairs that get misread (O/0, I/1/L).
+    // already avoids O/0 and I/1/L.
     ctx.font = `600 ${Math.round(labelArea * 0.42)}px ui-monospace, "SF Mono", Menlo, Consolas, monospace`;
     ctx.letterSpacing = '0.12em';
     ctx.fillText(passportId, canvas.width / 2, source.height + labelArea * 0.44);
@@ -46,13 +43,10 @@ async function composePassportPng(source: HTMLCanvasElement, passportId: string)
 }
 
 /**
- * Sticker-PNG export. Render {@link node} in the tree, call {@link request} with
- * the ids to export, and watch {@link progress} for a long run.
- *
- * A single id downloads as one PNG; anything longer is zipped. The off-screen
- * rendering and its one-canvas-at-a-time discipline belong to
- * {@link useQrCanvasBatch}; what is passport-specific is only the sticker
- * composition and how the results are packaged.
+ * Sticker PNG export. Render {@link node}, call {@link request} with the ids,
+ * and watch {@link progress}. One id downloads a PNG, more a ZIP. The off-screen
+ * rendering is {@link useQrCanvasBatch}'s; this is only the sticker and the
+ * packaging.
  */
 export const usePassportPngExport = (onFailure: () => void): {
     request: (ids: string[], filename: string) => void;
@@ -86,9 +80,8 @@ export const usePassportPngExport = (onFailure: () => void): {
 };
 
 /**
- * `YYYYMMDD-HHMM` in the admin's own timezone, for naming an export file. An
- * export covers whatever the screen is showing rather than some fixed group of
- * passports, so what tells two downloads apart is when each was taken.
+ * `YYYYMMDD-HHMM` in the admin's zone, for export filenames: an export covers
+ * whatever is on screen, so the time is what tells two apart.
  */
 export const fileStamp = (): string => {
     const now = new Date();
@@ -100,8 +93,7 @@ export const fileStamp = (): string => {
 const csvCell = (value: string): string =>
     /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 
-/** A print-shop CSV: CRLF rows, and a BOM so Excel opens it as UTF-8 rather
- * than guessing. */
+/** CRLF rows, and a BOM so Excel opens it as UTF-8. */
 const buildCsv = (header: string[], rows: string[][]): Blob =>
     new Blob(
         [`﻿${[header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n')}\r\n`],
@@ -109,8 +101,7 @@ const buildCsv = (header: string[], rows: string[][]): Blob =>
     );
 
 /**
- * The print shop's pairing list, from the generator screen or from a selection's
- * Keys CSV in the stock table.
+ * The print shop's pairing list, from the generator or a selection's Keys CSV.
  */
 export function buildPassportCsv(
     rows: {passportId: string; activationCode: string}[],

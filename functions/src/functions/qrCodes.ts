@@ -18,9 +18,8 @@ import {
 const QR_EXPIRATION_MODES = ["none", "event", "date"] as const;
 type QrExpirationMode = typeof QR_EXPIRATION_MODES[number];
 
-// Platform ids become Firestore field-path segments (`platformScans.<id>`), so
-// only doc-id-safe characters are allowed. Ids come from the socialPlatforms
-// collection (seeded slugs or auto-generated ids), which always match.
+// Platform ids become field-path segments (`platformScans.<id>`), so only
+// doc-id-safe characters.
 const PLATFORM_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** The `p` scan param, or "" when absent/unsafe (never blocks the redirect). */
@@ -28,8 +27,8 @@ function readScanPlatform(value: unknown): string {
     return typeof value === "string" && PLATFORM_ID_RE.test(value) ? value : "";
 }
 
-// A spot is only "set" when both coordinates are present and not the (0, 0)
-// origin sentinel (mirrors hasCoordinates() on the client).
+// Set only when both coordinates are present and not the (0, 0) sentinel, like
+// hasCoordinates() on the client.
 function readSpot(input: Record<string, unknown>): {lat: number; lng: number} {
     const hasLat = input.lat !== undefined && input.lat !== null;
     const hasLng = input.lng !== undefined && input.lng !== null;
@@ -41,10 +40,9 @@ function readSpot(input: Record<string, unknown>): {lat: number; lng: number} {
 }
 
 /**
- * Create or update a managed QR code. Managed codes encode a stable
- * `/qr?id=<docId>` link resolved server-side, so the target, linked event,
- * expiration, and map spot can all be edited without reprinting the code.
- * Scan counters are preserved across edits.
+ * Create or update a managed QR code. It encodes a stable `/qr?id=<docId>` link
+ * resolved server-side, so the target, event, expiry and spot can change
+ * without reprinting. Scan counts survive edits.
  */
 export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -57,12 +55,10 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
     const targetUrl = validateStr(input.targetUrl, "targetUrl", 2000, true);
     validateUrl(targetUrl, "targetUrl");
     const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : "";
-    // Source platforms ([] = a location code). A social code is one record for
-    // one URL carrying a QR link per platform (`/qr?id=…&p=<platform>`); scans
-    // are tallied per platform so click-through can be compared, and the list
-    // can be changed after creation. A code is either social (platforms, no
-    // map spot) or location (map spot, no platforms) — never both, and the
-    // kind is fixed at creation (enforced in the update path below).
+    // [] means a location code. A social code is one URL with a QR link per
+    // platform (`/qr?id=…&p=<platform>`), tallied per platform, and its list
+    // can change later. A code is social (platforms, no spot) or location
+    // (spot, no platforms), fixed at creation.
     const platforms = validateStringArray(input.platforms, "platforms", 50, 64);
     for (const p of platforms) {
         if (!PLATFORM_ID_RE.test(p)) {
@@ -98,9 +94,8 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
         if (qrId) {
             const existing = await txn.get(ref);
             if (!existing.exists) throw new HttpsError("not-found", "QR code not found.");
-            // The kind is fixed at creation: the plain link (location) or the
-            // per-platform links (social) are already printed/shared, and
-            // flipping the kind would orphan them and their scan attribution.
+            // The kind is fixed: its links are already printed or shared, and
+            // flipping it would orphan them and their scan counts.
             const existingPlatforms = existing.data()?.platforms;
             const wasSocial = Array.isArray(existingPlatforms) && existingPlatforms.length > 0;
             if (wasSocial !== social) {
@@ -109,9 +104,8 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
                     "A code's type (location vs. social media) can't be changed after creation.",
                 );
             }
-            // Drop the stored date when the mode no longer needs one. Existing
-            // platformScans tallies are kept so removing/re-adding a platform
-            // never loses its history.
+            // Drop the date when the mode doesn't need one. platformScans
+            // tallies are kept, so re-adding a platform keeps its history.
             txn.update(ref, {...data, expiresAt: expiresAt ?? FieldValue.delete()});
         } else {
             txn.set(ref, {
@@ -135,9 +129,8 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * Pin a QR code to a map spot. Powers the "link to my current location" flow:
- * an admin scans the printed code on their phone, the redirect page reads their
- * geolocation, and calls this to set the spot without any desktop UI.
+ * Pin a QR code to a map spot, from a phone: an admin scans the printed code
+ * and the redirect page sends their location here.
  */
 export const setQrSpot = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -174,8 +167,8 @@ export const deleteQrCode = onCall({maxInstances: 10}, async (request) => {
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError("not-found", "QR code not found.");
 
-    // Scans live in an unbounded subcollection, so they're purged in chunks
-    // outside the transaction before the parent doc is removed.
+    // An unbounded subcollection, purged in chunks outside the transaction
+    // first.
     const scansSnap = await ref.collection("scans").get();
     const ops = scansSnap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref));
     if (ops.length > 0) await commitInChunks(ops);
@@ -190,13 +183,13 @@ export const deleteQrCode = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * Public, unauthenticated endpoint hit by the `/qr?id=` redirect page on every
- * scan. Resolves the current target, evaluates expiration server-side, and (for
- * active codes) bumps the counter plus logs a scan event for the trend charts.
+ * Public endpoint the `/qr?id=` page calls on every scan: resolves the target
+ * and expiry, and for active codes bumps the counter and logs a scan for the
+ * trend charts.
  *
- * App Check is enforced globally; no per-user rate limit applies since scanners
- * are anonymous. Admins linking a spot use the in-app scanner (setQrSpot) — that
- * path never hits this endpoint, so it can't skew the heatmap.
+ * App Check is enforced globally; scanners are anonymous, so there's no per-user
+ * rate limit. Admins linking a spot use setQrSpot instead, so they don't skew
+ * the heatmap.
  */
 export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
     const qrId = validateDocId((request.data as {id?: string})?.id, "id");
@@ -212,8 +205,8 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
 
     const now = Date.now();
     let active = true;
-    // Why a scan resolved as inactive — logged below so "expired/invalid" reports
-    // can be diagnosed from Cloud Logging without on-page debug output.
+    // Logged on failure, so "expired/invalid" reports can be diagnosed from Cloud
+    // Logging.
     let reason = "ok";
     let eventEndAt: number | null = null;
     if (data.expirationMode === "date") {
@@ -245,8 +238,7 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
         reason = "no-target";
     }
 
-    // Log only failed resolutions so successful redirects stay silent. Filter the
-    // function's logs by `recordQrScan: inactive` to see why codes are failing.
+    // Filter the logs by `recordQrScan: inactive` to see why codes fail.
     if (!active) {
         console.log(
             `recordQrScan: inactive qrId=${qrId} reason=${reason} ` +
@@ -269,11 +261,9 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
     return {active, targetUrl: data.targetUrl ?? ""};
 });
 
-// Linked-event end times, cached in-process. While an instance stays warm,
-// repeated scans of the same event-linked code during an event skip the
-// upcomingEvents read entirely. The TTL is short so reschedules and archival
-// (which delete the live event doc) self-correct within seconds — far simpler
-// than denormalizing endAt onto every QR doc and syncing it on event edits.
+// Linked-event end times, cached per instance so repeated scans during an event
+// skip the read. The short TTL lets reschedules and archives correct themselves
+// within a minute, which is simpler than copying endAt onto every QR doc.
 const EVENT_END_TTL_MS = 60_000;
 const eventEndCache = new Map<string, {endAtMs: number | null; fetchedAt: number}>();
 
@@ -289,15 +279,14 @@ async function getEventEndAtMs(eventId: string): Promise<number | null> {
 }
 
 /**
- * Public HTTP endpoint the `/qr` hosting rewrite points at. Resolves a managed
- * code server-side and answers with a 302 straight to the target — no SPA boot,
- * no App Check round-trip (HTTP functions aren't gated by the global
- * enforceAppCheck the way callables are; see serveTicketQr), no client JS hop.
+ * Public HTTP endpoint behind the `/qr` hosting rewrite: resolves a managed code
+ * and answers with a 302 straight to the target, with no SPA boot and no App
+ * Check round-trip (HTTP functions aren't gated by enforceAppCheck; see
+ * serveTicketQr).
  *
- * Legacy printed codes (url/event/expires inline, no `id`) and the
- * expired/invalid state are handed off to the SPA, which still renders the
- * styled card. The `recordQrScan` callable + SPA `/qr` page remain as a fallback
- * (e.g. local dev, where no hosting rewrite is in front of the app).
+ * Expired and invalid codes are handed to the SPA's styled card. The
+ * `recordQrScan` callable and the SPA `/qr` page remain as a fallback where
+ * there is no rewrite, e.g. local dev.
  */
 export const redirectQr = onRequest({maxInstances: 20, memory: "256MiB"}, async (req, res) => {
     // Target URLs are editable and expiry is time-based — this must never cache.
@@ -306,12 +295,11 @@ export const redirectQr = onRequest({maxInstances: 20, memory: "256MiB"}, async 
     const id = typeof req.query.id === "string" ? req.query.id : "";
     const platform = readScanPlatform(req.query.p);
 
-    // Internal hand-offs use same-origin relative paths so scanners stay on
-    // whatever host served the request (custom domain, preview channel, etc.).
+    // Hand-offs are same-origin relative paths, so scanners stay on whatever
+    // host served the request.
 
-    // No managed id → legacy inline-url code. These are no longer supported
-    // (the inline `url` param was an open-redirect vector), so resolve to the
-    // expired/invalid card instead of honoring the destination.
+    // No id: an old inline-url code. Its `url` param was an open-redirect
+    // vector, so it gets the expired card instead.
     if (!id) {
         res.redirect(302, "/qr/expired");
         return;
@@ -376,10 +364,8 @@ export const redirectQr = onRequest({maxInstances: 20, memory: "256MiB"}, async 
         return;
     }
 
-    // Send the scanner on their way FIRST, then record the scan. Cloud Run keeps
-    // the instance running until this handler resolves, so the awaited write
-    // still completes — it just overlaps the browser's navigation instead of
-    // sitting on the redirect's critical path.
+    // Redirect first, then record: the instance runs until the handler resolves,
+    // so the write still completes, just off the redirect's critical path.
     res.redirect(302, data.targetUrl);
     try {
         await recordScan(ref, {clientKey: scanClientKey(req), platform});

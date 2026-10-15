@@ -5,13 +5,10 @@ import { MapPicker } from '../../MapPicker';
 import { parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
 
 /**
- * The two kinds of tracked code — mutually exclusive and fixed at creation
- * (the links already in the wild differ by kind, so a saved code never flips):
- * - 'location': a printed code placed somewhere physical; can pin a map spot,
- *   never carries a platform tag.
- * - 'social': a link shared on social platforms; tagged with a platform so
- *   scan counts compare click-through per platform, never has a map spot.
- * Not persisted — derived from whether a saved code has a platform tag.
+ * A tracked code's kind, fixed at creation since its links differ by kind.
+ * 'location' is printed somewhere physical and can pin a map spot; 'social' is
+ * shared on platforms and tagged per platform. Derived from whether a code has
+ * platform tags.
  */
 type QrKind = 'location' | 'social';
 
@@ -26,9 +23,8 @@ export interface QrDraft {
     /** Editing-only: which kind of code this is (see {@link QrKind}). */
     kind: QrKind;
     /**
-     * Source platforms (social kind only). The code gets one QR link per
-     * selected platform — all opening {@link targetUrl} — with scans tallied
-     * per platform. Freely editable after creation to add/remove platforms.
+     * Social only: one QR link per platform, all opening {@link targetUrl},
+     * tallied per platform. Editable later.
      */
     platforms: string[];
     lat: number;
@@ -78,11 +74,8 @@ interface QrSavePayload {
 }
 
 /**
- * Translate a draft into the Cloud Function payload. Returns a validation error
- * string (localized) instead of a payload when the draft is incomplete.
- *
- * The kind decides which extras survive: location codes keep the map spot and
- * never platform tags; social codes keep the platform list and never a spot.
+ * A draft as the function's payload, or a localized error when incomplete.
+ * Location codes keep the spot and no platforms; social codes the reverse.
  */
 export function buildQrPayload(
     draft: QrDraft,
@@ -131,9 +124,8 @@ export function buildQrPayload(
 }
 
 /**
- * Shared shape of the individual field editors below. Each edits one facet of
- * a {@link QrDraft}, so the create form and the detail page's one-at-a-time
- * inline editors render the exact same controls.
+ * Each field editor edits one facet of a {@link QrDraft}, so the create form
+ * and the detail page's inline editors share controls.
  */
 interface QrFieldProps {
     draft: QrDraft;
@@ -248,8 +240,8 @@ export const QrPlatformPicker = (
     {draft, setDraft, isEnglish, onManagePlatforms}: QrFieldProps & {onManagePlatforms?: () => void},
 ) => {
     const {platforms} = useSocialPlatforms();
-    // Tags from since-deleted platforms still get a checkbox (labelled with the
-    // raw id) so they can be seen and unchecked rather than silently dropped.
+    // Tags of deleted platforms still get a checkbox (their raw id), so they
+    // can be unchecked rather than silently dropped.
     const knownIds = new Set(platforms.map(p => p.id));
     const orphanTags = draft.platforms.filter(id => !knownIds.has(id));
 
@@ -361,64 +353,44 @@ interface QrCodeFormProps {
     isEnglish: boolean;
     /** Opens the social-platform manager. */
     onManagePlatforms?: () => void;
-    /** Set when editing a saved code — the kind is fixed at creation. */
-    kindLocked?: boolean;
 }
 
 /** The full form used when creating a tracked code. */
-export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatforms, kindLocked}: QrCodeFormProps) => {
+export const QrCodeForm = ({draft, setDraft, events, isEnglish, onManagePlatforms}: QrCodeFormProps) => {
     return (
         <>
             <div className="admin-section-mb">
                 <span className="admin-field-label">{isEnglish ? 'Code type' : '二维码类型'}</span>
-                {kindLocked ? (
-                    <>
-                        <div>
-                            {draft.kind === 'location'
-                                ? (isEnglish ? '📍 Location' : '📍 地点')
-                                : (isEnglish ? '📣 Social media' : '📣 社交媒体')}
-                        </div>
-                        <small className="admin-helper-text">
-                            {isEnglish
-                                ? 'The type is fixed once a code is created — its links are already out there. '
-                                + 'Create a new code to use the other type.'
-                                : '二维码类型创建后无法更改 — 其链接可能已在使用中。如需另一种类型，请新建二维码。'}
-                        </small>
-                    </>
-                ) : (
-                    <>
-                        <div className="admin-qr-mode-toggle" role="tablist">
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={draft.kind === 'location'}
-                                className={`admin-btn admin-btn--ghost${draft.kind === 'location' ? ' admin-btn--ghost-active' : ''}`}
-                                onClick={() => setDraft(prev => ({...prev, kind: 'location'}))}
-                            >
-                                {isEnglish ? '📍 Location' : '📍 地点'}
-                            </button>
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={draft.kind === 'social'}
-                                className={`admin-btn admin-btn--ghost${draft.kind === 'social' ? ' admin-btn--ghost-active' : ''}`}
-                                onClick={() => setDraft(prev => ({...prev, kind: 'social'}))}
-                            >
-                                {isEnglish ? '📣 Social media' : '📣 社交媒体'}
-                            </button>
-                        </div>
-                        <small className="admin-helper-text">
-                            {draft.kind === 'location'
-                                ? (isEnglish
-                                    ? 'A printed code placed somewhere physical — pin it on the map and track scans by spot.'
-                                    : '张贴在实体位置的二维码 — 可标记在地图上，按位置追踪扫描。')
-                                : (isEnglish
-                                    ? 'A link shared on social platforms — one code per platform for the same URL, so scan '
-                                    + 'counts compare click-through by platform.'
-                                    : '在社交平台分享的链接 — 同一链接按平台各生成一个二维码，扫描数即可对比各平台的点击表现。')}
-                        </small>
-                    </>
-                )}
+                <div className="admin-qr-mode-toggle" role="tablist">
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={draft.kind === 'location'}
+                        className={`admin-btn admin-btn--ghost${draft.kind === 'location' ? ' admin-btn--ghost-active' : ''}`}
+                        onClick={() => setDraft(prev => ({...prev, kind: 'location'}))}
+                    >
+                        {isEnglish ? '📍 Location' : '📍 地点'}
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={draft.kind === 'social'}
+                        className={`admin-btn admin-btn--ghost${draft.kind === 'social' ? ' admin-btn--ghost-active' : ''}`}
+                        onClick={() => setDraft(prev => ({...prev, kind: 'social'}))}
+                    >
+                        {isEnglish ? '📣 Social media' : '📣 社交媒体'}
+                    </button>
+                </div>
+                <small className="admin-helper-text">
+                    {draft.kind === 'location'
+                        ? (isEnglish
+                            ? 'A printed code placed somewhere physical — pin it on the map and track scans by spot.'
+                            : '张贴在实体位置的二维码 — 可标记在地图上，按位置追踪扫描。')
+                        : (isEnglish
+                            ? 'A link shared on social platforms — one code per platform for the same URL, so scan '
+                            + 'counts compare click-through by platform.'
+                            : '在社交平台分享的链接 — 同一链接按平台各生成一个二维码，扫描数即可对比各平台的点击表现。')}
+                </small>
             </div>
 
             <div className="admin-form-grid">

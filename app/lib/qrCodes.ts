@@ -12,11 +12,9 @@ export interface QrCode {
     /** Optional linked event — drives dashboard filtering and event-based expiry. */
     eventId: string;
     /**
-     * Source platforms ([] = a location code). A social code is one record for
-     * one URL carrying a QR link per platform (see {@link qrScanUrl}); the list
-     * is editable after creation and each platform's scans tally separately in
-     * {@link platformScans} so click-through can be compared. The kind itself
-     * (social vs. location) is fixed at creation.
+     * [] means a location code. A social code is one URL with a QR link per
+     * platform (see {@link qrScanUrl}), tallied per platform in {@link
+     * platformScans}; the list can change, the kind can't.
      */
     platforms: string[];
     /** Per-platform scan tallies keyed by platform id (social codes only). */
@@ -73,8 +71,8 @@ export function useQrCodes(): {qrCodes: QrCode[]; loading: boolean; refresh: () 
 }
 
 /**
- * The stable link encoded into a managed QR code's image. Social codes get one
- * link per platform — the `p` param routes the scan into that platform's tally.
+ * The stable link in a managed code's image. Social codes get one per platform;
+ * `p` routes the scan to its tally.
  */
 export function qrScanUrl(id: string, origin: string, platform?: string): string {
     const base = `${origin}/qr?id=${encodeURIComponent(id)}`;
@@ -93,8 +91,8 @@ export function qrHasSpot(code: Pick<QrCode, 'lat' | 'lng'>): boolean {
 
 /**
  * Whether a code would still redirect, for admin display. `eventEndAt` is the
- * linked event's end time (null if unknown/archived) and is only consulted for
- * event-based expiry.
+ * linked event's end (null if unknown or archived), used only for event-based
+ * expiry.
  */
 export function qrIsActive(code: QrCode, eventEndAt: Date | null): boolean {
     const now = new Date();

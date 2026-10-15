@@ -53,10 +53,8 @@ export const ClaimPage = () => {
     const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
     const [ticketInfo, setTicketInfo] = useState<TicketInfo | null>(null);
     const [retryCount, setRetryCount] = useState(0);
-    // Whether there is a profile, not the profile itself: a claim refreshes the
-    // profile when it lands, and re-running on the new object would claim again —
-    // an event code would flip to "already have", and a ticket would re-redeem
-    // until its grace window ran out and then flip to "already redeemed".
+    // Whether there is a profile, not the object: a claim refreshes it, and
+    // re-running on the new one would claim again.
     const hasProfile = !!profile;
 
     useEffect(() => {

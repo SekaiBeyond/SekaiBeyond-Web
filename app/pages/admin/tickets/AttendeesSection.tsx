@@ -11,9 +11,8 @@ interface AttendeesSectionProps {
     totals: AttendeeTotals;
     attendees: AttendeeData[];
     /**
-     * Lowercased email -> the account behind it, or null for none. An address
-     * missing from the map has not been looked up yet, which is why the tag
-     * waits rather than claiming there is no account.
+     * Lowercased email → its account, or null for none. Missing means not
+     * looked up yet, so the tag waits.
      */
     accountLinks: Map<string, AccountLink>;
     search: string;
@@ -192,8 +191,7 @@ export function AttendeesSection({
                 const {used, voided, remaining} = ticketStatusCounts(a);
                 const isExpanded = expanded.has(a.id);
                 const ticketType = a.tickets[0]?.type || 'normal';
-                // undefined while the lookup is still out; null once it has come
-                // back with nothing.
+                // undefined while asking; null for no account.
                 const account = accountLinks.get(a.email.toLowerCase());
                 return (
                     <div key={a.id} className="admin-tickets-attendee-row">

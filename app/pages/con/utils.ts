@@ -5,12 +5,9 @@ import type { ConLanguage } from '~/pages/con/i18n';
 
 const locales: Record<ConLanguage, string> = {en: 'en-US', zh: 'zh-CN'};
 
-/*
- * Con times are stored zoneless, as the admin typed them, and mean the Pacific
- * clock wherever the page is read: parseSiteTime reads them that way, and each
- * is shown back in SITE_TIME_ZONE, so a visitor abroad sees the hours the con
- * keeps and a countdown that ends when it opens.
- */
+/* Con times are stored zoneless and mean the Pacific clock: parseSiteTime reads
+   them that way and they're shown in SITE_TIME_ZONE, so a visitor abroad sees
+   the con's own hours. */
 
 /** "November 14, 2026" / "2026年11月14日" */
 export const formatEventDate = (iso: string, lang: ConLanguage) =>
@@ -39,8 +36,8 @@ export const formatDeadline = (iso: string, lang: ConLanguage) =>
     formatSiteTime(parseSiteTime(iso), lang === 'en', {month: 'short', day: 'numeric', ...TIME_OPTIONS});
 
 /**
- * 10 → "$10", 12.5 → "$12.50", 0 → "Free" / "免费". Cents only show when there
- * are some, and `narrowSymbol` keeps zh-CN at "$" rather than "US$".
+ * 10 → "$10", 12.5 → "$12.50", 0 → "Free" / "免费". `narrowSymbol` keeps zh-CN at
+ * "$" rather than "US$".
  */
 export const formatPrice = (price: number, lang: ConLanguage) => {
     if (price === 0) return lang === 'en' ? 'Free' : '免费';
@@ -53,9 +50,8 @@ export const formatPrice = (price: number, lang: ConLanguage) => {
 };
 
 /**
- * The tier's early bird if it is still running at `now`, else null. An
- * unparseable deadline reads as ended, so a bad date shows the regular price
- * rather than a discount with "Invalid Date" beside it.
+ * The tier's early bird if still running at `now`, else null. An unparseable
+ * deadline reads as ended.
  */
 export const activeEarlyBird = (tier: TicketTier, now: number): EarlyBird | null => {
     if (!tier.earlyBird) return null;
@@ -64,14 +60,13 @@ export const activeEarlyBird = (tier: TicketTier, now: number): EarlyBird | null
 };
 
 /**
- * The online transaction fee on a ticket that costs `price`, rounded to the cent.
- * A free ticket has no payment to charge a fee on, so it stays at 0 whatever
- * the flat part is.
+ * The online fee on a ticket of `price`, to the cent. A free ticket has no fee,
+ * flat part or not.
  */
 export const ticketFeeFor = (price: number, fee: TicketFee) => {
     if (price <= 0) return 0;
-    // In whole cents and hundredths of a percent, because the float version rounds
-    // 2.9% of $25 (72.5¢) down: 25 * 2.9 comes out as 72.4999…
+    // In whole cents and hundredths of a percent: in floats, 25 * 2.9 is 72.4999…
+    // and rounds down.
     const cents = Math.round(price * 100);
     const basisPoints = Math.round(fee.percent * 100);
     return (Math.round(cents * basisPoints / 10000) + Math.round(fee.flat * 100)) / 100;
@@ -79,8 +74,8 @@ export const ticketFeeFor = (price: number, fee: TicketFee) => {
 
 /** "Mon, Oct 5" / "10月5日周一" for a bare YYYY-MM-DD. */
 export const formatSessionDay = (date: string, lang: ConLanguage) =>
-    // With a time attached the date parses in the viewer's clock. Bare, it would
-    // parse as UTC midnight and read as the day before anywhere west of Greenwich.
+    // With a time it parses in the viewer's clock; bare, it would be UTC midnight,
+    // the day before west of Greenwich.
     new Date(`${date}T00:00`).toLocaleDateString(locales[lang], {
         weekday: 'short',
         month: 'short',
@@ -102,12 +97,8 @@ export const parseClockTime = (time: string | undefined): number | null => {
 };
 
 /**
- * "13:30" → "1:30 PM" / "13:30". Schedule items store a bare clock time with no
- * date to hang it on, so the day below is arbitrary — only the time is read back.
- *
- * Anything that is not HH:MM is handed back untouched: the admin panel and the
- * save function both enforce the shape, and showing a stored oddity as-is beats
- * rendering "Invalid Date" where a time should be.
+ * "13:30" → "1:30 PM" / "13:30". The date is arbitrary; only the time is read
+ * back. Anything not HH:MM is shown as stored rather than as "Invalid Date".
  */
 export const formatClockTime = (time: string, lang: ConLanguage) => {
     const minutes = parseClockTime(time);
@@ -121,8 +112,7 @@ export const formatClockTime = (time: string, lang: ConLanguage) => {
 export const pad = (value: number) => String(value).padStart(2, '0');
 
 /**
- * Smooth-scrolls to a con section instead of letting the anchor jump, while
- * leaving the href intact so the link still works on middle-click.
+ * Smooth-scrolls to a section, keeping the href so middle-click still works.
  */
 export const scrollToSection =
     (id: string, onDone?: () => void) => (event: MouseEvent<HTMLAnchorElement>) => {

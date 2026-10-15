@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { FiArrowLeft, FiMenu, FiX } from 'react-icons/fi';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
-import { CON_NAME, useConContent, useConNavLinks } from '~/lib/conContent';
+import { CON_NAME, useConListing, useConNavLinks } from '~/lib/conContent';
 import { useT } from '~/pages/con/i18n';
 import { useActiveSection, useScrolledPast } from '~/pages/con/hooks';
 import { scrollToSection } from '~/pages/con/utils';
 
 export const Navigation = () => {
     const t = useT();
-    const {ticketUrl} = useConContent().content.event;
+    const {ticketUrl} = useConListing().listing;
     const navLinks = useConNavLinks();
     const [menuOpen, setMenuOpen] = useState(false);
 
@@ -34,8 +34,8 @@ export const Navigation = () => {
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [menuOpen]);
 
-    // The open mobile drawer is white, so the bar has to leave its transparent
-    // hero styling behind at the same time or the logo turns white-on-white.
+    // The open mobile drawer is white, so the bar goes opaque with it or the
+    // logo turns white-on-white.
     const opaque = solid || menuOpen;
 
     return (
@@ -74,16 +74,18 @@ export const Navigation = () => {
                             {t({en: 'Policy', zh: '政策'})}
                         </Link>
                     </li>
-                    <li className="sbc-nav-links-cta">
-                        <a
-                            className="btn btn-primary sbc-btn-compact"
-                            href={ticketUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            {t({en: 'Get Tickets', zh: '获取门票'})}
-                        </a>
-                    </li>
+                    {ticketUrl && (
+                        <li className="sbc-nav-links-cta">
+                            <a
+                                className="btn btn-primary sbc-btn-compact"
+                                href={ticketUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                {t({en: 'Get Tickets', zh: '获取门票'})}
+                            </a>
+                        </li>
+                    )}
                     <li className="sbc-nav-links-home">
                         <Link className="sbc-nav-link" to="/" onClick={() => setMenuOpen(false)}>
                             ← {t({en: 'Sekai Beyond home', zh: '返回彼世界主站'})}
@@ -95,14 +97,16 @@ export const Navigation = () => {
                     <div className="sbc-lang-slot">
                         <LanguageSwitcher/>
                     </div>
-                    <a
-                        className="btn btn-primary sbc-btn-compact sbc-nav-ticket-btn"
-                        href={ticketUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        {t({en: 'Get Tickets', zh: '获取门票'})}
-                    </a>
+                    {ticketUrl && (
+                        <a
+                            className="btn btn-primary sbc-btn-compact sbc-nav-ticket-btn"
+                            href={ticketUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            {t({en: 'Get Tickets', zh: '获取门票'})}
+                        </a>
+                    )}
                     <button
                         type="button"
                         className="sbc-nav-toggle"

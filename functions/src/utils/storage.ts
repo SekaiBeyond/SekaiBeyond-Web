@@ -6,11 +6,9 @@ export const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
 export const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
 /**
- * Videos get their own, larger cap: the con hero loop is a 10-20s clip, which is
- * a few MB even after the encode, where every image on the site is a thumbnail.
- * Well under the 32MiB a Cloud Run request may carry, because the file travels
- * as base64 and so weighs 4/3 its own size on the wire — 20MB of video is a
- * ~27MB request, which leaves room for the JSON around it.
+ * Videos get a larger cap: the hero loop is a few MB where every image is a
+ * thumbnail. Well under Cloud Run's 32MiB request limit, since base64 makes 20MB
+ * of video a ~27MB request.
  */
 export const MAX_VIDEO_UPLOAD_SIZE_MB = Number(process.env.MAX_VIDEO_UPLOAD_SIZE_MB ?? 20);
 export const MAX_VIDEO_UPLOAD_SIZE = MAX_VIDEO_UPLOAD_SIZE_MB * 1024 * 1024;
@@ -31,15 +29,12 @@ export const IMAGE_SIGNATURES: {mime: string; magic: Buffer}[] = [
 ];
 
 /**
- * Only WebM is uploadable, but MP4 is recognised too so that the one file likely
- * to be sent by mistake is named rather than reported as "not a video" — the
- * callers compare this against the content type they were handed.
+ * Only WebM is uploadable, but MP4 is recognised too, so the likeliest wrong file
+ * is named rather than "not a video".
  *
- * Neither is identified by a magic number at offset 0 the way an image is: an MP4
- * opens with the length of its first box and only then the "ftyp" tag, and a WebM
- * is a Matroska stream whose EBML header says nothing about the codecs inside.
- * This is a container check, not a codec one — enough to know the bytes are not
- * something else wearing a video content type.
+ * Neither has a magic number at offset 0: an MP4 starts with its first box's
+ * length before "ftyp", and a WebM's EBML header says nothing about codecs. A
+ * container check, not a codec one.
  */
 export function detectVideoMime(buffer: Buffer): string | null {
     if (buffer.length >= 12 && buffer.subarray(4, 8).equals(Buffer.from("ftyp"))) {
@@ -52,8 +47,7 @@ export function detectVideoMime(buffer: Buffer): string | null {
 }
 
 export function detectImageMime(buffer: Buffer): string | null {
-    // WebP uses a RIFF container — check bytes 0-3 for "RIFF" and bytes 8-11 for "WEBP"
-    // to avoid false positives from other RIFF formats (WAV, AVI, etc.)
+    // Bytes 0-3 "RIFF" and 8-11 "WEBP", to rule out other RIFF formats (WAV, AVI).
     if (buffer.length >= 12 &&
         buffer.subarray(0, 4).equals(Buffer.from([0x52, 0x49, 0x46, 0x46])) &&
         buffer.subarray(8, 12).equals(Buffer.from([0x57, 0x45, 0x42, 0x50]))) {
@@ -84,13 +78,11 @@ export async function deleteStorageFile(downloadUrl: string, allowedPrefixes?: s
 /**
  * Refuses a save that links a Storage file that is no longer there.
  *
- * The saves that call this delete the files they stop linking, so a form opened
- * before someone else replaced a file still holds the URL of the one that was
- * deleted. Saving it would store a dead link, and delete the replacement as the
- * file it replaced. Only files `alreadyLinked` doesn't name are checked: a dead
- * link that is already stored isn't this save's doing, and refusing it would
- * block every save until someone fixed it by hand. Compared by path, since a
- * re-upload to the same path gives the file a new URL.
+ * These saves delete files they stop linking, so a form opened before someone
+ * else replaced a file would store a dead link and delete the replacement. Only
+ * files `alreadyLinked` doesn't name are checked, so an existing dead link
+ * doesn't block every save. Compared by path, since re-uploading changes the
+ * URL.
  */
 export async function requireNewlyLinkedFilesExist(linked: string[], alreadyLinked: string[]): Promise<void> {
     const known = new Set(alreadyLinked.map(extractStoragePath));

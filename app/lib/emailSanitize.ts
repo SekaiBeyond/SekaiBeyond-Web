@@ -1,17 +1,13 @@
 import sanitizeHtml from 'sanitize-html';
 
-// Allowlist for ticket-email template HTML.
+// Allowlist for ticket-email template HTML. The backend keeps a copy
+// (`EMAIL_HTML_SANITIZE_OPTIONS` in functions/src/functions/tickets.ts), since
+// the two are separate projects; they must stay in sync, as the server sanitizes
+// on save and this drives the admin's preview.
 //
-// Single source of truth — the backend (functions/src/functions/tickets.ts)
-// keeps a duplicate copy (`EMAIL_HTML_SANITIZE_OPTIONS`) because Cloud Functions
-// and the web app are separate tsc projects with their own node_modules. The two
-// MUST stay in sync: server-side sanitize runs at save time in
-// updateEventEmailTemplate, and the client uses this file for preview so the
-// admin sees exactly what will be sent.
-//
-// Blocks <script>/<iframe>/<style>/event handlers and restricts href to
-// https/mailto, img src to https/data/cid. Ticket QR codes are added on the
-// server after sanitizing, as https images from the serveTicketQr endpoint.
+// Blocks scripts, iframes, styles and event handlers, and restricts href to
+// https/mailto and img src to https/data/cid. The server adds ticket QR images
+// after sanitizing.
 export const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     allowedTags: [
         'p', 'div', 'span', 'strong', 'em', 'b', 'i', 'u', 'br', 'hr',

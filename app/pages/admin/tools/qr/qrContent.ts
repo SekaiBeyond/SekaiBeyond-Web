@@ -1,13 +1,13 @@
 /**
- * Reads what a scanned QR code holds. A QR code carries only a string; links,
- * Wi-Fi logins, contact cards and the rest are conventional formats inside it,
- * recognised here so the scanner can lay out their parts.
+ * Reads what a scanned QR code holds. A code is only a string; links, Wi-Fi
+ * logins, contact cards and so on are formats inside it, recognised so the
+ * scanner can lay them out.
  */
 
 export type QrContentKind = 'url' | 'email' | 'phone' | 'sms' | 'geo' | 'wifi' | 'contact' | 'text';
 
 // `security` is empty for an open network and `hidden` has no value; the
-// scanner puts both into words.
+// scanner words both.
 export type QrFieldKey =
     | 'subject' | 'message' | 'label' | 'security' | 'password' | 'hidden'
     | 'org' | 'title' | 'phone' | 'email' | 'website' | 'address' | 'note';
@@ -20,9 +20,9 @@ interface QrContent {
     detail?: string;
     fields: {key: QrFieldKey; value: string}[];
     /**
-     * Where the primary action goes. Only ever an https/http link, or a
-     * mailto:/tel: built here from parsed parts — never the scanned string
-     * itself, so a `javascript:` payload can't end up in an href.
+     * The primary action: only an http(s) link or a mailto:/tel: built from
+     * parsed parts, never the scanned string, so `javascript:` can't reach an
+     * href.
      */
     href?: string;
 }
@@ -71,8 +71,7 @@ function parseWebLink(text: string): QrContent | null {
         return null;
     }
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    // The hostname comes back from URL in punycode, so a lookalike domain
-    // shows up as xn--… rather than passing for the real one.
+    // The hostname is in punycode, so a lookalike domain shows as xn--….
     return {kind: 'url', headline: url.hostname, detail: text, fields: [], href: url.href};
 }
 
@@ -91,8 +90,8 @@ function splitOnce(value: string, sep: string): [string, string] {
 }
 
 /**
- * A URI's query, percent-decoded. Unlike URLSearchParams it leaves `+` alone:
- * mailto: and sms: bodies mean a literal plus by it, not a space.
+ * A URI's query, percent-decoded, leaving `+` alone: in mailto: and sms: bodies
+ * it's a literal plus.
  */
 function queryParams(query: string): Map<string, string> {
     const params = new Map<string, string>();
@@ -255,15 +254,15 @@ function contact(c: ContactParts): QrContent {
 }
 
 /**
- * Splits the `KEY:value;KEY:value;;` body shared by Wi-Fi, MECARD and MATMSG
- * codes. Values escape `\ ; , :` with a backslash. Keys can repeat (a contact
- * with two phone numbers), so each maps to a list.
+ * Splits the `KEY:value;KEY:value;;` body of Wi-Fi, MECARD and MATMSG codes.
+ * Values escape `\ ; , :` with a backslash; keys can repeat, so each maps to a
+ * list.
  */
 function parseKeyValueFields(body: string): Map<string, string[]> {
     const fields = new Map<string, string[]>();
     for (const part of splitUnescaped(body, ';')) {
-        // Keys never contain a colon, so the first one always ends the key,
-        // even when a sloppy generator left a colon in the value unescaped.
+        // Keys have no colon, so the first ends the key even if a value has an
+        // unescaped one.
         const colon = part.indexOf(':');
         if (colon === -1) continue;
         const key = part.slice(0, colon).toUpperCase();

@@ -423,8 +423,6 @@
     gap: 10px 32px;
     list-style: none;
     margin-bottom: 34px;
-    /* Lands /con#venue with the row clear of the solid navbar. */
-    scroll-margin-top: 94px;
 }
 
 .sbc-hero-meta li {
@@ -448,8 +446,7 @@
     font-weight: 500;
 }
 
-/* The venue name opens Google Maps. The ↗ beside it marks it as a link; the
-   underline only shows on hover. */
+/* The venue name opens Google Maps; the ↗ marks the link, underlined on hover. */
 .sbc-hero-meta-link {
     display: inline-flex;
     align-items: center;
@@ -518,8 +515,8 @@
     }
 }
 
-/* On a short laptop screen the hero outgrows the viewport, so the page already
-   reads as scrollable, and the cue would sit cramped under the buttons. */
+/* On a short laptop screen the hero already overflows, so the scroll cue would
+   only crowd the buttons. */
 @media (max-height: 760px) {
     .sbc-hero {
         padding-bottom: 64px;
@@ -694,25 +691,18 @@
     color: var(--color-text-body);
 }
 
-/*
- * Schedule. Several rooms run at once, so the readable shape is the run-of-show grid
- * this is transcribed from: one column per room, one clock down the side, and each
- * item drawn as tall as it actually runs. A single chronological list answered
- * "what is on at 2pm" only by making you read every room's rows in turn.
- *
- * It is one CSS grid rather than a table: rows are five-minute slots, and an item
- * spans from its start slot to its end slot. The row tracks are `minmax(slot, auto)`,
- * so an item carrying more copy than its duration has room for stretches its rows
- * instead of clipping — and because every column shares those rows, the clock stays
- * true for the rest of them.
- */
+/* Schedule, as the run-of-show grid it's transcribed from: a column per room, a clock
+   down the side, each item as tall as it runs.
+
+   One CSS grid of five-minute rows, each item spanning its slots. Rows are
+   `minmax(slot, auto)`, so an item with more copy than time stretches its rows rather
+   than clipping, and the shared rows keep the clock true across columns. */
 .sbc-schedule {
     padding: 28px 24px;
 }
 
-/* The columns keep a readable width and scroll sideways rather than squeezing
-   every room onto a phone. The room filter above is the way out of the scroll: one
-   room picked is one column, which fits anywhere. */
+/* Columns keep a readable width and scroll sideways; picking one room in the
+   filter fits anywhere. */
 .sbc-grid-scroll {
     overflow-x: auto;
     overscroll-behavior-x: contain;
@@ -729,8 +719,8 @@
     --sbc-grid-slot: 7px;
 
     display: grid;
-    /* Track counts come from the data, so the template itself is set inline;
-       these three widths stay here so the breakpoints can still reach them. */
+    /* Track counts come from the data, so the template is inline; these widths
+       stay here for the breakpoints. */
     min-width: min-content;
 }
 
@@ -745,8 +735,7 @@
     border-bottom: 2px solid var(--sbc-accent-ink);
 }
 
-/* The clock stays put while the rooms scroll under it, so you never lose track of
-   which hour a column is showing. */
+/* The clock stays put while the rooms scroll under it. */
 .sbc-grid-corner,
 .sbc-grid-time {
     position: sticky;
@@ -764,16 +753,14 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* Lifted half a line so the label reads as sitting on its hour rule rather than
-   hanging below it. */
+/* Lifted half a line to sit on its hour rule. */
 .sbc-grid-time > span {
     display: block;
     margin-top: -0.6em;
     white-space: nowrap;
 }
 
-/* Hour rules stop at the gutter: the clock reads cleanly without them running
-   through it. */
+/* Hour rules stop at the gutter. */
 .sbc-grid-hour {
     grid-column: 2 / -1;
     border-top: 1px dashed var(--sbc-line);
@@ -808,8 +795,8 @@
     color: var(--sbc-heading);
 }
 
-/* Read aloud, never drawn. The column header is what says which room an item is
-   in, and a header three screens up carries nothing to a screen reader. */
+/* Read aloud, never drawn: the column header says the room, but is screens away
+   for a screen reader. */
 .sbc-sr-only {
     position: absolute;
     width: 1px;
@@ -821,11 +808,9 @@
     white-space: nowrap;
 }
 
-/* Room accents. Which room wears which one is admin-editable data; the palette
-   itself is fixed here, so a room can only ever pick a colour that is legible
-   against the schedule card. The grid columns and the room filter above them both
-   read these two variables, so each colour is written down once. Keep the class
-   list in sync with ROOM_ACCENTS in con/content.ts. */
+/* Room accents. Rooms pick one in admin; the palette is fixed so every colour
+   stays legible on the card. The grid and the filter both read these two
+   variables. Keep in sync with ROOM_ACCENTS in app/lib/conContent.ts. */
 .sbc-accent--pink {
     --sbc-accent-tint: rgba(255, 107, 157, 0.16);
     --sbc-accent-ink: #d94a7c;
@@ -856,11 +841,9 @@
     --sbc-accent-ink: #5a616f;
 }
 
-/* Room filter. A column per room needs a sideways scroll on anything narrower than
-   a laptop, so picking one room narrows the grid to a single column — and to that
-   room's own hours — which fits a phone without a second layout to maintain.
-   `aria-pressed` carries the selected state, so the styling hook and the state a
-   screen reader announces cannot drift apart. */
+/* Room filter: one room narrows the grid to a single column and that room's hours,
+   which fits a phone without a second layout. Styled off `aria-pressed`, so look
+   and announced state can't drift. */
 .sbc-schedule-filter,
 .sbc-vendor-row-filter {
     display: flex;
@@ -896,8 +879,7 @@
     outline-offset: 2px;
 }
 
-/* Announced but unscheduled. There is no hour to hang these on, so they sit under
-   the grid rather than being dropped from the page. */
+/* Announced but unscheduled: listed under the grid. */
 .sbc-schedule-tba {
     margin-top: 30px;
     padding-top: 26px;
@@ -930,8 +912,7 @@
     gap: 20px;
 }
 
-/* Avatar beside the text rather than above it, so a phone's single column of
-   guests stays a list you can scan instead of a screen per guest. */
+/* Avatar beside the text, so a phone's column of guests stays a scannable list. */
 .sbc-guest-card {
     display: grid;
     grid-template-columns: 64px 1fr;
@@ -990,11 +971,8 @@
     color: var(--color-accent);
 }
 
-/*
- * Maid café: the café's poster beside its theme, room and hours, then a poster
- * for each maid. Every poster is drawn at 17:22 — US Letter, the shape they are
- * printed at and cropped to on upload — so none of them is trimmed here.
- */
+/* Maid café: the café's poster beside its theme, room and hours, then a poster
+   per maid. All at 17:22 (US Letter), the shape they're cropped to on upload. */
 .sbc-cafe {
     display: grid;
     grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
@@ -1252,17 +1230,13 @@
     right: 20px;
 }
 
-/*
- * Artist alley: the main hall floor plan, a panel under it naming whoever is at
- * the table picked, and a directory of every table below. The plan's geometry
- * lives in con/hall.ts as one CSS grid. Every item carries its grid lines for
- * both orientations as custom properties, and the container query below only
- * picks which pair applies — so the plan turns a quarter turn on a narrow
- * screen without a second layout to keep in step.
- *
- * Sized by its container rather than the viewport, because the admin panel's
- * editor shows the same plan in a narrower column than /con does.
- */
+/* Artist alley: the hall floor plan, a panel naming whoever is at the picked
+   table, and a directory below. The geometry is one CSS grid in con/hall.ts;
+   each item carries grid lines for both orientations, and the container query
+   below picks the pair.
+
+   Sized by its container, since the admin editor shows the plan in a narrower
+   column. */
 .sbc-hall-card {
     padding: 24px 24px 18px;
 }
@@ -1330,8 +1304,8 @@
     border-color: var(--color-primary);
 }
 
-/* The plan. It carries its own tokens, so it reads the same inside the admin
-   panel, which is not under `.sbc-page`. */
+/* The plan carries its own tokens, since the admin panel isn't under
+   `.sbc-page`. */
 .sbc-hall {
     --sbc-hall-wall: #8d93a1;
     --sbc-hall-door: #2fb3c4;
@@ -1352,17 +1326,16 @@
     grid-row: var(--l-row);
 }
 
-/* The wall is the floor's border, exactly as thick as the wall tracks in hall.ts,
-   so a door laid over a wall track lies on that stretch of it. */
+/* The wall is the floor's border, as thick as hall.ts's wall tracks, so a door on
+   a wall track lies on it. */
 .sbc-hall-floor {
     border: 4px solid var(--sbc-hall-wall);
     border-radius: 10px;
     background: #fffafc;
 }
 
-/* A teal stretch of wall, drawn a little thicker than the wall either side so it
-   reads as a doorway rather than a gap. Inset along its length, so a door beside
-   a corner stays clear of the curve. */
+/* A teal stretch of wall, slightly thicker so it reads as a doorway, inset to
+   clear the corners. */
 .sbc-hall-door {
     border-radius: 4px;
     background: var(--sbc-hall-door);
@@ -1451,8 +1424,7 @@
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.2s ease;
 }
 
-/* Picking a vendor in the directory scrolls their table into view; the margin
-   keeps it clear of the fixed navbar rather than tucked under it. */
+/* Clear of the fixed navbar when the directory scrolls a table into view. */
 button.sbc-hall-table {
     cursor: pointer;
     scroll-margin-block: 110px;
@@ -1490,9 +1462,8 @@ button.sbc-hall-table:hover {
     outline-offset: 2px;
 }
 
-/* North up. A fixed-height track for every table, so a phone gets tables it can
-   tap rather than ones the width of a hairline; capped in width, so a tablet does
-   not get a plan two screens tall. */
+/* North up. Fixed-height tracks so phone tables are tappable; capped width so a
+   tablet's plan isn't two screens tall. */
 @container sbc-hall (max-width: 759px) {
     .sbc-hall-grid {
         grid-template-columns: var(--p-cols);
@@ -1658,8 +1629,8 @@ button.sbc-hall-table:hover {
     font-weight: 400;
 }
 
-/* Four rows side by side, as the tables stand in the hall. Narrower than that, one
-   row at a time behind the chips. */
+/* Four rows side by side, as in the hall; narrower, one row at a time behind the
+   chips. */
 .sbc-vendor-directory {
     container: sbc-directory / inline-size;
     margin-top: 28px;
@@ -1818,8 +1789,7 @@ button.sbc-hall-table:hover {
     padding: 34px 28px 28px;
 }
 
-/* A second pixel of edge drawn as a ring, so the featured card's content sits
-   exactly where its neighbours' does. */
+/* The second pixel of edge as a ring, so content aligns with its neighbours'. */
 .sbc-ticket-card--featured {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 1px var(--color-primary), var(--shadow-card);
@@ -2347,8 +2317,7 @@ button.sbc-hall-table:hover {
         padding: 22px 16px;
     }
 
-    /* Tighter columns and a shorter hour, so a phone showing one or two rooms shows
-       them whole and the sideways scroll is only ever a short one. */
+    /* Tighter columns and a shorter hour, so one or two rooms fit a phone. */
     .sbc-grid {
         --sbc-grid-gutter: 72px;
         --sbc-grid-column: 148px;
@@ -2493,10 +2462,9 @@ button.sbc-hall-table:hover {
     }
 }
 
-/* Shown to staff previewing a con page that is switched off. Pinned to the
-   bottom rather than the top: the navbar is `position: fixed; top: 0`, so a banner
-   in the flow above it gets overlapped, and pushing the navbar down instead would
-   mean hard-coding a banner height that this wrapping text does not have. */
+/* For staff previewing a switched-off con page. At the bottom: the fixed navbar
+   would cover it at the top, and pushing the navbar down would mean hard-coding
+   the banner's height. */
 .sbc-preview-banner {
     position: fixed;
     left: 0;
@@ -2512,9 +2480,8 @@ button.sbc-hall-table:hover {
     letter-spacing: 0.3px;
 }
 
-/* Lift the scroll-to-top button clear of the banner. The clearance is a fixed
-   number because CSS cannot measure the banner, so the banner's copy is kept
-   short enough to stay within one line on desktop and two on a phone. */
+/* CSS can't measure the banner, so this clearance is fixed and the banner's
+   copy is kept to one line on desktop, two on a phone. */
 .sbc-page--preview .go-to-top {
     bottom: 76px;
 }
@@ -2551,8 +2518,7 @@ button.sbc-hall-table:hover {
     color: var(--color-primary);
 }
 
-/* This card sits outside `.sbc-page`, so it cannot use the `--sbc-*` tokens
-   defined there — only the global ones from base.css. */
+/* Outside `.sbc-page`, so only base.css's tokens apply. */
 .sbc-unpublished-title {
     margin: 0 0 12px;
     font-family: var(--font-display);
@@ -2576,9 +2542,8 @@ button.sbc-hall-table:hover {
     display: none;
 }
 
-/* The preview column stretches to the controls' height and the preview fills it,
-   so the two sides line up. The controls get the wider share so the photo buttons
-   fit beside the upload copy. */
+/* The preview fills a column stretched to the controls' height; the controls get
+   the wider share. */
 .sbc-lineup-editor {
     display: grid;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
@@ -2596,8 +2561,8 @@ button.sbc-hall-table:hover {
 
 .sbc-lineup-preview {
     position: relative;
-    /* A zero basis keeps the preview from adding to the row's height; the cap keeps
-       it 4:5 when the column is too narrow for the full height. */
+    /* A zero basis so it doesn't add height; the cap keeps it 4:5 in a narrow
+       column. */
     flex: 1 1 0;
     min-height: 0;
     max-height: calc(100cqi * 5 / 4);
@@ -2684,8 +2649,7 @@ button.sbc-hall-table:hover {
     box-shadow: var(--shadow-soft);
 }
 
-/* The buttons take the width their labels need, so "Choose photo" stays on one
-   line; the copy gets the rest. */
+/* The buttons take their labels' width; the copy gets the rest. */
 .sbc-lineup-upload-card {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;

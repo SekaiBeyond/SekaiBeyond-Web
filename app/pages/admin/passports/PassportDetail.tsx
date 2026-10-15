@@ -28,14 +28,10 @@ const MASKED_KEY = '••••-••••-••••';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * What subtracting a passport's term would leave of a membership, for the line
- * under the checkbox. Mirrors reducedExpiry in
- * functions/src/utils/membership.ts, which is the one that decides: this only has
- * to be right enough to answer "what am I about to do", and the toast afterwards
- * reports what the server actually took.
- *
- * Null means there is nothing to take — no membership on file, or one that has
- * already run out.
+ * What subtracting a passport's term would leave, for the line under the
+ * checkbox. Mirrors reducedExpiry in functions/src/utils/membership.ts, which
+ * decides; the toast reports what it actually took. Null when there's nothing to
+ * take.
  */
 const previewReduced = (current: Date | null, days: number): {expiresAt: Date; daysRemoved: number} | null => {
     if (!current) return null;
@@ -64,18 +60,12 @@ interface PassportDetailProps {
 }
 
 /**
- * One passport's page: who holds it and its sticker.
+ * One passport's page: who holds it and its sticker. Any passport's key can be
+ * viewed; unsold stock can have its slip reissued or be deleted.
  *
- * Any passport's key slip can be viewed. Stock that has never been sold can have
- * its slip reissued or be deleted outright.
- *
- * A claimed passport can only be deleted here, one at a time — the stock table
- * won't even let a claimed row be ticked, so unbinding one is always a deliberate
- * act taken with the holder on the screen. The delete panel carries the one
- * choice that goes with it: whether the days the claim granted come back off the
- * holder's membership, floored at today so it can never go negative. Left off,
- * the membership isn't touched, and any other change to it belongs in Users
- * Management.
+ * A claimed passport can only be deleted here, with its holder on screen (the
+ * stock table can't tick claimed rows). The delete panel's one choice is whether
+ * the claim's days come back off the holder's membership, floored at today.
  */
 export const PassportDetail = ({
                                    passportId,
@@ -93,18 +83,16 @@ export const PassportDetail = ({
     const [missing, setMissing] = useState(false);
     const [loadFailed, setLoadFailed] = useState(false);
     const [owner, setOwner] = useState<UserRecord | null>(null);
-    // Gone and unreadable are kept apart for the holder as well, so a failed read
-    // never tells the admin the account was deleted.
+    // So a failed read never says the account was deleted.
     const [ownerMissing, setOwnerMissing] = useState(false);
     const [ownerFailed, setOwnerFailed] = useState(false);
     const [busy, setBusy] = useState(false);
-    // Fetched on the first Show, since every fetch is written to the Records tab.
-    // Hide only masks it, so showing it again isn't a second look.
+    // Fetched on the first Show, since every fetch is recorded; Hide only masks
+    // it.
     const [key, setKey] = useState<string | null>(null);
     const [keyShown, setKeyShown] = useState(false);
-    // The claimed passport's delete is a panel rather than a window.confirm,
-    // because it carries a choice — and the membership it would leave behind —
-    // which a confirm can't show. Kept shut until asked for.
+    // A panel rather than window.confirm, since it carries a choice and shows
+    // its result.
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [subtractDays, setSubtractDays] = useState(false);
 
@@ -115,8 +103,8 @@ export const PassportDetail = ({
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const scanValue = passportScanUrl(passportId, origin);
 
-    // Absent and unreadable are different answers: "not found" is only ever shown
-    // for a passport the server confirmed isn't there, never for a failed read.
+    // "Not found" only for a passport the server confirmed missing, never a
+    // failed read.
     const reload = useCallback(async () => {
         const fresh = await fetchPassport(passportId);
         setPassport(fresh);
@@ -151,9 +139,8 @@ export const PassportDetail = ({
     }, [ownerUid]);
 
     /**
-     * What a reissue leaves behind: a changed passport the list is still holding
-     * the old copy of. Failing here is a stale screen, never a failed action — the
-     * write it follows has already committed.
+     * Updates the list's copy after a reissue. A failure here is a stale screen;
+     * the write has committed.
      */
     const refreshAfterWrite = async () => {
         try {
@@ -166,9 +153,8 @@ export const PassportDetail = ({
 
     const fmtDate = (date: Date | null): string =>
         passportDateTime(date, isEnglish, isEnglish ? 'Never' : '从未');
-    // A membership expiry is set on the Pacific clock, so it reads back on it;
-    // an issue, claim or creation is something that happened, so fmtDate shows
-    // it on the viewer's.
+    // Expiries are set on the Pacific clock; issue, claim and creation dates
+    // are moments, shown in the viewer's zone.
     const fmtExpiry = (date: Date | null): string => date
         ? formatSiteTime(date, isEnglish, {
             year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -194,9 +180,8 @@ export const PassportDetail = ({
             setBusy(false);
             return;
         }
-        // The call reports a skip rather than failing, so a passport claimed or
-        // already deleted under this open page says so here instead of vanishing
-        // from a list it is still in.
+        // Claimed or deleted under this open page: the call reports a skip, said
+        // here.
         if (result.deleted.length === 0) {
             showToast(
                 result.claimed.length > 0
@@ -210,29 +195,18 @@ export const PassportDetail = ({
             await refreshAfterWrite();
             return;
         }
-        // Nothing left to refetch: the page goes back to the list, which drops the
-        // row rather than re-reading the design.
+        // The list drops the row itself.
         showToast(isEnglish ? 'Passport deleted.' : '通行证已删除。', 'warning');
         onDeleted(passportId);
     };
 
     /**
-     * Break a permanent binding and remove the passport with it — a passport
-     * activated by mistake, or onto the wrong account, which no membership edit
-     * can put right.
+     * Break a permanent binding and remove the passport, for one activated by
+     * mistake or onto the wrong account.
      *
-     * Reached from this page only. The bulk delete in the stock table can't even
-     * tick a claimed row, so this is never something a selection can do by
-     * accident: whoever deletes a member's passport has opened it and read the
-     * Holder above the button first.
-     *
-     * The panel that calls this is the confirmation — it states the consequences,
-     * carries the membership choice, and shows what that choice would leave — so
-     * there is no window.confirm on top of it.
-     *
-     * The server answers not-found or a failed precondition rather than reporting
-     * a skip — one passport, one outcome — so unlike the stock delete there is no
-     * "nothing went" case to explain here.
+     * Only from this page, since the stock table can't tick claimed rows. The
+     * panel that calls this is the confirmation. The server answers not-found or
+     * failed-precondition rather than a skip, so there's no "nothing went" case.
      */
     const deleteClaimed = async () => {
         setBusy(true);
@@ -244,9 +218,8 @@ export const PassportDetail = ({
             setBusy(false);
             return;
         }
-        // What the server actually took, not what the panel predicted: the
-        // membership may have moved under the open page, and days asked for can
-        // come back as none.
+        // What the server took, not the preview: the membership may have moved
+        // meanwhile.
         showToast(
             result.daysRemoved > 0
                 ? (isEnglish
@@ -300,8 +273,8 @@ export const PassportDetail = ({
         setBusy(false);
     };
 
-    // "Not found" is reserved for a read that came back empty. A read that never
-    // came back says so instead, so a network blip can't retire a live passport.
+    // "Not found" only for an empty read; a failed one says so, so a network
+    // blip can't retire a live passport.
     if (missing || (loadFailed && !passport)) {
         return (
             <div className="admin-section">
@@ -329,10 +302,8 @@ export const PassportDetail = ({
 
     const unclaimed = passport.status === 'unclaimed';
     const keyViewable = !readOnly;
-    // What ticking the box would do. Null while the holder is loading or couldn't
-    // be read, for an account that is gone, and for a membership that has already
-    // run out — none of them has days to show being given back, so the box stays
-    // off for all of them, and the line below says which it is.
+    // Null while the holder loads or can't be read, for a deleted account, and
+    // for a lapsed membership; the box stays off and the line below says why.
     const reduction = previewReduced(owner?.membershipExpiresAt ?? null, passport.termDays);
     const ownerLoading = !owner && !ownerMissing && !ownerFailed;
 
@@ -357,8 +328,8 @@ export const PassportDetail = ({
                 ? `Left off, the membership keeps its current expiry of ${from}.`
                 : `不勾选时，会员资格保持当前到期日 ${from}。`;
         }
-        // Fewer days left than the passport gave: the floor is doing the work, and
-        // saying so is the difference between a clamp and a silent wrong answer.
+        // Fewer days left than it gave: say the floor applied, rather than
+        // silently clamp.
         if (reduction.daysRemoved < passport.termDays) {
             return isEnglish
                 ? `Only ${reduction.daysRemoved} ${reduction.daysRemoved === 1 ? 'day is' : 'days are'} left to take, so the membership ends today rather than going negative.`
@@ -401,8 +372,7 @@ export const PassportDetail = ({
                         <img src={owner.photoURL} alt="" className="admin-user-avatar"
                              referrerPolicy="no-referrer"/>
                     ) : (
-                        // An account with no photo, rather than the broken image
-                        // an empty src would paint at this size.
+                        // No photo: an initial rather than a broken image.
                         <span className="admin-user-avatar admin-passport-holder-initial">
                             {Array.from(owner.displayName.trim())[0]?.toUpperCase() ?? '?'}
                         </span>
@@ -468,8 +438,7 @@ export const PassportDetail = ({
                 </button>
             </div>
 
-            {/* The passport as an object: its cover, the code printed on it, and
-                what state that code is in. */}
+            {/* The passport itself: cover, printed code and its state. */}
             <header className={`admin-passport-hero admin-passport-hero--${passport.status}`}>
                 <div className="admin-passport-hero-cover">
                     {design?.coverImageUrl
@@ -513,9 +482,8 @@ export const PassportDetail = ({
                         {holderBody()}
                     </section>
 
-                    {/* The slip that ships in the bag, and the only action that
-                        touches it — kept beside the key rather than exiled to a
-                        row of buttons at the foot of the page. */}
+                    {/* The slip that ships in the bag, with the one action that
+                        touches it. */}
                     <section className="admin-passport-panel">
                         <div className="admin-passport-panel-head">
                             <h4 className="admin-passport-panel-title">
@@ -534,8 +502,7 @@ export const PassportDetail = ({
                                 </button>
                             )}
                         </div>
-                        {/* Only for someone who can ask for it: a masked
-                            readout with no Show beside it is decoration. */}
+                        {/* Only for someone who can reveal it. */}
                         {keyViewable && (
                             <div className={`admin-passport-key-readout${
                                 keyShown && key ? '' : ' admin-passport-key-readout--masked'}`}>
@@ -574,9 +541,9 @@ export const PassportDetail = ({
                         </h4>
                         <dl className="admin-passport-facts">
                             <div>
-                                {/* Not a lifetime: a passport never expires.
-                                    This is what activating it awarded, fixed
-                                    when the passport was generated. */}
+                                {/* What activating it awarded, fixed at
+                                    generation; the passport itself never
+                                    expires. */}
                                 <dt>{isEnglish ? 'Grants' : '授予'}</dt>
                                 <dd>
                                     {isEnglish
@@ -605,9 +572,8 @@ export const PassportDetail = ({
                     </section>
                 </div>
 
-                {/* The printed side of the passport, kept together: what the
-                    sticker shows, where it points, and how to get it back out
-                    as artwork. */}
+                {/* The printed side: what the sticker shows, where it points,
+                    and its artwork. */}
                 <aside className="admin-passport-panel admin-passport-sticker">
                     <h4 className="admin-passport-panel-title">
                         {isEnglish ? 'Sticker' : '贴纸'}
@@ -637,8 +603,7 @@ export const PassportDetail = ({
                 </aside>
             </div>
 
-            {/* Everything that can't be taken back, in the one place on the page
-                that says so before it is read. */}
+            {/* Everything that can't be undone, in one place. */}
             {!readOnly && (
                 <section className={`admin-passport-danger${
                     confirmingDelete ? ' admin-passport-danger--open' : ''}`}>
@@ -664,8 +629,7 @@ export const PassportDetail = ({
                                         return;
                                     }
                                     // Off every time it opens: taking days back is
-                                    // its own decision, not the one carried over
-                                    // from the last passport.
+                                    // decided per passport.
                                     setSubtractDays(false);
                                     setConfirmingDelete(true);
                                 }}

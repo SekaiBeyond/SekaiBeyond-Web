@@ -37,10 +37,8 @@ export const conSectionId = (section: ConContentSection) => `admin-sec-con-${sec
 export const BLANK: Localized = {en: '', zh: ''};
 
 /**
- * An id for a newly added row. Deliberately not derived from the list length:
- * deleting `room-2` from three rooms and adding one would mint `room-3` on top of
- * the `room-3` that is still there. Lowercase hex keeps it inside the slug shape
- * the server enforces for room ids.
+ * An id for a new row. Not from the list length, which would collide after a
+ * delete. Lowercase hex fits the server's slug shape for room ids.
  */
 export const newRowId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 
@@ -71,10 +69,9 @@ interface SectionEditor<T> {
 }
 
 /**
- * Holds one section's draft. The draft is seeded once the initial fetch lands
- * (the same `initialized` guard SiteConfigTab uses), and re-seeded after a save
- * from what the server stored — the function trims copy and fills in ids, so
- * echoing the draft back would leave the form disagreeing with the live page.
+ * One section's draft, seeded once the first fetch lands (the `initialized`
+ * guard SiteConfigTab uses) and re-seeded from what the server stored after a
+ * save, since it trims copy and fills in ids.
  */
 export function useSectionEditor<K extends ConContentSection>(
     section: K,
@@ -109,8 +106,7 @@ export function useSectionEditor<K extends ConContentSection>(
             setSaving(false);
             return;
         }
-        // The write landed. A re-read that fails after it is a stale form, not a
-        // failed save, so it must not be reported as one.
+        // The write landed; a failed re-read is a stale form, not a failed save.
         try {
             const fresh = await refreshConContent();
             setDraft(fresh[section]);
@@ -135,9 +131,8 @@ interface SectionShellProps<K extends ConContentSection> {
     helper: Localized;
     editor: SectionEditor<ConContent[K]>;
     /**
-     * Blocks Save and Discard while something the draft depends on is still in
-     * flight — an image upload leaves a local `blob:` preview in the draft, which
-     * the server rejects outright.
+     * Blocks Save and Discard while the draft depends on something in flight,
+     * such as an upload's `blob:` preview.
      */
     busy?: boolean;
     busyLabel?: Localized;
@@ -200,23 +195,20 @@ interface LocalizedFieldProps {
     onChange: (next: Localized) => void;
     readOnly?: boolean;
     multiline?: boolean;
-    full?: boolean;
 }
 
 /**
- * The con page stores copy as {en, zh} pairs rather than the `field`/`fieldCn`
- * columns BilingualFormField expects, so this is the same two-input layout over
- * a single Localized value.
+ * BilingualFormField's two-input layout over one {en, zh} Localized value, the
+ * shape con copy is stored in.
  */
-export const LocalizedField = ({label, value, onChange, readOnly, multiline, full}: LocalizedFieldProps) => {
+export const LocalizedField = ({label, value, onChange, readOnly, multiline}: LocalizedFieldProps) => {
     const {isEnglish} = useLanguage();
     const Tag = multiline ? 'textarea' : 'input';
     const cls = `admin-input${multiline ? ' admin-textarea' : ''}`;
-    const wrapCls = full ? 'admin-form-grid-full' : undefined;
 
     return (
         <>
-            <label className={wrapCls}>
+            <label>
                 <span>{isEnglish ? `${label.en} (English)` : `${label.zh}（英文）`}</span>
                 <Tag
                     className={cls}
@@ -225,7 +217,7 @@ export const LocalizedField = ({label, value, onChange, readOnly, multiline, ful
                     readOnly={readOnly}
                 />
             </label>
-            <label className={wrapCls}>
+            <label>
                 <span>{isEnglish ? `${label.en} (Chinese)` : `${label.zh}（中文）`}</span>
                 <Tag
                     className={cls}
@@ -254,12 +246,12 @@ export const AmountField = (
     {label, value, onChange, readOnly, helper, unit = {en: 'USD', zh: '美元'}, max}: AmountFieldProps,
 ) => {
     const {isEnglish} = useLanguage();
-    // Held as text apart from the number: bound straight to `value`, React refills
-    // a cleared number input with "0" and the next keystroke lands after it ("015").
+    // Text held apart from the number: bound to `value`, React refills a cleared
+    // input with "0" and the next keystroke lands after it ("015").
     const [text, setText] = useState(String(value));
     useEffect(() => {
-        // Follow outside changes (a discard, a fresh load) without undoing a blank
-        // or a trailing "12." the admin is still typing.
+        // Follow outside changes without undoing a blank or a trailing "12." still
+        // being typed.
         setText(prev => (Number(prev) === value ? prev : String(value)));
     }, [value]);
 
@@ -294,9 +286,8 @@ interface RowActionsProps {
     /** Holds the row in place while something is due to land in the list by position. */
     disabled?: boolean;
     /**
-     * Reordering, for a section that keeps an order of its own. A section put in
-     * order as it saves — the schedule, by start time — passes none of these and
-     * gets the delete on its own, rather than arrows the next save would overrule.
+     * Reordering, for sections with their own order. One sorted on save (the
+     * schedule) passes none and gets only delete.
      */
     index?: number;
     count?: number;
@@ -383,8 +374,8 @@ export const EmptyRow = ({label}: {label: Localized}) => {
 };
 
 /**
- * Flags a section whose saved settings keep it off /con, so nobody edits it
- * wondering why the page has not changed.
+ * Flags a section its saved settings keep off /con, so nobody wonders why edits
+ * don't show.
  */
 export const HiddenSectionNote = ({content, section}: {content: ConContent; section: HideableSection}) => {
     const {isEnglish} = useLanguage();

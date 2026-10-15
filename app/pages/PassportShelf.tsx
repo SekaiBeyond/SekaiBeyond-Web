@@ -4,18 +4,15 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { fetchPassportsByOwner, type Passport, passportName, usePassportDesigns, } from '~/lib/passports';
 
 /**
- * One passport on the shelf: its design's cover art, its name, and whatever the
- * surface wants under it.
- *
- * `date` arrives pre-formatted so the caller decides how to word it.
+ * One passport on the shelf: its cover art, name, and whatever the surface
+ * wants under it. `date` comes pre-formatted.
  */
-export const PassportShelfCard = ({designId, year, date, code, to, current}: {
+export const PassportShelfCard = ({designId, year, date, code, to}: {
     designId: string;
     year: number;
     date?: string;
     code?: string;
     to?: string;
-    current?: boolean;
 }) => {
     const {isEnglish} = useLanguage();
     const {designs} = usePassportDesigns();
@@ -35,16 +32,14 @@ export const PassportShelfCard = ({designId, year, date, code, to, current}: {
         </>
     );
 
-    const className = `passport-shelf-card${current ? ' passport-shelf-card--current' : ''}`;
     return to
-        ? <Link to={to} className={className}>{body}</Link>
-        : <div className={className}>{body}</div>;
+        ? <Link to={to} className="passport-shelf-card">{body}</Link>
+        : <div className="passport-shelf-card">{body}</div>;
 };
 
 /**
- * Every passport bound to `uid`: null while the read is in flight, and `failed`
- * if it didn't land. Pass null to skip the read — someone else's profile has no
- * shelf, since getPublicProfile carries none of it.
+ * Every passport bound to `uid`: null in flight, `failed` on error. Pass null
+ * to skip; someone else's profile has no shelf.
  */
 export function usePassportsByOwner(uid: string | null): {passports: Passport[] | null; failed: boolean} {
     const [passports, setPassports] = useState<Passport[] | null>(null);
@@ -71,12 +66,9 @@ export function usePassportsByOwner(uid: string | null): {passports: Passport[] 
 }
 
 /**
- * The owner's passport shelf on /profile: one card per physical passport they
- * hold. Loading, failure and the empty shelf are the profile page's to draw, the
- * same as for its other sections.
- *
- * A duplicate design gets its own card rather than a "×3" badge — each passport
- * is a separate object with its own code, its own claim date, and its own page.
+ * The owner's shelf on /profile, one card per physical passport, so duplicates
+ * of a design each get their own. Loading, failure and empty are the profile
+ * page's to draw.
  */
 export const PassportShelf = ({passports}: {passports: Passport[]}) => {
     const {isEnglish} = useLanguage();

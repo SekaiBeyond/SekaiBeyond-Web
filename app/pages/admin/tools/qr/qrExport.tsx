@@ -2,17 +2,14 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { downloadBlob } from '~/lib/zip';
 
-// Error correction and quiet-zone width, shared by every QR this app draws —
-// the on-screen preview, the QR sticker PNG, and the passport sticker PNG — so a
-// printed code always encodes the way the preview showed it.
+// Shared by every QR the app draws (preview, sticker PNG, passport sticker PNG),
+// so a printed code encodes as the preview showed.
 const QR_LEVEL = 'M' as const;
 const QR_MARGIN = 2;
 
 /**
- * Backing-buffer resolution used when a QR is exported to PNG. Rendered only
- * for the duration of a download (see {@link useQrDownload}) so pages never
- * hold a large canvas in memory; qrcode.react further multiplies this by
- * devicePixelRatio, keeping the file crisp when scaled up or printed.
+ * The PNG export's buffer size, mounted only during a download (see {@link
+ * useQrDownload}); qrcode.react multiplies it by devicePixelRatio.
  */
 const QR_EXPORT_SIZE = 1024;
 
@@ -47,15 +44,10 @@ interface OffscreenQrCanvasesProps {
 }
 
 /**
- * Renders QRs off-screen and hands each painted canvas back, one at a time.
- *
- * Two things live here rather than in either exporter. Only one canvas is ever
- * alive: hundreds of {@link QR_EXPORT_SIZE}px buffers held at once would be
- * hundreds of megabytes, and nothing on screen needs them. And the ordering that
- * makes reading a canvas safe at all — qrcode.react draws in its own effect, and
- * a descendant's effect runs before its owner's, so the buffer is always painted
- * before this component's effect reads it — is an assumption about React that
- * deserves exactly one place to be stated and, if it ever changes, fixed.
+ * Renders QRs off-screen and hands back each painted canvas, one at a time, so
+ * hundreds of {@link QR_EXPORT_SIZE}px buffers never exist at once. Reading the
+ * canvas here relies on qrcode.react drawing in its own effect, which runs
+ * before this owner's; this is the one place that assumption lives.
  */
 const OffscreenQrCanvases = ({values, size, onCanvas, onDone, onError}: OffscreenQrCanvasesProps) => {
     const wrapRef = useRef<HTMLDivElement>(null);
@@ -82,9 +74,8 @@ const OffscreenQrCanvases = ({values, size, onCanvas, onDone, onError}: Offscree
         return () => {
             cancelled = true;
         };
-        // Deliberately keyed on the cursor alone: the callbacks are stable for one
-        // export, and re-running per identity change would double-render a QR.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // Keyed on the cursor alone: the callbacks are stable for one export, and
+        // re-running per identity would draw a QR twice.
     }, [index]);
 
     if (index >= values.length) return null;
@@ -101,17 +92,12 @@ const OffscreenQrCanvases = ({values, size, onCanvas, onDone, onError}: Offscree
 };
 
 /**
- * Render a batch of QRs off-screen and do something with each one. The building
- * block under {@link useQrDownload} and the passport sticker exporter, which
- * differ only in what they encode and what they do with a painted canvas.
- *
- * Callers hand over their own items rather than bare strings — `value` says what
- * to encode, and `onCanvas` gets the item back, so a passport's composer still
- * has the id it prints under the QR. `onCanvas` and `onFinish` are read when a
- * canvas is ready rather than captured at mount, so they may close over current
- * state; `request` starts a fresh run and remounts the renderer. The `label`
- * given to `request` names the run and comes back to `onFinish`, which is what
- * every caller wants to name its file.
+ * Render a batch of QRs off-screen and handle each one; the base of {@link
+ * useQrDownload} and the passport sticker export. Callers pass their own items:
+ * `value` says what to encode and `onCanvas` gets the item back. `onCanvas` and
+ * `onFinish` are read when needed, so they may close over current state.
+ * `request` starts a fresh run, and its `label` comes back to `onFinish` for
+ * naming the file.
  */
 export const useQrCanvasBatch = <TItem, TResult>({size, value, onCanvas, onFinish, onFailure}: {
     size: number;
@@ -169,10 +155,9 @@ export const useQrCanvasBatch = <TItem, TResult>({size, value, onCanvas, onFinis
 };
 
 /**
- * Exports one QR to a crisp PNG without keeping a high-resolution canvas
- * mounted. Render {@link node} once in the component's tree, then call
- * {@link request} on click: a hidden {@link QR_EXPORT_SIZE}px canvas is mounted,
- * read back as a PNG, and unmounted.
+ * Exports one QR as a crisp PNG without keeping a large canvas mounted: render
+ * {@link node} once, then {@link request} mounts a hidden {@link
+ * QR_EXPORT_SIZE}px canvas, reads it back and unmounts it.
  */
 export const useQrDownload = (): {request: (value: string, filename: string) => void; node: ReactNode} => {
     const {request, node} = useQrCanvasBatch<string, Blob>({

@@ -24,10 +24,9 @@ export const VendorsSection = ({content, loading, showToast, readOnly}: SectionP
     const byTable = useMemo(() => new Map(draft.tables.map(vendor => [vendor.table, vendor])), [draft.tables]);
 
     /**
-     * The draft lists only tables someone is at, in plan order — the shape the
-     * server stores, so a table filled in and cleared again reads as no change.
-     * A table with nothing typed in it is an open table, not a vendor without a
-     * name; one with only a link is kept, and Save says it needs a name.
+     * The draft lists only occupied tables, in plan order, as the server stores
+     * them, so filling and clearing a table is no change. A table with only a
+     * link is kept, and Save asks for a name.
      */
     const setTable = (table: string, patch: Partial<Pick<VendorDraft, 'name' | 'link'>>) =>
         setDraft(prev => {

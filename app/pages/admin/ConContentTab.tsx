@@ -11,14 +11,11 @@ import { InPersonSalesSection, TicketFeeSection, TicketsSection, } from './ConTi
 import { FaqSection } from './ConFaqSection';
 
 /**
- * Editor for the public /con page's copy. Everything here is saved to the
- * staff-only `conContent/draft`, mirrored to the public `conContent/main` while
- * the con is published, and read back through `app/lib/conContent.ts`.
- *
- * Each section owns its own Save button and writes only its own field, so two
- * people editing different parts of the page cannot clobber each other. The
- * parts of the con page that are not editable here — the con's name, the About
- * section, the nav links, the room colours — stay in code.
+ * Editor for /con's copy, saved to the staff-only `conContent/draft` (mirrored
+ * to `conContent/main` while published) and read through
+ * `app/lib/conContent.ts`. Each section saves only its own field, so two
+ * editors can't clobber each other. The con's name, About, nav links and room
+ * colours stay in code.
  */
 
 interface ConContentTabProps {
@@ -40,8 +37,7 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
         );
     }
 
-    // Editing here would mean saving the blank defaults over whatever is
-    // actually stored, so the form stays closed until a read succeeds.
+    // Editing now would save blank defaults over what's stored.
     if (failed) {
         return (
             <div className="admin-section">

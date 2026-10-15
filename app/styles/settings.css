@@ -1,6 +1,5 @@
-/* The Settings tab of /profile — the one place the privacy switches live. The
-   profile page supplies the nav, the header and the tab bar; this is the card
-   under it. */
+/* /profile's Settings tab card; the profile page supplies the nav, header and
+   tabs. */
 
 .settings-section {
     background: rgba(255, 255, 255, 0.85);

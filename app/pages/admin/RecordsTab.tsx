@@ -15,8 +15,6 @@ import { getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Venue } from '~/lib/venues';
-import type { ParkingLot } from '~/lib/parkingLots';
-import type { ParkingRate } from '~/lib/parkingRates';
 import { type ActivityRecord, type BadgeDef, RECORD_CATEGORIES, type RecordCategory } from './types';
 import { CATEGORY_BY_TYPE, formatRecordLabel, type RecordFormatContext } from './recordFormatters';
 
@@ -54,15 +52,11 @@ interface RecordsTabProps {
     upcomingEvents: UpcomingEvent[];
     badgeDefs: BadgeDef[];
     venues: Venue[];
-    parkingLots: ParkingLot[];
-    parkingRates: ParkingRate[];
     onLookupUser: (uid: string) => void;
     onSelectBadge: (badgeId: string) => void;
     onSelectEvent: (eventId: string) => void;
     onSelectUpcomingEvent: (eventId: string) => void;
     onSelectVenue: (venueId: string) => void;
-    onSelectParkingLot: (lotId: string) => void;
-    onSelectParkingRate: (rateId: string) => void;
 }
 
 export const RecordsTab = ({
@@ -70,15 +64,11 @@ export const RecordsTab = ({
                                upcomingEvents,
                                badgeDefs,
                                venues,
-                               parkingLots,
-                               parkingRates,
                                onLookupUser,
                                onSelectBadge,
                                onSelectEvent,
                                onSelectUpcomingEvent,
                                onSelectVenue,
-                               onSelectParkingLot,
-                               onSelectParkingRate,
                            }: RecordsTabProps) => {
     const {isEnglish} = useLanguage();
     const [records, setRecords] = useState<ActivityRecord[]>([]);
@@ -89,8 +79,7 @@ export const RecordsTab = ({
     const [recordFilterActor, setRecordFilterActor] = useState('');
     const [knownActors, setKnownActors] = useState<{uid: string; name: string}[]>([]);
     const activeFilterRef = useRef<{type: RecordCategory | ''; actor: string}>({type: '', actor: ''});
-    // Bumped by every load, so a page that lands after the filter changed is
-    // dropped instead of overwriting the newer list.
+    // So a page landing after the filter changed is dropped.
     const loadSeqRef = useRef(0);
 
     const loadRecords = useCallback(async (typeFilter: RecordCategory | '', actorFilter: string, after?: DocumentSnapshot) => {
@@ -109,8 +98,7 @@ export const RecordsTab = ({
             setLastDoc(snapshot.docs[snapshot.docs.length - 1] ?? null);
             setHasMore(snapshot.docs.length === PAGE_SIZE);
 
-            // System records (TTL deletions, the mail drain) have no actor; skip
-            // them rather than add a blank option that filters to nothing.
+            // System records have no actor to filter by.
             setKnownActors(prev => {
                 const merged = [...prev];
                 for (const item of items) {
@@ -149,15 +137,11 @@ export const RecordsTab = ({
         upcomingEvents,
         badgeDefs,
         venues,
-        parkingLots,
-        parkingRates,
         onLookupUser,
         onSelectBadge,
         onSelectEvent,
         onSelectUpcomingEvent,
         onSelectVenue,
-        onSelectParkingLot,
-        onSelectParkingRate,
     };
 
     return (

@@ -477,8 +477,8 @@
     color: #d81b60;
 }
 
-/* Membership sits alongside the group tag rather than inside it — any group can
-   hold one, so it needs a chip of its own. The profile's matches, in profile.css. */
+/* Membership gets its own chip beside the group tag, since any group can hold one.
+   The profile's are in profile.css. */
 .admin-user-member-tag {
     display: inline-block;
     padding: 4px 12px;
@@ -518,9 +518,8 @@
     margin-top: 40px;
 }
 
-/* Bare button wrapping a clickable image (past-event photos, event and
-   convention posters) — strips the button chrome so only the image shows,
-   while keeping it a real button for keyboard and screen-reader users. */
+/* A bare button around a clickable image, with no chrome but still a real
+   button. */
 .event-image-btn {
     border: none;
     background: none;
@@ -566,10 +565,8 @@
 }
 
 /**
- * The app-wide inline spinner, for the in-place "this panel is loading" case —
- * smaller and quicker than .loader, which owns the full-section loading state.
- * Add .spinner-centered when it stands alone in a column rather than sitting
- * beside other content.
+ * The inline spinner for a panel loading in place; smaller and quicker than
+ * .loader. Add .spinner-centered when it stands alone.
  */
 .spinner {
     width: 40px;

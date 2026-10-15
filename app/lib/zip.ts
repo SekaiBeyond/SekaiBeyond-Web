@@ -1,10 +1,7 @@
 /**
- * A minimal ZIP writer: one archive from a list of already-compressed files.
- *
- * Entries are stored, not deflated. The only thing this packs is PNGs, which are
- * deflate streams already — running them through a second pass would cost a
- * compression library for no size win. Nothing here needs Zip64: batches are
- * hundreds of small files, far under the 4 GB / 65 535-entry limits.
+ * A minimal ZIP writer. Entries are stored, not deflated: it only packs PNGs,
+ * which are deflate streams already. No Zip64: batches are hundreds of small
+ * files.
  */
 
 export interface ZipEntry {
@@ -64,8 +61,7 @@ class ByteWriter {
         this.push(buf);
     }
 
-    // The ArrayBuffer-backed type (rather than the ArrayBufferLike default) is
-    // what Blob accepts as a BlobPart.
+    // ArrayBuffer-backed, as Blob requires of a BlobPart.
     concat(): Uint8Array<ArrayBuffer> {
         const out = new Uint8Array(this.length);
         let offset = 0;

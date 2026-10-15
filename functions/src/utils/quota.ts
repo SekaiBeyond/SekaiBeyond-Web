@@ -2,24 +2,18 @@ import { FieldValue } from "firebase-admin/firestore";
 import { RESEND_DAILY_CAP } from "./config";
 import { db } from "./firebase";
 
-// Quota cache doc (system/resendQuota). Two independent counters:
+// The quota cache (system/resendQuota), as two counters.
 //
-//   confirmed — Resend's authoritative "used daily quota". Only applyProviderUsage
-//               writes it, from either of the two readings Resend gives us: the
-//               x-resend-daily-quota header on a send response (free plan only),
-//               or a count of GET /emails over the window (every plan — see
-//               fetchProviderUsage). It can move *down* as Resend's sliding 24h
-//               window rolls off old sends; that is how the cache observes
-//               headroom reopening.
-//   reserved  — sum of in-flight pre-charges for sends that have been decided
-//               but whose Resend response hasn't landed yet. reserveQuotaInTxn
-//               adds to it; rollbackQuotaReservation and applyProviderUsage
-//               subtract from it.
+// `confirmed` is Resend's own used count, written only by applyProviderUsage from
+// the send-response header or a GET /emails count (see fetchProviderUsage). It
+// falls as the 24-hour window rolls on, which is how headroom reopens.
 //
-// sentToday = confirmed + reserved. Keeping the two separate is what stops a
-// completing send from clobbering a concurrent admin's reservation: a header
-// write only ever releases its *own* delta from `reserved`, never the whole
-// counter.
+// `reserved` is the pre-charge of sends decided but not yet answered:
+// reserveQuotaInTxn adds, rollbackQuotaReservation and applyProviderUsage
+// subtract.
+//
+// sentToday = confirmed + reserved. Keeping them apart means a finishing send
+// releases only its own delta, never a concurrent admin's reservation.
 const QUOTA_DOC = db.collection("system").doc("resendQuota");
 
 function num(v: unknown): number {
@@ -41,12 +35,9 @@ export async function computeEmailQuota(): Promise<{sentToday: number; dailyCap:
     return {sentToday: confirmed + reserved, dailyCap: RESEND_DAILY_CAP};
 }
 
-// Read-only expansion of computeEmailQuota for the admin quota view: the same
-// totals plus the raw counters behind them and the age of the cache. Splitting
-// `confirmed` from `reserved` is what lets the panel distinguish mail Resend
-// has actually accepted from sends still in flight, and `observedAt` says how
-// stale the reading is — null on a cache that has never been written (no mail
-// sent yet since the counters were introduced).
+// computeEmailQuota plus the raw counters and the cache's age, for the admin
+// quota view: mail Resend accepted versus mail in flight, and how stale the
+// reading is (null before any send).
 export async function computeEmailQuotaDetail(): Promise<{
     sentToday: number;
     dailyCap: number;
@@ -65,10 +56,8 @@ export async function computeEmailQuotaDetail(): Promise<{
     };
 }
 
-// Transactional variant for atomic send-vs-queue reservation. Reading the
-// quota doc inside the txn means a competing reservation triggers a retry
-// rather than double-spending the cap. Returns `reserved` so the caller can
-// hand it straight to reserveQuotaInTxn on the same txn.
+// Read inside the reservation transaction, so a competing reservation forces a
+// retry. Returns `reserved` for reserveQuotaInTxn on the same transaction.
 export async function computeEmailQuotaInTxn(
     txn: FirebaseFirestore.Transaction,
 ): Promise<{sentToday: number; dailyCap: number; reserved: number}> {
@@ -76,10 +65,9 @@ export async function computeEmailQuotaInTxn(
     return {sentToday: confirmed + reserved, dailyCap: RESEND_DAILY_CAP, reserved};
 }
 
-// Pre-charge `delta` slots onto `reserved` inside the caller's txn.
-// `currentReserved` must come from computeEmailQuotaInTxn on the *same* txn so
-// Firestore's optimistic concurrency forces a retry if a competing reservation
-// lands first. merge:true so the write leaves `confirmed` untouched.
+// Pre-charge `delta` onto `reserved`. `currentReserved` must come from
+// computeEmailQuotaInTxn on the same transaction. merge leaves `confirmed`
+// alone.
 export function reserveQuotaInTxn(
     txn: FirebaseFirestore.Transaction,
     delta: number,
@@ -92,13 +80,10 @@ export function reserveQuotaInTxn(
     }, {merge: true});
 }
 
-// Release a `reserveQuotaInTxn` pre-charge when no quota header came back: a
-// send that failed, or one that went out on a plan that sends no header. When a
-// header did come back, applyProviderUsage already released the reservation and
-// this must NOT be called. Uses increment so it composes with concurrent writes;
-// the read-side clamp keeps `reserved` from going negative. Logs and swallows
-// errors. Nothing else releases a reservation, so a failed rollback stays in
-// `reserved` until system/resendQuota is corrected by hand.
+// Release a pre-charge when no quota header came back (a failed send, or a plan
+// without the header). Never after one did: applyProviderUsage already released
+// it. Increment-based, with a read-side clamp at zero. Errors are logged and
+// swallowed; a failed rollback stays in `reserved` until fixed by hand.
 export async function rollbackQuotaReservation(amount: number): Promise<void> {
     if (amount <= 0) return;
     try {
@@ -111,18 +96,12 @@ export async function rollbackQuotaReservation(amount: number): Promise<void> {
     }
 }
 
-// Fold a fresh used-quota reading from the provider into the cache: set
-// `confirmed` to its authoritative count and release this send's own
-// reservation (`sentDelta`, the recipients it pre-charged) from `reserved`.
-// Runs in a txn so a reservation racing the write isn't lost — only this send's
-// delta is removed, never a concurrent admin's. Called by resendClient.sendEmails
-// on any response that carried the quota header, success or 4xx/429 alike.
-// Logs and swallows errors: the next reading corrects `confirmed`, but this
-// send's reservation stays in `reserved` (see rollbackQuotaReservation).
+// Fold a provider reading into the cache: set `confirmed` and release this send's
+// own `sentDelta` from `reserved`, in a transaction so a concurrent reservation
+// survives. Called by sendEmails on any response with the header, 429s included.
+// Errors are logged and swallowed.
 //
-// Pass sentDelta = 0 for a reading that wasn't attached to a send (a
-// fetchProviderUsage scan): it refreshes `confirmed` while leaving in-flight
-// reservations alone, since a scan releases nothing.
+// sentDelta = 0 for a reading not tied to a send (a fetchProviderUsage scan).
 export async function applyProviderUsage(
     headerConsumed: number,
     sentDelta: number,

@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
-import { AdvancedMarker, APIProvider, Map, useMap } from '@vis.gl/react-google-maps';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { createMap, type MapLibreMap, useMarkerElements } from '~/lib/maplibre';
 import { DEFAULT_ZOOM } from '~/lib/venues';
 import { type QrCode, qrHasSpot } from '~/lib/qrCodes';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_MAP_ID } from '~/lib/googleMaps';
 import { heatColor } from './heat';
 
 interface QrSpotsMapProps {
@@ -13,8 +13,8 @@ interface QrSpotsMapProps {
 }
 
 /**
- * Read-only map of every QR code that has a pinned spot, with a count marker
- * heat-colored by scan volume — the "where are my hotspots" view.
+ * Every QR code with a pinned spot, with a count marker coloured by scan
+ * volume.
  */
 export const QrSpotsMap = ({codes, onSelect, height = 340}: QrSpotsMapProps) => {
     const {isEnglish} = useLanguage();
@@ -30,60 +30,77 @@ export const QrSpotsMap = ({codes, onSelect, height = 340}: QrSpotsMapProps) => 
             </p>
         );
     }
-
-    return (
-        <div className="admin-qr-map" style={{height}}>
-            <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
-                <Map
-                    defaultCenter={spotted[0]}
-                    defaultZoom={DEFAULT_ZOOM}
-                    mapId={GOOGLE_MAPS_MAP_ID}
-                    gestureHandling="greedy"
-                    disableDefaultUI={false}
-                    zoomControl={true}
-                >
-                    <FitBounds points={spotted}/>
-                    {spotted.map(code => (
-                        <AdvancedMarker
-                            key={code.id}
-                            position={{lat: code.lat, lng: code.lng}}
-                            title={code.label}
-                            onClick={onSelect ? () => onSelect(code.id) : undefined}
-                        >
-                            <div
-                                className="admin-qr-map-pin"
-                                style={{background: heatColor(code.scanCount, maxCount)}}
-                            >
-                                {code.scanCount}
-                            </div>
-                        </AdvancedMarker>
-                    ))}
-                </Map>
-            </APIProvider>
-        </div>
-    );
+    return <SpotsMap spotted={spotted} maxCount={maxCount} onSelect={onSelect} height={height}/>;
 };
 
-/** Pan/zoom to enclose every pinned spot once the map is ready. */
-const FitBounds = ({points}: {points: QrCode[]}) => {
-    const map = useMap();
+const SpotsMap = ({spotted, maxCount, onSelect, height}: {
+    spotted: QrCode[];
+    maxCount: number;
+    onSelect?: (id: string) => void;
+    height: number;
+}) => {
+    const {isEnglish} = useLanguage();
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [map, setMap] = useState<MapLibreMap | null>(null);
+    const [failed, setFailed] = useState(false);
+
     useEffect(() => {
-        if (!map || points.length === 0) return;
-        if (points.length === 1) {
-            map.setCenter({lat: points[0].lat, lng: points[0].lng});
-            map.setZoom(DEFAULT_ZOOM);
+        const container = containerRef.current;
+        if (!container) return;
+        const created = createMap(container, {center: [spotted[0].lng, spotted[0].lat], zoom: DEFAULT_ZOOM});
+        if (!created) {
+            setFailed(true);
             return;
         }
-        // A bounds literal avoids referencing the `google` global, which isn't
-        // in this project's restricted `types` set.
-        const lats = points.map(p => p.lat);
-        const lngs = points.map(p => p.lng);
-        map.fitBounds({
-            north: Math.max(...lats),
-            south: Math.min(...lats),
-            east: Math.max(...lngs),
-            west: Math.min(...lngs),
-        }, 64);
-    }, [map, points]);
-    return null;
+        setMap(created);
+        return () => {
+            created.remove();
+            setMap(null);
+        };
+    }, []);
+
+    // Enclose every pinned spot, again whenever the spots change.
+    const spotsKey = spotted.map(c => `${c.id}@${c.lng},${c.lat}`).join(';');
+    useEffect(() => {
+        if (!map) return;
+        if (spotted.length === 1) {
+            map.jumpTo({center: [spotted[0].lng, spotted[0].lat], zoom: DEFAULT_ZOOM});
+            return;
+        }
+        const lngs = spotted.map(c => c.lng), lats = spotted.map(c => c.lat);
+        map.fitBounds(
+            [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+            {padding: 64, maxZoom: 17, duration: 0},
+        );
+    }, [map, spotsKey]);
+
+    const {elements} = useMarkerElements(
+        map,
+        spotted.map(c => ({key: c.id, lng: c.lng, lat: c.lat})),
+        {anchor: 'center'},
+    );
+
+    return (
+        <div ref={containerRef} className="admin-qr-map" style={{height}}>
+            {failed && (
+                <div className="admin-map-failed">
+                    {isEnglish ? 'The map couldn’t load. Reload the page to try again.' : '地图加载失败，请刷新页面重试。'}
+                </div>
+            )}
+            {spotted.map(code => elements[code.id] && createPortal(
+                <button
+                    type="button"
+                    className="admin-qr-map-pin"
+                    style={{background: heatColor(code.scanCount, maxCount)}}
+                    title={code.label}
+                    aria-label={isEnglish ? `${code.label}: ${code.scanCount} scans` : `${code.label}：${code.scanCount} 次扫描`}
+                    onClick={onSelect ? () => onSelect(code.id) : undefined}
+                >
+                    {code.scanCount}
+                </button>,
+                elements[code.id],
+                code.id,
+            ))}
+        </div>
+    );
 };

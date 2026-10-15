@@ -30,24 +30,19 @@ export const ScheduleSection = ({content, loading, showToast, readOnly}: Section
         setDraft(prev => replaceAt(prev, index, next));
 
     /**
-     * Rooms the draft actually uses, listed in the order the Rooms section above
-     * puts them. A room nothing is booked in gets no chip: its only possible result
-     * is an empty section, which reads like the schedule was lost.
+     * Rooms the draft uses, in the Rooms section's order. An unbooked room gets no
+     * chip, since its only result would be an empty list.
      */
     const booked = new Set(draft.flatMap(item => item.room ? [item.room] : []));
     const filterableRooms = content.rooms.filter(room => booked.has(room.id));
 
-    // Derived, not stored: deleting the last item in a room, or reassigning it,
-    // retires that chip on the same render, and the view falls back to showing
-    // everything rather than to an empty list under a chip that no longer exists.
+    // Derived, so a chip whose room empties falls back to showing everything.
     const activeRoom = filterableRooms.some(room => room.id === roomFilter) ? roomFilter : null;
     const filtering = activeRoom !== null;
 
     /**
-     * Items paired with their real index in the draft. Every edit and delete below
-     * addresses that index — filtering changes what is on screen, never what a row
-     * points at, so an edit made under a filter cannot land on the neighbour that
-     * happened to take its place in the visible list.
+     * Items with their real index in the draft, which every edit and delete uses,
+     * so filtering can't make an edit land on a neighbour.
      */
     const visible = draft
         .map((item, index) => ({item, index}))
@@ -121,8 +116,7 @@ export const ScheduleSection = ({content, loading, showToast, readOnly}: Section
                                         ...item,
                                         start: e.target.checked ? undefined : '',
                                         end: e.target.checked ? undefined : '',
-                                        // The room goes with the hour, and comes back
-                                        // with it rather than as an empty picker.
+                                        // The room goes and comes back with the hour.
                                         room: e.target.checked
                                             ? undefined
                                             : (item.room ?? activeRoom ?? content.rooms[0]?.id ?? ''),
@@ -159,9 +153,8 @@ export const ScheduleSection = ({content, loading, showToast, readOnly}: Section
                                 </>
                             )}
 
-                            {/* Only a scheduled item picks a room. A con books the hour
-                                and the room together, so asking for one while the hour is
-                                open invites a guess the page would then show as settled. */}
+                            {/* Only a scheduled item picks a room: the hour and room are
+                                booked together. */}
                             {item.start !== undefined && (
                                 <>
                                     <label>
@@ -199,13 +192,12 @@ export const ScheduleSection = ({content, loading, showToast, readOnly}: Section
                     onClick={() => setDraft(prev => [...prev, {
                         start: '',
                         end: '',
-                        // Defaults to the room being filtered on, so a row added here
-                        // is a row that stays on screen.
+                        // The filtered room, so the new row stays on screen.
                         room: activeRoom ?? content.rooms[0]?.id ?? '',
                         title: BLANK,
                     }])}
-                    // Every item must name a room server-side, so with no rooms to pick
-                    // from the whole section would be rejected on Save.
+                    // Every item needs a room server-side, so without rooms the save
+                    // would fail.
                     blocked={content.rooms.length === 0}
                     blockedHint={{
                         en: 'Add and save a room above before adding schedule items.',
@@ -223,9 +215,8 @@ export const GuestsSection = ({content, loading, showToast, readOnly}: SectionPr
     const editor = useSectionEditor('guests', content.guests, loading, showToast);
     const {draft, setDraft} = editor;
     /**
-     * The in-flight upload's local preview, held beside the draft rather than in
-     * it. A `blob:` URL is not something the server will accept, so putting it in
-     * the draft means a Save landing mid-upload fails the whole section.
+     * The in-flight upload's preview, held apart from the draft: the server
+     * rejects `blob:` URLs, so a mid-upload save would fail the section.
      */
     const [preview, setPreview] = useState<{index: number; url: string} | null>(null);
 
@@ -236,8 +227,8 @@ export const GuestsSection = ({content, loading, showToast, readOnly}: SectionPr
         setPreview({index, url: previewUrl});
         try {
             showToast(isEnglish ? 'Uploading photo...' : '正在上传照片...', 'warning');
-            // Time-stamped rather than indexed: reordering the line-up must not
-            // point an existing guest's stored URL at a newly uploaded photo.
+            // Time-stamped, not indexed, so reordering can't point a guest at
+            // someone else's photo.
             const url = await callUploadAdminImage(file, `config/con-guest-${Date.now().toString(36)}.webp`);
             setDraft(prev => replaceAt(prev, index, {...prev[index], avatar: url}));
             showToast(isEnglish ? 'Photo uploaded.' : '照片已上传。', 'success');
@@ -245,8 +236,7 @@ export const GuestsSection = ({content, loading, showToast, readOnly}: SectionPr
             // Nothing to roll back — the draft never held the preview.
             showToast(e?.message ?? (isEnglish ? 'Photo upload failed.' : '照片上传失败。'), 'error');
         } finally {
-            // Safe to revoke immediately: the <img> is swapping to the stored URL in
-            // the same commit, so nothing refetches the blob.
+            // Safe now: the <img> swaps to the stored URL in the same commit.
             URL.revokeObjectURL(previewUrl);
             setPreview(null);
         }
@@ -280,8 +270,7 @@ export const GuestsSection = ({content, loading, showToast, readOnly}: SectionPr
                                 )}
                             </span>
                             {/* The photo lands by position, so the line-up holds
-                                still until it has: move a guest mid-upload and the
-                                photo would go to whoever had taken their slot. */}
+                                still until it has. */}
                             <RowActions
                                 index={index}
                                 count={draft.length}

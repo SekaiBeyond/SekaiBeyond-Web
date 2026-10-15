@@ -194,13 +194,10 @@
     box-shadow: var(--shadow-card);
 }
 
-/* The banner rounds its own corners rather than the card clipping them, so the
-   photo's tooltip can still spill past the card.
-
-   It is the same height with or without a member's own image. On the widest
-   card that height matches the crop's shape, BANNER_ASPECT in profile.tsx; on a
-   narrower screen the image trims its sides. The gradient stays underneath
-   while an image loads. */
+/* Rounds its own corners rather than the card clipping, so the photo's tooltip
+   can spill out. Same height with or without an image: on the widest card it
+   matches BANNER_ASPECT in profile.tsx, and narrower screens trim the sides.
+   The gradient shows while an image loads. */
 .profile-hero-banner {
     position: relative;
     height: 96px;
@@ -218,8 +215,8 @@
     border-radius: inherit;
 }
 
-/* Change and remove, in the banner's corner. Like the photo's camera they wait
-   for a hover; a phone has no hover, so there they stay out. */
+/* Wait for a hover, like the photo's camera; a phone has none, so there they
+   stay out. */
 .profile-banner-actions {
     position: absolute;
     top: 12px;
@@ -507,8 +504,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     text-align: center;
 }
 
-/* A passport's cover, on the screen confirming a key redeemed it, in the 3/4
-   shape a cover is shown in everywhere. */
+/* A redeemed passport's cover, in the usual 3/4. */
 .redeem-passport-cover {
     display: flex;
     align-items: center;
@@ -615,8 +611,8 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     text-align: center;
 }
 
-/* A section's single line in place of its grid: icon, words, and a button when
-   there is something to do about it. */
+/* A section's single line instead of its grid: icon, words, and a button when
+   there's something to do. */
 .profile-card-note {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -695,8 +691,8 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     box-shadow: var(--shadow-card);
 }
 
-/* Faint rings fading out of the top corner — the security-print motif of the
-   passport's data page. */
+/* Faint rings from the top corner, the passport data page's security-print
+   motif. */
 .profile-welcome::before {
     content: '';
     position: absolute;
@@ -1112,8 +1108,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     visibility: hidden;
 }
 
-/* Two lines, then cut off with an ellipsis. `anywhere` breaks a single word too
-   long for the card rather than letting it run out of the side. */
+/* Two lines, then an ellipsis; `anywhere` breaks an over-long word. */
 .profile-event-title {
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -1128,8 +1123,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     margin-bottom: 2px;
 }
 
-/* Inline, so its text counts toward the heading's two lines. A block link
-   would sit outside the clamp. */
+/* Inline, so it counts toward the two-line clamp. */
 .profile-event-title-link {
     display: inline;
     color: inherit;
@@ -1208,10 +1202,8 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     gap: 10px;
 }
 
-/* A row rather than a card: with the code behind a tap there is only a line of
-   text to show. The row itself is inert — a scanned ticket has no code left to
-   open and is drawn as a plain row, so what makes one look pressable lives on
-   the modifier below rather than here. */
+/* A row, not a card: the code is behind a tap. Inert by default, since a
+   scanned ticket has nothing to open; the pressable look is on the modifier. */
 .profile-ticket {
     display: flex;
     align-items: center;
@@ -1246,8 +1238,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     border-style: dashed;
 }
 
-/* The one piece the row and the opened ticket share; everything else differs
-   between a line in a list and a panel built around a code. */
+/* The one piece the row and the opened ticket share. */
 .profile-ticket-type {
     flex-shrink: 0;
     padding: 3px 12px;
@@ -1276,8 +1267,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     color: var(--color-error);
 }
 
-/* Either the affordance for "there is a code behind this", or — on a row with
-   no code left to open — the mark of what became of it. */
+/* "There is a code behind this", or on a spent row, what became of it. */
 .profile-ticket-open {
     display: flex;
     flex-shrink: 0;
@@ -1306,8 +1296,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
 
 /* --- One ticket, opened to be scanned -------------------------------------- */
 
-/* Sits on the shared .modal-overlay. White rather than the usual gradient: the
-   panel is the code's quiet zone, and a reader wants nothing else around it. */
+/* On the shared .modal-overlay; white, as the code's quiet zone. */
 .profile-ticket-modal {
     position: relative;
     display: flex;
@@ -1325,8 +1314,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     text-align: center;
 }
 
-/* The ring the rest of the page uses, rather than the browser's own — this is
-   the first thing focused when the ticket opens, so it is always on show. */
+/* The page's own ring: it's focused first, so always on show. */
 .profile-ticket-modal .modal-close:focus-visible {
     outline: 3px solid rgba(255, 107, 157, 0.45);
     outline-offset: 2px;
@@ -1344,8 +1332,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     overflow-wrap: anywhere;
 }
 
-/* As large as the screen allows — the point of opening it at all. The code
-   carries its own 4-module quiet zone, so this width covers both. */
+/* As large as the screen allows; the code includes its 4-module quiet zone. */
 .profile-ticket-modal-qr {
     position: relative;
     width: min(84vw, 366px);
@@ -1358,16 +1345,14 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     height: auto;
 }
 
-/* A voided code stays on screen — the id under it is what door staff read out
-   when a scan won't take — but it is stamped and faded so it can't be mistaken
-   for one that still works. */
+/* A voided code stays visible (staff read out the id under it) but stamped and
+   faded so it can't pass for valid. */
 .profile-ticket-modal--void .profile-ticket-modal-qr > svg {
     opacity: 0.18;
     filter: grayscale(1);
 }
 
-/* A mark pressed onto the code, solid enough to read at a glance across a
-   crowded doorway rather than a tint lost in the code behind it. */
+/* Solid enough to read across a crowded doorway. */
 .profile-ticket-stamp {
     position: absolute;
     top: 50%;
@@ -1417,8 +1402,8 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
 
 /* Group tag colors are in components.css */
 
-/* Blue, like the admin list's member tag, and far from all four group tints —
-   grey, green, orange, pink — so it never reads as a group. */
+/* Blue, like the admin member tag and unlike any group tint, so it never reads
+   as a group. */
 .profile-member-chip {
     display: inline-flex;
     align-items: center;
@@ -1451,8 +1436,8 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     cursor: pointer;
 }
 
-/* Square to the photo rather than to the wrapper, which grows taller on a phone
-   when the membership hint drops in under the photo. */
+/* Square to the photo, not the wrapper, which grows on a phone when the hint
+   drops in. */
 .profile-avatar-overlay,
 .profile-avatar-hint-overlay {
     position: absolute;
@@ -1773,8 +1758,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         gap: 16px;
     }
 
-    /* One ticket per row: the rows are a line of text each, and a phone is
-       where someone actually opens one. */
+    /* One ticket per row on a phone, where they're opened. */
     .profile-ticket-grid {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -1849,8 +1833,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         opacity: 1;
     }
 
-    /* No hover to reveal the camera, so it stays out as a small button on the
-       photo's edge rather than darkening the whole photo. */
+    /* No hover, so the camera stays out as a small button on the photo's edge. */
     .profile-avatar-overlay {
         inset: auto 0 2px auto;
         width: 34px;
@@ -1876,8 +1859,7 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
         display: none;
     }
 
-    /* No hover on a phone, so the hint is just shown, under the photo. It
-       overflows the photo's width evenly on both sides. */
+    /* No hover, so the hint shows under the photo, overflowing it evenly. */
     .profile-avatar-nonmember-hint {
         display: flex;
         flex-direction: column;

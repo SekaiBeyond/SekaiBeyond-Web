@@ -20,16 +20,11 @@ interface PassportsTabProps {
 }
 
 /**
- * Passports tab: one design's stock at a time — generating passports, the stock
- * table and its exports, a code/owner lookup, and the design editor.
- *
- * Every passport is its own document and nothing records which ones were minted
- * together, so the stock is one sortable table narrowed by status rather than
- * anything grouped by print run.
- *
- * Queries are equality-only (`designId`, `ownerUid`, or a document id) and
- * sorting happens here, so no composite index is needed — a design is a few
- * hundred documents.
+ * The Passports tab: one design's stock at a time, with the generator, stock
+ * table and exports, a code/owner lookup, and the design editor. Nothing
+ * records which passports were minted together, so stock is one sortable table
+ * narrowed by status. Queries are equality-only and sorting is local, so no
+ * composite index is needed.
  */
 export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabProps) => {
     const {designs, loading: designsLoading, refresh: refreshDesigns} = usePassportDesigns();
@@ -39,24 +34,20 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
     const [passports, setPassports] = useState<Passport[] | null>(null);
     const [loadError, setLoadError] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    // Held here rather than in the table, which is unmounted whenever a passport
-    // is open — see StockView. Switching designs starts both over, since a page
-    // number into one design's stock means nothing in another's, and neither does
-    // a selection of another design's codes.
+    // Held here because the table unmounts while a passport is open (see
+    // StockView). Switching designs resets both.
     const [stockView, setStockView] = useState<StockView>(INITIAL_STOCK_VIEW);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-    // Default to the newest design, follow it if the design list arrives late, and
-    // fall back to it if the selected design is deleted — the `<select>` would
-    // otherwise paint an option the stats and exports below disagree with.
+    // Default to the newest design, follow it if the list arrives late, and fall
+    // back to it if the selected one is deleted.
     useEffect(() => {
         if (designs.length === 0) return;
         if (designId === null || !designs.some(d => d.id === designId)) setDesignId(designs[0].id);
     }, [designs, designId]);
 
-    // The design can be switched again while a load is in flight, and the second
-    // query may well answer first — only the newest load may write, or the tab
-    // paints one design's stock under another design's heading and exports.
+    // Only the newest load may write, or a slow earlier query would paint one
+    // design's stock under another's heading.
     const designToken = useRef(0);
     const loadDesign = useCallback(async (target: string) => {
         const mine = ++designToken.current;
@@ -81,15 +72,13 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
         if (designId !== null) await loadDesign(designId);
     }, [designId, loadDesign]);
 
-    // A key reissue changes exactly one passport, and the detail page has already
-    // refetched it — patching it in beats re-reading the design, which is every
-    // document the tab is holding. A delete drops the row the same way.
+    // A reissue changes one passport the detail page already refetched; patching
+    // it in beats re-reading the design. Deletes drop the row the same way.
     const applyChange = useCallback((fresh: Passport) => {
         setPassports(list => list?.map(p => p.id === fresh.id ? fresh : p) ?? list);
     }, []);
 
-    /** Rows for passports that no longer exist, gone from the list and from the
-     * selection that was acting on them. */
+    /** Drops deleted passports from the list and the selection. */
     const dropPassports = useCallback((deletedIds: string[]) => {
         if (deletedIds.length === 0) return;
         const gone = new Set(deletedIds);
@@ -279,8 +268,8 @@ const Dashboard = ({
                         </label>
                     </div>
 
-                    {/* The per-status counts live on the table's own tabs; the run
-                        total is the one figure they don't carry. */}
+                    {/* The status counts are on the table's tabs; the total is the
+                        one they don't show. */}
                     <div className="admin-stats-tiles admin-section-mb">
                         <StatTile label={isEnglish ? 'Generated' : '已生成'} value={passports?.length ?? 0}/>
                     </div>

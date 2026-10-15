@@ -58,9 +58,8 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                     setTemplate(t);
                     setInitialTemplate(t);
                 } else {
-                    // No saved template yet: pre-fill the editor with defaults so
-                    // the admin can save-as-is or tweak. initialTemplate stays
-                    // empty so isDirty=true and Save is enabled.
+                    // Nothing saved yet: pre-fill defaults, with initialTemplate
+                    // empty so Save is enabled.
                     setTemplate({
                         subject: DEFAULT_TEMPLATE_SUBJECT,
                         bodyHtml: DEFAULT_TEMPLATE_BODY_EN,
@@ -86,8 +85,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         return () => {
             cancelled = true;
         };
-        // Not keyed on isEnglish, which only words the failure toast: a language
-        // toggle would reload the template over any unsaved edits.
+        // Not keyed on isEnglish: a toggle would reload over unsaved edits.
     }, [event.id, showToast]);
 
     const isDirty = template.subject !== initialTemplate.subject
@@ -136,8 +134,8 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         return <div className="spinner spinner-centered"/>;
     }
 
-    // An empty editor would invite saving over the stored template, so a failed
-    // read shows no editor at all.
+    // No editor after a failed read, which would invite saving over the stored
+    // template.
     if (loadFailed) {
         return (
             <p className="admin-no-results">

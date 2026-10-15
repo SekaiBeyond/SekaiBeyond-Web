@@ -317,8 +317,7 @@ export const UserDetailView = ({
         }
     };
 
-    // Take-down only: a banner is the member's own to put up, so there is no
-    // upload here, and nothing to fall back to but the default gradient.
+    // Take-down only: a banner is the member's own to put up.
     const deleteBanner = async () => {
         if (!confirm(isEnglish
             ? `Remove ${userRecord.displayName}'s profile banner? Their profile will show the default banner.`

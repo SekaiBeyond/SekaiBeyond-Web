@@ -3,8 +3,6 @@ import { GROUP_LABELS, type UserGroup } from '~/components/AuthProvider';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Venue } from '~/lib/venues';
-import type { ParkingLot } from '~/lib/parkingLots';
-import { type ParkingRate, rateLabel } from '~/lib/parkingRates';
 import { ticketTypeLabel } from './tickets/types';
 import { type ActivityRecord, type BadgeDef, RECORD_CATEGORIES, type RecordCategory } from './types';
 
@@ -29,15 +27,11 @@ export interface RecordFormatContext {
     upcomingEvents: UpcomingEvent[];
     badgeDefs: BadgeDef[];
     venues: Venue[];
-    parkingLots: ParkingLot[];
-    parkingRates: ParkingRate[];
     onLookupUser: (uid: string) => void;
     onSelectBadge: (badgeId: string) => void;
     onSelectEvent: (eventId: string) => void;
     onSelectUpcomingEvent: (eventId: string) => void;
     onSelectVenue: (venueId: string) => void;
-    onSelectParkingLot: (lotId: string) => void;
-    onSelectParkingRate: (rateId: string) => void;
 }
 
 export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): ReactNode {
@@ -47,15 +41,11 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         upcomingEvents,
         badgeDefs,
         venues,
-        parkingLots,
-        parkingRates,
         onLookupUser,
         onSelectBadge,
         onSelectEvent,
         onSelectUpcomingEvent,
         onSelectVenue,
-        onSelectParkingLot,
-        onSelectParkingRate,
     } = ctx;
 
     const clickable = (label: ReactNode, onClick?: () => void): ReactNode => onClick
@@ -64,8 +54,8 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
 
     const clickableName = (uid: string, name: string) => clickable(name, () => onLookupUser(uid));
 
-    // A live item is linked by ID and named as it is now, in the viewer's
-    // language; a deleted one falls back to the name the record was written with.
+    // A live item is linked and named as it is now; a deleted one keeps the
+    // record's name.
     const localized = (en: string, zh: string) => (isEnglish ? en : zh) || en;
 
     // Archiving keeps an event's ID, so looking in both lists finds it either way.
@@ -89,18 +79,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         const venue = venues.find(v => v.id === venueId);
         if (venue) return clickable(localized(venue.nameEn, venue.nameCn), () => onSelectVenue(venue.id));
         return clickable(storedName ?? '');
-    };
-
-    const clickableLot = (lotId?: string, storedName?: string): ReactNode => {
-        const lot = parkingLots.find(l => l.id === lotId);
-        if (lot) return clickable(localized(lot.name, lot.nameCn), () => onSelectParkingLot(lot.id));
-        return clickable(storedName ?? '');
-    };
-
-    const clickableRate = (rateId?: string, storedLabel?: string): ReactNode => {
-        const rate = parkingRates.find(r => r.id === rateId);
-        if (rate) return clickable(rateLabel(rate, isEnglish), () => onSelectParkingRate(rate.id));
-        return clickable(storedLabel ?? '');
     };
 
     // A record can outlive a group's rename, so its group may have no label left.
@@ -200,8 +178,7 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             }
             return isEnglish ? <>created claim code for {badge}</> : <>为 {badge} 创建了兑换码</>;
         case 'event-attend':
-            // Say when attendance changed because they became event staff, or
-            // the row reads as a manual edit.
+            // Or it reads as a manual edit.
             if (r.reason === 'staff-code') {
                 return isEnglish
                     ? <>was marked as attending {event} on joining its staff with a code</>
@@ -351,45 +328,11 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>deleted venue {r.venueName ?? ''}</>
                 : <>删除了场地 {r.venueName ?? ''}</>;
-        case 'parkinglot-create':
+        case 'parking-sync': {
+            const lots = r.lotCount ?? 0;
             return isEnglish
-                ? <>created parking lot {clickableLot(r.lotId, r.lotName)}</>
-                : <>创建了停车场 {clickableLot(r.lotId, r.lotName)}</>;
-        case 'parkinglot-edit':
-            return isEnglish
-                ? <>edited parking lot {clickableLot(r.lotId, r.lotName)}</>
-                : <>编辑了停车场 {clickableLot(r.lotId, r.lotName)}</>;
-        case 'parkinglot-delete': {
-            const unlinked = r.unlinkedFrom ?? 0;
-            if (unlinked > 0) {
-                return isEnglish
-                    ? <>deleted parking lot {r.lotName ?? ''} (unlinked
-                        from {unlinked} venue{unlinked === 1 ? '' : 's'})</>
-                    : <>删除了停车场 {r.lotName ?? ''}（已从 {unlinked} 个场地解除关联）</>;
-            }
-            return isEnglish
-                ? <>deleted parking lot {r.lotName ?? ''}</>
-                : <>删除了停车场 {r.lotName ?? ''}</>;
-        }
-        case 'parkingrate-create':
-            return isEnglish
-                ? <>created parking rate {clickableRate(r.rateId, r.rateLabel)}</>
-                : <>创建了停车费率 {clickableRate(r.rateId, r.rateLabel)}</>;
-        case 'parkingrate-edit':
-            return isEnglish
-                ? <>edited parking rate {clickableRate(r.rateId, r.rateLabel)}</>
-                : <>编辑了停车费率 {clickableRate(r.rateId, r.rateLabel)}</>;
-        case 'parkingrate-delete': {
-            const unlinked = r.unlinkedFrom ?? 0;
-            if (unlinked > 0) {
-                return isEnglish
-                    ? <>deleted parking rate {r.rateLabel ?? ''} (unlinked
-                        from {unlinked} lot{unlinked === 1 ? '' : 's'})</>
-                    : <>删除了停车费率 {r.rateLabel ?? ''}（已从 {unlinked} 个停车场解除关联）</>;
-            }
-            return isEnglish
-                ? <>deleted parking rate {r.rateLabel ?? ''}</>
-                : <>删除了停车费率 {r.rateLabel ?? ''}</>;
+                ? <>synced UW parking data ({lots} visitor lot{lots === 1 ? '' : 's'})</>
+                : <>同步了 UW 停车数据（{lots} 个访客停车场）</>;
         }
         case 'account-deletion-requested': {
             const selfRequest = r.performedBy && r.targetUid && r.performedBy === r.targetUid;
@@ -510,16 +453,16 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                     now {fmtExpiry(r.newExpiresAt)})</>
                 : <>激活了通行证 {r.passportId ?? ''}（+{r.extendDays ?? 0} 天，现到期于 {fmtExpiry(r.newExpiresAt)}）</>;
         case 'passport-delete': {
-            // A single deletion names its passport, and its holder if it had
-            // one; a bulk one only counts them.
+            // A single deletion names its passport and any holder; a bulk one
+            // counts.
             if (r.passportId) {
-                // Negative, as passport-claim's are positive; absent when the
-                // membership was left alone.
+                // Negative, mirroring passport-claim; absent when nothing was
+                // taken.
                 const taken = r.extendDays ? (isEnglish
                     ? <>, taking back {Math.abs(r.extendDays)} days (now {fmtExpiry(r.newExpiresAt)})</>
                     : <>，并收回 {Math.abs(r.extendDays)} 天（现到期于 {fmtExpiry(r.newExpiresAt)}）</>) : null;
-                // A holder deleted before the passport leaves no name, and a
-                // blank one would read "deleted 's passport".
+                // No name if the holder was deleted first; a blank would read
+                // "deleted 's passport".
                 if (r.targetName) {
                     return isEnglish
                         ? <>deleted {target}'s passport {r.passportId}{taken}</>

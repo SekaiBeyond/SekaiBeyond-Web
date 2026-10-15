@@ -46,9 +46,9 @@ interface CachedRedemption {
 const DEDUPE_MS = 3000;
 const CACHE_SIZE = 20;
 /**
- * How long the same result for the same code stays quiet after it last came up.
- * A code held in front of the camera comes back every frame, or from the server
- * every DEDUPE_MS; this outlasts that plus the round trip, so it sounds once.
+ * How long a repeated result for the same code stays quiet: longer than a held
+ * code's per-frame and DEDUPE_MS repeats plus the round trip, so it sounds
+ * once.
  */
 const CUE_QUIET_MS = 5000;
 /** How long each result stays up before clearing itself for the next scan. */
@@ -83,8 +83,8 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
     const [busy, setBusy] = useState(false);
     const [leaving, setLeaving] = useState(false);
 
-    // Signals a result once per showing of a code: each repeat of the same result
-    // for it inside CUE_QUIET_MS restarts the quiet instead of playing again.
+    // Once per showing of a code: a repeat inside CUE_QUIET_MS restarts the
+    // quiet.
     const cue = useCallback((outcome: ScanOutcome, code: string) => {
         const key = `${outcome}:${code}`;
         const now = Date.now();
@@ -100,10 +100,9 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         const now = Date.now();
         if (last && last.ticketId === ticketId && now - last.at < DEDUPE_MS) return;
 
-        // A ticket this device let in moments ago reads as the same success without
-        // a round trip, but only inside the server's grace window. Past it the scan
-        // goes to the server, which answers "already redeemed": a ticket shown again
-        // later — a shared screenshot — must not get in on the strength of a cache.
+        // A ticket this device just let in reads as success without a round trip,
+        // but only inside the server's grace window; after it, a shared screenshot
+        // must get "already redeemed".
         const cached = redeemedCacheRef.current.find(c => c.ticketId === ticketId && now < c.until);
         if (cached) {
             setStatus({
@@ -145,10 +144,9 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 setStatus({kind: 'success', ...successData, shownAt: Date.now()});
                 cue('success', ticketId);
 
-                // The server times the window from the first admission, and a rescan
-                // it answers can come well into it, so it says how much is left. A
-                // duration, not a time, so this phone's clock being off doesn't
-                // matter. Without it, the entry expires at once.
+                // The server says how much of the window is left, as a duration so
+                // this phone's clock doesn't matter. Without it, the entry expires
+                // at once.
                 redeemedCacheRef.current = [
                     {ticketId, until: now + (d.graceRemainingMs ?? 0), ...successData},
                     ...redeemedCacheRef.current.filter(c => c.ticketId !== ticketId),
@@ -181,8 +179,8 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         }
     }, [eventId, isEnglish, onRedeemed, cue]);
 
-    // Each decoded code: redeem if it's for this event, warn if it's for another,
-    // ignore anything unparseable. Always returns false so scanning continues.
+    // Redeem a code for this event, warn on another event's, ignore the rest.
+    // Always false, to keep scanning.
     const onDecode = useCallback((raw: string): boolean => {
         const parsed = parseTicketUrl(raw);
         if (parsed && parsed.eventId === eventId) {
@@ -210,10 +208,9 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         logLabel: '[TicketScanner]',
     });
 
-    // A result fades and clears itself for the next in line. Unlike Next Scan
-    // this keeps the cue state, so a code still held up doesn't sound again. A
-    // held code sets the status anew each frame or rescan, which restarts the
-    // timer, so the result clears once the code is put away.
+    // A result clears itself for the next in line, keeping the cue state so a
+    // held code stays quiet. Each frame of a held code restarts the timer, so
+    // it clears once the code is put away.
     useEffect(() => {
         if (!('shownAt' in status)) return;
         const ms = CLEAR_AFTER_MS[status.kind];
@@ -384,8 +381,8 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
 }
 
 /**
- * A ring that runs down as a result's auto-clear does, and starts over with it.
- * The radius makes the circumference 100, which the CSS dashes by.
+ * A ring that runs down with a result's auto-clear. The radius makes the
+ * circumference 100, which the CSS dashes by.
  */
 function Countdown({status}: {status: ShownStatus}) {
     return (

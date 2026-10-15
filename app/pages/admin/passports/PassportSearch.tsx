@@ -20,9 +20,9 @@ interface PassportSearchProps {
 }
 
 /**
- * Look a passport up by the code on the sticker, or by its owner. A 10-character
- * code resolves directly; anything else is matched against users the same way
- * every other admin surface does, then each match's passports are listed.
+ * Look up a passport by its sticker code or its owner: a 10-character code
+ * resolves directly; anything else is matched against users, and each match's
+ * passports are listed.
  */
 export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps) => {
     const {isEnglish} = useLanguage();
@@ -41,8 +41,7 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
                 setResults(passport ? [{passport}] : []);
                 return;
             }
-            // searchUsers returns up to 30 matches; their passports are fetched
-            // together rather than one round trip at a time.
+            // Up to 30 matches, whose passports are fetched together.
             const owners = await searchUsers(query);
             const perOwner = await Promise.all(owners.map(owner => fetchPassportsByOwner(owner.uid)));
             setResults(owners.flatMap((owner, i) => perOwner[i].map(passport => ({passport, owner}))));

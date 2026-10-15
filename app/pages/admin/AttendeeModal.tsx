@@ -7,9 +7,8 @@ import { useAccountLinks } from './tickets/useAccountLinks';
 import type { ShowToast } from './utils';
 
 /**
- * How long typing has to settle before the address is looked up. Every callable
- * shares one rate-limit budget, so a lookup per keystroke would spend an admin's
- * whole allowance on a single email field.
+ * Typing must settle before the lookup: every callable shares one rate-limit
+ * budget.
  */
 const LOOKUP_DEBOUNCE_MS = 600;
 
@@ -24,9 +23,8 @@ interface AttendeeModalProps {
     onClose: () => void;
     /** Add mode: called after a successful add (the modal closes itself). */
     onAdded?: () => void;
-    // Name-only edit: an optimistic patch for the parent to merge.
-    // Regenerated edit: ticket UUIDs are minted server-side, so the parent must
-    // refetch instead of trusting a placeholder array.
+    // A name-only edit is an optimistic patch to merge. A regenerated edit
+    // mints ticket ids server-side, so the parent must refetch.
     onSaved?: (changes: Partial<AttendeeData>) => void;
     onRegenerated?: () => void;
     showToast: ShowToast;
@@ -63,9 +61,8 @@ export function AttendeeModal({
     const countChanged = !!attendee && countValid && parsedCount !== attendee.ticketCount;
     const typeChanged = !!attendee && type !== originalType;
 
-    // Which address the account lookup is currently asking about. Editing can
-    // ask at once — the address is fixed and read-only — while adding waits for
-    // the typing to settle.
+    // The address being looked up: at once when editing (it's read-only), after
+    // typing settles when adding.
     const [lookupEmail, setLookupEmail] = useState(attendee?.email.trim().toLowerCase() ?? '');
     useEffect(() => {
         if (attendee) return;
@@ -79,8 +76,7 @@ export function AttendeeModal({
 
     const lookupEmails = useMemo(() => lookupEmail ? [lookupEmail] : [], [lookupEmail]);
     const {links: accountLinks, failed: accountLookupFailed} = useAccountLinks(eventId, lookupEmails);
-    // undefined while the lookup is out or nothing has been asked; null once it
-    // has come back with no account.
+    // undefined while asking or not asked; null for no account.
     const account = lookupEmail ? accountLinks.get(lookupEmail) : undefined;
     const checkingAccount = !!lookupEmail && account === undefined && !accountLookupFailed;
 
@@ -203,10 +199,9 @@ export function AttendeeModal({
                         disabled={!attendee && saving}
                         autoFocus={!attendee}
                     />
-                    {/* Whether this address reaches somebody's profile. A ticket
-                        sold to an address with no account still works — it is
-                        credited if they sign up with it later — so this is a
-                        note, never a reason not to save. */}
+                    {/* Whether this address reaches someone's profile. A note
+                        only: a ticket without an account still works, and credits
+                        them if they sign up with it. */}
                     {emailValid && (
                         <span className={`admin-helper-text admin-tickets-account-note${
                             account ? ' admin-tickets-account-note--linked' : ''}`}>
@@ -220,8 +215,7 @@ export function AttendeeModal({
                                         ? (
                                             <>
                                                 {isEnglish ? 'Registered account: ' : '已注册账户：'}
-                                                {/* uid only comes back for core staff, the
-                                                    same people the attendee row links for. */}
+                                                {/* uid only comes back for core staff. */}
                                                 {account.uid
                                                     ? (
                                                         <a

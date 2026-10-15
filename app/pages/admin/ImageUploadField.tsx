@@ -12,19 +12,18 @@ interface ImageUploadFieldProps {
     onFileChange: (file: File, previewUrl: string) => void;
     onCleanupPreview?: (url: string) => void;
     cropAspect?: number;
-    /** Width the crop is written at; its height follows from `cropAspect`. The
-     *  default suits a thumbnail, not art the site gives a whole screen to. */
+    /**
+     * Width the crop is written at; height follows `cropAspect`. The default
+     * suits a thumbnail.
+     */
     cropWidth?: number;
     convertToWebp?: boolean;
     showToast: ShowToast;
-    // 'avatar' swaps the labelled file input for a round preview beside a styled button,
-    // so the admin sees the same circular crop the site renders. The caller owns the field
-    // label in this variant, since it also owns the controls that sit beside it.
-    // 'cover' does the same for a passport cover or a poster: a frame in the shape the
-    // site shows it in — `cropAspect`, or 3:4 without one — over its button.
+    // 'avatar' shows a round preview beside a button, the crop the site renders; the
+    // caller owns the label. 'cover' does the same in the site's frame for a cover or
+    // poster (`cropAspect`, or 3:4).
     variant?: 'field' | 'avatar' | 'cover';
-    // Shown in the avatar preview when there is no image yet — the same default the
-    // public page falls back to, so an empty picker tells the truth about the result.
+    // The avatar preview with no image: the public page's own default.
     placeholderSrc?: string;
 }
 
@@ -107,9 +106,8 @@ export const ImageUploadField = ({
     if (variant === 'avatar' || variant === 'cover') {
         const cover = variant === 'cover';
         const frame = cover && cropAspect ? {aspectRatio: String(cropAspect)} : undefined;
-        // A cover is cropped to the shape the site shows it in, so the crop is
-        // the whole story; without one it is only trimmed to fit at display
-        // time, which is a different promise and worth saying differently.
+        // A cover is cropped to its display shape; anything else is only
+        // trimmed at display time, which needs saying differently.
         const hint = {
             en: `Any image up to ${imageMb} MB.` + (cropAspect
                 ? cover ? " You'll crop it to this frame before it's saved." : " You'll crop it before it's saved."
@@ -138,8 +136,8 @@ export const ImageUploadField = ({
                         />
                     )}
                     <div className="admin-avatar-actions">
-                        {/* The input is visually hidden but still focusable, so this label is
-                            the button and :focus-within draws its ring. */}
+                        {/* The input is hidden but focusable, so this label is the button and
+                            :focus-within draws its ring. */}
                         <label className={`admin-btn admin-btn--chip admin-avatar-choose${
                             converting ? ' admin-avatar-choose-busy' : ''}`}>
                             <input type="file" accept={accept} onChange={handleChange} disabled={converting}/>

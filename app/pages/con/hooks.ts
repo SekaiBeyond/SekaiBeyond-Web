@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { parseSiteTime } from '~/lib/siteTime';
 
 /**
- * Tracks a CSS media query in JS. The con hero uses it to keep its clip off
- * reduced-motion setups entirely, rather than just hiding it with CSS.
+ * A CSS media query in JS; the hero uses it to keep its clip off entirely for
+ * reduced motion.
  */
 export const useMediaQuery = (query: string) => {
     const [matches, setMatches] = useState(false);
@@ -35,8 +35,8 @@ const remainingFrom = (target: number, end: number): CountdownState => {
     const now = Date.now();
     const ended = Number.isFinite(end) && now > end;
     const diff = target - now;
-    // An unparseable date reads as "not started" with zeroed digits rather than
-    // rendering NaN in every segment.
+    // An unparseable date reads as not started, with zeroed digits rather than
+    // NaN.
     if (!Number.isFinite(diff)) {
         return {days: 0, hours: 0, minutes: 0, seconds: 0, started: false, ended};
     }
@@ -55,13 +55,10 @@ const remainingFrom = (target: number, end: number): CountdownState => {
 };
 
 /**
- * Counts down to `isoDate`, ticking once a second, and reports when `endIsoDate`
- * has passed too. Both are read as parseSiteTime reads them, so the count ends
- * when the con opens, not when that hour comes round on the viewer's clock.
- *
- * The timer exists only to move something on screen, so it stops once the con
- * has ended — until then it has to keep running even after the start time,
- * because the live → ended transition is what it drives.
+ * Counts down to `isoDate` once a second and reports when `endIsoDate` has
+ * passed. Both are read with parseSiteTime, so it ends when the con opens
+ * wherever the viewer is. It keeps ticking past the start, since the live →
+ * ended change is what it drives, and stops at the end.
  */
 export const useCountdown = (isoDate: string, endIsoDate: string): CountdownState => {
     const target = parseSiteTime(isoDate).getTime();
@@ -86,15 +83,13 @@ export const useCountdown = (isoDate: string, endIsoDate: string): CountdownStat
     return countdown;
 };
 
-// setTimeout overflows past ~24.8 days and fires immediately, so longer waits
-// are taken in hops of this size.
+// setTimeout fires at once past ~24.8 days, so longer waits go in hops.
 const MAX_TIMEOUT = 2 ** 31 - 1;
 
 /**
- * The current time, re-read the moment each of `isoDates` (read as parseSiteTime
- * reads them) passes and at no other time. Lets a page left open across an early
- * bird deadline switch to the regular price without ticking every second to
- * catch it.
+ * The current time, re-read only as each of `isoDates` passes, so a page left
+ * open across an early-bird deadline switches price without ticking every
+ * second.
  */
 export const useNowAcross = (isoDates: string[]) => {
     const [now, setNow] = useState(() => Date.now());
@@ -131,8 +126,8 @@ export const useScrolledPast = (offset: number) => {
 };
 
 /**
- * Returns the id of the section currently filling most of the viewport, so the
- * navbar can highlight where the reader is.
+ * The id of the section filling most of the viewport, for the navbar's
+ * highlight.
  */
 export const useActiveSection = (ids: string[]) => {
     const [active, setActive] = useState('');

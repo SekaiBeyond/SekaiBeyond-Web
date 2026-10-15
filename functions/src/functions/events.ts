@@ -80,8 +80,10 @@ export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) =>
     return {cancelled: true};
 });
 
-/** Deletes an event's attendees and email template, which Firestore leaves
- *  behind when the event document itself is deleted. */
+/**
+ * Deletes an event's attendees and email template, which Firestore leaves
+ * behind with the event.
+ */
 async function deleteEventSubcollections(eventRef: FirebaseFirestore.DocumentReference): Promise<void> {
     const snaps = await Promise.all(["attendees", "emailTemplate"].map(sub => eventRef.collection(sub).get()));
     const ops = snaps.flatMap(snap => snap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)));
@@ -117,8 +119,8 @@ export const onPastEventDeleted = onDocumentDeleted(
             console.error(`onPastEventDeleted: cascade failed for ${eventId}`, err);
         }
 
-        // Firestore does not delete subcollections with their parent: a paid
-        // event's attendees and email template, copied here when it was archived.
+        // Firestore leaves subcollections behind: here, the attendees and
+        // template a paid event's archive copied over.
         try {
             await deleteEventSubcollections(db.collection("pastEvents").doc(eventId));
         } catch (err) {
@@ -282,9 +284,8 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         }
         await requireNewlyLinkedFilesExist([poster, emailHeaderBg], [prevPoster, prevEmailHeaderBg]);
 
-        // Paid events use tickets, not check-in codes — purge any claim codes
-        // that exist for this event (e.g., left over from a free→paid toggle).
-        // Reads must happen before writes inside the transaction.
+        // Paid events use tickets, so purge claim codes left from a free→paid
+        // switch. Reads before writes, as transactions require.
         let codesToDelete: FirebaseFirestore.QueryDocumentSnapshot[] = [];
         if (paid && eventId) {
             const codesSnap = await txn.get(
@@ -419,9 +420,8 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         if (!data) return;
 
         try {
-            // Wipe both event check-in codes and staff claim codes — they're scoped
-            // to the live event and must not survive archive/deletion. A fresh staff
-            // code can be generated for the past event afterward if needed.
+            // Check-in and staff codes belong to the live event and must not survive
+            // archive or deletion.
             const [codesSnap, staffCodesSnap] = await Promise.all([
                 db.collection("claimCodes").where("eventId", "==", eventId).get(),
                 db.collection("staffClaimCodes").where("eventId", "==", eventId).get(),
@@ -442,10 +442,9 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         await deleteStorageFile(data.emailHeaderBg ?? "", ["upcoming-events/headers/"])
             .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId} header`));
 
-        // Skip the deleted-record write if this deletion was the tail end of an
-        // archive — archiveUpcomingEvent already wrote an "upcoming-event-archive"
-        // record, and the past event reuses this ID (so eventStaffEvents
-        // references stay valid, and we must NOT purge them).
+        // The tail end of an archive: archiveUpcomingEvent already wrote its
+        // record, and the past event reuses this id, so eventStaffEvents must not
+        // be purged.
         let archived = false;
         try {
             archived = (await db.collection("pastEvents").doc(eventId).get()).exists;
@@ -454,8 +453,7 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
         }
         if (archived) return;
 
-        // Hard delete (TTL-driven or admin abort) — purge eventStaffEvents
-        // references from users so stale event IDs don't haunt assignments.
+        // A hard delete: purge the id from eventStaffEvents.
         try {
             const staffSnap = await db.collection("users")
                 .where("eventStaffEvents", "array-contains", eventId).get();
@@ -468,8 +466,8 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: eventStaffEvents cascade failed for ${eventId}`, err);
         }
 
-        // Firestore does not delete subcollections with their parent. An archive
-        // never reaches here: archiveUpcomingEvent's Phase C clears its own.
+        // Firestore leaves subcollections behind. An archive never gets here:
+        // its Phase C clears its own.
         try {
             await deleteEventSubcollections(db.collection("upcomingEvents").doc(eventId));
         } catch (err) {
@@ -489,10 +487,9 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
 
 /**
  * Writes that bring `dest` from the `copied` snapshot up to `live`, then empty
- * `live`'s collection. A doc whose update time hasn't moved was copied as it
- * stands, so only changed and new docs are written again. Each copy is queued
- * ahead of its original's delete, and commitInChunks stops at the first failed
- * chunk, so no original is deleted before its copy lands.
+ * `live`'s collection. Unchanged docs aren't rewritten. Each copy is queued
+ * before its original's delete, and commitInChunks stops at the first failed
+ * chunk, so no original goes before its copy lands.
  */
 function reconcileCopy(
     copied: FirebaseFirestore.QuerySnapshot,
@@ -525,8 +522,8 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     const newDocRef = db.collection("pastEvents").doc(eventId);
 
     // Phase A writes before Phase B's transaction checks the caller, so check
-    // first: otherwise anyone signed in could copy an event's attendees into a
-    // pastEvents path that nothing cleans up.
+    // first: otherwise anyone signed in could copy attendees into an orphaned
+    // pastEvents path.
     await requireAdmin(uid);
 
     // ---- Phase A: stream-copy subcollections to pastEvents ----
@@ -579,8 +576,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             icon: "",
             tagIds,
             published: false,
-            // Preserve paid status so the past-events panel can show the
-            // read-only Tickets/Stats view instead of the free attendee list.
+            // So the past-events panel shows the read-only Tickets/Stats view.
             paid: eventData.paid === true,
         });
         txn.delete(db.collection("upcomingEvents").doc(eventId));
@@ -594,14 +590,13 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     });
 
     // ---- Phase C: carry over late changes, then delete the originals ----
-    // Tickets keep changing until Phase B deletes the event (a scan, a void, an
-    // import, a removed attendee), so Phase A's copy can be stale. After Phase B
-    // every transactional ticket and template writer refuses, so the LIVE
-    // collections read here are final but for a batch already past its event
-    // check (an import, an email send). Reconcile the copy against them before
-    // deleting: deleting alone would drop the late changes, and anything left
-    // would strand under upcomingEvents/{deletedId}/…, which
-    // onUpcomingEventDeleted skips because the archive wrote a pastEvents doc.
+    //
+    // Tickets can change until Phase B deletes the event, so Phase A's copy may
+    // be stale. After Phase B the transactional writers refuse, so the live
+    // collections are final but for a batch already past its event check.
+    // Reconcile before deleting: otherwise late changes are lost, and anything
+    // left strands under upcomingEvents/{deletedId}, which
+    // onUpcomingEventDeleted skips once a pastEvents doc exists.
     const [liveAttendees, liveTemplate] = await Promise.all([
         attendeesSrc.get(),
         emailTemplateSrc.get(),
@@ -612,14 +607,11 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     ];
     if (moveOps.length > 0) await commitInChunks(moveOps);
 
-    // Event staff are intentionally retained on archive. Past-event staff are
-    // tracked via eventStaffEvents (the past-event id stays in the array) — that
-    // same array drives the profile Staff badge (users.ts) and the admin roster,
-    // and lets admins keep/assign staff on past events. Lingering admin/scanner
-    // access is avoided by gating event-staff access on *upcoming* assigned events
-    // rather than raw eventStaffEvents membership (see admin/index.tsx
-    // isEventStaffOnly). eventStaffEvents is purged only when the past event is
-    // hard-deleted (onPastEventDeleted).
+    // Event staff are kept on archive: eventStaffEvents keeps the past event's id
+    // for the profile Staff badge and the admin roster. Admin and scanner access
+    // is gated on upcoming events (isEventStaffOnly in admin/index.tsx), so it
+    // lapses on its own. The id is purged only when the past event is
+    // hard-deleted.
 
     return {pastEventId};
 });
@@ -645,8 +637,7 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
         ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         const targetData = targetSnap.data()!;
-        // Hierarchy guard, but allow self-edits — admins managing their own
-        // attendance shouldn't be blocked by the "above your level" check.
+        // Self-edits are exempt from the hierarchy check.
         if (
             targetUid !== uid
             && callerGroup !== "president"
@@ -724,8 +715,8 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
         const attendedEvents: string[] = targetData.attendedEvents ?? [];
         const alreadyAttended = attendedEvents.includes(eventId);
 
-        // Past: pull eventId out of attendedEvents so the user doesn't show in
-        // the free-event attendees list. Upcoming: auto-attend (legacy).
+        // Past: drop the event from attendedEvents, so staff don't show among a
+        // free event's attendees. Upcoming: staff count as attending.
         const attendanceAction: "add" | "remove" | "none" = isPastEvent
             ? (alreadyAttended ? "remove" : "none")
             : (alreadyAttended ? "none" : "add");

@@ -6,11 +6,9 @@ import { useT } from '~/pages/con/i18n';
 import { formatClockTime, formatSessionDay, sessionBounds, ticketFeeFor } from '~/pages/con/utils';
 
 /**
- * The in-person ticket table, under the ticket cards. It is another way to buy
- * the same tickets rather than a section of its own, so it has no nav link.
- *
- * Each session drops off once it closes, and the whole block goes with the last
- * one — a page left open switches over at that moment, like the early bird does.
+ * The in-person ticket table under the ticket cards: another way to buy, so no
+ * nav link. Each session drops off once it closes, and the block with the last,
+ * live on an open page.
  */
 export const InPersonSales = () => {
     const t = useT();
@@ -29,13 +27,12 @@ export const InPersonSales = () => {
     });
     const now = useNowAcross(timed.flatMap(entry => entry.iso));
 
-    // An unparseable time reads as closed, so a bad row is hidden rather than
-    // shown with "Invalid Date" in it.
+    // An unparseable time reads as closed.
     const upcoming = timed.filter(({closes}) => Number.isFinite(closes) && now < closes);
     if (upcoming.length === 0) return null;
 
-    // The regular price is each tier's highest, so if none of those carries a fee
-    // online there is nothing to save by coming in person, and the copy says less.
+    // With no online fee on any tier's regular price, there's nothing to save in
+    // person.
     const skipsFee = tickets.some(tier => ticketFeeFor(tier.price, ticketFee) > 0);
 
     return (

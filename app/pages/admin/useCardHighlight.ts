@@ -12,9 +12,8 @@ export interface LocationListHandle extends CardHighlightHandle {
 }
 
 /**
- * Shared "jump to this card" behavior for the admin location lists. Each list binds the
- * returned `highlight` into its own imperative handle so a location record or the overview
- * map can send the reader straight to the matching venue / lot / rate card.
+ * "Jump to this card" for the admin location lists: each binds `highlight` into its
+ * handle, so a record or the overview map can send the reader to a venue's card.
  */
 export function useCardHighlight() {
     const cardRefs = useRef(new Map<string, HTMLElement>());

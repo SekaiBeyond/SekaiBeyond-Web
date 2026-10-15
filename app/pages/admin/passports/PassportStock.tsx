@@ -15,25 +15,17 @@ import { buildPassportCsv, buildPassportIdCsv, fileStamp, usePassportPngExport }
 import { type Column, PassportStockTable, type SortDir, type SortKey } from './PassportStockTable';
 
 /**
- * One design's passports, as a sortable table.
+ * One design's passports as a sortable table: narrowed by status, sorted by the
+ * clicked column, paged. All on the array the tab already holds, since a design
+ * is a few hundred docs.
  *
- * Nothing groups passports any more, so the whole of a design's stock is one
- * list: narrowed by status, ordered by whichever column was clicked, and walked
- * a page at a time. Everything happens on the array the tab already holds — a
- * design is a few hundred documents, and re-querying to sort would be slower
- * than sorting them here.
+ * Actions hang off ticked rows, the only way to act on a set that shares nothing
+ * in the data (one envelope, a damaged batch): export codes, keys and stickers,
+ * or delete in one call.
  *
- * Every action hangs off ticked rows, which is how a set of passports that share
- * nothing in the data — the ones in one envelope, the ones that came back damaged
- * — is acted on at all. A selection exports its codes, its keys and its
- * stickers, and is deleted in one call.
- *
- * Only unclaimed stock can be ticked. Everything a selection does is a
- * print-and-pack job on passports that haven't been sold — the codes CSV carries
- * no holder, and a claimed passport's sticker is already in someone's hands — so
- * a claimed row has nothing to gain from being in one, and leaving it out is what
- * makes the selection and the delete the same set. Deleting a claimed passport is
- * done on its own page, where the holder is on the screen.
+ * Only unclaimed stock can be ticked: everything a selection does is
+ * print-and-pack work on unsold passports, and it keeps the selection and the
+ * delete the same set. Claimed passports are deleted from their own page.
  */
 
 /** About a screenful, and few enough rows that a re-sort is instant. */
@@ -43,11 +35,8 @@ type StatusFilter = 'all' | PassportStatus;
 const STATUS_FILTERS: StatusFilter[] = ['all', 'unclaimed', 'claimed'];
 
 /**
- * How the table is set: which slice, which column, which way, which page.
- *
- * It lives in the tab above rather than in this component because opening a
- * passport swaps the whole dashboard out — without lifting it, coming back from
- * row 43 of page 2 would land on page 1 of an unsorted list.
+ * How the table is set: slice, column, direction, page. Held by the tab, since
+ * opening a passport unmounts this and would otherwise lose your place.
  */
 export interface StockView {
     filter: StatusFilter;
@@ -77,23 +66,20 @@ interface PassportStockProps {
     year: number | undefined;
     view: StockView;
     onViewChange: (view: StockView) => void;
-    /** Ticked passport ids. Lifted for the same reason as the view — opening a
-     * passport unmounts the table, and a selection built across three pages
-     * shouldn't be the price of checking one of them. */
+    /** Ticked passport ids, lifted for the same reason as the view. */
     selected: string[];
     onSelectedChange: (selected: string[]) => void;
     /** The passports a bulk delete removed, so the list drops those rows. */
     onDeleted: (passportIds: string[]) => void;
     onOpen: (id: string) => void;
     showToast: ShowToast;
-    /** Staff (read-only) still export codes and stickers; keys and deleting are
-     * theirs to lose. */
+    /**
+     * Staff (read-only) can still export codes and stickers, but not keys or
+     * deletes.
+     */
     readOnly: boolean;
 }
 
-/**
- * One design's passports, as a sortable table.
- */
 export const PassportStock = ({
                                   passports,
                                   year,
@@ -123,17 +109,14 @@ export const PassportStock = ({
         claimed: passports.filter(p => p.status === 'claimed').length,
     }), [passports]);
 
-    // Holders are resolved for the whole design rather than a page at a time,
-    // because the Holder column is sortable — a page's worth of names can't order
-    // a list the rest of which has no names yet. It is one read per claimed
-    // passport, 30 to a query, and only claimed passports have a holder at all.
+    // Holders for the whole design, not a page, because the Holder column sorts.
+    // One read per claimed passport, 30 to a query.
     const ownerUids = useMemo(
         () => [...new Set(passports.flatMap(p => p.ownerUid ? [p.ownerUid] : []))],
         [passports],
     );
-    // Keyed on the uids themselves: patching the list (a key reissue, a deleted
-    // passport dropping out) hands back a new array every time, and who holds
-    // what hasn't changed unless a uid has.
+    // Keyed on the uids, since patching the list makes a new array without
+    // changing who holds what.
     const ownerKey = ownerUids.join(',');
     useEffect(() => {
         setOwnersFailed(false);
@@ -148,8 +131,7 @@ export const PassportStock = ({
                 if (!stale) setOwners(map);
             })
             .catch(() => {
-                // An unreadable holder is a blank cell, never a broken table: the
-                // codes, statuses and dates are all still worth showing.
+                // An unreadable holder is a blank cell, never a broken table.
                 if (!stale) {
                     setOwners(new Map());
                     setOwnersFailed(true);
@@ -178,9 +160,8 @@ export const PassportStock = ({
                     return (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) * factor;
                 case 'holder': {
                     const [left, right] = [holderName(a), holderName(b)];
-                    // A passport nobody holds sinks to the bottom either way:
-                    // flipping the column should reorder the names, not bury them
-                    // under a hundred blanks.
+                    // Unheld passports sink either way, so flipping reorders the
+                    // names.
                     if (!left || !right) return left ? -1 : right ? 1 : 0;
                     return left.localeCompare(right) * factor;
                 }
@@ -188,32 +169,26 @@ export const PassportStock = ({
                     return ((a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0)) * factor;
             }
         };
-        // The id breaks every tie, so equal rows keep one stable order instead of
-        // shuffling whenever the list is patched.
+        // The id breaks ties, so equal rows don't shuffle when the list is
+        // patched.
         return [...filtered].sort((a, b) => compare(a, b) || a.id.localeCompare(b.id));
     }, [filtered, view.sortKey, view.sortDir, owners]);
 
     const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-    // Clamped rather than reset: deleting the last passport on the final page
-    // shouldn't throw the admin back to the top of the list.
+    // Clamped, so deleting the final page's last row doesn't jump to the top.
     const page = Math.min(view.page, pageCount - 1);
     const from = page * PAGE_SIZE;
     const rows = sorted.slice(from, from + PAGE_SIZE);
 
     const selectedSet = useMemo(() => new Set(selected), [selected]);
-    // Resolved against the whole design rather than the current filter, so a
-    // selection survives switching tabs to look at something else, and so an id
-    // left over from a row someone else deleted drops out on its own. A passport
-    // claimed under the open table drops out the same way: it was ticked as stock
-    // and has stopped being stock, and nothing here acts on a claimed passport.
+    // Resolved against the whole design, so a selection survives switching tabs,
+    // and ids deleted or claimed meanwhile drop out on their own.
     const selectedPassports = useMemo(
         () => passports.filter(p => selectedSet.has(p.id) && p.status === 'unclaimed'),
         [passports, selectedSet],
     );
 
-    // What the header box and its partial state are measured against: ticking
-    // "all" can only mean all of the rows that can be ticked, which on the Claimed
-    // tab is none of them.
+    // "All" means every tickable row in view (none on the Claimed tab).
     const selectableInView = useMemo(() => sorted.filter(p => p.status === 'unclaimed'), [sorted]);
     const viewSelectedCount = selectableInView.reduce((n, p) => n + (selectedSet.has(p.id) ? 1 : 0), 0);
     const allInViewSelected = selectableInView.length > 0 && viewSelectedCount === selectableInView.length;
@@ -221,8 +196,7 @@ export const PassportStock = ({
     const toggleOne = (id: string) => onSelectedChange(
         selectedSet.has(id) ? selected.filter(s => s !== id) : [...selected, id]);
 
-    // The header box takes the whole filtered view, not the page on screen — the
-    // same set the exports below cover, so "all" means one thing on this screen.
+    // The whole filtered view, not the page: the same set the exports cover.
     const toggleView = () => {
         const inView = new Set(selectableInView.map(p => p.id));
         onSelectedChange(allInViewSelected
@@ -230,9 +204,7 @@ export const PassportStock = ({
             : [...new Set([...selected, ...inView])]);
     };
 
-    // Everything ticked is deletable — claimed rows can't be ticked — so this
-    // deletes the selection, with no subset to explain and no count that disagrees
-    // with the one beside it.
+    // Every ticked row is deletable, since claimed rows can't be ticked.
     const deleteSelected = async () => {
         const count = selectedPassports.length;
         if (count === 0) return;
@@ -257,9 +229,8 @@ export const PassportStock = ({
         }
         setDeleting(false);
 
-        // A passport claimed or already deleted since the table was loaded is
-        // skipped rather than failing the call, so the toast reports what actually
-        // went instead of implying the whole selection did.
+        // Claimed or deleted since loading: skipped, so the toast says what
+        // actually went.
         const skipped = result.claimed.length + result.missing.length;
         if (result.deleted.length === 0) {
             showToast(isEnglish
@@ -273,9 +244,8 @@ export const PassportStock = ({
         onDeleted(result.deleted);
     };
 
-    // The keys come from the server, a call per MAX_PASSPORT_KEY_EXPORT, and each
-    // call is logged in Records. A passport with no key on file (minted before
-    // keys were kept) is left out of the file and counted in the toast.
+    // One call per MAX_PASSPORT_KEY_EXPORT, each recorded. A passport with no key
+    // on file is left out and counted in the toast.
     const exportKeys = async () => {
         const ids = selectedPassports.map(p => p.id);
         if (ids.length === 0) return;
@@ -313,16 +283,14 @@ export const PassportStock = ({
     const sortBy = (column: Column) => onViewChange({
         ...view,
         sortKey: column.key,
-        // Clicking the column already sorted flips it; a new column starts the way
-        // that column is usually read.
+        // The sorted column flips; a new one starts its usual way.
         sortDir: view.sortKey === column.key
             ? (view.sortDir === 'asc' ? 'desc' : 'asc')
             : column.first,
         page: 0,
     });
 
-    // An export covers what was ticked and nothing else, so no filter describes
-    // it and the time it was taken is what tells two downloads apart.
+    // A selection export matches no filter, so its time tells downloads apart.
     const selectionBase = `passports-${year ?? ''}-selected-${fileStamp()}`;
 
     return (
@@ -345,15 +313,10 @@ export const PassportStock = ({
                 ))}
             </div>
 
-            {/* Always on screen, and the same height whether or not anything is
-                ticked, so the table doesn't jump the first time a row is. The
-                select-all lives here rather than in the table header because a
-                box in a header can't say that it takes the whole view and not
-                the page.
-
-                A view with no rows still gets the bar while something is ticked,
-                since a selection is built across tabs and its actions have to
-                stay reachable from whichever one is open. */}
+            {/* Always shown and always the same height, so the table doesn't jump
+                on the first tick. Select-all lives here because a header box
+                can't say it covers the whole view. Shown on an empty view too
+                while something is ticked, since a selection spans tabs. */}
             {(sorted.length > 0 || selectedPassports.length > 0) && (
                 <div className="admin-passport-bar">
                     <label className={`admin-passport-bar-all${
@@ -361,8 +324,8 @@ export const PassportStock = ({
                         <input
                             type="checkbox"
                             checked={allInViewSelected}
-                            // Partly ticked whenever the view holds some of the
-                            // selection but not all of it.
+                            // Partly ticked when the view holds some of the
+                            // selection.
                             ref={el => {
                                 if (el) el.indeterminate = viewSelectedCount > 0 && !allInViewSelected;
                             }}
@@ -400,8 +363,8 @@ export const PassportStock = ({
                             {isEnglish ? 'Clear' : '清除'}
                         </button>
                     )}
-                    {/* Present and disabled rather than absent: what a tick is for is
-                        then readable before anything has been ticked. */}
+                    {/* Disabled rather than absent, so what ticking is for is visible
+                        up front. */}
                     <div className="admin-passport-bar-actions">
                         <button
                             className="admin-toggle-btn admin-toggle-edit admin-btn-sm"

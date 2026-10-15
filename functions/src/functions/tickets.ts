@@ -161,8 +161,7 @@ function renderTicketQrBlock(tickets: any[], eventId: string): string {
         }
 
         const qrUrl = `${origin}/api/ticket-qr?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
-        // A wide gap between tickets so a reader framing one code doesn't
-        // also catch its neighbour and scan the wrong ticket.
+        // A wide gap so framing one code doesn't also catch its neighbour.
         return `<div style="margin:${i === 0 ? 16 : 72}px 0 16px;text-align:center;">` +
             `<div style="display:inline-block;background-color:${bgColor};color:${textColor};font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">${typeLabel}</div><br/>` +
             `<img src="${qrUrl}" alt="Ticket ${id}" width="300" height="300" style="width:300px;max-width:100%;height:auto;display:inline-block;"/>` +
@@ -171,10 +170,8 @@ function renderTicketQrBlock(tickets: any[], eventId: string): string {
     }).join("\n");
 }
 
-// Ticket ids are UUIDs and event ids are Firestore doc ids, so both fit this
-// charset well under the length cap. This endpoint is public and uncached for
-// novel inputs, so rejecting off-shape params early keeps an anonymous caller
-// from forcing QR generation for arbitrary (cache-busting) query strings.
+// Ticket ids are UUIDs and event ids are doc ids, so both fit. The endpoint is
+// public, so off-shape params are refused before any QR is generated for them.
 const QR_PARAM_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 export const serveTicketQr = onRequest({maxInstances: 10, memory: "256MiB"}, async (req, res) => {
@@ -200,8 +197,7 @@ export const serveTicketQr = onRequest({maxInstances: 10, memory: "256MiB"}, asy
         const url = `${origin}/claim?ticket=${encodeURIComponent(ticketId)}&event=${encodeURIComponent(eventId)}`;
         const QRCode = (await import("qrcode")).default;
 
-        // Twice the 300px the email shows it at, so it stays sharp on a
-        // high-density screen. Error correction "M" scans reliably at this size.
+        // Twice the 300px the email shows, for high-density screens.
         const buf = await QRCode.toBuffer(url, {errorCorrectionLevel: "M", width: 600, margin: 1});
 
         res.set("Content-Type", "image/png");
@@ -220,8 +216,8 @@ const escapeHtml = (s: string): string => s
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-// Site Config's Contact Email. Usable in an href too (mailto:{{ contactEmail }}),
-// since the address is escaped like every other substituted value.
+// Site Config's Contact Email. Escaped like every other value, so it also works
+// in an href (mailto:{{ contactEmail }}).
 const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
 
 function renderTemplate(
@@ -237,23 +233,20 @@ function renderTemplate(
         ticketBlock: string;
         contactEmail: string;
     },
-    // True when rendering into HTML (body). False for plain-text contexts
-    // (subject line) — entity-encoding subject text would surface literally
-    // in inboxes (e.g. "Jones &amp; Co").
+    // False for the subject line, where entities would show literally ("Jones
+    // &amp; Co").
     htmlContext: boolean,
 ): string {
     const sub = htmlContext ? escapeHtml : (s: string) => s;
-    // CSS background-image is unreliable in email clients (Outlook strips it
-    // entirely; several others ignore it). Render a real <img> instead so the
-    // header artwork shows everywhere. The URL was checked as a Firebase Storage
-    // URL at save time (validateStorageImageUrl), but that check reads the parsed
-    // URL while the stored string is what lands here, so it is escaped too.
+    // A real <img>, since email clients strip or ignore CSS backgrounds. The URL
+    // was validated at save time, but against its parsed form, so the stored
+    // string is escaped too.
     const headerImage = data.emailHeaderBg
         ? `<img src="${escapeHtml(data.emailHeaderBg)}" alt="${sub(data.eventTitle)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
         : `<div style="background-color:#ff6b9d;height:120px;"></div>`;
 
-    // Function replacements throughout: a replacement string reads $&, $' and $$
-    // as patterns, so a name or title containing one would come out mangled.
+    // Function replacements throughout: a replacement string would read $&, $'
+    // and $$ in a name or title as patterns.
     return template
         .replace(/{{\s*attendeeEmail\s*}}/g, () => sub(data.attendeeEmail))
         .replace(/{{\s*attendeeName\s*}}/g, () => sub(data.attendeeName))
@@ -263,8 +256,8 @@ function renderTemplate(
         .replace(/{{\s*eventHeader\s*}}/g, () => headerImage)
         .replace(/{{\s*ticketCount\s*}}/g, () => String(data.ticketCount))
         .replace(CONTACT_EMAIL_PLACEHOLDER, () => sub(data.contactEmail))
-        // {{ ticketIds[] }} — with optional surrounding <p>/<div> tags collapsed.
-        // ticketBlock is server-built HTML, never escaped.
+        // {{ ticketIds[] }}, with a wrapping <p>/<div> collapsed. ticketBlock is
+        // server-built HTML, never escaped.
         .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[]\s*}}(\s*<\/p>|\s*<\/div>)?/g, () => data.ticketBlock);
 }
 
@@ -310,9 +303,8 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         normalized.set(email, {email, name, ticketCount, type, timestamp});
     }
 
-    // Admin check + event existence check in a lightweight transaction.
-    // We can't fit the whole import in one transaction (would violate the 500-op
-    // limit on large imports), so the big writes run as batched commits below.
+    // Only the admin and event checks are transactional; the import itself is
+    // too big for the 500-op limit, so it runs as batched commits below.
     const eventTitle = await adminTransaction(uid, async (txn) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
@@ -321,8 +313,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
 
     const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
 
-    // Look up existing docs by email in parallel (queries in chunks to avoid
-    // the `in` operator's 30-value limit).
+    // Chunked for the `in` operator's 30-value limit.
     const emails = Array.from(normalized.keys());
     const existingByEmail = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
     for (let i = 0; i < emails.length; i += 30) {
@@ -356,9 +347,8 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         const now = FieldValue.serverTimestamp();
         const customDate = row.timestamp ? Timestamp.fromDate(row.timestamp) : undefined;
 
-        // A row's own timestamp, when the import has one, stands in for both dates,
-        // so the ticket reads as bought then. Without one, a new record is stamped
-        // now and a replaced one keeps its createdAt.
+        // A row's own timestamp stands in for both dates. Without one, a new record
+        // is stamped now and a replaced one keeps its createdAt.
 
         if (existing) {
             replacedCount++;
@@ -417,38 +407,25 @@ interface HeldTicket {
 /**
  * Every ticket the caller holds for an event that hasn't ended yet.
  *
- * Attendee docs are keyed by the email the ticket was bought with, and the
- * `attendees` subcollection is closed to everyone but staff (see
- * firestore.rules), so this call is the only way a holder reaches their own
- * tickets. The email comes off the ID token rather than the users doc, and only
- * once the token says it is verified, so nobody reads someone else's tickets by
- * having a profile field say so, or by signing up with an address they don't
- * own. Sign-in is Google only today, but that is a setting in the Firebase
- * console, not something this code enforces.
+ * Attendee docs are keyed by purchase email and closed to everyone but staff, so
+ * this is the only way holders reach their tickets. The email comes from the ID
+ * token, and only once it is verified, so nobody can read someone else's tickets
+ * through a profile field or an unowned sign-up address.
  *
- * The cut is the event's end, never the scan. A ticket already through the door
- * stays visible for the length of the event — people re-open their own ticket to
- * settle what they paid for or which of a batch was used — and once `endAt`
- * passes nothing comes back at all, scanned or not, so the card leaves the
- * profile on its own. The event's attendance then shows up under Events Attended
- * once it is archived.
+ * The cut is the event's end, not the scan: a scanned ticket stays visible while
+ * the event runs, and once `endAt` passes nothing comes back. Only paid,
+ * published events are searched.
  *
- * Only paid, published events are searched: a free event has no tickets, and an
- * unpublished event's title is withheld by those same rules.
- *
- * A redeemed ticket also backfills attendance. The scanner credits the holder's
- * account as it scans, but only if an account already carried the ticket's
- * email; someone who signed up afterwards would otherwise never be credited for
- * the event they were scanned into. createUserProfile does the same at sign-up,
- * for ended events too; this catches a sign-up whose credit failed.
+ * A redeemed ticket also backfills attendance, for someone who signed up after
+ * being scanned and whose sign-up credit (createUserProfile) failed.
  */
 export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
     const email = (request.auth?.token.email ?? "").trim().toLowerCase();
     if (!email || request.auth?.token.email_verified !== true) return {events: []};
 
-    // Filtering on endAt alone keeps this on the automatic single-field index —
-    // there are only ever a handful of live events to sift in memory.
+    // endAt alone stays on the automatic single-field index; there are only a
+    // handful of live events to filter in memory.
     const liveSnap = await db.collection("upcomingEvents")
         .where("endAt", ">", Timestamp.now()).get();
     const liveEvents = liveSnap.docs.filter(doc => {
@@ -461,8 +438,8 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
             .where("email", "==", email).get();
         if (attendeeSnap.empty) return null;
 
-        // Import dedupes by email, so this is one doc in practice; taking every
-        // match means a hand-edited duplicate still shows all of its tickets.
+        // Import dedupes by email, so this is one doc in practice; a hand-made
+        // duplicate still shows its tickets.
         const tickets: HeldTicket[] = [];
         for (const doc of attendeeSnap.docs) {
             const rawTickets: unknown[] = Array.isArray(doc.data().tickets) ? doc.data().tickets : [];
@@ -510,8 +487,8 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
                 await userRef.update({attendedEvents: FieldValue.arrayUnion(...missing)});
             }
         } catch (err) {
-            // A profile that couldn't be credited must not cost the caller the
-            // sight of their tickets — the scanner is the primary writer anyway.
+            // A failed credit mustn't hide the tickets; the scanner is the
+            // primary writer anyway.
             console.error(`getMyTickets: attendance backfill failed for ${uid}`, err);
         }
     }
@@ -519,29 +496,20 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     return {events};
 });
 /**
- * How many emails one lookup may ask about. Firestore's `in` takes 30 at a time,
- * so this is 17 queries fired together — comfortably inside a call, and enough
- * that a 500-strong attendee list is answered in one round trip rather than
- * spending a caller's rate-limit budget on a dozen.
+ * Emails per lookup: 17 parallel `in` queries of 30, enough to answer a
+ * 500-strong list in one call.
  */
 const ACCOUNT_LOOKUP_MAX = 500;
 
 /**
- * Which of these ticket emails belong to a registered account.
+ * Which of these ticket emails belong to a registered account, for staff adding
+ * an attendee or reading the list.
  *
- * Staff need this in two places: adding an attendee, where it says whether the
- * address they just typed will reach somebody's profile, and reading the list
- * afterwards, where it says which tickets will credit an account when scanned.
+ * It uses the scanner's exact query, a match on the lowercased address (see
+ * redeemTicket), so staff see what check-in will actually find.
  *
- * It answers with the same query the scanner uses — an exact match on the
- * lowercased address (see redeemTicket) — so what staff are shown is a preview
- * of what check-in will actually find, rather than a friendlier lookup that
- * would promise a link the scanner then misses.
- *
- * Who the account belongs to is for staff and above, who can read every
- * profile anyway. Event staff get the fact of a link and nothing else: they can
- * read this event's attendees, which is not the same as being able to put a name
- * to every address in the club.
+ * Staff and above get who the account is; event staff only get whether there is
+ * one.
  */
 export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -556,8 +524,8 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
             `Too many emails in a single lookup (max ${ACCOUNT_LOOKUP_MAX}).`);
     }
 
-    // The same gate as reading the attendees themselves: staff anywhere, event
-    // staff on their own event.
+    // The same gate as reading the attendees: staff anywhere, event staff on
+    // their own event.
     const callerSnap = await db.collection("users").doc(uid).get();
     const callerData = callerSnap.data() ?? {};
     const isStaffOrAbove = ["staff", ...ADMIN_GROUPS].includes(normalizeGroup(callerData.group));
@@ -566,10 +534,8 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
         throw new HttpsError("permission-denied", "Not authorized to read this event's attendees.");
     }
 
-    // A malformed address is dropped rather than rejected. This is a read on
-    // behalf of a preview that may well be showing a row someone typed wrong,
-    // and no address matches an account anyway — losing the whole lookup over
-    // one bad row would be the worse answer.
+    // A malformed address is dropped rather than failing the whole lookup; it
+    // matches no account anyway.
     const emails = Array.from(new Set(
         input.emails
             .map(raw => (typeof raw === "string" ? raw.trim().toLowerCase() : ""))
@@ -629,9 +595,9 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         }
 
         const now = Timestamp.now();
-        // Core staff scan whenever. The staff group and the event's own staff scan
-        // on the day(s) it runs — all day, not only its hours, so the door can
-        // open early — and are told so before anything about the ticket.
+        // Core staff scan whenever. The staff group and the event's staff scan all
+        // day on the event's days, so the door can open early, and are told so
+        // before anything about the ticket.
         if (!isCoreStaffOrAbove
             && !isOnEventDay(eventSnap.data()?.startAt, eventSnap.data()?.endAt, now.toMillis())) {
             throw new HttpsError("failed-precondition", "Tickets can only be scanned on the day of the event.",
@@ -665,10 +631,9 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         const attendeeName: string = attendeeData.name ?? "";
         const eventTitle: string = eventSnap.data()?.title ?? "";
 
-        // How long after admitting a ticket the same scanner can read it again and
-        // be told it succeeded, so a ticket still held up to the camera doesn't flip
-        // to "already redeemed" a moment after it got in. Timed from the admission;
-        // the scanner's cache is told what is left of it.
+        // How long after admitting a ticket the same scanner reading it again is
+        // told it succeeded, so a ticket still held to the camera doesn't flip to
+        // "already redeemed". Timed from the admission.
         const REDEEM_GRACE_PERIOD_MS = 15_000;
 
         if (ticket.redeemed) {
@@ -689,10 +654,9 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                 };
             }
 
-            // The same scanner reading it again moments later: report the admission
-            // it already made, and write nothing. Writing redeemedAt again would
-            // restart the window on every rescan, and a ticket held up to the camera
-            // every few seconds would never stop reading as a fresh admission.
+            // The same scanner again moments later: report the earlier admission and
+            // write nothing, since rewriting redeemedAt would restart the window on
+            // every rescan.
             return {
                 success: true,
                 attendeeName,
@@ -863,16 +827,14 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
         if (tickets[idx].voided) {
             throw new HttpsError("failed-precondition", "This ticket has been voided.", {code: "voided"});
         }
-        // Idempotent: a ticket already redeemed stays as-is so a double-click
-        // can't overwrite the original redeemer/time.
+        // Idempotent, so a double-click can't overwrite the original redeemer
+        // and time.
         if (tickets[idx].redeemed) {
             return {redeemed: false, alreadyRedeemed: true};
         }
 
-        // A check-in by hand is still a check-in, so it credits the holder's
-        // account exactly as the scanner does (see redeemTicket) — otherwise
-        // whether the event reaches their profile would come down to which
-        // button the door staff pressed.
+        // A check-in by hand credits the account exactly as the scanner does
+        // (see redeemTicket).
         const attendeeEmail: string = data.email ?? "";
         let userCheckedIn = false;
         if (attendeeEmail) {
@@ -943,10 +905,8 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
         const idx = tickets.findIndex(t => t.ticketId === ticketId);
         if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
 
-        // Clear only the redemption state. The attendee's user-level
-        // attendedEvents (set by the scanner) is intentionally left untouched —
-        // a user may have attended via another ticket, so we don't un-check-in
-        // the person just because one ticket was reset.
+        // Only the redemption state. attendedEvents stays: the holder may have
+        // attended on another ticket.
         tickets[idx] = {
             ...tickets[idx],
             redeemed: false,
@@ -1190,9 +1150,8 @@ export const sendTicketEmails = onCall(
                 "Email template is empty.", {code: "no-template"});
         }
 
-        // Refuse rather than send "contact us at  and we'll sort it out" with
-        // a mailto: to no one. Read per call, so a fix in Site Config applies
-        // to the next send.
+        // Refuse rather than send "contact us at " with an empty mailto. Read
+        // per call, so a Site Config fix applies to the next send.
         const contactEmail = ((await db.collection("config").doc("main").get())
             .get("contactEmail") as string | undefined) ?? "";
         const usesContactEmail = [template.subject, template.bodyHtml]
@@ -1216,9 +1175,8 @@ export const sendTicketEmails = onCall(
             targets = filtered.slice(0, chunkSize);
             queriedCount = filtered.length;
         } else if (mode === "unsent") {
-            // Drain pattern: processed attendees leave the result set on the next call.
-            // orderBy createdAt gives FIFO fairness across chunks — uses the
-            // existing (emailSent, createdAt) composite index.
+            // A drain: processed attendees leave the result set. createdAt order keeps
+            // chunks FIFO on the (emailSent, createdAt) index.
             const snap = await attendeesCol
                 .where("emailSent", "==", false)
                 .orderBy("createdAt", "asc")
@@ -1241,23 +1199,16 @@ export const sendTicketEmails = onCall(
         const emailHeaderBg: string = eventData.emailHeaderBg ?? "";
         const eventDateEn = formatEventDateForEmail(eventData.startAt);
 
-        // Enforce the Resend daily cap server-side so a buggy/malicious client
-        // (or parallel admins) can't blow past it. Anything past the daily cap
-        // goes into /scheduledMail and is drained by scheduledMailDrain as
-        // quota frees up.
-        // Bail out only when BOTH the daily cap and the queue are full —
-        // otherwise the chunk falls through to the walk below. The
-        // authoritative cap re-read happens inside the txn (see below); this
-        // pre-check is just to short-circuit a no-op chunk before doing real
-        // work. Queue capacity stays loose by design — a few overflow items
-        // past RESEND_QUEUE_CAP are acceptable.
+        // The daily cap is enforced here, not trusted to the client; anything
+        // past it goes to /scheduledMail for scheduledMailDrain. This pre-check
+        // only skips a chunk when both the cap and the queue are full; the
+        // authoritative read is in the transaction below. The queue cap is
+        // loose on purpose.
         //
-        // Re-anchor `confirmed` against the provider before reading it. The
-        // cache is otherwise only written as a side effect of sending, so it
-        // never observes the rolling window reopening between sends — and on a
-        // plan that gets no quota header it is never written at all, which
-        // would leave the cap unenforced. A failed read leaves the cache as-is
-        // and we gate on it, same as before.
+        // Re-anchoring against the provider first matters because the cache
+        // otherwise only updates on sends, so it never sees the rolling window
+        // reopen, and on a plan with no quota header it is never written at
+        // all. A failed read leaves the cache as it was.
         await syncProviderUsage();
         const {sentToday, dailyCap} = await computeEmailQuota();
         const prelimRemainingToday = Math.max(0, dailyCap - sentToday);
@@ -1268,15 +1219,13 @@ export const sendTicketEmails = onCall(
                 "Daily cap reached and overflow queue is full.", {code: "quota-exceeded"});
         }
 
-        // Ops here are only for non-email side effects (ticketless attendee
-        // marks). The actual Resend send happens in one batch call below.
+        // Only the non-email writes (ticketless attendee marks); the send
+        // itself is one call below.
         const ops: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
 
-        // Walk targets into a candidates list. The send-vs-queue split is
-        // deferred until inside the reservation transaction below, so the
-        // split keys off a fresh sentToday read rather than the stale one
-        // from the pre-check (which a concurrent admin send could have
-        // consumed in the meantime).
+        // The send/queue split waits for the reservation transaction, so it
+        // keys off a fresh sentToday rather than the pre-check's, which a
+        // concurrent send may have consumed.
         const ticketlessTargets: FirebaseFirestore.QueryDocumentSnapshot[] = [];
         const candidates: {
             target: FirebaseFirestore.QueryDocumentSnapshot;
@@ -1284,9 +1233,9 @@ export const sendTicketEmails = onCall(
             tickets: any[];
         }[] = [];
         const prelimBudget = prelimRemainingToday + queueCapacity;
-        // How many of `targets`, in order, this call deals with — lowered below if
-        // the reservation trims candidates. A resend-all pass resumes after the
-        // last of them, so a target left over is picked up next call, not skipped.
+        // How many of `targets`, in order, this call handles; lowered if the
+        // reservation trims candidates, so a resend-all resumes with the first one
+        // left over.
         let handled = targets.length;
         for (const [i, target] of targets.entries()) {
             if (candidates.length >= prelimBudget) {
@@ -1305,8 +1254,7 @@ export const sendTicketEmails = onCall(
             candidates.push({target, data, tickets: activeTickets});
         }
 
-        // Defective attendees (no tickets or all voided): mark sent so the mode='unsent'
-        // drain doesn't spin on the same doc forever.
+        // No tickets, or all voided: mark sent so the 'unsent' drain doesn't spin on it.
         for (const target of ticketlessTargets) {
             ops.push(b => b.update(target.ref, {
                 emailSent: true,
@@ -1315,16 +1263,11 @@ export const sendTicketEmails = onCall(
             }));
         }
 
-        // Reserve daily-cap slots atomically. Reading the quota cache inside
-        // the txn and writing the pre-charge (reserved counter + audit
-        // record) in the same txn closes the race where two concurrent
-        // admin sends both observe pre-reservation state and double-spend:
-        // Firestore's optimistic concurrency on system/resendQuota means
-        // whichever txn lands second retries against the new total. Once
-        // the send settles, this send's own reservation is released, and
-        // Resend's authoritative count recorded if a quota header came back.
-        // Queue audit shares the txn for symmetry — doesn't consume the
-        // daily cap, cheap to include.
+        // Reserve daily-cap slots in a transaction that reads the quota cache
+        // and writes the pre-charge together, so two concurrent sends can't
+        // both spend the same slots: optimistic concurrency on
+        // system/resendQuota retries the second. The reservation is released
+        // once the send settles.
         const callerSnap = await db.collection("users").doc(uid).get();
         const performedByName = callerSnap.data()?.displayName ?? "";
         const {sendAuditRef, queueAuditRef, expectedSentCount, expectedQueuedCount} =
@@ -1365,9 +1308,8 @@ export const sendTicketEmails = onCall(
                 };
             });
 
-        // Trim candidates to what the txn actually reserved (a concurrent
-        // admin send may have consumed slots between the pre-check and the
-        // txn read). First `expectedSentCount` ship now; the rest queue.
+        // Trim to what the transaction reserved: the first `expectedSentCount`
+        // send now, the rest queue.
         const reservedCount = expectedSentCount + expectedQueuedCount;
         if (reservedCount < candidates.length) {
             handled = Math.min(handled, targets.indexOf(candidates[reservedCount].target));
@@ -1377,8 +1319,8 @@ export const sendTicketEmails = onCall(
             queued: i >= expectedSentCount,
         }));
 
-        // Build envelopes for the send slice and queue payloads for the
-        // queue slice. One pass — both share the same rendering.
+        // Envelopes for the send slice and payloads for the queue slice,
+        // rendered in one pass.
         const sendEnvelopes: ResendEnvelope[] = [];
         const sendCommitTargets: typeof sendableTargets = [];
         const queueItems: {
@@ -1389,9 +1331,8 @@ export const sendTicketEmails = onCall(
             const {target, data, tickets, queued} = item;
             const ticketBlock = renderTicketQrBlock(tickets, eventId);
 
-            // Strip control chars (CR/LF in particular) from the rendered
-            // subject so a stray newline in eventTitle/attendeeName can't
-            // escape the Subject: header and inject extra fields.
+            // Strip control characters so a newline in eventTitle or
+            // attendeeName can't inject headers.
             const renderedSubject = renderTemplate(template.subject, {
                 attendeeEmail: data.email ?? "",
                 attendeeName: data.name ?? "",
@@ -1427,15 +1368,10 @@ export const sendTicketEmails = onCall(
             }
         }
 
-        // One call to Resend for the whole send slice — sendEmails picks
-        // the single endpoint when there's exactly one envelope and the
-        // batch endpoint (up to 100) otherwise. SEND_CHUNK_SIZE is capped
-        // at 100 so a single call always covers the chunk.
-        // Failure mode: all-or-nothing — a 4xx/5xx fails every envelope. If
-        // Resend responded with the quota header, resendClient already
-        // wrote the authoritative count to the cache; if no header came
-        // back, we roll back the pre-charge so a retry doesn't see a false
-        // ceiling.
+        // One Resend call for the whole send slice (SEND_CHUNK_SIZE is capped
+        // at the batch endpoint's 100). It is all or nothing: on failure, the
+        // pre-charge is rolled back unless a quota header came back, which
+        // resendClient has already recorded.
         let sentCount = 0;
         let sendError: unknown = null;
         if (sendEnvelopes.length > 0) {
@@ -1445,8 +1381,6 @@ export const sendTicketEmails = onCall(
             } catch (err) {
                 console.error("sendTicketEmails: send failed", err);
                 sendError = err;
-                // Roll back the pre-charge unless a quota header came back;
-                // resendClient has already folded that into the cache.
                 const headerArrived = err instanceof ResendSendError
                     && err.dailyConsumed !== null;
                 if (!headerArrived) {
@@ -1455,16 +1389,12 @@ export const sendTicketEmails = onCall(
             }
         }
 
-        // Mark attendees as sent — one batch.commit() per attendee so a
-        // single bad write (e.g., attendee deleted mid-call) doesn't
-        // strand the whole group. The Resend send already happened, so
-        // a failed mark means the email will look "unsent" in the admin
-        // UI and would be re-sent on the next 'unsent' drain.
-        // Mitigation: log loudly so an admin can manually flag.
-        // sentCount is the id count Resend returned, not a local length, so
-        // clamp the loop to the targets we actually hold. Overrunning would
-        // throw outside the per-attendee catch below and strand every
-        // remaining mark, re-sending the whole batch on the next drain.
+        // One commit per attendee, so one bad write (say, an attendee deleted
+        // mid-call) doesn't strand the rest. The email has gone, so a failed
+        // mark would be re-sent by the next 'unsent' drain; it is logged loudly
+        // for an admin to flag. sentCount is Resend's id count, so the loop is
+        // clamped to the targets held: overrunning would throw outside the
+        // per-attendee catch.
         if (sentCount > sendCommitTargets.length) {
             console.error("sendTicketEmails: Resend returned more ids than envelopes sent",
                 sentCount, sendCommitTargets.length);
@@ -1484,9 +1414,8 @@ export const sendTicketEmails = onCall(
             }
         }
 
-        // Queue the overflow. attendeePath lets the drain clear
-        // emailScheduled once the queued mail actually ships, flipping
-        // the admin UI from "Queued" to "Sent".
+        // Queue the overflow. attendeePath lets the drain clear emailScheduled
+        // once the mail ships, turning "Queued" into "Sent" in the admin UI.
         let queuedCount = 0;
         for (const {target, envelope} of queueItems) {
             const scheduledRef = db.collection("scheduledMail").doc();
@@ -1500,10 +1429,8 @@ export const sendTicketEmails = onCall(
                 recipientCount: 1,
                 attendeePath: target.ref.path,
             });
-            // emailSent=true keeps the mode='unsent' drain from
-            // re-picking this attendee on the next chunk call.
-            // emailScheduled is the disambiguator the admin UI keys on to
-            // show "Queued" instead of "Sent" until the drain ships the mail.
+            // emailSent keeps the 'unsent' drain off it; emailScheduled makes
+            // the admin UI say "Queued" until the drain ships it.
             batch.update(target.ref, {
                 emailSent: true,
                 emailScheduled: true,
@@ -1519,11 +1446,8 @@ export const sendTicketEmails = onCall(
 
         if (ops.length > 0) await commitInChunks(ops);
 
-        // Reconcile the eager audit reservations: if a mid-loop error or
-        // skipped target meant we shipped fewer than reserved, lower the
-        // recorded count (or delete the audit entirely if nothing got
-        // through). Keeps computeEmailQuota accurate without leaving a
-        // counterfactual over-count blocking later sends.
+        // If fewer shipped than were reserved, lower the audit's count, or
+        // delete it when none did, so it doesn't block later sends.
         if (sendAuditRef) {
             if (sentCount === 0) await sendAuditRef.delete();
             else if (sentCount !== expectedSentCount) await sendAuditRef.update({sentCount});
@@ -1533,9 +1457,7 @@ export const sendTicketEmails = onCall(
             else if (queuedCount !== expectedQueuedCount) await queueAuditRef.update({sentCount: queuedCount});
         }
 
-        // Surface send failures to the caller after reconciliation so any
-        // audit/queue writes that did succeed are durable. Queued items
-        // get drained later; the admin should retry the failed send.
+        // Thrown after reconciling, so the writes that did succeed are kept.
         if (sendError && sentCount === 0 && expectedSentCount > 0) {
             throw new HttpsError("internal",
                 "Email send failed; queued items (if any) will still drain.",
@@ -1546,9 +1468,8 @@ export const sendTicketEmails = onCall(
                 });
         }
 
-        // hasMore: the query returned a full chunk (there may be more), or this
-        // call stopped short of the chunk it read. For attendeeIds, the client
-        // controls chunking — never set hasMore.
+        // A full chunk came back, or this call stopped short of it. With
+        // attendeeIds the client does the chunking.
         const hasMore = !attendeeIds && (queriedCount >= chunkSize || handled < targets.length);
         const resumeAfter = handled > 0 ? targets[handled - 1].id : cursor;
         const nextCursor = mode === "all" && hasMore && resumeAfter ? resumeAfter : undefined;
@@ -1557,15 +1478,15 @@ export const sendTicketEmails = onCall(
     });
 export const getTicketEmailQuota = onCall({
     maxInstances: 5,
-    // Needed by syncProviderUsage below; without the binding it reads no key
-    // and silently falls back to the cached counter.
+    // For syncProviderUsage; without it the read has no key and falls back to
+    // the cached counter.
     secrets: [RESEND_API_KEY],
 }, async (request) => {
     const uid = await requireAuth(request);
     await requireAdmin(uid);
 
-    // Same re-anchor as the send path, so the headroom quoted in the send UI
-    // matches what sendTicketEmails will actually gate on a moment later.
+    // The send path's re-anchor, so the headroom shown matches what
+    // sendTicketEmails gates on.
     await syncProviderUsage();
     const [{sentToday, dailyCap}, queuedCount] = await Promise.all([
         computeEmailQuota(),

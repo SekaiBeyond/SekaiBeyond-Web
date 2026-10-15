@@ -37,10 +37,8 @@ interface QrCodeDetailProps {
 }
 
 /**
- * One code's page: stats, QR image(s), settings, and scan trends together.
- * Every setting displays as a read-only value with its own Edit affordance
- * that swaps in just that field's controls — so the scan count and chart
- * never leave the screen, and only the facet being changed becomes a form.
+ * One code's page: stats, QR images, settings and scan trends. Each setting is
+ * a value with its own Edit, so only the facet being changed becomes a form.
  */
 export const QrCodeDetail = ({
                                  code,
@@ -56,8 +54,8 @@ export const QrCodeDetail = ({
     const {request: requestDownload, node: downloadNode} = useQrDownload();
 
     const [editing, setEditing] = useState<EditSection | null>(null);
-    // Holds the whole draft while a section edits (saves send the full payload);
-    // stale and unused when nothing is being edited.
+    // The whole draft, since saves send the full payload; stale while nothing is
+    // edited.
     const [draft, setDraft] = useState<QrDraft>(() => qrToDraft(code));
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -68,10 +66,8 @@ export const QrCodeDetail = ({
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const scanValue = qrScanUrl(code.id, origin);
 
-    // "Unsaved changes" is judged on the payload that would be saved, not raw
-    // draft state — cosmetic leftovers (an expiry date remembered after
-    // switching modes off, a cleared spot's note) don't count, and a draft
-    // that can't build a payload always does.
+    // Unsaved changes are judged on the payload, so cosmetic leftovers don't
+    // count, and a draft that can't build one always does.
     const payloadJson = (d: QrDraft): string | null => {
         const built = buildQrPayload(d, isEnglish);
         return 'error' in built ? null : JSON.stringify(built.payload);
@@ -143,8 +139,8 @@ export const QrCodeDetail = ({
         d ? d.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
         }) : (isEnglish ? 'Never' : '从未');
-    // An expiry is set on the Pacific clock, so it reads back on it; a scan is
-    // something that happened, so fmtDate shows it on the viewer's.
+    // Expiries are on the Pacific clock; scans are moments, in the viewer's
+    // zone.
     const fmtExpiry = (d: Date): string =>
         formatSiteTime(d, isEnglish, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
 
@@ -352,9 +348,8 @@ export const QrCodeDetail = ({
                         </p>
                     )}
                     <div className="admin-qr-platform-cards">
-                        {/* While the picker is open the cards preview the checkbox
-                            state, so toggling a platform shows/hides its QR live
-                            (a just-checked one shows 0 scans until saved). */}
+                        {/* While picking, the cards follow the checkboxes; a new
+                            platform shows 0 scans until saved. */}
                         {(editing === 'platforms' ? draft.platforms : code.platforms).map(pid => (
                             <PlatformQrCard
                                 key={pid}

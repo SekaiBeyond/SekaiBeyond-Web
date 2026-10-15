@@ -11,8 +11,6 @@ import { useAllUpcomingEvents, useUpcomingEventsByIds } from '~/lib/upcomingEven
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTags } from '~/lib/tags';
 import { useVenues } from '~/lib/venues';
-import { useParkingLots } from '~/lib/parkingLots';
-import { useParkingRates } from '~/lib/parkingRates';
 import type { BadgeDef, Tab } from './types';
 import { UsersTab, type UsersTabHandle } from './UsersTab';
 import { EventsTab, type EventsTabHandle } from './EventsTab';
@@ -20,27 +18,19 @@ import { UpcomingEventsTab, type UpcomingEventsTabHandle } from './UpcomingEvent
 import { BadgesTab, type BadgesTabHandle } from './BadgesTab';
 import { TagsTab } from './TagsTab';
 import { VenuesTab } from './VenuesTab';
+import { UwParkingStatus } from './UwParkingStatus';
 import { LocationsMap } from './LocationsMap';
-import { ParkingLotsTab } from './ParkingLotsTab';
-import { ParkingRatesTab } from './ParkingRatesTab';
 import { PassportsTab } from './passports/PassportsTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
 import { ConContentTab } from './ConContentTab';
 import { SectionNav } from './SectionNav';
-import type { CardHighlightHandle, LocationListHandle } from './useCardHighlight';
+import type { LocationListHandle } from './useCardHighlight';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
 
-/** Every tab a link can name, and the older names now folded into another tab. */
+/** Every tab a link can name. */
 const LINKABLE_TABS: Tab[] = ['users', 'events', 'locations', 'badges', 'passports', 'records', 'tools', 'config', 'con'];
-const TAB_ALIASES: Record<string, Tab> = {
-    venues: 'locations',
-    parking: 'locations',
-    tags: 'events',
-    upcoming: 'events',
-    policy: 'config',
-};
 
 const ADMIN_TABS: {id: Tab; en: string; zh: string; generalStaffOnly?: boolean}[] = [
     {id: 'users', en: 'Users Management', zh: '用户管理', generalStaffOnly: true},
@@ -71,11 +61,9 @@ export const AdminPage = () => {
     const isCoreStaffOrAbove = !!profile && hasPermission(profile.group, 'core-staff');
     // Staff group: view-only admin access + Tools. Superset of event-staff access.
     const isStaffGroup = !!profile && hasPermission(profile.group, 'staff') && !isCoreStaffOrAbove;
-    // Event-staff is a per-event tag, independent of the global user group — a user
-    // below staff group who is staff for an UPCOMING event gets scanner/admin access
-    // for those events. Access is gated on upcoming (not raw eventStaffEvents)
-    // membership: past-event staff entries are retained for the profile badge +
-    // roster, so access falls away naturally once a staffer's events are archived.
+    // Event staff is a per-event tag, independent of the group: staff for an
+    // upcoming event get scanner and admin access to it. Gated on upcoming events
+    // because eventStaffEvents keeps past ones, so access lapses on archive.
     const isEventStaffOnly = !!profile
         && !isCoreStaffOrAbove
         && !isStaffGroup
@@ -86,9 +74,8 @@ export const AdminPage = () => {
     const refreshUpcoming = (isCoreStaffOrAbove || isStaffGroup) ? refreshAllUpcoming : refreshStaffUpcoming;
 
     const [activeTab, selectTab] = useState<Tab>('users');
-    // Switching tabs unmounts the whole tab, so it is a way out of any screen
-    // holding state that can't be recovered — the batch generator's activation
-    // keys, above all. Every caller goes through the guard by construction.
+    // Switching tabs unmounts the tab, so it goes through the exit guard (the
+    // generator's unsaved keys, above all).
     const setActiveTab = (tab: Tab) => {
         if (confirmExit()) selectTab(tab);
     };
@@ -99,8 +86,6 @@ export const AdminPage = () => {
     const {toasts, showToast} = useToasts();
     const {tags, refresh: refreshTags} = useTags();
     const {venues, refresh: refreshVenues} = useVenues();
-    const {parkingLots, refresh: refreshParkingLots} = useParkingLots();
-    const {parkingRates, refresh: refreshParkingRates} = useParkingRates();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const urlParamsHandled = useRef(false);
@@ -110,11 +95,8 @@ export const AdminPage = () => {
     const upcomingTabRef = useRef<UpcomingEventsTabHandle>(null);
     const badgesTabRef = useRef<BadgesTabHandle>(null);
     const venuesTabRef = useRef<LocationListHandle>(null);
-    const parkingLotsTabRef = useRef<LocationListHandle>(null);
-    const parkingRatesTabRef = useRef<CardHighlightHandle>(null);
-    // Cross-tab "jump to this card" requests. Held in state (not a ref) with a
-    // nonce so the effect below fires after the target tab has mounted — and
-    // re-fires even when the target tab is already active (e.g. map → list jumps).
+    // Cross-tab "jump to this card" requests, in state with a nonce so the effect
+    // fires after the target tab mounts, and again when it's already active.
     const actionNonce = useRef(0);
     const [pendingAction, setPendingAction] = useState<{type: string; id: string; nonce: number} | null>(null);
     const queueAction = useCallback((type: string, id: string) => {
@@ -138,8 +120,7 @@ export const AdminPage = () => {
         if (!isCoreStaffOrAbove && !isStaffGroup && !isEventStaffOnly) return;
         const tab = searchParams.get('tab');
         const event = searchParams.get('event');
-        // Selections are queued rather than made here: the tab only mounts once
-        // setActiveTab lands, so its ref is still empty at this point.
+        // Queued: the tab only mounts once setActiveTab lands.
         if (isEventStaffOnly) {
             setActiveTab('events');
             const firstEventId = event && staffUpcomingEvents.some(e => e.id === event)
@@ -147,10 +128,8 @@ export const AdminPage = () => {
                 : staffUpcomingEvents[0]?.id;
             if (firstEventId) queueAction('selectUpcomingEvent', firstEventId);
         } else {
-            const target = LINKABLE_TABS.includes(tab as Tab) ? tab as Tab : TAB_ALIASES[tab ?? ''];
-            if (target) setActiveTab(target);
+            if (LINKABLE_TABS.includes(tab as Tab)) setActiveTab(tab as Tab);
             if (tab === 'events' && event) queueAction('selectEvent', event);
-            if (tab === 'upcoming' && event) queueAction('selectUpcomingEvent', event);
         }
         urlParamsHandled.current = true;
     }, [loading, user, profile, searchParams, isCoreStaffOrAbove, isStaffGroup, isEventStaffOnly, staffUpcomingEvents, queueAction]);
@@ -209,28 +188,12 @@ export const AdminPage = () => {
         queueAction('selectVenue', venueId);
     }, [queueAction]);
 
-    const handleSelectParkingLot = useCallback((lotId: string) => {
-        setActiveTab('locations');
-        queueAction('selectParkingLot', lotId);
-    }, [queueAction]);
-
-    const handleSelectParkingRate = useCallback((rateId: string) => {
-        setActiveTab('locations');
-        queueAction('selectParkingRate', rateId);
-    }, [queueAction]);
-
     const handleEditVenue = useCallback((venueId: string) => {
         setActiveTab('locations');
         queueAction('editVenue', venueId);
     }, [queueAction]);
 
-    const handleEditParkingLot = useCallback((lotId: string) => {
-        setActiveTab('locations');
-        queueAction('editParkingLot', lotId);
-    }, [queueAction]);
-
-    // Execute pending jump actions after the target tab mounts (same commit:
-    // card refs register during mount, then this effect runs and can scroll to them).
+    // Runs after the target tab mounts and registers its card refs.
     useEffect(() => {
         const action = pendingAction;
         if (!action) return;
@@ -251,24 +214,14 @@ export const AdminPage = () => {
             case 'selectVenue':
                 venuesTabRef.current?.highlight(action.id);
                 break;
-            case 'selectParkingLot':
-                parkingLotsTabRef.current?.highlight(action.id);
-                break;
-            case 'selectParkingRate':
-                parkingRatesTabRef.current?.highlight(action.id);
-                break;
             case 'editVenue':
                 venuesTabRef.current?.openEdit(action.id);
-                break;
-            case 'editParkingLot':
-                parkingLotsTabRef.current?.openEdit(action.id);
                 break;
         }
     }, [pendingAction]);
 
-    // A potential event-staff user (below staff group, has eventStaffEvents) can't be
-    // classified until we know which of their assigned events are still upcoming.
-    // Hold the spinner until that resolves so we don't flash "Access Denied".
+    // Possible event staff can't be classified until we know which of their events
+    // are upcoming; hold the spinner rather than flash "Access Denied".
     const resolvingEventStaff = !!profile && !isCoreStaffOrAbove && !isStaffGroup
         && staffEventIds.length > 0 && staffEventsLoading;
     if (loading || resolvingEventStaff) {
@@ -404,14 +357,16 @@ export const AdminPage = () => {
                             </h2>
                             <LocationsMap
                                 venues={venues}
-                                parkingLots={parkingLots}
-                                parkingRates={parkingRates}
                                 onShowVenue={handleSelectVenue}
-                                onShowLot={handleSelectParkingLot}
                                 onEditVenue={handleEditVenue}
-                                onEditLot={handleEditParkingLot}
                                 readOnly={isStaffGroup}
                             />
+                        </div>
+                        <div id="admin-sec-uw-parking">
+                            <h2 className="admin-section-header admin-section-mt">
+                                {isEnglish ? 'UW Parking Data' : 'UW 停车数据'}
+                            </h2>
+                            <UwParkingStatus showToast={showToast} readOnly={isStaffGroup}/>
                         </div>
                         <div id="admin-sec-venues">
                             <h2 className="admin-section-header admin-section-mt">
@@ -420,34 +375,6 @@ export const AdminPage = () => {
                             <VenuesTab
                                 ref={venuesTabRef}
                                 venues={venues}
-                                parkingLots={parkingLots}
-                                refreshVenues={refreshVenues}
-                                showToast={showToast}
-                                readOnly={isStaffGroup}
-                            />
-                        </div>
-                        <div id="admin-sec-parking-rates">
-                            <h2 className="admin-section-header admin-section-mt">
-                                {isEnglish ? 'Parking Rates' : '停车费率'}
-                            </h2>
-                            <ParkingRatesTab
-                                ref={parkingRatesTabRef}
-                                parkingRates={parkingRates}
-                                refreshParkingRates={refreshParkingRates}
-                                refreshParkingLots={refreshParkingLots}
-                                showToast={showToast}
-                                readOnly={isStaffGroup}
-                            />
-                        </div>
-                        <div id="admin-sec-parking-lots">
-                            <h2 className="admin-section-header admin-section-mt">
-                                {isEnglish ? 'Parking Lots' : '停车场'}
-                            </h2>
-                            <ParkingLotsTab
-                                ref={parkingLotsTabRef}
-                                parkingLots={parkingLots}
-                                parkingRates={parkingRates}
-                                refreshParkingLots={refreshParkingLots}
                                 refreshVenues={refreshVenues}
                                 showToast={showToast}
                                 readOnly={isStaffGroup}
@@ -456,9 +383,8 @@ export const AdminPage = () => {
                         <SectionNav
                             sections={[
                                 {id: 'admin-sec-map', label: isEnglish ? 'Overview Map' : '总览地图'},
+                                {id: 'admin-sec-uw-parking', label: isEnglish ? 'UW Parking Data' : 'UW 停车数据'},
                                 {id: 'admin-sec-venues', label: isEnglish ? 'Venues' : '场地'},
-                                {id: 'admin-sec-parking-rates', label: isEnglish ? 'Parking Rates' : '停车费率'},
-                                {id: 'admin-sec-parking-lots', label: isEnglish ? 'Parking Lots' : '停车场'},
                             ]}
                         />
                     </>
@@ -498,15 +424,11 @@ export const AdminPage = () => {
                         upcomingEvents={upcomingEvents}
                         badgeDefs={badgeDefs}
                         venues={venues}
-                        parkingLots={parkingLots}
-                        parkingRates={parkingRates}
                         onLookupUser={handleLookupUser}
                         onSelectBadge={handleSelectBadge}
                         onSelectEvent={handleSelectEvent}
                         onSelectUpcomingEvent={handleSelectUpcomingEvent}
                         onSelectVenue={handleSelectVenue}
-                        onSelectParkingLot={handleSelectParkingLot}
-                        onSelectParkingRate={handleSelectParkingRate}
                     />
                 )}
 

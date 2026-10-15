@@ -1,7 +1,6 @@
 /**
- * Map a scan count to a heat color (cool blue → hot red) relative to the
- * busiest code in view. Zero scans render as a neutral grey so "never scanned"
- * reads as absent rather than merely cool.
+ * A scan count as a heat colour, cool blue to hot red, relative to the busiest
+ * code in view. Zero is grey, so "never scanned" reads as absent.
  */
 export function heatColor(count: number, max: number): string {
     if (count <= 0) return '#9aa0a6';

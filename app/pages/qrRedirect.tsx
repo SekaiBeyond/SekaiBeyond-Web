@@ -9,9 +9,8 @@ export const QrRedirectPage = () => {
     const [searchParams] = useSearchParams();
     const id = searchParams.get('id');
 
-    // Managed codes (saved + tracked) use a short, stable `id`; social codes add
-    // `p` so the scan tallies under that platform. Legacy inline-url codes are no
-    // longer supported — anything without an `id` resolves to expired/invalid.
+    // Managed codes carry a stable `id`, social ones also `p` for the platform
+    // tally. Anything without an `id` is expired.
     if (id) return <ManagedQrRedirect id={id} platform={searchParams.get('p') ?? ''}/>;
     return <ExpiredCard isError={false}/>;
 };

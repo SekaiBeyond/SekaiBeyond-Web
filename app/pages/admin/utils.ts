@@ -21,15 +21,14 @@ import type { ShowToast } from '~/lib/useToasts';
 
 export const WEBP_QUALITY = 0.95;
 
-// Re-exported so the admin panel keeps importing its toaster type from here,
-// while there is only one definition of it (in ~/lib/useToasts).
+// Re-exported so the admin panel imports it from here; defined in
+// ~/lib/useToasts.
 export type { ShowToast };
 
 /**
- * The re-read after an admin write has landed. Its failure is a stale screen, not a
- * failed save, so it is reported with a warning and never thrown. Thrown inside the
- * write's try, it would read as "Failed to save", and saving again would repeat the
- * write: a second copy of whatever was being created.
+ * The re-read after an admin write. Its failure is a stale screen, so it warns and
+ * never throws: inside the write's try it would read as "Failed to save", and a
+ * retry would duplicate the write.
  */
 export async function refreshAfterSave(
     refresh: () => Promise<unknown>,
@@ -66,12 +65,9 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
 };
 
 /**
- * Users by uid, for a screen holding a list of uids rather than a query — the
- * passport stock table resolving its holders, for instance.
- *
- * Firestore takes at most 30 ids per `in`, so the ids are chunked and the chunks
- * run together. A uid with no document (a deleted account) is simply missing from
- * the result, which callers read as "deleted" rather than as a failure.
+ * Users by uid, for screens holding uids rather than a query. Chunked for `in`'s
+ * 30-id limit. A uid with no document (a deleted account) is missing from the
+ * result, which callers read as deleted.
  */
 export const fetchUsersByUids = async (uids: string[]): Promise<Map<string, UserRecord>> => {
     const unique = [...new Set(uids)];
@@ -86,9 +82,8 @@ export const fetchUsersByUids = async (uids: string[]): Promise<Map<string, User
 };
 
 // The browsable user list, filtered by role and/or active membership. Members-only
-// has to order by membershipExpiresAt because Firestore requires the first orderBy
-// to match the inequality field — so that view is sorted by expiry rather than by
-// join date, which is the more useful ordering for it anyway.
+// orders by membershipExpiresAt, since Firestore's first orderBy must match the
+// inequality field.
 export const buildUserListQuery = (opts: {
     group: UserGroup | '';
     membersOnly: boolean;
@@ -111,14 +106,12 @@ export const buildUserListQuery = (opts: {
 
 const USER_SEARCH_LIMIT = 10;
 
-// Shared by every admin surface that looks a user up, so they all match the same way.
-// Both displayName and email are matched as prefixes: Firestore has no substring search,
-// but a [p, p + \uf8ff] range covers every value starting with p.
+// How every admin surface looks a user up: displayName and email as prefixes, via a [p, p +
+// \uf8ff] range, since Firestore has no substring search.
 //
-// Emails are stored lowercase, so one query covers them. displayName is mixed case and
-// Firestore ranges are case-sensitive, so the name query is repeated with the first letter
-// in each case and the results merged — that covers the usual "ben" vs "Ben" mismatch
-// without needing a search index. An "@" can only be an email, so it skips the name queries.
+// Emails are stored lowercase. Names are mixed case and ranges are case-sensitive, so the
+// name query runs with the first letter in each case. An "@" means an email and skips the
+// name queries.
 export const searchUsers = async (
     rawQuery: string,
     group: UserGroup | '' = '',
@@ -148,9 +141,8 @@ export const searchUsers = async (
     }
 
     const snaps = await Promise.all(searches);
-    // The group and membership filters are applied here rather than in the query:
-    // combining either with a prefix range would need a composite index, and each
-    // query is already capped at USER_SEARCH_LIMIT.
+    // Filtered here, since combining either filter with a prefix range would need
+    // a composite index.
     const deduped = new Map<string, UserRecord>();
     snaps.forEach(s => s.docs.forEach(d => {
         const r = docToUserRecord(d);
@@ -175,9 +167,8 @@ export const fetchEventStaffCount = async (eventId: string): Promise<number> => 
     return snapshot.size;
 };
 
-// True if an archived event has ticket attendees. Only paid events ever populate
-// the attendees subcollection, so this detects paid events that were archived
-// before the `paid` flag was stored on the past-event doc.
+// Whether an archived event has ticket attendees, which only paid events do; for
+// past-event docs that don't carry the `paid` flag.
 export const pastEventHasTickets = async (eventId: string): Promise<boolean> => {
     const db = getFirebaseDb();
     const snapshot = await getDocs(
@@ -209,15 +200,10 @@ export function validateImageFile(f: File, maxMb: number, isEnglish: boolean, sh
 }
 
 /**
- * The con hero's clip, which is a WebM and nothing else: the stored filename ends
- * .webm and the `<source type>` the hero renders says the same, so an MP4 let
- * through here would be handed to every browser as a WebM and played by none.
- *
- * The browser reports the container, not the codecs, so this only rules out the
- * wrong kind of file. A .webm holding AV1 passes here and then fails to decode
- * on anything too old for it — which is why the helper text names VP9.
- *
- * `maxMb` is the server's video cap, from useUploadLimits.
+ * The con hero's clip must be WebM: it's stored as .webm and served as a WebM
+ * source, so anything else plays nowhere. The browser reports the container, not
+ * the codecs, so an AV1 WebM still passes here, which is why the helper text
+ * names VP9. `maxMb` is the server's video cap.
  */
 export function validateVideoFile(f: File, maxMb: number, isEnglish: boolean, showToast: ShowToast): boolean {
     if (f.type !== 'video/webm') {

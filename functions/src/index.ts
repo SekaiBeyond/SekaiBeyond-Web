@@ -12,3 +12,4 @@ export * from "./functions/qrCodes";
 export * from "./functions/passports";
 export * from "./functions/socialPlatforms";
 export { scheduledMailDrain } from "./functions/scheduledMail";
+export { lookUpUwBuilding, syncUwParking, uwParkingNightlySync } from "./functions/parking";

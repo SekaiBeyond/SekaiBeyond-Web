@@ -3,9 +3,7 @@ import { collection, getDocs, query, type QueryConstraint, type QueryDocumentSna
 import { getFirebaseDb } from './firebase';
 
 /**
- * A Firestore Timestamp field as a Date, or null when the field is absent or is
- * something else. Every `mapDoc` below reaches for this, so it lives here rather
- * than being re-spelled in each data module.
+ * A Firestore Timestamp field as a Date, or null when absent or not a Timestamp.
  */
 export const toDate = (v: unknown): Date | null =>
     v && typeof (v as {toDate?: () => Date}).toDate === 'function'
@@ -13,26 +11,20 @@ export const toDate = (v: unknown): Date | null =>
         : null;
 
 /**
- * A module-level read-through cache shared across every component that uses it. The first
- * `useValue()` triggers a single fetch; the result is cached in module scope and pushed to
- * all mounted subscribers. `refresh()` re-fetches and fans the new value out to everyone,
- * so an admin write is reflected app-wide without each consumer re-querying.
- *
- * Use this for small, rarely-changing data loaded in full (a config doc, a top-level
- * collection). It is not a substitute for a live `onSnapshot` listener.
+ * A module-level read-through cache shared by every component that uses it: the first
+ * `useValue()` fetches once and every subscriber gets the result, and `refresh()` fans a
+ * new value out app-wide. For small, rarely-changing data loaded whole, not a substitute
+ * for `onSnapshot`.
  */
 export interface ValueCache<T> {
     /**
-     * Hook returning the cached value, a loading flag, an `error`, and a `refresh`
-     * that re-fetches. `error` is non-null only while `value` is still the fallback
-     * — i.e. it answers "is this real data?", not "did the last request fail?". A
-     * refresh that fails on top of an already-loaded value leaves it null, because
-     * the value on screen is still the one the server gave us.
+     * The cached value, a loading flag, an `error`, and `refresh`. `error` is set
+     * only while `value` is still the fallback: it answers "is this real data?", so
+     * a failed refresh over loaded data leaves it null.
      *
-     * Pass `enabled: false` to hold off the fetch entirely — for a cache the
-     * current viewer is not allowed to read, where firing the request would only
-     * produce a permission error. It reports the fallback and `loading: false`,
-     * and fetches if `enabled` later flips true.
+     * `enabled: false` holds off the fetch, for a cache this viewer can't read. It
+     * reports the fallback with `loading: false` and fetches once `enabled` turns
+     * true.
      */
     useValue: (enabled?: boolean) => {value: T; loading: boolean; error: unknown; refresh: () => Promise<void>};
     /** Re-fetch and notify all subscribers. Returns the fresh value. */
@@ -59,8 +51,7 @@ export function createValueCache<T>(
                 cached = await fetcher();
                 return cached;
             } finally {
-                // Clear on success and failure alike, so a failed fetch can be retried
-                // instead of pinning a rejected promise forever.
+                // Cleared either way, so a failed fetch can be retried.
                 fetchPromise = null;
             }
         })();
@@ -74,9 +65,8 @@ export function createValueCache<T>(
             for (const fn of subscribers) fn(value, null);
             return value;
         } catch (err) {
-            // Subscribers holding a previously fetched value keep it — a refresh that
-            // fails is a stale screen, not a missing one. Only a cache that has never
-            // loaded is downgraded to "what you see is the fallback".
+            // Subscribers with a value keep it; only a cache that never loaded falls
+            // back.
             if (cached === null) for (const fn of subscribers) fn(initialValue, err);
             throw err;
         }
@@ -96,9 +86,8 @@ export function createValueCache<T>(
                 : {value: initialValue, error: null, settled: false}),
         );
 
-        // Derived, not stored: `enabled` can flip true a render before the effect
-        // starts the fetch, and a separately-tracked `loading` would read false in
-        // that gap — long enough for a caller to act on the fallback value.
+        // Derived, not stored: `enabled` can turn true a render before the fetch
+        // starts, and a stored flag would read false in that gap.
         const loading = enabled && !state.settled;
 
         useEffect(() => {
@@ -134,13 +123,15 @@ export function createValueCache<T>(
 }
 
 /**
- * A `ValueCache` over a Firestore collection fetched with the given query constraints
- * (all documents when none are given). Use for small, rarely-changing top-level
- * collections (tags, venues, parking lots).
+ * A `ValueCache` over a Firestore collection and optional query constraints, for
+ * small, rarely-changing top-level collections such as tags and venues.
  */
 export interface CollectionCache<T> {
-    /** Hook returning the cached list, a loading flag, and a `refresh` that re-fetches. */
-    useItems: () => {items: T[]; loading: boolean; refresh: () => Promise<void>};
+    /**
+     * Hook returning the cached list, a loading flag, and a `refresh` that re-fetches;
+     * `enabled` as in `ValueCache.useValue`.
+     */
+    useItems: (enabled?: boolean) => {items: T[]; loading: boolean; refresh: () => Promise<void>};
     /** Re-fetch from Firestore and notify all subscribers. Returns the fresh list. */
     refresh: () => Promise<T[]>;
     /** Synchronous snapshot of the cached list, or null if it hasn't loaded yet. */
@@ -158,8 +149,8 @@ export function createCollectionCache<T>(
         return snapshot.docs.map(mapDoc);
     }, []);
 
-    function useItems() {
-        const {value: items, loading, refresh} = cache.useValue();
+    function useItems(enabled: boolean = true) {
+        const {value: items, loading, refresh} = cache.useValue(enabled);
         return {items, loading, refresh};
     }
 

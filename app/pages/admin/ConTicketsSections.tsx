@@ -407,8 +407,8 @@ export const InPersonSalesSection = ({content, loading, showToast, readOnly}: Se
                 <AddButton
                     label={{en: 'sale day', zh: '售票日期'}}
                     onClick={() => setDraft(prev => {
-                        // The table usually keeps the same hours day to day, so a new
-                        // day starts from the last one's and only needs its date.
+                        // Hours rarely change day to day, so a new day starts from
+                        // the last one's.
                         const last = prev.sessions[prev.sessions.length - 1];
                         return {
                             ...prev,

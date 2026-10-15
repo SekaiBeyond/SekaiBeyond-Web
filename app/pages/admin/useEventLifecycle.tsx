@@ -13,9 +13,8 @@ interface UseEventLifecycleOptions {
 }
 
 /**
- * The publish/unpublish and request/cancel-deletion flows shared by the past-
- * and upcoming-events tabs. The tabs differ only in which Cloud Functions back
- * the actions, so those come in as options.
+ * Publish/unpublish and request/cancel-deletion, shared by the past and
+ * upcoming event tabs, which only differ in the functions behind them.
  */
 export function useEventLifecycle({
                                       requestDeletion,

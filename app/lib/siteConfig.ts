@@ -17,9 +17,8 @@ export interface ConEdition {
     }[];
 }
 
-// The accounts the site links to. Each has an icon drawn in code, so the set is
-// fixed; the URLs are site config. Mirrored by the keys of SOCIAL_LINK_PATTERNS
-// in functions/src/functions/admin.ts.
+// The accounts the site links to, each with an icon drawn in code. Mirrored by
+// SOCIAL_LINK_PATTERNS in functions/src/functions/admin.ts.
 export const SOCIAL_LINK_KEYS = ['discord', 'instagram', 'bilibili', 'xiaohongshu', 'linkedin', 'github'] as const;
 export type SocialLinkKey = typeof SOCIAL_LINK_KEYS[number];
 /** Profile URL per account. Blank hides every link to that account. */
@@ -52,10 +51,10 @@ export interface TeamMemberConfig {
     roleCn: string;
     imageUrl: string;
     isHonorary?: boolean;
-    // When a member is linked to an account (uid set), each of these opts that field
-    // into following the account's live value; the stored value is kept as a fallback.
-    // role -> account title (+ titleCn for the Chinese role), photo -> account photoURL.
-    // Names are always custom: linking an account only prefills a blank name.
+    // With a linked account (uid set), each flag makes a field follow the account's live
+    // value, keeping the stored one as a fallback: role follows its title (titleCn for
+    // Chinese), photo its photoURL. Names stay custom; linking only prefills a blank
+    // one.
     useAccountRole?: boolean;
     useAccountPhoto?: boolean;
 }
@@ -67,8 +66,8 @@ export interface SiteConfig {
     conEdition: ConEdition | null;
     contactEmail: string;
     socialLinks: SocialLinks;
-    // The part before the @ of the From address on outbound email; the domain
-    // is set on the server. Blank means the server's default prefix.
+    // The part before the @ of the From address; the server sets the domain.
+    // Blank uses its default prefix.
     senderPrefix: string;
 }
 

@@ -6,8 +6,7 @@
     letter-spacing: 1px;
 }
 
-/* Wider than a profile page: the nine tabs need ~1100px to sit on one row,
-   and the tables and card grids below them are happier with the extra room. */
+/* Wider than a profile page: the nine tabs need ~1100px for one row. */
 .admin-page {
     max-width: 1200px;
 }
@@ -53,10 +52,9 @@
     margin-top: 10px;
 }
 
-/* One button base + look/size modifiers. Every admin button is
-   `.admin-btn` plus a `--variant`; utilities (e.g. .admin-section-mb) still
-   win because they are declared later in the cascade. The .admin-toggle-btn
-   pill family is a separate, self-contained system further down. */
+/* Every admin button is `.admin-btn` plus a `--variant`; utilities declared
+   later (e.g. .admin-section-mb) still win. The .admin-toggle-btn pills are a
+   separate system further down. */
 .admin-btn {
     cursor: pointer;
 }
@@ -243,8 +241,7 @@
     opacity: 0.6;
 }
 
-/* <select> flavour: bold label, pointer, and no flex-grow so it keeps its
-   intrinsic width next to a growing input in the same row. */
+/* Bold, and no flex-grow, so it keeps its width beside a growing input. */
 .admin-select {
     flex: 0 1 auto;
     color: var(--color-text);
@@ -273,8 +270,7 @@
     flex-wrap: wrap;
 }
 
-/* Membership is orthogonal to role, so it filters beside the role dropdown
-   rather than as another option inside it. */
+/* Membership filters beside the role dropdown, not inside it. */
 .admin-members-filter {
     display: flex;
     align-items: center;
@@ -692,7 +688,7 @@
     box-shadow: 0 4px 16px rgba(255, 107, 157, 0.12);
 }
 
-/* Brief pulse when a record links the reader to a specific venue/lot/rate card. */
+/* Brief pulse when a record or the map jumps to a card. */
 .admin-card-highlight {
     animation: admin-card-highlight 2s ease;
 }
@@ -860,19 +856,9 @@
     margin-top: 4px;
 }
 
-.admin-max-uses-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    color: var(--color-text-light);
-    margin-top: 8px;
-}
-
 .admin-number-input {
     width: 100px;
     padding: 6px 8px;
-    border: 1px solid var(--color-border);
     border-radius: 8px;
     font-size: 14px;
 }
@@ -1145,8 +1131,8 @@
     }
 }
 
-/* Staff claim code: a card read top to bottom — what the code is for, the code
-   itself, how much of it is spent, then the limits on it and what to do to it. */
+/* Staff claim code, read top to bottom: what it's for, the code, how much is
+   spent, then its limits and actions. */
 .admin-staff-code {
     display: flex;
     flex-direction: column;
@@ -1195,7 +1181,7 @@
     gap: 8px;
 }
 
-/* Big and monospaced: the code is read off a screen, or out loud, and typed. */
+/* Big and monospaced: read off a screen or aloud, then typed. */
 .admin-staff-code-value {
     flex: 1;
     min-width: 0;
@@ -1396,8 +1382,8 @@
     min-width: 0;
 }
 
-/* A <select> sizes to its widest option by default, which would blow out the grid
-   column (e.g. long parking-rate labels). Allow it to shrink and clip to the cell. */
+/* A <select> sizes to its widest option, which would blow out the column; let it
+   shrink and clip. */
 .admin-form-grid label select {
     min-width: 0;
 }
@@ -1508,10 +1494,9 @@
     border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-/* Avatar picker: a round preview beside its action. The circle is the point — team
-   avatars render as circles on the public page, so a square preview would hide how
-   the image is actually cropped. Both the upload and follow-the-account states use
-   this row, so toggling between them doesn't reshuffle the layout. */
+/* Avatar picker: a round preview beside its action, since team avatars render as
+   circles. Upload and follow-the-account share the row, so toggling doesn't
+   reflow. */
 .admin-avatar-field {
     display: flex;
     align-items: center;
@@ -1528,8 +1513,7 @@
     background: rgba(255, 255, 255, 0.85);
 }
 
-/* Nothing has been chosen and the site's default avatar stands in — say so, rather than
-   letting the stand-in read as a photo someone picked. */
+/* The site's default avatar standing in, marked so it doesn't read as a chosen photo. */
 .admin-avatar-preview-default {
     opacity: 0.55;
     border-style: dashed;
@@ -1543,8 +1527,8 @@
     min-width: 0;
 }
 
-/* A file input can't be styled, so the real one is visually hidden and this label is
-   the button. The input keeps its place in the tab order rather than display:none. */
+/* File inputs can't be styled, so the real one is visually hidden (still focusable)
+   and this label is the button. */
 .admin-avatar-choose {
     position: relative;
     display: inline-flex;
@@ -1658,8 +1642,7 @@
     padding: 5px 14px;
 }
 
-/* Read aloud, never drawn — for a control or a header whose meaning is carried
-   by its position rather than by any text beside it. */
+/* Read aloud, never drawn. */
 .admin-sr-only {
     position: absolute;
     width: 1px;
@@ -1677,7 +1660,7 @@
 
 .admin-divider {
     border: none;
-    border-top: 1px solid var(--color-border, #e5e7eb);
+    border-top: 1px solid #e5e7eb;
     margin: 28px 0;
 }
 
@@ -2386,12 +2369,6 @@
     line-height: 1.1;
 }
 
-/* For tile values that are text (a date) rather than a big number. */
-.admin-stats-tile-value--sm {
-    font-size: 17px;
-    padding-top: 4px;
-}
-
 .admin-stats-tile-sub {
     font-size: 12px;
     color: var(--color-text-muted);
@@ -2573,8 +2550,8 @@
     color: var(--color-purple);
 }
 
-/* Whether the address on a ticket reaches a registered account — which is what
-   decides, at the scanner, whether the event lands on anybody's profile. */
+/* Whether a ticket's address belongs to an account, which decides whether a
+   scan reaches a profile. */
 .admin-tickets-tag-linked {
     background: rgba(78, 203, 113, 0.18);
     color: #2e7d4f;
@@ -2677,9 +2654,8 @@ select.admin-tickets-tag:focus {
     border-color: rgba(0, 0, 0, 0.2);
 }
 
-/* The admin panel's one table look, shared by the ticket lists and the passport
-   stock table. Anything a single table needs on top of it (a sortable header, a
-   clickable row) is added below rather than forked from here. */
+/* The admin's one table look, shared by the ticket lists and the passport stock
+   table; extras like sortable headers go below rather than forking it. */
 .admin-data-table-wrap {
     width: 100%;
     overflow-x: auto;
@@ -2725,8 +2701,7 @@ select.admin-tickets-tag:focus {
     background: rgba(255, 107, 157, 0.04);
 }
 
-/* A header that sorts. The caret is the only thing that moves, so the heading
-   stays where the eye left it when the column is clicked. */
+/* A sortable header. Only the caret moves, so the heading stays put. */
 .admin-data-table-sort {
     display: inline-flex;
     align-items: center;
@@ -2836,8 +2811,7 @@ select.admin-tickets-tag:focus {
     font-size: 11px;
 }
 
-/* The three stacked panels of the Tickets sub-tab (Import, Template, Send) share
-   one shell, so they read as siblings down the column. */
+/* The Tickets sub-tab's three panels share one shell. */
 .admin-tickets-import,
 .admin-tickets-template,
 .admin-tickets-send {
@@ -3335,8 +3309,8 @@ select.admin-tickets-tag:focus {
     color: #2e7d4f;
 }
 
-/* Time left before a result clears for the next scan, as a ring on the right
-   in the banner's colour whose arc sweeps away clockwise from the top. */
+/* Time until a result clears, as a ring in the banner's colour sweeping away
+   clockwise from the top. */
 .admin-tickets-scan-success,
 .admin-tickets-scan-already,
 .admin-tickets-scan-error {
@@ -3618,29 +3592,6 @@ select.admin-tickets-tag:focus {
     background: linear-gradient(135deg, #6c63ff, #9b59b6);
 }
 
-.admin-venue-lot-badge[data-type="disabled"] {
-    background: linear-gradient(135deg, #4ecb71, #2ea7a0);
-}
-
-.admin-venue-lot-badge[data-type="empty"] {
-    background: rgba(0, 0, 0, 0.07);
-    color: var(--color-text-light);
-}
-
-.admin-venue-lot-body {
-    flex: 1 1 auto;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-}
-
-.admin-venue-lot-select {
-    flex: 1 1 auto;
-    min-width: 0;
-    margin: 0;
-}
-
 .admin-venue-lot-remove {
     flex: 0 0 auto;
     width: 30px;
@@ -3663,17 +3614,212 @@ select.admin-tickets-tag:focus {
     color: var(--color-error);
 }
 
+/* UW building lookup in the venue editor */
+.admin-uw-building-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.admin-uw-building-input {
+    flex: 0 1 160px;
+    min-width: 0;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.admin-uw-note {
+    margin-top: 10px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 107, 157, 0.18);
+    background: rgba(255, 107, 157, 0.06);
+    color: var(--color-text);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.admin-uw-note--warning {
+    border-color: rgba(230, 170, 40, 0.45);
+    background: rgba(254, 202, 87, 0.16);
+}
+
+.admin-uw-note--error {
+    border-color: rgba(224, 85, 85, 0.3);
+    background: rgba(224, 85, 85, 0.08);
+    color: var(--color-error);
+}
+
+.admin-uw-note ul {
+    margin: 6px 0 0 18px;
+}
+
+/* UW Parking Data status */
+.admin-uw-status {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 18px;
+    margin: 0;
+    font-size: 14px;
+}
+
+.admin-uw-status dt {
+    color: var(--color-text-muted);
+    font-weight: 600;
+}
+
+.admin-uw-status dd {
+    margin: 0;
+    color: var(--color-text);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-uw-code-chip {
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--color-primary);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+}
+
+/* Suggested lots in the venue editor */
+.admin-venue-lot-picker {
+    flex: 0 1 260px;
+    min-width: 0;
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.admin-venue-suggest {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.admin-venue-suggest-label {
+    margin-right: 2px;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.admin-venue-suggest-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 12px;
+    border: 1.5px dashed rgba(255, 107, 157, 0.45);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.7);
+    color: var(--color-primary);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.admin-venue-suggest-chip span {
+    color: var(--color-text-muted);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.admin-venue-suggest-chip:hover:not(:disabled) {
+    border-style: solid;
+    background: rgba(255, 107, 157, 0.08);
+}
+
+.admin-venue-suggest-chip:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.admin-venue-lot-card--suggested {
+    align-items: flex-start;
+}
+
+.admin-venue-lot-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-venue-lot-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding-top: 2px;
+}
+
+.admin-venue-lot-code {
+    color: var(--color-text);
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.admin-venue-lot-name {
+    color: var(--color-text-muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.admin-venue-lot-walk {
+    color: var(--color-primary);
+    font-size: 12.5px;
+    font-weight: 700;
+}
+
+.admin-venue-lot-missing {
+    color: var(--color-error);
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.admin-venue-lot-notes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.admin-venue-lot-notes .admin-input {
+    min-width: 0;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+.admin-venue-lot-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
 @media (max-width: 600px) {
-    .admin-venue-lot-body {
+    .admin-venue-lot-notes {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-venue-lot-card--suggested {
         flex-wrap: wrap;
     }
 
-    .admin-venue-lot-select {
-        flex-basis: 100%;
+    .admin-venue-lot-actions {
+        margin-left: auto;
     }
 }
 
-/* Admin form field section heading (reused across lot/venue forms) */
+/* Admin form field section heading */
 .admin-field-label {
     display: block;
     font-size: 14px;
@@ -3696,7 +3842,7 @@ select.admin-tickets-tag:focus {
     margin-bottom: 12px;
 }
 
-/* Secondary line of text inside an event/lot/venue card. */
+/* Secondary line of text inside a card. */
 .admin-card-meta {
     display: block;
     margin-top: 4px;
@@ -3709,9 +3855,10 @@ select.admin-tickets-tag:focus {
 }
 
 .admin-map-picker-canvas {
+    position: relative;
+    height: 320px;
     border-radius: 8px;
     overflow: hidden;
-    border: 1px solid var(--color-border);
 }
 
 .admin-map-picker-hint {
@@ -3720,6 +3867,73 @@ select.admin-tickets-tag:focus {
 
 .admin-map-picker-coords {
     opacity: 0.7;
+}
+
+/* Shown in place of any admin map when MapLibre can't start (no WebGL). */
+.admin-map-failed {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+/* Place search above the map picker: type, then Enter or Search, then pick a result. */
+.admin-map-search {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-map-search-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.admin-map-search-row .admin-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-map-search-note {
+    margin: 0;
+}
+
+.admin-map-search-results {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border: 1px solid rgba(255, 107, 157, 0.2);
+    border-radius: 12px;
+    background: #fff;
+}
+
+.admin-map-search-result {
+    padding: 8px 10px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--color-text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-map-search-result:hover,
+.admin-map-search-result:focus-visible {
+    background: rgba(255, 107, 157, 0.08);
+}
+
+.admin-map-search-credit {
+    padding: 2px 10px 0;
+    font-size: 11px;
+    color: var(--color-text-light);
 }
 
 .admin-locmap {
@@ -3817,8 +4031,8 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-muted);
 }
 
-/* Type badge shared by the search dropdown; colors encode the lot type (list-only —
-   on the map, marker color encodes the rate tier instead). */
+/* Type badge in the search dropdown, coloured like the map's markers: orange
+   for surface lots, indigo for garages. */
 .admin-locmap-badge {
     flex: 0 0 auto;
     width: 30px;
@@ -3841,10 +4055,6 @@ select.admin-tickets-tag:focus {
 
 .admin-locmap-badge[data-type="garage"] {
     background: #6c63ff;
-}
-
-.admin-locmap-badge[data-type="disabled"] {
-    background: #4ecb71;
 }
 
 .admin-locmap-legend {
@@ -3882,24 +4092,59 @@ select.admin-tickets-tag:focus {
     font-size: 9px;
 }
 
-/* Type glyphs are neutral — on the map, marker color encodes the rate tier instead. */
-.admin-locmap-legend-dot[data-kind="glyph"] {
-    background: #5a6472;
+.admin-locmap-legend-dot[data-type="garage"] {
+    background: #6c63ff;
 }
 
 .admin-locmap-canvas {
+    position: relative;
     height: 480px;
     border-radius: 14px;
     overflow: hidden;
     border: 2px solid rgba(255, 107, 157, 0.12);
 }
 
-/* Venue star + name chip stacked, like the guide's lot marker + label. */
-.admin-locmap-venue-marker {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
+/* Lot pins are the parking guide's, colored by type here rather than by status. */
+.admin-locmap-pin.parking-pin {
+    background: var(--color-accent);
+}
+
+.admin-locmap-pin.parking-pin.is-garage {
+    background: #6c63ff;
+}
+
+.admin-locmap-canvas.is-zoomed-in .parking-pin-label {
+    display: block;
+}
+
+.admin-locmap-popup {
+    z-index: 10;
+}
+
+.admin-locmap-popup .maplibregl-popup-content {
+    padding: 12px 30px 12px 14px;
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(255, 107, 157, 0.22);
+    font-family: var(--font-body);
+}
+
+.admin-locmap-popup .maplibregl-popup-close-button {
+    top: 4px;
+    right: 6px;
+    font-size: 18px;
+    color: var(--color-text-secondary);
+}
+
+.admin-locmap-popup-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-accent);
+}
+
+.admin-locmap-popup-meta {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
 }
 
 .admin-locmap-hint {
@@ -3957,10 +4202,10 @@ select.admin-tickets-tag:focus {
 }
 
 .admin-qr-map {
+    position: relative;
     width: 100%;
     border-radius: 12px;
     overflow: hidden;
-    border: 1px solid var(--color-border);
 }
 
 .admin-qr-map-pin {
@@ -3969,6 +4214,7 @@ select.admin-tickets-tag:focus {
     padding: 0 7px;
     border-radius: 13px;
     color: white;
+    font-family: inherit;
     font-size: 13px;
     font-weight: 700;
     display: flex;
@@ -3976,7 +4222,7 @@ select.admin-tickets-tag:focus {
     justify-content: center;
     border: 2px solid white;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-    transform: translateY(-50%);
+    cursor: pointer;
 }
 
 .admin-qr-list {
@@ -4184,8 +4430,7 @@ select.admin-tickets-tag:focus {
     align-items: flex-start;
 }
 
-/* The QR presented as the physical tag it becomes when printed: a white
-   "paper" card whose dashed border reads as the cut line. */
+/* The QR as the printed tag: a white card whose dashed border is the cut line. */
 .admin-qr-detail-code {
     display: flex;
     flex-direction: column;
@@ -4337,8 +4582,7 @@ select.admin-tickets-tag:focus {
     outline-offset: 1px;
 }
 
-/* In-place editor that swaps in for a row/section's display value;
-   the purple tint marks which facet is "open". */
+/* An inline editor in place of a value; the purple tint marks what's open. */
 .admin-qr-inline-edit {
     display: flex;
     flex-direction: column;
@@ -4350,8 +4594,7 @@ select.admin-tickets-tag:focus {
     border-radius: 12px;
 }
 
-/* The shared field components assume the form grid's stacked-label layout;
-   mirror it when they render inside an inline editor instead. */
+/* The shared fields expect the form grid's stacked labels; mirror that here. */
 .admin-qr-inline-edit > label {
     display: flex;
     flex-direction: column;
@@ -4478,9 +4721,8 @@ select.admin-tickets-tag:focus {
     font-size: 15px;
 }
 
-/* QR Scanner, under QR Codes. The frame is the one dark object on the page:
-   it holds the camera, then freezes on the code that was read. Everything else
-   stays light. */
+/* QR Scanner. The frame is the page's one dark object: it holds the camera,
+   then freezes on the code read. */
 .qrs {
     --qrs-frame: #2a1d2e; /* plum-black, the brand pink's shadow; see FRAME_BACKDROP */
     --qrs-pink-strong: #cf3c73; /* brand pink deepened until white text on it reads */
@@ -4899,56 +5141,6 @@ select.admin-tickets-tag:focus {
     }
 }
 
-.admin-rate-color-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-}
-
-.admin-rate-swatch {
-    width: 26px;
-    height: 26px;
-    border-radius: 8px;
-    border: 2px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-    cursor: pointer;
-    padding: 0;
-    transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-.admin-rate-swatch:hover {
-    transform: scale(1.12);
-}
-
-.admin-rate-swatch.is-active {
-    box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-primary);
-    transform: scale(1.12);
-}
-
-/* Native color input restyled to sit alongside the preset swatches. */
-.admin-rate-color-input {
-    width: 34px;
-    height: 30px;
-    padding: 0;
-    border: 2px dashed rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-    background: transparent;
-    cursor: pointer;
-}
-
-/* Marker-color dot shown beside a rate's label on its card. */
-.admin-rate-dot {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: 4px;
-    margin-right: 7px;
-    vertical-align: baseline;
-    border: 1.5px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-
 /* Pushed to the end of the tool header row so Back/title stay left-aligned. */
 .admin-quota-refresh {
     margin-left: auto;
@@ -4961,8 +5153,7 @@ select.admin-tickets-tag:focus {
     margin: 16px 0;
 }
 
-/* Two stacked segments (sent + in-flight) sitting on the unfilled remainder,
-   so the bar reads as one capacity meter rather than two bars. */
+/* Sent and in-flight segments over the unfilled remainder, read as one meter. */
 .admin-quota-meter-track {
     display: flex;
     width: 100%;
@@ -5030,10 +5221,9 @@ select.admin-tickets-tag:focus {
     margin-top: 4px;
 }
 
-/* Con Content tab — repeated entry cards (rooms, schedule items, guests, tables,
-   tiers, FAQ, sale days), each one editable entry with its own controls. The
-   lighter .admin-con-item row holds something smaller than an entry: a tier's
-   perks, the hero's clip. */
+/* Con Content tab: one card per editable entry (rooms, schedule items, guests,
+   tables, tiers, FAQ, sale days). The lighter .admin-con-item row is for smaller
+   things, like a tier's perks. */
 .admin-con-list {
     display: flex;
     flex-direction: column;
@@ -5107,9 +5297,8 @@ select.admin-tickets-tag:focus {
     margin-bottom: 0;
 }
 
-/* Room filter over the schedule editor. `aria-pressed` is both the state a screen
-   reader announces and the hook the selected style hangs off, so the two cannot
-   drift apart. */
+/* Room filter over the schedule editor, styled off `aria-pressed` so the look and
+   the announced state can't drift. */
 .admin-con-filter {
     display: flex;
     flex-wrap: wrap;
@@ -5152,8 +5341,8 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-muted);
 }
 
-/* Sits inline after a section heading, so an admin who scrolls away from a
-   half-edited section can still see it is waiting on a save. */
+/* Inline after a section heading, so a section waiting on a save is visible
+   from anywhere. */
 .admin-con-dirty {
     margin-left: 10px;
     font-size: 12px;
@@ -5161,8 +5350,7 @@ select.admin-tickets-tag:focus {
     color: var(--color-primary);
 }
 
-/* Maid café editor: the café's poster beside its details, the way a passport
-   design's cover sits beside its fields, then a card per maid around their poster. */
+/* Maid café editor: the café's poster beside its details, then a card per maid. */
 .admin-con-cafe {
     display: grid;
     grid-template-columns: 200px minmax(0, 1fr);
@@ -5170,8 +5358,8 @@ select.admin-tickets-tag:focus {
     align-items: start;
 }
 
-/* Top-aligned, as in the passport editor: a stretched label would grow the
-   intro's textarea to the height of the poster beside it. */
+/* Top-aligned, so a stretched label doesn't grow the textarea to the poster's
+   height. */
 .admin-con-cafe .admin-form-grid {
     align-items: start;
     margin-bottom: 0;
@@ -5238,9 +5426,8 @@ select.admin-tickets-tag:focus {
     }
 }
 
-/* Artist alley editor: the /con floor plan as an overview, then one collapsible
-   row of tables each, every table a single line — sixty-three of them as cards
-   would be pages long. */
+/* Artist alley editor: the floor plan, then a collapsible row of tables each,
+   one line per table. */
 .admin-con-vendor-row > summary {
     cursor: pointer;
 }
@@ -5274,8 +5461,7 @@ select.admin-tickets-tag:focus {
     }
 }
 
-/* Reserved for state that is off the normal path — e.g. the con page being
-   unpublished, which is worth noticing while scrolling past. */
+/* For state off the normal path, e.g. the con page being unpublished. */
 .admin-con-warning {
     color: var(--color-error) !important;
     font-weight: 600;
@@ -5284,15 +5470,13 @@ select.admin-tickets-tag:focus {
 /* ==========================================================================
    Passports tab
 
-   Borrows only the small shared pieces from the QR tool — the dashed "paper"
-   the code is printed on, the status badge and the inline row control. The
-   stock grid, the one-time key table and the detail page below are the
-   passport's own: it is an object with a cover, a holder and a printed slip,
-   which a QR code is not.
+   Shares only small pieces with the QR tool (the dashed code "paper", the
+   status badge, the inline row control); the stock grid, key table and detail
+   page are its own.
    ========================================================================== */
 
-/* Which slice of the stock the table is showing. Underlined rather than boxed,
-   so the counts read as one row of figures instead of three buttons. */
+/* Which slice of the stock is shown, underlined so the counts read as one row
+   of figures. */
 .admin-passport-tabs {
     display: flex;
     flex-wrap: wrap;
@@ -5339,11 +5523,9 @@ select.admin-tickets-tag:focus {
     background: rgba(255, 107, 157, 0.16);
 }
 
-/* What is ticked and what can be done with it, over the rows it is about. It is
-   in the document whether or not anything is ticked and keeps the same height
-   either way, so the table doesn't jump the first time a row is — and the
-   select-all sits here, where its label has room to say that it takes the whole
-   view rather than the page on screen. */
+/* The selection bar over the rows: always present at the same height, so the
+   table doesn't jump on the first tick, with room for select-all to say it
+   covers the whole view. */
 .admin-passport-bar {
     display: flex;
     flex-wrap: wrap;
@@ -5377,8 +5559,7 @@ select.admin-tickets-tag:focus {
     cursor: pointer;
 }
 
-/* The Claimed tab, where there is nothing to take: the label carries the reason
-   in place of a count, so it reads as an explanation rather than a dead box. */
+/* The Claimed tab: the label gives the reason instead of a count. */
 .admin-passport-bar-all--off {
     font-weight: 600;
     color: var(--color-text-muted);
@@ -5406,8 +5587,7 @@ select.admin-tickets-tag:focus {
     color: var(--color-text);
 }
 
-/* Pushed to the far edge, and always present: what a tick is for is readable
-   before anything has been ticked. */
+/* At the far edge, and always present. */
 .admin-passport-bar-actions {
     display: flex;
     flex-wrap: wrap;
@@ -5416,9 +5596,8 @@ select.admin-tickets-tag:focus {
     margin-left: auto;
 }
 
-/* Narrow enough to read as a gutter rather than a column, and the box inside it
-   keeps the pointer it would have anywhere else — the row around it is clickable,
-   and the tick has to look like it isn't part of that. */
+/* A narrow gutter; the box keeps its own pointer so it doesn't look like part of
+   the clickable row. */
 .admin-passport-cell-tick {
     width: 1%;
     white-space: nowrap;
@@ -5433,9 +5612,8 @@ select.admin-tickets-tag:focus {
     cursor: pointer;
 }
 
-/* A claimed row: faded so the column reads as unavailable rather than unticked,
-   and taking the row's own cursor, since the click opens the passport — which is
-   where a claimed one is deleted. */
+/* A claimed row: faded, with the row's cursor, since the click opens the
+   passport. */
 .admin-passport-cell-tick input[type="checkbox"]:disabled {
     opacity: 0.35;
     cursor: inherit;
@@ -5472,9 +5650,7 @@ select.admin-tickets-tag:focus {
     background: #2f9e57;
 }
 
-/* A claimed row reads apart from the stock around it on the All tab, where the
-   two kinds are interleaved — quieter than a badge in every row, and doing the
-   work the status dot alone was too small to do. */
+/* Claimed rows stand apart from stock on the All tab. */
 .admin-passport-row--claimed {
     background: rgba(78, 203, 113, 0.05);
 }
@@ -5484,8 +5660,7 @@ select.admin-tickets-tag:focus {
     max-width: 280px;
 }
 
-/* A face beside the name: this is a table of people, and a column of them is
-   scanned far faster than a column of names. */
+/* A face beside the name, faster to scan than names alone. */
 .admin-passport-holder {
     display: flex;
     align-items: center;
@@ -5554,10 +5729,9 @@ select.admin-tickets-tag:focus {
     font-variant-numeric: tabular-nums;
 }
 
-/* Too narrow for five columns, so each passport becomes a stacked card: the
-   code and its status on the first line, the holder and the generation under
-   them, and the tick down the left where it is in the table. A horizontal
-   scrollbar would hide the tick column or the date, whichever end it was at. */
+/* Too narrow for five columns, so each passport stacks into a card: code and
+   status first, holder and generation under them, the tick down the left. A
+   horizontal scroll would hide the tick or the date. */
 @media (max-width: 720px) {
     .admin-passport-table thead {
         display: none;
@@ -5565,7 +5739,6 @@ select.admin-tickets-tag:focus {
 
     .admin-passport-table,
     .admin-passport-table tbody,
-    .admin-passport-table tr,
     .admin-passport-table td {
         display: block;
     }
@@ -5620,8 +5793,7 @@ select.admin-tickets-tag:focus {
         color: var(--color-text-muted);
     }
 
-    /* The generator's name is the least of what a card carries; it shares the
-       date's line instead of taking one of its own. */
+    /* The generator's name shares the date's line. */
     .admin-passport-table .admin-passport-cell-by {
         display: inline;
         font-size: 12px;
@@ -5661,8 +5833,8 @@ select.admin-tickets-tag:focus {
     margin-top: 10px;
 }
 
-/* A boxed warning, in red when what it warns about can't be undone — the
-   claimed passport's delete panel is built on the urgent one. */
+/* A boxed warning, red when it can't be undone; the claimed passport's delete
+   panel builds on it. */
 .admin-passport-warning {
     padding: 14px 16px;
     margin-bottom: 16px;
@@ -5686,16 +5858,11 @@ select.admin-tickets-tag:focus {
 }
 
 /* ------------------------------------------------------------------
-   Generating a run
-
-   The screen is the run: the cover it prints on the left, what to make
-   on the right, and afterwards the keys themselves, which exist in one
-   place exactly once.
+   Generating a run: the cover on the left, what to make on the right, then the
+   keys, shown once.
    ------------------------------------------------------------------ */
 
-/* Compose the run. The cover is the same 3/4 shape a design is shown in
-   everywhere else, so what is about to be printed is on screen while it is
-   being chosen. */
+/* Compose the run, with the cover at its usual 3/4. */
 .admin-passport-run {
     display: flex;
     flex-wrap: wrap;
@@ -5808,9 +5975,8 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-muted);
 }
 
-/* What the run turned out to be. Saved is an outcome rather than a warning, so
-   it reads green; unsaved keeps the red, because leaving is when the keys stop
-   being retrievable together. */
+/* The run's outcome: saved reads green; unsaved stays red, since leaving loses
+   the keys together. */
 .admin-passport-result {
     padding: 14px 16px;
     margin-bottom: 14px;
@@ -5828,8 +5994,7 @@ select.admin-tickets-tag:focus {
     font-size: 15px;
 }
 
-/* Scoped so it outranks the paragraph reset above rather than fighting it
-   with !important. */
+/* Scoped to outrank the paragraph reset without !important. */
 .admin-passport-result .admin-passport-result-meta {
     margin-top: 2px;
     font-weight: 700;
@@ -5866,9 +6031,7 @@ select.admin-tickets-tag:focus {
     margin-left: auto;
 }
 
-/* The activation keys, shown exactly once — so the list is capped rather than
-   run off the bottom of a 200-passport page, and its header stays put while it
-   is scrolled. */
+/* The activation keys, shown once: capped in height with a sticky header. */
 .admin-passport-keys {
     display: flex;
     flex-direction: column;
@@ -5891,8 +6054,7 @@ select.admin-tickets-tag:focus {
     border-top: none;
 }
 
-/* What a public code is and what a secret key is, said by labelling the two
-   columns they arrive in. */
+/* Labels the public-code and secret-key columns. */
 .admin-passport-keys-head {
     position: sticky;
     top: 0;
@@ -5929,15 +6091,13 @@ select.admin-tickets-tag:focus {
 }
 
 @media (max-width: 560px) {
-    /* The cover is alone on its line once the fields wrap under it, so it sits
-       in the middle of that line rather than against one edge of it. */
+    /* Centred once the fields wrap under it. */
     .admin-passport-run-cover {
         width: 84px;
         margin-inline: auto;
     }
 
-    /* Both column labels in full are wider than the row they head, and which
-       column is which is the half worth keeping. */
+    /* Both labels don't fit; which column is which is the half kept. */
     .admin-passport-keys-head-where {
         display: none;
     }
@@ -5954,9 +6114,8 @@ select.admin-tickets-tag:focus {
     color: #000;
 }
 
-/* The claimed passport's delete, opened. It borrows the urgent warning's red
-   panel, since it is the same kind of thing said at the same volume, and adds
-   the room its choice and its buttons need. */
+/* The claimed passport's delete, open: the urgent warning's red panel with room
+   for its choice and buttons. */
 .admin-passport-delete-panel {
     margin: 0;
 }
@@ -5967,8 +6126,7 @@ select.admin-tickets-tag:focus {
 
 .admin-passport-delete-choice {
     margin-top: 12px;
-    /* Inherits the panel's red; the tick itself stays the accent colour so it
-       reads as a control rather than part of the warning. */
+    /* The panel's red; the tick stays the accent colour, reading as a control. */
     font-weight: 700;
 }
 
@@ -5980,9 +6138,8 @@ select.admin-tickets-tag:focus {
     cursor: not-allowed;
 }
 
-/* What the tick above would leave behind — the quiet line under a loud panel.
-   Scoped to the panel so it outranks the paragraph reset above rather than
-   fighting it with !important. */
+/* What the tick would leave, quietly under the panel. Scoped to outrank the
+   paragraph reset without !important. */
 .admin-passport-delete-panel .admin-passport-delete-effect {
     margin-top: 6px;
     /* Lines up under the checkbox label's text, not its box. */
@@ -5996,12 +6153,8 @@ select.admin-tickets-tag:focus {
 }
 
 /* --------------------------------------------------------------------------
-   One passport's page
-
-   Laid out as the thing it describes rather than as a form: a band up top for
-   the object itself, the record beside the printed side, and the single
-   irreversible action fenced off at the foot where nothing is clicked by
-   accident on the way past.
+   One passport's page: the object up top, the record beside the printed side,
+   and the one irreversible action fenced off at the foot.
    -------------------------------------------------------------------------- */
 
 /* The passport as it is held — cover, printed code, state. */
@@ -6018,16 +6171,14 @@ select.admin-tickets-tag:focus {
     box-shadow: 0 2px 10px rgba(255, 150, 200, 0.08);
 }
 
-/* Claimed tints green, the same green as the status dots in the stock table,
-   so the band itself answers the question the badge spells out. */
+/* Claimed tints the band the stock table's status green. */
 .admin-passport-hero--claimed {
     border-color: rgba(78, 203, 113, 0.28);
     background: linear-gradient(135deg, rgba(78, 203, 113, 0.12), rgba(108, 99, 255, 0.05)),
     rgba(255, 255, 255, 0.85);
 }
 
-/* The 3/4 shape a cover is shown in everywhere else, at thumbnail size. With
-   no art on the design yet, the year holds its place, as on the design card. */
+/* The cover at thumbnail size, 3/4; without art, the year holds its place. */
 .admin-passport-hero-cover {
     flex: 0 0 auto;
     display: flex;
@@ -6065,8 +6216,7 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-muted);
 }
 
-/* Mono and spaced out: this is the string someone reads off a sticker and
-   types, so it is set the way it is printed. */
+/* Mono and spaced, as printed: it's read off a sticker and typed. */
 .admin-passport-hero-code {
     margin: 2px 0 0;
     font-family: var(--font-mono);
@@ -6096,8 +6246,8 @@ select.admin-tickets-tag:focus {
     color: var(--color-error);
 }
 
-/* Record on the left, printed side on the right; one column as soon as the
-   sticker no longer fits beside it. */
+/* Record left, printed side right; one column once the sticker doesn't fit
+   beside it. */
 .admin-passport-detail-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
@@ -6123,8 +6273,7 @@ select.admin-tickets-tag:focus {
     box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
 }
 
-/* The same eyebrow voice the detail rows use, so a card title and a field
-   label read as one labelling system. */
+/* The detail rows' eyebrow style, so titles and labels match. */
 .admin-passport-panel-title {
     margin: 0 0 12px;
     font-size: 12px;
@@ -6147,8 +6296,7 @@ select.admin-tickets-tag:focus {
     margin-bottom: 0;
 }
 
-/* An action and the one line that says what it does, ruled off at the foot of
-   the card it belongs to. */
+/* An action and its one-line explanation, ruled off at the card's foot. */
 .admin-passport-panel-foot {
     display: flex;
     flex-wrap: wrap;
@@ -6166,8 +6314,7 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-muted);
 }
 
-/* The holder, as the avatar row they are elsewhere in the panel — and the way
-   through to their account, since nothing about them is edited here. */
+/* The holder as an avatar row, linking through to their account. */
 .admin-passport-holder-card {
     display: flex;
     align-items: center;
@@ -6214,9 +6361,7 @@ select.admin-tickets-tag:focus {
     min-width: 0;
 }
 
-/* A long name or address is clipped rather than widening the card; the
-   membership line below wraps instead, since a half-shown date is worse than
-   a second line. */
+/* A long name or address clips; the membership line wraps instead. */
 .admin-passport-holder-display,
 .admin-passport-holder-mail {
     overflow: hidden;
@@ -6235,8 +6380,7 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-muted);
 }
 
-/* Not this page's to change, but it is the figure the delete below subtracts
-   from — so the answer is on screen before the choice is made. */
+/* The figure the delete below subtracts from, shown before the choice. */
 .admin-passport-holder-member {
     margin-top: 3px;
     font-size: 12px;
@@ -6256,9 +6400,8 @@ select.admin-tickets-tag:focus {
     white-space: nowrap;
 }
 
-/* No holder to show: stock, a deleted account, one that couldn't be read, or
-   still loading. Dashed, so the empty state reads as a space waiting to be
-   filled rather than a card. */
+/* No holder to show (stock, deleted, unreadable or loading): dashed, as a space
+   rather than a card. */
 .admin-passport-holder-empty {
     padding: 14px;
     border: 1px dashed rgba(122, 129, 144, 0.32);
@@ -6280,8 +6423,7 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-muted);
 }
 
-/* The key at the size it is read off a slip. The masked and revealed states
-   are the same box, so showing it doesn't shift what is underneath. */
+/* The key at slip size. Masked and revealed share one box, so nothing shifts. */
 .admin-passport-key-readout {
     padding: 12px 14px;
     border: 1px solid rgba(74, 81, 96, 0.1);
@@ -6356,8 +6498,7 @@ select.admin-tickets-tag:focus {
     color: var(--color-text-muted);
 }
 
-/* The printed side, kept together: what the sticker shows, where it points,
-   and how to get it back out as artwork. */
+/* The printed side: what the sticker shows, where it points, and its artwork. */
 .admin-passport-sticker {
     display: flex;
     flex-direction: column;
@@ -6374,14 +6515,12 @@ select.admin-tickets-tag:focus {
     width: min(240px, 100%);
 }
 
-/* Stacked under the record, the card goes full width while its contents stay
-   at sticker size rather than stretching across the page. */
+/* Full width when stacked, contents still at sticker size. */
 .admin-passport-sticker .admin-code-url {
     max-width: 260px;
 }
 
-/* The one part of the page that can't be taken back, fenced and labelled
-   before it is read. */
+/* The one irreversible part of the page, fenced and labelled. */
 .admin-passport-danger {
     margin-top: 20px;
     padding: 16px 18px;
@@ -6390,8 +6529,7 @@ select.admin-tickets-tag:focus {
     background: rgba(224, 85, 85, 0.04);
 }
 
-/* Opened, the panel inside is its own fence and says everything the frame
-   did — so the frame gets out of its way rather than stacking red on red. */
+/* Opened, the panel inside is its own fence, so the frame steps back. */
 .admin-passport-danger--open {
     padding: 0;
     border-color: transparent;
@@ -6430,9 +6568,8 @@ select.admin-tickets-tag:focus {
     }
 }
 
-/* Too narrow for the holder's details and the way through to their account
-   side by side: the link drops to its own line rather than squeezing the
-   membership date into an ellipsis. */
+/* Too narrow for the holder's details and the link side by side: the link drops
+   to its own line. */
 @media (max-width: 560px) {
     .admin-passport-holder-card {
         flex-wrap: wrap;
@@ -6583,16 +6720,14 @@ select.admin-tickets-tag:focus {
     align-items: start;
 }
 
-/* Top-aligned: the term column runs taller than the year beside it, and a stretched
-   label would grow .admin-input (flex: 1) to match. */
+/* Top-aligned, so a stretched label doesn't grow .admin-input (flex: 1). */
 .admin-passport-design-editor-body .admin-form-grid {
     align-items: start;
     margin-bottom: 0;
 }
 
-/* A design carries two images: the page inside the open passport, and the
-   optional outside it is shut on. They stack in the editor's first column, each
-   under its own caption, so it is clear which one is being replaced. */
+/* A design's two images, the inside page and the optional outside, stacked in
+   the first column under their own captions. */
 .admin-passport-design-covers {
     display: flex;
     flex-direction: column;
@@ -6623,8 +6758,7 @@ select.admin-tickets-tag:focus {
     font-weight: 700;
 }
 
-/* Only there once an outside has been picked — it puts the design back on one
-   image for both, which nothing else in the field can do. */
+/* Only once an outside is picked; puts the design back on one image. */
 .admin-passport-cover-clear {
     align-self: flex-start;
     padding: 0;
@@ -6720,9 +6854,9 @@ select.admin-tickets-tag:focus {
 }
 
 /* ==========================================================================
-   Section navigator — a floating previous / jump-to / next pill for tabs that
-   stack several long sections (Events, Locations, Site Config, Con Content).
-   Sits under modals (z-index 1000+) and clear of the toasts in the top right.
+   Section navigator: a floating previous / jump-to / next pill for tabs of long
+   stacked sections (Events, Locations, Site Config, Con Content). Under modals
+   (z-index 1000+), clear of the toasts.
    ========================================================================== */
 
 .admin-secnav-spacer {

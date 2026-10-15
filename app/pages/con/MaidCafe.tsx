@@ -20,9 +20,8 @@ interface PosterViewerProps {
 }
 
 /**
- * One poster at full size, with the rest a step away on either side. A poster is
- * print art with its details set small, so the thumbnails on the page are for
- * picking one, and this is where it is read.
+ * One poster full size with the rest either side; the thumbnails are for
+ * picking, this is for reading.
  */
 const PosterViewer = ({posters, index, onIndex, onClose}: PosterViewerProps) => {
     const t = useT();
@@ -102,9 +101,8 @@ const PosterViewer = ({posters, index, onIndex, onClose}: PosterViewerProps) => 
 };
 
 /**
- * The maid café: its poster beside the theme, room and hours, then a poster for
- * each maid. Each part shows once it has been filled in, under a header that is
- * always there.
+ * The maid café: its poster beside the theme, room and hours, then each maid's.
+ * Each part appears once filled in.
  */
 export const MaidCafe = () => {
     const t = useT();

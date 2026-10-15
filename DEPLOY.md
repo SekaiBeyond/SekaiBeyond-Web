@@ -142,40 +142,11 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     The same mechanism applies to the optional settings `RESEND_DAILY_CAP` (default 100), `SEND_CHUNK_SIZE` (default 100), `RESEND_QUEUE_CAP` (default 500), `IMPORT_MAX_ROWS` (default 1000), `MAX_UPLOAD_SIZE_MB` (default 10), and `SCAN_CLIENT_SALT`. The salt has a fallback in source, so set your own to keep the hashed scan-client keys from being reversed by someone holding both the source and a database export. `functions/.env.example` describes each one. Note that `RESEND_API_KEY` is *not* one of these — it is a Secret Manager secret, set via `firebase functions:secrets:set` (see Step 10).
 
-13. Configure **Google Maps Platform** — the **Parking Guide** page and the admin panel's maps (the Locations map, the **Map Picker** for venues and parking lots, and the QR spots map) render interactive maps via `@vis.gl/react-google-maps`, keyed by `VITE_GOOGLE_MAPS_API_KEY` and `VITE_GOOGLE_MAPS_MAP_ID`. Without these, the map silently fails to load (the script request goes out with an empty `key=`, and the Maps JS API logs `The Google Maps JavaScript API could not load`).
+13. **Maps need no setup.** The **Parking Guide** and the admin panel's maps (the Locations map, the map picker for venues and QR spots, and the QR spots map) draw [OpenFreeMap](https://openfreemap.org) tiles of OpenStreetMap data with MapLibre GL: no key, no billing, no request limit. The map picker's place search uses OpenStreetMap's [Nominatim](https://nominatim.org/release-docs/latest/api/Search/), whose usage policy allows a search when someone asks for one (at most one a second, and no search-as-you-type), which is how the picker uses it.
 
-    **Step A — Enable the API and create a browser key**
+    > **Parking data:** lot details, UW's event-parking days and walking times come from UW Transportation Services and OpenStreetMap. The `uwParkingNightlySync` scheduled function copies them into `uwParking/current` every day at 5:30 PM Pacific; it deploys with the other functions and needs no keys. To fill it right after the first deploy, use **Force run** on its job in [Cloud Scheduler](https://console.cloud.google.com/cloudscheduler).
 
-    1. In [Google Cloud Console](https://console.cloud.google.com) (same project as Firebase), go to **APIs & Services** > **Library** and enable **Maps JavaScript API**.
-    2. Go to **APIs & Services** > **Credentials** > **Create credentials** > **API key**.
-    3. **Restrict the key** (critical — an unrestricted key is a billing risk and will be flagged by Google):
-       - **Application restrictions** > **Websites (HTTP referrers)** — add **every** host the site is served from, with a wildcard path: `https://sekaibeyond.com/*`, `https://www.sekaibeyond.com/*`, `https://<project-id>.web.app/*`, `https://<project-id>.firebaseapp.com/*`, and `http://localhost:*/*` for local dev. A referrer list that omits production is the #1 cause of a blank map plus a `RefererNotAllowedMapError` in the console.
-       - **API restrictions** > **Restrict key** > select **Maps JavaScript API**.
-
-    **Step B — Create a Map ID (required for Advanced Markers)**
-
-    The app uses `AdvancedMarker`, which only renders on a map tied to a **Map ID**. In Cloud Console go to **Google Maps Platform** > **Map management** > **Create Map ID**, choose **JavaScript** > **Vector**, and copy the ID. (Falling back to the built-in `DEMO_MAP_ID` works for local tinkering but watermarks the map and is not for production.)
-
-    **Step C — Wire both values into the build**
-
-    Add to **both** targets — `VITE_*` vars are inlined by Vite at build time, so the bundle must be rebuilt after they change:
-    - GitHub repo secrets (see [GitHub Repository Secrets](#2-github-repository-secrets)) — required for production builds. The deploy workflow passes them to the `Build` step.
-    - Local `.env` — required for the map to appear under `npm run dev`.
-
-    ```
-    VITE_GOOGLE_MAPS_API_KEY=<browser-key-from-Step-A>
-    VITE_GOOGLE_MAPS_MAP_ID=<map-id-from-Step-B>
-    ```
-
-    **Step D — Content-Security-Policy (already wired)**
-
-    The CSP header in `firebase.json` already allowlists everything the **vector** map needs, so forks need no CSP changes for the map:
-    - `script-src`: `https://maps.googleapis.com` (the API script) and `'wasm-unsafe-eval'` (vector maps compile WebAssembly for label rendering — without it the map throws `CompileError: ... blocked by CSP` and never paints tiles).
-    - `img-src`: `https://*.gstatic.com` / `https://*.ggpht.com` (map tiles, Street View thumbnails).
-    - `connect-src`: `https://*.gstatic.com` (legend/style fetches from `www.gstatic.com/maps/...`) and `data:` (the renderer fetches inline `data:` images).
-    - `worker-src 'self' blob:` for the vector-map label worker.
-
-    If you add other third-party scripts, extend that header accordingly — and note that the deploy-time `npm run update-csp-hashes` only rewrites the inline-script `sha256-` hashes inside `script-src`, preserving every other source token (including `'wasm-unsafe-eval'`).
+    The CSP header in `firebase.json` already allows what the maps need: `https://tiles.openfreemap.org` in `img-src` and `connect-src` (tiles, fonts and icons), `https://nominatim.openstreetmap.org` in `connect-src` (place search), and `worker-src 'self'` for MapLibre's worker, which the build bundles as a same-origin file. If you add other third-party scripts, extend that header accordingly — the deploy-time `npm run update-csp-hashes` only rewrites the inline-script `sha256-` hashes inside `script-src`, preserving every other source token.
 
 #### Firestore Indexes Explained
 
@@ -207,8 +178,6 @@ Go to your repo > **Settings** > **Secrets and variables** > **Actions**, and ad
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Your sender ID                      |
 | `VITE_FIREBASE_APP_ID`              | Your app ID                         |
 | `VITE_RECAPTCHA_SITE_KEY`           | reCAPTCHA v3 site key (App Check)   |
-| `VITE_GOOGLE_MAPS_API_KEY`          | Maps JS API browser key (see Step 13) |
-| `VITE_GOOGLE_MAPS_MAP_ID`           | Vector Map ID for Advanced Markers  |
 | `FIREBASE_SERVICE_ACCOUNT`          | Service account JSON (see below)    |
 
 The `VITE_*` secrets are injected as build-time environment variables. `FIREBASE_SERVICE_ACCOUNT` authenticates the deploy step.
@@ -223,7 +192,7 @@ The `VITE_*` secrets are injected as build-time environment variables. `FIREBASE
 4. Grant these roles:
    - **Firebase Admin** (broad, simplest), or more narrowly: **Firebase Hosting Admin**, **Cloud Functions Admin**, **Firebase Rules Admin**, **Storage Admin**
    - **Secret Manager Admin** (`roles/secretmanager.admin`) — required to deploy the secret-bound email functions; not covered by Firebase Admin (see [Step 10](#1-firebase-project))
-   - **Cloud Scheduler Admin** (`roles/cloudscheduler.admin`) — required to create/update the Cloud Scheduler job behind the `scheduledMailDrain` scheduled function; not covered by Firebase Admin or Cloud Functions Admin. Without it, deploys that change the function's schedule fail with `403 ... lacks IAM permission "cloudscheduler.jobs.update"`.
+   - **Cloud Scheduler Admin** (`roles/cloudscheduler.admin`) — required to create/update the Cloud Scheduler jobs behind the `scheduledMailDrain` and `uwParkingNightlySync` scheduled functions; not covered by Firebase Admin or Cloud Functions Admin. Without it, deploys that change the function's schedule fail with `403 ... lacks IAM permission "cloudscheduler.jobs.update"`.
    - **Service Account User**
 5. After creating, open the service account, go to the **Keys** tab, click **Add Key** > **Create new key** > **JSON**, and download the file
 6. Paste the entire file contents into the `FIREBASE_SERVICE_ACCOUNT` secret value in GitHub

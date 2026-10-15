@@ -45,8 +45,8 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
     const [importing, setImporting] = useState(false);
     const [busy, setBusy] = useState(false);
 
-    // Only the rows on show are looked up: a thousand-row paste would otherwise
-    // spend a lookup on addresses nobody is reading.
+    // Only the rows on show, so a thousand-row paste doesn't spend a lookup per
+    // row.
     const previewEmails = useMemo(
         () => rows.slice(0, MAX_PREVIEW).map(r => r.email),
         [rows],
@@ -201,8 +201,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
 
         setImporting(true);
         try {
-            // We pass onDuplicate: 'override' because we've already filtered out the ones we want to skip locally.
-            // Any existing ones remaining in 'toSend' are explicitly meant to be overridden.
+            // 'override': the duplicates to skip were filtered out locally, so any left are meant to be replaced.
             const result = await callImportEventAttendees({eventId, attendees: toSend, onDuplicate: 'override'});
             const {added, replaced, skipped} = result.data;
             const totalSkipped = skipped + manuallySkipped;

@@ -52,10 +52,10 @@ export interface UserRecord {
 export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'passports' | 'records' | 'tools' | 'config' | 'con';
 
 /**
- * Every record type, by Records tab category: the one list behind RecordType,
- * the type filter, and each row's tag and colour. Mirrors RecordType in
- * functions/src/utils/records.ts. A category is one `in` query, so keep each
- * within Firestore's 30-value cap.
+ * Every record type by Records tab category: the source of RecordType, the type
+ * filter, and each row's tag and colour. Mirrors RecordType in
+ * functions/src/utils/records.ts. Each category is one `in` query, so keep it
+ * within 30 types.
  */
 export const RECORD_CATEGORIES = {
     role: {
@@ -104,9 +104,7 @@ export const RECORD_CATEGORIES = {
     },
     location: {
         en: 'Location', zh: '场地',
-        types: ['venue-create', 'venue-edit', 'venue-delete',
-            'parkinglot-create', 'parkinglot-edit', 'parkinglot-delete',
-            'parkingrate-create', 'parkingrate-edit', 'parkingrate-delete'],
+        types: ['venue-create', 'venue-edit', 'venue-delete', 'parking-sync'],
     },
     passport: {
         en: 'Passport', zh: '通行证',
@@ -155,10 +153,6 @@ export interface ActivityRecord {
     /** Location records: the item's ID, for the link, and its English name at the time. */
     venueId?: string;
     venueName?: string;
-    lotId?: string;
-    lotName?: string;
-    rateId?: string;
-    rateLabel?: string;
     qrLabel?: string;
     /** Passport records: the printed code, and its design's year and name. */
     passportId?: string;
@@ -171,7 +165,7 @@ export interface ActivityRecord {
     conSection?: string;
     /** The Site Config sections a config-update saved (keys of CONFIG_SECTION_LABELS). */
     configSections?: string[];
-    unlinkedFrom?: number;
+    lotCount?: number;
     /** Event check-in codes only; see RecordFields.code. */
     code?: string;
     oldGroup?: UserGroup;
@@ -187,8 +181,10 @@ export interface ActivityRecord {
     newName?: string;
     oldType?: string;
     newType?: string;
-    /** Why a staff grant or its attendance change happened: 'staff-assignment'
-     *  (an admin made them staff) or 'staff-code' (they redeemed a staff code). */
+    /**
+     * Why staff was granted: 'staff-assignment' (by an admin) or 'staff-code' (a
+     * redeemed code).
+     */
     reason?: string;
     addedCount?: number;
     replacedCount?: number;

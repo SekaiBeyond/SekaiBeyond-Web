@@ -11,8 +11,7 @@ interface ToolDef {
     titleCn: string;
     description: string;
     descriptionCn: string;
-    // Hidden from read-only (staff) viewers. Use for tools whose callable is
-    // gated to core-staff+, which would otherwise fail with permission-denied.
+    // Hidden from staff (read-only), for tools whose callable is core-staff+.
     adminOnly?: boolean;
 }
 

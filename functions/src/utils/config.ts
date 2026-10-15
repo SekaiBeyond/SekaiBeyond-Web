@@ -1,29 +1,26 @@
 import { Timestamp } from "firebase-admin/firestore";
 
 export const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN ?? "https://sekaibeyond.com";
-// Resend free-plan daily cap. Tracked as a sliding 24h window on Resend's
-// side — we don't reset this on calendar boundaries; we read the consumed
-// count from Resend (see fetchProviderUsage) and cache it in system/resendQuota.
+// Resend's daily cap, a sliding 24-hour window on their side; the used count is
+// read from Resend (fetchProviderUsage) and cached in system/resendQuota.
 export const RESEND_DAILY_CAP = Number(process.env.RESEND_DAILY_CAP) || 100;
-// Resend's batch endpoint caps at 100 envelopes per call; SEND_CHUNK_SIZE
-// is also the per-call attendee ceiling for sendTicketEmails, so it is
-// clamped to 100 — a larger value would make sendEmails reject the batch.
+// Also sendTicketEmails' per-call attendee ceiling, so clamped to the batch
+// endpoint's 100.
 export const SEND_CHUNK_SIZE = Math.min(100, Number(process.env.SEND_CHUNK_SIZE) || 100);
-// Hard cap on /scheduledMail depth. Once full, sends past the daily cap are
-// rejected (callable throws resource-exhausted) rather than silently swallowed.
-// Drained every 30 min by the scheduledMailDrain function.
+// Once /scheduledMail is this deep, sends past the daily cap fail with
+// resource-exhausted rather than vanish. scheduledMailDrain empties it every 30
+// minutes.
 export const RESEND_QUEUE_CAP = Number(process.env.RESEND_QUEUE_CAP) || 500;
-// Outbound mail goes out from <prefix>@SENDER_DOMAIN (see getSenderAddress).
-// The domain is the site's own host from PUBLIC_ORIGIN, less a leading "www.",
-// and must be the one verified on the Resend account — direct API calls reject
-// a From on any other. The prefix is set in Site Config; DEFAULT_SENDER_PREFIX
-// is used while it is blank.
+// Mail goes from <prefix>@SENDER_DOMAIN (see getSenderAddress): the
+// PUBLIC_ORIGIN host less "www.", which must be the domain verified on the
+// Resend account. The prefix comes from Site Config, or DEFAULT_SENDER_PREFIX
+// while blank.
 export const SENDER_DOMAIN = (() => {
     try {
         return new URL(PUBLIC_ORIGIN).hostname.replace(/^www\./, "");
     } catch {
-        // A blank or malformed PUBLIC_ORIGIN must not crash every function at
-        // load; sends fail at Resend instead, as ticket links already would.
+        // A bad PUBLIC_ORIGIN mustn't crash every function at load; sends fail
+        // at Resend instead.
         return "";
     }
 })();
@@ -35,10 +32,8 @@ export function recordExpiresAt(): Timestamp {
     return Timestamp.fromMillis(Date.now() + RECORD_RETENTION_DAYS * 24 * 60 * 60 * 1000);
 }
 
-// Individual QR code scan events are kept for a year so trend charts stay
-// useful across a full event season, then auto-expire. The TTL policy is set
-// on the `scans` collection GROUP, so every parent's subcollection of that
-// name is covered by the one policy in firestore.indexes.json.
+// Kept a year so trend charts cover a full event season. The TTL policy is on
+// the `scans` collection group (firestore.indexes.json).
 export const SCAN_RETENTION_DAYS = 365;
 
 export function scanExpiresAt(): Timestamp {

@@ -32,19 +32,15 @@ interface HallMapProps {
 }
 
 /**
- * The main hall floor plan (see hall.ts), shared by /con and the admin editor.
- *
- * Its tables are out of the tab order: on /con the directory under it lists
- * every vendor and selecting one there lights the table up here, and in the
- * admin panel each table's own input is reachable directly. Sixty-odd extra tab
- * stops in a grid of buttons would only stand between a keyboard and either.
- * The buttons stay named and in the accessibility tree for a screen reader.
+ * The hall floor plan (see hall.ts), shared by /con and the admin editor.
+ * Tables are out of the tab order: the vendor directory (on /con) or each
+ * table's input (in admin) is the keyboard route, and sixty extra tab stops
+ * would only be in the way. They stay named for screen readers.
  */
 export const HallMap = ({vendors, selected, onSelect, onHover, matches, pickOpen, label}: HallMapProps) => {
     const t = useT();
 
-    // Touch fires pointerenter as well, and a hover that only ends on the next tap
-    // elsewhere would leave the preview stuck.
+    // Touch fires pointerenter too, and its hover would stick until the next tap.
     const hover = (table: string | null) => (e: PointerEvent) => {
         if (e.pointerType === 'mouse') onHover?.(table);
     };

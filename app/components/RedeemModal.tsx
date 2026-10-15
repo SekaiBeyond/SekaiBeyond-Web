@@ -97,8 +97,8 @@ export const RedeemModal = () => {
         setState('claiming');
         setError('');
 
-        // One call whatever kind of code this is: the server knows them all, and
-        // guessing from here would spend a rate-limit slot per guess.
+        // One call for any kind of code; guessing here would spend a rate-limit
+        // slot per guess.
         try {
             const {data} = await callRedeemCode({code: trimmed});
 
@@ -148,9 +148,8 @@ export const RedeemModal = () => {
                 case 'max-uses':
                     setError(isEnglish ? 'This code has reached its maximum uses.' : '此兑换码已达到最大使用次数。');
                     break;
-                // Only a passport key reaches these two: its passport was found,
-                // so "invalid" would send the holder off to retype a key that
-                // was never wrong.
+                // Only a passport key gets here, and its passport was found, so
+                // "invalid" would be wrong.
                 case 'already-claimed':
                     setError(isEnglish
                         ? 'This passport has already been activated.'
@@ -166,8 +165,7 @@ export const RedeemModal = () => {
                         ? (isEnglish ? 'You are already staff for this event.' : '您已是此活动的工作人员。')
                         : (isEnglish ? 'You already have this badge.' : '您已拥有此徽章。'));
                     break;
-                // A check-in code names itself, so it can be turned away by name
-                // instead of joining everything else under "invalid".
+                // A check-in code names itself, so it's turned away by name.
                 case 'event-code':
                     setError(isEnglish
                         ? 'That code checks you in at an event — use the link or QR code from the event itself.'

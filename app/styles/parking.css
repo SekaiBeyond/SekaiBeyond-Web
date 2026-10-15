@@ -1,3 +1,25 @@
+:root {
+    /* What the pins, pills and legend encode: parking during the event, or right now.
+       Global, since the admin maps reuse the pins. */
+    --parking-free: #4ecb71;
+    --parking-free-ink: #23914a;
+    --parking-free-soft: rgba(78, 203, 113, 0.14);
+    --parking-part: #feca57;
+    --parking-part-ink: #9a6a00;
+    --parking-part-soft: rgba(254, 202, 87, 0.24);
+    --parking-part-glyph: #6b4b00;
+    --parking-paid: #ff8e53;
+    --parking-paid-ink: #d9622a;
+    --parking-paid-soft: rgba(255, 142, 83, 0.14);
+    --parking-permit: #8b93a1;
+    --parking-permit-ink: #5f6673;
+    --parking-permit-soft: rgba(139, 147, 161, 0.16);
+    --parking-event: #e05555;
+    --parking-event-ink: #c93a3a;
+    --parking-event-soft: rgba(224, 85, 85, 0.12);
+    --parking-badge-font: 'Fredoka', 'Quicksand', 'Noto Sans SC', sans-serif;
+}
+
 .parking-page {
     min-height: 100vh;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)),
@@ -16,16 +38,11 @@
     z-index: 2;
 }
 
-.parking-topbar .parking-back-btn {
-    margin: 0;
-}
-
 .parking-back-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     padding: 10px 22px;
-    margin: 24px 40px 0;
     border: 2px solid rgba(255, 150, 200, 0.3);
     background: rgba(255, 255, 255, 0.7);
     border-radius: 25px;
@@ -152,7 +169,7 @@
 }
 
 .parking-venue-switcher-name {
-    font-family: 'Fredoka', 'Noto Sans SC', sans-serif;
+    font-family: var(--parking-badge-font);
     font-size: 1.25rem;
     color: var(--color-text);
     font-weight: 700;
@@ -189,7 +206,7 @@
     top: calc(100% + 10px);
     left: 50%;
     transform: translateX(-50%);
-    width: min(360px, 90vw);
+    width: min(380px, 90vw);
     background: #fff;
     border-radius: 16px;
     box-shadow: 0 12px 40px rgba(255, 107, 157, 0.25);
@@ -218,7 +235,7 @@
 
 .parking-venue-switcher-list {
     margin-top: 10px;
-    max-height: 260px;
+    max-height: 280px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -228,7 +245,9 @@
 .parking-venue-switcher-option {
     position: relative;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
     width: 100%;
     padding: 10px 34px 10px 12px;
     border: none;
@@ -236,6 +255,7 @@
     border-radius: 10px;
     cursor: pointer;
     text-align: left;
+    font-family: var(--font-body);
     transition: background 0.15s ease;
 }
 
@@ -248,9 +268,29 @@
 }
 
 .parking-venue-switcher-option-name {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
     font-size: 14px;
     font-weight: 700;
     color: var(--color-text);
+}
+
+.parking-venue-switcher-option-meta {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.parking-venue-switcher-tag {
+    font-family: var(--parking-badge-font);
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--gradient-primary);
+    padding: 1px 8px;
+    border-radius: 999px;
 }
 
 .parking-venue-switcher-check {
@@ -269,38 +309,56 @@
     color: var(--color-text-secondary);
 }
 
+/* The map (left, wide) beside a column of cards that scrolls on its own. */
 .parking-content {
+    /* Above the fixed decorative blobs, below the header's venue dropdown. */
+    position: relative;
+    z-index: 1;
     display: grid;
-    grid-template-columns: 2.2fr 1fr;
-    gap: 30px;
+    grid-template-columns: minmax(0, 2.2fr) minmax(340px, 1fr);
+    gap: 24px;
     max-width: 1700px;
+    height: clamp(560px, 84vh, 880px);
     margin: 20px auto 0;
     padding: 0 40px;
-    align-items: start;
 }
 
 .parking-map-container {
+    position: relative;
+    min-height: 0;
     background: white;
     border-radius: 20px;
     overflow: hidden;
     box-shadow: 0 8px 30px rgba(255, 150, 200, 0.12);
     border: 2px solid rgba(255, 150, 200, 0.15);
-    position: relative;
 }
 
-.parking-map {
-    width: 100%;
-    height: 820px;
+/* Two classes, to win over MapLibre's own .maplibregl-map { position: relative }. */
+.parking-map-container .parking-map {
+    position: absolute;
+    inset: 0;
+    background: #f5f3f0;
 }
 
-/* Price legend overlaid on the map, like the UW parking map's LEGEND box.
-   Frosted "glass": translucent + blurred so markers behind it stay visible, and
-   click-through (pointer-events: none) so those markers remain clickable. */
+.parking-map-failed {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 40px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* Legend over the map, frosted so markers behind stay visible, and
+   click-through so they stay clickable. Above every pin (ParkingMap stacks
+   them 1–7) and under the hover card. */
 .parking-map-legend {
     position: absolute;
     left: 14px;
     bottom: 14px;
-    max-width: min(320px, calc(100% - 28px));
+    max-width: min(300px, calc(100% - 28px));
     background: rgba(255, 255, 255, 0.55);
     backdrop-filter: blur(8px) saturate(1.1);
     -webkit-backdrop-filter: blur(8px) saturate(1.1);
@@ -311,7 +369,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    z-index: 2;
+    z-index: 8;
     pointer-events: none;
 }
 
@@ -341,11 +399,18 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    font-family: var(--parking-badge-font);
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 700;
     color: #fff;
     border: 1.5px solid #fff;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.parking-map-legend-dot.is-pick {
+    background: #fff;
+    color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary), 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
 .parking-map-legend-star {
@@ -362,26 +427,53 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
+.parking-map-legend-star.is-other {
+    background: #fff;
+    box-shadow: 0 0 0 1.5px rgba(255, 150, 200, 0.55);
+}
+
+/* Status colors, shared by the pins, the list badges and the legend. */
+.parking-k-free {
+    background: var(--parking-free);
+}
+
+.parking-k-part {
+    background: var(--parking-part);
+    color: var(--parking-part-glyph) !important;
+}
+
+.parking-k-paid {
+    background: var(--parking-paid);
+}
+
+.parking-k-permit {
+    background: var(--parking-permit);
+}
+
+.parking-k-event {
+    background: var(--parking-event);
+}
+
 .parking-info-panel {
+    min-height: 0;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 14px;
+    padding: 2px 8px 8px 2px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 150, 200, 0.45) transparent;
 }
 
 .parking-info-card {
     display: flex;
-    gap: 16px;
+    gap: 14px;
+    align-items: flex-start;
     background: white;
     border-radius: 18px;
-    padding: 22px;
+    padding: 18px;
     box-shadow: 0 4px 18px rgba(255, 150, 200, 0.1);
     border: 1px solid rgba(255, 150, 200, 0.12);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.parking-info-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 28px rgba(255, 150, 200, 0.18);
 }
 
 .parking-info-icon {
@@ -395,6 +487,13 @@
     font-size: 22px;
 }
 
+.parking-info-icon--small {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-size: 16px;
+}
+
 .parking-info-icon--time {
     background: rgba(255, 142, 83, 0.12);
     color: var(--color-accent);
@@ -405,12 +504,30 @@
     color: var(--color-primary);
 }
 
+.parking-info-icon--warn {
+    background: var(--parking-event-soft);
+}
+
+.parking-info-icon--pick {
+    background: var(--gradient-primary);
+    color: #fff;
+    font-family: var(--parking-badge-font);
+    font-weight: 700;
+}
+
 .parking-info-text {
     flex: 1;
+    min-width: 0;
     font-size: 14px;
-    line-height: 1.7;
+    line-height: 1.6;
     color: var(--color-text);
     font-weight: 500;
+}
+
+.parking-info-stack {
+    display: grid;
+    gap: 3px;
+    justify-items: start;
 }
 
 .parking-info-text strong {
@@ -418,40 +535,137 @@
     font-weight: 700;
 }
 
-.parking-info-text a {
+.parking-info-panel a {
     color: var(--color-primary);
-    text-decoration: none;
     font-weight: 700;
-    transition: color 0.2s ease;
+    text-decoration: none;
 }
 
-.parking-info-text a:hover {
+.parking-info-panel a:hover {
     color: var(--color-accent);
     text-decoration: underline;
 }
 
-.parking-info-icon--general {
-    background: var(--color-accent);
-    color: white;
+.parking-eyebrow {
+    font-size: 11px;
     font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
 }
 
-.parking-info-icon--garage {
-    background: #6c63ff;
-    color: white;
-    font-weight: 800;
+.parking-event-title {
+    font-family: var(--parking-badge-font);
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 1.25;
+    color: var(--color-text);
 }
 
-.parking-info-icon--disabled {
-    background: #4ecb71;
-    color: white;
+.parking-meta {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-muted);
 }
 
-.parking-lot-name-row {
+.parking-linkish {
+    border: 0;
+    background: none;
+    padding: 0;
+    font: inherit;
+    font-weight: 700;
+    color: var(--color-primary);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* Which of its days an event's guide shows. */
+.parking-when {
     display: flex;
-    align-items: center;
     flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.parking-when-select {
+    margin-top: 8px;
+    max-width: 100%;
+    border: 2px solid rgba(255, 150, 200, 0.25);
+    border-radius: 14px;
+    padding: 6px 10px;
+    background: #fff;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.parking-when-select:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+/* On an event's guide, that its prices are the event's, not this minute's. */
+.parking-event-note {
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(255, 142, 83, 0.12);
+    font-size: 12.5px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--parking-paid-ink);
+}
+
+.parking-banner .parking-info-text {
+    color: var(--parking-event-ink);
+    font-weight: 700;
+}
+
+.parking-banner a {
+    font-size: 12.5px;
+}
+
+.parking-section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
     gap: 8px;
+    padding: 2px 4px 0;
+}
+
+.parking-section-title h2 {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+.parking-section-title small {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+/* Suggested lot cards */
+.parking-pick {
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.parking-pick:hover,
+.parking-pick.is-hot {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 28px rgba(255, 150, 200, 0.18);
+    border-color: rgba(255, 107, 157, 0.35);
 }
 
 .parking-lot-name {
@@ -460,55 +674,76 @@
     color: var(--color-text);
 }
 
-a.parking-lot-name {
-    color: var(--color-primary);
-    text-decoration: underline;
-}
-
-a.parking-lot-name:hover {
-    color: var(--color-accent);
-}
-
 .parking-lot-type {
     font-size: 12px;
     font-weight: 600;
     color: var(--color-text-secondary);
-    margin-top: 2px;
 }
 
-.parking-lot-dist {
-    display: flex;
-    align-items: center;
-    gap: 5px;
+.parking-dist {
     font-size: 12.5px;
     font-weight: 700;
     color: var(--color-primary);
-    margin-top: 6px;
 }
 
-.parking-popup-dist {
-    margin-top: 4px;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--color-primary);
-}
-
-.parking-lot-rate {
-    display: flex;
-    align-items: center;
-    gap: 5px;
+.parking-rate-line {
     font-size: 12.5px;
     font-weight: 600;
     color: var(--color-text-secondary);
-    margin-top: 6px;
 }
 
-.parking-lot-search {
-    position: relative;
-    /* Lift the dropdown above the info cards that follow it. */
-    z-index: 30;
+.parking-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px 2px 8px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 700;
+    line-height: 1.5;
+    justify-self: start;
 }
 
+.parking-status::before {
+    content: "";
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 3px;
+    background: var(--dot);
+}
+
+.parking-s-free {
+    color: var(--parking-free-ink);
+    background: var(--parking-free-soft);
+    --dot: var(--parking-free);
+}
+
+.parking-s-part {
+    color: var(--parking-part-ink);
+    background: var(--parking-part-soft);
+    --dot: var(--parking-part);
+}
+
+.parking-s-paid {
+    color: var(--parking-paid-ink);
+    background: var(--parking-paid-soft);
+    --dot: var(--parking-paid);
+}
+
+.parking-s-permit {
+    color: var(--parking-permit-ink);
+    background: var(--parking-permit-soft);
+    --dot: var(--parking-permit);
+}
+
+.parking-s-event {
+    color: var(--parking-event-ink);
+    background: var(--parking-event-soft);
+    --dot: var(--parking-event);
+}
+
+/* All-lots search, filters and list */
 .parking-lot-search-field {
     display: flex;
     align-items: center;
@@ -516,7 +751,7 @@ a.parking-lot-name:hover {
     background: #fff;
     border: 2px solid rgba(255, 150, 200, 0.25);
     border-radius: 18px;
-    padding: 14px 18px;
+    padding: 12px 16px;
     box-shadow: 0 4px 18px rgba(255, 150, 200, 0.1);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -527,7 +762,7 @@ a.parking-lot-name:hover {
 }
 
 .parking-lot-search-icon {
-    font-size: 18px;
+    font-size: 17px;
     opacity: 0.7;
 }
 
@@ -543,84 +778,6 @@ a.parking-lot-name:hover {
     font-weight: 500;
 }
 
-.parking-lot-search-panel {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
-    right: 0;
-    background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 12px 40px rgba(255, 107, 157, 0.22);
-    border: 1px solid rgba(255, 150, 200, 0.2);
-    padding: 8px;
-    max-height: 320px;
-    overflow-y: auto;
-    z-index: 40;
-}
-
-.parking-lot-search-option {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    padding: 10px 12px;
-    border: none;
-    background: transparent;
-    border-radius: 10px;
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.15s ease;
-}
-
-.parking-lot-search-option:hover {
-    background: rgba(255, 150, 200, 0.1);
-}
-
-.parking-lot-search-option.is-active {
-    background: rgba(255, 150, 200, 0.15);
-}
-
-.parking-lot-search-badge {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-weight: 800;
-    font-size: 15px;
-    background: var(--color-accent);
-}
-
-.parking-lot-search-badge[data-type="garage"] {
-    background: #6c63ff;
-}
-
-.parking-lot-search-badge[data-type="disabled"] {
-    background: #4ecb71;
-}
-
-.parking-lot-search-opt-body {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.parking-lot-search-opt-name {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--color-text);
-}
-
-.parking-lot-search-opt-meta {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    font-weight: 600;
-}
-
 .parking-lot-search-empty {
     padding: 16px 12px;
     text-align: center;
@@ -628,47 +785,698 @@ a.parking-lot-name:hover {
     color: var(--color-text-secondary);
 }
 
-.parking-footer {
-    text-align: center;
-    margin-top: 30px;
-    padding: 0 40px;
+.parking-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
-.parking-footer-text {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
+.parking-chip {
+    border: 2px solid rgba(255, 150, 200, 0.2);
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 25px;
+    padding: 4px 12px;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    cursor: pointer;
+}
+
+.parking-chip:hover {
+    border-color: rgba(255, 150, 200, 0.45);
+}
+
+.parking-chip[aria-pressed="true"] {
     background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    display: inline-flex;
+    border-color: transparent;
+    color: #fff;
+}
+
+.parking-lot-list {
+    display: grid;
+    gap: 2px;
+    padding: 8px;
+}
+
+.parking-lot-row {
+    display: flex;
     align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 9px 10px;
+    border: 0;
+    background: transparent;
+    border-radius: 10px;
+    font-family: var(--font-body);
+    text-align: left;
+    cursor: pointer;
+}
+
+.parking-lot-row:hover,
+.parking-lot-row.is-hot {
+    background: rgba(255, 150, 200, 0.1);
+}
+
+.parking-lot-badge {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-family: var(--parking-badge-font);
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.parking-lot-row-body {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 1px;
+}
+
+.parking-lot-row-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.parking-lot-row-name span {
+    margin-left: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.parking-lot-row-meta {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.parking-lot-row-walk {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--color-primary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Detail view */
+.parking-detail-back {
+    align-self: flex-start;
+    padding: 7px 16px;
+    font-size: 13px;
+}
+
+.parking-detail-title {
+    display: grid;
+    gap: 6px;
+}
+
+.parking-detail-code-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.parking-detail-code {
+    font-family: var(--parking-badge-font);
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--color-accent);
+}
+
+.parking-pick-badge {
+    font-family: var(--parking-badge-font);
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--gradient-primary);
+    padding: 3px 11px;
+    border-radius: 999px;
+    box-shadow: 0 3px 10px rgba(255, 107, 157, 0.35);
+    white-space: nowrap;
+}
+
+.parking-detail-sub {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.parking-detail-card {
+    display: grid;
+    gap: 12px;
+}
+
+.parking-detail-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.parking-detail-head h3 {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+/* The day an event's prices are for, so it stands out from the heading. */
+.parking-detail-head h3 strong {
+    font-weight: 900;
+    color: var(--color-text);
+}
+
+.parking-detail-card p {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.6;
+    color: var(--color-text-muted);
+}
+
+.parking-note {
+    background: rgba(255, 150, 200, 0.1);
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.55;
+    color: var(--color-text);
+}
+
+.parking-note b {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-primary);
+}
+
+.parking-actions {
+    display: flex;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
-.parking-footer-sparkle {
-    font-size: 16px;
-    color: #feca57;
-    -webkit-text-fill-color: #feca57;
-    background: none;
-    -webkit-background-clip: initial;
-    background-clip: initial;
-    opacity: 0.9;
+.parking-info-panel a.parking-cta,
+.parking-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    border: 0;
+    border-radius: 25px;
+    background: var(--gradient-primary);
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(255, 107, 157, 0.3);
+    transition: transform 0.2s ease;
 }
 
-/* Custom map markers (Google Maps AdvancedMarker) */
-.parking-marker-venue-inner {
-    width: 40px;
-    height: 40px;
-    background: var(--gradient-primary);
-    border-radius: 50%;
+.parking-cta:hover {
+    transform: translateY(-2px);
+}
+
+.parking-info-panel a.parking-cta:hover {
+    color: #fff;
+    text-decoration: none;
+}
+
+.parking-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 25px;
+    background: rgba(255, 150, 200, 0.1);
+    border: 2px solid rgba(255, 150, 200, 0.2);
+    color: var(--color-primary);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* A link styled as a button, rather than the panel's underlined link. */
+.parking-info-panel a.parking-ghost:hover {
+    color: var(--color-primary);
+    text-decoration: none;
+    background: rgba(255, 150, 200, 0.18);
+}
+
+.parking-rates {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+    gap: 8px;
+}
+
+.parking-rate {
+    display: grid;
+    gap: 1px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 142, 83, 0.08);
+}
+
+.parking-rate b {
+    font-family: var(--parking-badge-font);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--color-accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.parking-rate span {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+/* Which hours a rate is for, when a lot has both daytime and evening rates. */
+.parking-rate small {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--color-text-secondary);
+}
+
+.parking-kv {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 16px;
+    margin: 0;
+    font-size: 13.5px;
+}
+
+.parking-kv dt {
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.parking-kv dd {
+    margin: 0;
+    font-weight: 700;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.parking-stalls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 8px;
+}
+
+.parking-stall {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 10px;
+}
+
+.parking-stall .parking-info-icon {
+    color: #fff;
+    font-family: var(--parking-badge-font);
+    font-weight: 700;
+}
+
+.parking-stall b {
+    display: block;
+    font-family: var(--parking-badge-font);
+    font-size: 18px;
+    line-height: 1.1;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.parking-stall span {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+}
+
+.parking-stall--standard {
+    background: var(--color-accent);
+}
+
+.parking-stall--compact {
+    background: #feca57;
+}
+
+.parking-stall--accessible {
+    background: var(--color-success);
+}
+
+.parking-stall--motorcycle {
+    background: var(--color-purple);
+}
+
+.parking-stall--ev {
+    background: var(--color-link);
+}
+
+.parking-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.parking-tag {
+    background: rgba(255, 150, 200, 0.1);
+    border: 2px solid rgba(255, 150, 200, 0.2);
+    border-radius: 25px;
+    padding: 3px 12px;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+}
+
+button.parking-tag {
+    cursor: pointer;
+    color: var(--color-primary);
+}
+
+/* The lot data's credit, under the map and the panel. */
+.parking-footer {
+    /* Above the fixed decorative blobs, like the content. */
+    position: relative;
+    z-index: 1;
+    max-width: 1700px;
+    margin: 20px auto 0;
+    padding: 0 40px;
+    text-align: center;
+}
+
+.parking-footer small {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.parking-footer a {
+    color: var(--color-primary);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.parking-footer a:hover {
+    color: var(--color-accent);
+    text-decoration: underline;
+}
+
+/* Map pins. MapLibre positions the bare .map-marker wrapper; everything is drawn
+   inside it, leaving its classes and transform alone. */
+.parking-pin-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+
+.parking-pin {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 8px;
+    border: 2px solid #fff;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-family: var(--parking-badge-font);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+    transition: transform 0.15s ease;
+}
+
+.parking-pin:hover,
+.parking-pin.is-hot,
+.parking-pin:focus-visible {
+    transform: scale(1.18);
+}
+
+.parking-pin:focus-visible {
+    outline: 3px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.parking-pin-label {
+    display: none;
+    background: #fff;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--color-text);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+    text-align: center;
+    pointer-events: none;
+}
+
+.parking-pin-label span {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.parking-map.is-zoomed-in .parking-pin-label {
+    display: block;
+}
+
+/* Suggested lots: bigger pin, white + brand ring and a soft pulse, gradient label. */
+.parking-pin-wrap.is-pick {
+    /* The scaled-up pin + ring overflow their layout box, so add room before the label. */
+    gap: 14px;
+}
+
+.parking-pin-wrap.is-pick .parking-pin {
+    transform: scale(1.28);
+    box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--color-primary), 0 5px 16px rgba(255, 107, 157, 0.5);
+    animation: parking-lot-highlight 2s ease-in-out infinite;
+}
+
+.parking-pin-wrap.is-pick .parking-pin:hover,
+.parking-pin-wrap.is-pick .parking-pin.is-hot,
+.parking-pin-wrap.is-pick .parking-pin:focus-visible {
+    transform: scale(1.42);
+}
+
+.parking-pin-wrap.is-pick .parking-pin-label {
+    display: block;
+    background: var(--gradient-primary);
+    color: #fff;
+    font-weight: 800;
+    box-shadow: 0 3px 12px rgba(255, 107, 157, 0.45);
+}
+
+.parking-pin-wrap.is-pick .parking-pin-label span {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.parking-pin.is-selected {
+    box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--color-accent), 0 5px 16px rgba(255, 142, 83, 0.5) !important;
+    animation: none !important;
+}
+
+/* Venue stars: the current venue pulses; the others switch the guide when clicked. */
+.parking-vpin {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--font-body);
+    cursor: pointer;
+}
+
+.parking-vpin-dot {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    background: #fff;
+    border: 2.5px solid #fff;
+    box-shadow: 0 0 0 2px rgba(255, 150, 200, 0.55), 0 3px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.15s ease;
+}
+
+.parking-vpin:hover .parking-vpin-dot,
+.parking-vpin:focus-visible .parking-vpin-dot {
+    transform: scale(1.15);
+}
+
+.parking-vpin:focus-visible {
+    outline: none;
+}
+
+.parking-vpin:focus-visible .parking-vpin-dot {
+    outline: 3px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.parking-vpin-label {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: #fff;
+    color: var(--color-text);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    white-space: nowrap;
+}
+
+.parking-vpin.is-current {
+    cursor: default;
+}
+
+.parking-vpin.is-current .parking-vpin-dot {
+    width: 40px;
+    height: 40px;
     font-size: 20px;
+    background: var(--gradient-primary);
+    border: 3px solid #fff;
     box-shadow: 0 4px 14px rgba(255, 107, 157, 0.45);
-    border: 3px solid white;
     animation: parking-venue-pulse 2s ease-in-out infinite;
+    transform: none;
+}
+
+.parking-vpin.is-current .parking-vpin-label {
+    max-width: 240px;
+    background: var(--gradient-primary);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    box-shadow: 0 3px 12px rgba(255, 107, 157, 0.45);
+}
+
+/* The quick card a lot shows on hover, focus or a first tap (a MapLibre popup). */
+.parking-page .maplibregl-popup {
+    z-index: 10;
+}
+
+.parking-hover-popup:not(.is-pinned) {
+    pointer-events: none;
+}
+
+.parking-hover-popup .maplibregl-popup-content {
+    padding: 0;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 12px 40px rgba(255, 107, 157, 0.25);
+    color: var(--color-text);
+    font-family: var(--font-body);
+}
+
+.parking-hover-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+    border-top-color: #fff;
+}
+
+.parking-hover-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip {
+    border-bottom-color: #fff;
+}
+
+.parking-hover-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+    border-right-color: #fff;
+}
+
+.parking-hover-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+    border-left-color: #fff;
+}
+
+.parking-hc {
+    display: grid;
+    gap: 6px;
+    min-width: 210px;
+    padding: 12px 14px;
+}
+
+.parking-hc-top {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.parking-hc-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-accent);
+}
+
+.parking-hc-type {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.parking-hc-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 12px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+}
+
+.parking-hc .parking-cta {
+    justify-self: start;
+    padding: 7px 14px;
+    font-size: 13px;
+}
+
+.parking-page .maplibregl-ctrl-group {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 14px rgba(255, 150, 200, 0.25);
+    overflow: hidden;
+}
+
+.parking-page .maplibregl-ctrl-group button + button {
+    border-top-color: rgba(255, 150, 200, 0.2);
+}
+
+.parking-page .maplibregl-ctrl-attrib {
+    background: rgba(255, 255, 255, 0.75);
+    color: var(--color-text-secondary);
+}
+
+.parking-page .maplibregl-ctrl-attrib a {
+    color: var(--color-text-muted);
 }
 
 @keyframes parking-venue-pulse {
@@ -680,45 +1488,6 @@ a.parking-lot-name:hover {
     }
 }
 
-.parking-marker-lot-inner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-}
-
-/* The background color is set inline per lot: it encodes the lot's rate tier
-   (UW parking-map style), with a grey fallback when no rate is assigned. */
-.parking-marker-p {
-    width: 32px;
-    height: 32px;
-    background: var(--color-accent);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 18px;
-    font-weight: 800;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
-    border: 2px solid white;
-}
-
-/* Lots linked to this venue are strongly highlighted — bigger pin, white + brand
-   ring, and a soft pulse — so they stand out among all the lots without dimming the
-   others. */
-.parking-marker-lot-inner.is-linked {
-    /* The scaled-up pin + ring overflow their layout box, so add room before the label. */
-    gap: 14px;
-}
-
-.parking-marker-lot-inner.is-linked .parking-marker-p {
-    transform: scale(1.28);
-    border-color: #fff;
-    box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--color-primary), 0 5px 16px rgba(255, 107, 157, 0.5);
-    animation: parking-lot-highlight 2s ease-in-out infinite;
-}
-
 @keyframes parking-lot-highlight {
     0%, 100% {
         box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--color-primary), 0 5px 16px rgba(255, 107, 157, 0.45);
@@ -726,60 +1495,6 @@ a.parking-lot-name:hover {
     50% {
         box-shadow: 0 0 0 3px #fff, 0 0 0 8px rgba(255, 107, 157, 0.55), 0 7px 22px rgba(255, 107, 157, 0.75);
     }
-}
-
-/* Linked lots get a colored label instead of the plain white one. */
-.parking-marker-lot-inner.is-linked .parking-marker-label {
-    background: var(--gradient-primary);
-    color: #fff;
-    font-weight: 800;
-    box-shadow: 0 3px 12px rgba(255, 107, 157, 0.45);
-}
-
-.parking-marker-lot-inner.is-linked .parking-marker-label span {
-    color: rgba(255, 255, 255, 0.9);
-}
-
-.parking-marker-label {
-    background: white;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--color-text);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    white-space: nowrap;
-    text-align: center;
-    line-height: 1.3;
-}
-
-.parking-marker-label span {
-    display: block;
-    font-size: 10px;
-    color: var(--color-text-secondary);
-    font-weight: 600;
-}
-
-.parking-popup-content {
-    font-family: var(--font-body);
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--color-text);
-    padding: 2px 4px;
-    min-width: 140px;
-}
-
-.parking-popup-title {
-    font-weight: 700;
-    font-size: 14px;
-    margin-bottom: 4px;
-    color: var(--color-accent);
-}
-
-.parking-popup-type {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    font-weight: 600;
 }
 
 /* Parking Guide button (on home page event card) */
@@ -811,11 +1526,6 @@ a.parking-lot-name:hover {
     gap: 16px;
     text-align: center;
     padding: 40px;
-}
-
-/* Shown inline below the header (e.g. "Choose a venue") rather than as a full-page state. */
-.parking-error--inline {
-    min-height: 40vh;
 }
 
 .parking-error-icon {
@@ -862,12 +1572,21 @@ a.parking-lot-name:hover {
 
 @media (max-width: 1024px) {
     .parking-content {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
+        height: auto;
         padding: 0 20px;
     }
 
-    .parking-map {
-        height: 640px;
+    .parking-map-container {
+        height: 62vh;
+        min-height: 380px;
+    }
+
+    .parking-info-panel {
+        overflow: visible;
+        padding: 0;
+        /* Keep the details clear of the top edge when scrolled into view. */
+        scroll-margin-top: 12px;
     }
 
     .parking-header {
@@ -878,29 +1597,15 @@ a.parking-lot-name:hover {
         margin: 16px 20px 0;
     }
 
-    .parking-back-btn {
-        margin: 16px 20px 0;
-    }
-
     .parking-footer {
         padding: 0 20px;
     }
 }
 
 @media (max-width: 640px) {
-    .parking-map {
-        height: 480px;
-    }
-
-    .parking-info-card {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 18px;
-    }
-
     .parking-content {
         gap: 20px;
+        padding: 0 16px;
     }
 
     .parking-header-sparkle {
@@ -915,9 +1620,41 @@ a.parking-lot-name:hover {
         margin: 12px 16px 0;
     }
 
-    .parking-back-btn {
-        margin: 12px 16px 0;
+    .parking-footer {
+        padding: 0 16px;
+    }
+
+    .parking-topbar .parking-back-btn {
         padding: 8px 16px;
         font-size: 13px;
+    }
+
+    .parking-info-card {
+        padding: 16px;
+    }
+
+    .parking-map-legend {
+        padding: 8px 10px;
+        gap: 4px;
+    }
+
+    .parking-map-legend-item.is-optional {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .parking-header-sparkle,
+    .parking-pin-wrap.is-pick .parking-pin,
+    .parking-vpin.is-current .parking-vpin-dot {
+        animation: none;
+    }
+
+    .parking-pin,
+    .parking-pick,
+    .parking-back-btn,
+    .parking-cta,
+    .parking-vpin-dot {
+        transition: none;
     }
 }

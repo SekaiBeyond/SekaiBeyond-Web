@@ -17,33 +17,21 @@ import {
     sendEmails
 } from "../utils/resendClient";
 
-// Minutes between drain runs. Exported so the admin quota view can state the
-// cadence without hardcoding a second copy that could drift from the schedule.
+// Exported so the admin quota view states the same cadence as the schedule.
 export const DRAIN_INTERVAL_MINUTES = 30;
 
-// Drains /scheduledMail into Resend's batch endpoint every 30 minutes.
+// Drains /scheduledMail into Resend's batch endpoint every 30 minutes. Resend's
+// daily cap is a sliding 24-hour window, so polling picks up headroom as it
+// opens rather than waiting for a reset that never comes.
 //
-// Why every-30-min instead of a single LA-midnight run: Resend's free-plan
-// daily cap is a sliding 24h window with no calendar reset. The previous
-// 00:05 LA schedule was a guess at when Resend's window would refresh; the
-// docs explicitly say "wait until 24 hours have passed," which means
-// consumption rolls off per-email rather than in a block. Periodic polling
-// detects headroom as soon as it opens up.
+// Each run pulls as many queued items as the cached counter allows (at most
+// 100, the batch limit) and sends them in one call. With the cap exhausted it
+// still pulls one as a probe (see below); with nothing queued it exits after
+// one read.
 //
-// Each fire reads the cached consumed counter, computes remaining cap,
-// pulls up to that many (capped at 100, Resend's batch limit) queued
-// items, and ships them in one batch call. When the cache shows the cap
-// is exhausted it still pulls a single envelope as a probe (see below);
-// when the queue is empty it exits after one cheap read.
-//
-// Duplicate-delivery assumption: onSchedule v2 invokes via Pub/Sub, which
-// is at-least-once. retryCount:0 disables retries on our side, but Pub/Sub
-// can still deliver the same fire twice in rare cases. The 30-min cadence
-// makes overlap unlikely; if it happens, both runs query the same FIFO
-// docs and both try to ship them. Resend may double-deliver. Observed
-// Pub/Sub dup rate is <0.1% and 30-min runs aren't long enough to compound
-// often. If this becomes a problem, wrap the per-doc delete in a txn
-// that re-reads the queue doc and bails if it's already gone.
+// Pub/Sub is at-least-once, so the same fire can rarely arrive twice and
+// double-send. The observed rate is under 0.1%; if it becomes a problem, delete
+// each doc in a transaction that bails when it's already gone.
 export const scheduledMailDrain = onSchedule({
     schedule: `*/${DRAIN_INTERVAL_MINUTES} * * * *`,
     timeZone: "UTC",
@@ -52,19 +40,15 @@ export const scheduledMailDrain = onSchedule({
     retryCount: 0,
     secrets: [RESEND_API_KEY],
 }, async () => {
-    // Re-anchor `confirmed` against the provider first, so headroom reflects
-    // the window as it stands now rather than the high-water mark left by the
-    // last send.
+    // Re-anchor `confirmed` against the provider, so headroom reflects the
+    // window now rather than the last send's high-water mark.
     await syncProviderUsage();
     const {sentToday, dailyCap} = await computeEmailQuota();
-    // Headroom per the cached counter. When it is exhausted we still pull a
-    // single envelope as a *probe* (drainLimit = 1). The sync above is normally
-    // what teaches the cache that the daily window has recovered, but it
-    // returns null when the provider can't be read (network, sending-only key);
-    // the probe is the fallback that keeps the queue from pinning at the cap
-    // forever, since sendEmails also refreshes `confirmed` from the
-    // x-resend-daily-quota header when one arrives — even on a 429. A genuine
-    // 429 just refreshes the cache and leaves the doc queued for the next run.
+    // With the cap exhausted, still pull one envelope as a probe. The sync
+    // above is what normally notices the window recovering, but it returns null
+    // when the provider can't be read; the probe's send also refreshes
+    // `confirmed` from the quota header, even on a 429, so the queue can't stay
+    // pinned at the cap. A real 429 leaves the doc queued.
     const headroom = Math.min(100, Math.max(0, dailyCap - sentToday));
     const probing = headroom === 0;
     const drainLimit = probing ? 1 : headroom;
@@ -78,11 +62,9 @@ export const scheduledMailDrain = onSchedule({
         return;
     }
 
-    // Orphaned-attendee pre-check (parallel): a ticket-type queue entry's
-    // attendee may have been deleted since queueing. Shipping the mail
-    // would deliver unredeemable tickets, AND the post-send batch.update
-    // would fail — leaving the queue entry stuck for the next run to retry
-    // and fail again. Drop orphans here.
+    // Drop entries whose attendee was deleted since queueing: the mail would
+    // carry dead tickets, and the post-send update would fail and leave the
+    // entry stuck.
     const checks = await Promise.all(snap.docs.map(async (doc) => {
         const data = doc.data();
         const attendeePath = typeof data.attendeePath === "string" ? data.attendeePath : null;
@@ -129,18 +111,15 @@ export const scheduledMailDrain = onSchedule({
         return;
     }
 
-    // Pre-charge the cache so a concurrent admin send sees the
-    // reservation immediately. It is released once the send settles, by
-    // sendEmails or by the catch below.
+    // Pre-charge, so a concurrent admin send sees the reservation. Released
+    // once the send settles, by sendEmails or the catch below.
     const totalRecipients = countRecipients(candidates.map(c => c.envelope));
     await db.runTransaction(async (txn) => {
         const {reserved} = await computeEmailQuotaInTxn(txn);
         reserveQuotaInTxn(txn, totalRecipients, reserved);
     });
 
-    // Single call for the whole drain — sendEmails uses POST /emails when
-    // exactly one item is queued, the batch endpoint otherwise. All-or-
-    // nothing; on success all N envelopes ship.
+    // One call for the whole drain, all or nothing.
     let drained = 0;
     let sendError: unknown = null;
     try {
@@ -157,9 +136,8 @@ export const scheduledMailDrain = onSchedule({
         }
     }
 
-    // Clean up successfully drained docs + flip emailScheduled on
-    // their referenced attendees. Per-doc batch matches the previous
-    // skip-on-failure pattern: one bad commit doesn't strand the rest.
+    // Delete drained docs and clear emailScheduled on their attendees, one
+    // commit each so a bad one doesn't strand the rest.
     if (drained > 0) {
         for (let i = 0; i < drained; i++) {
             const {doc, attendeePath} = candidates[i];
@@ -201,8 +179,7 @@ function extractEnvelope(data: FirebaseFirestore.DocumentData): ResendEnvelope |
     return null;
 }
 
-// Validate a raw object against the ResendEnvelope shape, dropping any
-// optional field that isn't the right type.
+// A raw object as a ResendEnvelope, dropping optional fields of the wrong type.
 function parseEnvelopeShape(e: Record<string, unknown>): ResendEnvelope | null {
     if (typeof e.subject !== "string" || typeof e.html !== "string") return null;
     if (typeof e.to !== "string" && !Array.isArray(e.to)) return null;
@@ -222,10 +199,9 @@ export async function getScheduledMailQueueDepth(): Promise<number> {
     return snap.data().count;
 }
 
-// Queue depth plus the queuedAt of the FIFO head, for the admin quota view.
-// The oldest entry's age is the useful signal: a queue that isn't draining
-// shows up as a head that keeps getting older across refreshes. Ordered the
-// same way scheduledMailDrain pulls, so this really is the next doc to ship.
+// Queue depth and the head's queuedAt, for the admin quota view: a queue that
+// isn't draining shows as a head that keeps getting older. Ordered as
+// scheduledMailDrain pulls.
 export async function getScheduledMailQueueStatus(): Promise<{
     queuedCount: number;
     oldestQueuedAt: string | null;

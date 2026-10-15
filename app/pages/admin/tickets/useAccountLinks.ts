@@ -8,21 +8,14 @@ const LOOKUP_CHUNK = 500;
 export type AccountLink = AttendeeAccount | null;
 
 /**
- * Whether each of these ticket emails belongs to a registered account — the
- * thing that decides, when the ticket is scanned, whether anybody's profile
- * hears about it.
+ * Whether each ticket email belongs to a registered account, which decides
+ * whether a scan reaches a profile.
  *
- * Answers are cached for the life of the surface, so a list that grows as more
- * attendees are shown only ever asks about the addresses it hasn't seen. That
- * matters more than it looks: every callable shares one rate-limit budget, so a
- * lookup per render would cost an admin the ability to do anything else.
+ * Answers are cached for the surface's life, so a growing list only asks about
+ * new addresses: every callable shares one rate-limit budget. An email absent
+ * from `links` is unchecked; null means no account.
  *
- * An email absent from `links` has not been checked yet; one mapped to null has
- * been checked and has no account. Callers need that difference to tell "no
- * account" from "still looking".
- *
- * Pass a stable `emails` array — memoise it at the call site, or derive it from
- * state that only changes when the addresses do.
+ * Pass a stable `emails` array.
  */
 export function useAccountLinks(eventId: string, emails: string[]): {
     links: Map<string, AccountLink>;
@@ -42,9 +35,8 @@ export function useAccountLinks(eventId: string, emails: string[]): {
     );
     const wantedKey = wanted.join(',');
 
-    // An event of its own gets its own answers: eventId is what authorises the
-    // lookup, so a cache carried across events would be answering for a caller
-    // who may not be staff on this one.
+    // A new event starts fresh: eventId authorises the lookup, and the caller
+    // may not be staff on this one.
     useEffect(() => {
         cache.current = new Map();
         setLinks(new Map());
@@ -63,8 +55,7 @@ export function useAccountLinks(eventId: string, emails: string[]): {
                 const chunk = missing.slice(i, i + LOOKUP_CHUNK);
                 const result = await callGetAttendeeAccounts({eventId, emails: chunk});
                 if (stale) return;
-                // Everything asked about is now known: the matches name an
-                // account, and whatever didn't come back has none.
+                // Whatever didn't come back has no account.
                 for (const email of chunk) cache.current.set(email, null);
                 for (const account of result.data.accounts) {
                     cache.current.set(account.email, account);
