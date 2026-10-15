@@ -54,8 +54,8 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
 
     const clickableName = (uid: string, name: string) => clickable(name, () => onLookupUser(uid));
 
-    // A live item is linked by ID and named as it is now, in the viewer's
-    // language; a deleted one falls back to the name the record was written with.
+    // A live item is linked and named as it is now; a deleted one keeps the
+    // record's name.
     const localized = (en: string, zh: string) => (isEnglish ? en : zh) || en;
 
     // Archiving keeps an event's ID, so looking in both lists finds it either way.
@@ -178,8 +178,7 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             }
             return isEnglish ? <>created claim code for {badge}</> : <>为 {badge} 创建了兑换码</>;
         case 'event-attend':
-            // Say when attendance changed because they became event staff, or
-            // the row reads as a manual edit.
+            // Or it reads as a manual edit.
             if (r.reason === 'staff-code') {
                 return isEnglish
                     ? <>was marked as attending {event} on joining its staff with a code</>
@@ -329,48 +328,6 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>deleted venue {r.venueName ?? ''}</>
                 : <>删除了场地 {r.venueName ?? ''}</>;
-        // Hand-entered lots and rates gave way to UW's own data; their history
-        // still reads, by the names the records were written with.
-        case 'parkinglot-create':
-            return isEnglish
-                ? <>created parking lot {r.lotName ?? ''}</>
-                : <>创建了停车场 {r.lotName ?? ''}</>;
-        case 'parkinglot-edit':
-            return isEnglish
-                ? <>edited parking lot {r.lotName ?? ''}</>
-                : <>编辑了停车场 {r.lotName ?? ''}</>;
-        case 'parkinglot-delete': {
-            const unlinked = r.unlinkedFrom ?? 0;
-            if (unlinked > 0) {
-                return isEnglish
-                    ? <>deleted parking lot {r.lotName ?? ''} (unlinked
-                        from {unlinked} venue{unlinked === 1 ? '' : 's'})</>
-                    : <>删除了停车场 {r.lotName ?? ''}（已从 {unlinked} 个场地解除关联）</>;
-            }
-            return isEnglish
-                ? <>deleted parking lot {r.lotName ?? ''}</>
-                : <>删除了停车场 {r.lotName ?? ''}</>;
-        }
-        case 'parkingrate-create':
-            return isEnglish
-                ? <>created parking rate {r.rateLabel ?? ''}</>
-                : <>创建了停车费率 {r.rateLabel ?? ''}</>;
-        case 'parkingrate-edit':
-            return isEnglish
-                ? <>edited parking rate {r.rateLabel ?? ''}</>
-                : <>编辑了停车费率 {r.rateLabel ?? ''}</>;
-        case 'parkingrate-delete': {
-            const unlinked = r.unlinkedFrom ?? 0;
-            if (unlinked > 0) {
-                return isEnglish
-                    ? <>deleted parking rate {r.rateLabel ?? ''} (unlinked
-                        from {unlinked} lot{unlinked === 1 ? '' : 's'})</>
-                    : <>删除了停车费率 {r.rateLabel ?? ''}（已从 {unlinked} 个停车场解除关联）</>;
-            }
-            return isEnglish
-                ? <>deleted parking rate {r.rateLabel ?? ''}</>
-                : <>删除了停车费率 {r.rateLabel ?? ''}</>;
-        }
         case 'parking-sync': {
             const lots = r.lotCount ?? 0;
             return isEnglish
@@ -496,16 +453,16 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                     now {fmtExpiry(r.newExpiresAt)})</>
                 : <>激活了通行证 {r.passportId ?? ''}（+{r.extendDays ?? 0} 天，现到期于 {fmtExpiry(r.newExpiresAt)}）</>;
         case 'passport-delete': {
-            // A single deletion names its passport, and its holder if it had
-            // one; a bulk one only counts them.
+            // A single deletion names its passport and any holder; a bulk one
+            // counts.
             if (r.passportId) {
-                // Negative, as passport-claim's are positive; absent when the
-                // membership was left alone.
+                // Negative, mirroring passport-claim; absent when nothing was
+                // taken.
                 const taken = r.extendDays ? (isEnglish
                     ? <>, taking back {Math.abs(r.extendDays)} days (now {fmtExpiry(r.newExpiresAt)})</>
                     : <>，并收回 {Math.abs(r.extendDays)} 天（现到期于 {fmtExpiry(r.newExpiresAt)}）</>) : null;
-                // A holder deleted before the passport leaves no name, and a
-                // blank one would read "deleted 's passport".
+                // No name if the holder was deleted first; a blank would read
+                // "deleted 's passport".
                 if (r.targetName) {
                     return isEnglish
                         ? <>deleted {target}'s passport {r.passportId}{taken}</>

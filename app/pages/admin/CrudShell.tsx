@@ -2,10 +2,9 @@ import type { ReactNode } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 
 /**
- * Shared chrome for the admin card-list CRUD tabs (tags, rates, lots, venues):
- * the "+ New X" button that flips into a create form, and the per-card action
- * rows. Each tab keeps its own state, handlers, and form fields — these
- * components only own the repeated markup and busy-label handling.
+ * Shared chrome for the admin card-list tabs (tags, venues): the "+ New X"
+ * button that opens a create form, and the per-card actions. Each tab keeps its
+ * own state and fields.
  */
 
 interface CreateSectionProps {

@@ -79,8 +79,7 @@ export const RecordsTab = ({
     const [recordFilterActor, setRecordFilterActor] = useState('');
     const [knownActors, setKnownActors] = useState<{uid: string; name: string}[]>([]);
     const activeFilterRef = useRef<{type: RecordCategory | ''; actor: string}>({type: '', actor: ''});
-    // Bumped by every load, so a page that lands after the filter changed is
-    // dropped instead of overwriting the newer list.
+    // So a page landing after the filter changed is dropped.
     const loadSeqRef = useRef(0);
 
     const loadRecords = useCallback(async (typeFilter: RecordCategory | '', actorFilter: string, after?: DocumentSnapshot) => {
@@ -99,8 +98,7 @@ export const RecordsTab = ({
             setLastDoc(snapshot.docs[snapshot.docs.length - 1] ?? null);
             setHasMore(snapshot.docs.length === PAGE_SIZE);
 
-            // System records (TTL deletions, the mail drain) have no actor; skip
-            // them rather than add a blank option that filters to nothing.
+            // System records have no actor to filter by.
             setKnownActors(prev => {
                 const merged = [...prev];
                 for (const item of items) {

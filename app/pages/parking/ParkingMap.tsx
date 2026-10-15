@@ -25,8 +25,6 @@ const LOT_ZOOM = 17;
 export type HoverTarget = {kind: 'lot'; code: string; pinned: boolean} | {kind: 'venue'; id: string};
 
 export interface ParkingMapApi {
-    /** Frames the venue and its suggested lots again, or every lot without a venue. */
-    fitVenue: () => void;
     /** Centers a lot, zooming in if the map is further out. */
     focusLot: (code: string) => void;
 }
@@ -125,16 +123,12 @@ export const ParkingMap = (props: ParkingMapProps) => {
     const latest = useRef(props);
     latest.current = props;
 
-    const fitVenue = (animate: boolean) => {
+    const fitVenue = () => {
         const bounds = map && venueBounds(latest.current.venue, latest.current.views);
-        if (map && bounds) map.fitBounds(bounds, {
-            padding: fitPadding(),
-            duration: animate && !prefersReducedMotion() ? 700 : 0
-        });
+        if (map && bounds) map.fitBounds(bounds, {padding: fitPadding(), duration: prefersReducedMotion() ? 0 : 700});
     };
 
     useImperativeHandle(ref, () => ({
-        fitVenue: () => fitVenue(true),
         focusLot: code => {
             const view = latest.current.views.find(v => v.lot.code === code);
             if (!map || !view) return;
@@ -249,7 +243,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
     useEffect(() => {
         if (framedVenue.current === venue?.id) return;
         framedVenue.current = venue?.id;
-        fitVenue(true);
+        fitVenue();
     }, [venue?.id]);
 
     // The hover card follows `hover`; a pinned one takes clicks, a passing one lets them through.
@@ -282,8 +276,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
             <div ref={containerRef} className="parking-map"/>
             {failed && <div className="parking-map-failed">{tx.t('mapFailed')}</div>}
 
-            {/* Translucent "glass" and click-through, so any marker behind it stays
-                visible and usable rather than being hidden. */}
+            {/* Click-through, so markers behind it stay usable. */}
             <div className="parking-map-legend">
                 <div className="parking-map-legend-title">
                     {isNow ? tx.t('legendNow') : tx.t('legendEvent', {d: tx.date(parkingWindow.date)})}

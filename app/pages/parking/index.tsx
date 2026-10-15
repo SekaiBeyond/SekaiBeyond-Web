@@ -74,7 +74,7 @@ export const ParkingGuide = () => {
     const thisMinute = useMemo(() => nowWindow(now), [now]);
 
     // The event the address names: an upcoming event by its id, or the con as 'con'.
-    // Looked up among past ones too, so one that's over still names its venue.
+    // Ended events count too, so one that's over still names its venue.
     const urlEvent = useMemo((): GuideEvent | null => {
         if (!urlEventId) return null;
         if (urlEventId === 'con') {
@@ -218,7 +218,6 @@ export const ParkingGuide = () => {
                 </div>
             </header>
 
-            {/* Without a venue, the whole campus: every lot, none suggested or measured. */}
             <div className="parking-content">
                 <section className="parking-map-container" aria-label={tx.t('mapLabel')}>
                     <ParkingMap

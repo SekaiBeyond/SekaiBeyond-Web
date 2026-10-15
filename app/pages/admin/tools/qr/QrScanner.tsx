@@ -76,9 +76,9 @@ interface ScanResult {
 }
 
 /**
- * Reads any QR code — from the camera or a photo — and lays out what's in it,
- * so a link can be checked before anyone opens it. Decoding happens in the
- * browser; photos aren't uploaded anywhere.
+ * Reads any QR code, from the camera or a photo, and lays out what's in it so a
+ * link can be checked before opening. Decoded in the browser; nothing is
+ * uploaded.
  */
 export const QrScanner = ({onBack, showToast}: QrScannerProps) => {
     const {isEnglish} = useLanguage();

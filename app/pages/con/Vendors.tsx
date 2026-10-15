@@ -35,12 +35,11 @@ export const Vendors = () => {
 
     // Derived, so a refresh that drops the selected table drops the selection with it.
     const pinned = selected !== null && byTable.has(selected) ? selected : null;
-    // A search that names a table, or is down to one vendor, answers itself: no
-    // need to click the result. "B1" also matches B10–B15, but B1 is what was asked.
+    // A search naming a table, or down to one vendor, answers itself. "B1" also
+    // matches B10–B15, but B1 was asked.
     const exact = needle && byTable.has(asTableQuery(needle)) ? asTableQuery(needle) : null;
     const lit = pinned ?? exact ?? (found?.length === 1 ? found[0].table : null);
-    // A mouse hover previews in the panel under the plan; the plan itself already
-    // shows the hover, and it is not a selection.
+    // A hover previews in the panel; it isn't a selection.
     const shownTable = hovered ?? lit;
     const shown = shownTable ? byTable.get(shownTable) : undefined;
 
@@ -48,8 +47,7 @@ export const Vendors = () => {
         .map(({letter}) => ({letter, vendors: (found ?? tables).filter(vendor => rowOf(vendor.table) === letter)}))
         .filter(group => group.vendors.length > 0);
 
-    // The row a narrow screen lists. Falls back to the first one with anybody in
-    // it, so a stale pick never leaves an empty list under the chips.
+    // The row a narrow screen lists, else the first with anyone in it.
     const activeRow = groups.some(group => group.letter === row) ? row : groups[0]?.letter ?? null;
 
     const pickOnMap = (table: string) => {
@@ -59,8 +57,7 @@ export const Vendors = () => {
 
     const pickInList = (table: string) => {
         setSelected(table);
-        // Bring the table into view only if it is not already: on a phone the plan
-        // sits a screen above the list, and the lit table is the whole answer.
+        // Only if it's off screen: on a phone the plan is a screen above the list.
         const el = sectionRef.current?.querySelector(`.sbc-hall [data-table="${table}"]`);
         const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         el?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: still ? 'auto' : 'smooth'});
@@ -169,9 +166,8 @@ export const Vendors = () => {
 
             {tables.length > 0 && (
                 <div className="sbc-vendor-directory">
-                    {/* Shown on narrow screens only, where four rows of fifteen side by
-                        side will not fit and one long column of sixty is a lot to
-                        scroll past. A search lists every row it matched instead. */}
+                    {/* Narrow screens only, where four rows of fifteen won't fit side by
+                        side. A search lists every row it matched instead. */}
                     {!found && groups.length > 1 && (
                         <div
                             className="sbc-vendor-row-filter"

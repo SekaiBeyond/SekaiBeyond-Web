@@ -29,8 +29,7 @@ export function PastEventAttendeesSection({
     const [busyUid, setBusyUid] = useState<string | null>(null);
     const [staffUids, setStaffUids] = useState<Set<string>>(new Set());
 
-    // Pull staff UIDs once so we can pre-filter the search results — saves the
-    // admin a round-trip to "add → rejected → remove staff first → retry".
+    // Staff are filtered out of the search up front, saving a rejected add.
     useEffect(() => {
         let stale = false;
         const load = async () => {

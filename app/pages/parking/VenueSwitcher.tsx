@@ -17,9 +17,8 @@ interface VenueSwitcherProps {
 }
 
 /**
- * Searchable venue picker shown in the parking-guide header. Defaults to the event's own
- * venue, but lets visitors switch to any other venue to view its parking map and lots, or
- * to the whole campus.
+ * Searchable venue picker in the guide's header, with the whole campus as one of the
+ * options.
  */
 export const VenueSwitcher = ({venues, selectedId, eventVenueId, suggestionFor, onSelect, tx}: VenueSwitcherProps) => {
     const [open, setOpen] = useState(false);

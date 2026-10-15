@@ -1,16 +1,10 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Handles three modal accessibility concerns:
- * 1. Traps keyboard focus within the modal (Tab / Shift+Tab cycle inside).
- * 2. Locks body scroll while the modal is open.
- * 3. Closes on Escape, when an `onClose` is given. Guard inside the callback to
- *    keep the modal open conditionally (e.g. `() => {if (!saving) onClose()}`).
- *
- * Pass `open: true` when the modal is visible. The hook is a no-op when `open` is false.
- *
- * `containerRef` should point to the modal's root element (the overlay or the
- * modal-content div — as long as all focusable elements are descendants).
+ * A modal's accessibility: traps Tab focus inside, locks body scroll, and closes on
+ * Escape when `onClose` is given (guard inside it to stay open, e.g. while saving). A
+ * no-op while `open` is false. `containerRef` is the modal's root, containing every
+ * focusable element.
  */
 export function useModalEffects(
     open: boolean,
@@ -19,8 +13,8 @@ export function useModalEffects(
 ) {
     const previouslyFocused = useRef<HTMLElement | null>(null);
 
-    // Latest-callback ref, so a new closure each render doesn't re-run the main
-    // effect (which would re-lock scroll and yank focus back to the first field).
+    // So a new closure each render doesn't re-run the effect, which would re-lock
+    // scroll and pull focus back.
     const onCloseRef = useRef(onClose);
     onCloseRef.current = onClose;
 

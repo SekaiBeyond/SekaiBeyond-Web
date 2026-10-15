@@ -20,12 +20,10 @@ import { privacyRow, privacyStateLabel } from '~/lib/privacy';
 import { type ShowToast, ToastContainer, useToasts } from '~/lib/useToasts';
 
 /**
- * /p/:passportId — the one URL on every passport sticker.
- *
- * What it renders depends on the passport, not on who is looking: an unclaimed
- * sticker is the passport shown shut, a claimed one is its owner's public page
- * (no sign-in required), and an unknown code is a blank page stamped as having
- * no record. The owner also gets a privacy toggle on their own passport.
+ * /p/:passportId, the URL on every passport sticker. An unclaimed sticker shows
+ * the passport shut, a claimed one its owner's public page (no sign-in), and an
+ * unknown code a blank page stamped as having no record. The owner also gets a
+ * privacy toggle.
  */
 export const PassportPage = () => {
     const {passportId: raw} = useParams();
@@ -44,9 +42,8 @@ export const PassportPage = () => {
         if (id === passportId) setNonce(n => n + 1);
     }), [passportId]);
 
-    // Resolved again when the viewer signs in or out: the server decides whether
-    // they own it, which is what shows them the privacy switch and, if they hid
-    // it, the page itself.
+    // Again on sign-in or out: the server decides ownership, which brings the
+    // privacy switch and, if hidden, the page itself.
     useEffect(() => {
         if (!wellFormed || authLoading) return;
         let stale = false;
@@ -64,8 +61,7 @@ export const PassportPage = () => {
         };
     }, [passportId, wellFormed, nonce, authLoading, viewerUid]);
 
-    // A code that can't be a passport id is answered here rather than by the
-    // server, which would give the same "invalid" either way.
+    // The server would answer a malformed code "invalid" anyway.
     if (!wellFormed) return <PassportNotFound code={passportId}/>;
     if (failed) return <PassportNotFound code={passportId} failed onRetry={() => setNonce(n => n + 1)}/>;
 
@@ -101,8 +97,8 @@ export const PassportPage = () => {
 };
 
 /**
- * Nav + page frame, matching the profile and admin pages. `wide` lets the open
- * passport fill the screen; the message cards keep the narrower frame.
+ * Nav and page frame, as on the profile and admin pages. `wide` lets the open
+ * passport fill the screen.
  */
 const PassportShell = ({children, wide = false}: {children: ReactNode; wide?: boolean}) => {
     const {isEnglish} = useLanguage();
@@ -123,10 +119,8 @@ const PassportShell = ({children, wide = false}: {children: ReactNode; wide?: bo
 };
 
 /**
- * The page's one spinner, in the one place: while the sticker is being resolved,
- * and again while the cover art loads before the passport opens. The frame is
- * the same either way, so crossing from the first wait to the second changes
- * nothing on screen.
+ * The one spinner, while the sticker resolves and again while the cover art
+ * loads, in the same frame so the handover is invisible.
  */
 const PassportLoading = () => (
     <PassportShell>
@@ -137,8 +131,8 @@ const PassportLoading = () => (
 );
 
 /**
- * The frame for a passport that can't be opened here: the passport as an object
- * on one side, and what to do about it on the other. Stacked on a phone.
+ * A passport that can't be opened: the object on one side, what to do on the
+ * other. Stacked on a phone.
  */
 const PassportState = ({object, title, children}: {
     object: ReactNode;
@@ -160,12 +154,9 @@ const PassportState = ({object, title, children}: {
 const MAX_SHOWN_CODE = 16;
 
 /**
- * Unknown, malformed, deleted and orphaned codes all land here, deliberately —
- * and so does a lookup that failed, which gets a retry instead of a stamp.
- *
- * The object is a blank passport page with the number that was looked up on its
- * one filled-in line, so it can be checked against the sticker, and stamped as
- * having no record behind it.
+ * Unknown, malformed, deleted and orphaned codes all land here on purpose; a
+ * failed lookup gets a retry instead. The object is a blank passport page with
+ * the looked-up number on its one line, to check against the sticker.
  */
 const PassportNotFound = ({code, failed = false, onRetry}: {
     code: string;
@@ -181,8 +172,7 @@ const PassportNotFound = ({code, failed = false, onRetry}: {
                 ? (isEnglish ? 'Unable to Load This Passport' : '无法加载此通行证')
                 : (isEnglish ? 'No Passport Found' : '查无此通行证')}
             object={
-                // The number is in the text beside it too, so the page itself is
-                // only a picture of it.
+                // The number is in the text beside it too.
                 <div className="passport-blank" aria-hidden="true">
                     <div className="passport-blank-lines">
                         <div className="passport-blank-line">
@@ -239,11 +229,10 @@ const PassportNotFound = ({code, failed = false, onRetry}: {
 };
 
 /**
- * The unclaimed state: the passport shown shut, by the art on its outside. It is
- * activated from Redeem Code with the key from its slip, and when that happens
- * the page re-resolves behind the box and the passport opens here.
+ * Unclaimed: the passport shown shut. Once activated from Redeem Code, the page
+ * re-resolves and the passport opens here.
  */
-const UnclaimedPassport = ({designId}: {designId: string | undefined}) => {
+const UnclaimedPassport = ({designId}: {designId: string}) => {
     const {isEnglish} = useLanguage();
     const {user, loading: authLoading, signIn} = useAuth();
     const {designs, loading: designsLoading} = usePassportDesigns();
@@ -252,8 +241,7 @@ const UnclaimedPassport = ({designId}: {designId: string | undefined}) => {
     const src = design?.outerCoverImageUrl || design?.coverImageUrl;
     const coverReady = useImagesReady([src]);
 
-    // Held back until the art can paint, so the cover doesn't arrive blank and
-    // then change.
+    // Held until the art can paint, so the cover doesn't arrive blank.
     if (designsLoading || !coverReady) return <PassportLoading/>;
 
     return (
@@ -299,17 +287,13 @@ const UnclaimedPassport = ({designId}: {designId: string | undefined}) => {
 const COVER_LOAD_TIMEOUT_MS = 8000;
 
 /**
- * Both faces of the cover are painted at once by the opening, so the passport
- * has to be held shut until they can be. This loads them off-screen and reports
- * when every one is decoded and ready for the copies in the DOM to paint from.
- *
- * A face that fails to load counts as settled — it falls back to its own
- * gradient, and a broken url shouldn't hold the passport shut forever. Neither
- * should a request that never answers, which is what the cap above is for.
+ * The opening paints both cover faces at once, so the passport stays shut until
+ * they're decoded. A face that fails, or a request that never answers (the cap
+ * above), counts as settled; it falls back to its gradient.
  */
 const useImagesReady = (urls: (string | undefined)[]): boolean => {
-    // One string rather than the array, which is rebuilt every render: the
-    // effect should re-run when the images change, not when React re-renders.
+    // A string, so the effect re-runs when the images change rather than on
+    // every render.
     const key = [...new Set(urls.filter((url): url is string => !!url))].join('\n');
     const [loadedKey, setLoadedKey] = useState<string | null>(null);
 
@@ -324,10 +308,8 @@ const useImagesReady = (urls: (string | undefined)[]): boolean => {
         for (const src of srcs) {
             const img = new Image();
             img.src = src;
-            // decode() waits for the bitmap and not just the bytes, which is
-            // what the copy in the DOM needs to paint in the flip's first
-            // frame. It rejects on an image that can't be decoded, and that
-            // settles it the same way a load error does.
+            // decode() waits for the bitmap, which the flip's first frame
+            // needs. A rejection settles it like a load error.
             img.decode().then(settle, settle);
         }
         const cap = window.setTimeout(() => {
@@ -349,11 +331,9 @@ interface ClaimedPassportProps {
 }
 
 /**
- * The owner's public page. Renders for signed-out visitors — no login wall.
- *
- * Laid out as an open passport: the design's cover art on one page, the holder's
- * data page on the other, stamped with their membership. The owner also gets the
- * privacy toggle in the data page's corner and a line of what only they see.
+ * The owner's public page, signed in or not: an open passport, cover art on one
+ * page and the holder's data page on the other, stamped with their membership.
+ * The owner also gets the privacy toggle and a line of what only they see.
  */
 const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
     const {isEnglish} = useLanguage();
@@ -377,11 +357,8 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
         };
     }, [owner.displayName]);
 
-    // The passport opens once, on load, and the opening is the whole of the
-    // first second on this page — art that arrives part-way through it appears
-    // out of a cover already in mid-air, or after it has landed. So the spread
-    // isn't mounted, and the animation doesn't start, until the designs have
-    // been read and their art is loaded.
+    // The opening fills the page's first second, so art arriving mid-flight
+    // would pop in. Nothing mounts until the designs and their art have loaded.
     if (designsLoading || !coverReady) return <PassportLoading/>;
 
     const fmtDate = (iso: string | null): string => {
@@ -396,9 +373,9 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
     const joinedOn = fmtDate(owner.joinedAt);
     const group = normalizeGroup(owner.group);
 
-    // Officers are stamped with the role they hold; everyone else is a member.
-    // Whether a membership is still running is never stamped — the page won't
-    // announce someone's expiry to whoever just scanned their passport.
+    // Officers are stamped with their role, everyone else as a member. Expiry
+    // is never stamped: the page doesn't tell a scanner when someone's
+    // membership ends.
     const stamp = group !== 'user'
         ? {
             modifier: ' passport-stamp--role',
@@ -486,13 +463,10 @@ const ClaimedPassport = ({passportId, data}: ClaimedPassportProps) => {
 };
 
 /**
- * One side of the passport's cover, which is a two-faced card so that it can be
- * flipped open on load. The back face is the shut passport lying over the data
- * page, so it takes the design's outside art if it has any; the front face is
- * the page the cover comes to rest on, which is always the cover art. A design
- * without its own outside uses the cover art for both, the way every design did
- * before the two could differ. Only one face ever faces the viewer, so the back
- * is kept out of the accessibility tree.
+ * One face of the two-faced cover that flips open on load. The back is the shut
+ * passport and takes the design's outside art if any; the front, where the
+ * cover lands, is always the cover art. Only one face is ever visible, so the
+ * back is hidden from the accessibility tree.
  */
 const CoverFace = ({design, name, back = false}: {
     design: PassportDesign | undefined;
@@ -521,10 +495,9 @@ const CoverFace = ({design, name, back = false}: {
 };
 
 /**
- * The passport page's privacy switch, as an icon in the corner of the data page:
- * a globe while scanners can see the page, a lock while they get the private
- * notice instead. It saves the same setting as the Settings tab on /profile and
- * refreshes the auth profile afterwards, so that tab reads the new value.
+ * The privacy switch in the data page's corner: a globe while scanners can see
+ * the page, a lock while they get the private notice. Saves the same setting as
+ * /profile's Settings tab and refreshes the auth profile so that tab agrees.
  */
 const PrivacyToggle = ({initialHidden, showToast}: {initialHidden: boolean; showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();

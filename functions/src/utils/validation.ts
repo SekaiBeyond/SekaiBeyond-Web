@@ -12,9 +12,9 @@ export function validateISODate(value: unknown, name: string): string | null {
 }
 
 /**
- * An ISO date-time that names its zone (ends in Z or an offset), so it is the
- * same moment wherever it is read. A zoneless one is refused rather than read in
- * the server's UTC, which is never the clock it was typed on. Null when absent.
+ * An ISO date-time that names its zone (Z or an offset). A zoneless one is
+ * refused rather than read as UTC, which is never the clock it was typed on.
+ * Null when absent.
  */
 export function validateInstant(value: unknown, name: string): string | null {
     const iso = validateISODate(value, name);
@@ -38,9 +38,8 @@ export function validateEmail(value: unknown, name: string): string {
     return normalized;
 }
 
-// The part before the @ of an address on our own domain. Deliberately
-// narrower than RFC 5322 allows: letters, digits and single . _ + - between
-// them, which every mail system accepts.
+// The part before the @ on our own domain: letters, digits and single . _ + -
+// between them, narrower than RFC 5322 so every mail system accepts it.
 export const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
 
 /** Trimmed and lowercased. */

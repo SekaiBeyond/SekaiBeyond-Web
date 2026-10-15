@@ -7,9 +7,8 @@ import { openRedeemModal } from '~/components/RedeemModal';
 import { useUpcomingEvents } from '~/lib/upcomingEvents';
 
 /**
- * The pieces /profile builds its collections from: a card per section, the
- * one-line note a section shows instead of a grid, and the welcome card a brand
- * new account sees in place of three empty sections.
+ * What /profile builds its collections from: a card per section, the one-line
+ * note shown instead of a grid, and the welcome card for a brand-new account.
  */
 
 /** A titled section of the profile, with its count beside the title. */
@@ -73,15 +72,11 @@ interface CollectionPrompt {
     action: ReactNode;
 }
 
-/**
- * How each collection on your own profile fills up, and the button that starts
- * it. Events are logged by checking in, and both badge codes and passport keys
- * go through Redeem Code.
- */
+/** How each of your collections fills up, and the button that starts it. */
 function useCollectionPrompts(): Record<CollectionKind, CollectionPrompt> {
     const {isEnglish} = useLanguage();
-    // The home page hides its upcoming section when nothing is scheduled, so a
-    // link to it would scroll nowhere; point at the past events instead.
+    // With nothing scheduled the home page hides its upcoming section, so point
+    // at past events instead.
     const {hasActive} = useUpcomingEvents();
 
     return {
@@ -145,9 +140,8 @@ export const OwnEmptyNote = ({kind}: {kind: CollectionKind}) => {
 export type SectionState = 'loading' | 'failed' | 'private' | 'empty' | 'filled';
 
 /**
- * One collection on the profile. Filled, it is its grid under a counted title;
- * otherwise it shrinks to a single note. An empty section of your own says how
- * to fill it; someone else's just says it is empty.
+ * One collection: its grid under a counted title, or a single note. Your own
+ * empty one says how to fill it.
  */
 export const ProfileSection = ({kind, title, state, count, own, icon = FiAward, none, hidden, failed, children}: {
     kind: CollectionKind;
@@ -178,9 +172,8 @@ export const ProfileSection = ({kind, title, state, count, own, icon = FiAward, 
 const WELCOME_ORDER: CollectionKind[] = ['events', 'badges', 'passports'];
 
 /**
- * A brand-new account's profile: one card of the three ways in, rather than
- * three sections each saying it is empty. It goes away as soon as any one of
- * them has something in it.
+ * A brand-new account's profile: one card of the three ways in, gone once any
+ * of them has something.
  */
 export const ProfileWelcome = () => {
     const {isEnglish} = useLanguage();

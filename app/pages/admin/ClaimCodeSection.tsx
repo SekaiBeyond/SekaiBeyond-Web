@@ -65,8 +65,8 @@ const TEXT: Record<Variant, VariantText> = {
 };
 
 /**
- * Whether the code would be accepted if someone used it now and, if not, why.
- * The same checks, in the same order, as validateCodeInTransaction in functions.
+ * Whether the code would be accepted now and, if not, why:
+ * validateCodeInTransaction's checks, in its order.
  */
 type CodeState = 'active' | 'disabled' | 'scheduled' | 'expired' | 'used-up';
 
@@ -93,10 +93,9 @@ const formatWhen = (value: string, isEnglish: boolean) =>
     });
 
 /**
- * A stored window bound as an ISO moment, or null for none. Bounds saved before
- * they carried a zone hold the bare datetime-local value, typed on the Pacific
- * clock, so parseSiteTime reads them as Pacific — as validateCodeInTransaction
- * does. One it can't read is no bound there either.
+ * A stored window bound as an ISO moment, or null. A zoneless bound reads as
+ * Pacific, as validateCodeInTransaction reads it; an unreadable one is no
+ * bound.
  */
 const storedBound = (value: unknown): string | null => {
     if (typeof value !== 'string' || !value) return null;
@@ -113,8 +112,8 @@ const inputBound = (value: string): string | null => value ? parseSiteTime(value
 interface ClaimCodeSectionProps {
     eventId: string;
     /**
-     * 'checkin': attendee check-in codes ('claimCodes'), shown as a claim-URL QR.
-     * 'staff': staff claim codes ('staffClaimCodes'), a raw code with a max-uses cap.
+     * 'checkin': attendee codes (claimCodes), shown as a claim-URL QR. 'staff': staff
+     * codes (staffClaimCodes), a raw code with a max-uses cap.
      */
     variant: Variant;
     showToast: ShowToast;
@@ -124,12 +123,9 @@ interface ClaimCodeSectionProps {
 }
 
 /**
- * Self-contained claim-code manager for a single event: loads the event's code,
- * generates/regenerates it, toggles it, and edits its active time window. Staff
- * codes work for past events as well as upcoming ones — their Cloud Functions
- * resolve the event from either collection — while check-in codes are for
- * upcoming events only. The staff variant is core-staff-only per Firestore
- * rules, so mount it only for core staff.
+ * One event's claim code: load, generate, toggle, and edit its time window.
+ * Staff codes also work for past events; check-in codes are upcoming-only. The
+ * staff variant is core-staff-only under the rules, so mount it only for them.
  */
 export function ClaimCodeSection({eventId, variant, showToast, readOnly = false, eventEndAt}: ClaimCodeSectionProps) {
     const {isEnglish} = useLanguage();
@@ -154,12 +150,12 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     const [code, setCode] = useState<BadgeCode | null>(null);
     const [codeFrom, setCodeFrom] = useState('');
     const [codeUntil, setCodeUntil] = useState('');
-    // The max-uses draft: a checkbox for whether there is a cap at all, and the
-    // cap as typed, so clearing the field to retype it doesn't lift the cap.
+    // Whether there's a cap, and the cap as typed, so clearing the field to
+    // retype doesn't lift it.
     const [limitUses, setLimitUses] = useState(false);
     const [maxUsesText, setMaxUsesText] = useState('');
-    // Staff codes show their time window as a summary, opened for editing on
-    // request; check-in codes always show the inputs.
+    // Staff codes show a window summary to open; check-in codes always show the
+    // inputs.
     const [editingWindow, setEditingWindow] = useState(false);
     const [copied, setCopied] = useState(false);
     const [generating, setGenerating] = useState(false);
@@ -221,8 +217,8 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         return () => {
             stale = true;
         };
-        // Not keyed on isEnglish, which only words the failure toast: a language
-        // toggle would reload the code over an unsaved time window.
+        // Not keyed on isEnglish: a language toggle would reload over an unsaved
+        // window.
     }, [eventId, variant, showToast]);
 
     useEffect(() => {
@@ -343,8 +339,8 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
 
     const eventEndLocal = eventEndAt ? toDatetimeLocal(eventEndAt) : '';
 
-    // Staff codes are claimed by typing the code, so they show the dashed form;
-    // check-in codes are scanned from a URL, which carries the code as stored.
+    // Staff codes are typed, so they copy dashed; check-in codes are scanned
+    // from a URL.
     const copyValue = code ? (isStaff ? formatCode(code.code) : getClaimUrl(code.code)) : '';
 
     const copyCode = async () => {
@@ -385,10 +381,9 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         </div>
     );
 
-    // "No code yet" is only said when the read came back empty. Generating retires
-    // every code the event already has (a staff code, by deleting it), so offering
-    // it after a failed read could take away one that is printed and in use,
-    // without the regenerate warning.
+    // "No code yet" only for an empty read. Generating retires every existing
+    // code, so offering it after a failed read could kill a printed code without
+    // the regenerate warning.
     if (loadFailed) {
         return (
             <div className="admin-codes-section">

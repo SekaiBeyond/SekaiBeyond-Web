@@ -7,9 +7,8 @@ import { SectionHeader } from '~/pages/con/SectionHeader';
 const POLICY_WORD = {en: 'Policy', zh: '政策'};
 
 /**
- * Links each mention of the Policy page in an answer, so the plain text written
- * in the admin panel can point there. Case-sensitive: a lowercase "policy" in
- * passing stays plain.
+ * Links each mention of the Policy page in an answer. Case-sensitive, so a
+ * passing "policy" stays plain.
  */
 const linkPolicy = (text: string, word: string) =>
     text.split(word).flatMap((part, i) => i === 0 ? [part] : [
@@ -27,8 +26,7 @@ export const Faq = () => {
             <SectionHeader title={{en: 'FAQ', zh: '常见问题'}}/>
 
             <div className="sbc-faq-list">
-                {/* Keyed by position: two entries may share an English question,
-                    and a collision would cross-link their open/closed state. */}
+                {/* By position: two entries may share a question. */}
                 {content.faq.map((entry, i) => (
                     <details key={i} className="sbc-faq-item">
                         <summary className="sbc-faq-question">

@@ -22,15 +22,12 @@ export interface Venue {
 // These are the values to change if the parking guide is ever used off the UW campus.
 /** Default map center (UW campus center) when no venue-specific center is available. */
 export const UW_CAMPUS_CENTER = {lat: 47.6553, lng: -122.3035};
-/** A few blocks across: about the zoom Google Maps calls 17, as MapLibre counts it. */
+/** A few blocks across. */
 export const DEFAULT_ZOOM = 16;
 /** External "more info" link shown on the parking guide. */
 export const PARKING_INFO_URL = 'https://transportation.uw.edu/park/visitor';
 
-/**
- * A lat/lng pair counts as "set" only when both are finite and not the (0, 0) origin,
- * which we use as the unset sentinel (the admin map picker never leaves a real lot there).
- */
+/** Set only when both are finite and not the (0, 0) origin, the unset sentinel. */
 export function hasCoordinates(lat: number, lng: number): boolean {
     return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
 }
@@ -47,9 +44,8 @@ export function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: n
 }
 
 /**
- * Format a straight-line distance for display. The leading "~" / "约" signals this is an
- * as-the-crow-flies estimate, not a measured walking route. Very short distances switch to
- * feet (English) / metres (Chinese) so close lots don't all read the same.
+ * A straight-line distance for display. The "~" / "约" marks it as an estimate, not a
+ * walking route; short distances switch to feet / metres.
  */
 export function formatDistanceEstimate(miles: number, isEnglish: boolean): string {
     if (isEnglish) {
@@ -93,20 +89,14 @@ export function useVenues(): {venues: Venue[]; loading: boolean; refresh: () => 
     return {venues: items, loading, refresh};
 }
 
-/**
- * Resolve an event's explicit `venueId` to its building {@link Venue}. Events carry a direct
- * reference to the building (chosen in the admin event editor) rather than matching on the
- * free-text location string. Returns null if unset or unknown.
- */
+/** An event's `venueId` as its {@link Venue}, or null if unset or unknown. */
 export function resolveVenueById(venueId: string | undefined, venues: Venue[]): Venue | null {
     if (!venueId) return null;
     return venues.find(v => v.id === venueId) ?? null;
 }
 
 /**
- * Display string for an event's location. The free-text location is optional; when it's empty
- * we fall back to the linked venue's (building) name so the event still shows where it is.
- * Returns an empty string only when neither a location nor a resolvable venue is set.
+ * An event's location for display: its free-text location, else its venue's name, else ''.
  */
 export function eventLocationDisplay(
     location: string | undefined,

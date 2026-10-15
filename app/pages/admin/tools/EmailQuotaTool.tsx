@@ -17,8 +17,7 @@ interface QuotaStatus {
     };
     providerReported: number | null;
     readingSource: 'live' | 'cached' | 'unavailable';
-    // The server stopped counting at its page budget, so providerReported is a
-    // floor. Only plausible at volumes far above this event's.
+    // Stopped at the page budget, so providerReported is a floor.
     usageTruncated: boolean;
     sentToday: number;
     dailyCap: number;
@@ -32,13 +31,12 @@ interface QuotaStatus {
     serverNow: string;
 }
 
-// Remaining headroom at or below this is called out as "running low" so an
-// admin sees it before starting a send that would spill into the queue.
+// At or below this, headroom is "running low", flagged before a send spills
+// into the queue.
 const LOW_HEADROOM = 10;
 
-// Age of `iso` measured against the server's clock rather than the browser's,
-// so a skewed local clock can't render a fresh counter as hours old. Returns
-// null when the timestamp is absent (counter never written / empty queue).
+// Age of `iso` against the server's clock, so local skew can't make a fresh
+// counter look old. Null when absent.
 const formatAge = (
     iso: string | null,
     serverNow: string,
@@ -94,19 +92,16 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
     }, [isEnglish, showToast]);
 
     useEffect(() => {
-        // Mount fetch only — refreshing is manual, so the panel doesn't poll a
-        // callable in the background while the tool sits open. Deliberately not
-        // keyed on `load`: a language toggle shouldn't trigger a refetch.
+        // On mount only; refresh is manual, and a language toggle shouldn't
+        // refetch.
         void load(false);
     }, []);
 
     const providerName = status?.provider.name ?? '';
     const unavailable = status?.readingSource === 'unavailable';
 
-    // Send decisions are gated on the local counter (provider count + in-flight
-    // reservations), so headroom is derived from that rather than from the
-    // provider's own number — otherwise the panel would promise capacity that
-    // a concurrent send has already spoken for.
+    // From the local counter that gates sends, so it never promises capacity a
+    // concurrent send has taken.
     const remainingToday = status ? Math.max(0, status.dailyCap - status.sentToday) : 0;
     const remainingQueue = status ? Math.max(0, status.queueCap - status.queuedCount) : 0;
     const atCap = status !== null && !unavailable && remainingToday === 0;
@@ -114,9 +109,8 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
         && remainingToday > 0 && remainingToday <= LOW_HEADROOM;
     const queueFull = status !== null && remainingQueue === 0 && status.queuedCount > 0;
 
-    // Meter segments as percentages of the cap. `confirmed` is what the provider
-    // has counted; `reserved` is pre-charged and still in flight. Both are
-    // clamped so a counter that briefly overshoots the cap can't overflow the bar.
+    // Percentages of the cap: `confirmed` counted by the provider, `reserved` in
+    // flight. Clamped so an overshoot can't overflow the bar.
     const confirmedPct = status
         ? Math.min(100, (status.confirmed / Math.max(1, status.dailyCap)) * 100)
         : 0;
@@ -128,9 +122,8 @@ export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
     const oldestQueuedAge = status
         && formatAge(status.oldestQueuedAt, status.serverNow, isEnglish);
 
-    // How current the headline number is. A live probe means it should match
-    // the provider's dashboard right now; "cached" is a leftover reading from
-    // the last send and is only as good as its age.
+    // "live" should match the provider's dashboard now; "cached" is the last
+    // send's reading, as good as its age.
     const readingLabel = !status ? '' : status.readingSource === 'live'
         ? (isEnglish ? `live from ${providerName}` : `来自 ${providerName} 实时数据`)
         : status.readingSource === 'cached'

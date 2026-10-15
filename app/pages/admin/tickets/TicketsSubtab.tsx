@@ -31,14 +31,13 @@ interface TicketsSubtabProps {
     event: UpcomingEvent;
     readOnly: boolean;
     /**
-     * Who may scan this event's tickets, as redeemTicket decides it: 'always' for
-     * core staff, 'event-days' for the staff group and the event's own staff, who
-     * scan only on the calendar day(s) it runs.
+     * Who may scan, as redeemTicket decides: 'always' for core staff,
+     * 'event-days' for the staff group and the event's staff.
      */
     scanAccess: 'always' | 'event-days' | 'none';
     showToast: ShowToast;
-    // Where ticket attendees live. Archived events keep them under `pastEvents`
-    // (migrated on archive); live events under `upcomingEvents`.
+    // Where ticket attendees live: under `pastEvents` once archived, else
+    // `upcomingEvents`.
     collectionRoot?: 'upcomingEvents' | 'pastEvents';
 }
 
@@ -55,8 +54,8 @@ export function TicketsSubtab({
     const startMs = event.startAt.getTime();
     const endMs = event.endAt.getTime();
 
-    // Checked each minute, so a scanner left open overnight opens on the day
-    // without a reload. The server holds the same line whatever this says.
+    // Checked each minute, so a scanner left open overnight opens on the day.
+    // The server enforces it regardless.
     const [eventDay, setEventDay] = useState(() => eventDayStatus(event.startAt, event.endAt));
     useEffect(() => {
         const check = () => setEventDay(eventDayStatus(new Date(startMs), new Date(endMs)));
@@ -71,8 +70,7 @@ export function TicketsSubtab({
     const [section, setSection] = useState<TicketsSection>(scanOpen && readOnly ? 'scan' : 'attendees');
     const [attendees, setAttendees] = useState<AttendeeData[]>([]);
     const [loadingAttendees, setLoadingAttendees] = useState(false);
-    // A flag rather than the message, so that the load needn't depend on the
-    // language: a toggle would otherwise refetch every attendee.
+    // A flag rather than the message, so a language toggle doesn't refetch.
     const [attendeesFailed, setAttendeesFailed] = useState(false);
     const [search, setSearch] = useState('');
     const [filterUnsent, setFilterUnsent] = useState(false);
@@ -170,17 +168,13 @@ export function TicketsSubtab({
         return filteredAttendees.slice(0, displayCount);
     }, [filteredAttendees, displayCount]);
 
-    // Whether each attendee's address has an account behind it — which is what
-    // decides, when their ticket is scanned, whether the event reaches anybody's
-    // profile. Asked for the whole list rather than the page on show, so the
-    // answer is already there as more rows are revealed.
+    // Which addresses have an account, deciding whether a scan reaches a
+    // profile. Asked for the whole list, so revealed rows already have answers.
     const attendeeEmails = useMemo(() => attendees.map(a => a.email), [attendees]);
     const {links: accountLinks} = useAccountLinks(eventId, attendeeEmails);
 
-    // Merged into the attendee as it stands when the call returns, not as it was
-    // when the button was pressed: actions on two of someone's tickets can be in
-    // flight together, and the second to land would otherwise undo the first on
-    // screen.
+    // Merged into the attendee as it is when the call returns, so two in-flight
+    // actions don't undo each other.
     const updateAttendee = (attendeeId: string, changes: Partial<AttendeeData>) => {
         setAttendees(prev => prev.map(a => a.id === attendeeId ? {...a, ...changes} : a));
     };

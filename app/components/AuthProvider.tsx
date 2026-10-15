@@ -15,8 +15,7 @@ import {
 } from '~/lib/firebase';
 import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
 
-// `group` is a pure role ladder. Whether someone has paid is membership, which
-// lives in membershipExpiresAt and never moves anyone between these values.
+// `group` is a role ladder only; membership lives in membershipExpiresAt.
 export type UserGroup = 'user' | 'staff' | 'core-staff' | 'president';
 
 export const USER_GROUPS: UserGroup[] = ['user', 'staff', 'core-staff', 'president'];
@@ -35,14 +34,12 @@ export const GROUP_LABELS: Record<UserGroup, {en: string; zh: string}> = {
     'president': {en: 'President', zh: '社长'},
 };
 
-// Anything that isn't a known group reads as the base group, so GROUP_LEVEL never
-// comes back undefined and turns every permission check false.
+// Anything unknown reads as the base group, so GROUP_LEVEL is never undefined.
 export function normalizeGroup(raw: unknown): UserGroup {
     return raw === 'staff' || raw === 'core-staff' || raw === 'president' ? raw : 'user';
 }
 
-// Membership is active purely by comparison — nothing is written when it starts,
-// so nothing has to be undone when it ends.
+// Active purely by comparison, so nothing needs undoing when it ends.
 export function isMembershipActive(expiresAt: Date | null | undefined): boolean {
     return expiresAt instanceof Date && expiresAt.getTime() > Date.now();
 }
@@ -76,8 +73,8 @@ export function formatGroupWithTitle(
     return resolved ? `${label} - ${resolved}` : label;
 }
 
-// An account's effective title per language: its explicit title, else its group label.
-// Presidents (and anyone without a title) fall back to the group name, e.g. "President".
+// An account's title per language: its explicit title, else its group label (e.g.
+// "President").
 export function accountEffectiveTitle(
     group: UserGroup,
     title: string | undefined,
@@ -149,16 +146,15 @@ function toUserProfile(data: DocumentData, email: string): UserProfile {
 interface AuthContextType {
     user: User | null;
     profile: UserProfile | null;
-    // Derived from profile.membershipExpiresAt so membership checks aren't
-    // re-implemented per page. Recomputed on render, not on a timer.
+    // From profile.membershipExpiresAt, so pages don't each re-check it.
+    // Recomputed on render.
     isMember: boolean;
     // True until both the signed-in user and their profile are known.
     loading: boolean;
-    // True once the signed-in user is known, without waiting on the profile, so
-    // UI that only needs `user` doesn't sit behind the Firestore read.
+    // True once the signed-in user is known, without waiting for the profile.
     authReady: boolean;
-    // The profile photo last seen on this device for the signed-in user, to show
-    // until the profile loads. Empty when there is none.
+    // The profile photo last seen on this device for this user, shown until the
+    // profile loads.
     cachedPhotoURL: string;
     authError: Error | null;
     signIn: () => Promise<void>;

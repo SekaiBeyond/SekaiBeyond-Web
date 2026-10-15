@@ -28,9 +28,8 @@ function parseQrId(raw: string): string | null {
 }
 
 /**
- * Admin "link a code by scanning" flow: point the phone camera at a printed
- * managed QR, match it to one of your codes, then pin it to your current GPS
- * location in one tap. Keeps location-linking entirely inside the admin tool.
+ * Link a code by scanning it: point the phone at a printed code, match it to
+ * yours, and pin it to your current location in one tap.
  */
 export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScannerProps) => {
     const {isEnglish} = useLanguage();
@@ -41,9 +40,8 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
     const [linkState, setLinkState] = useState<LinkState>('idle');
     const [linkError, setLinkError] = useState('');
 
-    // Resolve a scanned/typed value to one of the admin's codes. Returns true on a
-    // valid id (matched or unknown); the scanner hook stops the camera on a true
-    // return, and the manual-entry handlers do the same explicitly.
+    // A scanned or typed value as one of your codes. True on any valid id, matched
+    // or not, which stops the camera; manual entry does the same.
     const resolve = useCallback((raw: string): boolean => {
         const id = parseQrId(raw);
         if (!id) return false;

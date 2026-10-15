@@ -20,8 +20,8 @@ import {
     type WalkingTime,
 } from "../utils/uwParking";
 
-// The parking guide's synced copy of UW's data. Publicly readable: it holds only
-// what UW already publishes, plus walking times from venues that are public too.
+// The guide's synced copy of UW's data. Publicly readable: it holds only what UW
+// publishes and walking times from public venues.
 const PARKING_DOC = db.collection("uwParking").doc("current");
 // Pause between walking-router calls, to stay well inside FOSSGIS's fair use.
 const ROUTER_PAUSE_MS = 1_000;
@@ -37,8 +37,8 @@ interface VenueWalking {
     /** The venue location these times were measured from. */
     lat: number;
     lng: number;
-    /** The lots they were measured to, as lotsKey gives them; missing on times measured before it was kept. */
-    lotsKey?: string;
+    /** The lots they were measured to, as lotsKey gives them. */
+    lotsKey: string;
     lots: Record<string, WalkingTime>;
 }
 
@@ -63,10 +63,9 @@ async function syncedLots(): Promise<UwLot[]> {
 }
 
 /**
- * Brings a saved venue's walking times and building outline up to date, unless
- * they were already taken from this spot, to these lots, and for this building,
- * so a new or changed venue has them before the nightly sync. Does nothing
- * before the first sync.
+ * Brings a saved venue's walking times and outline up to date, unless they're
+ * already from this spot, to these lots, for this building. Does nothing before
+ * the first sync.
  */
 export async function refreshVenueParking(
     venueId: string,
@@ -119,9 +118,9 @@ export async function dropVenueParking(venueId: string): Promise<void> {
 }
 
 /**
- * Refreshes uwParking/current. Each source is refreshed on its own: one that
- * fails keeps its last good copy and is named in lastRunErrors, so a UW outage
- * leaves the guide on yesterday's data instead of blanking it.
+ * Refreshes uwParking/current. A source that fails keeps its last good copy and
+ * is named in lastRunErrors, so a UW outage leaves yesterday's data rather than
+ * none.
  */
 async function runUwParkingSync(): Promise<ParkingSyncSummary> {
     const previous = (await PARKING_DOC.get()).data() ?? {};
@@ -147,9 +146,9 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
         errors.push(`Event pricing: ${errorMessage(err)}`);
     }
 
-    // Measured from every venue with a location, unless its times are from the same
-    // spot to the same lots, which keeps the sync short and the router's load light.
-    // A venue whose call fails keeps its last times; a deleted venue's are dropped with it.
+    // Measured only when a venue's spot or the lots have changed, to keep the sync short
+    // and the router's load light. A failed call keeps the last times; deleted venues drop
+    // out.
     const venues = await db.collection("venues").get();
     const previousWalking = (previous.walking ?? {}) as Record<string, VenueWalking>;
     const walking: Record<string, VenueWalking> = {};
@@ -174,9 +173,8 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
         update.walking = walking;
     }
 
-    // The footprint of each venue's building, for the guide's venue highlight, all
-    // looked up at once. Like walking times, a failed lookup keeps the last outline
-    // for the same building.
+    // Building footprints for the venue highlight. A failed lookup keeps the last
+    // outline for the same building.
     const previousOutlines = (previous.outlines ?? {}) as Record<string, UwBuildingOutline>;
     const outlines: Record<string, UwBuildingOutline> = {};
     await Promise.all(venues.docs.map(async venue => {
@@ -193,8 +191,8 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
     update.outlines = outlines;
 
     Object.assign(update, {lastRunAt: now, lastRunErrors: errors});
-    // mergeFields writes each listed field whole, so `walking` and `outlines` lose deleted venues
-    // (a plain merge would deep-merge it), and a failed source's fields stay as they were.
+    // mergeFields writes each field whole, so deleted venues drop out of `walking` and
+    // `outlines`, and a failed source's fields are left as they were.
     await PARKING_DOC.set(update, {mergeFields: Object.keys(update)});
 
     return {lotCount: lots.length, pricingDayCount, walkingVenueCount: Object.keys(walking).length, errors};

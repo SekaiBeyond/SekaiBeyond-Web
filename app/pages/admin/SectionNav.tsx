@@ -16,12 +16,9 @@ interface SectionNavProps {
 const topInset = () => (document.querySelector('.profile-nav')?.getBoundingClientRect().bottom ?? 0) + 16;
 
 /**
- * A floating previous / next / jump-to control for admin tabs that stack several
- * long sections. The section under the top nav is the current one, so the
- * buttons always step relative to what the admin is looking at.
- *
- * Render it after the sections: it leaves a spacer in the flow so the last
- * section's buttons can scroll clear of it.
+ * Floating previous / next / jump-to for admin tabs of long stacked sections,
+ * relative to the section under the top nav. Render it after the sections; its
+ * spacer lets the last section scroll clear.
  */
 export const SectionNav = ({sections}: SectionNavProps) => {
     const {isEnglish} = useLanguage();
@@ -29,10 +26,9 @@ export const SectionNav = ({sections}: SectionNavProps) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const containerRef = useRef<HTMLElement>(null);
     /**
-     * The section last jumped to, held until the admin scrolls away from where the
-     * jump landed. Without it a short section near the bottom of the page — one the
-     * page cannot scroll up to the top — would read as its neighbour right after
-     * being picked. `settledY` stays null while the smooth scroll is still moving.
+     * The section last jumped to, until the admin scrolls away; otherwise a short
+     * section near the bottom would read as its neighbour. `settledY` is null while
+     * the scroll is moving.
      */
     const pin = useRef<{index: number; settledY: number | null} | null>(null);
     const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -44,8 +40,8 @@ export const SectionNav = ({sections}: SectionNavProps) => {
         }, 150);
     }, []);
 
-    // Ids can't contain whitespace, so this is a stable key for the effect below
-    // even though callers build a fresh `sections` array every render.
+    // Ids have no whitespace, so this is a stable key even though `sections` is
+    // rebuilt every render.
     const idKey = sections.map(s => s.id).join(' ');
 
     useEffect(() => {
@@ -71,8 +67,8 @@ export const SectionNav = ({sections}: SectionNavProps) => {
                 const el = document.getElementById(id);
                 if (el && el.getBoundingClientRect().top <= line) index = i;
             });
-            // Scrolled to the very end: the last section may be too short to ever
-            // reach the line, but it is plainly the one on screen.
+            // At the very end, the last section is current even if too short to
+            // reach the line.
             const {scrollHeight} = document.documentElement;
             if (window.scrollY > 0 && window.innerHeight + window.scrollY >= scrollHeight - 2) {
                 index = ids.length - 1;

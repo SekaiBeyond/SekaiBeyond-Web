@@ -18,9 +18,8 @@ interface UserSearchAddProps {
 }
 
 /**
- * Search box + candidate rows for adding a user to a roster (event staff,
- * attendees). Owns the search flow; the caller owns what "add" means and keeps
- * `excludeUids` current so added users drop out of the results.
+ * Search and candidate rows for adding a user to a roster. The caller decides
+ * what "add" means and keeps `excludeUids` current.
  */
 export function UserSearchAdd({
                                   excludeUids,

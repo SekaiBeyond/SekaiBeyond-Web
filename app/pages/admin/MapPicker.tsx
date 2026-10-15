@@ -7,7 +7,6 @@ import { DEFAULT_ZOOM, hasCoordinates, UW_CAMPUS_CENTER } from '~/lib/venues';
 interface MapPickerProps {
     value: {lat: number; lng: number};
     onChange: (next: {lat: number; lng: number}) => void;
-    height?: number;
 }
 
 // Six decimals of a degree is about 10 cm, as fine as a pin dropped by hand can mean.
@@ -15,12 +14,10 @@ const round = (n: number) => Math.round(n * 1e6) / 1e6;
 const keyOf = (p: {lat: number; lng: number}) => `${p.lat},${p.lng}`;
 
 /**
- * Map-based coordinate picker with three input methods:
- * - Search a place by name (OpenStreetMap's Nominatim) and pick a result.
- * - Click anywhere on the map to drop the marker at that point.
- * - Drag the marker for fine-tuning.
+ * Coordinate picker: search a place (Nominatim), click the map to drop the
+ * marker, or drag it.
  */
-export const MapPicker = ({value, onChange, height = 320}: MapPickerProps) => {
+export const MapPicker = ({value, onChange}: MapPickerProps) => {
     const {isEnglish} = useLanguage();
     const containerRef = useRef<HTMLDivElement>(null);
     const [map, setMap] = useState<MapLibreMap | null>(null);
@@ -30,8 +27,8 @@ export const MapPicker = ({value, onChange, height = 320}: MapPickerProps) => {
     // The map's handlers outlive renders, so they call the latest onChange through this.
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
-    // A point the map itself just set (a click or a drag) is already in view; only
-    // one that came from elsewhere (search, a building lookup) pans the map.
+    // A point the map just set is in view; only one from elsewhere (search, a
+    // building lookup) pans.
     const placedHere = useRef('');
 
     useEffect(() => {
@@ -79,7 +76,7 @@ export const MapPicker = ({value, onChange, height = 320}: MapPickerProps) => {
     return (
         <div className="admin-map-picker">
             <PlaceSearch onPick={p => onChange({lat: round(p.lat), lng: round(p.lng)})}/>
-            <div ref={containerRef} className="admin-map-picker-canvas" style={{height}}>
+            <div ref={containerRef} className="admin-map-picker-canvas">
                 {failed && (
                     <div className="admin-map-failed">
                         {isEnglish ? 'The map couldn’t load. Reload the page to try again.' : '地图加载失败，请刷新页面重试。'}
@@ -99,10 +96,9 @@ export const MapPicker = ({value, onChange, height = 320}: MapPickerProps) => {
     );
 };
 
-// OpenStreetMap's public geocoder. Its usage policy allows a search when someone
-// asks for one, at most once a second, and no search-as-you-type, so this one
-// searches on Enter or the button. Results lean towards Seattle without being
-// limited to it.
+// OpenStreetMap's public geocoder. Its policy allows one search per request, at
+// most once a second, and no search-as-you-type, so this searches on Enter or
+// the button. Results lean towards Seattle.
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const SEATTLE_VIEWBOX = '-122.46,47.78,-122.22,47.48';
 const MIN_SEARCH_GAP_MS = 1_100;

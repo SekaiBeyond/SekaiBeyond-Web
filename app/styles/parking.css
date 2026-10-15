@@ -1,6 +1,6 @@
 :root {
-    /* What the pins, pills and legend encode: parking during the event (or right now).
-       Global rather than on .parking-page, as the admin's maps reuse the guide's pins. */
+    /* What the pins, pills and legend encode: parking during the event, or right now.
+       Global, since the admin maps reuse the pins. */
     --parking-free: #4ecb71;
     --parking-free-ink: #23914a;
     --parking-free-soft: rgba(78, 203, 113, 0.14);
@@ -351,9 +351,8 @@
     font-weight: 600;
 }
 
-/* Legend overlaid on the map, like the UW parking map's LEGEND box.
-   Frosted "glass": translucent + blurred so markers behind it stay visible, and
-   click-through (pointer-events: none) so those markers remain clickable. */
+/* Legend over the map, frosted so markers behind stay visible, and
+   click-through so they stay clickable. */
 .parking-map-legend {
     position: absolute;
     left: 14px;
@@ -1223,8 +1222,8 @@ button.parking-tag {
     text-decoration: underline;
 }
 
-/* Map pins. MapLibre positions the bare .parking-marker wrapper; everything else
-   is drawn inside it, so its own classes and transform are left alone. */
+/* Map pins. MapLibre positions the bare .map-marker wrapper; everything is drawn
+   inside it, leaving its classes and transform alone. */
 .parking-pin-wrap {
     display: flex;
     flex-direction: column;

@@ -34,8 +34,8 @@ type GestureStart =
     | {kind: 'pinch'; distance: number; angle: number; midpointX: number; midpointY: number; transform: PhotoTransform};
 
 /**
- * The preset card titles: `title` is what is drawn on the card (always English,
- * to match the artwork), `label` is how the menu offers it.
+ * `title` is drawn on the card (always English, to match the artwork); `label`
+ * is the menu's.
  */
 const CARD_TITLE_PRESETS = {
     cosplay: {title: 'Cosplay Lineup', label: {en: 'Cosplay Lineup', zh: 'Cosplay 阵容'}},
@@ -52,9 +52,9 @@ type UploadedFont = TitleFont & {name: string; face: FontFace};
 // The longest preset title, and how wide every font draws it.
 const TITLE_SAMPLE = CARD_TITLE_PRESETS.cosplay.title;
 const TITLE_SAMPLE_WIDTH = 690;
-// Open-licensed (SIL OFL or Apache) Google Fonts only: visitors type their own
-// titles here, which commercial webfont licenses forbid. Each size draws
-// TITLE_SAMPLE at TITLE_SAMPLE_WIDTH; longer titles still shrink to fit.
+// Open-licensed (OFL or Apache) Google Fonts only, since visitors type their
+// own titles. Each size draws TITLE_SAMPLE at TITLE_SAMPLE_WIDTH; longer titles
+// shrink.
 const TITLE_FONTS: TitleFont[] = [
     {family: 'Caveat Brush', size: 132},
     {family: 'Water Brush', size: 132},
@@ -178,9 +178,9 @@ const takeFile = (event: ChangeEvent<HTMLInputElement>) => {
 };
 
 /**
- * The share card maker: a visitor's photo inside the con's frame artwork, with a
- * title, optional extra line, and a QR back to this section. Everything is drawn
- * on a canvas in the browser; nothing is uploaded.
+ * The share card maker: a visitor's photo in the con's frame, with a title, an
+ * optional line, and a QR back here. Drawn on a canvas in the browser; nothing
+ * is uploaded.
  */
 export const ShareCard = () => {
     const t = useT();
@@ -217,8 +217,7 @@ export const ShareCard = () => {
     const [shareUrl, setShareUrl] = useState('');
 
     useEffect(() => {
-        // Keep the QR pointed at this deployment (localhost, preview, or live)
-        // while always opening directly at the share-card editor.
+        // This deployment's origin, opening at the share-card editor.
         setShareUrl(`${window.location.origin}${window.location.pathname}#lineup`);
     }, []);
 
@@ -250,9 +249,8 @@ export const ShareCard = () => {
 
     useEffect(() => {
         let cancelled = false;
-        // Loading against the title also fetches the CJK font's glyph slices for a
-        // Chinese title. The canvas can't repaint itself when they arrive, so every
-        // finished load bumps a counter that redraws the card.
+        // Also fetches the CJK glyph slices for a Chinese title. The canvas can't
+        // repaint itself, so each finished load bumps a redraw counter.
         void loadTitleFontStylesheet()
             .then(() => Promise.all([
                 document.fonts.load(`${titleFont.size}px ${titleFontStack(titleFont.family)}`, title.trim() || 'A'),
@@ -283,8 +281,7 @@ export const ShareCard = () => {
         if (!context) return;
 
         context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        // Export an opaque card so transparent pixels in PNG photos or AI cutouts
-        // cannot show up as black in dark-mode image viewers or social apps.
+        // Opaque, so transparent photos don't turn black in dark-mode viewers.
         context.fillStyle = CANVAS_BACKGROUND;
         context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -333,8 +330,8 @@ export const ShareCard = () => {
 
         const qrCanvas = qrCanvasRef.current;
         if (shareUrl && qrCanvas) {
-            // Let the quiet zone show the artwork through, keeping the QR integrated
-            // with the pale lower edge instead of adding another block to the card.
+            // The quiet zone lets the artwork through, so the QR sits in the pale
+            // lower edge.
             context.drawImage(qrCanvas, SHARE_QR.left, SHARE_QR.top, SHARE_QR.size, SHARE_QR.size);
 
             context.textAlign = 'left';
@@ -371,8 +368,8 @@ export const ShareCard = () => {
         }
 
         setFontOpening(true);
-        // Read into memory so the file never leaves this device. An ArrayBuffer
-        // source also needs no blob: URL, which our CSP's font-src doesn't allow.
+        // Read into memory: the file stays on the device, and an ArrayBuffer
+        // needs no blob: URL, which font-src doesn't allow.
         const family = `Uploaded Font ${token}`;
         let face: FontFace;
         try {
@@ -537,8 +534,8 @@ export const ShareCard = () => {
     );
 
     return (
-        // `lineup` is the anchor the nav links to and every printed QR code opens
-        // at, so it outlives the section's name.
+        // The nav and every printed QR code open at `lineup`, so it stays
+        // whatever the section is called.
         <section id="lineup" className="sbc-section sbc-lineup-section">
             <SectionHeader
                 title={{en: 'Share Card', zh: '活动分享卡'}}

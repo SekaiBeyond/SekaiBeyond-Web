@@ -30,8 +30,8 @@ function parseBvid(input: string): string {
     return match ? match[0] : '';
 }
 
-// A <div> rather than the editor's <label>: `.admin-form-grid label span`
-// would restyle any <span> in the rendered policy.
+// A <div>, since `.admin-form-grid label span` would restyle spans in the
+// policy.
 const PolicyPreview = ({label, content}: {label: string; content: string}) => {
     const {isEnglish} = useLanguage();
     return (
@@ -62,8 +62,8 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     const [savingSocial, setSavingSocial] = useState(false);
     const [senderInput, setSenderInput] = useState('');
     const [savingSender, setSavingSender] = useState(false);
-    // The domain lives on the server (from PUBLIC_ORIGIN). Until it loads, or if
-    // it can't, the field still works and only the "@domain" hint is missing.
+    // The domain comes from the server; until it loads, only the "@domain" hint
+    // is missing.
     const [senderSettings, setSenderSettings] = useState<{domain: string, defaultPrefix: string} | null>(null);
     const [configInitialized, setConfigInitialized] = useState(false);
 
@@ -163,8 +163,8 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
             setSocialInputs(socialLinkInputs(res.data.socialLinks ?? links));
             showToast(isEnglish ? 'Social links saved.' : '社交链接已保存。', 'success');
         } catch (err) {
-            // The one save the form can't check ahead: a share link the server
-            // follows that doesn't lead to a profile.
+            // The one failure the form can't check ahead: a share link that
+            // doesn't lead to a profile.
             const shareLinkFailed = err instanceof FirebaseError && err.code === 'functions/invalid-argument'
                 && isXiaohongshuShareLink(links.xiaohongshu);
             showToast(
@@ -225,9 +225,8 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         );
     }
 
-    // Editing here would mean saving the built-in defaults over whatever is
-    // actually stored — the con edition and the policy each save whole — so the
-    // tab stays closed until both reads succeed.
+    // The con edition and the policy save whole, so editing after a failed read
+    // would save defaults over them.
     if (configFailed || policyFailed) {
         return (
             <div className="admin-section">

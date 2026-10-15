@@ -22,8 +22,8 @@ interface SearchItem {
 
 
 /**
- * Searchable finder over every venue and UW parking lot. Picking a mappable item focuses it
- * on the overview map; venues without coordinates jump straight to their list card.
+ * Search over every venue and UW lot. A mappable pick focuses the map; a venue without
+ * coordinates jumps to its card.
  */
 interface LocationSearchProps {
     items: SearchItem[];
@@ -130,10 +130,9 @@ const LABEL_ZOOM = 17.4;
 const FOCUS_ZOOM = 16.5;
 
 /**
- * Interactive overview map for the admin Locations tab, modeled on the public parking
- * guide and drawn with its pins. Plots every venue (star) and UW visitor lot (P / G) on
- * one map; selecting a venue highlights its suggested lots, and a venue's popup can jump
- * to its card in the list below via `onShowVenue` / `onEditVenue`.
+ * The Locations tab's overview map, drawn with the parking guide's pins: every venue
+ * (star) and UW visitor lot (P / G). Selecting a venue highlights its suggested lots,
+ * and its popup jumps to its card.
  */
 interface LocationsMapProps {
     venues: Venue[];
@@ -230,8 +229,8 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
     const {elements: lotElements} = useMarkerElements(
         map, lots.map(l => ({key: l.code, lng: l.lng, lat: l.lat})));
 
-    // Stacking lives on the wrappers, the elements MapLibre stacks; the selected
-    // venue's bigger star sits a little higher so its middle stays on the venue.
+    // Stacking lives on the wrappers MapLibre stacks; the selected venue's
+    // bigger star sits higher to stay centred.
     useEffect(() => {
         for (const [id, element] of Object.entries(venueElements)) {
             const current = selectedVenue?.id === id;

@@ -7,8 +7,8 @@ const MAX_IMPORT_ROWS = 1000;
 const foldType = (raw: string) => raw.toLowerCase().replace(/[\s_-]+/g, '');
 
 /**
- * Every spelling a type column may use: the stored value and both of the labels
- * the panel shows for it, plus the short "comp". Anything else imports as normal.
+ * Every spelling of a type: the stored value, both panel labels, and "comp".
+ * Anything else imports as normal.
  */
 const TYPE_BY_NAME = new Map<string, TicketType>([
     ...TICKET_TYPES.flatMap(tt =>
@@ -210,8 +210,8 @@ export const validateRows = (
     const deduped = new Map<string, ParsedRow>();
     for (const r of parsedRows) deduped.set(r.email, r);
 
-    // Priority: existing rows with field differences first (need admin decision),
-    // then new adds, then existing rows that are identical (no-op).
+    // Changed existing rows first (they need a decision), then new rows, then
+    // unchanged ones.
     const rank = (r: ParsedRow): number => {
         if (r.action === 'add') return 1;
         const hasDiff =

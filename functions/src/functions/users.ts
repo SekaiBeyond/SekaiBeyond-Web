@@ -31,8 +31,8 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     await checkRateLimit(uid);
 
     // ID tokens outlive account deletion by up to an hour, so a deleted user's
-    // client (AuthProvider auto-creates missing profiles) could resurrect the
-    // doc after onUserDeleted ran. Only Auth itself knows the account is gone.
+    // client could recreate the doc after onUserDeleted ran; only Auth knows
+    // the account is gone.
     try {
         await getAuth().getUser(uid);
     } catch (err: unknown) {
@@ -84,15 +84,12 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
 
 /**
  * Credit a new account with the paid events its email was scanned into. The
- * scanner credits the holder as it scans, but only an account that already
- * carried the ticket's email, and getMyTickets catches later sign-ups only
- * while the event is live. Anyone who signs up after the event ends, archived
- * or not, is caught here, the one moment that gap opens.
+ * scanner only credits accounts that already existed, and getMyTickets only
+ * while the event is live, so a sign-up after the event ends is caught here.
  *
- * Only a verified email may claim the tickets sent to it, so the caller checks
- * the token says so: sign-in is Google only today, but that is a setting in the
- * Firebase console, not something this code enforces. The collection-group query
- * rides the attendees.email override in firestore.indexes.json.
+ * Only a verified email may claim its tickets, so the caller checks the token.
+ * The collection-group query uses the attendees.email override in
+ * firestore.indexes.json.
  */
 async function creditScannedTickets(
     userRef: FirebaseFirestore.DocumentReference,
@@ -109,8 +106,8 @@ async function creditScannedTickets(
     }
     if (eventRefs.size === 0) return;
 
-    // A deleted event's ticket list outlives it when its cleanup fails; an
-    // event that is gone must not land in attendedEvents.
+    // A deleted event's tickets outlive it when its cleanup fails; a gone event
+    // must not land in attendedEvents.
     const events = await db.getAll(...eventRefs.values());
     const ids = events.filter(e => e.exists).map(e => e.id);
     if (ids.length > 0) await userRef.update({attendedEvents: FieldValue.arrayUnion(...ids)});
@@ -130,14 +127,12 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     }
 
     const data = userSnap.data()!;
-    // A section the owner has switched off is emptied here rather than at the
-    // client, so hiding it actually withholds the data instead of declining to
-    // draw it. The flags ride along so a viewer reads "kept private" rather than
-    // the empty state, which would otherwise claim they have earned nothing.
+    // Sections the owner has switched off are emptied here, not at the client,
+    // so the data is actually withheld. The flags go along so the viewer reads
+    // "kept private" rather than an empty state.
     const visibility = readVisibility(data.profileVisibility);
-    // Your own profile is never filtered: /profile with your own uid in the
-    // query string is still your profile, and hiding it from yourself would
-    // leave no way to tell a hidden section from an empty one.
+    // Your own profile is never filtered, or you couldn't tell a hidden section
+    // from an empty one.
     const isSelf = request.auth.uid === targetUid;
     const showBadges = isSelf || visibility.badges;
     const showEvents = isSelf || visibility.events;
@@ -151,8 +146,8 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         }
     }
 
-    // Restrict eventStaffEvents to past events only — upcoming-event ids would
-    // leak unpublished events whose titles are otherwise gated by Firestore rules.
+    // Past events only: upcoming ids would leak unpublished events whose titles
+    // the rules withhold.
     const rawStaffEvents = showEvents ? toStringIds(data.eventStaffEvents) : [];
     const pastEvents = await pastEventIds(rawStaffEvents);
     const eventStaffEvents = rawStaffEvents.filter(id => pastEvents.has(id));
@@ -167,8 +162,8 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         badges: showBadges ? (data.badges ?? []) : [],
         badgeEarnedAt,
         group: normalizeGroup(data.group),
-        // Only the membership's existence is public — the expiry date is the
-        // owner's business and stays on their own profile.
+        // Only whether there is a membership; the expiry is the owner's
+        // business.
         isMember: isMembershipActive(data),
         title: data.title ?? "",
         titleCn: data.titleCn ?? "",
@@ -177,12 +172,9 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
 });
 
 /**
- * Switch sections of the caller's profile on or off for everybody else. Self
- * only, no admin path — the same shape as setPassportPrivacy, which owns the
- * coarser "is there a passport page at all" switch next to these.
- *
- * Updates are partial: the settings tab saves one switch at a time, and merging
- * means two browser tabs left open can't undo each other's unrelated changes.
+ * Switch sections of the caller's own profile on or off for everyone else, like
+ * setPassportPrivacy. Partial updates, so two open tabs can't undo each other's
+ * switches.
  */
 export const setProfileVisibility = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -208,8 +200,8 @@ interface ProfileTarget {
     callerName: string;
 }
 
-// Resolves whose profile an edit applies to. Editing your own is always allowed;
-// editing someone else's requires admin rights over their group.
+// Whose profile an edit applies to: your own always, someone else's only with
+// admin rights over their group.
 async function resolveProfileTarget(callerUid: string, rawTargetUid: unknown): Promise<ProfileTarget> {
     const targetUid = rawTargetUid === undefined || rawTargetUid === null
         ? callerUid
@@ -241,16 +233,14 @@ async function resolveProfileTarget(callerUid: string, rawTargetUid: unknown): P
     };
 }
 
-// Uploading your own avatar or banner is a membership perk, but staff+ keep it
-// without holding a passport — otherwise this would quietly take it away from
-// every staff member who has never bought one. The only people blocked are plain
-// users with no active membership.
+// Uploading your own avatar or banner is a membership perk that staff+ keep
+// without one; only plain users with no active membership are blocked.
 function canSetOwnImages(userData: FirebaseFirestore.DocumentData): boolean {
     return isMembershipActive(userData) || normalizeGroup(userData.group) !== "user";
 }
 
-// The checks every profile image upload makes before anything touches Storage:
-// an allowed type, within the size limit, and bytes that really are that type.
+// Checks every profile image upload makes before touching Storage: allowed
+// type, size, and bytes that match the type.
 function decodeProfileImage(input: {data?: string; contentType?: string}): {buffer: Buffer; contentType: string} {
     const {data: dataBase64, contentType} = input;
 
@@ -275,8 +265,7 @@ function decodeProfileImage(input: {data?: string; contentType?: string}): {buff
     return {buffer, contentType};
 }
 
-// Saves an image at a fixed path and returns a URL that busts the year-long
-// cache, since every upload for a user overwrites the same object.
+// Each upload overwrites the same path, so the URL busts the year-long cache.
 async function saveProfileImage(path: string, buffer: Buffer, contentType: string): Promise<string> {
     const file = getStorage().bucket().file(path);
     await file.save(buffer, {
@@ -285,8 +274,8 @@ async function saveProfileImage(path: string, buffer: Buffer, contentType: strin
     return `${await getDownloadURL(file)}&t=${Date.now()}`;
 }
 
-// The photo a user reverts to once their uploaded avatar is gone. For the caller
-// this is on their token; for anyone else it has to come from their auth record.
+// The photo a user reverts to without an uploaded avatar, from their auth
+// record.
 async function googlePhotoURL(uid: string): Promise<string> {
     try {
         return (await getAuth().getUser(uid)).photoURL ?? "";
@@ -346,8 +335,7 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     const input = request.data as {data?: string; contentType?: string; targetUid?: string};
     const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input.targetUid);
 
-    // Uploading your own avatar is a membership perk, but staff+ keep it without
-    // holding a passport. An admin can still give an avatar to anyone.
+    // A membership perk for your own avatar; admins can give one to anyone.
     if (isSelf && !canSetOwnImages(targetData)) {
         throw new HttpsError("permission-denied", "An active membership is required to upload an avatar.");
     }
@@ -380,8 +368,8 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     const input = request.data as {targetUid?: string};
     const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input?.targetUid);
 
-    // Someone without an active membership can't upload an avatar, but may remove
-    // one an admin gave them.
+    // Without a membership you can't upload an avatar, but may remove one an
+    // admin gave you.
     const hasUploadedAvatar = typeof targetData.photoURL === "string"
         && targetData.photoURL.includes("firebasestorage.googleapis.com");
     if (isSelf && !canSetOwnImages(targetData) && !hasUploadedAvatar) {
@@ -413,9 +401,8 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     return {photoURL};
 });
 /**
- * The image across the top of the caller's profile. The same membership perk as
- * an uploaded avatar, but self only: admins can take a banner down
- * (deleteBanner) but never put one up for somebody else.
+ * The image across the top of the caller's profile. A membership perk like an
+ * avatar, but self only: admins can take a banner down, never put one up.
  */
 export const uploadBanner = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -437,9 +424,8 @@ export const uploadBanner = onCall({maxInstances: 10}, async (request) => {
 
     return {url: downloadUrl};
 });
-// Removing your banner needs no membership, so one uploaded before a membership
-// lapsed can still be taken down — the lapsed member just can't put up another.
-// An admin can remove anyone's they manage, for moderation.
+// No membership needed to remove your banner; admins can remove anyone's they
+// manage.
 export const deleteBanner = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
 
@@ -564,9 +550,8 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 
     return {oldGroup, newGroup};
 });
-// Membership is a time-boxed attribute, not a group. This never writes `group` —
-// changeUserGroup is the only function that does, so granting or revoking
-// membership can't promote or demote anyone.
+// Membership is time-boxed, not a group: this never writes `group`, which only
+// changeUserGroup does.
 export const setMembership = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -618,8 +603,8 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
         }
 
         const targetData = targetSnap.data()!;
-        // Same hierarchy guard as changeUserGroup: core-staff act on users and
-        // staff, the president on anyone.
+        // changeUserGroup's guard: core-staff act on users and staff, the
+        // president on anyone.
         if (callerGroup !== "president" && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetData.group))) {
             throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
         }
@@ -771,8 +756,8 @@ export const requestAccountDeletion = onCall({maxInstances: 10}, async (request)
         }
         const targetData = targetSnap.data()!;
 
-        // Deleting your own account is a right every signed-in user has, membership
-        // or not. Deleting someone else's still requires admin rights over them.
+        // Anyone may delete their own account; someone else's needs admin rights
+        // over them.
         if (callerUid !== targetUid) {
             if (!callerSnap.exists) {
                 throw new HttpsError("permission-denied", "Insufficient permissions.");
@@ -852,9 +837,8 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
     return {cancelled: true};
 });
 // retry: a dropped event would leave the Auth account alive with no user doc,
-// silently undoing the deletion on next sign-in. Re-runs are safe: deleteUser
-// tolerates user-not-found, the image deletes ignore missing files, and the
-// audit record writes to a fixed id.
+// undoing the deletion at next sign-in. Re-runs are safe: every step tolerates
+// what's already gone, and the record has a fixed id.
 export const onUserDeleted = onDocumentDeleted(
     {document: "users/{uid}", maxInstances: 10, retry: true},
     async (event) => {
@@ -871,12 +855,10 @@ export const onUserDeleted = onDocumentDeleted(
             }
         }
 
-        // The client can recreate the doc between the TTL delete and the auth
-        // deletion above (createUserProfile's existence check still passes in
-        // that window). Deleting a missing doc is a no-op that fires no event,
-        // so this only re-triggers the function when a resurrected doc really
-        // existed — and the re-fired run's own delete is then a no-op, ending
-        // the chain. Errors propagate so retry re-delivers the event.
+        // The client can recreate the doc between the TTL delete and the Auth
+        // deletion above. Deleting a missing doc fires nothing, so this
+        // re-triggers only for a doc that really came back, and that run's
+        // delete ends the chain. Errors propagate so retry re-delivers.
         await db.collection("users").doc(uid).delete();
 
         for (const path of [`avatars/${uid}`, `banners/${uid}`]) {
@@ -888,8 +870,7 @@ export const onUserDeleted = onDocumentDeleted(
         }
 
         try {
-            // Fixed id: retries and the resurrected-doc re-fire overwrite the
-            // same record instead of duplicating the audit entry.
+            // Fixed id, so retries and re-fires overwrite one record.
             await recordRef(`account-deleted-${uid}`).set(recordDoc("account-deleted", {
                 targetUid: uid,
                 targetName: data?.displayName ?? "",

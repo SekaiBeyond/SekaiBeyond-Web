@@ -1,22 +1,17 @@
 import type { CSSProperties } from 'react';
 
 /**
- * The main hall floor plan the Artist Alley section draws: the HUB Ballroom as
- * laid out for the con, transcribed from HUB's reservation diagram. Like the
- * hero's VENUE_MAP_URL it is fixed to HUB — if the con moves hall, or HUB redraws
- * the tables, this file is what changes. Which vendor sits at each table is admin data
- * (Admin → Con Content → Artist Alley); the tables themselves are not.
+ * The main hall floor plan for Artist Alley: the HUB Ballroom as laid out for the con,
+ * from HUB's reservation diagram. Fixed to HUB like the hero's VENUE_MAP_URL; if the
+ * hall or its tables change, this file does. Which vendor sits where is admin data.
  *
- * Only what a visitor walks past is drawn: the stage, the free cheering space,
- * the photo booth, the tables, and the doors the diagram marks as ways in and
- * out. Catering staging, A/V points and keep-clear zones are crew detail.
+ * Only what a visitor walks past is drawn: stage, cheering space, photo booth, tables
+ * and doors.
  *
- * The plan is one CSS grid, set out the way the diagram is drawn: west wall at
- * the top, stage on the left, north on the right. On a narrow screen there is no
- * room for fifteen tables abreast, so the stylesheet turns the same grid a
- * quarter turn anticlockwise — north up, stage at the bottom — instead of
- * squeezing or scrolling it. A rotation and not a transpose: a mirrored plan
- * would put row A on the wrong hand for anyone standing in the hall with it.
+ * One CSS grid, oriented like the diagram: west wall at the top, stage on the left,
+ * north on the right. On narrow screens the stylesheet turns it a quarter turn
+ * anticlockwise (north up) instead of squeezing it; a rotation, not a transpose, so
+ * row A stays on the right hand for someone standing in the hall.
  */
 
 export const HALL_ROWS = [
@@ -30,9 +25,9 @@ export const HALL_ROWS = [
 export type HallRow = typeof HALL_ROWS[number]['letter']
 
 /**
- * Every table on the plan, A1 to E3, in the order the page and the stored list
- * keep them. Mirrored by CON_HALL_TABLES in functions/src/functions/admin.ts,
- * which refuses a table not on this list.
+ * Every table, A1 to E3, in the order the page and the stored list keep.
+ * Mirrored by CON_HALL_TABLES in functions/src/functions/admin.ts, which
+ * refuses any other.
  */
 export const HALL_TABLES: string[] = HALL_ROWS.flatMap(({letter, tables}) =>
     Array.from({length: tables}, (_, i) => `${letter}${i + 1}`));
@@ -53,9 +48,8 @@ type Track = readonly [landscape: string, portrait: string]
 const WALL: Track = ['4px', '4px'];
 
 /**
- * South wall to north wall. Each table is two of the half-table tracks wide, so
- * the E tables, which the diagram puts between the tables above them, still
- * land on a grid line.
+ * South wall to north wall. Each table is two half-table tracks wide, so the E
+ * tables, set between the tables above them, still land on a grid line.
  */
 const COLUMNS: Track[] = [
     WALL,
@@ -71,8 +65,8 @@ const COLUMNS: Track[] = [
 ];
 
 /**
- * West wall to east wall. Vendors sit back to back in the narrow gaps between
- * A and B and between C and D, so the wide tracks are the aisles visitors walk.
+ * West wall to east wall. Vendors sit back to back between A and B and between
+ * C and D; the wide tracks are the aisles.
  */
 const ROWS: Track[] = [
     WALL,
@@ -104,11 +98,9 @@ interface Area {
 }
 
 /**
- * Grid lines for both orientations, as custom properties the stylesheet picks
- * between in its container query. Turning the plan anticlockwise sends the west
- * wall (the top) to the left and the north wall (the right) to the top, so a
- * landscape row becomes the portrait column of the same index, and landscape
- * column c becomes portrait row `n − c`, counted down from the north wall.
+ * Grid lines for both orientations, as custom properties the stylesheet's
+ * container query picks between. Turned anticlockwise, landscape row r becomes
+ * portrait column r, and landscape column c becomes portrait row `n − c`.
  */
 const place = ({col, colSpan, row, rowSpan}: Area): CSSProperties => ({
     '--l-col': `${col + 1} / span ${colSpan}`,
@@ -147,11 +139,9 @@ export const HALL_LANDMARKS: {kind: LandmarkKind; style: CSSProperties}[] = [
 ];
 
 /**
- * The doors the diagram marks with an arrow out: two to the south prefunction,
- * one to the balcony, two up to the second floor and the Mural Lounge, and one
- * to the north prefunction. Each sits in a wall track. `end` is the stage or the
- * north wall, `side` the long west or east wall — the stylesheet needs to know
- * which way the door runs to inset it from the corners.
+ * The doors the diagram marks as exits, each in a wall track. `end` is the stage
+ * or north wall, `side` the long west or east wall, which tells the stylesheet
+ * how to inset it from the corners.
  */
 export const HALL_DOORS: {wall: 'end' | 'side'; style: CSSProperties}[] = [
     {wall: 'end', style: place({col: 0, colSpan: 1, row: 1, rowSpan: 2})},

@@ -30,8 +30,7 @@ export async function checkRateLimit(uid: string): Promise<void> {
 
 export const ADMIN_GROUPS = ["core-staff", "president"];
 
-// `group` is a pure role ladder. Whether someone has paid lives in
-// membershipExpiresAt and never moves them between these values.
+// `group` is a role ladder only; membership lives in membershipExpiresAt.
 export const USER_GROUPS = ["user", "staff", "core-staff", "president"] as const;
 export type UserGroup = typeof USER_GROUPS[number];
 
@@ -43,9 +42,8 @@ export function normalizeGroup(raw: unknown): UserGroup {
     return raw === "staff" || raw === "core-staff" || raw === "president" ? raw : "user";
 }
 
-// Validates a group supplied by a caller. Unlike normalizeGroup this rejects
-// rather than coerces, so `changeUserGroup` can't be handed an unknown value
-// and silently treat it as "user".
+// Unlike normalizeGroup this rejects rather than coerces, so `changeUserGroup`
+// can't silently treat an unknown value as "user".
 export function isValidGroup(raw: unknown): raw is UserGroup {
     return typeof raw === "string" && (USER_GROUPS as readonly string[]).includes(raw);
 }

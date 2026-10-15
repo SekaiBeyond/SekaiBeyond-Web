@@ -3,10 +3,9 @@ import { cornersOf, type JsQRFn, loadJsQR, type QrCorners } from './qrDecode';
 
 interface UseQrScannerOptions {
     /**
-     * Invoked with each decoded QR payload. Return `true` once a match has been
-     * handled to stop the camera and the scan loop; return `false` to keep
-     * scanning (e.g. ignore an irrelevant code). `corners` locate the code on
-     * `canvasRef`, which still holds the frame it was read from.
+     * Called with each decoded payload: return `true` once handled to stop the
+     * camera, `false` to keep scanning. `corners` locate the code on
+     * `canvasRef`, which still holds its frame.
      */
     onDecode: (raw: string, corners: QrCorners) => boolean;
     /** Message shown when the camera can't be started (permissions, no device, …). */
@@ -29,24 +28,23 @@ export interface QrScanner {
 }
 
 /**
- * Drives a back-camera QR scanning loop with jsQR. Owns the whole camera
- * lifecycle — `getUserMedia`, the `requestAnimationFrame` decode loop, and
- * teardown — and reports each decoded payload through `onDecode`. Callers just
- * render `videoRef`/`canvasRef` and decide what a decoded value means.
+ * A back-camera QR scanning loop with jsQR, owning the camera from getUserMedia
+ * through the rAF decode loop to teardown. Callers render
+ * `videoRef`/`canvasRef` and decide what a payload means.
  */
 export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const rafRef = useRef<number | null>(null);
-    // Moved on by every stop, so a start still waiting on the camera can tell it
-    // was called off and leave the camera off instead of turning it on.
+    // Bumped by every stop, so a start still waiting on the camera knows it was
+    // called off.
     const sessionRef = useRef(0);
     const startingRef = useRef(false);
     const jsQRRef = useRef<JsQRFn | null>(null);
 
-    // Keep the latest options in a ref so the rAF loop never reads a stale
-    // closure and `tick`/`startCamera` stay referentially stable.
+    // So the rAF loop never reads a stale closure and the callbacks stay
+    // stable.
     const optionsRef = useRef(options);
     optionsRef.current = options;
 
@@ -92,9 +90,8 @@ export function useQrScanner(options: UseQrScannerOptions): QrScanner {
     }, [stopCamera]);
 
     const startCamera = useCallback(async () => {
-        // One start at a time. The Start button stays up until the camera is
-        // playing, and a second press while getUserMedia is in flight would open
-        // a second stream that nothing ever stops.
+        // One start at a time: a second press during getUserMedia would open a
+        // stream nothing stops.
         if (streamRef.current || startingRef.current) return;
         startingRef.current = true;
         const session = sessionRef.current;

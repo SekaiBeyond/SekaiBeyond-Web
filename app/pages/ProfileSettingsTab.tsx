@@ -6,13 +6,9 @@ import { PRIVACY_ROWS, type PrivacyKey, privacyRow, privacyStateLabel, readVisib
 import type { ShowToast } from '~/lib/useToasts';
 
 /**
- * Every privacy switch, read from the signed-in profile and saved one at a
- * time. Saving one switch leaves the others alone, so a second browser tab left
- * open on this page can't undo a change made here.
- *
- * A refresh that fails is swallowed, as it is everywhere else: the write landed,
- * and reporting failure would be a lie the user would act on. The saved value is
- * held locally so the switch stays where the user put it either way.
+ * Every privacy switch, saved one at a time so a second open tab can't undo a
+ * change. A failed refresh is swallowed: the write landed. The saved value is
+ * held locally either way.
  */
 function usePrivacySettings(showToast: ShowToast): {
     values: Record<PrivacyKey, boolean>;
@@ -78,16 +74,10 @@ const PrivacySwitch = ({checked, busy, label, onChange}: {
 );
 
 /**
- * The Settings tab of /profile — what other people are shown.
- *
- * Every switch here is enforced server-side: a hidden section is left out of
- * getPublicProfile entirely, rather than fetched and not drawn, and a private
- * passport page is refused by getPassportPublicProfile. The passport page switch
- * is also an icon on the owner's own passport page, which saves through the same
- * call and refreshes the profile this tab reads.
- *
- * Rendered inside the profile page, which owns the nav, the sign-in wall and the
- * toasts — so this is only the card.
+ * /profile's Settings tab: what other people are shown. Every switch is enforced
+ * server-side (getPublicProfile leaves hidden sections out;
+ * getPassportPublicProfile refuses a private passport page). Only the card; the
+ * profile page owns the nav, sign-in wall and toasts.
  */
 export const ProfileSettingsTab = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();

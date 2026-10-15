@@ -23,8 +23,8 @@ export const Tickets = () => {
             />
 
             <div className="sbc-ticket-grid">
-                {/* Keyed by position, not by content or id: tier ids are generated
-                    and perk text is free-form, so neither is guaranteed unique. */}
+                {/* By position: tier ids are generated and perk text free-form, so
+                    neither is unique. */}
                 {content.tickets.map((tier, i) => {
                     const earlyBird = activeEarlyBird(tier, now);
                     const fee = ticketFeeFor(earlyBird ? earlyBird.price : tier.price, content.ticketFee);

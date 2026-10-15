@@ -13,8 +13,8 @@ interface QrSpotsMapProps {
 }
 
 /**
- * Read-only map of every QR code that has a pinned spot, with a count marker
- * heat-colored by scan volume — the "where are my hotspots" view.
+ * Every QR code with a pinned spot, with a count marker coloured by scan
+ * volume.
  */
 export const QrSpotsMap = ({codes, onSelect, height = 340}: QrSpotsMapProps) => {
     const {isEnglish} = useLanguage();

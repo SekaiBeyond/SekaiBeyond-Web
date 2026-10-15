@@ -2,9 +2,8 @@ import { type QueryDocumentSnapshot } from 'firebase/firestore';
 import { createCollectionCache } from './collectionCache';
 
 /**
- * A traffic source the QR tool can tag tracked codes with. Creating a tracked
- * code "per platform" makes one code per selected platform, all pointing at the
- * same target URL, so per-code scan counts compare click-through by platform.
+ * A traffic source for tracked QR codes: one code per platform for the same
+ * URL, so scan counts compare click-through.
  */
 export interface SocialPlatform {
     id: string;
@@ -16,10 +15,9 @@ export interface SocialPlatform {
 }
 
 /**
- * Built-in platform list. These seed the editable `socialPlatforms` collection
- * and act as a fallback so per-platform tracking works before any admin
- * customises the list (and never ends up with an empty picker).
- * Stable ids let {@link seedSocialPlatforms} re-seed idempotently.
+ * The built-in platforms. They seed `socialPlatforms` and stand in until it has
+ * entries, so the picker is never empty. Stable ids keep {@link
+ * seedSocialPlatforms} idempotent.
  */
 export const DEFAULT_SOCIAL_PLATFORMS: SocialPlatform[] = [
     {id: 'instagram', label: 'Instagram', order: 0},
@@ -48,19 +46,14 @@ const cache = createCollectionCache<SocialPlatform>('socialPlatforms', mapDoc);
 const sortPlatforms = (list: SocialPlatform[]): SocialPlatform[] =>
     [...list].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
 
-/**
- * The effective platform list: the Firestore collection once it has entries,
- * otherwise the built-in defaults. Deleting every custom platform safely falls
- * back to defaults, so the picker is never empty.
- */
+/** The collection once it has entries, else the built-in defaults. */
 function effective(items: SocialPlatform[] | null): SocialPlatform[] {
     return items && items.length ? sortPlatforms(items) : DEFAULT_SOCIAL_PLATFORMS;
 }
 
 /**
- * Hook returning the live effective platform list. `customized` is true once the
- * Firestore collection has its own entries (i.e. defaults have been seeded/edited),
- * false while the built-in defaults are standing in.
+ * The live platform list. `customized` is true once the collection has its own
+ * entries.
  */
 export function useSocialPlatforms(): {
     platforms: SocialPlatform[];
@@ -82,10 +75,7 @@ export const getSocialPlatform = (
     platforms: SocialPlatform[] = socialPlatformsSnapshot(),
 ): SocialPlatform | undefined => platforms.find(p => p.id === id);
 
-/**
- * Display name for a platform tag stored on a QR code. Falls back to the raw
- * id so codes tagged with a since-deleted platform still show something useful.
- */
+/** A platform tag's display name, or the raw id for a deleted platform. */
 export function socialPlatformName(
     id: string,
     isEnglish: boolean,

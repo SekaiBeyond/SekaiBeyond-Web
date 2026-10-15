@@ -279,8 +279,8 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
     const here = {lat: draft.lat, lng: draft.lng};
     const sameSpot = (p: {lat: number; lng: number}) => metersBetween(p, here) < 1;
 
-    // Walking time from the venue as it stands in the form: from a lookup of this
-    // spot, from the last sync if the venue hasn't moved, or else a straight-line estimate.
+    // Walking time from the venue as the form has it: from a lookup of this spot, from the
+    // last sync if it hasn't moved, else a straight-line estimate.
     const synced = venueId ? parking.walking[venueId] : undefined;
     const walkLabel = (lot: UwLot): string => {
         const fromLookup = lookup && sameSpot(lookup.building) ? lookup.nearestLots.find(n => n.code === lot.code) : undefined;

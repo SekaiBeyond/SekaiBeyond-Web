@@ -45,10 +45,10 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// For trying the site against the local Firebase emulators (Auth, Firestore and
-// Functions on their default ports) rather than production. Pair it with a demo-
-// VITE_FIREBASE_PROJECT_ID, which the emulators treat as offline-only. App Check
-// is left off: the emulators don't enforce it.
+// Points the site at the local emulators (Auth, Firestore and Functions on their
+// default ports). Pair it with a demo- VITE_FIREBASE_PROJECT_ID, which the
+// emulators treat as offline-only. App Check stays off: the emulators don't
+// enforce it.
 const USE_EMULATORS = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true';
 
 let app: FirebaseApp;
@@ -63,9 +63,8 @@ function getFirebaseApp() {
         if (typeof window !== "undefined") {
             const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
-            // Enable debug token if VITE_APP_CHECK_DEBUG_TOKEN is provided.
-            // Set it to 'true' in .env to generate a token in the console, 
-            // or paste a specific debug token.
+            // 'true' generates a debug token in the console; anything else is
+            // used as the token.
             if (import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN) {
                 (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN =
                     import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN === 'true'
@@ -119,8 +118,7 @@ export const callClaimEventCode = (data: {code: string}) =>
         eventPoster: string;
     }>(getFunctions(), 'claimEventCode')(data);
 
-/** What one typed code turned out to be. A passport is claimed by its slip's key
- * alone. */
+/** What one typed code turned out to be. */
 export type RedeemResult =
     | {
     kind: 'badge';
@@ -248,14 +246,11 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
         ticketIndex: number;
         ticketType: string;
         userCheckedIn?: boolean;
-        // Display name of the staff member who first redeemed the ticket
-        // (server returns redeemedByName, not a raw UID). Only set when
-        // alreadyRedeemed is true.
+        // Who first redeemed it, by name; only when alreadyRedeemed.
         redeemedBy?: string;
         redeemedAt?: string | null;
-        // On success: how much longer this scanner may scan the ticket again and
-        // still be told it succeeded. A duration rather than a time, so the
-        // scanner can time it on its own clock.
+        // On success: how much longer a rescan here still reads as success, as a
+        // duration so the scanner times it on its own clock.
         graceRemainingMs?: number;
     }>(getFunctions(), 'redeemTicket')(data);
 
@@ -282,19 +277,16 @@ export interface HeldTicketEvent {
 }
 
 /**
- * The caller's own tickets for events still to finish, matched on the email the
- * ticket was bought with — spent ones included, since a ticket stays viewable
- * for the length of its event. Nothing comes back once the event has ended.
- * Attendee docs are staff-only in Firestore, so this is the only way to them —
- * see getMyTickets in functions.
+ * The caller's tickets for events not yet over, matched on the purchase email,
+ * scanned ones included. Attendee docs are staff-only, so this is the only way
+ * to them (getMyTickets in functions).
  */
 export const callGetMyTickets = () =>
     httpsCallable<Record<string, never>, {events: HeldTicketEvent[]}>(getFunctions(), 'getMyTickets')({});
 
 /**
- * A ticket email that turned out to belong to a registered account. `uid` and
- * `displayName` come back for core staff only — event staff are told that a link
- * exists, not whose it is.
+ * A ticket email that belongs to a registered account. `uid` and `displayName`
+ * only come back for core staff.
  */
 export interface AttendeeAccount {
     email: string;
@@ -303,9 +295,8 @@ export interface AttendeeAccount {
 }
 
 /**
- * Which of these ticket emails have an account behind them. Only the matches
- * come back, so an email missing from the result is one with no account — see
- * getAttendeeAccounts in functions.
+ * Which of these ticket emails have an account; only matches come back
+ * (getAttendeeAccounts in functions).
  */
 export const callGetAttendeeAccounts = (data: {eventId: string; emails: string[]}) =>
     httpsCallable<typeof data, {accounts: AttendeeAccount[]}>(getFunctions(), 'getAttendeeAccounts')(data);
@@ -365,11 +356,10 @@ export const callGetTicketEmailQuota = () =>
         queueCap: number;
     }>(getFunctions(), 'getTicketEmailQuota')({});
 
-// Panel-wide outbound-email capacity, for the admin Email Quota tool. Broader
-// than callGetTicketEmailQuota (which is scoped to one event's send flow): it
-// takes a live reading from the email provider, so `providerReported` matches
-// the provider's own dashboard, while `sentToday` is the local counter that
-// gates sends (provider count + in-flight reservations). Core-staff+.
+// Outbound-email capacity for the Email Quota tool, core-staff+.
+// `providerReported` is a live reading that matches the provider's dashboard;
+// `sentToday` is the local counter that gates sends, including in-flight
+// reservations.
 export const callGetEmailQuotaStatus = () =>
     httpsCallable<Record<string, never>, {
         provider: {
@@ -378,12 +368,10 @@ export const callGetEmailQuotaStatus = () =>
             windowKind: 'rolling24h' | 'calendarDay';
             fromAddress: string;
         };
-        // null when the provider's usage could not be read at all — must not
-        // be rendered as zero.
+        // null when unreadable, never to be shown as zero.
         providerReported: number | null;
         readingSource: 'live' | 'cached' | 'unavailable';
-        // The server stopped counting at its page budget, so providerReported
-        // is a lower bound rather than an exact figure.
+        // The count stopped at its page budget, so providerReported is a floor.
         usageTruncated: boolean;
         sentToday: number;
         dailyCap: number;
@@ -421,20 +409,20 @@ export const callSaveSiteConfig = (data: {
     senderPrefix?: string,
     conEdition?: ConEdition | null
 }) =>
-    // `socialLinks` comes back when it was sent, as stored: a Xiaohongshu share
-    // link resolved to the profile it opens.
+    // `socialLinks` comes back as stored, with a Xiaohongshu share link
+    // resolved to its profile.
     httpsCallable<typeof data, {saved: boolean, socialLinks?: SocialLinks}>(getFunctions(), 'saveSiteConfig')(data);
 
-// Only the sections present in `data` are written, so each Save button in the
-// Con Content tab leaves the sections it does not own untouched.
+// Only the sections in `data` are written, so each Save button leaves the
+// others alone.
 export const callSaveConContent = (data: Partial<ConContent>) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveConContent')(data);
 
 export const callSaveTeamMembers = (data: {teamMembers: any[]}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveTeamMembers')(data);
 
-// Public resolver: returns team members with account-linked fields (role/photo)
-// filled from the linked account's live data. Callable without auth.
+// Public: team members with account-linked fields filled from the account's
+// live data.
 export const callGetPublicTeamMembers = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getPublicTeamMembers')({});
 
@@ -444,9 +432,8 @@ export const callGetSenderSettings = () =>
         defaultPrefix: string
     }>(getFunctions(), 'getSenderSettings')({});
 
-// Admin editor read: the full roster (incl. linked-account uid + follow flags) from
-// the server-only teamRoster doc. Staff+ only. Public config carries a display-only
-// projection, so the editor can't source uid/flags from there.
+// The full roster, with linked uids and follow flags, from the server-only
+// teamRoster doc. Staff+.
 export const callGetTeamRoster = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getTeamRoster')({});
 
@@ -514,8 +501,8 @@ export const callSaveVenue = (data: {
     nameCn: string;
     lat: number;
     lng: number;
-    buildingCode?: string;
-    suggestedLots?: Array<{code: string; noteEn: string; noteCn: string}>;
+    buildingCode: string;
+    suggestedLots: Array<{code: string; noteEn: string; noteCn: string}>;
 }) => httpsCallable<typeof data, {venueId: string}>(getFunctions(), 'saveVenue')(data);
 
 export interface UwBuildingLookup {
@@ -578,9 +565,8 @@ export const callDeleteSocialPlatform = (data: {id: string}) =>
 export const callSeedSocialPlatforms = () =>
     httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
 
-// Physical passports. callGeneratePassports returns the new keys in bulk; if that
-// export is lost, callExportPassportKeys fetches a selection's again, and
-// callRevealPassportKey one passport's.
+// Physical passports. callGeneratePassports returns the new keys;
+// callExportPassportKeys and callRevealPassportKey serve them again.
 export const callGeneratePassports = (data: {designId: string; count: number}) =>
     httpsCallable<typeof data, {
         designId: string;
@@ -596,8 +582,8 @@ export const callRevealPassportKey = (data: {passportId: string}) =>
     httpsCallable<typeof data, {passportId: string; activationCode: string}>(
         getFunctions(), 'revealPassportKey')(data);
 
-// Admin only, and logged as one record per call. Up to MAX_PASSPORT_KEY_EXPORT
-// ids a call; a passport with no key on file comes back in `missing`.
+// Admin only, recorded once per call, up to MAX_PASSPORT_KEY_EXPORT ids; a
+// passport with no key comes back in `missing`.
 export const callExportPassportKeys = (data: {passportIds: string[]}) =>
     httpsCallable<typeof data, {
         passports: Array<{passportId: string; activationCode: string}>;
@@ -607,9 +593,7 @@ export const callExportPassportKeys = (data: {passportIds: string[]}) =>
 export const callGetPassportPublicProfile = (data: {passportId: string}) =>
     httpsCallable<typeof data, PassportPublicProfile>(getFunctions(), 'getPassportPublicProfile')(data);
 
-// One code or a whole selection; the answer says which ones went and which were
-// left alone, since a claimed or already-deleted passport is skipped rather than
-// failing the call.
+// Claimed and already-gone passports are skipped and reported, not fatal.
 export const callDeletePassports = (data: {passportIds: string[]}) =>
     httpsCallable<typeof data, {
         deleted: string[];
@@ -618,14 +602,11 @@ export const callDeletePassports = (data: {passportIds: string[]}) =>
     }>(getFunctions(), 'deletePassports')(data);
 
 /**
- * Claimed passports only, one at a time, and deliberately not part of
- * callDeletePassports: unbinding a member's passport is done from its own page
- * after reading who holds it, never from a ticked selection.
+ * One claimed passport, from its own page, never from a selection.
  *
- * `subtractDays` takes the term the passport granted back off the holder's
- * membership, floored at today — `daysRemoved` is what was actually taken, which
- * is less whenever the floor is reached and 0 when their membership had already
- * run out. Left off, the membership isn't touched at all.
+ * `subtractDays` takes the term it granted back off the holder's membership,
+ * floored at today; `daysRemoved` is what was actually taken. Left off, the
+ * membership isn't touched.
  */
 export const callDeleteClaimedPassport = (data: {passportId: string; subtractDays: boolean}) =>
     httpsCallable<typeof data, {
@@ -641,13 +622,14 @@ export const callDeleteClaimedPassport = (data: {passportId: string; subtractDay
 export const callSetPassportPrivacy = (data: {hide: boolean}) =>
     httpsCallable<typeof data, {hidePassportPage: boolean}>(getFunctions(), 'setPassportPrivacy')(data);
 
-// Partial on purpose: the settings tab saves one switch at a time and the server
-// merges, so two browser tabs left open can't undo each other's unrelated changes.
+// Partial: the server merges, so two open tabs can't undo each other's switches.
 export const callSetProfileVisibility = (data: {sections: Partial<ProfileVisibility>}) =>
     httpsCallable<typeof data, {visibility: ProfileVisibility}>(getFunctions(), 'setProfileVisibility')(data);
 
-/** `designId` edits that design; without it, `year` is required and a new one is
- * created. A design's year can't be changed after that. */
+/**
+ * `designId` edits that design; without it, `year` is required and a new one is
+ * created. The year is fixed after that.
+ */
 export const callSavePassportDesign = (data: {
     designId?: string;
     year?: number;
@@ -672,8 +654,8 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         isMember: boolean;
         title?: string;
         titleCn?: string;
-        // Sections the owner has switched off arrive empty; these say which, so
-        // the page can tell "kept private" from "none yet".
+        // Hidden sections arrive empty; these say which, so the page can tell
+        // "kept private" from "none yet".
         visibility: {badges: boolean; events: boolean};
     }>(getFunctions(), 'getPublicProfile')(data);
 
@@ -782,11 +764,9 @@ export const functionsErrorDetails = <T = unknown>(err: unknown): T | null => {
 };
 
 const googleProvider = new GoogleAuthProvider();
-// Always show the Google account chooser. Firebase signOut() only clears the
-// app's session, not the browser's Google SSO session, so without this the
-// OAuth flow silently re-authenticates the existing account (most visible in
-// Chrome, where users are signed into Google at the browser level and the
-// FedCM popup auto-selects the returning account) — preventing account switching.
+// Always show the account chooser: signOut() doesn't end the browser's Google
+// session, so otherwise the popup silently picks the same account again and
+// switching accounts is impossible.
 googleProvider.setCustomParameters({prompt: 'select_account'});
 
 export const signInWithGoogle = () => signInWithPopup(getFirebaseAuth(), googleProvider);

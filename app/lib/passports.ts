@@ -6,14 +6,12 @@ import { getFirebaseDb } from './firebase';
 export type PassportStatus = 'unclaimed' | 'claimed';
 
 /**
- * A physical passport. The document id is the public code printed on the
- * sticker, so it is also the URL: /p/<id>.
+ * A physical passport. The doc id is the public code on the sticker, and so the
+ * URL: /p/<id>.
  *
- * Binding is permanent — `ownerUid` and `claimedAt` are written once, by the
- * claim, and never cleared. There is no unbind and no rebind, which is what lets
- * the scan URL be treated as a stable address for a person. Unclaimed stock can
- * be deleted in bulk; a claimed passport can only be deleted from its own admin
- * page, one at a time, which removes it rather than returning it to stock.
+ * Binding is permanent: `ownerUid` and `claimedAt` are written once, by the
+ * claim, so the scan URL is a stable address for a person. Unclaimed stock can
+ * be deleted in bulk; a claimed passport only from its own admin page.
  */
 export interface Passport {
     id: string;
@@ -33,9 +31,8 @@ export interface Passport {
 }
 
 /**
- * What a passport is printed from: the name it goes by and its cover art. A year
- * can have several designs, and no two in the same year share a name in either
- * language.
+ * What a passport is printed from: its name and cover art. A year can have
+ * several designs, with distinct names in both languages.
  */
 export interface PassportDesign {
     id: string;
@@ -45,30 +42,27 @@ export interface PassportDesign {
     /** Optional; the English name stands in when it's blank. */
     nameCn: string;
     coverImageUrl: string;
-    /** Optional art for the outside of the passport — what the public page shows
-     * while it is shut, before the cover flips open. The cover art above stands
-     * in when this is blank, which is what every design did before there were
-     * two of them. */
+    /**
+     * Optional art for the outside, shown while the public page is shut. The
+     * cover art stands in when blank.
+     */
     outerCoverImageUrl: string;
-    /** Days of membership its passports grant. Copied onto each passport at
-     * generation, so an edit only reaches passports generated afterwards. */
+    /**
+     * Days of membership its passports grant, copied onto each at generation.
+     */
     termDays: number;
 }
 
 /**
- * One scanned sticker, resolved for anyone, signed in or not. It is keyed by the
- * printed passport code, never by uid.
- * The owner's uid comes back only to link to their profile; `isOwner` is decided
- * server-side.
- *
- * Mirrors what getPassportPublicProfile returns in
+ * One scanned sticker, resolved for anyone, keyed by the printed code, never by
+ * uid. The owner's uid is only for linking to their profile; `isOwner` is
+ * decided server-side. Mirrors getPassportPublicProfile in
  * functions/src/functions/passports.ts.
  */
 export type PassportPublicProfile =
     | {status: 'invalid'}
     | {status: 'private'}
-    /** designId is absent from a server that predates it. */
-    | {status: 'unclaimed'; designId?: string}
+    | {status: 'unclaimed'; designId: string}
     | {
     status: 'claimed';
     designId: string;
@@ -104,9 +98,8 @@ const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Pas
     };
 };
 
-// Designs are a handful of documents that change a few times a year, and they
-// are publicly readable — the public passport page reads them straight from here
-// while signed out.
+// A handful of public documents that rarely change; the public passport page
+// reads them signed out.
 const designCache = createCollectionCache<PassportDesign>('passportDesigns', docSnap => {
     const data = docSnap.data();
     return {
@@ -127,8 +120,7 @@ export function usePassportDesigns(): {
     refresh: () => Promise<void>;
 } {
     const {items, loading, refresh} = designCache.useItems();
-    // Memoized so the array keeps its identity between renders: consumers put it
-    // in effect dependencies, and a fresh copy each render would re-run them.
+    // Memoized: consumers use it in effect dependencies.
     const designs = useMemo(
         () => [...items].sort((a, b) => b.year - a.year || a.name.localeCompare(b.name)),
         [items],
@@ -141,8 +133,7 @@ export const passportStatusLabel = (status: PassportStatus, isEnglish: boolean):
     return isEnglish ? 'Unclaimed' : '未激活';
 };
 
-/** What a passport is called, on the shelf and on its page: its design's name.
- * Blank while the designs are still loading. */
+/** A passport's name, its design's. Blank while designs load. */
 export const passportName = (design: PassportDesign | undefined, isEnglish: boolean): string =>
     !design ? '' : isEnglish ? design.name : (design.nameCn || design.name);
 
@@ -159,9 +150,9 @@ export const passportScanUrl = (id: string, origin: string): string =>
     `${origin}/p/${encodeURIComponent(id)}`;
 
 /**
- * All passports generated from one design, newest first, for the admin
- * dashboard. Filtering and counting are done on the result: a design is hundreds
- * of documents, and equality on one field needs no composite index.
+ * Every passport from one design, newest first, for the admin dashboard.
+ * Filtered and counted client-side: hundreds of docs, and one equality filter
+ * needs no composite index.
  */
 export async function fetchPassportsByDesign(designId: string): Promise<Passport[]> {
     const snap = await getDocs(query(collection(getFirebaseDb(), 'passports'), where('designId', '==', designId)));
@@ -175,9 +166,8 @@ export async function fetchPassport(id: string): Promise<Passport | null> {
 }
 
 /**
- * Everything one account owns. Rules let a signed-in user read their own
- * passports only through this exact filter, so the ownerUid clause is load
- * bearing rather than an optimization.
+ * Everything one account owns. The rules only let users read their own
+ * passports through this exact filter.
  */
 export async function fetchPassportsByOwner(uid: string): Promise<Passport[]> {
     const snap = await getDocs(query(collection(getFirebaseDb(), 'passports'), where('ownerUid', '==', uid)));
@@ -185,23 +175,28 @@ export async function fetchPassportsByOwner(uid: string): Promise<Passport[]> {
         b.year - a.year || (b.claimedAt?.getTime() ?? 0) - (a.claimedAt?.getTime() ?? 0));
 }
 
-// Printed codes are read back by hand, so the dashes we print for legibility,
-// stray spaces, and lowercase are all folded away before the code is used.
-// Mirrors normalizeCode in functions/src/utils/passports.ts.
+// Typed by hand, so dashes, spaces and case are folded away. Mirrors
+// normalizeCode in functions/src/utils/passports.ts.
 export const normalizePassportCode = (raw: string): string =>
     raw.replace(/[\s-]+/g, '').toUpperCase();
 
 export const PASSPORT_ID_LENGTH = 10;
-/** How many passports one generate call may mint. Mirrors MAX_GENERATE_COUNT in
- * functions/src/utils/passports.ts, which enforces it. */
+/**
+ * Mirrors MAX_GENERATE_COUNT in functions/src/utils/passports.ts, which
+ * enforces it.
+ */
 export const MAX_PASSPORT_GENERATE = 200;
 /** What a new design's term starts at. */
 export const DEFAULT_PASSPORT_TERM_DAYS = 365;
-/** How many passports one delete call may remove. Mirrors MAX_DELETE_COUNT in
- * functions/src/utils/passports.ts, which enforces it. */
+/**
+ * Mirrors MAX_DELETE_COUNT in functions/src/utils/passports.ts, which enforces
+ * it.
+ */
 export const MAX_PASSPORT_DELETE = 200;
-/** How many passports' keys one export call may return. Mirrors
- * MAX_KEY_EXPORT_COUNT in functions/src/utils/passports.ts, which enforces it. */
+/**
+ * Mirrors MAX_KEY_EXPORT_COUNT in functions/src/utils/passports.ts, which
+ * enforces it.
+ */
 export const MAX_PASSPORT_KEY_EXPORT = 500;
 /** Mirrors MAX_GRANT_DAYS in functions/src/utils/membership.ts, which enforces it. */
 export const MAX_PASSPORT_TERM_DAYS = 3650;

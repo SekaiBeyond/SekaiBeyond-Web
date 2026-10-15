@@ -9,8 +9,7 @@ export type SortDir = 'asc' | 'desc';
 export interface Column {
     key: SortKey;
     label: {en: string; cn: string};
-    /** Which way the first click sorts: text reads A–Z, dates read newest
-     * first, because that is what each is usually being looked for. */
+    /** Which way the first click sorts: text A–Z, dates newest first. */
     first: SortDir;
 }
 
@@ -30,11 +29,8 @@ const shortDate = (date: Date | null, isEnglish: boolean): string =>
         : '—';
 
 /**
- * The Holder cell. A claimed passport whose account has since been deleted says
- * so rather than showing a blank — the passport stays bound either way, and that
- * is the one case where an empty cell would be misread as "nobody". When the
- * holders couldn't be read at all, nobody is known to be missing, so it stays
- * blank.
+ * The Holder cell. A holder whose account was deleted says so, since a blank
+ * would read as "nobody"; when holders couldn't be read at all, it stays blank.
  */
 const Holder = ({
                     passport,
@@ -71,8 +67,7 @@ const Holder = ({
                     referrerPolicy="no-referrer"
                 />
             ) : (
-                // An account with no photo, rather than the broken image an
-                // empty src would paint in every row that has one.
+                // No photo: a blank face rather than a broken image.
                 <span className="admin-passport-holder-face admin-passport-holder-face--blank">
                     {Array.from(owner.displayName.trim())[0]?.toUpperCase() ?? '?'}
                 </span>
@@ -151,8 +146,8 @@ export const PassportStockTable = ({
                         role="button"
                         onClick={() => onOpen(passport.id)}
                         onKeyDown={e => {
-                            // Only the row's own keys open it: space on
-                            // the tick box below ticks the box.
+                            // Only the row's own keys; space on the tick box
+                            // ticks it.
                             if (e.target !== e.currentTarget) return;
                             if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
@@ -162,21 +157,16 @@ export const PassportStockTable = ({
                     >
                         <td
                             className="admin-passport-cell-tick"
-                            // The tick cell swallows the click that
-                            // would open the row — except on a claimed
-                            // one, where there is no box to hit and
-                            // opening the passport is exactly where
-                            // whoever clicked it needs to go.
+                            // The tick cell swallows the open, except on a
+                            // claimed row, which has no box.
                             onClick={e => {
                                 if (passport.status !== 'claimed') e.stopPropagation();
                             }}
                         >
                             <input
                                 type="checkbox"
-                                // A row ticked as stock and claimed
-                                // since shows unticked, because it has
-                                // already dropped out of the selection
-                                // everything below acts on.
+                                // Claimed since being ticked: shown unticked,
+                                // as it has left the selection.
                                 checked={passport.status !== 'claimed' && selectedSet.has(passport.id)}
                                 onChange={() => onToggleOne(passport.id)}
                                 disabled={passport.status === 'claimed'}
@@ -201,9 +191,8 @@ export const PassportStockTable = ({
                                     {passportStatusLabel(passport.status, isEnglish)}
                                 </span>
                         </td>
-                        {/* Flagged when there is no holder to
-                                name, so the stacked layout can drop the
-                                line rather than stack a lone dash. */}
+                        {/* Flagged when empty, so the stacked layout drops the
+                            line. */}
                         <td className={`admin-passport-cell-holder${
                             passport.status === 'claimed' && passport.ownerUid
                                 ? '' : ' admin-passport-cell-holder--none'}`}>

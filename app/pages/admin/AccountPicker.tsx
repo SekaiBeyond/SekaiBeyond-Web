@@ -98,8 +98,8 @@ export const AccountPicker = ({
                             {isEnglish ? 'Search failed. Please try again.' : '搜索失败，请重试。'}
                         </p>
                     )}
-                    {/* Both fields match from the start, so say so rather than leaving a
-                        mid-word search looking like the account does not exist. */}
+                    {/* Both fields match from the start, which a mid-word search needs
+                        telling. */}
                     {hasSearched && !failed && searchResults.length === 0 && !searching && (
                         <p className="admin-no-results">
                             {isEnglish

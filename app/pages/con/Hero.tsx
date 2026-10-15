@@ -9,9 +9,8 @@ import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from
 import { Countdown } from '~/pages/con/Countdown';
 
 /**
- * Where the venue name links: the Husky Union Building's Google Maps page. Fixed
- * here rather than read from the venue picked in Admin → Con Content, so if the
- * con moves, change this too, or the new venue's name will open a map of HUB.
+ * The venue name's link: HUB on Google Maps. Fixed here, not taken from the
+ * picked venue, so change it if the con moves.
  */
 const VENUE_MAP_URL = 'https://maps.app.goo.gl/wVdWeZfELBYUEckx9';
 
@@ -38,23 +37,15 @@ export const Hero = () => {
     return (
         <section id="con-home" className="sbc-hero">
             <div className="sbc-hero-media" aria-hidden="true">
-                {/*
-                 * The floor the clip is laid on: whatever it fails to do — a
-                 * request that never answers, the seconds before the first frame —
-                 * ends on this gradient instead of on nothing. It is also the whole
-                 * backdrop when no clip is uploaded, and for reduced-motion visitors.
-                 *
-                 * Both layers are inset-0 absolutes with no z-index, so the order
-                 * they are written in is the order they paint.
-                 */}
+                {/* Under the clip, so a slow or failed load ends on this gradient;
+                    it's the whole backdrop with no clip or for reduced motion. Both
+                    layers are unstacked absolutes, so they paint in source order. */}
                 <div className="sbc-hero-backdrop"/>
 
                 {showClip && (
-                    // Keyed on the source so swapping the clip in the admin panel
-                    // remounts the element; React alone would leave <video> playing
-                    // the file it already loaded, since changing a <source> child
-                    // does nothing without a .load() call. Muted + playsInline, so
-                    // phones autoplay it too.
+                    // Keyed on the source so a new clip remounts it; changing a
+                    // <source> does nothing without .load(). Muted and playsInline
+                    // so phones autoplay it.
                     <video
                         key={heroVideo.webm}
                         className="sbc-hero-clip"
@@ -86,9 +77,7 @@ export const Hero = () => {
                 <h1 className="sbc-hero-title">{t(CON_NAME)}</h1>
                 <p className="sbc-hero-tagline">{t(event.tagline)}</p>
 
-                {/* Carries the `venue` id the old venue section had, so links to
-                    /con#venue still land on where the con is. */}
-                <ul id="venue" className="sbc-hero-meta">
+                <ul className="sbc-hero-meta">
                     <li>
                         <LuCalendar className="sbc-hero-meta-icon" aria-hidden="true"/>
                         <span>

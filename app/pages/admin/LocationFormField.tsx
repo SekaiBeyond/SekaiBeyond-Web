@@ -15,12 +15,9 @@ interface LocationFormFieldProps {
 }
 
 /**
- * Event-editor location controls. The free-text Location fields are the per-event display
- * string (unique to each event). The separate Venue (building) selector drives the parking
- * guide via `event.venueId` — it's independent of the location text.
- *
- * Location is optional: the "Set a custom location" checkbox toggles the free-text fields.
- * When unchecked the location text is cleared and the linked venue's name is shown instead
+ * Event-editor location controls. The free-text Location is the event's own display
+ * string; the Venue selector sets `event.venueId` for the parking guide, independently.
+ * Unticking "Set a custom location" clears the text and shows the venue's name instead
  * (see `eventLocationDisplay`).
  */
 export const LocationFormField = ({

@@ -14,13 +14,10 @@ import { refreshAfterSave, type ShowToast } from '../utils';
 
 const TERM_PRESETS = [30, 90, 180, 365, 730];
 
-/* The shape every frame on the site shows a cover in, from the thumbnail that
-   confirms an activation to the open passport on a desktop screen. The phone lays
-   the art on its side rather than asking for a second shape of its own, so this
-   is the only one a design is ever drawn at. */
+/* The one shape a cover is drawn at, everywhere; the phone lays the art on its
+   side rather than using a second shape. */
 const COVER_ASPECT = 3 / 4;
-/* Written at twice the widest the cover is ever painted — 840px on the largest
-   screen the spread is capped at — so it still holds up on a 2x display. */
+/* Twice the widest it's ever painted (840px), for 2x displays. */
 const COVER_WIDTH = 1680;
 
 /** Mirrors shownNames in functions/src/functions/passports.ts, which enforces it. */
@@ -39,12 +36,9 @@ interface PassportDesignsSectionProps {
 }
 
 /**
- * The designs passports are generated from: a name, the year it belongs to, the
- * cover art the shelf and the public passport page render, and the membership
- * term its passports grant. A year can have several designs, so they're listed
- * under their year and a name may not repeat within one. The year is fixed once
- * the design exists, and a design can't be deleted once passports have been
- * generated from it.
+ * The designs passports are generated from: name, year, cover art and
+ * membership term. Listed by year, with names unique within one. The year is
+ * fixed once created, and a design can't be deleted once it has passports.
  */
 export const PassportDesignsSection = ({
                                            designs,
@@ -207,9 +201,7 @@ interface DesignEditorProps {
 }
 
 /**
- * Create or edit one design. The cover sits beside the fields at the 3:4 it is
- * shown at everywhere, so what is saved is what the shelf and the passport page
- * will show.
+ * Create or edit one design, with the cover beside the fields at its real 3:4.
  */
 const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEditorProps) => {
     const {isEnglish} = useLanguage();
@@ -223,14 +215,12 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
     const [coverPreview, setCoverPreview] = useState<string | null>(null);
     const [outerFile, setOuterFile] = useState<File | null>(null);
     const [outerPreview, setOuterPreview] = useState<string | null>(null);
-    // The outer cover already saved, blanked when the admin removes it so that
-    // the save writes it away rather than leaving the old one in place.
+    // Blanked when removed, so the save clears it.
     const [outerUrl, setOuterUrl] = useState(initial?.outerCoverImageUrl ?? '');
     const [saving, setSaving] = useState(false);
 
-    // ImageUploadField revokes a preview it replaces; the ones picked here are
-    // this editor's to revoke when it closes, saved or not. Revoking a url the
-    // field has already let go of does nothing, so every one picked can go in.
+    // Previews picked here are this editor's to revoke on close; revoking one
+    // ImageUploadField already let go of is harmless.
     const previewUrls = useRef<string[]>([]);
     useEffect(() => () => {
         for (const url of previewUrls.current) URL.revokeObjectURL(url);
@@ -239,8 +229,8 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
     const termDays = Number(termInput);
     const termValid = Number.isInteger(termDays) && termDays >= 1 && termDays <= MAX_PASSPORT_TERM_DAYS;
     const hasCover = !!coverFile || !!initial?.coverImageUrl;
-    // Caught here so the form can say why Save is disabled; the server refuses it
-    // too, since two designs of a year under one name couldn't be told apart.
+    // Checked here so the form can say why Save is off; the server refuses it
+    // too.
     const draftNames = shownNames({name, nameCn});
     const nameTaken = !!name.trim() && designs.some(d =>
         d.id !== initial?.id && d.year === year && shownNames(d).some(n => draftNames.includes(n)));

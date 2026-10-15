@@ -3,9 +3,9 @@ import { recordExpiresAt } from "./config";
 import { db } from "./firebase";
 
 /**
- * Every type of record the functions write, grouped as the Records tab's
- * categories are. Mirrors RECORD_CATEGORIES in app/pages/admin/types.ts; a type
- * missing there shows as its raw slug, in no filter and with no colour.
+ * Every record type the functions write, grouped like the Records tab's
+ * categories. Mirrors RECORD_CATEGORIES in app/pages/admin/types.ts; a type
+ * missing there shows as its raw slug.
  */
 export type RecordType =
     | "group-assign"
@@ -71,12 +71,6 @@ export type RecordType =
     | "venue-create"
     | "venue-edit"
     | "venue-delete"
-    | "parkinglot-create"
-    | "parkinglot-edit"
-    | "parkinglot-delete"
-    | "parkingrate-create"
-    | "parkingrate-edit"
-    | "parkingrate-delete"
     | "parking-sync"
     | "passport-generate"
     | "passport-claim"
@@ -122,10 +116,6 @@ export interface RecordFields {
     tagName?: string;
     venueId?: string;
     venueName?: string;
-    lotId?: string;
-    lotName?: string;
-    rateId?: string;
-    rateLabel?: string;
     qrLabel?: string;
     /** Null on a bulk passport action, which only counts what it touched. */
     passportId?: string | null;
@@ -135,7 +125,6 @@ export interface RecordFields {
     platformLabel?: string;
     conSection?: string;
     configSections?: string[];
-    unlinkedFrom?: number;
     /** How many visitor lots a parking sync left the guide with. */
     lotCount?: number;
     /** Event check-in codes only: badge and staff codes are core-staff+, and all staff read records. */

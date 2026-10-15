@@ -33,14 +33,13 @@ const seedFormData = (member: TeamMemberConfig | null): TeamMemberConfig => ({
 export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEditModalProps) => {
     const {isEnglish} = useLanguage();
 
-    // The member as currently saved, normalized like the form so single fields can be
-    // compared against it and put back.
+    // The member as saved, normalized like the form, for per-field compare and
+    // revert.
     const [saved] = useState<TeamMemberConfig>(() => seedFormData(member));
     const [formData, setFormData] = useState<TeamMemberConfig>(saved);
 
     const [uploading, setUploading] = useState(false);
-    // Live values of the linked account, so followed fields preview what visitors will see
-    // (the stored formData values are only fallbacks for when the account has none).
+    // The linked account's live values, so followed fields preview what visitors see.
     const [account, setAccount] = useState<{
         title: string;
         titleCn: string;
@@ -70,8 +69,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                 photoURL: (d.photoURL as string) ?? '',
             };
             setAccount(acc);
-            // Keep followed fields in step with the account's current info; the stored value
-            // is only a fallback, so unchecking later reveals the up-to-date value, not a stale one.
+            // Followed fields track the account, so unticking later shows its current value.
             const accTitle = accountEffectiveTitle(acc.group, acc.title, acc.titleCn);
             setFormData(prev => ({
                 ...prev,
@@ -89,10 +87,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
 
     const handleUserSelect = (user: UserRecord | null) => {
         if (user) {
-            // Linking an account defaults role and photo to following it; snapshot their current
-            // values as a fallback for the public page (which live-resolves). The name never
-            // follows, so the account's only fills a blank one rather than replacing what the
-            // admin typed.
+            // Linking defaults role and photo to following, with their current values as the
+            // stored fallback. The name never follows; the account's only fills a blank one.
             const accTitle = accountEffectiveTitle(user.group, user.title, user.titleCn);
             setFormData(prev => ({
                 ...prev,
@@ -120,10 +116,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         setFormData(prev => ({...prev, imageUrl: previewUrl}));
         try {
             showToast(isEnglish ? 'Uploading image...' : '正在上传图片...', 'warning');
-            // A fresh path per upload, as badges and events do: writing to a path derived from
-            // the member id would overwrite the live image before the admin saves, so cancelling
-            // would leave the saved member pointing at a replaced file. saveTeamMembers deletes
-            // whichever team/ image the save orphans.
+            // A fresh path per upload: overwriting the member's image before saving would break
+            // it on cancel. saveTeamMembers deletes whatever team/ image the save orphans.
             const url = await callUploadAdminImage(file, `team/${crypto.randomUUID()}.webp`);
             setFormData(prev => ({...prev, imageUrl: url}));
             showToast(isEnglish ? 'Image uploaded.' : '图片已上传。', 'success');
@@ -137,13 +131,12 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
     };
 
     const accountLinked = !!formData.uid;
-    // Role and photo can each independently follow the linked account. A field that follows the
-    // account is filled from its live value, so it's hidden here and not required to save.
-    // Names are always custom, so both are always editable and the English one is always required.
+    // Role and photo can each follow the account, and then aren't shown or required. Names are
+    // always custom; the English one is required.
     const roleFromAccount = accountLinked && !!formData.useAccountRole;
     const photoFromAccount = accountLinked && !!formData.useAccountPhoto;
-    // Values shown for followed fields: the account's live value, falling back to the stored one.
-    // Role uses the account's effective title (its title, or group label like "President").
+    // Followed fields show the account's live value (role: its title or group label), else the
+    // stored one.
     const accTitle = account ? accountEffectiveTitle(account.group, account.title, account.titleCn) : null;
     const accountRole = accTitle?.en || formData.role;
     const accountRoleCn = accTitle?.zh || formData.roleCn;
@@ -152,11 +145,9 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
         && formData.name.trim() !== ''
         && (roleFromAccount || formData.role.trim() !== '');
 
-    // Per-field revert back to the saved member. A field that follows the account shows the
-    // account's live value, so its stored value is only an invisible fallback: while it is
-    // followed, the fallback drifting is not a change the admin made and does not count as
-    // edited. Restoring a followed field re-reads the account, mirroring what ticking
-    // "From account" does. Adding a member has nothing saved to go back to.
+    // Per-field revert to the saved member. A followed field's stored value is an invisible
+    // fallback, so its drifting isn't an edit; restoring one re-reads the account. A new
+    // member has nothing to revert to.
     const isEditing = !!member;
     const revertField = (patch: Partial<TeamMemberConfig>) => setFormData(prev => ({...prev, ...patch}));
     const accountEdited = isEditing && formData.uid !== saved.uid;
@@ -169,8 +160,7 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
     const photoEdited = isEditing && (formData.useAccountPhoto !== saved.useAccountPhoto
         || (!formData.useAccountPhoto && formData.imageUrl !== saved.imageUrl));
 
-    // Undoes everything picking an account did, since that is what handleUserSelect changed;
-    // the uid change re-runs the effect above, refreshing whichever fields follow the account.
+    // Undoes the account pick; the uid change refreshes followed fields.
     const revertAccount = () => revertField({
         uid: saved.uid,
         useAccountRole: saved.useAccountRole,
@@ -381,8 +371,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                     )}
                 </div>
 
-                {/* The avatar owns a labelled header like every other field; the checkbox
-                        says only where the photo comes from, so it drops "for avatar". */}
+                {/* Labelled like every field; the checkbox only says where the photo comes
+                    from. */}
                 <div className="admin-tickets-template-field" style={{marginTop: '8px'}}>
                         <span style={fieldHeaderStyle}>
                             <span>{isEnglish ? 'Member Avatar' : '成员头像'}</span>
@@ -418,8 +408,8 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                                 referrerPolicy="no-referrer"
                             />
                             <div className="admin-avatar-actions">
-                                {/* Mirrors what accountPhoto actually resolves to: the account's
-                                        photo, else the member's stored image, else the site default. */}
+                                {/* What accountPhoto resolves to: the account's photo, the stored image,
+                                    or the site default. */}
                                 <p className="admin-helper-text admin-avatar-helper">
                                     {account?.photoURL
                                         ? (isEnglish

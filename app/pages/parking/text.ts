@@ -11,9 +11,9 @@ import {
 import { uwLotTypeLabel } from '~/lib/uwParking';
 
 /**
- * The parking guide's copy in both site languages. Placeholders in braces are
- * filled by `t`. Kept in one table, like the approved mockup's, because most of
- * the page is built from short phrases that have to stay in step across languages.
+ * The parking guide's copy in both site languages, in one table so the short
+ * phrases most of the page is built from stay in step. Placeholders in braces are
+ * filled by `t`.
  */
 const EN = {
     back: 'Back to Home',

@@ -8,24 +8,19 @@ const QUOTA = "scanQuota";
 export const SCAN_QUOTA_WINDOW_MS = 30 * 60_000;
 
 /**
- * How many scans one client may add to one code per window.
+ * Scans one client may add to one code per window.
  *
- * A poster or standee is scanned by a whole room — all behind the venue's NAT,
- * sharing a handful of user agents, and therefore looking like very few clients.
- * A tighter ceiling would have stopped counting a busy poster's scans exactly at
- * the event its analytics exist to measure.
- *
- * It is loose enough that reaching it is already implausible for honest traffic;
- * what it stops is the shape with no honest explanation, which is the same
- * client asking thousands of times.
+ * A poster is scanned by a whole room behind one venue NAT, which looks like
+ * very few clients, so a tight ceiling would stop counting exactly when the
+ * analytics matter. This is loose enough that honest traffic won't reach it; it
+ * stops one client asking thousands of times.
  */
 export const SCAN_QUOTA = 500;
 
-// Only ever used to salt a hash that is thrown away within the hour. Set
-// SCAN_CLIENT_SALT in the function environment to make the digests unguessable
-// to anyone holding a database export; without it the fallback still keeps raw
-// addresses out of storage, which is the point, but a determined reader with
-// both the source and the data could brute-force the IPv4 space back out.
+// Salts a hash thrown away within the hour. Set SCAN_CLIENT_SALT to make
+// digests unguessable from a database export; the fallback still keeps raw
+// addresses out of storage, but someone with the source and the data could
+// brute-force IPv4 back out.
 const CLIENT_SALT = process.env.SCAN_CLIENT_SALT ?? "sekai-beyond-scan-client";
 
 interface ScanRequestLike {
@@ -34,14 +29,10 @@ interface ScanRequestLike {
 }
 
 /**
- * A stable, non-identifying handle for whoever is scanning — the address they
- * reach us from, narrowed to the IPv6 /64 so a client can't rotate through a
- * prefix it was handed for free, plus the user agent so several phones behind
- * one venue NAT aren't collapsed into a single scanner. Hashed, never stored raw.
- *
- * This is a quota key, not an identity: an unreadable address falls back to a
- * shared bucket rather than an exemption, so hiding where you came from costs
- * you the same allowance as everyone else who did.
+ * A non-identifying quota key for whoever is scanning: their address, narrowed to
+ * the IPv6 /64 so a client can't rotate through its prefix, plus the user agent
+ * so phones behind one NAT stay apart. Hashed, never stored raw. An unreadable
+ * address falls into a shared bucket, not an exemption.
  */
 export function scanClientKey(req: ScanRequestLike | undefined): string {
     const forwarded = req?.headers?.["x-forwarded-for"];
@@ -62,15 +53,10 @@ function narrowAddress(address: string): string {
 }
 
 /**
- * Whether this client has already used up its allowance on this code.
- *
- * The window is part of the document id rather than a field, so each one gets a
- * fresh document and there is no stale-window branch to get wrong — and because
- * Firestore's TTL sweeps lazily (a document can outlive its expiry by hours), a
- * leftover from an old window can never suppress a later scan.
- *
- * Best-effort by design: a read that fails lets the scan through rather than
- * dropping a tally over an unrelated outage.
+ * Whether this client has used up its allowance on this code. The window is in
+ * the doc id, so each gets a fresh doc and a leftover from an old window (TTL
+ * sweeps lazily) can't suppress a later scan. A failed read lets the scan
+ * through.
  */
 async function quotaExhausted(ref: FirebaseFirestore.DocumentReference): Promise<boolean> {
     try {
@@ -83,18 +69,12 @@ async function quotaExhausted(ref: FirebaseFirestore.DocumentReference): Promise
 }
 
 /**
- * Bump a QR code's counters and log one scan event under its `scans`
- * subcollection.
+ * Bump a QR code's counters and log a scan under `scans`. Both recordQrScan and
+ * redirectQr write through here, which keeps the counters, the TTL policy and
+ * the chart (fetchScans in app/lib/scans.ts) in agreement.
  *
- * Both entry points — the recordQrScan callable and the redirectQr request
- * handler — write through here, which is what keeps the counters, the `scans`
- * TTL policy and the chart that reads them (see fetchScans in app/lib/scans.ts)
- * in agreement.
- *
- * `platform` is a QR link's `p` tag, which additionally tallies under
- * `platformScans.<platform>` so click-through can be compared by platform. A
- * code reached without one passes "", which skips that field and reads as a
- * single series in the chart.
+ * `platform` is the link's `p` tag, also tallied under
+ * `platformScans.<platform>`; "" skips that.
  */
 export async function recordScan(
     ref: FirebaseFirestore.DocumentReference,
@@ -109,8 +89,8 @@ export async function recordScan(
     );
 
     if (await quotaExhausted(quotaRef)) {
-        // The only interesting scan event is the one that stopped counting: this
-        // is the signal a code is being hammered, and the redirect still runs.
+        // Logged: this is the signal a code is being hammered. The redirect
+        // still runs.
         console.log(`recordScan: quota reached for ${ref.path}, scan not counted`);
         return;
     }
@@ -128,8 +108,7 @@ export async function recordScan(
         platform,
         expiresAt: scanExpiresAt(),
     });
-    // Rides along in the same commit rather than costing its own round trip.
-    // Two windows' grace on the TTL, matching checkRateLimit.
+    // In the same commit. Two windows' grace on the TTL, like checkRateLimit.
     batch.set(quotaRef, {
         count: FieldValue.increment(1),
         expiresAt: Timestamp.fromMillis(Date.now() + SCAN_QUOTA_WINDOW_MS * 2),

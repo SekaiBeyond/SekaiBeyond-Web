@@ -34,8 +34,8 @@ export const Navigation = () => {
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [menuOpen]);
 
-    // The open mobile drawer is white, so the bar has to leave its transparent
-    // hero styling behind at the same time or the logo turns white-on-white.
+    // The open mobile drawer is white, so the bar goes opaque with it or the
+    // logo turns white-on-white.
     const opaque = solid || menuOpen;
 
     return (

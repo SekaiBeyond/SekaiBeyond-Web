@@ -6,13 +6,9 @@ export function toStringIds(raw: unknown): string[] {
 }
 
 /**
- * Which of the given ids name an existing past event.
- *
- * A public profile publishes past-event ids only: an upcoming-event id would
- * leak an unpublished event whose title is otherwise gated by Firestore rules.
- *
- * Callers hand over every list they need resolved at once: a member's attended
- * and staffed events overlap almost entirely, and the union is read once.
+ * Which of the given ids name an existing past event. Public profiles only
+ * publish past-event ids: an upcoming id would leak an unpublished event's
+ * title. Takes every list at once, since attended and staffed events overlap.
  */
 export async function pastEventIds(...lists: unknown[]): Promise<Set<string>> {
     const ids = [...new Set(lists.flatMap(toStringIds))];

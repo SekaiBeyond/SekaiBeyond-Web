@@ -139,7 +139,6 @@ export const LotList = (props: LotListProps) => {
 
     return (
         <>
-            {/* Only an event's guide has a card for its event; right now needs none. */}
             {event && (
                 <div className="parking-info-card">
                     <div className="parking-info-icon parking-info-icon--time">🕐</div>
@@ -157,7 +156,6 @@ export const LotList = (props: LotListProps) => {
                                 </button>
                             </span>
                         )}
-                        {/* So the prices aren't taken for this minute's, the day switch changes. */}
                         <span className="parking-event-note">
                             {tx.t('eventPrices', {
                                 d: tx.date(parkingWindow.date),

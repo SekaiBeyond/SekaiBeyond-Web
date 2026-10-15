@@ -137,10 +137,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             showToast(isEnglish ? 'End time must be after start time.' : '结束时间必须晚于开始时间。', 'error');
             return;
         }
-        // Paid → free is asymmetric: the server keeps the attendees and
-        // emailTemplate subcollections (so an accidental flip can be undone),
-        // but the tickets tab disappears from the admin UI. Make the trade-off
-        // explicit so the admin doesn't think the data is gone.
+        // Paid → free keeps the attendees and template on the server, so it can
+        // be undone, but hides the tickets tab; say so.
         if (editingEvent && editingEvent.paid && !form.paid) {
             const ok = confirm(isEnglish
                 ? 'Switching this event from paid to free will hide the tickets tab. Attendee and ticket data is kept on the server so you can switch back, but it will no longer be visible here. To permanently delete attendees, do that from the tickets tab before switching. Continue?'

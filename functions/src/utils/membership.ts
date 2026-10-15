@@ -3,20 +3,17 @@ import { addSiteDays } from "./siteTime";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Membership is a time-boxed attribute sitting alongside `group`, never inside it.
-// Nothing on the user document marks a membership as running, so nothing has to be
-// unwound when it ends — `membershipExpiresAt <= now` *is* the lapsed state,
-// which is why there is no scheduled sweep and no group ever changes on expiry.
+// Membership sits beside `group`, never inside it. `membershipExpiresAt <= now` is
+// the lapsed state, so nothing needs unwinding on expiry: no sweep, no group
+// change.
 export function isMembershipActive(data: FirebaseFirestore.DocumentData | undefined): boolean {
     const expiresAt = data?.membershipExpiresAt;
     return expiresAt instanceof Timestamp && expiresAt.toMillis() > Date.now();
 }
 
-// Grants stack: extending an active membership adds to its tail, while extending a
-// lapsed or never-held one starts from today. Passport claims (#9) use this too, so
-// claiming two passports the same day is two years rather than one. Days are
-// counted on the Pacific calendar, so an expiry set to the end of a day stays
-// there across a DST change.
+// Grants stack: an active membership extends from its end, a lapsed or new one from
+// today, so two passports claimed the same day give two years. Days are counted on
+// the Pacific calendar, so an end-of-day expiry stays there across DST.
 export function extendedExpiry(current: unknown, days: number): Timestamp {
     const active = current instanceof Timestamp && current.toMillis() > Date.now();
     const base = active ? (current as Timestamp).toMillis() : Date.now();
@@ -26,16 +23,12 @@ export function extendedExpiry(current: unknown, days: number): Timestamp {
 /**
  * Take days back off a membership, never past today.
  *
- * The mirror of extendedExpiry, and deliberately not symmetric with it: a grant
- * stacks onto whatever is already there, but taking one back stops at zero —
- * nobody is left owing membership, and a day taken here can't eat a day some
- * other grant paid for. A membership that has already lapsed has nothing left to
- * take and comes back untouched.
+ * Unlike extendedExpiry, this stops at zero: nobody is left owing membership, and
+ * it can't eat days another grant paid for. A lapsed membership comes back
+ * untouched.
  *
- * `daysRemoved` is what was actually taken, which is less than asked for whenever
- * the floor is reached, and 0 when there was nothing to take. Callers write
- * nothing in that case, so an expired or absent membership isn't rewritten with
- * the same value it already had.
+ * `daysRemoved` is what was actually taken: less than asked at the floor, 0 when
+ * there was nothing. Callers then write nothing.
  */
 export function reducedExpiry(current: unknown, days: number): {expiresAt: Timestamp; daysRemoved: number} | null {
     if (!(current instanceof Timestamp)) return null;
@@ -44,20 +37,18 @@ export function reducedExpiry(current: unknown, days: number): {expiresAt: Times
     const floored = Math.max(now, addSiteDays(current.toMillis(), -days));
     return {
         expiresAt: Timestamp.fromMillis(floored),
-        // Whole days, for the record and the toast — rounded, as a day across a
-        // DST change is 23 or 25 hours. The expiry itself is exact.
+        // Rounded, as a day across DST is 23 or 25 hours; the expiry itself is
+        // exact.
         daysRemoved: Math.round((current.toMillis() - floored) / DAY_MS),
     };
 }
 
-// When the membership running to `next` began, for `membershipStartedAt`. A change
-// to one that is still running keeps its start, one that begins a membership
-// starts it today, and null — written as a delete — means none is left running.
+// When the membership running to `next` began: kept for one still running, today
+// for a new one, null (written as a delete) when none is left.
 export function startedAtAfter(current: FirebaseFirestore.DocumentData, next: Timestamp | null): Timestamp | null {
     if (!next || next.toMillis() <= Date.now()) return null;
     return isMembershipActive(current) ? current.membershipStartedAt : Timestamp.now();
 }
 
-// Ceiling on a single admin grant. Not a cap on total membership — stacked grants
-// can carry someone past this — just a guard against a mistyped day count.
+// A guard against a mistyped day count, not a cap on total membership.
 export const MAX_GRANT_DAYS = 3650;

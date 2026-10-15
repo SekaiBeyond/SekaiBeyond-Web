@@ -80,11 +80,9 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * The con hero's background loop. Kept apart from `uploadAdminImage` rather than
- * folded into it: the two differ in every check that matters — allowed content
- * types, magic bytes, size cap, and destination prefix. Teaching the image path
- * to carry video would mean every badge and avatar upload inherits the video
- * ceiling as well, which is the one thing that path is careful about.
+ * The con hero's background loop. Kept apart from `uploadAdminImage` because
+ * every check differs (content types, magic bytes, size cap, prefix), and
+ * folding video in would give every image upload the video size ceiling.
  */
 export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async (request) => {
     const uid = await requireAuth(request);
@@ -108,9 +106,8 @@ export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async 
         throw new HttpsError("invalid-argument", "Con videos must be stored under con/.");
     }
 
-    // WebM alone, because the hero lists one source and it is a WebM. An MP4
-    // uploaded here would be stored, named .webm by the caller that minted the
-    // path, and then refused by every browser that opened it.
+    // WebM only: the hero lists a single WebM source, so an MP4 stored here
+    // would be refused by every browser.
     if (contentType !== "video/webm") {
         throw new HttpsError("invalid-argument", "Only video/webm is allowed.");
     }
@@ -135,10 +132,9 @@ export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async 
     return {url: downloadUrl};
 });
 
-// The upload caps, for the web app's early size check and its "up to N MB"
-// hints. Served from here so they come from the env that enforces them rather
-// than a copy in the web build. Public: members check their own profile photos
-// against the image cap, and both numbers are already in the errors above.
+// The upload caps, for the web app's early size check and "up to N MB" hints,
+// read from the env that enforces them. Public: members check their own photos
+// against the image cap.
 export const getUploadLimits = onCall({maxInstances: 10}, async () => ({
     imageMb: MAX_UPLOAD_SIZE_MB,
     videoMb: MAX_VIDEO_UPLOAD_SIZE_MB,
@@ -228,9 +224,8 @@ export const savePolicy = onCall({maxInstances: 10}, async (request) => {
         return {saved: true};
     });
 });
-// picUrl comes from Bilibili's API response (an untrusted third-party field),
-// so it must not be used as an arbitrary fetch target — that would be an SSRF
-// vector from inside the project. Restrict it to Bilibili's own image CDNs.
+// picUrl is an untrusted field from Bilibili's API; fetching it unchecked would
+// be an SSRF vector, so only Bilibili's image CDNs are allowed.
 function isBilibiliImageUrl(value: string): boolean {
     try {
         const url = new URL(value);
@@ -244,16 +239,14 @@ function isBilibiliImageUrl(value: string): boolean {
     }
 }
 
-// Con edition posters are config/con-<year>-<stamp>.webp. Matched exactly rather
-// than by prefix: the con page's guest photos (config/con-guest-*) share the
-// "config/con-" one.
+// Con edition posters are config/con-<year>-<stamp>.webp, matched exactly
+// because guest photos (config/con-guest-*) share the prefix.
 const CON_EDITION_IMAGE_PATH = /^config\/con-\d+-/;
 
-// Each account's link, in the one form the Site Config form builds from an ID
-// or any link to it (SOCIAL_LINK_FORMATS in app/pages/admin/socialLinkInput.ts).
-// The keys mirror SOCIAL_LINK_KEYS in app/lib/siteConfig.ts; each names an
-// account the site draws an icon for. Pinning the host keeps every link on the
-// platform it is shown as.
+// Each account's link in the one form the Site Config form builds
+// (SOCIAL_LINK_FORMATS in app/pages/admin/socialLinkInput.ts); keys mirror
+// SOCIAL_LINK_KEYS in app/lib/siteConfig.ts. Pinning the host keeps every link
+// on the platform it is shown as.
 const SOCIAL_LINK_PATTERNS: Record<string, RegExp> = {
     discord: /^https:\/\/discord\.gg\/[A-Za-z0-9-]+$/,
     instagram: /^https:\/\/www\.instagram\.com\/[A-Za-z0-9._]+\/$/,
@@ -263,8 +256,8 @@ const SOCIAL_LINK_PATTERNS: Record<string, RegExp> = {
     github: /^https:\/\/github\.com\/[A-Za-z0-9-]+$/,
 };
 
-// The Xiaohongshu app shares a profile as a short link that redirects to it.
-// The form passes one through as is, for resolveXiaohongshuShareLink.
+// Xiaohongshu shares profiles as short links that redirect; the form passes one
+// through for resolveXiaohongshuShareLink.
 const XIAOHONGSHU_SHARE_LINK = /^https:\/\/xhslink\.(?:cn|com)\/[A-Za-z0-9/]+$/;
 
 /** Every key in SOCIAL_LINK_PATTERNS, each a link in its pattern or "" (which hides that link). */
@@ -288,9 +281,8 @@ function validateSocialLinks(value: unknown): Record<string, string> {
 }
 
 /**
- * The profile a Xiaohongshu share link opens. The redirect's target carries the
- * sharer's tracking (share_id, shareRedId, xsec_token), so only the bare profile
- * link is kept.
+ * The profile a Xiaohongshu share link opens, without the sharer's tracking
+ * parameters.
  */
 async function resolveXiaohongshuShareLink(shareLink: string): Promise<string> {
     let target = "";
@@ -332,8 +324,8 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         : input.contactEmail === "" ? ""
             : validateEmail(input.contactEmail, "contactEmail");
 
-    // Only the part before the @ — the domain is always SENDER_DOMAIN, the one
-    // Resend accepts. "" clears it, which sends from DEFAULT_SENDER_PREFIX.
+    // Only the part before the @; the domain is always SENDER_DOMAIN. "" falls
+    // back to DEFAULT_SENDER_PREFIX.
     const senderPrefix = input.senderPrefix === undefined ? undefined
         : input.senderPrefix === "" ? ""
             : validateSenderPrefix(input.senderPrefix, "senderPrefix");
@@ -363,15 +355,12 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         validateStorageImageUrl(conEdition.image, "convention image");
     }
 
-    // Gate the network + storage side effects behind an admin check BEFORE
-    // running them. adminTransaction below is the authoritative (transactional)
-    // gate for the Firestore write, but the Bilibili fetch and the
-    // config/video-cover storage write happen out here — without this, any
-    // signed-in user could trigger a server-side fetch and overwrite the
-    // public cover object.
+    // Checked before the Bilibili fetch and the config/video-cover write, which
+    // happen outside adminTransaction; otherwise any signed-in user could
+    // trigger a server-side fetch and overwrite the public cover.
     await requireAdmin(uid);
 
-    // Behind the admin check for the same reason: it is a server-side fetch.
+    // Also a server-side fetch, so also behind the admin check.
     if (socialLinks && XIAOHONGSHU_SHARE_LINK.test(socialLinks.xiaohongshu)) {
         socialLinks.xiaohongshu = await resolveXiaohongshuShareLink(socialLinks.xiaohongshu);
     }
@@ -394,9 +383,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
                     });
                     if (imgResp.ok) {
                         const buffer = Buffer.from(await imgResp.arrayBuffer());
-                        // Trust the bytes, not the response's content-type header:
-                        // verify the payload really is an image and is within the
-                        // upload size cap before storing it in the public bucket.
+                        // Trust the bytes, not the content-type header.
                         const detectedMime = detectImageMime(buffer);
                         if (detectedMime && buffer.length <= MAX_UPLOAD_SIZE) {
                             const bucket = getStorage().bucket();
@@ -414,7 +401,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
                 }
             }
         } catch {
-            // Cover fetch is best-effort; proceed without it
+            // Best effort: save without a cover.
         }
     }
 
@@ -465,8 +452,8 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         return prevConImage;
     });
 
-    // Each upload writes a new time-stamped object, so the image this save
-    // replaces — or a reset drops — is left behind unless deleted here.
+    // Each upload is a new time-stamped object, so the image this save replaces
+    // or drops is deleted here.
     const oldConImagePath = extractStoragePath(oldConImage);
     if (oldConImagePath
         && oldConImagePath !== extractStoragePath(conEdition?.image ?? "")
@@ -480,8 +467,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
 });
 
 // Mirrors ROOM_ACCENTS in app/lib/conContent.ts. Each value names a CSS class
-// (sbc-accent--<accent>), so the palette is a whitelist even though the rooms
-// that use it are free-form, admin-managed data.
+// (sbc-accent--<accent>), so it's a whitelist.
 const CON_ROOM_ACCENTS = ["pink", "violet", "amber", "sky", "mint", "slate"] as const;
 
 const CON_SECTIONS = [
@@ -490,12 +476,11 @@ const CON_SECTIONS = [
 ] as const;
 type ConSection = typeof CON_SECTIONS[number];
 
-// Mirrors HIDEABLE_SECTIONS in app/lib/conContent.ts. Each is a key of
-// CON_SECTIONS as well as an anchor on the page.
+// Mirrors HIDEABLE_SECTIONS in app/lib/conContent.ts.
 const CON_HIDEABLE_SECTIONS = ["guests", "vendors"] as const satisfies readonly ConSection[];
 
-// Caps on how much copy one section can hold. Generous against real use, tight
-// enough that a runaway client cannot grow the public document without bound.
+// Generous against real use, but bounded so a runaway client can't grow the
+// public document indefinitely.
 const CON_LIMITS = {
     rooms: 24,
     scheduleItems: 120,
@@ -509,9 +494,8 @@ const CON_LIMITS = {
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-// Mirrors HALL_TABLES in app/pages/con/hall.ts: the tables on the main hall floor
-// plan, in plan order. A vendor can only sit at one of these — the page has
-// nowhere to draw any other.
+// Mirrors HALL_TABLES in app/pages/con/hall.ts: the hall floor plan's tables, in
+// plan order. A vendor can only sit at one of these.
 const CON_HALL_TABLES = ([["A", 15], ["B", 15], ["C", 15], ["D", 15], ["E", 3]] as const)
     .flatMap(([row, count]) => Array.from({length: count}, (_, i) => `${row}${i + 1}`));
 
@@ -521,8 +505,8 @@ interface LocalizedText {
 }
 
 /**
- * Con copy is stored as {en, zh} pairs rather than the `field`/`fieldCn` columns
- * the rest of the admin data uses, because the con page reads it that way.
+ * Con copy is stored as {en, zh} pairs, the way the con page reads it, rather
+ * than `field`/`fieldCn` columns.
  */
 function validateLocalized(raw: unknown, name: string, maxLen: number, required = false): LocalizedText {
     const value = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
@@ -557,10 +541,9 @@ function requireISODate(raw: unknown, name: string): string {
 }
 
 /**
- * Con assets — guest photos, café posters and the hero clip — come from two places:
- * an admin upload (a Storage download URL) or a file committed under public/ (a
- * root-relative path). Anything else — an off-site URL, a traversal attempt — is
- * rejected, so nothing the page loads is served from a host we do not control.
+ * A con asset is either a Storage download URL or a root-relative path under
+ * public/; anything else is rejected, so the page only loads files from hosts we
+ * control.
  */
 function validateConAsset(raw: unknown, name: string): string {
     const value = validateStr(raw, name, 500).trim();
@@ -582,12 +565,9 @@ function validateConLink(raw: unknown, name: string): string {
 }
 
 /**
- * Page-level switches. `published: false` takes /con off the public web, so it is
- * stored as a strict boolean rather than anything truthy — a stray string here
- * would silently republish the page.
- *
- * `hiddenSections` is optional so a client from before it existed can still save;
- * leaving it out shows every section.
+ * Page-level switches. `published` is a strict boolean because a stray truthy
+ * value would republish the page. Leaving `hiddenSections` out shows every
+ * section.
  */
 function buildConSettings(raw: unknown) {
     const s = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
@@ -638,12 +618,9 @@ function buildConEvent(raw: unknown) {
 }
 
 /**
- * The hero's background loop. Optional: with no clip the hero shows a gradient.
- *
- * The extension is pinned to the container the source element claims. A .webm url
- * holding something else is not a security problem, but it is an invisible one —
- * a browser that cannot decode what it finds drops the source silently, and the
- * hero would sit on the gradient with nothing to say why.
+ * The hero's background loop; without one the hero shows a gradient. The
+ * extension must match the container the source element claims, or a browser
+ * silently drops the source.
  */
 function buildConHeroVideo(raw: unknown) {
     const v = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
@@ -655,12 +632,9 @@ function buildConHeroVideo(raw: unknown) {
 }
 
 /**
- * Ids for rows the admin never sees or types (ticket tiers).
- * The fallback is index-derived, which collides on its own: deleting `tier-2` from
- * [tier-1, tier-2, tier-3] and adding a row hands the new one index 2, i.e. the
- * `tier-3` that already exists. Renaming rather than rejecting is deliberate — the
- * editor exposes no id field, so a rejected duplicate would be unfixable, and these
- * ids are not referenced from anywhere else the way room ids are.
+ * Ids for rows the admin never sees (ticket tiers). The index-derived fallback can
+ * collide with an existing id after a delete, so a duplicate is renamed rather than
+ * rejected: the editor has no id field to fix it in.
  */
 function uniqueConId(raw: unknown, fallback: string, seen: Set<string>, name: string): string {
     let id = sanitizeDisplayText(validateStr(raw, name, 60)) || fallback;
@@ -702,8 +676,7 @@ function buildConRooms(raw: unknown) {
 
 function buildConSchedule(raw: unknown) {
     return validateConArray(raw, "schedule", CON_LIMITS.scheduleItems).map(item => {
-        // A slot can be announced before it is scheduled. Both times absent
-        // means TBA; exactly one is a half-filled form, not an intent.
+        // Both times absent means TBA; exactly one is a half-filled form.
         const hasStart = item.start !== undefined && item.start !== null && item.start !== "";
         const hasEnd = item.end !== undefined && item.end !== null && item.end !== "";
         if (hasStart !== hasEnd) {
@@ -715,10 +688,8 @@ function buildConSchedule(raw: unknown) {
         const times = hasStart
             ? {start: validateConTime(item.start, "item start"), end: validateConTime(item.end, "item end")}
             : {};
-        // HH:MM sorts chronologically, so this is a plain string compare. It also
-        // means an item that runs past midnight cannot be expressed — acceptable
-        // for a single-day con, and the alternative is silently accepting the far
-        // more common "17:30–15:30" typo.
+        // HH:MM compares as a string. That rules out items past midnight, which
+        // is fine for a single-day con and catches the common "17:30–15:30" typo.
         if (times.start && times.end && times.end <= times.start) {
             throw new HttpsError(
                 "invalid-argument",
@@ -726,10 +697,8 @@ function buildConSchedule(raw: unknown) {
             );
         }
 
-        // Required of a scheduled item, which has to be drawn in some column, and
-        // dropped from a TBA one: a con books the hour and the room together, so a
-        // slot still waiting on the hour has no room to name yet. Stored only when
-        // there is one.
+        // A scheduled item needs a room to be drawn in; a TBA one has none yet, so
+        // it is stored only when there is one.
         const room = hasStart
             ? sanitizeDisplayText(validateStr(item.room, "item room", 60, true))
             : "";
@@ -740,9 +709,8 @@ function buildConSchedule(raw: unknown) {
             title: validateLocalized(item.title, "item title", 200, true),
         };
     })
-        // Stored in start order, so the editor has no reorder buttons to keep in
-        // step. An item with no time yet has nowhere on the clock to go, so it
-        // sorts last rather than to the top on an empty string.
+        // Stored in start order, so the editor needs no reorder buttons; TBA
+        // items sort last.
         .sort((a, b) => (a.start ?? "99:99").localeCompare(b.start ?? "99:99"));
 }
 
@@ -758,7 +726,7 @@ function buildConGuests(raw: unknown) {
 
 /**
  * The maid café. Its hours are both or neither, like a schedule item's, and every
- * poster is optional: a maid can be announced before their poster is drawn.
+ * poster is optional.
  */
 function buildConCafe(raw: unknown) {
     const c = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
@@ -807,7 +775,7 @@ function buildConVendors(raw: unknown) {
             link: validateConLink(vendor.link, `Table ${table} link`),
         };
     })
-        // Stored in plan order, which is the order the editor keeps its draft in.
+        // Stored in plan order, as the editor keeps its draft.
         .sort((a, b) => CON_HALL_TABLES.indexOf(a.table) - CON_HALL_TABLES.indexOf(b.table));
 
     return {
@@ -834,9 +802,7 @@ function buildConTickets(raw: unknown) {
     return validateConArray(raw, "tickets", CON_LIMITS.tickets).map((tier, i) => {
         const name = validateLocalized(tier.name, "tier name", 120, true);
 
-        // The page tells visitors what the tier costs once the early bird ends,
-        // so an early bird is all-or-nothing: its own price and a deadline. A
-        // half-filled one is a form mistake.
+        // An early bird is all or nothing: its own price and a deadline.
         const hasEarlyBird = tier.earlyBird !== undefined && tier.earlyBird !== null;
         const price = validateConPrice(tier.price, `${name.en} price`);
         let earlyBird: {price: number; endsAt: string} | undefined;
@@ -905,7 +871,7 @@ function buildConInPersonSales(raw: unknown) {
             }
             return {date, start, end};
         })
-        // Stored in date order, so the editor has no reorder buttons to keep in step.
+        // Stored in date order, so the editor needs no reorder buttons.
         .sort((a, b) => `${a.date}T${a.start}`.localeCompare(`${b.date}T${b.start}`));
 
     return {
@@ -938,12 +904,16 @@ const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
     faq: buildConFaq,
 };
 
-/** Where the con editor uploads to: the hero clip and the café posters under con/,
- *  and the guests' photos. */
+/**
+ * Where the con editor uploads: the hero clip and café posters under con/, and
+ * guest photos.
+ */
 const CON_ASSET_PREFIXES = ["con/", "config/con-guest-"];
 
-/** Every file URL con content points at. Root-relative public/ paths come along
- *  too; deleteStorageFile passes over anything that is not a Storage URL. */
+/**
+ * Every file URL con content points at; deleteStorageFile skips the ones that
+ * aren't Storage URLs.
+ */
 function conAssetUrls(content: Record<string, any>): string[] {
     const guests: any[] = Array.isArray(content.guests) ? content.guests : [];
     const maids: any[] = Array.isArray(content.cafe?.maids) ? content.cafe.maids : [];
@@ -958,15 +928,13 @@ function conAssetUrls(content: Record<string, any>): string[] {
 /**
  * Writes one or more sections of the /con page.
  *
- * Saves are per section on purpose: the editor has one Save button per section,
- * and a merge write of only the named sections means two people editing
- * different parts of the page cannot overwrite each other's work.
+ * Each section saves on its own, merged, so two people editing different sections
+ * can't overwrite each other.
  *
  * Everything lands in the staff-only `conContent/draft`. `conContent/main` is a
- * whole-document mirror of it, created when the con is published and deleted when
- * it is not — so an unannounced line-up is genuinely not on the public web, rather
- * than sitting in a world-readable document behind a flag the page is trusted to
- * respect. The two documents' read rules are in firestore.rules.
+ * whole-document mirror that exists only while the con is published, so an
+ * unannounced line-up is not on the public web at all. Read rules are in
+ * firestore.rules.
  */
 export const saveConContent = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -998,15 +966,13 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             }
         }
 
-        // Rooms and the schedule that references them can be saved separately, so
-        // the pairing is only coherent once both sides are known. Check the result
-        // of this write against whichever side it is not carrying — that catches
-        // both "item points at a room that never existed" and "room deleted while
-        // the schedule still uses it".
+        // Rooms and the schedule can be saved separately, so check this write
+        // against the side it isn't carrying: that catches both an item pointing
+        // at a missing room and a room deleted while still in use.
         if (updateData.rooms !== undefined || updateData.schedule !== undefined) {
             const rooms = updateData.rooms ?? stored.rooms;
-            // Rooms never saved means the page is still on the code defaults, which
-            // the server cannot see — nothing to check against yet.
+            // Rooms never saved means the page is on the code defaults, which the
+            // server can't see.
             if (rooms !== undefined) {
                 const schedule = (updateData.schedule ?? stored.schedule ?? []) as {room?: string}[];
                 const ids = new Set((rooms as {id?: string}[]).map(r => r?.id));
@@ -1030,20 +996,16 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
 
-        // The public document is a mirror of the draft that exists only while the
-        // con is published, so hiding the page removes the copy rather than leaving
-        // it world-readable behind a client-side flag. Written whole, not merged, so
-        // a section deleted in the draft cannot survive in the mirror. `updatedBy`
-        // is deliberately left out — nothing about who edits belongs on a public doc.
-        // A hidden section's copy stays out of it for the same reason the whole
-        // mirror does while unpublished: hiding a line-up should not leave it
-        // readable to anyone who asks the database directly.
+        // The public mirror exists only while the con is published, and leaves out
+        // hidden sections, so nothing hidden is readable from the database directly.
+        // Written whole so a section deleted in the draft can't survive, and without
+        // `updatedBy`, which doesn't belong on a public doc.
         const merged = {...stored, ...updateData};
         const settings = merged.settings as {published?: boolean; hiddenSections?: string[]} | undefined;
         const published = settings?.published === true;
         if (published) {
-            // Only what can be hidden today: a draft saved under an older list may
-            // name a section that is now always on the page.
+            // Only sections that can still be hidden; a stored draft may name one
+            // that no longer can.
             const hideable: readonly string[] = CON_HIDEABLE_SECTIONS;
             const hidden = new Set((settings?.hiddenSections ?? []).filter(section => hideable.includes(section)));
             const mirror: Record<string, any> = {updatedAt: FieldValue.serverTimestamp()};
@@ -1061,10 +1023,9 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             conSection: sections.join(", "),
         }));
 
-        // Each upload writes a new time-stamped object, so a clip, photo or poster
-        // this save replaces — or a removed guest's or maid's — is left behind and
-        // deleted once the save commits. Both documents now name the files that
-        // `merged` does, so one it no longer names is referenced by neither.
+        // Each upload is a new time-stamped object, so files this save replaces or
+        // drops are deleted once it commits. Both documents now name the files
+        // `merged` does, so one it doesn't name is unreferenced.
         const stillReferenced = new Set(conAssetUrls(merged));
         return [...new Set(conAssetUrls(stored))].filter(url => !stillReferenced.has(url));
     });
@@ -1080,45 +1041,38 @@ const MAX_SUGGESTED_LOTS = 10;
 
 /**
  * A venue's UW fields from a save: its building code and the UW lots suggested
- * for it, by facility code. Each is written only when the save sends it, so a
- * save from an editor that predates them keeps what the venue already has.
- * Codes are checked for shape only; a lot UW later drops is skipped by the guide.
+ * for it, by facility code. Codes are checked for shape only; a lot UW later
+ * drops is skipped by the guide.
  */
 function venueUwFields(input: Record<string, unknown>): {
-    buildingCode?: string;
-    suggestedLots?: {code: string; noteEn: string; noteCn: string}[];
+    buildingCode: string;
+    suggestedLots: {code: string; noteEn: string; noteCn: string}[];
 } {
-    const fields: ReturnType<typeof venueUwFields> = {};
-    if (input.buildingCode !== undefined) {
-        const code = validateStr(input.buildingCode, "buildingCode", 8).trim().toUpperCase();
-        if (code && !UW_BUILDING_CODE_RE.test(code)) {
-            throw new HttpsError("invalid-argument", `Invalid buildingCode: ${code}.`);
-        }
-        fields.buildingCode = code;
+    const buildingCode = validateStr(input.buildingCode, "buildingCode", 8).trim().toUpperCase();
+    if (buildingCode && !UW_BUILDING_CODE_RE.test(buildingCode)) {
+        throw new HttpsError("invalid-argument", `Invalid buildingCode: ${buildingCode}.`);
     }
-    if (input.suggestedLots !== undefined) {
-        if (!Array.isArray(input.suggestedLots)) {
-            throw new HttpsError("invalid-argument", "suggestedLots must be a list.");
-        }
-        if (input.suggestedLots.length > MAX_SUGGESTED_LOTS) {
-            throw new HttpsError("invalid-argument", `Too many suggested lots (max ${MAX_SUGGESTED_LOTS}).`);
-        }
-        const seen = new Set<string>();
-        fields.suggestedLots = input.suggestedLots.map((lot: any, i: number) => {
-            const code = validateStr(lot?.code, `suggestedLots[${i}].code`, 12, true).trim().toUpperCase();
-            if (!UW_LOT_CODE_RE.test(code)) {
-                throw new HttpsError("invalid-argument", `Invalid UW lot code: ${code}.`);
-            }
-            if (seen.has(code)) throw new HttpsError("invalid-argument", `Duplicate suggested lot: ${code}.`);
-            seen.add(code);
-            return {
-                code,
-                noteEn: sanitizeDisplayText(validateStr(lot?.noteEn, `suggestedLots[${i}].noteEn`, 300)),
-                noteCn: sanitizeDisplayText(validateStr(lot?.noteCn, `suggestedLots[${i}].noteCn`, 300)),
-            };
-        });
+    if (!Array.isArray(input.suggestedLots)) {
+        throw new HttpsError("invalid-argument", "suggestedLots must be a list.");
     }
-    return fields;
+    if (input.suggestedLots.length > MAX_SUGGESTED_LOTS) {
+        throw new HttpsError("invalid-argument", `Too many suggested lots (max ${MAX_SUGGESTED_LOTS}).`);
+    }
+    const seen = new Set<string>();
+    const suggestedLots = input.suggestedLots.map((lot: any, i: number) => {
+        const code = validateStr(lot?.code, `suggestedLots[${i}].code`, 12, true).trim().toUpperCase();
+        if (!UW_LOT_CODE_RE.test(code)) {
+            throw new HttpsError("invalid-argument", `Invalid UW lot code: ${code}.`);
+        }
+        if (seen.has(code)) throw new HttpsError("invalid-argument", `Duplicate suggested lot: ${code}.`);
+        seen.add(code);
+        return {
+            code,
+            noteEn: sanitizeDisplayText(validateStr(lot?.noteEn, `suggestedLots[${i}].noteEn`, 300)),
+            noteCn: sanitizeDisplayText(validateStr(lot?.noteCn, `suggestedLots[${i}].noteCn`, 300)),
+        };
+    });
+    return {buildingCode, suggestedLots};
 }
 
 export const saveVenue = onCall({maxInstances: 10}, async (request) => {
@@ -1133,25 +1087,20 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     const lat = validateCoordinate(input.lat, "lat", -90, 90);
     const lng = validateCoordinate(input.lng, "lng", -180, 180);
 
-    const uwFields = venueUwFields(input);
+    const {buildingCode, suggestedLots} = venueUwFields(input);
 
     const docId = venueId ?? db.collection("venues").doc().id;
-    let buildingCode = uwFields.buildingCode ?? "";
 
     await adminTransaction(uid, async (txn, callerSnap) => {
         if (venueId) {
             const existing = await txn.get(db.collection("venues").doc(venueId));
             if (!existing.exists) throw new HttpsError("not-found", "Venue not found.");
-            // A save that leaves the code out keeps the one the venue has.
-            const current = existing.data()?.buildingCode;
-            buildingCode = uwFields.buildingCode ?? (typeof current === "string" ? current : "");
         }
 
         const ref = db.collection("venues").doc(docId);
-        const data = {nameEn, nameCn, lat, lng, ...uwFields};
+        const data = {nameEn, nameCn, lat, lng, buildingCode, suggestedLots};
         if (venueId) {
-            // Clears the old guide's lot links from a venue saved before they retired.
-            txn.update(ref, {...data, parkingLots: FieldValue.delete()});
+            txn.update(ref, data);
         } else {
             txn.set(ref, data);
         }
@@ -1163,9 +1112,9 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
         }));
     });
 
-    // A new, moved or re-coded venue gets walking times and its building outline now
-    // rather than at the nightly sync. Best effort: the save has committed, and the
-    // next sync refreshes them anyway.
+    // A new, moved or re-coded venue gets walking times and its outline now rather
+    // than at the nightly sync. Best effort: the save has committed, and the sync
+    // refreshes them anyway.
     await refreshVenueParking(docId, {lat, lng, buildingCode})
         .catch(err => console.error("saveVenue: parking data not refreshed for", docId, err));
     return {venueId: docId};
@@ -1203,16 +1152,14 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     const validMembers = members.map(m => {
         const useAccountRole = Boolean(m.useAccountRole);
         const useAccountPhoto = Boolean(m.useAccountPhoto);
-        // The stored role is only a fallback when it follows the linked account (resolved live
-        // at read time), so require it only when custom — this matches the client's canSave and
-        // allows following an account with no title set. The name is always custom, so always
-        // required.
+        // The stored role is only a fallback when it follows the linked account, so it is
+        // required only when custom, matching the client's canSave. The name is always custom.
         const name = sanitizeDisplayText(validateStr(m.name, "name", 200, true));
         if (!name) throw new HttpsError("invalid-argument", "name is required.");
         const imageUrl = validateStr(m.imageUrl, "imageUrl", 500);
-        // Team photos are either a team/<uuid>.webp storage URL or, for a member
-        // following their account, the account's photoURL fallback — which may be a
-        // Google avatar URL, so validate https rather than a storage-only URL.
+        // A team/<uuid>.webp upload, or for a member following their account its
+        // photoURL, which may be a Google avatar: hence https rather than
+        // storage-only.
         validateUrl(imageUrl, "imageUrl");
         return {
             id: validateStr(m.id, "id", 128, true),
@@ -1228,11 +1175,8 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
         };
     });
 
-    // Public projection stored in the world-readable config/main doc — display
-    // fields only, never the linked-account uid or the follow flags. The full
-    // roster (with uid/flags) lives in the server-only teamRoster/main doc, read
-    // back by getPublicTeamMembers (to resolve live account data) and getTeamRoster
-    // (the admin editor).
+    // Display fields only, for the world-readable config/main doc. The full roster,
+    // with uids and follow flags, lives in the server-only teamRoster/main.
     const publicMembers = validMembers.map(m => ({
         id: m.id,
         name: m.name,
@@ -1246,11 +1190,9 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     const configRef = db.collection("config").doc("main");
     const rosterRef = db.collection("teamRoster").doc("main");
     const orphanedImages = await adminTransaction(uid, async (txn, callerSnap) => {
-        // Each avatar upload writes a new team/<uuid>.webp rather than overwriting, so images
-        // this save stops referencing — replaced ones, and those of removed members — are left
-        // behind and deleted once the save commits. A member following their account stores the
-        // account photo as its fallback; that lives outside team/ and the prefix guard below
-        // keeps it safe. Read before the writes, as transactions require.
+        // Each avatar upload is a new team/<uuid>.webp, so images this save stops referencing
+        // are deleted once it commits. Account photos live outside team/, so the prefix guard
+        // below keeps them. Read before the writes, as transactions require.
         const rosterSnap = await txn.get(rosterRef);
         const prevMembers = (rosterSnap.data()?.teamMembers ?? []) as {imageUrl?: string}[];
         await requireNewlyLinkedFilesExist(validMembers.map(m => m.imageUrl), prevMembers.map(m => m.imageUrl ?? ""));
@@ -1261,8 +1203,7 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
                 .filter(url => url && !stillReferenced.has(url))
         )];
 
-        // Full roster (server-only) and public projection (world-readable) written
-        // together so the two never drift.
+        // Written together so the roster and its public projection never drift.
         txn.set(rosterRef, {
             teamMembers: validMembers,
             updatedBy: uid,
@@ -1290,8 +1231,7 @@ export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
     return {saved: true};
 });
 
-// Group labels for accounts without an explicit title (e.g. the president, whose
-// effective title is simply "President"). Kept in sync with the client's GROUP_LABELS.
+// For accounts without an explicit title. Keep in sync with the client's GROUP_LABELS.
 const GROUP_LABELS: Record<string, {en: string; zh: string}> = {
     "user": {en: "User", zh: "用户"},
     "staff": {en: "Staff", zh: "工作人员"},
@@ -1308,14 +1248,11 @@ const accountEffectiveTitle = (acc: {group: string; title: string; titleCn: stri
     };
 };
 
-// Public (unauthenticated) resolver for the "Our Team" section on the landing page.
-// The public site cannot read the users collection directly (Firestore rules gate it
-// to staff/self), so members that opt a field into following their linked account have
-// role/photo resolved here from the account's live title/photoURL. Names are always the
-// admin's stored custom value and never resolved from the account. Only members the admin
-// explicitly placed on the public team are looked up, and no email is exposed.
+// Public resolver for the landing page's "Our Team". The site can't read users directly,
+// so a member who follows their linked account gets its live title and photo resolved
+// here. Names are always the admin's own, only members placed on the public team are
+// looked up, and no email is exposed.
 export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
-    // Full roster (with uid/flags) lives in the server-only teamRoster/main doc.
     const rosterSnap = await db.collection("teamRoster").doc("main").get();
     const members = (rosterSnap.data()?.teamMembers ?? []) as Record<string, unknown>[];
 
@@ -1357,15 +1294,13 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
     const teamMembers = members.map(m => {
         const acc = typeof m?.uid === "string" ? accounts.get(m.uid) : undefined;
         const f = acc ? follows(m) : {role: false, photo: false};
-        // The role toggle governs both languages: English role follows the account's English
-        // title, Chinese role its Chinese title, each falling back to the account's group label
-        // (so a president with no title shows "President") and then to the stored custom value.
+        // Each language's role follows the account's title in that language, then its group
+        // label, then the stored custom value.
         const title = acc ? accountEffectiveTitle(acc) : {en: "", zh: ""};
         const role = (m.role as string) ?? "";
         const roleCn = (m.roleCn as string) ?? "";
         const imageUrl = (m.imageUrl as string) ?? "";
-        // Project only display fields — never the internal linked-account uid or the
-        // admin-side follow flags.
+        // Display fields only: never the linked uid or the follow flags.
         return {
             id: (m.id as string) ?? "",
             name: (m.name as string) ?? "",
@@ -1380,12 +1315,8 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
     return {teamMembers};
 });
 
-// Admin-side roster read for the "Our Team" editor. The full roster (linked-account
-// uid + follow flags) lives in the server-only teamRoster/main doc — never a
-// client-readable one — so the editor fetches it through this callable instead of
-// reading config directly. Gated to staff+ to match who can view the site-config
-// tab (core-staff edit, staff read-only); writes still go through saveTeamMembers,
-// which is core-staff+.
+// The full roster for the "Our Team" editor, from the server-only teamRoster/main.
+// Staff+, matching who can view Site Config; saveTeamMembers stays core-staff+.
 export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     const callerSnap = await db.collection("users").doc(uid).get();
@@ -1398,9 +1329,9 @@ export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
     return {teamMembers: rosterSnap.data()?.teamMembers ?? []};
 });
 
-// What Site Config's Sender Email section shows around the prefix field. The
-// domain comes from PUBLIC_ORIGIN on the server, which the client can't see.
-// Staff+ like getTeamRoster, since staff view Site Config read-only.
+// What Site Config's Sender Email section shows around the prefix field; the
+// domain comes from PUBLIC_ORIGIN, which the client can't see. Staff+, like
+// getTeamRoster.
 export const getSenderSettings = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     const callerSnap = await db.collection("users").doc(uid).get();
@@ -1410,22 +1341,14 @@ export const getSenderSettings = onCall({maxInstances: 10}, async (request) => {
     return {domain: SENDER_DOMAIN, defaultPrefix: DEFAULT_SENDER_PREFIX};
 });
 
-// Outbound-email capacity for the admin panel's Email Quota tool. Core-staff+
-// only, like the sends it describes.
+// Outbound-email capacity for the Email Quota tool. Core-staff+, like the sends
+// it describes.
 //
-// Two different numbers come back, and the distinction is the point:
-//
-//   providerReported — the provider's own used count, i.e. what the provider's
-//                      dashboard shows. Taken live per request via
-//                      syncProviderUsage. null when unavailable.
-//   sentToday        — the local counter that actually gates sends
-//                      (confirmed + in-flight reservations). Runs slightly
-//                      ahead of the provider while sends are in flight.
-//
-// Reporting only the local counter is what made this view disagree with the
-// Resend dashboard: system/resendQuota is written solely as a side effect of
-// sending, so between sends it sits at a high-water mark while the provider's
-// rolling window keeps rolling. Re-reading the provider re-anchors it here.
+// Two numbers come back: providerReported, the provider's own count read live
+// (null when unavailable), and sentToday, the local counter that gates sends,
+// confirmed plus in-flight. The local counter only updates on sends, so between
+// them it drifts from the provider's rolling window; reading the provider here
+// re-anchors it.
 export const getEmailQuotaStatus = onCall({
     maxInstances: 5,
     secrets: [RESEND_API_KEY],
@@ -1433,17 +1356,10 @@ export const getEmailQuotaStatus = onCall({
     const uid = await requireAuth(request);
     await requireAdmin(uid);
 
-    // Live reading first, folded into the cache with a zero send-delta so it
-    // refreshes `confirmed` without disturbing in-flight reservations. Every
-    // later read in this request then sees the fresh value. Also benefits the
-    // send path: an admin opening this panel re-anchors the counter that
-    // sendTicketEmails will use.
-    //
-    // Reading mid-send can briefly double-count: the provider may already have
-    // counted envelopes whose response hasn't landed, while `reserved` still
-    // holds them. That errs toward over-counting, which is the safe direction
-    // for cap enforcement, and settles as soon as the send response releases
-    // its reservation.
+    // Folded into the cache with a zero send-delta, which refreshes `confirmed`
+    // without touching in-flight reservations, so the rest of this request and
+    // the next send see it. Mid-send this can briefly double-count, which errs
+    // toward the safe side for the cap.
     const usage = await syncProviderUsage();
 
     const [quota, queue, fromAddress] = await Promise.all([
@@ -1452,10 +1368,9 @@ export const getEmailQuotaStatus = onCall({
         getSenderAddress(),
     ]);
 
-    // "cached" means the live read came back empty but a past send did record
-    // a reading — show it, aged, rather than pretending to be current.
-    // "unavailable" means we have never obtained a usage figure at all; the
-    // panel must not render that as 0 of 100.
+    // "cached": the live read failed but an earlier send recorded one, shown
+    // aged. "unavailable": never read at all, which the panel must not show as
+    // 0 of 100.
     const readingSource = usage !== null ? "live"
         : quota.observedAt !== null ? "cached"
             : "unavailable";
@@ -1469,15 +1384,15 @@ export const getEmailQuotaStatus = onCall({
         },
         providerReported: readingSource === "unavailable" ? null : quota.confirmed,
         readingSource,
-        // Set when the scan hit its page budget before reaching the window
-        // edge, so the panel can present the figure as a floor.
+        // The scan hit its page budget before the window edge, so the figure is
+        // a floor.
         usageTruncated: usage?.truncated ?? false,
         ...quota,
         ...queue,
         queueCap: RESEND_QUEUE_CAP,
         drainIntervalMinutes: DRAIN_INTERVAL_MINUTES,
-        // Server clock, so the client can age observedAt/oldestQueuedAt
-        // without trusting a possibly-skewed local clock.
+        // So the client can age observedAt/oldestQueuedAt without trusting its
+        // own clock.
         serverNow: new Date().toISOString(),
     };
 });

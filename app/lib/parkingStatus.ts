@@ -1,16 +1,15 @@
 import type { ClockRange, UwEventPricing, UwLot } from './uwParking';
 
 /**
- * What parking at a UW lot is like over a stretch of one day: the status the
- * parking guide's pins, pills and filters show. Kept free of the page and of
- * language, so it can be checked on its own.
+ * What parking at a UW lot is like over a stretch of one day: the status behind the
+ * guide's pins, pills and filters, kept free of the page and of language.
  *
- * UW lists two windows a day for each lot: when a permit is required, and when
- * a visitor can pay instead. Outside the permit window, parking is free; inside
- * it but outside the pay window, only permit holders can park. Sundays have
- * neither, and a window that runs past midnight carries on into the next
- * morning. A day on UW's event-parking calendar replaces both with a flat rate.
- * UW's holidays aren't in its data, so on one the guide may say pay when it's free.
+ * UW lists two windows a day per lot: when a permit is required, and when a visitor
+ * can pay instead. Outside the permit window parking is free; inside it but outside
+ * the pay window, it's permits only. Sundays have neither, a window past midnight
+ * carries into the next morning, and a day on UW's event-parking calendar replaces
+ * both with a flat rate. UW's holidays aren't in its data, so on one the guide may
+ * say pay when it's free.
  */
 
 /** How a stretch of time is: free, pay to park, or permit holders only. */
@@ -33,8 +32,8 @@ export interface ParkingWindow {
     start: number;
     end: number;
     /**
-     * A moment rather than an event's hours, for a guide opened without one: the
-     * status then describes `start` and what comes after it that day.
+     * A moment rather than an event's hours: the status describes `start` and
+     * the rest of that day.
      */
     isNow: boolean;
 }
@@ -75,12 +74,11 @@ export const dayOfWeek = (date: string): number => {
 };
 
 /**
- * A listed window in minutes, on the day it starts. UW writes 24 hours as a start
- * equal to its end (00:00–00:00), and an end of 00:00 means midnight at the close
- * of the day. A window past midnight counts until midnight here; `pastMidnight`
- * has the rest.
+ * A listed window in minutes, on the day it starts. UW writes 24 hours as
+ * 00:00–00:00, and an end of 00:00 is the midnight closing the day. A window past
+ * midnight counts until midnight here; `pastMidnight` has the rest.
  */
-export function windowMinutes(range: ClockRange | null | undefined): [number, number] | null {
+export function windowMinutes(range: ClockRange | null): [number, number] | null {
     if (!range) return null;
     const start = clockMinutes(range.start);
     const end = clockMinutes(range.end);
@@ -89,7 +87,7 @@ export function windowMinutes(range: ClockRange | null | undefined): [number, nu
 }
 
 /** The part of a listed window that runs past midnight into the next day, in that day's minutes. */
-export function pastMidnight(range: ClockRange | null | undefined): [number, number] | null {
+export function pastMidnight(range: ClockRange | null): [number, number] | null {
     if (!range) return null;
     const start = clockMinutes(range.start);
     const end = clockMinutes(range.end);
@@ -97,8 +95,8 @@ export function pastMidnight(range: ClockRange | null | undefined): [number, num
 }
 
 /** The minutes a lot's listed hours cover on day `dow`: its own window, and what's left of the day before's. */
-function minutesOn(hours: UwLot['paidHours'] | undefined, dow: number): [number, number][] {
-    const listed = (day: number) => hours && (day === 0 ? null : day === 6 ? hours.saturday : hours.weekday);
+function minutesOn(hours: UwLot['paidHours'], dow: number): [number, number][] {
+    const listed = (day: number) => day === 0 ? null : day === 6 ? hours.saturday : hours.weekday;
     return [windowMinutes(listed(dow)), pastMidnight(listed((dow + 6) % 7))].filter(w => w !== null);
 }
 
@@ -107,8 +105,7 @@ const within = (ws: [number, number][], minute: number) => ws.some(w => minute >
 /** A lot's day as stretches from midnight to midnight, each free, pay or permit only. */
 export function daySchedule(lot: UwLot, dow: number): Stretch[] {
     const pay = minutesOn(lot.paidHours, dow);
-    // Lots synced before permit hours were kept have only paid hours; assume they match.
-    const permit = lot.permitHours ? minutesOn(lot.permitHours, dow) : pay;
+    const permit = minutesOn(lot.permitHours, dow);
 
     const marks = [...new Set([0, DAY_MINUTES, ...pay.flat(), ...permit.flat()])].sort((a, b) => a - b);
     const stretches: Stretch[] = [];
@@ -131,7 +128,7 @@ function clip(day: Stretch[], start: number, end: number): Stretch[] {
 
 /** The event-rate day covering this lot during the window, if there is one. */
 export function eventPricingFor(lot: UwLot, window: ParkingWindow, pricing: UwEventPricing[]): UwEventPricing | null {
-    // Read like a listed window, so one synced before the sync split them at midnight still counts until then.
+    // An end of 00:00 is the midnight closing the day, as in a listed window.
     const covers = (p: UwEventPricing) => {
         const w = p.start === null || p.end === null ? null : windowMinutes({start: p.start, end: p.end});
         return w === null || (w[0] < window.end && w[1] > window.start);
@@ -195,11 +192,10 @@ export function listedRates(lot: UwLot): Rate[] {
 const overlaps = (a: number, b: number, [c, d]: readonly [number, number]) => a < d && b > c;
 
 /**
- * The rates a visitor pays at the lot between `start` and `end` on day `dow`:
- * only for time the lot charges, and only those of the rate periods that time
- * falls in. When the lot lists no rate for those periods, it gets whatever it
- * does list, since UW's data is what the gate charges. Empty when nothing is
- * paid then (free, permits only, or a Sunday).
+ * The rates a visitor pays between `start` and `end` on day `dow`: only for
+ * charged time, and only the rate periods it falls in, or whatever the lot
+ * lists when it has none for them. Empty when nothing is paid (free, permits
+ * only, or Sunday).
  */
 export function ratesDuring(lot: UwLot, dow: number, start: number, end: number): Rate[] {
     const paid = daySchedule(lot, dow).filter(s => s.segment === 'pay' && s.end > start && s.start < end)

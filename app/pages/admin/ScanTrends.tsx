@@ -5,16 +5,15 @@ import { SCAN_FETCH_LIMIT, type ScanEvent, type ScanHistory } from '~/lib/scans'
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import { advance, bucketStart, formatBucketLabel, granularityForSpan } from './timeBuckets';
 
-// Fixed palette for platform series, assigned in platform order and never
-// cycled. Validated for adjacent-pair colorblind separation on the app's white
-// surface; slot 1 is the app pink so single-series charts keep their old look,
-// and #6c5ce7 stays reserved for the cumulative line.
+// Platform series colours, in platform order, never cycled; checked for
+// colorblind separation between neighbours on white. Slot 1 is the app pink;
+// #6c5ce7 is reserved for the cumulative line.
 const SERIES_COLORS = [
     '#ff6b9d', '#2a78d6', '#eda100', '#008300', '#e34948',
     '#1baf7a', '#eb6834', '#4a3aa7', '#a05a2c',
 ];
-// Untagged scans (and platforms past the last slot) go neutral so they never
-// impersonate a tracked platform.
+// Untagged scans and overflow platforms go neutral, never looking like a
+// tracked platform.
 const UNTAGGED_COLOR = '#8a8987';
 const CUMULATIVE_COLOR = '#6c5ce7';
 
@@ -28,9 +27,9 @@ interface PlatformSeries {
 }
 
 /**
- * One series per platform the code tracks (or that appears in its history —
- * removed platforms keep their scans), plus a "Direct" bucket when untagged
- * scans exist. Empty for a plain location code, which charts as one series.
+ * One series per platform tracked or in the history (removed platforms keep
+ * their scans), plus "Direct" for untagged scans. Empty for a plain location
+ * code.
  */
 function buildPlatformSeries(
     scans: ScanEvent[],
@@ -63,9 +62,8 @@ interface Datum {
     [seriesKey: string]: number | string;
 }
 
-// Bucket scan timestamps into hour/day/week slots (chosen by overall span),
-// counted per series, and carry a running cumulative total so the chart shows
-// both pace and reach.
+// Hour, day or week buckets by overall span, per series, with a running total
+// for reach.
 function buildSeries(scans: ScanEvent[], seriesKeys: string[], isEnglish: boolean): Datum[] {
     if (scans.length === 0) return [];
     const sorted = [...scans].sort((a, b) => a.at.getTime() - b.at.getTime());
@@ -101,10 +99,9 @@ function buildSeries(scans: ScanEvent[], seriesKeys: string[], isEnglish: boolea
 }
 
 /**
- * The "Scans Over Time" panel as a detail page mounts it: loads the code's
- * scans, offers a refresh, and hands them to {@link ScanTrends}. `fetchScans`
- * has to be a stable reference (the module-level fetchQrScans), since it is what
- * re-triggers the load.
+ * "Scans Over Time" for a detail page: loads the scans, offers a refresh, and
+ * renders {@link ScanTrends}. `fetchScans` must be stable, since it triggers the
+ * load.
  */
 export function ScanTrendsSection({id, fetchScans, platforms}: {
     id: string;
@@ -115,8 +112,7 @@ export function ScanTrendsSection({id, fetchScans, platforms}: {
     const [history, setHistory] = useState<ScanHistory | null>(null);
     const [failed, setFailed] = useState(false);
 
-    // Refresh is a button as well as an effect, so a second load has to be able
-    // to overtake the first rather than race it: only the newest one may answer.
+    // Only the newest load may answer, since Refresh can start one mid-load.
     const token = useRef(0);
     const load = useCallback(() => {
         const mine = ++token.current;
@@ -166,10 +162,7 @@ interface ScanTrendsProps {
     platforms?: string[];
 }
 
-/**
- * One QR code's scan history over time. The platform series below is simply
- * empty for a code that doesn't tag its scans, which charts as one series.
- */
+/** One QR code's scan history over time. */
 export function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
     const {isEnglish} = useLanguage();
     const {platforms: platformDefs} = useSocialPlatforms();
@@ -239,8 +232,7 @@ export function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
                         <YAxis yAxisId="right" orientation="right" allowDecimals={false} tick={{fontSize: 11}}
                                width={32}/>
                         <Tooltip/>
-                        {/* Keep legend entries in series (stack) order, Cumulative last —
-                            the default sorts by name, and mount order shifts as pills toggle. */}
+                        {/* Legend in stack order with Cumulative last; the default sorts by name. */}
                         <Legend verticalAlign="top" iconType="circle" wrapperStyle={{fontSize: '12px'}}
                                 itemSorter={item => {
                                     const i = barSeries.findIndex(sr => sr.key === item.dataKey);

@@ -108,9 +108,8 @@ export const UpcomingEventDetailView = ({
         }
     };
 
-    // The sub-tab chosen on opening can belong to the other kind of event once an
-    // open event is switched to or from paid. Derived rather than corrected in an
-    // effect, so the panel never renders a tab the event doesn't have.
+    // Derived, so switching an open event to or from paid never renders a tab it
+    // doesn't have.
     const subTab = event.paid && (eventSubTab === 'codes' || eventSubTab === 'attendees') ? 'tickets'
         : !event.paid && eventSubTab === 'tickets' ? 'codes'
             : eventSubTab;
@@ -296,8 +295,8 @@ export const UpcomingEventDetailView = ({
                 <TicketsSubtab
                     event={event}
                     readOnly={readOnly}
-                    // Read-only here means the staff group, or event staff, who are
-                    // shown only their own events: both scan on the event's day(s).
+                    // Read-only means the staff group or event staff, who scan on
+                    // the event's days.
                     scanAccess={readOnly ? 'event-days' : 'always'}
                     showToast={showToast}
                 />

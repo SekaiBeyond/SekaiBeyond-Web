@@ -109,8 +109,8 @@ export const EventSection = ({content, loading, showToast, readOnly}: SectionPro
                         disabled={readOnly}
                     >
                         <option value="">{isEnglish ? '— Select a venue —' : '— 选择场地 —'}</option>
-                        {/* A venue deleted from Locations still has to show as the
-                            current value, or the select would quietly read as blank. */}
+                        {/* A deleted venue still shows as the current value, or the
+                            select would read blank. */}
                         {draft.venueId && !venuesLoading && !venues.some(v => v.id === draft.venueId) && (
                             <option value={draft.venueId}>
                                 {isEnglish ? '(Deleted venue)' : '（已删除的场地）'}
@@ -157,9 +157,8 @@ const ClipField = ({url, uploading, disabled, onPick, onClear, readOnly}: ClipFi
             </div>
 
             {url ? (
-                // Muted and looping like the hero itself, so the preview shows the
-                // loop point — the one thing about a background clip that is easy
-                // to get wrong and impossible to see in a still.
+                // Looping like the hero, so the loop point, invisible in a still,
+                // can be checked.
                 <video className="admin-video-cover-preview" src={url} muted loop autoPlay playsInline/>
             ) : (
                 <p className="admin-helper-text admin-mt-4">
@@ -177,8 +176,8 @@ const ClipField = ({url, uploading, disabled, onPick, onClear, readOnly}: ClipFi
                             disabled={disabled}
                             onChange={e => {
                                 const file = e.target.files?.[0];
-                                // Cleared right away so picking the same file twice
-                                // after a failed upload still fires a change event.
+                                // Cleared so picking the same file again still
+                                // fires a change.
                                 e.target.value = '';
                                 if (file) onPick(file);
                             }}
@@ -215,9 +214,8 @@ export const HeroVideoSection = ({content, loading, showToast, readOnly}: Sectio
         setBusy(true);
         try {
             showToast(isEnglish ? 'Uploading clip...' : '正在上传视频...', 'warning');
-            // Time-stamped so a replacement lands on a new object: the old URL is
-            // still what the published page is serving until this section is saved,
-            // and overwriting it in place would swap the live clip early.
+            // Time-stamped: the published page serves the old URL until this saves,
+            // and overwriting it would swap the live clip early.
             const url = await callUploadConVideo(file, `con/hero-${Date.now().toString(36)}.webm`);
             setDraft(prev => ({...prev, webm: url}));
             showToast(isEnglish ? 'Clip uploaded.' : '视频已上传。', 'success');

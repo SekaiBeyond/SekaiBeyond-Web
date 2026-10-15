@@ -30,10 +30,8 @@ interface PastEventDetailViewProps {
     onEdit: (event: PastEvent) => void;
 }
 
-// Adapt an archived event to the UpcomingEvent shape TicketsSubtab expects.
-// Only the fields the read-only Attendees/Stats view reads are meaningful; the
-// rest are placeholders (the Import/Template/Send sections that consume them are
-// hidden in readOnly mode).
+// An archived event in the UpcomingEvent shape TicketsSubtab expects; only the
+// read-only views' fields matter.
 const toTicketEvent = (e: PastEvent): UpcomingEvent => ({
     id: e.id,
     title: e.title,
@@ -71,8 +69,7 @@ export const PastEventDetailView = ({
     const {isEnglish} = useLanguage();
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
     const [searching, setSearching] = useState(false);
-    // Paid events show the read-only Tickets/Stats view; free events the
-    // user-record attendee list.
+    // Paid events show Tickets/Stats; free ones the attendee list.
     const [eventSubTab, setEventSubTab] = useState<'attendees' | 'staff' | 'tickets'>(
         event.paid ? 'tickets' : 'attendees',
     );
@@ -99,16 +96,15 @@ export const PastEventDetailView = ({
         }
     };
 
-    // Runs once per event: the view is keyed on the event's id, and a past
-    // event's `paid` flag is set when it is archived and never changes after.
+    // Once per event: the view is keyed on its id, and `paid` is fixed at
+    // archive.
     useEffect(() => {
         let active = true;
 
         const init = async () => {
             let paid = event.paid === true;
             if (!paid) {
-                // Fall back to probing the ticket attendees subcollection for events
-                // archived before the `paid` flag was stored on the past-event doc.
+                // No `paid` flag on the doc: probe for ticket attendees instead.
                 try {
                     paid = await pastEventHasTickets(event.id);
                     if (!active) return;
@@ -150,8 +146,7 @@ export const PastEventDetailView = ({
         return () => {
             active = false;
         };
-        // Not keyed on isEnglish, which only words the failure toast: a language
-        // toggle would otherwise refetch the attendees.
+        // Not keyed on isEnglish: a language toggle shouldn't refetch.
     }, [event.id, event.paid, showToast]);
 
     return (
@@ -228,9 +223,8 @@ export const PastEventDetailView = ({
             </div>
 
             {isPaidEvent && eventSubTab === 'tickets' && (
-                // Archived paid event — tickets are read-only and live
-                // under pastEvents (migrated on archive). Scanning is off
-                // because the event is over.
+                // Read-only: copied under pastEvents on archive, and the event
+                // is over.
                 <TicketsSubtab
                     event={toTicketEvent(event)}
                     readOnly

@@ -1,13 +1,10 @@
 /**
- * The zone the site keeps its dates and times in: the one its events run in,
- * that ticket emails print times in, and that admins type times in, wherever
- * their own computer is. Named rather than a fixed offset, so each date is read
- * with the offset in force on it — PST through the winter, PDT through the
- * summer. Mirrors functions/src/utils/siteTime.ts.
+ * The zone the site keeps dates and times in: its events', its ticket emails',
+ * and the one admins type in. Named rather than a fixed offset, so each date gets
+ * the offset in force on it. Mirrors functions/src/utils/siteTime.ts.
  *
- * Times the club sets — event hours, code windows, expiries — are typed and shown
- * on this clock. Timestamps of things that happened (a scan, a sign-up, a log
- * entry) stay in the viewer's own zone.
+ * Times the club sets (event hours, code windows, expiries) are typed and shown
+ * on this clock; timestamps of things that happened stay in the viewer's zone.
  */
 export const SITE_TIME_ZONE = 'America/Los_Angeles';
 
@@ -22,8 +19,8 @@ const CLOCK_FORMAT = new Intl.DateTimeFormat('en-US', {
 });
 
 /**
- * What the clock in SITE_TIME_ZONE reads at `ms`, written as the UTC moment that
- * reads the same — a number that can be stepped through without meeting a DST change.
+ * SITE_TIME_ZONE's wall clock at `ms`, as the UTC moment that reads the same, for
+ * arithmetic that never meets a DST change.
  */
 const clockAt = (ms: number): number => {
     const parts = Object.fromEntries(CLOCK_FORMAT.formatToParts(ms).map(p => [p.type, Number(p.value)]));
@@ -33,12 +30,11 @@ const clockAt = (ms: number): number => {
 /** The moment the clock in SITE_TIME_ZONE reads `clock`, as clockAt writes it. */
 const momentAt = (clock: number): number => {
     // Guessed with the offset at one moment, then corrected with the offset at
-    // the guess. The two agree unless a DST change falls between them.
+    // the guess; they agree unless DST changes in between.
     const first = clock - (clockAt(clock) - clock);
     const second = clock - (clockAt(first) - first);
-    // In the hour spring skips, no moment reads `clock`: `first`, taken with the
-    // winter offset, lands an hour on, where a clock set to it would read. In the
-    // hour fall repeats, `second` is its first pass, still on daylight time.
+    // In the hour spring skips, no moment reads `clock`, and `first` lands an
+    // hour on. In the hour fall repeats, `second` is the first pass.
     return clockAt(second) === clock ? second : first;
 };
 
@@ -46,10 +42,10 @@ const CLOCK_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)
 const ZONED_RE = /(Z|[+-]\d{2}:\d{2})$/;
 
 /**
- * A time as the moment it names. One that carries its zone — an ISO string
- * ending in Z or an offset — is read as written. A zoneless YYYY-MM-DDTHH:mm[:ss],
- * what a datetime-local input holds and what con content stores, is read on the
- * clock in SITE_TIME_ZONE, never the viewer's. Anything else is an Invalid Date.
+ * A time as the moment it names. An ISO string with Z or an offset is read as
+ * written; a zoneless YYYY-MM-DDTHH:mm[:ss], as datetime-local inputs and con
+ * content hold, is read on SITE_TIME_ZONE's clock. Anything else is an Invalid
+ * Date.
  */
 export const parseSiteTime = (value: string): Date => {
     const clock = CLOCK_RE.exec(value);
@@ -59,16 +55,15 @@ export const parseSiteTime = (value: string): Date => {
 };
 
 /**
- * `date` as the YYYY-MM-DDTHH:mm a datetime-local input holds, on the clock in
- * SITE_TIME_ZONE. Empty for no date, which leaves the input unset.
+ * `date` as a datetime-local value on SITE_TIME_ZONE's clock; empty for no
+ * date.
  */
 export const toDatetimeLocal = (date: Date | null): string =>
     date && !Number.isNaN(date.getTime()) ? new Date(clockAt(date.getTime())).toISOString().slice(0, 16) : '';
 
 /**
- * `days` calendar days on from `ms`: the same time on the clock in
- * SITE_TIME_ZONE, `days` dates later. Not `days` × 24 hours — across a DST change
- * a day is 23 or 25 of them. Mirrors addSiteDays in functions/src/utils/siteTime.ts.
+ * `days` calendar days on from `ms`, at the same wall-clock time, not `days` × 24
+ * hours. Mirrors addSiteDays in functions/src/utils/siteTime.ts.
  */
 export const addSiteDays = (ms: number, days: number): number => momentAt(clockAt(ms) + days * DAY_MS);
 
@@ -80,8 +75,8 @@ export const labelSiteZone = (text: string, isEnglish: boolean): string =>
     isEnglish ? `${text} PT` : `${text}（太平洋时间）`;
 
 /**
- * `date` on the clock in SITE_TIME_ZONE, in the reader's language. When
- * `options` include the hour, the zone is named after it.
+ * `date` on SITE_TIME_ZONE's clock in the reader's language, naming the zone
+ * when the hour is shown.
  */
 export const formatSiteTime = (date: Date, isEnglish: boolean, options: Intl.DateTimeFormatOptions): string => {
     const text = date.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {...options, timeZone: SITE_TIME_ZONE});

@@ -4,9 +4,8 @@ import { callGetTicketEmailQuota, callSendTicketEmails, functionsErrorCode, } fr
 import type { ShowToast } from '../utils';
 import type { AttendeeTotals } from './types';
 
-// Fallback chunk size used only for confirm-dialog copy when quota hasn't
-// loaded yet. The server is the source of truth (returned as quota.chunkSize)
-// and caps the per-invocation work either way.
+// Only for the confirm text before quota loads; the server's quota.chunkSize is
+// what counts.
 const FALLBACK_CHUNK_SIZE = 100;
 
 interface SendSectionProps {
@@ -42,9 +41,8 @@ export function SendSection({
     const [noTemplate, setNoTemplate] = useState(false);
     const [quota, setQuota] = useState<QuotaState | null>(null);
     const [quotaError, setQuotaError] = useState(false);
-    // The send loop reads the ref between chunks. The state only exists so that
-    // pressing Cancel re-renders the button and the note at once, not when the
-    // chunk in flight comes back.
+    // Read by the send loop between chunks; the state only re-renders the
+    // button and note at once.
     const cancelRef = useRef(false);
     const [cancelling, setCancelling] = useState(false);
 
@@ -71,9 +69,8 @@ export function SendSection({
         : null;
     const quotaNearCap = remainingToday !== null && remainingToday <= 10;
     const quotaAtCap = remainingToday === 0;
-    // Sends are disabled only when BOTH the current window's cap and the
-    // overflow queue are full — otherwise overflow goes into /scheduledMail,
-    // which drains automatically as Resend's rolling window reopens headroom.
+    // Blocked only when both the cap and the queue are full; otherwise overflow
+    // queues in /scheduledMail and drains as the window reopens.
     const fullyBlocked = quotaAtCap && remainingQueue === 0;
     const chunkSize = quota?.chunkSize ?? FALLBACK_CHUNK_SIZE;
 

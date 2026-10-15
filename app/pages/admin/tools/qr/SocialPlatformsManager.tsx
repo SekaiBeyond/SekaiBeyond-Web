@@ -25,13 +25,9 @@ interface SocialPlatformsManagerProps {
 }
 
 /**
- * Admin manager for the editable platform list behind per-platform QR tracking.
- * Platforms are traffic-source tags: picking some while creating a tracked code
- * makes one code per platform for the same URL, so scan counts compare
- * click-through by platform. Until the defaults are seeded the list is
- * read-only (built-in defaults stand in); "Customize defaults" seeds all of
- * them so they can be edited, removed, or extended — seeding all at once avoids
- * a single new platform replacing the defaults in the picker.
+ * Manages the platform list behind per-platform QR tracking. Until the defaults
+ * are seeded the list is read-only; "Customize defaults" seeds them all at
+ * once, so adding one platform can't replace the defaults in the picker.
  */
 export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: SocialPlatformsManagerProps) => {
     const {isEnglish} = useLanguage();

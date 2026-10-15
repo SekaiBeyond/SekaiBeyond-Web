@@ -60,8 +60,8 @@ interface TimelineEntry {
     type: TicketType;
 }
 
-// Per-bucket row: a label, the running cumulative total, and one numeric field
-// per ticket type (used as the dataKey for each stacked bar segment).
+// Per bucket: a label, the running total, and a count per ticket type for the
+// stacked bars.
 type TimelineDatum = {
     label: string;
     cumulative: number;
@@ -72,10 +72,8 @@ interface Timeline {
     types: TicketType[];
 }
 
-// Bucket entries by hour, day, or week depending on the span they cover. Each
-// bucket is split by ticket type and accumulates a running total for the
-// cumulative line. `types` lists the types that actually appear, in canonical
-// order, so the chart only draws bars that carry data.
+// Hour, day or week buckets by span, split by type, with a running total.
+// `types` lists only the types present, in canonical order.
 const buildTimeline = (entries: TimelineEntry[], isEnglish: boolean): Timeline => {
     if (entries.length === 0) return {data: [], types: []};
     const sorted = [...entries].sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -139,8 +137,7 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
                 }
                 const type = t.type || 'normal';
                 typeCounts[type] = (typeCounts[type] || 0) + 1;
-                // Split active (non-voided) tickets per type into redeemed and
-                // not-yet-redeemed for the per-type status breakdown.
+                // Active tickets per type, split into redeemed and not.
                 if (!t.voided) {
                     if (t.redeemed) {
                         redeemedByType[type] = (redeemedByType[type] || 0) + 1;
@@ -429,8 +426,7 @@ const CUMULATIVE_KEY = 'cumulative';
 function ChartTimeline(
     {data, types, isEnglish}: {data: TimelineDatum[]; types: TicketType[]; isEnglish: boolean},
 ) {
-    // dataKeys the user has toggled off via the legend (ticket types and/or
-    // the cumulative line).
+    // Series toggled off in the legend.
     const [hidden, setHidden] = useState<Set<string>>(new Set());
 
     const toggle = (key?: string) => {

@@ -43,7 +43,6 @@ export interface UwLot {
     /** When a permit is required; outside paidHours, a visitor can't park then. */
     permitHours: {weekday: ClockRange | null; saturday: ClockRange | null};
     gateHours: ClockRange | null;
-    hasTour: boolean;
 }
 
 export interface UwEventPricing {

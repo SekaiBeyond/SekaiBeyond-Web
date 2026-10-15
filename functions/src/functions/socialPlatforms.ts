@@ -4,8 +4,8 @@ import { db } from "../utils/firebase";
 import { sanitizeDisplayText, validateDocId, validateStr } from "../utils/validation";
 import { recordDoc, recordRef } from "../utils/records";
 
-// Server copy of the built-in platform list used by seedSocialPlatforms.
-// Kept in sync with DEFAULT_SOCIAL_PLATFORMS on the client (app/lib/socialPlatforms.ts).
+// The built-in platforms for seedSocialPlatforms. Keep in sync with
+// DEFAULT_SOCIAL_PLATFORMS in app/lib/socialPlatforms.ts.
 const DEFAULT_SOCIAL_PLATFORMS = [
     {id: "instagram", label: "Instagram", order: 0},
     {id: "x", label: "X (Twitter)", order: 1},
@@ -27,10 +27,9 @@ function validateOrder(value: unknown): number {
 }
 
 /**
- * Create or update an editable social platform. Platforms are traffic-source
- * tags for tracked QR codes: creating a code "per platform" makes one code per
- * platform pointing at the same URL so scan counts compare click-through.
- * Admin-only; the list is read client-side but only written here.
+ * Create or update a social platform: a traffic-source tag for tracked QR
+ * codes, one code per platform for the same URL so scans compare click-through.
+ * Read client-side, written only here.
  */
 export const saveSocialPlatform = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -84,8 +83,8 @@ export const deleteSocialPlatform = onCall({maxInstances: 10}, async (request) =
 });
 
 /**
- * Idempotently write the built-in defaults so admins can edit/remove them.
- * Only missing ids are created, so re-running never clobbers customisations.
+ * Write the built-in defaults so admins can edit them. Only missing ids are
+ * created, so re-running keeps customisations.
  */
 export const seedSocialPlatforms = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);

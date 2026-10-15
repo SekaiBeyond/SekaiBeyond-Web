@@ -18,38 +18,31 @@ import { Unpublished } from '~/pages/con/Unpublished';
 import { useT } from '~/pages/con/i18n';
 
 /**
- * The Sekai Beyond Con page. It carries its own navbar and footer rather than the
- * main site's: the bar sits transparent over the hero video and its links are
- * anchors into this page's sections, neither of which the shared chrome does.
- * `sbc-` prefixes keep its styles clear of the global class names in app/styles.
+ * The Sekai Beyond Con page, with its own navbar and footer: the bar sits
+ * transparent over the hero and links to this page's anchors. `sbc-` keeps its
+ * styles clear of app/styles.
  */
 export const ConPage = () => {
     const t = useT();
-    // Resolves to the published mirror, or to the draft when staff are
-    // previewing; `loading` already covers waiting on the viewer's group.
+    // The published mirror, or the draft for staff previewing.
     const {content, loading: contentLoading, failed} = useConContent();
-    // Fetched alongside the content so the venue name is there on first paint,
-    // rather than the hero reading "TBA" for a moment and then correcting itself.
+    // Alongside the content, so the hero doesn't flash "TBA" for the venue.
     const {loading: venuesLoading} = useVenues();
     const loading = contentLoading || venuesLoading;
     const {profile} = useAuth();
 
-    // The sections a hash points at do not exist until the content lands, so the
-    // scroll has to wait for it — `useHashScroll`'s own 500ms retry expires long
-    // before a cold Firestore read on a slow connection.
+    // Waits for the content, since a cold read can outlast `useHashScroll`'s own
+    // retry.
     useHashScroll(!loading);
 
     const canPreview = !!profile && hasPermission(profile.group, 'staff');
-    // A read that failed falls back to the shipped defaults, and those are not a
-    // page anybody agreed to publish.
+    // A failed read falls back to defaults nobody agreed to publish.
     const published = content.settings.published && !failed;
-    // Staff previewing the draft see these gone too, so the preview stays the page
-    // the public will get.
+    // Hidden for staff previews too, so the preview is the public page.
     const hidden = content.settings.hiddenSections;
 
-    // The switch and the viewer's group both arrive asynchronously. Rendering
-    // before either is known would flash an unpublished con at the public, which is
-    // the one thing this switch exists to prevent.
+    // Rendering before the switch and the viewer's group are known could flash an
+    // unpublished con.
     if (loading) return <div className="sbc-page"/>;
 
     if (!published && !canPreview) return <Unpublished/>;

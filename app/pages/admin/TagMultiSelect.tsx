@@ -5,20 +5,11 @@ interface TagMultiSelectProps {
     selected: string[];
     onChange: (tagIds: string[]) => void;
     isEnglish: boolean;
-    label?: string;
-    labelCn?: string;
 }
 
-// Toggle-chip selector for assigning multiple tags to an event. Rendered as a
-// div (not a <label>) so clicking the heading doesn't activate the first chip.
-export const TagMultiSelect = ({
-                                   tags,
-                                   selected,
-                                   onChange,
-                                   isEnglish,
-                                   label = 'Tags',
-                                   labelCn = '标签',
-                               }: TagMultiSelectProps) => {
+// Toggle chips for an event's tags, under a div rather than a <label> so
+// clicking the heading doesn't toggle the first chip.
+export const TagMultiSelect = ({tags, selected, onChange, isEnglish}: TagMultiSelectProps) => {
     const toggle = (id: string) => {
         onChange(selected.includes(id)
             ? selected.filter(t => t !== id)
@@ -27,7 +18,7 @@ export const TagMultiSelect = ({
 
     return (
         <div className="admin-tag-field">
-            <span>{isEnglish ? label : labelCn}</span>
+            <span>{isEnglish ? 'Tags' : '标签'}</span>
             {tags.length === 0 ? (
                 <p className="admin-tag-field-empty">
                     {isEnglish ? 'No tags available.' : '暂无可用标签。'}

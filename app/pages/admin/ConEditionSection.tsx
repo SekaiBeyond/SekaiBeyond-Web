@@ -40,9 +40,8 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
         setFormData(prev => ({...prev, image: previewUrl}));
         try {
             showToast(isEnglish ? 'Uploading image...' : '正在上传图片...', 'warning');
-            // Time-stamped so a replacement lands on a new object: admin images are
-            // cached as immutable, and the old URL is what the home page serves
-            // until this section is saved.
+            // Time-stamped: admin images are cached as immutable, and the home page
+            // serves the old URL until this saves.
             const url = await callUploadAdminImage(
                 file,
                 `config/con-${formData.year}-${Date.now().toString(36)}.webp`,

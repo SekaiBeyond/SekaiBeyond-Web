@@ -1,10 +1,8 @@
 import { formatSiteTime, siteDay } from '~/lib/siteTime';
 
-/*
- * An event's calendar days are counted in SITE_TIME_ZONE, the zone its ticket
- * emails print its time in. Mirrors functions/src/utils/eventDays.ts, which holds
- * the staff group and event staff to these days when they scan a ticket.
- */
+/* An event's calendar days, counted in SITE_TIME_ZONE. Mirrors
+   functions/src/utils/eventDays.ts, which holds the staff group and event staff
+   to these days when scanning. */
 
 /** The last moment the event runs. One that ends on the stroke of midnight doesn't run into the next day. */
 const lastMs = (startAt: Date, endAt: Date): number => Math.max(startAt.getTime(), endAt.getTime() - 1);

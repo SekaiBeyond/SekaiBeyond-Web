@@ -6,8 +6,7 @@ import { applyProviderUsage, rollbackQuotaReservation } from "./quota";
 // Bind to functions that send mail. Without the binding, value() returns "".
 export const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
 
-// Normalized envelope — one outbound email. Callers convert their own shapes
-// (attendee row, queue doc, admin form) into this.
+// One outbound email. Callers convert their own shapes into this.
 export interface ResendEnvelope {
     to: string | string[];
     subject: string;
@@ -20,16 +19,13 @@ export interface ResendEnvelope {
 export interface SendResult {
     sentCount: number;
     ids: string[];
-    // x-resend-daily-quota — Resend's authoritative consumed counter for the
-    // free plan's sliding 24h window. Absent on paid plans. Returned by both
-    // the single and the batch endpoint.
+    // x-resend-daily-quota: Resend's own count for the free plan's 24-hour
+    // window, on both endpoints. Absent on paid plans.
     dailyConsumed: number | null;
 }
 
-// Resend's free-plan daily limit counts every to/cc/bcc address as a separate
-// email — a single POST with 1 to + 24 cc consumes 25 quota slots, not 1. The
-// x-resend-daily-quota header reflects this. Use this helper to compute quota
-// deltas on both reserve and release so the cache matches Resend's bookkeeping.
+// Resend counts every to/cc/bcc address as one email (1 to + 24 cc uses 25), so
+// reserve and release both count this way.
 export function countRecipients(envelopes: ResendEnvelope[]): number {
     let total = 0;
     for (const e of envelopes) {
@@ -40,12 +36,10 @@ export function countRecipients(envelopes: ResendEnvelope[]): number {
     return total;
 }
 
-// Custom error carrying the daily-quota header value, if one came back.
-// Callers use it to settle the pre-charge they wrote before the call: null
-// means the reservation is still in place (Resend never answered, or answered
-// without the header), so the caller rolls it back; non-null means
-// resendClient already folded the header into the cache, and rolling back
-// would release the reservation twice.
+// Carries the quota header, if one came back, so callers can settle their
+// pre-charge: null means it's still in place and must be rolled back; non-null
+// means resendClient already folded it in, and rolling back would release it
+// twice.
 export class ResendSendError extends Error {
     dailyConsumed: number | null;
 
@@ -60,17 +54,15 @@ const RESEND_SINGLE_URL = "https://api.resend.com/emails";
 const RESEND_BATCH_URL = "https://api.resend.com/emails/batch";
 const RESEND_BATCH_MAX = 100;
 
-// The From address for outbound mail: the prefix saved in Site Config, or
-// DEFAULT_SENDER_PREFIX while that is blank, at SENDER_DOMAIN. Read on every
-// send, so a change in Site Config applies to the next email without a deploy.
+// From: the Site Config prefix, or DEFAULT_SENDER_PREFIX while blank, at
+// SENDER_DOMAIN. Read per send, so a change applies without a deploy.
 export async function getSenderAddress(): Promise<string> {
     const saved = (await db.collection("config").doc("main").get()).get("senderPrefix");
     const prefix = typeof saved === "string" && saved ? saved : DEFAULT_SENDER_PREFIX;
     return `${prefix}@${SENDER_DOMAIN}`;
 }
 
-// Build the Resend API JSON for one envelope. `reply_to` is snake_case —
-// the camelCase form is silently ignored by the REST API.
+// `reply_to` must be snake_case; the REST API ignores camelCase.
 function toPayload(e: ResendEnvelope, from: string): Record<string, unknown> {
     const payload: Record<string, unknown> = {
         from,
@@ -84,21 +76,14 @@ function toPayload(e: ResendEnvelope, from: string): Record<string, unknown> {
     return payload;
 }
 
-// Send one or more emails through Resend, picking the endpoint by count:
-//   - exactly 1  -> POST /emails        (single send; body is one object,
-//                                        response is {id})
-//   - 2 to 100   -> POST /emails/batch  (batch send;  body is an array,
-//                                        response is {data:[{id}]})
-// A lone email is a genuine single send rather than a batch-of-one — that
-// keeps it on the endpoint that supports attachments/scheduled_at, should a
-// caller ever need them (the batch endpoint supports neither). Both
-// endpoints carry x-resend-daily-quota on the same terms, so quota tracking
-// is identical.
+// Send one or more emails: exactly one through POST /emails ({id}), 2 to 100
+// through POST /emails/batch ({data: [{id}]}). A lone email is a real single
+// send, the endpoint that supports attachments and scheduled_at. Both carry the
+// quota header the same way.
 //
-// All-or-nothing: a malformed envelope fails the whole call (the batch
-// endpoint has no per-email error reporting). Validation happens upstream.
-// On any response carrying the quota header, the cache is updated before
-// returning/throwing so reservation reads see the authoritative count.
+// All or nothing: the batch endpoint has no per-email errors, so one bad
+// envelope fails the call. The cache is updated from any quota header before
+// returning or throwing.
 export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResult> {
     if (envelopes.length === 0) {
         return {sentCount: 0, ids: [], dailyConsumed: null};
@@ -112,11 +97,9 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
         throw new Error("RESEND_API_KEY is not set on this function.");
     }
 
-    // Per-envelope shape guard. The batch endpoint is all-or-nothing with no
-    // per-email error reporting, so one structurally bad envelope would fail
-    // the whole call with an opaque 422. Catch it here with a message that
-    // names the offender. (Shape only — a well-formed address that Resend
-    // rejects server-side still fails the batch; that's inherent to batching.)
+    // Shape check per envelope, so a bad one fails with a message naming it
+    // rather than an opaque 422 for the batch. An address Resend rejects still
+    // fails the whole batch.
     for (let i = 0; i < envelopes.length; i++) {
         const e = envelopes[i];
         const recipients = Array.isArray(e.to) ? e.to : [e.to];
@@ -127,8 +110,8 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
         }
     }
 
-    // A failed read throws before Resend is called, which callers already
-    // treat like a network error and roll back their pre-charge.
+    // A failed read throws before Resend is called; callers treat that like a
+    // network error.
     const from = await getSenderAddress();
 
     const single = envelopes.length === 1;
@@ -147,23 +130,17 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
             body: JSON.stringify(body),
         });
     } catch (err) {
-        // Network error / DNS failure / timeout — Resend never responded,
-        // so no quota header arrived. dailyConsumed=null signals to the
-        // caller that any pre-charge they did is still in place and needs
-        // to be rolled back.
+        // Resend never answered, so no header: dailyConsumed=null tells the
+        // caller its pre-charge needs rolling back.
         throw new ResendSendError(
             `Resend send network error: ${err instanceof Error ? err.message : String(err)}`,
             null,
         );
     }
 
-    // Read header even on error, so reservation accuracy survives a 4xx (a 429
-    // in particular wants the freshest consumed count).
-    //
-    // Often absent: Resend sends the quota headers to free-plan accounts only,
-    // and only on send responses — never on a GET. Treat a present value as a
-    // bonus that re-anchors the cache for free, not as the counter's source;
-    // fetchProviderUsage is what keeps `confirmed` honest on every plan.
+    // Read even on an error: a 429 especially wants the freshest count. Often
+    // absent (free plan, send responses only), so it's a bonus re-anchor;
+    // fetchProviderUsage is what keeps `confirmed` honest.
     const dailyHeader = resp.headers.get("x-resend-daily-quota");
     const dailyConsumed = dailyHeader !== null && !Number.isNaN(Number(dailyHeader))
         ? Number(dailyHeader)
@@ -171,10 +148,8 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
 
     const totalRecipients = countRecipients(envelopes);
 
-    // Fold the reading into the quota cache: record Resend's authoritative
-    // count and release this send's own reservation (totalRecipients, what
-    // the caller pre-charged). Done before returning/throwing so reservation
-    // reads see the fresh count.
+    // Record Resend's count and release this send's own reservation, before
+    // returning or throwing.
     if (dailyConsumed !== null) {
         await applyProviderUsage(dailyConsumed, totalRecipients);
     }
@@ -206,9 +181,9 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
         const batchJson = json as {data?: Array<{id: string}>};
         ids = (batchJson.data ?? []).map(d => d.id);
     }
-    // Sent, but no header arrived (e.g. on paid plans): release the pre-charge
-    // so it doesn't leak. Last, because a throw anywhere above leaves that
-    // release to the caller, and releasing here as well would do it twice.
+    // Sent, but no header (e.g. a paid plan): release the pre-charge. Last,
+    // because if anything above throws the caller releases it, and doing it
+    // here too would double it.
     if (dailyConsumed === null) await rollbackQuotaReservation(totalRecipients);
     return {sentCount: ids.length, ids, dailyConsumed};
 }

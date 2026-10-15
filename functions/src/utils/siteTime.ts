@@ -1,10 +1,8 @@
 /**
- * The zone the site keeps its dates and times in: the one its events run in,
- * that ticket emails print times in, and that admins type times in, wherever
- * their own computer is. Named rather than a fixed offset, so each date is read
- * with the offset in force on it — PST through the winter, PDT through the
- * summer. Nothing here reads the server's own zone, which is UTC. Mirrors
- * app/lib/siteTime.ts.
+ * The zone the site keeps dates and times in: its events', its ticket emails',
+ * and the one admins type in. Named rather than a fixed offset, so each date
+ * gets the offset in force on it. The server's own zone (UTC) is never read.
+ * Mirrors app/lib/siteTime.ts.
  */
 export const SITE_TIME_ZONE = "America/Los_Angeles";
 
@@ -19,9 +17,8 @@ const CLOCK_FORMAT = new Intl.DateTimeFormat("en-US", {
 });
 
 /**
- * What the clock in SITE_TIME_ZONE reads at `ms`, written as the UTC moment that
- * reads the same — a number the date arithmetic below can step through without
- * meeting a DST change.
+ * SITE_TIME_ZONE's wall clock at `ms`, as the UTC moment that reads the same,
+ * for arithmetic that never meets a DST change.
  */
 function clockAt(ms: number): number {
     const parts = Object.fromEntries(CLOCK_FORMAT.formatToParts(ms).map(p => [p.type, Number(p.value)]));
@@ -31,12 +28,11 @@ function clockAt(ms: number): number {
 /** The moment the clock in SITE_TIME_ZONE reads `clock`, as clockAt writes it. */
 function momentAt(clock: number): number {
     // Guessed with the offset at one moment, then corrected with the offset at
-    // the guess. The two agree unless a DST change falls between them.
+    // the guess; they agree unless DST changes in between.
     const first = clock - (clockAt(clock) - clock);
     const second = clock - (clockAt(first) - first);
-    // In the hour spring skips, no moment reads `clock`: `first`, taken with the
-    // winter offset, lands an hour on, where a clock set to it would read. In the
-    // hour fall repeats, `second` is its first pass, still on daylight time.
+    // In the hour spring skips, no moment reads `clock`, and `first` lands an
+    // hour on. In the hour fall repeats, `second` is the first pass.
     return clockAt(second) === clock ? second : first;
 }
 
@@ -44,9 +40,8 @@ const CLOCK_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)
 const ZONED_RE = /(Z|[+-]\d{2}:\d{2})$/;
 
 /**
- * A time as the moment it names. One that carries its zone — an ISO string
- * ending in Z or an offset — is read as written. A zoneless YYYY-MM-DDTHH:mm[:ss],
- * what a datetime-local input holds, is read on the clock in SITE_TIME_ZONE.
+ * A time as the moment it names. An ISO string with Z or an offset is read as
+ * written; a zoneless YYYY-MM-DDTHH:mm[:ss] is read on SITE_TIME_ZONE's clock.
  * Anything else is an Invalid Date.
  */
 export function parseSiteTime(value: string): Date {
@@ -62,10 +57,8 @@ export function siteDay(ms: number): string {
 }
 
 /**
- * `days` calendar days on from `ms`: the same time on the clock in
- * SITE_TIME_ZONE, `days` dates later. Not `days` × 24 hours — across a DST change
- * a day is 23 or 25 of them, and counting hours would move a time an hour, which
- * for one set to 11:59 PM is the next day.
+ * `days` calendar days on from `ms`, at the same wall-clock time. Not `days` × 24
+ * hours, which across DST would move 11:59 PM into the next day.
  */
 export function addSiteDays(ms: number, days: number): number {
     return momentAt(clockAt(ms) + days * DAY_MS);

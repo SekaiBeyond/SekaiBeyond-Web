@@ -1,22 +1,19 @@
 import { generateSecureCode } from "./helpers";
 
 /**
- * Every reward code is typed into the same box, so the box has to work out what
- * kind of code it was handed. Codes issued from here say so themselves: a
- * single-letter prefix names the collection the code lives in.
+ * Every reward code is typed into the same box, so a single-letter prefix names
+ * the collection a code lives in.
  *
- * Codes issued before the prefix are bare CODE_BODY_LENGTH characters and name
- * nothing. Only staff codes still have bare ones live, so redeemCode tries a
- * bare code as a staff code. Nothing is reissued — a code already printed on a
- * flyer has to keep working.
+ * Older staff codes are bare CODE_BODY_LENGTH characters and still live, so
+ * redeemCode tries a bare code as a staff code. Printed codes have to keep
+ * working.
  */
 
 export const CODE_BODY_LENGTH = 12;
 
 export type CodeKind = "badge" | "staff" | "event";
 
-// Drawn from CODE_ALPHABET so the prefix survives the same transcription as the
-// body it precedes: nothing here can be misread as I/1 or O/0.
+// From CODE_ALPHABET, so nothing can be misread as I/1 or O/0.
 const PREFIX_BY_KIND: Record<CodeKind, string> = {
     badge: "B",
     staff: "S",
@@ -33,9 +30,8 @@ export function issueCode(kind: CodeKind): string {
 }
 
 /**
- * The document id for a code someone typed: case folded, with the dashes we
- * print for legibility (and any spaces the reader adds) dropped. Null for
- * anything the per-kind callables would have rejected outright.
+ * The doc id for a typed code: case folded, dashes and spaces dropped. Null for
+ * anything the per-kind callables would reject outright.
  */
 export function normalizeCode(raw: unknown): string | null {
     if (typeof raw !== "string") return null;
@@ -44,12 +40,9 @@ export function normalizeCode(raw: unknown): string | null {
 }
 
 /**
- * What kind of code this is, or null when it predates the prefix.
- *
- * Length is what separates the two generations: a prefixed code is exactly one
- * character longer than the bare ones it sits alongside, so a legacy code that
- * merely starts with a "B" is never mistaken for a badge code. A passport id is
- * shorter still, and so never claims a kind here either.
+ * What kind of code this is, or null for a bare one. A prefixed code is exactly
+ * one character longer than a bare one, so a bare code starting with "B" is
+ * never taken for a badge code; a passport id is shorter still.
  */
 export function codeKind(canonical: string): CodeKind | null {
     if (canonical.length !== CODE_BODY_LENGTH + 1) return null;

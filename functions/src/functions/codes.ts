@@ -18,10 +18,9 @@ function requireCode(request: {data: unknown}): string {
 }
 
 /**
- * "That isn't one of ours" — the only failure worth trying the next kind on.
- * Anything else (expired, used up, already held) describes a code we did match,
- * and re-asking a different collection would replace a true answer with
- * "invalid".
+ * "That isn't one of ours", the only failure worth trying the next kind on. Any
+ * other error means the code matched, and asking another collection would turn
+ * a true answer into "invalid".
  */
 function isUnmatchedCode(err: unknown): boolean {
     const details = err instanceof HttpsError ? err.details as {code?: string} | undefined : undefined;
@@ -48,14 +47,12 @@ async function redeemPassportKey(uid: string, key: string) {
 }
 
 /**
- * One door for every code a member can type: badge codes, staff codes, and the
- * key on a passport's slip are all redeemed here.
+ * One door for every code a member can type: badge codes, staff codes and
+ * passport keys.
  *
- * The client used to do this dispatch itself by calling each claim function in
- * turn, which spent a rate-limit slot per guess (requireAuth charges one each
- * time) and let five mistypes lock someone out for a minute. Guessing from here
- * costs one slot however many collections it takes, and the guessing stops
- * entirely for a code whose prefix names its kind.
+ * Guessing the kind here costs one rate-limit slot however many collections it
+ * takes (requireAuth charges one per call), and a prefixed code needs no guess
+ * at all.
  */
 export const redeemCode = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
@@ -67,15 +64,15 @@ export const redeemCode = onCall({maxInstances: 20}, async (request) => {
         case "staff":
             return {kind: "staff" as const, ...await redeemStaffCode(uid, code)};
         case "event":
-            // Check-in codes are scanned from their claim URL rather than typed,
-            // so the prefix buys a straight answer instead of "invalid".
+            // Check-in codes are scanned from their claim URL, not typed, so the
+            // prefix buys a straight answer.
             throw new HttpsError("failed-precondition", "This code checks you in at an event.", {
                 code: "event-code",
             });
     }
 
-    // No prefix: a staff code issued before prefixes existed, or a passport key.
-    // Every bare badge code is gone, so only staff codes still need the guess.
+    // No prefix: an old staff code, or a passport key. No bare badge codes
+    // remain.
     try {
         return {kind: "staff" as const, ...await redeemStaffCode(uid, code)};
     } catch (err) {
@@ -516,8 +513,8 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
                     throw new HttpsError("permission-denied", "Insufficient permissions.");
                 }
 
-                // Staff codes can be generated for past events too (to credit
-                // staff retroactively), so resolve the event from either collection.
+                // Staff codes also work for past events, to credit staff after the
+                // fact.
                 const [upcomingSnap, pastSnap] = await Promise.all([
                     txn.get(db.collection("upcomingEvents").doc(eventId)),
                     txn.get(db.collection("pastEvents").doc(eventId)),
@@ -531,9 +528,8 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
                 ]);
                 if (existing.exists) throw new Error("duplicate");
 
-                // The new code replaces every code the event had, enabled or not,
-                // rather than leaving them switched off. Staff they admitted stay
-                // staff: that lives on their user records.
+                // Replaces every code the event had, enabled or not. Staff they
+                // admitted stay staff; that lives on their user records.
                 for (const oldDoc of existingCodes.docs) {
                     txn.delete(oldDoc.ref);
                     txn.set(recordRef(), recordDoc("staff-code-delete", {
@@ -619,8 +615,8 @@ async function redeemStaffCode(uid: string, code: string) {
         txn.update(codeRef, {usedCount: FieldValue.increment(1)});
         txn.update(userRef, {
             eventStaffEvents: FieldValue.arrayUnion(eventId),
-            // Upcoming: auto-attend. Past: keep them out of the free attendee list
-            // (matches assignEventStaff — staff are credited via the Staff badge).
+            // As in assignEventStaff: upcoming, they count as attending; past,
+            // they stay off the free attendee list and get the Staff badge.
             attendedEvents: isPastEvent
                 ? FieldValue.arrayRemove(eventId)
                 : FieldValue.arrayUnion(eventId),
@@ -713,9 +709,8 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
     });
 });
 /**
- * Deletes a staff code for good. Only a disabled one, so a code that is printed
- * and in use has to be switched off first. Staff it already admitted stay staff:
- * that lives on their user record, not on the code.
+ * Deletes a staff code for good, but only a disabled one, so a code in use is
+ * switched off first. Staff it admitted stay staff.
  */
 export const deleteStaffCode = onCall({maxInstances: 10}, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");

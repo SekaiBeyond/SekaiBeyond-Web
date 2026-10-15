@@ -1,17 +1,15 @@
 import { PUBLIC_ORIGIN } from "./config";
 
 /**
- * Readers for the public data the parking guide is built from. None of these
- * sources is a documented API, so each reader validates what it gets and throws
- * rather than return something half-read; the sync then keeps its last good copy.
+ * Readers for the public data the parking guide is built from. None is a
+ * documented API, so each validates what it gets and throws rather than return
+ * something half-read; the sync then keeps its last good copy.
  *
- * - UW_LOTS_URL: the JSON behind UW Transportation Services' parking map
- *   (depts.washington.edu/tsevents), regenerated daily around 23:00 UTC.
- * - UW_EVENT_PRICING_URL: the Trumba feed behind UW's event-parking calendar,
- *   which lists the days a flat event rate replaces the usual one.
- * - WALKING_ROUTER_URL: the public OSRM foot router run by FOSSGIS on
- *   OpenStreetMap data. Fair use only, so it is called at most once per venue per
- *   sync, and only when the venue or a lot has moved.
+ * - UW_LOTS_URL: the JSON behind UW Transportation Services' parking map,
+ *   regenerated daily around 23:00 UTC.
+ * - UW_EVENT_PRICING_URL: the Trumba feed behind UW's event-parking calendar.
+ * - WALKING_ROUTER_URL: FOSSGIS's public OSRM foot router. Fair use only, so
+ *   called once per venue per sync, and only when the venue or a lot moved.
  */
 export const UW_LOTS_URL = "https://depts.washington.edu/tsevents/data/master-data.json";
 export const UW_EVENT_PRICING_URL = "https://www.trumba.com/calendars/sea_commute.json";
@@ -30,7 +28,7 @@ export const UW_LOT_CODE_RE = /^[A-Z0-9][A-Z0-9-]{0,11}$/;
 export const UW_BUILDING_CODE_RE = /^[A-Z0-9]{2,8}$/;
 
 // The access levels a visitor can park under; "Permits Only", "Restricted" and
-// load zones ("Other") are left out of the guide.
+// load zones are left out.
 const VISITOR_ACCESS = ["Permits or Pay", "Pay to Park"] as const;
 const CLOCK_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -67,14 +65,12 @@ export interface UwLot {
     /** When visitors can pay to park, as HH:mm on the site clock. Null on a day with no paid hours. */
     paidHours: {weekday: ClockRange | null; saturday: ClockRange | null};
     /**
-     * When a permit is required. Usually the same as paidHours, but on some lots
-     * it starts earlier or ends later, and outside paidHours a visitor can't park.
+     * When a permit is required: usually paidHours, but sometimes longer, and
+     * outside paidHours a visitor can't park then.
      */
     permitHours: {weekday: ClockRange | null; saturday: ClockRange | null};
     /** When a gated garage is open, if UW lists it. */
     gateHours: ClockRange | null;
-    /** Whether UW's map has a 360° photo tour of the lot. */
-    hasTour: boolean;
 }
 
 export interface UwEventPricing {
@@ -162,7 +158,6 @@ function toVisitorLot(raw: unknown): UwLot | null {
             saturday: clockRange(raw.permitSaturdayStart, raw.permitSaturdayEnd),
         },
         gateHours: clockRange(raw.physicalAccessStart, raw.physicalAccessEnd),
-        hasTour: isRecord(raw.tour) && raw.tour.hasImages === true,
     };
 }
 
@@ -228,9 +223,9 @@ export async function fetchUwEventPricing(fromDay: string): Promise<UwEventPrici
             .filter(c => UW_LOT_CODE_RE.test(c));
         if (!allLots && lots.length === 0) continue;
 
-        // An entry can cover more than one day: an all-day one ends at the midnight after its last
-        // day (Fri 00:00 to Sun 00:00 is Friday and Saturday), and a timed one can run past midnight.
-        // Each day it covers gets a record of its own, with the hours it covers that day.
+        // An entry can span days: an all-day one ends at the midnight after its last day (Fri 00:00
+        // to Sun 00:00 is Friday and Saturday), and a timed one can run past midnight. Each day gets
+        // its own record with that day's hours.
         const firstDay = start[1];
         const [endDay, endClock] = end ? [end[1], end[2]] : [addDays(firstDay, 1), "00:00"];
         const lastDay = endClock === "00:00" && endDay > firstDay ? addDays(endDay, -1) : endDay;
@@ -287,7 +282,7 @@ export async function fetchWalkingTimes(
 }
 
 // UW Facilities' public ArcGIS layers: building outlines, and the accessibility
-// guide's per-building notes, which include the parking UW recommends for it.
+// guide's per-building notes, which name the parking UW recommends.
 const UW_GIS = "https://gis.maps.uw.edu/federated/rest/services";
 const UW_BUILDINGS_LAYER = `${UW_GIS}/BaseComponents/UW_Seattle_Buildings_and_Paths/FeatureServer/1/query`;
 const UW_BUILDING_INFO_LAYER = `${UW_GIS}/PublicData/PUBLIC_ADA/MapServer/6/query`;
@@ -408,9 +403,8 @@ export async function fetchUwBuilding(code: string): Promise<UwBuilding | null> 
 }
 
 /**
- * A building's footprint, shaped for Firestore, which can't hold an array in an
- * array: each polygon maps ring index to a flat [lng, lat, lng, lat, …] list,
- * the outline first and any courtyards after it.
+ * A building's footprint, shaped for Firestore, which can't nest arrays: each
+ * polygon maps ring index to a flat [lng, lat, …] list, outline first.
  */
 export interface UwBuildingOutline {
     code: string;

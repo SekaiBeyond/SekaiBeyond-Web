@@ -64,14 +64,11 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
     const [hasMoreRecent, setHasMoreRecent] = useState(true);
     const [pendingDeletionUids, setPendingDeletionUids] = useState<Set<string>>(new Set());
 
-    // Bumped whenever the filters change, so a page asked for under the old ones
-    // is dropped when it lands instead of being shown, or appended, under the new.
+    // So a page requested under old filters is dropped when it lands.
     const recentGenRef = useRef(0);
 
-    // Merged into each list's current copy rather than the one the request began
-    // from: two edits in flight at once (a rename and a membership change, say)
-    // would otherwise each put back the field the other changed, and an admin who
-    // has gone back to the list isn't pulled back into the user when it lands.
+    // Merged into each list's current copy, so two edits in flight don't undo
+    // each other, and a landing edit doesn't pull the admin back into the user.
     const applyUserUpdate = (uid: string, changes: Partial<UserRecord>) => {
         const merge = (u: UserRecord) => u.uid === uid ? {...u, ...changes} : u;
         setSelectedUser(prev => prev && merge(prev));
@@ -187,8 +184,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                         </option>
                     ))}
                 </select>
-                {/* Membership is orthogonal to role, so it filters separately rather
-                    than as another entry in the role dropdown. */}
+                {/* Membership is separate from role, so it filters separately. */}
                 <label className="admin-members-filter">
                     <input
                         type="checkbox"

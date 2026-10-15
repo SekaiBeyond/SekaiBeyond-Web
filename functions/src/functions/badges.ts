@@ -119,8 +119,8 @@ export const saveBadge = onCall({maxInstances: 10}, async (request) => {
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const imageUrl = validateStr(input.imageUrl, "imageUrl", 500);
     validateStorageImageUrl(imageUrl, "imageUrl");
-    // createdByUid/Name/Link are for crediting the badge designer (not the admin who enters it).
-    // The actual admin who performed the action is recorded as createdBy/performedBy.
+    // createdBy* credits the badge's designer; the admin who saves it is recorded as
+    // performedBy.
     const createdByUid = validateStr(input.createdByUid, "createdByUid", 128);
     const createdByName = sanitizeDisplayText(validateStr(input.createdByName, "createdByName", 100));
     const createdByLink = validateStr(input.createdByLink, "createdByLink", 500);

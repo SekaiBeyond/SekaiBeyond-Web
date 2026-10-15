@@ -1,8 +1,7 @@
 /**
- * The sections of a profile that other people can be shown, each switchable on
- * the Settings tab of /profile. Mirrors PROFILE_SECTIONS in
- * functions/src/utils/visibility.ts, which is where the switches are actually
- * enforced — a hidden section is emptied server-side, not merely left undrawn.
+ * The profile sections others can be shown, each switchable on /profile's
+ * Settings tab. Mirrors PROFILE_SECTIONS in functions/src/utils/visibility.ts,
+ * which enforces them server-side.
  */
 export const PROFILE_SECTIONS = ['badges', 'events'] as const;
 
@@ -12,13 +11,12 @@ export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
 export type ProfileVisibility = Record<ProfileSection, boolean>;
 
 /**
- * Every switch on the settings page. The passport page is not a section — it is
- * the coarser question of whether /p/<code> resolves at all — but it reads and
- * saves like one, so the page treats them alike.
+ * Every switch on the settings page. The passport page isn't a section (it
+ * decides whether /p/<code> resolves at all), but it reads and saves like one.
  */
 export type PrivacyKey = 'passportPage' | ProfileSection;
 
-/** Unset reads as visible: every account predates these switches. */
+/** Unset reads as visible. */
 export const readVisibility = (raw: unknown): ProfileVisibility => {
     const stored = (raw ?? {}) as Record<string, unknown>;
     return {
@@ -38,8 +36,8 @@ export interface PrivacyRow {
 }
 
 /**
- * The switches, in the order they are shown. The passport page leads because it
- * is the coarsest: it decides whether a scanned sticker shows anything at all.
+ * In display order. The passport page leads: it decides whether a scanned
+ * sticker shows anything.
  */
 export const PRIVACY_ROWS: PrivacyRow[] = [
     {

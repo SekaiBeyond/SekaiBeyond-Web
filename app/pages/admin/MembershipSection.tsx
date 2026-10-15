@@ -17,10 +17,7 @@ const QUICK_EXTENSIONS = [30, 90, 365];
 
 const daysUntil = (date: Date) => Math.ceil((date.getTime() - Date.now()) / 86_400_000);
 
-/**
- * Membership is a time-boxed attribute, not a group — editing it here never
- * touches the user's role, so a president can hold one just like anyone else.
- */
+/** Membership is time-boxed, not a group: editing it never touches the role. */
 export function MembershipSection({user, canManage, onUpdated, showToast}: MembershipSectionProps) {
     const {isEnglish} = useLanguage();
     const [editing, setEditing] = useState(false);
@@ -69,9 +66,8 @@ export function MembershipSection({user, canManage, onUpdated, showToast}: Membe
 
     const saveDate = () => {
         if (!dateInput) return;
-        // Membership runs to the end of the chosen day rather than to midnight at
-        // its start, so "expires on the 5th" means the 5th is still covered — the
-        // day as it falls in Pacific time, wherever the admin is.
+        // To the end of the chosen day on the Pacific calendar, so "expires on
+        // the 5th" covers the 5th.
         const iso = parseSiteTime(`${dateInput}T23:59:59`).toISOString();
         void apply({expiresAt: iso}, isEnglish ? 'Membership updated.' : '会员资格已更新。');
     };

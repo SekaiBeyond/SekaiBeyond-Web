@@ -22,15 +22,12 @@ import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist
 /**
  * Physical passports.
  *
- * A passport is bound to the first account that claims it and stays bound —
- * there is no unbind and no rebind, so `ownerUid` and `claimedAt` are written
- * exactly once in a passport's life. That is what makes the public page at
- * /p/<passportId> a stable address: whoever scans the sticker afterwards always
- * lands on the same person.
+ * A passport is bound to the first account that claims it, for good: `ownerUid`
+ * and `claimedAt` are written once, so /p/<passportId> always lands on the same
+ * person.
  *
- * None of these handlers writes `users/{uid}.group`. Claiming moves
- * `membershipExpiresAt` and nothing else — a president who claims a passport is
- * still a president, and a lapsed membership never demotes anyone.
+ * Nothing here writes `users/{uid}.group`. Claiming only moves
+ * `membershipExpiresAt`.
  */
 
 const PASSPORTS = "passports";
@@ -40,13 +37,10 @@ const DESIGNS = "passportDesigns";
 const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap.data()?.displayName ?? "";
 
 /**
- * Mint passports from one design — one, or as many as MAX_GENERATE_COUNT at a
- * time. Each one is an independent document: how many were made in the same call
- * is not recorded, and nothing downstream groups them.
- *
- * The keys come back in bulk in this response. If the export is lost before the
- * slips are printed, exportPassportKeys serves a selection of them again, and
- * revealPassportKey one at a time.
+ * Mint passports from one design, up to MAX_GENERATE_COUNT at a time. Each is
+ * independent; nothing records which were made together. If the keys returned
+ * here are lost before printing, exportPassportKeys and revealPassportKey serve
+ * them again.
  */
 export const generatePassports = onCall({maxInstances: 5}, async (request) => {
     const uid = await requireAuth(request);
@@ -59,19 +53,18 @@ export const generatePassports = onCall({maxInstances: 5}, async (request) => {
         throw new HttpsError("invalid-argument", `count must be an integer between 1 and ${MAX_GENERATE_COUNT}.`);
     }
 
-    // A passport without a design has nothing to render on the profile shelf or
-    // the public page, so the design comes first.
+    // Without a design there is nothing to render on the shelf or the public
+    // page.
     const designSnap = await db.collection(DESIGNS).doc(designId).get();
     if (!designSnap.exists) {
         throw new HttpsError("failed-precondition", "That passport design doesn't exist.", {code: "no-design"});
     }
-    // Copied onto every passport: a design's year is fixed once it is created,
-    // and the shelf sorts on it and records log it without reading designs.
+    // Copied onto every passport: the year never changes, and the shelf and
+    // records use it without reading designs.
     const year: number = designSnap.data()!.year;
     const designName: string = designSnap.data()!.name ?? "";
-    // Copied too, but for a different reason: the term can be edited, and a
-    // passport grants what its slip was sold with, not whatever the design says
-    // by the time it's activated.
+    // Copied because the term can be edited, and a passport grants what its
+    // slip was sold with.
     const termDays: number = designSnap.data()!.termDays;
 
     const issued: {passportId: string; activationCode: string}[] = [];
@@ -80,9 +73,8 @@ export const generatePassports = onCall({maxInstances: 5}, async (request) => {
 
     for (let i = 0; i < count; i++) {
         let passportId = generateSecureCode(PASSPORT_ID_LENGTH);
-        // Only guards against a collision within this call; a collision with an
-        // existing document is caught by batch.create() below, which fails the
-        // write rather than overwriting a passport someone already owns.
+        // Only guards within this call; batch.create() below fails on a
+        // collision with an existing passport rather than overwriting it.
         while (seen.has(passportId)) passportId = generateSecureCode(PASSPORT_ID_LENGTH);
         seen.add(passportId);
 
@@ -121,10 +113,8 @@ export const generatePassports = onCall({maxInstances: 5}, async (request) => {
 });
 
 /**
- * Mint a replacement activation key for an unclaimed passport, for when a key
- * slip may have been seen by someone it shouldn't have been. A slip that was
- * merely lost or damaged doesn't need this — revealPassportKey reprints it. This
- * invalidates the old key and hands back the new one.
+ * Replace an unclaimed passport's key, for a slip someone else may have seen; a
+ * lost slip only needs revealPassportKey. The old key stops working.
  */
 export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -164,10 +154,9 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
 });
 
 /**
- * Serve a passport's current key: an unclaimed one's to reprint its slip, a
- * claimed one's to check the key it was activated with. Every call is written to
- * records: the key is what makes an unsold passport worth stealing, so who has
- * looked at it is worth keeping, and the Records tab is where it is kept.
+ * A passport's current key: an unclaimed one's to reprint its slip, a claimed
+ * one's to check what it was activated with. Every call is recorded, since the
+ * key is what makes unsold stock worth stealing.
  */
 export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -207,14 +196,11 @@ export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * Serve the current keys of a set of passports at once, for the stock table's
- * Keys CSV: reprinting a run of slips, or a pairing list for a pack. The bulk
- * form of revealPassportKey, and logged the same way, as one record per call
- * that names the passport when there is one and counts them otherwise.
+ * The current keys of a set of passports, for the stock table's Keys CSV. The
+ * bulk form of revealPassportKey, recorded once per call.
  *
- * A passport that is gone, or has no viewable key on file (minted before keys
- * were kept), comes back in `missing` rather than failing the rest. The record
- * is written before anything is returned, so no key leaves without one.
+ * A passport that is gone or has no key on file comes back in `missing` rather
+ * than failing the rest. The record is written before anything is returned.
  */
 export const exportPassportKeys = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -233,8 +219,8 @@ export const exportPassportKeys = onCall({maxInstances: 10}, async (request) => 
     }
     const passportIds = normalized as string[];
 
-    // getAll answers in the order it was asked, so index i is the same passport
-    // in both lists.
+    // getAll keeps the order asked, so index i is the same passport in both
+    // lists.
     const [passportSnaps, secretSnaps] = await Promise.all([
         db.getAll(...passportIds.map(id => db.collection(PASSPORTS).doc(id))),
         db.getAll(...passportIds.map(id => db.collection(SECRETS).doc(id))),
@@ -268,27 +254,19 @@ export const exportPassportKeys = onCall({maxInstances: 10}, async (request) => 
 });
 
 /**
- * Resolve a scanned sticker, for anyone — no sign-in.
+ * Resolve a scanned sticker, for anyone, signed in or not.
  *
- * Like recordQrScan and getPublicTeamMembers, this takes anonymous callers. The
- * uid-keyed checkRateLimit can't apply, so abuse protection is App Check,
- * enforced for every callable by setGlobalOptions in index.ts, plus the fact
- * that reaching a real passport means holding a 10-character printed code out
- * of 31^10.
+ * The uid-keyed rate limit can't apply to anonymous callers, so the protection is App
+ * Check (setGlobalOptions in index.ts) plus the 31^10 space of printed codes.
  *
- * It must not widen uid-keyed profile reads, and doesn't: nothing here accepts a
- * uid, and the owner's uid it hands back only builds the link to their profile,
- * which getPublicProfile still serves to signed-in callers alone and filters by
- * the owner's section switches. Firestore rules keep the user document itself
- * unreadable by anyone else. `isOwner` is resolved server-side rather than by
- * comparing uids on the client. Badges, events, and the owner's other passports
- * are not part of it: the page doesn't show them, so a scanner isn't handed them
- * either.
+ * It doesn't widen profile reads: it takes no uid, and the owner's uid it returns
+ * only builds a link to getPublicProfile, which still serves signed-in callers alone.
+ * `isOwner` is decided here, not on the client. Nothing the page doesn't show is
+ * returned.
  *
- * Unknown ids — including deleted passports — and passports whose owner deleted
- * their account all answer identically ("invalid"), so a valid id can't be told
- * from a fabricated one. A private passport is distinguishable, deliberately: whoever
- * is holding that sticker deserves to know it works.
+ * Unknown and deleted passports, and those whose owner deleted their account, all
+ * answer "invalid", so real ids can't be told from made-up ones. A private passport
+ * answers differently on purpose: whoever holds the sticker should know it works.
  */
 export const getPassportPublicProfile = onCall({maxInstances: 20}, async (request) => {
     const passportId = normalizePassportId((request.data as {passportId?: unknown})?.passportId);
@@ -299,17 +277,16 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 
     const passport = passportSnap.data()!;
 
-    // The page reads the design itself (passportDesigns is public), for its name
-    // and cover art — shut on an unclaimed passport, open on a claimed one.
+    // The page reads the design itself (passportDesigns is public) for its name
+    // and cover art.
     const designId: string = passport.designId ?? "";
 
     if (passport.status !== "claimed" || !passport.ownerUid) return {status: "unclaimed" as const, designId};
 
     const ownerUid: string = passport.ownerUid;
     const ownerSnap = await db.collection("users").doc(ownerUid).get();
-    // An owner who deleted their account leaves the passport bound to a uid that
-    // no longer exists. The binding is permanent, so the sticker doesn't return
-    // to circulation — it simply stops resolving.
+    // The owner deleted their account. The binding is permanent, so the sticker
+    // just stops resolving.
     if (!ownerSnap.exists) return {status: "invalid" as const};
 
     const owner = ownerSnap.data()!;
@@ -320,8 +297,7 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
         status: "claimed" as const,
         designId,
         claimedAt: (passport.claimedAt as Timestamp | null)?.toDate?.()?.toISOString() ?? null,
-        // The owner is looking at their own passport: the page gives them its
-        // privacy switch.
+        // The page gives the owner its privacy switch.
         isOwner,
         hidden: owner.hidePassportPage === true,
         owner: {
@@ -337,22 +313,16 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
 });
 
 /**
- * Delete unclaimed passports — a sticker destroyed in packing, a pack whose slip
- * and sticker were mismatched, stock written off. Each one's document and key
- * both go, so the code stops resolving and is free to be minted again.
+ * Delete unclaimed passports, e.g. stock destroyed in packing or written off.
+ * The document and key both go, so the code stops resolving and can be minted
+ * again.
  *
- * Claimed passports are never deleted here, however the selection was built:
- * the binding is permanent and the page belongs to its owner, so unbinding one
- * is a deliberate act on a single passport and goes through
- * deleteClaimedPassport instead.
+ * Claimed passports are never deleted here, whatever the selection: that goes
+ * through deleteClaimedPassport, one passport at a time. A claimed or
+ * already-gone passport is reported as skipped and the rest still go, so a stale
+ * row can't block the delete.
  *
- * One passport or a whole selection comes through here, because the guard is the
- * same either way. Nothing is refused for the sake of the rest: a claimed or
- * already-gone passport is reported back as skipped and the others still go, so
- * a stale row in the admin's table can't block the delete it is part of.
- *
- * Nothing about a deleted passport survives except the one `records` entry this
- * writes, which is what an admin looking for where a code went is left with.
+ * Only the `records` entry this writes survives.
  */
 export const deletePassports = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -365,8 +335,7 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
             `passportIds must hold between 1 and ${MAX_DELETE_COUNT} passport codes.`,
         );
     }
-    // Deduplicated before the reads: the same code twice would otherwise be
-    // counted twice in the record and deleted twice in the same batch.
+    // Deduplicated so a code listed twice isn't counted or deleted twice.
     const passportIds = [...new Set(input.map(normalizePassportId))];
     if (passportIds.some(id => id === null)) {
         throw new HttpsError("invalid-argument", "Invalid passportId.");
@@ -393,11 +362,9 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
         deleted.push(snap.id);
         if (year === null && typeof snap.data()?.year === "number") year = snap.data()!.year;
 
-        // The delete carries the version the guard was read at, so a claim landing
-        // between the two fails this write rather than binding a passport already
-        // on its way out. What a transaction gave a single delete, a precondition
-        // gives the whole selection — and a batch that fails this way commits
-        // nothing, so the admin retries and sees the passport reported claimed.
+        // A precondition on the version the guard read, so a claim landing in
+        // between fails the batch instead of binding a passport on its way out.
+        // Nothing commits, and the retry reports it claimed.
         const updateTime = snap.updateTime;
         ops.push(batch => batch.delete(snap.ref, {lastUpdateTime: updateTime}));
         ops.push(batch => batch.delete(db.collection(SECRETS).doc(snap.id)));
@@ -419,34 +386,21 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
 });
 
 /**
- * Delete one claimed passport, by hand, from its own page, and optionally take
- * back the membership it granted.
+ * Delete one claimed passport from its own page, optionally taking back the
+ * membership it granted.
  *
- * The binding a claim makes is permanent, so this is the only way out of it — a
- * passport activated in error, or onto the wrong account, that no membership
- * edit can put right. It takes one passport and lives apart from
- * `deletePassports` on purpose: the bulk path still refuses claimed stock, so a
- * ticked selection can never sweep up a member's passport and staff have to open
- * the passport and read who holds it before they can remove it.
+ * The only way out of a permanent binding, for a passport activated in error or
+ * onto the wrong account. Kept apart from `deletePassports`, which refuses claimed
+ * stock, so staff must open the passport and see who holds it first.
  *
- * `subtractDays` is the admin's call, made per deletion, because the two cases
- * pull opposite ways: a passport activated by the wrong account should take its
- * days back with it, while one deleted for a reason the holder had nothing to do
- * with shouldn't cost them membership they were sold. Left off, this touches the
- * user document not at all.
+ * `subtractDays` is the admin's call each time: a wrong-account activation should
+ * take its days back, but a deletion the holder had no part in shouldn't cost
+ * them. It takes back the term the passport carried, the same field
+ * claimPassportWithKey granted from, and never past today (reducedExpiry). Left
+ * off, the user document isn't touched.
  *
- * What it takes back is the term the passport itself carried, not whatever the
- * design says today — the same number the claim granted, since
- * claimPassportWithKey reads the same field. Taking it back can only ever reach
- * zero (reducedExpiry): days stack from several sources, so a passport can never
- * pull a membership below the day it is taken back on, and a lapsed one has
- * nothing left to take.
- *
- * Nothing about the passport survives: its document and its key both go,
- * /p/<code> stops resolving, the holder's shelf loses it, and the code is free to
- * be minted again. The one `records` entry this writes — naming the holder, since
- * nothing else will afterwards, and carrying the days taken the way passport-claim
- * carries the days given — is what is left.
+ * Only the `records` entry survives, naming the holder and carrying the days
+ * taken.
  */
 export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -461,16 +415,14 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
 
     const ref = db.collection(PASSPORTS).doc(passportId);
 
-    // One transaction, because the membership edit and the delete have to agree:
-    // the days are taken back on the strength of a claim that this same commit
-    // erases, and a passport read as claimed here can't be deleted twice.
+    // One transaction: the days come back on the strength of a claim this same
+    // commit erases, and a passport can't be deleted twice.
     const outcome = await adminTransaction(uid, async (txn, callerSnap) => {
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
 
         const passport = snap.data()!;
-        // Unclaimed stock has its own path, and taking it here would let this
-        // handler stand in for the bulk delete one call at a time.
+        // Unclaimed stock goes through deletePassports.
         if (passport.status !== "claimed") {
             throw new HttpsError(
                 "failed-precondition",
@@ -480,18 +432,15 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
         }
 
         const ownerUid: string | null = typeof passport.ownerUid === "string" ? passport.ownerUid : null;
-        // Read before any write, as a transaction requires, and only when it is
-        // going to be used for something.
+        // Read before any write, as transactions require, and only when needed.
         const ownerRef = ownerUid ? db.collection("users").doc(ownerUid) : null;
         const ownerSnap = ownerRef ? await txn.get(ownerRef) : null;
         const ownerData = ownerSnap?.exists ? ownerSnap.data()! : null;
-        // Copied into the record rather than resolved when the record is read: the
-        // passport is about to stop pointing at anyone, and the account itself may
-        // be deleted later.
+        // Copied into the record: the passport is about to point at no one, and
+        // the account may be deleted later.
         const ownerName: string = ownerData?.displayName ?? "";
 
-        // What the claim granted, read the way claimPassportWithKey read it so the
-        // two numbers agree by construction.
+        // Read as claimPassportWithKey read it, so the two numbers agree.
         const granted = typeof passport.termDays === "number" ? passport.termDays : PASSPORT_TERM_DAYS;
         const reduced = subtractDays && ownerData
             ? reducedExpiry(ownerData.membershipExpiresAt, granted)
@@ -500,8 +449,7 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
             txn.update(ownerRef, {
                 membershipExpiresAt: reduced.expiresAt,
                 // Trimmed to today, the membership is over, and startedAtAfter
-                // answers null for that — the same delete an expiry reaching the
-                // past has always written.
+                // answers null.
                 membershipStartedAt: startedAtAfter(ownerData, reduced.expiresAt) ?? FieldValue.delete(),
             });
         }
@@ -518,9 +466,8 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
             passportId,
             passportCount: 1,
             passportYear: typeof passport.year === "number" ? passport.year : null,
-            // Negative, mirroring the days passport-claim records as given. Null
-            // when the membership was left alone, whether the admin chose that or
-            // there was nothing left to take.
+            // Negative, mirroring passport-claim's days given; null when nothing
+            // was taken.
             extendDays: reduced ? -reduced.daysRemoved : null,
             newExpiresAt: reduced ? reduced.expiresAt.toDate().toISOString() : "",
         }));
@@ -530,9 +477,8 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
             ownerName,
             daysRemoved: reduced?.daysRemoved ?? 0,
             membershipExpiresAt: reduced?.expiresAt.toDate().toISOString() ?? null,
-            // The admin asked for days back and got none: the holder's membership
-            // had already run out, or their account is gone. The screen says so
-            // rather than reporting a subtraction that didn't happen.
+            // Days were asked for but none were left (lapsed membership or
+            // deleted account); the screen says so.
             nothingToSubtract: subtractDays && !reduced,
         };
     });
@@ -553,8 +499,10 @@ export const setPassportPrivacy = onCall({maxInstances: 10}, async (request) => 
     return {hidePassportPage: hide};
 });
 
-/** The names a design is shown under, folded for comparison. The Chinese name
- * falls back to the English one, as the pages that render it do. */
+/**
+ * A design's shown names, folded for comparison. The Chinese name falls back to
+ * the English one, as on the pages.
+ */
 const shownNames = (design: {name?: unknown; nameCn?: unknown}): string[] => {
     const name = typeof design.name === "string" ? design.name : "";
     const nameCn = typeof design.nameCn === "string" && design.nameCn ? design.nameCn : name;
@@ -562,14 +510,11 @@ const shownNames = (design: {name?: unknown; nameCn?: unknown}): string[] => {
 };
 
 /**
- * Create or edit a design: the name passports generated from it go by, their
- * cover art, and the membership term they grant. Publicly readable, so no
- * secrets here.
+ * Create or edit a design: its name, cover art, and the membership term its
+ * passports grant. Publicly readable.
  *
- * A year can have any number of designs, told apart by name, so a name may not
- * repeat within its year in either language. The year is set on creation and
- * never changes after. The term can change, but only for passports generated
- * afterwards: every passport keeps the term it was generated with.
+ * Names can't repeat within a year in either language. The year is fixed at
+ * creation; a term change only applies to passports generated afterwards.
  */
 export const savePassportDesign = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
@@ -585,8 +530,7 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
     if (!name) throw new HttpsError("invalid-argument", "name is required.");
     const coverImageUrl = validateStr(input.coverImageUrl, "coverImageUrl", 2000, true);
     validateStorageImageUrl(coverImageUrl, "coverImageUrl");
-    // Optional, and blank on purpose when cleared: the cover art stands in for
-    // the shut passport, which is what it did before this was a separate image.
+    // Optional; without it the cover art stands in for the shut passport.
     const outerCoverImageUrl = validateStr(input.outerCoverImageUrl, "outerCoverImageUrl", 2000);
     validateStorageImageUrl(outerCoverImageUrl, "outerCoverImageUrl");
     const termDays = input.termDays;
@@ -637,10 +581,9 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
             passportDesignName: name,
             passportYear: year,
         }));
-        // Each cover upload writes a new time-stamped object, so one this save
-        // replaces — or an outer cover it clears — is left behind and deleted once
-        // the save commits. Passports read their design's covers live, so nothing
-        // else holds these URLs.
+        // Each upload is a new time-stamped object, so covers this save replaces
+        // or clears are deleted once it commits. Passports read covers live, so
+        // nothing else holds these URLs.
         return [...new Set(prevImages)].filter(url =>
             url && url !== coverImageUrl && url !== outerCoverImageUrl);
     });
@@ -652,8 +595,10 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
     return {designId: ref.id};
 });
 
-/** Remove a design. Refused once any passport has been generated from it — that
- * passport would be left with nothing to render. */
+/**
+ * Remove a design. Refused once any passport uses it, which would be left with
+ * nothing to render.
+ */
 export const deletePassportDesign = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
     const callerSnap = await requireAdmin(uid);

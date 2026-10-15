@@ -5,8 +5,10 @@ import { type Localized, useT } from '~/pages/con/i18n';
 import { formatClockTime, pad, parseClockTime } from '~/pages/con/utils';
 import { SectionHeader } from '~/pages/con/SectionHeader';
 
-/** How many minutes one grid row covers. Every time the admin panel accepts lands
- *  on a five, so a slot this size places each item on its exact start. */
+/**
+ * Minutes per grid row. The admin panel only takes times on a five, so every item
+ * lands exactly.
+ */
 const SLOT_MINUTES = 5;
 
 /** Drawn height of an item that has a start but no end. */
@@ -33,10 +35,8 @@ interface Track {
 }
 
 /**
- * Greedy interval packing: an item takes the first lane that is free by the time it
- * starts. Nothing in the run-of-show double-books a room, but the admin panel does
- * not stop it, and two boxes drawn on top of each other would hide an event
- * outright. Assumes `items` is already in start order.
+ * Greedy interval packing: each item takes the first lane free when it starts, so a
+ * double-booked room never hides an event. Assumes start order.
  */
 const packLanes = (items: Placed[]) => {
     const laneEnds: number[] = [];
@@ -55,27 +55,22 @@ export const Schedule = () => {
     const [roomFilter, setRoomFilter] = useState<string | null>(null);
 
     /**
-     * Only rooms with something booked in them get a filter. A room can exist with
-     * an empty day — the admin panel adds the room before the programming — and a
-     * chip whose only possible result is an empty schedule is not a choice worth
-     * offering. Ordered by the room list, not by the schedule, so the chips stay in
-     * the order an admin arranged them.
+     * Only rooms with something booked get a filter, since an empty one's only
+     * result is an empty schedule. In the room list's order.
      */
     const filterableRooms = useMemo(() => {
         const booked = new Set(content.schedule.flatMap(item => item.room ? [item.room] : []));
         return content.rooms.filter(room => booked.has(room.id));
     }, [content.rooms, content.schedule]);
 
-    // Derived rather than corrected in an effect: if a refresh drops the room that
-    // was selected, the filter falls back to "all" on the same render that loses it,
-    // instead of briefly showing an empty schedule with no chip to explain why.
+    // Derived, so a room dropped by a refresh falls back to "all" on the same
+    // render.
     const activeRoom = filterableRooms.some(room => room.id === roomFilter) ? roomFilter : null;
 
     /**
-     * The grid: one track per room that has something on the clock, each packed into
-     * lanes, plus the hour range they all share. Built from the filtered items so
-     * that narrowing to one room narrows the clock to that room's day as well,
-     * rather than leaving hours of empty column above and below it.
+     * One track per room with something on the clock, packed into lanes, plus their
+     * shared hours. From the filtered items, so one room narrows the clock to its
+     * day.
      */
     const grid = useMemo(() => {
         const byRoom = new Map<string, Placed[]>();
@@ -89,8 +84,7 @@ export const Schedule = () => {
             const end = stop !== null && stop > start ? stop : start + OPEN_ENDED_MINUTES;
             const placed: Placed = {item, start, end, lane: 0};
 
-            // Grouped under the id as stored. One that matches no room has no column
-            // to be drawn in, so it falls out of the grid here.
+            // An id matching no room has no column, so it falls out here.
             const existing = byRoom.get(item.room ?? '');
             if (existing) existing.push(placed);
             else byRoom.set(item.room ?? '', [placed]);
@@ -119,20 +113,15 @@ export const Schedule = () => {
         return {tracks, lanes, from, to, rows: (to - from) / SLOT_MINUTES};
     }, [content.rooms, content.schedule, activeRoom]);
 
-    /**
-     * Announced but unscheduled. There is no hour to hang these on, so they sit
-     * under the grid rather than being dropped from the page.
-     */
+    /** Announced but unscheduled: listed under the grid. */
     const unscheduled = useMemo(
         () => content.schedule.filter(item =>
             parseClockTime(item.start) === null && (activeRoom === null || item.room === activeRoom)),
         [content.schedule, activeRoom],
     );
 
-    // Counted rather than written down, and from the rooms with something on the
-    // clock — the columns the grid draws — so neither a room added ahead of its
-    // programming nor one holding only unscheduled items makes the subtitle promise
-    // a track the schedule doesn't show.
+    // Counted from the columns the grid draws, so an empty room or one with only
+    // TBA items isn't promised as a track.
     const trackCount = useMemo(() => {
         const timed = new Set(content.schedule.flatMap(item =>
             item.room && parseClockTime(item.start) !== null ? [item.room] : []));
@@ -145,9 +134,8 @@ export const Schedule = () => {
         }
         : {en: '', zh: ''};
 
-    // The header row sits above the slots, and grid lines are 1-based. Start times
-    // round down and end times round up, so an odd minute never collapses an item
-    // into a zero-height box.
+    // The header row comes first and grid lines are 1-based. Starts round down and
+    // ends up, so nothing collapses to zero height.
     const lineAt = (minutes: number, round: (n: number) => number) =>
         round((minutes - (grid?.from ?? 0)) / SLOT_MINUTES) + 2;
 
@@ -259,8 +247,7 @@ export const Schedule = () => {
                                                 && ` – ${formatClockTime(placed.item.end, currentLanguage)}`}
                                         </p>
                                         <h4 className="sbc-grid-event-title">
-                                            {/* The column header carries the room visually; read aloud,
-                                                nothing else would say which room this is in. */}
+                                            {/* The column header shows the room; this says it aloud. */}
                                             <span className="sbc-sr-only">{t(track.name)}: </span>
                                             {t(placed.item.title)}
                                         </h4>
@@ -278,8 +265,7 @@ export const Schedule = () => {
                         </h3>
 
                         <div className="sbc-tba-grid">
-                            {/* No room chip: an item with no hour has no room either,
-                                so these are neutral until both are settled. */}
+                            {/* No room chip: an item without an hour has no room. */}
                             {unscheduled.map((item, i) => (
                                 <article key={i} className="sbc-tba-card sbc-accent--slate">
                                     <h4 className="sbc-grid-event-title">{t(item.title)}</h4>

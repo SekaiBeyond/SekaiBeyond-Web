@@ -6,9 +6,8 @@ import { type TeamMemberConfig, useSiteConfig } from "~/lib/siteConfig";
 export const Team = () => {
     const {isEnglish} = useLanguage();
     const {config, loading} = useSiteConfig();
-    // Members can opt role/photo into following their linked account live; the site
-    // can't read the users collection directly, so a public Cloud Function resolves those
-    // fields. Falls back to the config snapshot if it fails.
+    // Fields that follow a linked account are resolved by a public function, since the
+    // site can't read users; the config snapshot stands in if it fails.
     const [resolvedMembers, setResolvedMembers] = useState<TeamMemberConfig[] | null>(null);
 
     useEffect(() => {

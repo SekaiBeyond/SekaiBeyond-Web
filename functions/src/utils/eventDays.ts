@@ -2,11 +2,9 @@ import type { Timestamp } from "firebase-admin/firestore";
 import { siteDay } from "./siteTime";
 
 /**
- * Whether `nowMs` falls on any calendar day the event runs on, from the start of
- * the day it begins to the end of the day it ends, whatever its hours. Days are
- * counted in SITE_TIME_ZONE, the zone its ticket emails print its time in. False
- * for an event missing either time. Mirrors app/lib/eventDays.ts, which words the
- * same rule for the scanner.
+ * Whether `nowMs` falls on any calendar day the event runs on, whatever its
+ * hours, counted in SITE_TIME_ZONE. False without both times. Mirrors
+ * app/lib/eventDays.ts.
  */
 export function isOnEventDay(startAt: Timestamp | undefined, endAt: Timestamp | undefined, nowMs: number): boolean {
     const startMs = startAt?.toMillis?.();

@@ -31,8 +31,7 @@ export function validateCodeInTransaction(data: {
         throw new HttpsError("failed-precondition", "This code is inactive.", {code: "inactive"});
     }
 
-    // Bounds saved before they carried a zone hold the bare datetime-local value,
-    // typed on the Pacific clock, which parseSiteTime reads as Pacific.
+    // parseSiteTime also reads a zoneless datetime-local bound, as Pacific.
     const now = new Date();
     if (data.activeFrom && parseSiteTime(data.activeFrom) > now) {
         throw new HttpsError("failed-precondition", "This code is not active yet.", {code: "not-active-yet"});
@@ -58,8 +57,7 @@ export async function commitInChunks(
         try {
             await batch.commit();
         } catch (err) {
-            // If a chunk fails after a previous chunk succeeded, data is partially committed.
-            // Log the failure so it can be investigated and cleaned up.
+            // Earlier chunks have committed, so the data is now partial: logged for cleanup.
             console.error(
                 `commitInChunks: batch ${i / BATCH_LIMIT + 1} of ${Math.ceil(ops.length / BATCH_LIMIT)} failed after previous chunks committed.`,
                 err

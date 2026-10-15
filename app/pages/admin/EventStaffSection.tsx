@@ -33,9 +33,8 @@ export function EventStaffSection({
             setLoading(true);
             try {
                 const db = getFirebaseDb();
-                // Staff roster — for both upcoming and past events — is derived from
-                // users' eventStaffEvents arrays (the past-event id is retained on
-                // archive). assignEventStaff/removeEventStaff handle past events too.
+                // From users' eventStaffEvents, which keeps the past-event id on
+                // archive, so this covers past events too.
                 const q = query(
                     collection(db, 'users'),
                     where('eventStaffEvents', 'array-contains', eventId),
@@ -59,8 +58,7 @@ export function EventStaffSection({
         return () => {
             stale = true;
         };
-        // Not keyed on isEnglish, which only words the failure toast: a language
-        // toggle shouldn't refetch the roster.
+        // Not keyed on isEnglish: a language toggle shouldn't refetch.
     }, [eventId, showToast, onCountChange]);
 
     const addStaff = async (user: UserRecord) => {

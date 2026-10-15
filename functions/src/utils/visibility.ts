@@ -1,13 +1,11 @@
 import { HttpsError } from "firebase-functions/v2/https";
 
 /**
- * The sections of a member's profile that others can be shown, and that the
- * member can switch off one at a time on the Settings tab of /profile.
+ * The profile sections a member can hide from others, one at a time, on
+ * /profile's Settings tab.
  *
- * Name and photo are deliberately absent: a passport page exists to say whose
- * passport it is, and a page that named nobody would be indistinguishable from
- * the private notice it already has. Whoever wants that has the passport-page
- * switch (`hidePassportPage`), which is coarser on purpose.
+ * Name and photo aren't among them: a passport page exists to say whose
+ * passport it is. The coarser `hidePassportPage` switch covers that.
  *
  * Mirrors PROFILE_SECTIONS in app/lib/privacy.ts.
  */
@@ -19,11 +17,8 @@ export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
 export type ProfileVisibility = Record<ProfileSection, boolean>;
 
 /**
- * Read the stored map, defaulting anything unset to visible.
- *
- * Absent means visible rather than hidden because every account predates the
- * setting: a profile nobody has touched has to keep reading the way it always
- * has, and only an explicit `false` takes a section away.
+ * The stored map, with anything unset visible: only an explicit `false` hides a
+ * section.
  */
 export function readVisibility(raw: unknown): ProfileVisibility {
     const stored = (raw ?? {}) as Record<string, unknown>;
@@ -35,9 +30,8 @@ export function readVisibility(raw: unknown): ProfileVisibility {
 }
 
 /**
- * Validate a partial update from the client. Only known sections are accepted,
- * each must be a boolean, and an empty object is rejected — a no-op write would
- * report success without the caller ever learning their key was misspelled.
+ * A partial update from the client: known sections only, booleans only, and not
+ * empty, so a misspelled key isn't reported as saved.
  */
 export function parseVisibilityInput(raw: unknown): Partial<ProfileVisibility> {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {

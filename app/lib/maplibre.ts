@@ -17,10 +17,8 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * What every map on the site shares: MapLibre GL drawing OpenFreeMap's tiles,
- * which are OpenStreetMap data with no key, no billing and no request limit.
- * The public parking guide and the admin's Locations map, map picker and QR
- * spots map all start here.
+ * What every map on the site shares: MapLibre GL on OpenFreeMap's OpenStreetMap
+ * tiles, with no key, billing or request limit.
  */
 
 // MapLibre looks for its worker beside its own script, which the bundle moves.
@@ -33,8 +31,8 @@ export type { MapLibreMap };
 /**
  * A map in `container` with the site's defaults: no rotation or tilt, zoom
  * buttons top-right, compact attribution bottom-right (`attribution` adds to
- * OpenStreetMap's), and the base map tidied before it's drawn. Null when
- * MapLibre can't start, which almost always means no WebGL.
+ * OpenStreetMap's), and the base map tidied. Null when MapLibre can't start,
+ * almost always for lack of WebGL.
  */
 export function createMap(
     container: HTMLElement,
@@ -59,8 +57,8 @@ export function createMap(
     map.keyboard.disableRotation();
     map.addControl(new NavigationControl({showCompass: false}), 'top-right');
     map.addControl(new AttributionControl({compact: true, customAttribution: attribution}), 'bottom-right');
-    // Some places in the style ask for icons its sprite doesn't have; a blank
-    // stand-in leaves their names showing and keeps MapLibre from warning per icon.
+    // Some places ask for icons the sprite lacks; a blank stand-in keeps their
+    // names and stops a warning per icon.
     map.setMissingStyleImageResolver(id => {
         if (!map.hasImage(id)) map.addImage(id, {width: 1, height: 1, data: new Uint8Array(4)});
     });
@@ -69,11 +67,10 @@ export function createMap(
 }
 
 /**
- * The base map as the site wants it, applied before anything is drawn: flat
- * buildings rather than the style's 3D ones, as a campus map reads best; no
- * OpenStreetMap parking icons, which would sit beside the guide's own pins
- * and include lots visitors can't use; and no highway shields, which campus
- * maps don't need and whose filters warn on every tile.
+ * The base map as the site wants it, before anything is drawn: flat buildings
+ * rather than 3D; no OpenStreetMap parking icons beside the guide's own pins
+ * (they include lots visitors can't use); and no highway shields, whose filters
+ * warn on every tile.
  */
 function tidyStyle(style: StyleSpecification): StyleSpecification {
     const notParking = ['!=', ['get', 'class'], 'parking'] as FilterSpecification;
@@ -110,10 +107,9 @@ export interface PlacedMarkers {
 }
 
 /**
- * One marker per point, each a bare wrapper element to portal React content
- * into. Remade when the set of points or their positions change. The default
- * anchor, the top lifted 15px, puts the middle of a 30px pin on the point
- * with any label hanging below it.
+ * One marker per point, each a bare wrapper to portal React content into,
+ * remade when the points or their positions change. The default anchor (top,
+ * lifted 15px) centres a 30px pin on the point with its label hanging below.
  */
 export function useMarkerElements(
     map: MapLibreMap | null,

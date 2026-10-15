@@ -49,8 +49,7 @@ export const QrDashboard = ({
         return isEnglish ? e.title : (e.titleCn || e.title);
     };
 
-    // Only events actually referenced by a code appear in the filter, so the
-    // dropdown stays short and meaningful.
+    // Only events some code links to.
     const usedEventIds = useMemo(() => {
         const s = new Set<string>();
         for (const c of codes) if (c.eventId) s.add(c.eventId);

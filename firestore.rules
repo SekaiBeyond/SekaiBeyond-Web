@@ -174,8 +174,7 @@ service cloud.firestore {
 
         // The parking guide's synced copy of UW's lots, event pricing, walking times
         // and venue outlines (uwParking/current). Publicly readable; written only by
-        // the sync functions. It replaced the hand-entered parkingLots and parkingRates,
-        // which the default deny now covers.
+        // the sync functions.
         match /uwParking/{docId} {
             allow read: if true;
         }
