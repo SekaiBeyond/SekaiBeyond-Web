@@ -95,7 +95,7 @@ function DaySwitch({days, shown, onShow, tx}: {
     );
 }
 
-/** The guide's list view: the event on its guide, UW event-rate warnings, the suggested lots, then every lot. */
+/** The guide's list view: the event on its guide or else today's UW event-rate warnings, the suggested lots, then every lot. */
 export const LotList = (props: LotListProps) => {
     const {
         event,
@@ -121,9 +121,8 @@ export const LotList = (props: LotListProps) => {
         tx
     } = props;
     const picks = views.filter(v => v.rank > 0).sort((a, b) => a.rank - b.rank);
-    // UW event pricing on any of the event's days, on its guide; otherwise today's.
-    const bannerDates = new Set(event ? days.map(d => d.window.date) : [parkingWindow.date]);
-    const banners = eventPricing.filter(p => bannerDates.has(p.date));
+    // Today's UW event pricing, off an event's guide; on one, the lots' statuses already show it.
+    const banners = event ? [] : eventPricing.filter(p => p.date === parkingWindow.date);
     const name = venue ? venueName(venue) : '';
 
     // Hovering a lot in the list lights up its pin and shows its card on the map.
