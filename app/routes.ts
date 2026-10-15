@@ -12,6 +12,6 @@ export default [
     route("p/:passportId", "routes/passport.tsx"),
     route("qr", "routes/qr.tsx"),
     route("qr/expired", "routes/qrExpired.tsx"),
-    // `/parking?venue=<id>` opens the guide on a venue with no event behind it.
-    route("parking/:eventId?", "routes/parking.tsx"),
+    // `/parking/venue/<venue id>` opens the guide on a venue, `/parking/lot/<lot code>` on a UW lot.
+    route("parking/:kind?/:id?", "routes/parking.tsx"),
 ] satisfies RouteConfig;

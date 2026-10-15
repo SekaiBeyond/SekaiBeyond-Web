@@ -565,7 +565,7 @@ export function useConVenue(): ConVenue | null {
     if (!venue) return null;
     return {
         name: {en: venue.nameEn, zh: venue.nameCn || venue.nameEn},
-        parkingUrl: `/parking?venue=${encodeURIComponent(venue.id)}`,
+        parkingUrl: `/parking/venue/${encodeURIComponent(venue.id)}`,
     };
 }
 

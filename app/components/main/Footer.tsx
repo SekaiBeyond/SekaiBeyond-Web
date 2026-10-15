@@ -53,7 +53,7 @@ export const Footer = () => {
                                 </a>
                             )}
                             {link.id === 'team' && hasActive && (
-                                <a href={`/parking/${activeEvents[0].id}`} className="footer-link">
+                                <a href="/parking" className="footer-link">
                                     {isEnglish ? 'Parking Guide' : '停车指南'}
                                 </a>
                             )}

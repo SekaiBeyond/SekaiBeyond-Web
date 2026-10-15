@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
-import { doc, getDoc } from 'firebase/firestore';
+import { useNavigate, useParams } from 'react-router';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { CON_NAME, useConContent } from '~/lib/conContent';
-import { getFirebaseDb } from '~/lib/firebase';
 import { parseSiteTime, siteDay, toDatetimeLocal } from '~/lib/siteTime';
 import { useUpcomingEvents } from '~/lib/upcomingEvents';
 import { useUwParking } from '~/lib/uwParking';
@@ -46,59 +44,23 @@ const Notice = ({icon, title, desc}: {icon: string; title: string; desc: string}
     </div>
 );
 
-type EventLoad = {state: 'loading'} | {state: 'missing'} | {state: 'ready'; event: GuideEvent | null};
-
 // How often the "right now" statuses move on.
 const NOW_TICK_MS = 60_000;
 
 export const ParkingGuide = () => {
-    const {eventId} = useParams<{eventId: string}>();
-    // The con page knows its venue but is not an upcoming event, so it links here
-    // by venue instead; with no event to look up, that venue is the default.
-    const [searchParams] = useSearchParams();
-    const venueParam = eventId ? '' : searchParams.get('venue') ?? '';
+    // `/parking/venue/<venue id>` opens on a venue, and `/parking/lot/<lot code>` on a lot.
+    const {kind, id} = useParams<{kind: string; id: string}>();
+    const urlVenueId = kind === 'venue' ? id ?? '' : '';
+    const urlCode = kind === 'lot' ? id?.toUpperCase() ?? '' : '';
+    // The address names the lot open, or else the venue picked, so either can be linked to.
+    const navigate = useNavigate();
+    const goTo = (path: string) => navigate(path, {replace: true, preventScrollReset: true});
+    const venuePath = (venueId: string) => venueId ? `/parking/venue/${encodeURIComponent(venueId)}` : '/parking';
     const tx = useParkingText();
     const {venues, loading: venuesLoading} = useVenues();
     const {parking, loading: parkingLoading} = useUwParking();
     const {content: con, loading: conLoading} = useConContent();
     const {activeEvents, loading: eventsLoading} = useUpcomingEvents();
-
-    const [upcoming, setUpcoming] = useState<EventLoad>(eventId ? {state: 'loading'} : {state: 'ready', event: null});
-    useEffect(() => {
-        if (!eventId) {
-            setUpcoming({state: 'ready', event: null});
-            return;
-        }
-        let cancelled = false;
-        (async () => {
-            try {
-                const snap = await getDoc(doc(getFirebaseDb(), 'upcomingEvents', eventId));
-                const data = snap.data();
-                if (cancelled) return;
-                if (!data) {
-                    setUpcoming({state: 'missing'});
-                    return;
-                }
-                const startAt = data.startAt?.toDate?.() ?? null, endAt = data.endAt?.toDate?.() ?? null;
-                setUpcoming({
-                    state: 'ready',
-                    event: startAt ? {
-                        id: eventId,
-                        title: {en: data.title ?? '', zh: data.titleCn ?? ''},
-                        venueId: data.venueId ?? '',
-                        start: toDatetimeLocal(startAt),
-                        end: toDatetimeLocal(endAt),
-                    } : null,
-                });
-            } catch (err) {
-                console.error('[ParkingGuide] fetch error:', err);
-                if (!cancelled) setUpcoming({state: 'missing'});
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [eventId]);
 
     // The con, until it's over.
     const conEvent = useMemo((): GuideEvent | null => {
@@ -109,10 +71,6 @@ export const ParkingGuide = () => {
         if (!start || (end || start).slice(0, 10) < siteDay(new Date())) return null;
         return {id: 'con', title: CON_NAME, venueId, start, end};
     }, [con.event]);
-    // The event the guide was opened for; a venue link to the con's own venue plans around the con.
-    const opened = upcoming.state === 'ready'
-        ? upcoming.event ?? (venueParam && venueParam === conEvent?.venueId ? conEvent : null)
-        : null;
 
     // The guide shows parking right now, which the clock moves on, unless the
     // visitor switches it to a day of one of the events.
@@ -123,30 +81,31 @@ export const ParkingGuide = () => {
     }, []);
     const thisMinute = useMemo(() => nowWindow(now), [now]);
     // Every event with a venue the guide can plan around, so any of them can be switched to.
-    const events = useMemo(() => guideEvents(opened, [...activeEvents.map(fromUpcoming), ...(conEvent ? [conEvent] : [])]
-        .filter(e => resolveVenueById(e.venueId, venues))), [opened, activeEvents, conEvent, venues]);
+    const events = useMemo(() => guideEvents([...activeEvents.map(fromUpcoming), ...(conEvent ? [conEvent] : [])]
+        .filter(e => resolveVenueById(e.venueId, venues))), [activeEvents, conEvent, venues]);
     const days = useMemo(() => events.flatMap(e => eventDays(e, thisMinute.date)), [events, thisMinute.date]);
     const [shownKey, setShownKey] = useState<string | null>(null);
     // The event last switched to stays the guide's event after switching back to right now.
     const [eventKey, setEventKey] = useState<string | null>(null);
     const shownDay = days.find(d => d.key === shownKey) ?? null;
     const parkingWindow = shownDay?.window ?? thisMinute;
-    const event = events.find(e => e.id === eventKey) ?? opened;
+    const event = events.find(e => e.id === eventKey) ?? null;
     const eventVenueId = event?.venueId ?? '';
+
+    // Which venue's parking guide is displayed: the one the address names, or none, the
+    // whole campus. A switch to another event's day moves it to the event's venue, and
+    // the switcher can change it.
+    const [selectedVenueId, setSelectedVenueId] = useState(urlVenueId);
     const showDay = (day: EventDay | null) => {
         setShownKey(day?.key ?? null);
-        if (day) setEventKey(day.event.id);
+        if (!day) return;
+        setEventKey(day.event.id);
+        // Switching to an event with no venue keeps the one picked.
+        if (day.event.venueId && day.event.venueId !== eventVenueId) {
+            setSelectedVenueId(day.event.venueId);
+            goTo(venuePath(day.event.venueId));
+        }
     };
-
-    // Which venue's parking guide is displayed. Defaults to the event's own venue (or
-    // the one a `?venue=` link names) once it's known, and moves with a switch to
-    // another event's day; the switcher can change it. Switching to an event with no
-    // venue keeps the one picked.
-    const [selectedVenueId, setSelectedVenueId] = useState('');
-    const defaultVenueId = eventVenueId || venueParam;
-    useEffect(() => {
-        if (defaultVenueId) setSelectedVenueId(defaultVenueId);
-    }, [defaultVenueId]);
     const venue = resolveVenueById(selectedVenueId, venues);
     const eventVenue = resolveVenueById(eventVenueId, venues);
 
@@ -160,7 +119,8 @@ export const ParkingGuide = () => {
     const visibleCodes = useMemo(() => new Set(visibleViews.map(v => v.lot.code)), [visibleViews]);
     const listedCodes = useMemo(() => new Set(parking.lots.map(l => l.code)), [parking.lots]);
 
-    const [selectedCode, setSelectedCode] = useState<string | null>(null);
+    // The lot open in the panel is the one the address names.
+    const selectedCode = listedCodes.has(urlCode) ? urlCode : null;
     const [hover, setHover] = useState<HoverTarget | null>(null);
     const [hotCode, setHotCode] = useState<string | null>(null);
     const mapApi = useRef<ParkingMapApi>(null);
@@ -170,7 +130,7 @@ export const ParkingGuide = () => {
 
     const selectVenue = (id: string) => {
         setSelectedVenueId(id);
-        setSelectedCode(null);
+        goTo(venuePath(id));
         setHover(null);
         setHotCode(null);
         if (panelRef.current) panelRef.current.scrollTop = 0;
@@ -179,7 +139,7 @@ export const ParkingGuide = () => {
     const openLot = (code: string) => {
         const panel = panelRef.current;
         if (panel && !selectedCode) listScroll.current = panel.scrollTop;
-        setSelectedCode(code);
+        if (code !== selectedCode) goTo(`/parking/lot/${encodeURIComponent(code)}`);
         setHover(null);
         setHotCode(null);
         mapApi.current?.focusLot(code);
@@ -192,7 +152,7 @@ export const ParkingGuide = () => {
         }
     };
 
-    const closeLot = () => setSelectedCode(null);
+    const closeLot = () => goTo(venuePath(venue?.id ?? ''));
     useEffect(() => {
         if (!selectedCode && panelRef.current) panelRef.current.scrollTop = listScroll.current;
     }, [selectedCode]);
@@ -210,7 +170,7 @@ export const ParkingGuide = () => {
 
     const venueName = (v: Venue) => localizedVenueName(v, tx.isEnglish);
 
-    const loading = upcoming.state === 'loading' || venuesLoading || parkingLoading || conLoading || eventsLoading;
+    const loading = venuesLoading || parkingLoading || conLoading || eventsLoading;
     if (loading) {
         return (
             <div className="parking-page">
@@ -218,15 +178,6 @@ export const ParkingGuide = () => {
                     <div className="loader"></div>
                     <span className="parking-loading-text">{tx.t('loading')}</span>
                 </div>
-            </div>
-        );
-    }
-
-    if (upcoming.state === 'missing') {
-        return (
-            <div className="parking-page">
-                <TopBar tx={tx}/>
-                <Notice icon="🅿️" title={tx.t('notFoundTitle')} desc={tx.t('notFoundDesc')}/>
             </div>
         );
     }

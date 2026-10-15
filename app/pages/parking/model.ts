@@ -93,11 +93,10 @@ const sameEvent = (a: GuideEvent, b: GuideEvent) => a.id === b.id
     // The con can be listed as an upcoming event too: one venue on one first day is one event.
     || (!!a.venueId && a.venueId === b.venueId && a.start.slice(0, 10) === b.start.slice(0, 10));
 
-/** The events the guide offers, each once: the one it was opened for, then the rest by start. */
-export function guideEvents(opened: GuideEvent | null, others: GuideEvent[]): GuideEvent[] {
+/** The events the guide offers by start, each once. */
+export function guideEvents(events: GuideEvent[]): GuideEvent[] {
     const list: GuideEvent[] = [];
-    const rest = [...others].sort((a, b) => a.start.localeCompare(b.start));
-    for (const event of opened ? [opened, ...rest] : rest) {
+    for (const event of [...events].sort((a, b) => a.start.localeCompare(b.start))) {
         if (!list.some(e => sameEvent(e, event))) list.push(event);
     }
     return list;

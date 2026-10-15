@@ -8,7 +8,7 @@ interface VenueSwitcherProps {
     venues: Venue[];
     /** '' for the whole campus. */
     selectedId: string;
-    /** The venue of the event the guide was opened for, tagged "This event". */
+    /** The venue of the event the guide is showing, tagged "This event". */
     eventVenueId: string;
     /** The first suggested lot per venue, for each option's second line. */
     suggestionFor: (venue: Venue) => {code: string; walk: {seconds: number} | null} | null;
@@ -18,8 +18,8 @@ interface VenueSwitcherProps {
 
 /**
  * Searchable venue picker shown in the parking-guide header. Defaults to the event's own
- * venue, or the one a `?venue=` link names, but lets visitors switch to any other venue to
- * view its parking map and lots, or to the whole campus.
+ * venue, but lets visitors switch to any other venue to view its parking map and lots, or
+ * to the whole campus.
  */
 export const VenueSwitcher = ({venues, selectedId, eventVenueId, suggestionFor, onSelect, tx}: VenueSwitcherProps) => {
     const [open, setOpen] = useState(false);

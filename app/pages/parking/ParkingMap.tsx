@@ -183,6 +183,9 @@ export const ParkingMap = (props: ParkingMapProps) => {
             created.resize();
             const bounds = venueBounds(latest.current.venue, latest.current.views);
             if (bounds) created.fitBounds(bounds, {padding: fitPadding(), duration: 0});
+            // A link to a lot opens on it.
+            const linked = latest.current.views.find(v => v.lot.code === latest.current.selectedCode);
+            if (linked) created.jumpTo({center: [linked.lot.lng, linked.lot.lat], zoom: LOT_ZOOM});
         });
 
         // A click on the map itself lets go of a card a tap pinned open.
