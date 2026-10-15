@@ -8,12 +8,15 @@ import {
     ratesDuring
 } from '~/lib/parkingStatus';
 import { siteDay, toDatetimeLocal } from '~/lib/siteTime';
+import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { UwLot, UwParkingData, WalkingTime } from '~/lib/uwParking';
 import { hasCoordinates, haversineMiles, type Venue } from '~/lib/venues';
 import type { Localized } from '~/pages/con/i18n';
 
-/** The event the guide was opened for: an upcoming event, or the con on a venue link. */
+/** An event the guide can show parking for: an upcoming event, or the con. */
 export interface GuideEvent {
+    /** The upcoming event's id, or 'con'. */
+    id: string;
     title: Localized;
     venueId: string;
     /** YYYY-MM-DDTHH:mm on the site clock. */
@@ -25,13 +28,10 @@ export interface GuideEvent {
 /** One lot as the guide shows it from the selected venue. */
 export interface LotView {
     lot: UwLot;
-    /** During the event, or right now when there's no event. */
+    /** Right now, or during the event when the guide is showing the event's day. */
     status: LotStatus;
-    /** What a visitor pays during the event (or now): none when it's free, permits only or event-priced. */
+    /** What a visitor pays then: none when it's free, permits only or event-priced. */
     rates: Rate[];
-    /** Right now, whatever the event; the same as `status` when there's no event. */
-    now: LotStatus;
-    nowRates: Rate[];
     /** Place among the venue's suggested lots, from 1; 0 when not suggested. */
     rank: number;
     /** The organizers' note on a suggested lot, if they left one. */
@@ -48,21 +48,70 @@ export const LOT_FILTERS: LotFilter[] = ['free', 'ada', 'ev', 'moto', 'garage'];
 
 const toLocal = (value: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) ? value.slice(0, 16) : '';
 
-/**
- * The stretch of the event's first day the status covers. An event running past
- * midnight is judged on its first day, from its start until midnight.
- */
-export function eventWindow(event: GuideEvent): ParkingWindow | null {
-    const start = toLocal(event.start), end = toLocal(event.end);
-    if (!start) return null;
-    const date = start.slice(0, 10);
-    const from = clockMinutes(start.slice(11));
-    const until = !end ? from : end.slice(0, 10) === date ? clockMinutes(end.slice(11)) : DAY_MINUTES;
-    // An event with no end, or one before its start, is judged at its first minute.
-    return {date, start: from, end: until > from ? until : Math.min(from + 1, DAY_MINUTES), isNow: false};
+/** One day of an event, which the guide can be switched to. */
+export interface EventDay {
+    /** Stays the same as the events load and the clock moves on. */
+    key: string;
+    event: GuideEvent;
+    /** The event's hours that day. */
+    window: ParkingWindow;
 }
 
-/** This minute on the site clock, for a guide opened without an event. */
+// The most days one event offers, should its end be mistyped a year out.
+const MAX_EVENT_DAYS = 7;
+
+const nextDate = (date: string) => {
+    const [y, m, d] = date.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+};
+
+/**
+ * The event's hours on each of its days from `today` on. An event running past
+ * midnight has one per day: from its start until midnight, then from midnight
+ * until its end.
+ */
+export function eventDays(event: GuideEvent, today: string): EventDay[] {
+    const start = toLocal(event.start), end = toLocal(event.end);
+    if (!start) return [];
+    const first = start.slice(0, 10), from = clockMinutes(start.slice(11));
+    const day = (date: string, s: number, e: number): EventDay =>
+        ({key: `${event.id}/${date}`, event, window: {date, start: s, end: e, isNow: false}});
+    // An event with no end, or one before its start, is judged at its first minute.
+    if (end <= start) return first < today ? [] : [day(first, from, Math.min(from + 1, DAY_MINUTES))];
+
+    const last = end.slice(0, 10), until = clockMinutes(end.slice(11));
+    const days: EventDay[] = [];
+    for (let date = first; date <= last && days.length < MAX_EVENT_DAYS; date = nextDate(date)) {
+        const s = date === first ? from : 0, e = date === last ? until : DAY_MINUTES;
+        // An event ending at midnight has nothing on the day it ends.
+        if (e > s && date >= today) days.push(day(date, s, e));
+    }
+    return days;
+}
+
+const sameEvent = (a: GuideEvent, b: GuideEvent) => a.id === b.id
+    // The con can be listed as an upcoming event too: one venue on one first day is one event.
+    || (!!a.venueId && a.venueId === b.venueId && a.start.slice(0, 10) === b.start.slice(0, 10));
+
+/** The events the guide offers, each once: the one it was opened for, then the rest by start. */
+export function guideEvents(opened: GuideEvent | null, others: GuideEvent[]): GuideEvent[] {
+    const list: GuideEvent[] = [];
+    const rest = [...others].sort((a, b) => a.start.localeCompare(b.start));
+    for (const event of opened ? [opened, ...rest] : rest) {
+        if (!list.some(e => sameEvent(e, event))) list.push(event);
+    }
+    return list;
+}
+
+export const fromUpcoming = (event: UpcomingEvent): GuideEvent => ({
+    id: event.id,
+    title: {en: event.title, zh: event.titleCn},
+    venueId: event.venueId,
+    start: toDatetimeLocal(event.startAt),
+    end: toDatetimeLocal(event.endAt),
+});
+
+/** This minute on the site clock, which the guide shows unless switched to an event's day. */
 export function nowWindow(now: Date): ParkingWindow {
     const local = toDatetimeLocal(now);
     const start = clockMinutes(local.slice(11, 16));
@@ -81,30 +130,27 @@ function venueWalking(parking: UwParkingData, venue: Venue): Record<string, Walk
     return walking && walking.lat === venue.lat && walking.lng === venue.lng ? walking.lots : null;
 }
 
-const ratesOver = (lot: UwLot, status: LotStatus, window: ParkingWindow) =>
-    status.kind === 'event' ? [] : ratesDuring(lot, status.dow, window.start, window.end);
-
-/** Every visitor lot as seen from `venue` during `window` and at `nowWin`, nearest on foot first. */
-export function lotViews(parking: UwParkingData, venue: Venue, window: ParkingWindow, nowWin: ParkingWindow): LotView[] {
-    const walking = venueWalking(parking, venue);
-    const located = hasCoordinates(venue.lat, venue.lng);
+/**
+ * Every visitor lot as seen from `venue` during `window`, nearest on foot first.
+ * Without a venue, none is suggested or has a distance, and they go by code.
+ */
+export function lotViews(parking: UwParkingData, venue: Venue | null, window: ParkingWindow): LotView[] {
+    const walking = venue && venueWalking(parking, venue);
+    const from = venue && hasCoordinates(venue.lat, venue.lng) ? venue : null;
     // Ranked among the suggestions UW still lists, so a dropped lot leaves no gap.
     const listed = new Set(parking.lots.map(l => l.code));
-    const picks = venue.suggestedLots.filter(s => listed.has(s.code));
+    const picks = venue?.suggestedLots.filter(s => listed.has(s.code)) ?? [];
     return parking.lots.map(lot => {
         const pick = picks.findIndex(s => s.code === lot.code);
         const suggested = pick >= 0 ? picks[pick] : null;
         const walk = walking?.[lot.code] ?? null;
-        const miles = located ? haversineMiles(venue.lat, venue.lng, lot.lat, lot.lng) : null;
+        const miles = from ? haversineMiles(from.lat, from.lng, lot.lat, lot.lng) : null;
         const status = lotStatus(lot, window, parking.eventPricing);
-        const now = window.isNow ? status : lotStatus(lot, nowWin, parking.eventPricing);
         return {
             lot,
             status,
-            rates: ratesOver(lot, status, window),
-            now,
-            // The rates of this minute, though `now` looks ahead to the rest of the day.
-            nowRates: ratesOver(lot, now, {...nowWin, end: nowWin.start + 1}),
+            // A moment's window is its one minute, so these are this minute's rates.
+            rates: status.kind === 'event' ? [] : ratesDuring(lot, status.dow, window.start, window.end),
             rank: pick + 1,
             note: suggested && (suggested.noteEn || suggested.noteCn) ? {
                 en: suggested.noteEn,

@@ -5,14 +5,18 @@ import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { CON_NAME, useConContent } from '~/lib/conContent';
 import { getFirebaseDb } from '~/lib/firebase';
 import { parseSiteTime, siteDay, toDatetimeLocal } from '~/lib/siteTime';
+import { useUpcomingEvents } from '~/lib/upcomingEvents';
 import { useUwParking } from '~/lib/uwParking';
 import { PARKING_INFO_URL, resolveVenueById, useVenues, type Venue } from '~/lib/venues';
 import { LotDetail } from './LotDetail';
 import { LotList } from './LotList';
 import {
-    eventWindow,
+    type EventDay,
+    eventDays,
     firstSuggestion,
+    fromUpcoming,
     type GuideEvent,
+    guideEvents,
     localizedVenueName,
     type LotFilter,
     lotViews,
@@ -34,8 +38,8 @@ const TopBar = ({tx}: {tx: ParkingText}) => (
     </div>
 );
 
-const Notice = ({icon, title, desc, inline}: {icon: string; title: string; desc: string; inline?: boolean}) => (
-    <div className={`parking-error${inline ? ' parking-error--inline' : ''}`}>
+const Notice = ({icon, title, desc}: {icon: string; title: string; desc: string}) => (
+    <div className="parking-error">
         <div className="parking-error-icon">{icon}</div>
         <h2 className="parking-error-title">{title}</h2>
         <p className="parking-error-desc">{desc}</p>
@@ -57,6 +61,7 @@ export const ParkingGuide = () => {
     const {venues, loading: venuesLoading} = useVenues();
     const {parking, loading: parkingLoading} = useUwParking();
     const {content: con, loading: conLoading} = useConContent();
+    const {activeEvents, loading: eventsLoading} = useUpcomingEvents();
 
     const [upcoming, setUpcoming] = useState<EventLoad>(eventId ? {state: 'loading'} : {state: 'ready', event: null});
     useEffect(() => {
@@ -78,6 +83,7 @@ export const ParkingGuide = () => {
                 setUpcoming({
                     state: 'ready',
                     event: startAt ? {
+                        id: eventId,
                         title: {en: data.title ?? '', zh: data.titleCn ?? ''},
                         venueId: data.venueId ?? '',
                         start: toDatetimeLocal(startAt),
@@ -94,39 +100,59 @@ export const ParkingGuide = () => {
         };
     }, [eventId]);
 
-    // A venue link to the con's own venue plans around the con, until the con is over.
+    // The con, until it's over.
     const conEvent = useMemo((): GuideEvent | null => {
         const {date, endTime, venueId} = con.event;
-        if (!venueParam || venueParam !== venueId || !date) return null;
+        if (!date) return null;
         const start = toDatetimeLocal(parseSiteTime(date));
         const end = endTime ? toDatetimeLocal(parseSiteTime(endTime)) : '';
         if (!start || (end || start).slice(0, 10) < siteDay(new Date())) return null;
-        return {title: CON_NAME, venueId, start, end};
-    }, [con.event, venueParam]);
-    const event = upcoming.state === 'ready' ? upcoming.event ?? conEvent : null;
-    const eventVenueId = event?.venueId ?? '';
+        return {id: 'con', title: CON_NAME, venueId, start, end};
+    }, [con.event]);
+    // The event the guide was opened for; a venue link to the con's own venue plans around the con.
+    const opened = upcoming.state === 'ready'
+        ? upcoming.event ?? (venueParam && venueParam === conEvent?.venueId ? conEvent : null)
+        : null;
 
-    // Which venue's parking guide is displayed. Defaults to the event's own venue (or
-    // the one a `?venue=` link names) once it's known; the switcher can change it.
-    const [selectedVenueId, setSelectedVenueId] = useState('');
-    const defaultVenueId = eventVenueId || venueParam;
-    useEffect(() => setSelectedVenueId(defaultVenueId), [defaultVenueId]);
-    const venue = resolveVenueById(selectedVenueId, venues);
-    const eventVenue = resolveVenueById(eventVenueId, venues);
-
-    // Each lot also shows how it is right now, so the clock moves the guide on.
-    // Without an event, statuses are for this minute.
+    // The guide shows parking right now, which the clock moves on, unless the
+    // visitor switches it to a day of one of the events.
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
         const id = setInterval(() => setNow(new Date()), NOW_TICK_MS);
         return () => clearInterval(id);
     }, []);
     const thisMinute = useMemo(() => nowWindow(now), [now]);
-    const parkingWindow = useMemo(() => (event && eventWindow(event)) || thisMinute, [event, thisMinute]);
+    // Every event with a venue the guide can plan around, so any of them can be switched to.
+    const events = useMemo(() => guideEvents(opened, [...activeEvents.map(fromUpcoming), ...(conEvent ? [conEvent] : [])]
+        .filter(e => resolveVenueById(e.venueId, venues))), [opened, activeEvents, conEvent, venues]);
+    const days = useMemo(() => events.flatMap(e => eventDays(e, thisMinute.date)), [events, thisMinute.date]);
+    const [shownKey, setShownKey] = useState<string | null>(null);
+    // The event last switched to stays the guide's event after switching back to right now.
+    const [eventKey, setEventKey] = useState<string | null>(null);
+    const shownDay = days.find(d => d.key === shownKey) ?? null;
+    const parkingWindow = shownDay?.window ?? thisMinute;
+    const event = events.find(e => e.id === eventKey) ?? opened;
+    const eventVenueId = event?.venueId ?? '';
+    const showDay = (day: EventDay | null) => {
+        setShownKey(day?.key ?? null);
+        if (day) setEventKey(day.event.id);
+    };
+
+    // Which venue's parking guide is displayed. Defaults to the event's own venue (or
+    // the one a `?venue=` link names) once it's known, and moves with a switch to
+    // another event's day; the switcher can change it. Switching to an event with no
+    // venue keeps the one picked.
+    const [selectedVenueId, setSelectedVenueId] = useState('');
+    const defaultVenueId = eventVenueId || venueParam;
+    useEffect(() => {
+        if (defaultVenueId) setSelectedVenueId(defaultVenueId);
+    }, [defaultVenueId]);
+    const venue = resolveVenueById(selectedVenueId, venues);
+    const eventVenue = resolveVenueById(eventVenueId, venues);
 
     const views = useMemo(
-        () => venue ? lotViews(parking, venue, parkingWindow, thisMinute) : [],
-        [parking, venue, parkingWindow, thisMinute],
+        () => lotViews(parking, venue, parkingWindow),
+        [parking, venue, parkingWindow],
     );
     const [query, setQuery] = useState('');
     const [filters, setFilters] = useState<ReadonlySet<LotFilter>>(new Set());
@@ -184,7 +210,7 @@ export const ParkingGuide = () => {
 
     const venueName = (v: Venue) => localizedVenueName(v, tx.isEnglish);
 
-    const loading = upcoming.state === 'loading' || venuesLoading || parkingLoading || (!!venueParam && conLoading);
+    const loading = upcoming.state === 'loading' || venuesLoading || parkingLoading || conLoading || eventsLoading;
     if (loading) {
         return (
             <div className="parking-page">
@@ -241,87 +267,83 @@ export const ParkingGuide = () => {
                 </div>
             </header>
 
-            {venue ? (
-                <div className="parking-content">
-                    <section className="parking-map-container" aria-label={tx.t('mapLabel')}>
-                        <ParkingMap
-                            ref={mapApi}
-                            views={views}
-                            visibleCodes={visibleCodes}
-                            venues={venues}
-                            venue={venue}
-                            outline={parking.outlines[venue.id] ?? null}
-                            eventVenueId={eventVenueId}
-                            selectedCode={selectedCode}
-                            hotCode={hotCode}
-                            hover={hover}
-                            setHover={setHover}
-                            isNow={parkingWindow.isNow}
+            {/* Without a venue, the whole campus: every lot, none suggested or measured. */}
+            <div className="parking-content">
+                <section className="parking-map-container" aria-label={tx.t('mapLabel')}>
+                    <ParkingMap
+                        ref={mapApi}
+                        views={views}
+                        visibleCodes={visibleCodes}
+                        venues={venues}
+                        venue={venue}
+                        outline={venue ? parking.outlines[venue.id] ?? null : null}
+                        eventVenueId={eventVenueId}
+                        selectedCode={selectedCode}
+                        hotCode={hotCode}
+                        hover={hover}
+                        setHover={setHover}
+                        isNow={parkingWindow.isNow}
+                        onOpenLot={openLot}
+                        onSelectVenue={selectVenue}
+                        tx={tx}
+                    />
+                </section>
+
+                <aside className="parking-info-panel" ref={panelRef} aria-label={tx.t('panelLabel')}>
+                    {parking.lots.length === 0 ? (
+                        <>
+                            <div className="parking-info-card">
+                                <div className="parking-info-icon parking-info-icon--info">🅿️</div>
+                                <div className="parking-info-text parking-info-stack">
+                                    <span className="parking-lot-name">{tx.t('noDataTitle')}</span>
+                                    <span>{tx.t('noDataDesc')}</span>
+                                    <a href={PARKING_INFO_URL} target="_blank" rel="noopener noreferrer">
+                                        {PARKING_INFO_URL} ↗
+                                    </a>
+                                </div>
+                            </div>
+                            <Footer generatedAt="" tx={tx}/>
+                        </>
+                    ) : selectedView ? (
+                        <LotDetail
+                            view={selectedView}
+                            parkingWindow={parkingWindow}
+                            venueName={venue ? venueName(venue) : ''}
+                            listedCodes={listedCodes}
+                            generatedAt={parking.lotsGeneratedAt}
+                            onBack={closeLot}
                             onOpenLot={openLot}
-                            onSelectVenue={selectVenue}
                             tx={tx}
                         />
-                    </section>
-
-                    <aside className="parking-info-panel" ref={panelRef} aria-label={tx.t('panelLabel')}>
-                        {parking.lots.length === 0 ? (
-                            <>
-                                <div className="parking-info-card">
-                                    <div className="parking-info-icon parking-info-icon--info">🅿️</div>
-                                    <div className="parking-info-text parking-info-stack">
-                                        <span className="parking-lot-name">{tx.t('noDataTitle')}</span>
-                                        <span>{tx.t('noDataDesc')}</span>
-                                        <a href={PARKING_INFO_URL} target="_blank" rel="noopener noreferrer">
-                                            {PARKING_INFO_URL} ↗
-                                        </a>
-                                    </div>
-                                </div>
-                                <Footer generatedAt="" tx={tx}/>
-                            </>
-                        ) : selectedView ? (
-                            <LotDetail
-                                view={selectedView}
+                    ) : (
+                        <>
+                            <LotList
+                                event={event}
                                 parkingWindow={parkingWindow}
-                                venueName={venueName(venue)}
-                                listedCodes={listedCodes}
-                                generatedAt={parking.lotsGeneratedAt}
-                                onBack={closeLot}
+                                days={days}
+                                shownDay={shownDay}
+                                onShowDay={showDay}
+                                venue={venue}
+                                eventVenue={eventVenue}
+                                venueName={venueName}
+                                eventPricing={parking.eventPricing}
+                                views={views}
+                                visibleViews={visibleViews}
+                                query={query}
+                                onQuery={setQuery}
+                                filters={filters}
+                                onToggleFilter={toggleFilter}
+                                hotCode={hotCode}
+                                onHot={hotLot}
                                 onOpenLot={openLot}
+                                onSelectVenue={selectVenue}
                                 tx={tx}
                             />
-                        ) : (
-                            <>
-                                <LotList
-                                    event={event}
-                                    parkingWindow={parkingWindow}
-                                    venue={venue}
-                                    eventVenue={eventVenue}
-                                    venueName={venueName}
-                                    eventPricing={parking.eventPricing}
-                                    views={views}
-                                    visibleViews={visibleViews}
-                                    query={query}
-                                    onQuery={setQuery}
-                                    filters={filters}
-                                    onToggleFilter={toggleFilter}
-                                    hotCode={hotCode}
-                                    onHot={hotLot}
-                                    onOpenLot={openLot}
-                                    onSelectVenue={selectVenue}
-                                    tx={tx}
-                                />
-                                <Footer generatedAt={parking.lotsGeneratedAt} tx={tx}/>
-                            </>
-                        )}
-                    </aside>
-                </div>
-            ) : (
-                <>
-                    {/* No venue selected (e.g. event has no linked venue) — prompt to pick one. */}
-                    <Notice icon="🅿️" title={tx.t('chooseTitle')} desc={tx.t('chooseDesc')} inline/>
-                    <Footer generatedAt="" tx={tx}/>
-                </>
-            )}
+                            <Footer generatedAt={parking.lotsGeneratedAt} tx={tx}/>
+                        </>
+                    )}
+                </aside>
+            </div>
         </div>
     );
 };

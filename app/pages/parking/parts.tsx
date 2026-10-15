@@ -14,19 +14,6 @@ export const RatesLine = ({rates, tx}: {rates: Rate[]; tx: ParkingText}) =>
     rates.length > 0 ? <span className="parking-rate-line">💲 {tx.rates(rates)}</span> : null;
 
 /**
- * How the lot is right now, beside how it will be during the event: "Now ·
- * Permits only until 4 pm, then pay", "Now · $7 flat · Pay until 9 pm, then free".
- * The price comes first, as it's this minute's; the rest says what changes later.
- */
-export const NowLine = ({view, tx}: {view: LotView; tx: ParkingText}) => (
-    <span className={`parking-now parking-now--${view.now.kind}`}>
-        <b>{tx.t('nowLabel')}</b>
-        {view.nowRates.length > 0 && ` · ${tx.rates(view.nowRates)}`}
-        {` · ${tx.status(view.now, true)}`}
-    </span>
-);
-
-/**
  * How far a lot is: "2 min walk to HUB" (`venueName` given), "2 min walk", or
  * "2 min" (`short`). Without a measured walk, a straight-line estimate instead.
  */

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { clockMinutes, DAY_MINUTES, daySchedule, type ParkingWindow, weeklyRates } from '~/lib/parkingStatus';
 import type { ClockRange } from '~/lib/uwParking';
-import { Footer, NowLine, RatesLine, StatusPill, walkText } from './parts';
+import { Footer, RatesLine, StatusPill, walkText } from './parts';
 import type { LotView } from './model';
 import type { ParkingText } from './text';
 
@@ -126,7 +126,6 @@ export const LotDetail = ({
                 <StatusPill status={status} tx={tx}/>
                 <RatesLine rates={view.rates} tx={tx}/>
                 <p>{whyText(view, parkingWindow, tx)}</p>
-                {!parkingWindow.isNow && <NowLine view={view} tx={tx}/>}
                 {walk && (
                     <span
                         className="parking-dist">📍 {walk}{view.walk && ` · ${view.walk.meters} ${tx.isEnglish ? 'm' : '米'}`}</span>

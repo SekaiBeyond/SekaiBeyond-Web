@@ -6,6 +6,7 @@ import type { ParkingText } from './text';
 
 interface VenueSwitcherProps {
     venues: Venue[];
+    /** '' for the whole campus. */
     selectedId: string;
     /** The venue of the event the guide was opened for, tagged "This event". */
     eventVenueId: string;
@@ -18,7 +19,7 @@ interface VenueSwitcherProps {
 /**
  * Searchable venue picker shown in the parking-guide header. Defaults to the event's own
  * venue, or the one a `?venue=` link names, but lets visitors switch to any other venue to
- * view its parking map and lots.
+ * view its parking map and lots, or to the whole campus.
  */
 export const VenueSwitcher = ({venues, selectedId, eventVenueId, suggestionFor, onSelect, tx}: VenueSwitcherProps) => {
     const [open, setOpen] = useState(false);
@@ -28,13 +29,14 @@ export const VenueSwitcher = ({venues, selectedId, eventVenueId, suggestionFor, 
     const inputRef = useRef<HTMLInputElement>(null);
 
     const selected = venues.find(v => v.id === selectedId) ?? null;
-    const triggerLabel = selected ? localizedVenueName(selected, tx.isEnglish) : tx.t('selectVenue');
+    const triggerLabel = selected ? localizedVenueName(selected, tx.isEnglish) : tx.t('allCampus');
 
     const q = query.trim().toLowerCase();
     const filtered = q
         ? venues.filter(v => v.nameEn.toLowerCase().includes(q) || v.nameCn.toLowerCase().includes(q)
             || v.buildingCode.toLowerCase().includes(q))
         : venues;
+    const showCampus = !q || tx.t('allCampus').toLowerCase().includes(q);
 
     // While open: close on outside click / Escape and focus the search box.
     useEffect(() => {
@@ -108,8 +110,21 @@ export const VenueSwitcher = ({venues, selectedId, eventVenueId, suggestionFor, 
                         aria-label={tx.t('searchVenues')}
                     />
                     <div className="parking-venue-switcher-list" role="listbox">
+                        {showCampus && (
+                            <button
+                                type="button"
+                                role="option"
+                                aria-selected={!selected}
+                                className={`parking-venue-switcher-option${!selected ? ' is-active' : ''}`}
+                                onClick={() => choose('')}
+                            >
+                                <span className="parking-venue-switcher-option-name">{tx.t('allCampus')}</span>
+                                <span className="parking-venue-switcher-option-meta">{tx.t('allCampusSub')}</span>
+                                {!selected && <span className="parking-venue-switcher-check">✓</span>}
+                            </button>
+                        )}
                         {filtered.length === 0 ? (
-                            <div className="parking-venue-switcher-empty">{tx.t('noVenues')}</div>
+                            !showCampus && <div className="parking-venue-switcher-empty">{tx.t('noVenues')}</div>
                         ) : (
                             filtered.map(v => {
                                 const active = v.id === selectedId;

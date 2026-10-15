@@ -24,7 +24,7 @@ const LOT_ZOOM = 17;
 export type HoverTarget = {kind: 'lot'; code: string; pinned: boolean} | {kind: 'venue'; id: string};
 
 export interface ParkingMapApi {
-    /** Frames the venue and its suggested lots again. */
+    /** Frames the venue and its suggested lots again, or every lot without a venue. */
     fitVenue: () => void;
     /** Centers a lot, zooming in if the map is further out. */
     focusLot: (code: string) => void;
@@ -36,7 +36,8 @@ interface ParkingMapProps {
     /** Lots the search and filters leave; the rest are hidden unless suggested or selected. */
     visibleCodes: ReadonlySet<string>;
     venues: Venue[];
-    venue: Venue;
+    /** None for the whole campus. */
+    venue: Venue | null;
     outline: VenueOutline | null;
     eventVenueId: string;
     selectedCode: string | null;
@@ -66,11 +67,12 @@ function boundsAround(points: Point[], marginLng: number, marginLat: number): Ln
     ];
 }
 
-/** The venue with its suggested lots, or its three nearest when it has none. */
-function venueBounds(venue: Venue, views: LotView[]): LngLatBoundsLike | null {
+/** The venue with its suggested lots, or its three nearest when it has none; every lot without a venue. */
+function venueBounds(venue: Venue | null, views: LotView[]): LngLatBoundsLike | null {
     const picks = views.filter(v => v.rank > 0);
-    const lots = (picks.length > 0 ? picks : views.slice(0, 3)).map(v => [v.lot.lng, v.lot.lat] as Point);
-    const points = hasCoordinates(venue.lat, venue.lng) ? [[venue.lng, venue.lat] as Point, ...lots] : lots;
+    const framed = !venue ? views : picks.length > 0 ? picks : views.slice(0, 3);
+    const lots = framed.map(v => [v.lot.lng, v.lot.lat] as Point);
+    const points = venue && hasCoordinates(venue.lat, venue.lng) ? [[venue.lng, venue.lat] as Point, ...lots] : lots;
     return points.length > 0 ? boundsAround(points, 0.0012, 0.0008) : null;
 }
 
@@ -225,23 +227,23 @@ export const ParkingMap = (props: ParkingMapProps) => {
     }, [lotElements, views, visibleCodes, selectedCode]);
     useEffect(() => {
         for (const [id, element] of Object.entries(venueElements)) {
-            const current = id === venue.id;
+            const current = id === venue?.id;
             element.style.zIndex = current ? '7' : '4';
             venueMarkers[id]?.setOffset([0, current ? -20 : -15]);
         }
-    }, [venueElements, venueMarkers, venue.id]);
+    }, [venueElements, venueMarkers, venue?.id]);
 
     // Switching venue moves the highlight and reframes the map.
     useEffect(() => {
         if (!map || !styleReady) return;
         (map.getSource('venue-outline') as GeoJSONSource | undefined)?.setData(outlineData(outline));
     }, [map, styleReady, outline]);
-    const framedVenue = useRef(venue.id);
+    const framedVenue = useRef(venue?.id);
     useEffect(() => {
-        if (framedVenue.current === venue.id) return;
-        framedVenue.current = venue.id;
+        if (framedVenue.current === venue?.id) return;
+        framedVenue.current = venue?.id;
         fitVenue(true);
-    }, [venue.id]);
+    }, [venue?.id]);
 
     // The hover card follows `hover`; a pinned one takes clicks, a passing one lets them through.
     useEffect(() => {
@@ -293,11 +295,14 @@ export const ParkingMap = (props: ParkingMapProps) => {
                     <div className="parking-map-legend-item is-optional"><span
                         className="parking-map-legend-dot is-pick">1</span>{tx.t('lg_pick')}</div>
                 )}
-                <div className="parking-map-legend-item is-optional"><span
-                    className="parking-map-legend-star">⭐</span>{tx.t('lg_venue')}</div>
-                {mappedVenues.length > 1 && (
+                {venue && (
                     <div className="parking-map-legend-item is-optional"><span
-                        className="parking-map-legend-star is-other">⭐</span>{tx.t('lg_other')}</div>
+                        className="parking-map-legend-star">⭐</span>{tx.t('lg_venue')}</div>
+                )}
+                {mappedVenues.some(v => v.id !== venue?.id) && (
+                    <div className="parking-map-legend-item is-optional"><span
+                        className="parking-map-legend-star is-other">⭐</span>{tx.t(venue ? 'lg_other' : 'lg_venues')}
+                    </div>
                 )}
             </div>
 
@@ -352,7 +357,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
             {mappedVenues.map(v => {
                 const element = venueElements[v.id];
                 if (!element) return null;
-                const current = v.id === venue.id;
+                const current = v.id === venue?.id;
                 const name = localizedVenueName(v, tx.isEnglish);
                 return createPortal(
                     <button
@@ -432,11 +437,7 @@ const LotCard = ({view, pinned, onDetails, tx}: {
                 {rank > 0 && <span className="parking-pick-badge">{tx.t('pick', {n: rank})}</span>}
             </div>
             <StatusPill status={status} tx={tx}/>
-            {view.nowRates.length > 0 ? (
-                <RatesLine rates={view.nowRates} tx={tx}/>
-            ) : view.now.kind === 'permit' ? (
-                <span className="parking-rate-line">🎫 {tx.t('st_now_permit')}</span>
-            ) : null}
+            <RatesLine rates={view.rates} tx={tx}/>
             <div className="parking-hc-facts">
                 {walk && <span className="parking-dist">📍 {walk}</span>}
                 {!!lot.stalls.accessible && <span title={tx.t('s_accessible')}>♿ {lot.stalls.accessible}</span>}

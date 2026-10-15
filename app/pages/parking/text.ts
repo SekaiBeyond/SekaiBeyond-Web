@@ -18,13 +18,16 @@ const EN = {
     back: 'Back to Home',
     title: 'Parking Guide',
     viewingFor: 'Viewing parking for',
-    selectVenue: 'Select a venue',
+    allCampus: 'All of campus',
+    allCampusSub: 'Every visitor lot, without walking times',
     searchVenues: 'Search venues…',
     noVenues: 'No venues found',
     thisEvent: 'This event',
     yourEvent: 'Your event',
     rightNow: 'Parking right now',
     rightNowSub: 'Statuses show parking at this moment.',
+    showParking: 'Show parking for',
+    whenNow: 'Right now',
     otherVenue: 'You’re viewing parking for {v}.',
     backToEventVenue: 'Switch back to {v}',
     suggested: 'Suggested lots for {v}',
@@ -64,10 +67,6 @@ const EN = {
     rate_night: '{p} flat',
     rateDayWhen: 'Weekdays {r}',
     rateNightWhen: 'Weekdays {w}, Sat {s}',
-    nowLabel: 'Now',
-    st_bare_free: 'Free',
-    st_bare_pay: 'Pay',
-    st_bare_permit: 'Permits only',
     weekday: 'Weekday',
     monFri: 'Mon–Fri',
     sat: 'Saturday',
@@ -115,6 +114,7 @@ const EN = {
     lg_pick: 'Suggested lot',
     lg_venue: 'Event venue',
     lg_other: 'Other venues (click to switch)',
+    lg_venues: 'Venues (click to choose)',
     bannerAll: '{d}: ${p} event parking in all campus lots{when}.',
     bannerSome: '{d}: ${p} event parking in {lots}{when}.',
     bannerSrc: 'UW event parking calendar',
@@ -131,8 +131,8 @@ const EN = {
     notFoundDesc: 'The event you’re looking for doesn’t exist or has been removed.',
     noVenuesTitle: 'Parking Guide Unavailable',
     noVenuesDesc: 'No parking guides are available yet. Check back later or contact the organizers.',
-    chooseTitle: 'Choose a Venue',
-    chooseDesc: 'Pick a venue above to see its parking map and nearby lots.',
+    chooseTitle: 'Where are you headed?',
+    chooseDesc: 'Pick a venue above, or a star on the map, to see its suggested lots and walking times.',
     noDataTitle: 'Lot details are on their way',
     noDataDesc: 'We couldn’t load UW’s parking data just now. UW’s own visitor parking page has everything in the meantime.',
     st_event: '${p} event parking',
@@ -157,13 +157,16 @@ const ZH: Record<TextKey, string> = {
     back: '返回首页',
     title: '停车指南',
     viewingFor: '查看停车场地',
-    selectVenue: '选择场地',
+    allCampus: '全校园',
+    allCampusSub: '所有访客停车场，不含步行时间',
     searchVenues: '搜索场地…',
     noVenues: '未找到场地',
     thisEvent: '本次活动',
     yourEvent: '你的活动',
     rightNow: '当前停车情况',
     rightNowSub: '状态显示的是此刻的停车情况。',
+    showParking: '显示停车情况',
+    whenNow: '现在',
     otherVenue: '你正在查看 {v} 的停车信息。',
     backToEventVenue: '切换回 {v}',
     suggested: '{v} 推荐停车场',
@@ -203,10 +206,6 @@ const ZH: Record<TextKey, string> = {
     rate_night: '{p} 固定价',
     rateDayWhen: '工作日 {r}',
     rateNightWhen: '工作日 {w}，周六 {s}',
-    nowLabel: '现在',
-    st_bare_free: '免费',
-    st_bare_pay: '需付费',
-    st_bare_permit: '仅限持证',
     weekday: '工作日',
     monFri: '周一至周五',
     sat: '周六',
@@ -254,6 +253,7 @@ const ZH: Record<TextKey, string> = {
     lg_pick: '推荐停车场',
     lg_venue: '活动场地',
     lg_other: '其他场地（点击切换）',
+    lg_venues: '场地（点击选择）',
     bannerAll: '{d}：全校停车场实行活动停车价 ${p}{when}。',
     bannerSome: '{d}：{lots} 实行活动停车价 ${p}{when}。',
     bannerSrc: 'UW 活动停车日历',
@@ -270,8 +270,8 @@ const ZH: Record<TextKey, string> = {
     notFoundDesc: '您查找的活动不存在或已被移除。',
     noVenuesTitle: '停车指南暂不可用',
     noVenuesDesc: '暂无停车指南。请稍后查看或联系主办方。',
-    chooseTitle: '选择场地',
-    chooseDesc: '在上方选择场地，即可查看其停车地图及附近停车场。',
+    chooseTitle: '你要去哪里？',
+    chooseDesc: '在上方或地图上的星标选择场地，即可查看推荐停车场和步行时间。',
     noDataTitle: '停车场信息即将上线',
     noDataDesc: '暂时无法加载 UW 停车数据。你可以先查看 UW 的访客停车页面。',
     st_event: '活动停车价 ${p}',
@@ -349,12 +349,11 @@ function makeText(isEnglish: boolean) {
         return isEnglish ? `, ${r}` : `（${r}）`;
     };
 
-    /** `bare` drops the "now" / "during your event", for a line already labelled with when. */
-    const status = (s: LotStatus, bare = false): string => {
+    const status = (s: LotStatus): string => {
         const p = s.phrase;
         if (p.key === 'event') return t('st_event', {p: p.price});
         if (p.key === 'allDay') return t('st_allDay');
-        if (p.key === 'only') return t(`st_${bare ? 'bare' : s.isNow ? 'now' : 'only'}_${p.segment}` as TextKey);
+        if (p.key === 'only') return t(`st_${s.isNow ? 'now' : 'only'}_${p.segment}` as TextKey);
         return t(`st_${p.from}>${p.to}` as TextKey, {t: time(p.at)});
     };
 

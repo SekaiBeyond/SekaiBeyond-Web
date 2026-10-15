@@ -579,6 +579,33 @@
     cursor: pointer;
 }
 
+/* Whether the guide shows parking right now or on one of the events' days. */
+.parking-when {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.parking-when-select {
+    margin-top: 8px;
+    max-width: 100%;
+    border: 2px solid rgba(255, 150, 200, 0.25);
+    border-radius: 14px;
+    padding: 6px 10px;
+    background: #fff;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.parking-when-select:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
 .parking-banner .parking-info-text {
     color: var(--parking-event-ink);
     font-weight: 700;
@@ -702,59 +729,6 @@
     color: var(--parking-event-ink);
     background: var(--parking-event-soft);
     --dot: var(--parking-event);
-}
-
-/* How a lot is right now, under its status for the event. Plain inline text, so it wraps like a sentence. */
-.parking-now {
-    display: block;
-    font-size: 12.5px;
-    font-weight: 600;
-    line-height: 1.45;
-    color: var(--color-text-muted);
-}
-
-.parking-now::before {
-    content: "";
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    margin-right: 6px;
-    border-radius: 3px;
-    vertical-align: 1px;
-    background: var(--dot);
-}
-
-.parking-now b {
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--ink);
-}
-
-.parking-now--free {
-    --dot: var(--parking-free);
-    --ink: var(--parking-free-ink);
-}
-
-.parking-now--part {
-    --dot: var(--parking-part);
-    --ink: var(--parking-part-ink);
-}
-
-.parking-now--paid {
-    --dot: var(--parking-paid);
-    --ink: var(--parking-paid-ink);
-}
-
-.parking-now--permit {
-    --dot: var(--parking-permit);
-    --ink: var(--parking-permit-ink);
-}
-
-.parking-now--event {
-    --dot: var(--parking-event);
-    --ink: var(--parking-event-ink);
 }
 
 /* All-lots search, filters and list */
@@ -1552,11 +1526,6 @@ button.parking-tag {
     gap: 16px;
     text-align: center;
     padding: 40px;
-}
-
-/* Shown inline below the header (e.g. "Choose a venue") rather than as a full-page state. */
-.parking-error--inline {
-    min-height: 40vh;
 }
 
 .parking-error-icon {
