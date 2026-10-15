@@ -352,7 +352,8 @@
 }
 
 /* Legend over the map, frosted so markers behind stay visible, and
-   click-through so they stay clickable. */
+   click-through so they stay clickable. Above every pin (ParkingMap stacks
+   them 1–7) and under the hover card. */
 .parking-map-legend {
     position: absolute;
     left: 14px;
@@ -368,7 +369,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    z-index: 2;
+    z-index: 8;
     pointer-events: none;
 }
 
