@@ -127,8 +127,11 @@ export function createValueCache<T>(
  * small, rarely-changing top-level collections such as tags and venues.
  */
 export interface CollectionCache<T> {
-    /** Hook returning the cached list, a loading flag, and a `refresh` that re-fetches. */
-    useItems: () => {items: T[]; loading: boolean; refresh: () => Promise<void>};
+    /**
+     * Hook returning the cached list, a loading flag, and a `refresh` that re-fetches;
+     * `enabled` as in `ValueCache.useValue`.
+     */
+    useItems: (enabled?: boolean) => {items: T[]; loading: boolean; refresh: () => Promise<void>};
     /** Re-fetch from Firestore and notify all subscribers. Returns the fresh list. */
     refresh: () => Promise<T[]>;
     /** Synchronous snapshot of the cached list, or null if it hasn't loaded yet. */
@@ -146,8 +149,8 @@ export function createCollectionCache<T>(
         return snapshot.docs.map(mapDoc);
     }, []);
 
-    function useItems() {
-        const {value: items, loading, refresh} = cache.useValue();
+    function useItems(enabled: boolean = true) {
+        const {value: items, loading, refresh} = cache.useValue(enabled);
         return {items, loading, refresh};
     }
 

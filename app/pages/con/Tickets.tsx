@@ -1,5 +1,5 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { useConContent } from '~/lib/conContent';
+import { useConContent, useConListing } from '~/lib/conContent';
 import { useNowAcross } from '~/pages/con/hooks';
 import { useT } from '~/pages/con/i18n';
 import { InPersonSales } from '~/pages/con/InPersonSales';
@@ -10,6 +10,7 @@ export const Tickets = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
     const {content} = useConContent();
+    const {ticketUrl} = useConListing().listing;
     const now = useNowAcross(content.tickets.flatMap(tier => tier.earlyBird ? [tier.earlyBird.endsAt] : []));
 
     return (
@@ -81,14 +82,16 @@ export const Tickets = () => {
                                 ))}
                             </ul>
 
-                            <a
-                                className={`btn ${tier.featured ? 'btn-primary' : 'btn-secondary'} sbc-ticket-cta`}
-                                href={content.event.ticketUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                {t({en: 'Reserve', zh: '预订'})}
-                            </a>
+                            {ticketUrl && (
+                                <a
+                                    className={`btn ${tier.featured ? 'btn-primary' : 'btn-secondary'} sbc-ticket-cta`}
+                                    href={ticketUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    {t({en: 'Reserve', zh: '预订'})}
+                                </a>
+                            )}
                         </article>
                     );
                 })}

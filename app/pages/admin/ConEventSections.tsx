@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUploadConVideo } from '~/lib/firebase';
 import { type ConContent, HIDEABLE_SECTIONS, ROOM_ACCENTS, type RoomAccent, } from '~/lib/conContent';
+import { formatSiteTime } from '~/lib/siteTime';
+import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { useUploadLimits } from '~/lib/uploadLimits';
 import { useVenues } from '~/lib/venues';
 import type { Localized } from '~/pages/con/i18n';
@@ -27,17 +29,30 @@ export const EventSection = ({content, loading, showToast, readOnly}: SectionPro
     const {isEnglish} = useLanguage();
     const editor = useSectionEditor('event', content.event, loading, showToast);
     const {draft, setDraft} = editor;
-    const {venues, loading: venuesLoading} = useVenues();
+    const {venues} = useVenues();
+    const {upcomingEvents, loading: eventsLoading} = useAllUpcomingEvents();
 
     const set = <K extends keyof typeof draft, >(key: K, value: typeof draft[K]) =>
         setDraft(prev => ({...prev, [key]: value}));
+
+    const linked = upcomingEvents.find(e => e.id === draft.upcomingEventId) ?? null;
+    const none = isEnglish ? 'none' : '无';
+    const when = (date: Date) => formatSiteTime(date, isEnglish, {
+        year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+    const venueName = (id: string) => {
+        if (!id) return none;
+        const venue = venues.find(v => v.id === id);
+        if (!venue) return isEnglish ? '(Deleted venue)' : '（已删除的场地）';
+        return isEnglish ? venue.nameEn : (venue.nameCn || venue.nameEn);
+    };
 
     return (
         <SectionShell
             section="event"
             helper={{
-                en: 'The date, venue, and ticket link shown in the hero, the countdown, the navbar button, and the venue card.',
-                zh: '在首屏、倒计时、导航栏按钮与场地卡片中展示的日期、场地与购票链接。',
+                en: 'The edition, tagline and intro in the hero, and the upcoming event whose dates, venue and ticket link the hero, the countdown, the navbar button and the venue card show.',
+                zh: '首屏中的届次、标语与简介，以及对应的活动预告——首屏、倒计时、导航栏按钮与场地卡片展示该活动的日期、场地与购票链接。',
             }}
             editor={editor}
             readOnly={readOnly}
@@ -51,17 +66,6 @@ export const EventSection = ({content, loading, showToast, readOnly}: SectionPro
                         value={draft.edition}
                         onChange={e => !readOnly && set('edition', Number(e.target.value))}
                         readOnly={readOnly}
-                    />
-                </label>
-                <label>
-                    <span>{isEnglish ? 'Ticket link' : '购票链接'}</span>
-                    <input
-                        className="admin-input"
-                        type="url"
-                        value={draft.ticketUrl}
-                        onChange={e => !readOnly && set('ticketUrl', e.target.value)}
-                        readOnly={readOnly}
-                        placeholder="https://..."
                     />
                 </label>
 
@@ -79,54 +83,51 @@ export const EventSection = ({content, loading, showToast, readOnly}: SectionPro
                     multiline
                 />
 
-                <label>
-                    <span>{isEnglish ? 'Starts (Pacific)' : '开始时间（太平洋时间）'}</span>
-                    <input
-                        className="admin-input"
-                        type="datetime-local"
-                        value={draft.date}
-                        onChange={e => !readOnly && set('date', e.target.value)}
-                        readOnly={readOnly}
-                    />
-                </label>
-                <label>
-                    <span>{isEnglish ? 'Ends (Pacific)' : '结束时间（太平洋时间）'}</span>
-                    <input
-                        className="admin-input"
-                        type="datetime-local"
-                        value={draft.endTime}
-                        onChange={e => !readOnly && set('endTime', e.target.value)}
-                        readOnly={readOnly}
-                    />
-                </label>
-
                 <label className="admin-form-grid-full">
-                    <span>{isEnglish ? 'Venue' : '场地'}</span>
+                    <span>{isEnglish ? 'Upcoming event' : '对应的活动预告'}</span>
                     <select
                         className="admin-input"
-                        value={draft.venueId}
-                        onChange={e => !readOnly && set('venueId', e.target.value)}
+                        value={draft.upcomingEventId}
+                        onChange={e => !readOnly && set('upcomingEventId', e.target.value)}
                         disabled={readOnly}
                     >
-                        <option value="">{isEnglish ? '— Select a venue —' : '— 选择场地 —'}</option>
-                        {/* A deleted venue still shows as the current value, or the
-                            select would read blank. */}
-                        {draft.venueId && !venuesLoading && !venues.some(v => v.id === draft.venueId) && (
-                            <option value={draft.venueId}>
-                                {isEnglish ? '(Deleted venue)' : '（已删除的场地）'}
+                        <option value="">{isEnglish ? '— Select the con’s event —' : '— 选择漫展对应的活动 —'}</option>
+                        {/* An archived or deleted event still shows as the current value,
+                            or the select would read blank. */}
+                        {draft.upcomingEventId && !eventsLoading && !linked && (
+                            <option value={draft.upcomingEventId}>
+                                {isEnglish ? '(Archived or deleted event)' : '（已归档或删除的活动）'}
                             </option>
                         )}
-                        {venues.map(v => (
-                            <option key={v.id} value={v.id}>
-                                {isEnglish ? v.nameEn : (v.nameCn || v.nameEn)}
+                        {upcomingEvents.map(e => (
+                            <option key={e.id} value={e.id}>
+                                {`${isEnglish ? e.title : (e.titleCn || e.title)} · ${formatSiteTime(e.startAt, isEnglish, {
+                                    year: 'numeric', month: 'short', day: 'numeric',
+                                })}${e.published ? '' : (isEnglish ? ' (unpublished)' : '（未发布）')}`}
                             </option>
                         ))}
                     </select>
                     <span className="admin-helper-text admin-mt-4">
                         {isEnglish
-                            ? 'Add or edit venues in the Locations tab. The map button uses the venue’s coordinates.'
-                            : '可在「场地管理」标签页中添加或编辑场地。地图按钮使用场地的坐标。'}
+                            ? 'The con’s dates, venue and ticket link come from this event: edit them in the Upcoming Events tab. The con page’s parking button opens its parking guide.'
+                            : '漫展的日期、场地与购票链接均来自该活动，请在「活动预告」标签页中编辑。漫展页面的停车按钮将打开该活动的停车指南。'}
                     </span>
+                    {linked && (
+                        <span className="admin-helper-text admin-mt-4">
+                            {isEnglish ? 'Runs' : '时间'}: {when(linked.startAt)} – {when(linked.endAt)}
+                            <br/>
+                            {isEnglish ? 'Venue' : '场地'}: {venueName(linked.venueId)}
+                            <br/>
+                            {isEnglish ? 'Ticket link' : '购票链接'}: {linked.buyTicket || none}
+                        </span>
+                    )}
+                    {linked && !linked.published && (
+                        <span className="admin-helper-text admin-mt-4 admin-con-warning">
+                            {isEnglish
+                                ? 'This event is unpublished. Staff previews show its details, but until it’s published the public con page shows no date, venue or ticket link, and its parking guide opens on right now.'
+                                : '该活动尚未发布。工作人员预览可见其信息，但在发布前，公开的漫展页面不会显示日期、场地与购票链接，停车指南也将显示当前情况。'}
+                        </span>
+                    )}
                 </label>
             </div>
         </SectionShell>

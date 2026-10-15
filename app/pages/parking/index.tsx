@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
-import { CON_NAME, useConContent } from '~/lib/conContent';
 import { prefersReducedMotion } from '~/lib/maplibre';
-import { parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
 import { useUpcomingEvents } from '~/lib/upcomingEvents';
 import { useUwParking } from '~/lib/uwParking';
 import { PARKING_INFO_URL, resolveVenueById, useVenues, type Venue } from '~/lib/venues';
@@ -62,7 +60,6 @@ export const ParkingGuide = () => {
     const tx = useParkingText();
     const {venues, loading: venuesLoading} = useVenues();
     const {parking, loading: parkingLoading} = useUwParking();
-    const {content: con, loading: conLoading} = useConContent();
     const {upcomingEvents, loading: eventsLoading} = useUpcomingEvents();
 
     // The guide shows parking right now, which the clock moves on, unless it's an event's guide.
@@ -73,19 +70,12 @@ export const ParkingGuide = () => {
     }, []);
     const thisMinute = useMemo(() => nowWindow(now), [now]);
 
-    // The event the address names: an upcoming event by its id, or the con as 'con'.
-    // Ended events count too, so one that's over still names its venue.
+    // The upcoming event the address names by its id. Ended events count too, so one
+    // that's over still names its venue.
     const urlEvent = useMemo((): GuideEvent | null => {
-        if (!urlEventId) return null;
-        if (urlEventId === 'con') {
-            const {date, endTime, venueId} = con.event;
-            const start = date ? toDatetimeLocal(parseSiteTime(date)) : '';
-            const end = endTime ? toDatetimeLocal(parseSiteTime(endTime)) : '';
-            return {id: 'con', title: CON_NAME, venueId, start, end};
-        }
-        const upcoming = upcomingEvents.find(e => e.id === urlEventId);
+        const upcoming = urlEventId ? upcomingEvents.find(e => e.id === urlEventId) : undefined;
         return upcoming ? fromUpcoming(upcoming) : null;
-    }, [urlEventId, con.event, upcomingEvents]);
+    }, [urlEventId, upcomingEvents]);
     // Its days from today on, which its guide switches between, opening on the first.
     const days = useMemo(() => urlEvent ? eventDays(urlEvent, thisMinute.date) : [], [urlEvent, thisMinute.date]);
     // An event that's over, or isn't found, opens parking right now instead.
@@ -169,8 +159,8 @@ export const ParkingGuide = () => {
 
     const venueName = (v: Venue) => localizedVenueName(v, tx.isEnglish);
 
-    // An event's guide waits for the events and the con, so it doesn't open on right now first.
-    const loading = venuesLoading || parkingLoading || (!!urlEventId && (conLoading || eventsLoading));
+    // An event's guide waits for the events, so it doesn't open on right now first.
+    const loading = venuesLoading || parkingLoading || (!!urlEventId && eventsLoading);
     if (loading) {
         return (
             <div className="parking-page">

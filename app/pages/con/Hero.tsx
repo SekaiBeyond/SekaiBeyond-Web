@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router';
 import { LuArrowUpRight, LuCalendar, LuClock, LuMapPin, LuSquareParking } from 'react-icons/lu';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { CON_NAME, useConContent, useConVenue } from '~/lib/conContent';
+import { CON_NAME, useConContent, useConListing, useConVenue } from '~/lib/conContent';
 import { useT } from '~/pages/con/i18n';
 import { useMediaQuery } from '~/pages/con/hooks';
 import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/con/utils';
@@ -27,6 +27,7 @@ export const Hero = () => {
     const t = useT();
     const {currentLanguage} = useLanguage();
     const {content} = useConContent();
+    const {listing} = useConListing();
     const venue = useConVenue();
     const {event, heroVideo} = content;
     const sparks = useMemo(generateSparkStyles, []);
@@ -80,15 +81,22 @@ export const Hero = () => {
                 <ul className="sbc-hero-meta">
                     <li>
                         <LuCalendar className="sbc-hero-meta-icon" aria-hidden="true"/>
-                        <span>
-                            {formatEventDate(event.date, currentLanguage)}
-                            <span className="sbc-hero-meta-dim"> · {formatWeekday(event.date, currentLanguage)}</span>
-                        </span>
+                        {listing.date ? (
+                            <span>
+                                {formatEventDate(listing.date, currentLanguage)}
+                                <span
+                                    className="sbc-hero-meta-dim"> · {formatWeekday(listing.date, currentLanguage)}</span>
+                            </span>
+                        ) : (
+                            <span>{t({en: 'Date TBA', zh: '日期待定'})}</span>
+                        )}
                     </li>
-                    <li>
-                        <LuClock className="sbc-hero-meta-icon" aria-hidden="true"/>
-                        <span>{formatTimeRange(event.date, event.endTime, currentLanguage)}</span>
-                    </li>
+                    {listing.date && (
+                        <li>
+                            <LuClock className="sbc-hero-meta-icon" aria-hidden="true"/>
+                            <span>{formatTimeRange(listing.date, listing.endTime, currentLanguage)}</span>
+                        </li>
+                    )}
                     <li>
                         {venue ? (
                             <a
@@ -116,15 +124,17 @@ export const Hero = () => {
                 <Countdown/>
 
                 <div className="sbc-hero-buttons">
-                    <a
-                        className="btn btn-primary"
-                        href={event.ticketUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        <span>{t({en: 'Get Tickets', zh: '获取门票'})}</span>
-                        <LuArrowUpRight aria-hidden="true"/>
-                    </a>
+                    {listing.ticketUrl && (
+                        <a
+                            className="btn btn-primary"
+                            href={listing.ticketUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <span>{t({en: 'Get Tickets', zh: '获取门票'})}</span>
+                            <LuArrowUpRight aria-hidden="true"/>
+                        </a>
+                    )}
                     {venue && (
                         <Link className="btn sbc-btn-ghost" to={venue.parkingUrl}>
                             <span>{t({en: 'Parking Guide', zh: '停车指南'})}</span>

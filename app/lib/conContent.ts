@@ -3,6 +3,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { createValueCache } from './collectionCache';
 import { getFirebaseDb } from './firebase';
+import { toDatetimeLocal } from './siteTime';
+import { useAllUpcomingEvents, useUpcomingEvents } from './upcomingEvents';
 import { resolveVenueById, useVenues } from './venues';
 import { isHallTable } from '~/pages/con/hall';
 import type { Localized } from '~/pages/con/i18n';
@@ -73,12 +75,11 @@ export interface ConEvent {
     edition: number
     tagline: Localized
     intro: Localized
-    /** Pacific time, no zone suffix — read with parseSiteTime. */
-    date: string
-    endTime: string
-    /** A document in `venues`, managed in Admin → Locations. */
-    venueId: string
-    ticketUrl: string
+    /**
+     * The con as listed in `upcomingEvents`, the one source of its hours, venue and
+     * ticket link (see useConListing); empty until one is picked.
+     */
+    upcomingEventId: string
 }
 
 /**
@@ -251,7 +252,7 @@ const BLANK: Localized = {en: '', zh: ''};
  */
 export const DEFAULT_CON_CONTENT: ConContent = {
     settings: {published: false, hiddenSections: []},
-    event: {edition: 2026, tagline: BLANK, intro: BLANK, date: '', endTime: '', venueId: '', ticketUrl: ''},
+    event: {edition: 2026, tagline: BLANK, intro: BLANK, upcomingEventId: ''},
     heroVideo: {webm: ''},
     rooms: [],
     schedule: [],
@@ -320,10 +321,7 @@ const readEvent = (raw: unknown): ConEvent => {
         edition: typeof e.edition === 'number' ? e.edition : DEFAULT_CON_CONTENT.event.edition,
         tagline: loc(e.tagline),
         intro: loc(e.intro),
-        date: str(e.date),
-        endTime: str(e.endTime),
-        venueId: str(e.venueId),
-        ticketUrl: str(e.ticketUrl),
+        upcomingEventId: str(e.upcomingEventId),
     };
 };
 
@@ -506,22 +504,62 @@ export function useConContent(): ConContentRead {
     };
 }
 
+/** What the con's upcoming event says about it; each part is empty when the event doesn't say. */
+export interface ConListing {
+    /** The event's start and end on the Pacific clock, no zone suffix — read with parseSiteTime. */
+    date: string;
+    endTime: string;
+    /** A document in `venues`, managed in Admin → Locations. */
+    venueId: string;
+    ticketUrl: string;
+}
+
+const NO_LISTING: ConListing = {date: '', endTime: '', venueId: '', ticketUrl: ''};
+
+/**
+ * The con's hours, venue and ticket link, from the upcoming event it's listed as.
+ * Staff previewing see it unpublished too, as they see the draft; everyone else,
+ * only once it's published. Blank until then, or while none is linked or the
+ * linked one is archived or deleted.
+ */
+export function useConListing(): {listing: ConListing; loading: boolean} {
+    const {profile, loading: authLoading} = useAuth();
+    const canPreview = !!profile && hasPermission(profile.group, 'staff');
+    const {content, loading: contentLoading} = useConContent();
+    // Only one is fetched; the unpublished ones would be denied to the public.
+    const published = useUpcomingEvents(!authLoading && !canPreview);
+    const all = useAllUpcomingEvents(!authLoading && canPreview);
+    const events = canPreview ? all : published;
+
+    const {upcomingEventId} = content.event;
+    const event = upcomingEventId ? events.upcomingEvents.find(e => e.id === upcomingEventId) : undefined;
+    return {
+        listing: event ? {
+            date: toDatetimeLocal(event.startAt),
+            endTime: toDatetimeLocal(event.endAt),
+            venueId: event.venueId,
+            ticketUrl: event.buyTicket,
+        } : NO_LISTING,
+        loading: contentLoading || events.loading,
+    };
+}
+
 export interface ConVenue {
     name: Localized;
     parkingUrl: string;
 }
 
 /**
- * Where the con is, from the venue in the event details. Null when none is
- * picked or it was deleted.
+ * Where the con is, from the venue on its upcoming event. Null when that event
+ * isn't found, has no venue, or its venue was deleted.
  */
 export function useConVenue(): ConVenue | null {
-    const {venueId} = useConContent().content.event;
-    const venue = resolveVenueById(venueId, useVenues().venues);
+    const {upcomingEventId} = useConContent().content.event;
+    const venue = resolveVenueById(useConListing().listing.venueId, useVenues().venues);
     if (!venue) return null;
     return {
         name: {en: venue.nameEn, zh: venue.nameCn || venue.nameEn},
-        parkingUrl: '/parking/event/con',
+        parkingUrl: `/parking/event/${encodeURIComponent(upcomingEventId)}`,
     };
 }
 

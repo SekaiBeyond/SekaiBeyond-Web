@@ -1,6 +1,6 @@
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { GoToTop } from '~/components/GoToTop';
-import { useConContent } from '~/lib/conContent';
+import { useConContent, useConListing } from '~/lib/conContent';
 import { useHashScroll } from '~/lib/useHashScroll';
 import { useVenues } from '~/lib/venues';
 import { Navigation } from '~/pages/con/Navigation';
@@ -26,9 +26,10 @@ export const ConPage = () => {
     const t = useT();
     // The published mirror, or the draft for staff previewing.
     const {content, loading: contentLoading, failed} = useConContent();
-    // Alongside the content, so the hero doesn't flash "TBA" for the venue.
+    // Alongside the content, so the hero doesn't flash "TBA" for the date or venue.
+    const {loading: listingLoading} = useConListing();
     const {loading: venuesLoading} = useVenues();
-    const loading = contentLoading || venuesLoading;
+    const loading = contentLoading || listingLoading || venuesLoading;
     const {profile} = useAuth();
 
     // Waits for the content, since a cold read can outlast `useHashScroll`'s own

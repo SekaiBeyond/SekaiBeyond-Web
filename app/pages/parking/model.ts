@@ -13,9 +13,8 @@ import { isGarage, type UwLot, type UwParkingData, type WalkingTime } from '~/li
 import { hasCoordinates, haversineMiles, type Venue } from '~/lib/venues';
 import type { Localized } from '~/pages/con/i18n';
 
-/** An event the guide can show parking for: an upcoming event, or the con. */
+/** An event the guide can show parking for: an upcoming event, the con's among them. */
 export interface GuideEvent {
-    /** The upcoming event's id, or 'con'. */
     id: string;
     title: Localized;
     venueId: string;

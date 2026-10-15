@@ -593,27 +593,16 @@ function buildConEvent(raw: unknown) {
         throw new HttpsError("invalid-argument", "Invalid edition year.");
     }
 
-    const date = requireISODate(e.date, "date");
-    const endTime = requireISODate(e.endTime, "endTime");
-    if (Date.parse(endTime) <= Date.parse(date)) {
-        throw new HttpsError("invalid-argument", "End time must be after the start time.");
-    }
-
-    const ticketUrl = validateConLink(e.ticketUrl, "ticketUrl");
-    if (!ticketUrl) throw new HttpsError("invalid-argument", "ticketUrl is required.");
-
-    // That the venue exists is checked inside saveConContent's transaction.
-    if (!e.venueId) throw new HttpsError("invalid-argument", "Select a venue.");
-    const venueId = validateDocId(e.venueId, "venueId");
+    // The con's hours, venue and ticket link are its upcoming event's. That the event
+    // exists is checked inside saveConContent's transaction.
+    if (!e.upcomingEventId) throw new HttpsError("invalid-argument", "Select the con's upcoming event.");
+    const upcomingEventId = validateDocId(e.upcomingEventId, "upcomingEventId");
 
     return {
         edition,
         tagline: validateLocalized(e.tagline, "tagline", 300),
         intro: validateLocalized(e.intro, "intro", 2000),
-        date,
-        endTime,
-        venueId,
-        ticketUrl,
+        upcomingEventId,
     };
 }
 
@@ -960,9 +949,12 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
         await requireNewlyLinkedFilesExist(conAssetUrls(updateData), conAssetUrls(stored));
 
         if (updateData.event !== undefined) {
-            const venueSnap = await txn.get(db.collection("venues").doc(updateData.event.venueId));
-            if (!venueSnap.exists) {
-                throw new HttpsError("failed-precondition", "The selected venue no longer exists. Pick another.");
+            const eventSnap = await txn.get(db.collection("upcomingEvents").doc(updateData.event.upcomingEventId));
+            if (!eventSnap.exists) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "The con's upcoming event was archived or deleted. Pick another.",
+                );
             }
         }
 

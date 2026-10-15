@@ -77,15 +77,15 @@ const adminCache = createCollectionCache<UpcomingEvent>(
     orderBy('startAt', 'asc'),
 );
 
-/** Published upcoming events only. Used by the public site. */
-export function useUpcomingEvents(): {
+/** Published upcoming events only. Used by the public site. `enabled: false` holds off the fetch. */
+export function useUpcomingEvents(enabled: boolean = true): {
     upcomingEvents: UpcomingEvent[];
     activeEvents: UpcomingEvent[];
     hasActive: boolean;
     loading: boolean;
     refresh: () => Promise<void>;
 } {
-    const {items: upcomingEvents, loading, refresh} = publishedCache.useItems();
+    const {items: upcomingEvents, loading, refresh} = publishedCache.useItems(enabled);
 
     const activeEvents = useMemo(
         () => upcomingEvents.filter(e => e.endAt > new Date()),
@@ -96,13 +96,13 @@ export function useUpcomingEvents(): {
     return {upcomingEvents, activeEvents, hasActive, loading, refresh};
 }
 
-/** All upcoming events including unpublished. For admin use only. */
-export function useAllUpcomingEvents(): {
+/** All upcoming events including unpublished. For staff and up only; `enabled: false` holds off the fetch. */
+export function useAllUpcomingEvents(enabled: boolean = true): {
     upcomingEvents: UpcomingEvent[];
     loading: boolean;
     refresh: () => Promise<void>;
 } {
-    const {items: upcomingEvents, loading} = adminCache.useItems();
+    const {items: upcomingEvents, loading} = adminCache.useItems(enabled);
 
     // An admin edit also changes what the public site shows, so refresh both caches.
     const refresh = useCallback(async () => {

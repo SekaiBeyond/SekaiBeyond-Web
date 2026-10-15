@@ -1,13 +1,14 @@
-import { useConContent } from '~/lib/conContent';
+import { useConListing } from '~/lib/conContent';
 import { useCountdown } from '~/pages/con/hooks';
 import { useT } from '~/pages/con/i18n';
 import { pad } from '~/pages/con/utils';
 
 export const Countdown = () => {
     const t = useT();
-    const {content} = useConContent();
-    const {date, endTime} = content.event;
+    const {date, endTime} = useConListing().listing;
     const {days, hours, minutes, seconds, started, ended} = useCountdown(date, endTime);
+
+    if (!date) return null;
 
     if (ended) {
         return (
