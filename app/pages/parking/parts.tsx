@@ -1,5 +1,5 @@
 import type { LotStatus, Rate } from '~/lib/parkingStatus';
-import { uwLotGlyph, walkMinutes } from '~/lib/uwParking';
+import { walkMinutes } from '~/lib/uwParking';
 import { siteDay } from '~/lib/siteTime';
 import { formatDistanceEstimate, PARKING_INFO_URL } from '~/lib/venues';
 import type { LotView } from './model';
@@ -32,9 +32,6 @@ export function walkText(view: LotView, tx: ParkingText, options: {venueName?: s
     }
     return view.miles === null ? '' : formatDistanceEstimate(view.miles, tx.isEnglish);
 }
-
-/** What a lot's pin shows: its rank among the suggestions, else P or G. */
-export const pinGlyph = (view: LotView) => view.rank ? String(view.rank) : uwLotGlyph(view.lot.type);
 
 /** Where the lot data comes from and when it was updated, at the bottom of the page; nothing without a date. */
 export const Footer = ({generatedAt, tx}: {generatedAt: string; tx: ParkingText}) => {

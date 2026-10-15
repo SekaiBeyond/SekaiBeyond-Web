@@ -10,7 +10,7 @@ interface VenueSwitcherProps {
     selectedId: string;
     /** The venue of the event the guide is showing, tagged "This event". */
     eventVenueId: string;
-    /** The first suggested lot per venue, for each option's second line. */
+    /** The nearest suggested lot per venue, for each option's second line. */
     suggestionFor: (venue: Venue) => {code: string; walk: {seconds: number} | null} | null;
     onSelect: (id: string) => void;
     tx: ParkingText;

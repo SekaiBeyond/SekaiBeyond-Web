@@ -508,7 +508,7 @@
     background: var(--parking-event-soft);
 }
 
-.parking-info-icon--num {
+.parking-info-icon--pick {
     background: var(--gradient-primary);
     color: #fff;
     font-family: var(--parking-badge-font);

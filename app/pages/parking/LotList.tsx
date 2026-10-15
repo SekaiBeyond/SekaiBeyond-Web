@@ -120,7 +120,8 @@ export const LotList = (props: LotListProps) => {
         onSelectVenue,
         tx
     } = props;
-    const picks = views.filter(v => v.rank > 0).sort((a, b) => a.rank - b.rank);
+    // Nearest on foot first, as `views` come.
+    const picks = views.filter(v => v.suggested);
     // Today's UW event pricing, off an event's guide; on one, the lots' statuses already show it.
     const banners = event ? [] : eventPricing.filter(p => p.date === parkingWindow.date);
     const name = venue ? venueName(venue) : '';
@@ -212,7 +213,8 @@ export const LotList = (props: LotListProps) => {
                                 className={`parking-info-card parking-pick${hotCode === lot.code ? ' is-hot' : ''}`}
                                 {...hoverProps(lot.code)}
                             >
-                                <span className="parking-info-icon parking-info-icon--num">{view.rank}</span>
+                                <span
+                                    className="parking-info-icon parking-info-icon--pick">{uwLotGlyph(lot.type)}</span>
                                 <span className="parking-info-text parking-info-stack">
                                     <span className="parking-lot-name">
                                         {lot.code}{lot.name !== lot.code && ` · ${lot.name}`}

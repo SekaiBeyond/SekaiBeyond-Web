@@ -3805,28 +3805,6 @@ select.admin-tickets-tag:focus {
     gap: 2px;
 }
 
-.admin-venue-lot-move {
-    width: 28px;
-    height: 28px;
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--color-text-muted);
-    font-size: 15px;
-    cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
-}
-
-.admin-venue-lot-move:hover:not(:disabled) {
-    background: rgba(255, 107, 157, 0.1);
-    color: var(--color-primary);
-}
-
-.admin-venue-lot-move:disabled {
-    opacity: 0.3;
-    cursor: default;
-}
-
 @media (max-width: 600px) {
     .admin-venue-lot-notes {
         grid-template-columns: 1fr;

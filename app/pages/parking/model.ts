@@ -31,8 +31,8 @@ export interface LotView {
     status: LotStatus;
     /** What a visitor pays then: none when it's free, permits only or event-priced. */
     rates: Rate[];
-    /** Place among the venue's suggested lots, from 1; 0 when not suggested. */
-    rank: number;
+    /** One of the venue's suggested lots, which are all as good as each other. */
+    suggested: boolean;
     /** The organizers' note on a suggested lot, if they left one. */
     note: Localized | null;
     walk: WalkingTime | null;
@@ -113,6 +113,10 @@ const DETOUR = 1.3;
 const WALK_METERS_PER_SECOND = 1.39;
 const METERS_PER_MILE = 1609.34;
 
+/** Seconds to sort by: the walking time, or one estimated from the straight-line `miles`. */
+const sortSecondsFor = (walk: WalkingTime | null, miles: number | null) =>
+    walk?.seconds ?? (miles === null ? Infinity : miles * METERS_PER_MILE * DETOUR / WALK_METERS_PER_SECOND);
+
 /** The venue's walking times, unless it has moved since they were measured. */
 function venueWalking(parking: UwParkingData, venue: Venue): Record<string, WalkingTime> | null {
     const walking = parking.walking[venue.id];
@@ -126,12 +130,9 @@ function venueWalking(parking: UwParkingData, venue: Venue): Record<string, Walk
 export function lotViews(parking: UwParkingData, venue: Venue | null, window: ParkingWindow): LotView[] {
     const walking = venue && venueWalking(parking, venue);
     const from = venue && hasCoordinates(venue.lat, venue.lng) ? venue : null;
-    // Ranked among the suggestions UW still lists, so a dropped lot leaves no gap.
-    const listed = new Set(parking.lots.map(l => l.code));
-    const picks = venue?.suggestedLots.filter(s => listed.has(s.code)) ?? [];
+    const suggestions = new Map((venue?.suggestedLots ?? []).map(s => [s.code, s] as const));
     return parking.lots.map(lot => {
-        const pick = picks.findIndex(s => s.code === lot.code);
-        const suggested = pick >= 0 ? picks[pick] : null;
+        const suggested = suggestions.get(lot.code);
         const walk = walking?.[lot.code] ?? null;
         const miles = from ? haversineMiles(from.lat, from.lng, lot.lat, lot.lng) : null;
         const status = lotStatus(lot, window, parking.eventPricing);
@@ -140,24 +141,34 @@ export function lotViews(parking: UwParkingData, venue: Venue | null, window: Pa
             status,
             // A moment's window is its one minute, so these are this minute's rates.
             rates: status.kind === 'event' ? [] : ratesDuring(lot, status.dow, window.start, window.end),
-            rank: pick + 1,
+            suggested: !!suggested,
             note: suggested && (suggested.noteEn || suggested.noteCn) ? {
                 en: suggested.noteEn,
                 zh: suggested.noteCn
             } : null,
             walk,
             miles,
-            sortSeconds: walk?.seconds
-                ?? (miles === null ? Infinity : miles * METERS_PER_MILE * DETOUR / WALK_METERS_PER_SECOND),
+            sortSeconds: sortSecondsFor(walk, miles),
         };
     }).sort((a, b) => a.sortSeconds - b.sortSeconds || a.lot.code.localeCompare(b.lot.code));
 }
 
-/** The first suggested lot UW still lists for a venue, with its walking time, for the venue switcher. */
-export function firstSuggestion(parking: UwParkingData, venue: Venue): {code: string; walk: WalkingTime | null} | null {
-    const code = venue.suggestedLots.find(s => parking.lots.some(l => l.code === s.code))?.code;
-    if (!code) return null;
-    return {code, walk: venueWalking(parking, venue)?.[code] ?? null};
+/** The nearest on foot of a venue's suggested lots that UW still lists, with its walking time, for the venue switcher. */
+export function nearestSuggestion(parking: UwParkingData, venue: Venue): {
+    code: string;
+    walk: WalkingTime | null
+} | null {
+    const walking = venueWalking(parking, venue);
+    const from = hasCoordinates(venue.lat, venue.lng) ? venue : null;
+    const suggested = new Set(venue.suggestedLots.map(s => s.code));
+    let nearest: {code: string; walk: WalkingTime | null; seconds: number} | null = null;
+    for (const lot of parking.lots) {
+        if (!suggested.has(lot.code)) continue;
+        const walk = walking?.[lot.code] ?? null;
+        const seconds = sortSecondsFor(walk, from && haversineMiles(from.lat, from.lng, lot.lat, lot.lng));
+        if (!nearest || seconds < nearest.seconds) nearest = {code: lot.code, walk, seconds};
+    }
+    return nearest && {code: nearest.code, walk: nearest.walk};
 }
 
 export function matchesFilters(view: LotView, query: string, filters: ReadonlySet<LotFilter>): boolean {

@@ -1,7 +1,15 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callDeleteVenue, callLookUpUwBuilding, callSaveVenue, type UwBuildingLookup } from '~/lib/firebase';
-import { isGarage, useUwParking, type UwLot, uwLotTypeLabel, type UwParkingData, walkMinutes } from '~/lib/uwParking';
+import {
+    isGarage,
+    useUwParking,
+    type UwLot,
+    uwLotGlyph,
+    uwLotTypeLabel,
+    type UwParkingData,
+    walkMinutes
+} from '~/lib/uwParking';
 import type { SuggestedLot, Venue } from '~/lib/venues';
 import { haversineMiles, UW_CAMPUS_CENTER } from '~/lib/venues';
 import { BilingualFormField } from './BilingualFormField';
@@ -172,8 +180,8 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         <div className="admin-section">
             <p className="admin-helper-text admin-section-intro">
                 {isEnglish
-                    ? 'Venues power the parking guide. Give each venue its UW building code to place it, then pick the UW lots to suggest, best first. Rates, hours and walking times come from UW data automatically. Pick a venue for an event from the Venue selector in the event editor.'
-                    : '场地数据用于停车指南。为每个场地填写 UW 建筑代码以确定位置，然后按推荐顺序选择 UW 停车场。费率、收费时间和步行时间会自动从 UW 数据获取。在活动编辑器的“场地”选择器中为活动选择场地。'}
+                    ? 'Venues power the parking guide. Give each venue its UW building code to place it, then pick the UW lots to suggest; the guide lists them nearest first. Rates, hours and walking times come from UW data automatically. Pick a venue for an event from the Venue selector in the event editor.'
+                    : '场地数据用于停车指南。为每个场地填写 UW 建筑代码以确定位置，然后选择要推荐的 UW 停车场，停车指南将按距离由近到远列出。费率、收费时间和步行时间会自动从 UW 数据获取。在活动编辑器的“场地”选择器中为活动选择场地。'}
             </p>
 
             {!readOnly && (
@@ -299,13 +307,6 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
     const updateLot = (index: number, patch: Partial<SuggestedLot>) => setDraft(prev => {
         const lots = [...prev.suggestedLots];
         lots[index] = {...lots[index], ...patch};
-        return {...prev, suggestedLots: lots};
-    });
-    const moveLot = (index: number, by: -1 | 1) => setDraft(prev => {
-        const lots = [...prev.suggestedLots];
-        const target = index + by;
-        if (target < 0 || target >= lots.length) return prev;
-        [lots[index], lots[target]] = [lots[target], lots[index]];
         return {...prev, suggestedLots: lots};
     });
     const removeLot = (index: number) => setDraft(prev => ({
@@ -495,7 +496,7 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
                                                 className="admin-venue-lot-badge"
                                                 data-type={lot && isGarage(lot) ? 'garage' : 'general'}
                                             >
-                                                {i + 1}
+                                                {lot ? uwLotGlyph(lot.type) : '?'}
                                             </div>
                                             <div className="admin-venue-lot-main">
                                                 <div className="admin-venue-lot-head">
@@ -532,24 +533,6 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
                                                 </div>
                                             </div>
                                             <div className="admin-venue-lot-actions">
-                                                <button
-                                                    type="button"
-                                                    className="admin-venue-lot-move"
-                                                    onClick={() => moveLot(i, -1)}
-                                                    disabled={i === 0}
-                                                    aria-label={isEnglish ? 'Move up' : '上移'}
-                                                    title={isEnglish ? 'Move up' : '上移'}
-                                                >↑
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="admin-venue-lot-move"
-                                                    onClick={() => moveLot(i, 1)}
-                                                    disabled={i === draft.suggestedLots.length - 1}
-                                                    aria-label={isEnglish ? 'Move down' : '下移'}
-                                                    title={isEnglish ? 'Move down' : '下移'}
-                                                >↓
-                                                </button>
                                                 <button
                                                     type="button"
                                                     className="admin-venue-lot-remove"

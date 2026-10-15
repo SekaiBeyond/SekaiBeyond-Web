@@ -54,7 +54,7 @@ export const LotDetail = ({
                               onOpenLot,
                               tx
                           }: LotDetailProps) => {
-    const {lot, status, rank, note} = view;
+    const {lot, status, suggested, note} = view;
 
     // Only rates the lot can charge: W28 lists daytime rates, but it's permits only then.
     const rates = weeklyRates(lot);
@@ -89,7 +89,7 @@ export const LotDetail = ({
             <div className="parking-info-card parking-detail-title">
                 <div className="parking-detail-code-row">
                     <span className="parking-detail-code">{lot.code}</span>
-                    {rank > 0 && <span className="parking-pick-badge">{tx.t('pick', {n: rank})}</span>}
+                    {suggested && <span className="parking-pick-badge">{tx.t('pick')}</span>}
                 </div>
                 <div className="parking-detail-sub">
                     {[lot.name !== lot.code && lot.name, tx.lotType(lot.type), lot.area && tx.area(lot.area)]

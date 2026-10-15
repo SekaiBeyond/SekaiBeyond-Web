@@ -9,13 +9,13 @@ import { LotDetail } from './LotDetail';
 import { LotList } from './LotList';
 import {
     eventDays,
-    firstSuggestion,
     fromUpcoming,
     type GuideEvent,
     localizedVenueName,
     type LotFilter,
     lotViews,
     matchesFilters,
+    nearestSuggestion,
     nowWindow,
     offeredFilters,
 } from './model';
@@ -201,7 +201,7 @@ export const ParkingGuide = () => {
                         venues={venues}
                         selectedId={selectedVenueId}
                         eventVenueId={eventVenueId}
-                        suggestionFor={v => firstSuggestion(parking, v)}
+                        suggestionFor={v => nearestSuggestion(parking, v)}
                         onSelect={selectVenue}
                         tx={tx}
                     />

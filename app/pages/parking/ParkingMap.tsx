@@ -10,10 +10,10 @@ import {
     usePopup,
 } from '~/lib/maplibre';
 import type { ParkingWindow } from '~/lib/parkingStatus';
-import type { VenueOutline } from '~/lib/uwParking';
+import { uwLotGlyph, type VenueOutline } from '~/lib/uwParking';
 import { hasCoordinates, type Venue } from '~/lib/venues';
 import { localizedVenueName, lotSubtitle, type LotView } from './model';
-import { pinGlyph, RatesLine, StatusPill, walkText } from './parts';
+import { RatesLine, StatusPill, walkText } from './parts';
 import type { ParkingText } from './text';
 
 const ATTRIBUTION = 'UW Transportation Services · UW Facilities GIS';
@@ -70,7 +70,7 @@ function boundsAround(points: Point[], marginLng: number, marginLat: number): Ln
 
 /** The venue with its suggested lots, or its three nearest when it has none; every lot without a venue. */
 function venueBounds(venue: Venue | null, views: LotView[]): LngLatBoundsLike | null {
-    const picks = views.filter(v => v.rank > 0);
+    const picks = views.filter(v => v.suggested);
     const framed = !venue ? views : picks.length > 0 ? picks : views.slice(0, 3);
     const lots = framed.map(v => [v.lot.lng, v.lot.lat] as Point);
     const points = venue && hasCoordinates(venue.lat, venue.lng) ? [[venue.lng, venue.lat] as Point, ...lots] : lots;
@@ -222,8 +222,8 @@ export const ParkingMap = (props: ParkingMapProps) => {
             const element = lotElements[view.lot.code];
             if (!element) continue;
             const selected = view.lot.code === selectedCode;
-            element.style.zIndex = String(selected ? 6 : view.rank ? 5 : 1);
-            element.style.display = visibleCodes.has(view.lot.code) || view.rank || selected ? '' : 'none';
+            element.style.zIndex = String(selected ? 6 : view.suggested ? 5 : 1);
+            element.style.display = visibleCodes.has(view.lot.code) || view.suggested || selected ? '' : 'none';
         }
     }, [lotElements, views, visibleCodes, selectedCode]);
     useEffect(() => {
@@ -269,7 +269,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
 
     const hoveredView = hover?.kind === 'lot' ? views.find(v => v.lot.code === hover.code) : undefined;
     const hoveredVenue = hover?.kind === 'venue' ? venues.find(v => v.id === hover.id) : undefined;
-    const hasPicks = views.some(v => v.rank > 0);
+    const hasPicks = views.some(v => v.suggested);
 
     return (
         <>
@@ -295,7 +295,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
                     className="parking-map-legend-dot parking-k-event">P</span>{tx.t('lg_event')}</div>
                 {hasPicks && (
                     <div className="parking-map-legend-item is-optional"><span
-                        className="parking-map-legend-dot is-pick">1</span>{tx.t('lg_pick')}</div>
+                        className="parking-map-legend-dot is-pick">P</span>{tx.t('lg_pick')}</div>
                 )}
                 {venue && (
                     <div className="parking-map-legend-item is-optional"><span
@@ -311,10 +311,10 @@ export const ParkingMap = (props: ParkingMapProps) => {
             {views.map(view => {
                 const element = lotElements[view.lot.code];
                 if (!element) return null;
-                const {lot, status, rank} = view;
+                const {lot, status, suggested} = view;
                 const typeLabel = tx.lotType(lot.type);
                 return createPortal(
-                    <div className={`parking-pin-wrap${rank ? ' is-pick' : ''}`}>
+                    <div className={`parking-pin-wrap${suggested ? ' is-pick' : ''}`}>
                         <button
                             type="button"
                             className={`parking-pin parking-k-${status.kind}${lot.code === selectedCode ? ' is-selected' : ''}${lot.code === hotCode ? ' is-hot' : ''}`}
@@ -344,11 +344,11 @@ export const ParkingMap = (props: ParkingMapProps) => {
                                 onOpenLot(lot.code);
                             }}
                         >
-                            {pinGlyph(view)}
+                            {uwLotGlyph(lot.type)}
                         </button>
                         <div className="parking-pin-label" aria-hidden="true">
                             {lot.code}
-                            {rank > 0 && <span>{typeLabel}</span>}
+                            {suggested && <span>{typeLabel}</span>}
                         </div>
                     </div>,
                     element,
@@ -431,14 +431,14 @@ const LotCard = ({view, pinned, onDetails, isNow, tx}: {
     isNow: boolean;
     tx: ParkingText
 }) => {
-    const {lot, status, rank} = view;
+    const {lot, status, suggested} = view;
     const walk = walkText(view, tx);
     return (
         <div className="parking-hc">
             <div className="parking-hc-top">
                 <span className="parking-hc-title">{lot.code}</span>
                 <span className="parking-hc-type">{lotSubtitle(lot, tx.lotType(lot.type))}</span>
-                {rank > 0 && <span className="parking-pick-badge">{tx.t('pick', {n: rank})}</span>}
+                {suggested && <span className="parking-pick-badge">{tx.t('pick')}</span>}
             </div>
             <StatusPill status={status} tx={tx}/>
             <RatesLine rates={view.rates} isNow={isNow} tx={tx}/>
