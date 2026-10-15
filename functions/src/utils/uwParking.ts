@@ -10,7 +10,8 @@ import { PUBLIC_ORIGIN } from "./config";
  * - UW_EVENT_PRICING_URL: the Trumba feed behind UW's event-parking calendar,
  *   which lists the days a flat event rate replaces the usual one.
  * - WALKING_ROUTER_URL: the public OSRM foot router run by FOSSGIS on
- *   OpenStreetMap data. Fair use only, so it is called once per venue per sync.
+ *   OpenStreetMap data. Fair use only, so it is called at most once per venue per
+ *   sync, and only when the venue or a lot has moved.
  */
 export const UW_LOTS_URL = "https://depts.washington.edu/tsevents/data/master-data.json";
 export const UW_EVENT_PRICING_URL = "https://www.trumba.com/calendars/sea_commute.json";
@@ -79,7 +80,7 @@ export interface UwLot {
 export interface UwEventPricing {
     /** YYYY-MM-DD on the site clock. */
     date: string;
-    /** HH:mm, or both null when the rate is in effect all day. */
+    /** HH:mm, or both null when the rate is in effect all day. An end of 00:00 is the midnight closing the day. */
     start: string | null;
     end: string | null;
     price: number;
@@ -190,7 +191,17 @@ export async function fetchUwLots(): Promise<{lots: UwLot[]; generatedAt: string
 
 // "$14 Event Parking in E01, E17, E18" / "$70 Event Parking in All Campus Lots"
 const PRICING_TITLE_RE = /^\$(\d+(?:\.\d{1,2})?)\s+event parking in\s+(.+)$/i;
+// Between the lot codes in a title: "E01, E17 and E18", "E01, E17, and E18", "E01 & E17".
+const LOT_LIST_SEPARATOR_RE = /\s*(?:,|&|\band\b)\s*/i;
 const FEED_TIME_RE = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/;
+// Longer than any real run of event days, so a longer entry is taken for a mistake and left out.
+const MAX_PRICING_DAYS = 31;
+
+/** The YYYY-MM-DD date `n` days after `date`. */
+function addDays(date: string, n: number): string {
+    const [y, m, d] = date.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
 
 /** Event-rate days from `fromDay` (YYYY-MM-DD) on, in date order. */
 export async function fetchUwEventPricing(fromDay: string): Promise<UwEventPricing[]> {
@@ -204,28 +215,48 @@ export async function fetchUwEventPricing(fromDay: string): Promise<UwEventPrici
         const title = text(entry.title, 200);
         const match = PRICING_TITLE_RE.exec(title);
         const start = FEED_TIME_RE.exec(text(entry.startDateTime, 40));
-        if (!match || !start || start[1] < fromDay) continue;
+        const end = FEED_TIME_RE.exec(text(entry.endDateTime, 40));
+        if (!match || !start) continue;
 
         const allDay = entry.allDay === true;
-        const endClock = FEED_TIME_RE.exec(text(entry.endDateTime, 40))?.[2] ?? null;
-        if (!allDay && !endClock) continue;
+        if ((!allDay && !end) || (end && end[1] < start[1])) continue;
 
         const where = match[2].trim();
         const allLots = /all campus lots/i.test(where);
-        const lots = allLots ? [] : where.split(/\s*,\s*|\s+and\s+/)
+        const lots = allLots ? [] : where.split(LOT_LIST_SEPARATOR_RE)
             .map(c => c.trim().toUpperCase())
             .filter(c => UW_LOT_CODE_RE.test(c));
         if (!allLots && lots.length === 0) continue;
 
-        days.push({
-            date: start[1],
-            start: allDay ? null : start[2],
-            end: allDay ? null : endClock,
-            price: Number(match[1]),
-            allLots,
-            lots,
-            title,
-        });
+        // An entry can cover more than one day: an all-day one ends at the midnight after its last
+        // day (Fri 00:00 to Sun 00:00 is Friday and Saturday), and a timed one can run past midnight.
+        // Each day it covers gets a record of its own, with the hours it covers that day.
+        const firstDay = start[1];
+        const [endDay, endClock] = end ? [end[1], end[2]] : [addDays(firstDay, 1), "00:00"];
+        const lastDay = endClock === "00:00" && endDay > firstDay ? addDays(endDay, -1) : endDay;
+        const covered: string[] = [];
+        for (let day = firstDay; day <= lastDay && covered.length <= MAX_PRICING_DAYS; day = addDays(day, 1)) {
+            covered.push(day);
+        }
+        if (covered.length > MAX_PRICING_DAYS) continue;
+
+        for (const day of covered) {
+            if (day < fromDay) continue;
+            // An end of 00:00 is the midnight that closes the day.
+            const from = allDay || day !== firstDay ? "00:00" : start[2];
+            const to = allDay || day !== endDay ? "00:00" : endClock;
+            if (to !== "00:00" && to <= from) continue;
+            const wholeDay = from === "00:00" && to === "00:00";
+            days.push({
+                date: day,
+                start: wholeDay ? null : from,
+                end: wholeDay ? null : to,
+                price: Number(match[1]),
+                allLots,
+                lots,
+                title,
+            });
+        }
     }
     return days.sort((a, b) => a.date.localeCompare(b.date) || (a.start ?? "").localeCompare(b.start ?? ""));
 }

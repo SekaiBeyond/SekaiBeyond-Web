@@ -529,13 +529,14 @@ export interface UwBuildingLookup {
 export const callLookUpUwBuilding = (data: {code: string}) =>
     httpsCallable<typeof data, UwBuildingLookup>(getFunctions(), 'lookUpUwBuilding')(data);
 
+// Waits as long as the sync may run on the server, instead of the client's default 70 seconds.
 export const callSyncUwParking = () =>
     httpsCallable<Record<string, never>, {
         lotCount: number;
         pricingDayCount: number;
         walkingVenueCount: number;
         errors: string[];
-    }>(getFunctions(), 'syncUwParking')({});
+    }>(getFunctions(), 'syncUwParking', {timeout: 300_000})({});
 
 export const callDeleteVenue = (data: {venueId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteVenue')(data);

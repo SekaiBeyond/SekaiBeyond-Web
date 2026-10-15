@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { CON_NAME, useConContent } from '~/lib/conContent';
 import { parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
@@ -45,19 +45,29 @@ const Notice = ({icon, title, desc}: {icon: string; title: string; desc: string}
 
 // How often the "right now" statuses move on.
 const NOW_TICK_MS = 60_000;
+// What the address can name after `/parking/`.
+const ADDRESS_KINDS = ['venue', 'lot', 'event'];
 
 export const ParkingGuide = () => {
     // `/parking/venue/<venue id>` opens on a venue, `/parking/lot/<lot code>` on a lot, and
     // `/parking/event/<event id>` on an event, with `/lot/<lot code>` after it for a lot.
     const [kind = '', id = '', sub = '', subId = ''] = (useParams()['*'] ?? '').split('/');
-    const urlVenueId = kind === 'venue' ? id : '';
-    const urlEventId = kind === 'event' ? id : '';
+    // The guide's earlier addresses, `/parking/<event id>` and `/parking?venue=<venue id>`, are still out
+    // in emails, posts and QR codes. They open the same guide, and the address is then rewritten.
+    const [searchParams] = useSearchParams();
+    const oldEventId = kind && !id && !ADDRESS_KINDS.includes(kind) ? kind : '';
+    const oldVenueId = kind ? '' : searchParams.get('venue') ?? '';
+    const urlVenueId = kind === 'venue' ? id : oldVenueId;
+    const urlEventId = kind === 'event' ? id : oldEventId;
     const urlCode = (kind === 'lot' ? id : urlEventId && sub === 'lot' ? subId : '').toUpperCase();
     // The address names the event, the lot open, or else the venue picked, so any of them can be linked to.
     const navigate = useNavigate();
     const goTo = (path: string) => navigate(path, {replace: true, preventScrollReset: true});
     const venuePath = (venueId: string) => venueId ? `/parking/venue/${encodeURIComponent(venueId)}` : '/parking';
     const eventPath = `/parking/event/${encodeURIComponent(urlEventId)}`;
+    useEffect(() => {
+        if (oldEventId || oldVenueId) goTo(oldEventId ? eventPath : venuePath(oldVenueId));
+    }, [oldEventId, oldVenueId]);
     const tx = useParkingText();
     const {venues, loading: venuesLoading} = useVenues();
     const {parking, loading: parkingLoading} = useUwParking();

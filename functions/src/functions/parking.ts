@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
@@ -36,8 +37,19 @@ interface VenueWalking {
     /** The venue location these times were measured from. */
     lat: number;
     lng: number;
+    /** The lots they were measured to, as lotsKey gives them; missing on times measured before it was kept. */
+    lotsKey?: string;
     lots: Record<string, WalkingTime>;
 }
+
+/** A short fingerprint of the lots' codes and locations, which changes when UW adds, drops or moves a lot. */
+const lotsKey = (lots: UwLot[]) => createHash("sha256")
+    .update(lots.map(l => `${l.code}@${l.lat.toFixed(6)},${l.lng.toFixed(6)}`).join(";"))
+    .digest("hex").slice(0, 16);
+
+/** Whether walking times were measured from this spot to these lots, so measuring again would give the same. */
+const measuredFrom = (walking: VenueWalking | undefined, lat: number, lng: number, key: string) =>
+    walking?.lat === lat && walking?.lng === lng && walking.lotsKey === key;
 
 const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err);
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -52,8 +64,9 @@ async function syncedLots(): Promise<UwLot[]> {
 
 /**
  * Brings a saved venue's walking times and building outline up to date, unless
- * they were already taken from this spot and this building, so a new or changed
- * venue has them before the nightly sync. Does nothing before the first sync.
+ * they were already taken from this spot, to these lots, and for this building,
+ * so a new or changed venue has them before the nightly sync. Does nothing
+ * before the first sync.
  */
 export async function refreshVenueParking(
     venueId: string,
@@ -65,9 +78,9 @@ export async function refreshVenueParking(
     const walking = data.walking?.[venueId] as VenueWalking | undefined;
     const outline = data.outlines?.[venueId] as UwBuildingOutline | undefined;
     const {lat, lng, buildingCode} = venue;
+    const key = lotsKey(lots);
 
-    const refreshWalking = lots.length > 0 && !(lat === 0 && lng === 0)
-        && !(walking?.lat === lat && walking?.lng === lng);
+    const refreshWalking = lots.length > 0 && !(lat === 0 && lng === 0) && !measuredFrom(walking, lat, lng, key);
     const refreshOutline = (outline?.code ?? "") !== buildingCode;
     const [walkingResult, outlineResult] = await Promise.allSettled([
         refreshWalking ? fetchWalkingTimes({lat, lng}, lots) : null,
@@ -76,7 +89,10 @@ export async function refreshVenueParking(
 
     const updates: [FieldPath, unknown][] = [];
     if (refreshWalking && walkingResult.status === "fulfilled" && walkingResult.value) {
-        updates.push([new FieldPath("walking", venueId), {lat, lng, lots: walkingResult.value} satisfies VenueWalking]);
+        updates.push([
+            new FieldPath("walking", venueId),
+            {lat, lng, lotsKey: key, lots: walkingResult.value} satisfies VenueWalking,
+        ]);
     }
     if (refreshOutline && outlineResult.status === "fulfilled") {
         updates.push([new FieldPath("outlines", venueId), outlineResult.value ?? FieldValue.delete()]);
@@ -131,19 +147,25 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
         errors.push(`Event pricing: ${errorMessage(err)}`);
     }
 
-    // Measured from every venue with a location. A venue whose call fails keeps
-    // its last times; a deleted venue's are dropped with it.
+    // Measured from every venue with a location, unless its times are from the same
+    // spot to the same lots, which keeps the sync short and the router's load light.
+    // A venue whose call fails keeps its last times; a deleted venue's are dropped with it.
     const venues = await db.collection("venues").get();
     const previousWalking = (previous.walking ?? {}) as Record<string, VenueWalking>;
     const walking: Record<string, VenueWalking> = {};
     if (lots.length > 0) {
+        const key = lotsKey(lots);
         let calls = 0;
         for (const venue of venues.docs) {
             const {lat, lng, nameEn} = venue.data();
             if (typeof lat !== "number" || typeof lng !== "number" || (lat === 0 && lng === 0)) continue;
+            if (measuredFrom(previousWalking[venue.id], lat, lng, key)) {
+                walking[venue.id] = previousWalking[venue.id];
+                continue;
+            }
             if (calls++ > 0) await pause(ROUTER_PAUSE_MS);
             try {
-                walking[venue.id] = {lat, lng, lots: await fetchWalkingTimes({lat, lng}, lots)};
+                walking[venue.id] = {lat, lng, lotsKey: key, lots: await fetchWalkingTimes({lat, lng}, lots)};
             } catch (err) {
                 errors.push(`Walking times for ${nameEn || venue.id}: ${errorMessage(err)}`);
                 if (previousWalking[venue.id]) walking[venue.id] = previousWalking[venue.id];
@@ -152,13 +174,14 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
         update.walking = walking;
     }
 
-    // The footprint of each venue's building, for the guide's venue highlight. Like
-    // walking times, a failed lookup keeps the last outline for the same building.
+    // The footprint of each venue's building, for the guide's venue highlight, all
+    // looked up at once. Like walking times, a failed lookup keeps the last outline
+    // for the same building.
     const previousOutlines = (previous.outlines ?? {}) as Record<string, UwBuildingOutline>;
     const outlines: Record<string, UwBuildingOutline> = {};
-    for (const venue of venues.docs) {
+    await Promise.all(venues.docs.map(async venue => {
         const {buildingCode, nameEn} = venue.data();
-        if (typeof buildingCode !== "string" || !buildingCode) continue;
+        if (typeof buildingCode !== "string" || !buildingCode) return;
         try {
             const outline = await fetchUwBuildingOutline(buildingCode);
             if (outline) outlines[venue.id] = outline;
@@ -166,7 +189,7 @@ async function runUwParkingSync(): Promise<ParkingSyncSummary> {
             errors.push(`Outline for ${nameEn || venue.id}: ${errorMessage(err)}`);
             if (previousOutlines[venue.id]?.code === buildingCode) outlines[venue.id] = previousOutlines[venue.id];
         }
-    }
+    }));
     update.outlines = outlines;
 
     Object.assign(update, {lastRunAt: now, lastRunErrors: errors});
