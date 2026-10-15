@@ -588,18 +588,13 @@ function buildConSettings(raw: unknown) {
 
 function buildConEvent(raw: unknown) {
     const e = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-    const edition = Number(e.edition);
-    if (!Number.isInteger(edition) || edition < 2000 || edition > 2200) {
-        throw new HttpsError("invalid-argument", "Invalid edition year.");
-    }
 
-    // The con's hours, venue and ticket link are its upcoming event's. That the event
-    // exists is checked inside saveConContent's transaction.
+    // The con's year, hours, venue and ticket link are its upcoming event's. That
+    // the event exists is checked inside saveConContent's transaction.
     if (!e.upcomingEventId) throw new HttpsError("invalid-argument", "Select the con's upcoming event.");
     const upcomingEventId = validateDocId(e.upcomingEventId, "upcomingEventId");
 
     return {
-        edition,
         tagline: validateLocalized(e.tagline, "tagline", 300),
         intro: validateLocalized(e.intro, "intro", 2000),
         upcomingEventId,

@@ -51,24 +51,13 @@ export const EventSection = ({content, loading, showToast, readOnly}: SectionPro
         <SectionShell
             section="event"
             helper={{
-                en: 'The edition, tagline and intro in the hero, and the upcoming event whose dates, venue and ticket link the hero, the countdown, the navbar button and the venue card show.',
-                zh: '首屏中的届次、标语与简介，以及对应的活动预告——首屏、倒计时、导航栏按钮与场地卡片展示该活动的日期、场地与购票链接。',
+                en: 'The tagline and intro in the hero, and the upcoming event whose year, dates, venue and ticket link the hero, the countdown, the navbar button and the venue card show.',
+                zh: '首屏中的标语与简介，以及对应的活动预告——首屏、倒计时、导航栏按钮与场地卡片展示该活动的年份、日期、场地与购票链接。',
             }}
             editor={editor}
             readOnly={readOnly}
         >
             <div className="admin-form-grid">
-                <label>
-                    <span>{isEnglish ? 'Edition (year)' : '届次（年份）'}</span>
-                    <input
-                        className="admin-input"
-                        type="number"
-                        value={draft.edition}
-                        onChange={e => !readOnly && set('edition', Number(e.target.value))}
-                        readOnly={readOnly}
-                    />
-                </label>
-
                 <LocalizedField
                     label={{en: 'Tagline', zh: '标语'}}
                     value={draft.tagline}
@@ -109,8 +98,8 @@ export const EventSection = ({content, loading, showToast, readOnly}: SectionPro
                     </select>
                     <span className="admin-helper-text admin-mt-4">
                         {isEnglish
-                            ? 'The con’s dates, venue and ticket link come from this event: edit them in the Upcoming Events tab. The con page’s parking button opens its parking guide.'
-                            : '漫展的日期、场地与购票链接均来自该活动，请在「活动预告」标签页中编辑。漫展页面的停车按钮将打开该活动的停车指南。'}
+                            ? 'The con’s dates, venue and ticket link come from this event, and the year in the hero from when it starts: edit them in the Upcoming Events tab. The con page’s parking button opens its parking guide.'
+                            : '漫展的日期、场地与购票链接均来自该活动，首屏中的年份取自其开始时间，请在「活动预告」标签页中编辑。漫展页面的停车按钮将打开该活动的停车指南。'}
                     </span>
                     {linked && (
                         <span className="admin-helper-text admin-mt-4">

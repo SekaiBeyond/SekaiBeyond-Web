@@ -34,6 +34,8 @@ export const Hero = () => {
 
     const allowsMotion = useMediaQuery('(prefers-reduced-motion: no-preference)');
     const showClip = Boolean(heroVideo.webm) && allowsMotion;
+    // The year the con's event starts, on the site's clock; none until one is linked.
+    const year = listing.date.slice(0, 4);
 
     return (
         <section id="con-home" className="sbc-hero">
@@ -72,7 +74,7 @@ export const Hero = () => {
 
             <div className="sbc-hero-content">
                 <span className="sbc-hero-badge">
-                    {event.edition} · {t({en: 'University of Washington', zh: '华盛顿大学'})}
+                    {year && `${year} · `}{t({en: 'University of Washington', zh: '华盛顿大学'})}
                 </span>
 
                 <h1 className="sbc-hero-title">{t(CON_NAME)}</h1>

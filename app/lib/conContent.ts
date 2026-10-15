@@ -72,7 +72,6 @@ export interface ConSettings {
 }
 
 export interface ConEvent {
-    edition: number
     tagline: Localized
     intro: Localized
     /**
@@ -252,7 +251,7 @@ const BLANK: Localized = {en: '', zh: ''};
  */
 export const DEFAULT_CON_CONTENT: ConContent = {
     settings: {published: false, hiddenSections: []},
-    event: {edition: 2026, tagline: BLANK, intro: BLANK, upcomingEventId: ''},
+    event: {tagline: BLANK, intro: BLANK, upcomingEventId: ''},
     heroVideo: {webm: ''},
     rooms: [],
     schedule: [],
@@ -318,7 +317,6 @@ const readSettings = (raw: unknown): ConSettings => {
 const readEvent = (raw: unknown): ConEvent => {
     const e = obj(raw);
     return {
-        edition: typeof e.edition === 'number' ? e.edition : DEFAULT_CON_CONTENT.event.edition,
         tagline: loc(e.tagline),
         intro: loc(e.intro),
         upcomingEventId: str(e.upcomingEventId),
