@@ -46,6 +46,10 @@ export interface LotView {
 export type LotFilter = 'free' | 'ada' | 'ev' | 'moto' | 'garage';
 export const LOT_FILTERS: LotFilter[] = ['free', 'ada', 'ev', 'moto', 'garage'];
 
+/** The filters worth offering: "free" only while some lot is free then. */
+export const offeredFilters = (views: LotView[]): LotFilter[] =>
+    LOT_FILTERS.filter(f => f !== 'free' || views.some(v => v.status.kind === 'free'));
+
 const toLocal = (value: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) ? value.slice(0, 16) : '';
 
 /** One day of an event, which its guide can be switched to. */

@@ -2,7 +2,7 @@ import type { PointerEvent } from 'react';
 import { clockMinutes, type ParkingWindow } from '~/lib/parkingStatus';
 import { type UwEventPricing, uwLotGlyph } from '~/lib/uwParking';
 import type { Venue } from '~/lib/venues';
-import { type EventDay, type GuideEvent, LOT_FILTERS, type LotFilter, lotSubtitle, type LotView } from './model';
+import { type EventDay, type GuideEvent, type LotFilter, lotSubtitle, type LotView } from './model';
 import { RatesLine, StatusPill, walkText } from './parts';
 import type { ParkingText } from './text';
 
@@ -27,6 +27,8 @@ interface LotListProps {
     visibleViews: LotView[];
     query: string;
     onQuery: (query: string) => void;
+    /** The filters to show, which leave out "free" while no lot is. */
+    offeredFilters: LotFilter[];
     filters: ReadonlySet<LotFilter>;
     onToggleFilter: (filter: LotFilter) => void;
     hotCode: string | null;
@@ -109,6 +111,7 @@ export const LotList = (props: LotListProps) => {
         visibleViews,
         query,
         onQuery,
+        offeredFilters,
         filters,
         onToggleFilter,
         hotCode,
@@ -245,7 +248,7 @@ export const LotList = (props: LotListProps) => {
                 />
             </label>
             <div className="parking-chips">
-                {LOT_FILTERS.map(f => (
+                {offeredFilters.map(f => (
                     <button
                         key={f}
                         type="button"

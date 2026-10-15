@@ -5,8 +5,6 @@ import { RatesLine, StatusPill, walkText } from './parts';
 import type { LotView } from './model';
 import type { ParkingText } from './text';
 
-const UW_PARKING_MAP_URL = 'https://depts.washington.edu/tsevents/';
-
 interface LotDetailProps {
     view: LotView;
     parkingWindow: ParkingWindow;
@@ -83,6 +81,8 @@ export const LotDetail = ({
     // "For Sat, Oct 24", the date in bold.
     const [forBefore, forAfter] = tx.t('secEvent').split('{d}');
     const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lot.lat},${lot.lng}&travelmode=driving`;
+    // A pin on the lot, without starting a route.
+    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${lot.lat},${lot.lng}`;
 
     const copyZone = () => {
         const done = () => {
@@ -143,7 +143,10 @@ export const LotDetail = ({
                     </div>
                 )}
                 <div className="parking-actions">
-                    <a className="parking-cta" href={directionsUrl} target="_blank" rel="noopener noreferrer">
+                    <a className="parking-cta" href={mapUrl} target="_blank" rel="noopener noreferrer">
+                        🗺️ {tx.t('openMap')}
+                    </a>
+                    <a className="parking-ghost" href={directionsUrl} target="_blank" rel="noopener noreferrer">
                         🧭 {tx.t('directions')}
                     </a>
                 </div>
@@ -247,19 +250,6 @@ export const LotDetail = ({
                     <SectionHead icon="🚗" title={tx.t('secAlso')}/>
                     <div className="parking-tags">
                         {services.map(([key]) => <span key={key} className="parking-tag">{tx.t(key)}</span>)}
-                    </div>
-                </section>
-            )}
-
-            {lot.hasTour && (
-                <section className="parking-info-card parking-detail-card">
-                    <SectionHead icon="📷" title={tx.t('secTour')}/>
-                    <p>{tx.t('tourSub')}</p>
-                    <div className="parking-actions">
-                        <a className="parking-ghost" href={UW_PARKING_MAP_URL} target="_blank"
-                           rel="noopener noreferrer">
-                            🔄 {tx.t('tour')} ↗
-                        </a>
                     </div>
                 </section>
             )}

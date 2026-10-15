@@ -18,6 +18,7 @@ import {
     lotViews,
     matchesFilters,
     nowWindow,
+    offeredFilters,
 } from './model';
 import { type HoverTarget, ParkingMap, type ParkingMapApi } from './ParkingMap';
 import { Footer } from './parts';
@@ -105,7 +106,13 @@ export const ParkingGuide = () => {
         [parking, venue, parkingWindow],
     );
     const [query, setQuery] = useState('');
-    const [filters, setFilters] = useState<ReadonlySet<LotFilter>>(new Set());
+    const [chosenFilters, setFilters] = useState<ReadonlySet<LotFilter>>(new Set());
+    // Only the filters offered apply, so "free" is set aside while no lot is free.
+    const offered = useMemo(() => offeredFilters(views), [views]);
+    const filters = useMemo(
+        () => new Set([...chosenFilters].filter(f => offered.includes(f))),
+        [chosenFilters, offered],
+    );
     const visibleViews = useMemo(() => views.filter(v => matchesFilters(v, query, filters)), [views, query, filters]);
     const visibleCodes = useMemo(() => new Set(visibleViews.map(v => v.lot.code)), [visibleViews]);
     const listedCodes = useMemo(() => new Set(parking.lots.map(l => l.code)), [parking.lots]);
@@ -270,6 +277,7 @@ export const ParkingGuide = () => {
                             visibleViews={visibleViews}
                             query={query}
                             onQuery={setQuery}
+                            offeredFilters={offered}
                             filters={filters}
                             onToggleFilter={toggleFilter}
                             hotCode={hotCode}

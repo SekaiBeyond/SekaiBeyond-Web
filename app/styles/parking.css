@@ -1038,6 +1038,13 @@
     cursor: pointer;
 }
 
+/* A link styled as a button, rather than the panel's underlined link. */
+.parking-info-panel a.parking-ghost:hover {
+    color: var(--color-primary);
+    text-decoration: none;
+    background: rgba(255, 150, 200, 0.18);
+}
+
 .parking-rates {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
