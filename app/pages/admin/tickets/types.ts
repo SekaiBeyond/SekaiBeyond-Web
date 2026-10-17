@@ -52,6 +52,11 @@ export interface AttendeeData {
     ticketIds: string[];
     /** Added at the door, with an email only if they gave one. */
     walkIn: boolean;
+    /** One ticket sold through HomeTown, kept by its number. */
+    hometown: boolean;
+    /** A HomeTown ticket let in at the door while missing from the imported list. */
+    unlisted: boolean;
+    hometownOrderId: string;
 }
 
 export interface EmailTemplate {
@@ -87,6 +92,8 @@ export interface AttendeeTotals {
     sendable: number;
     unsentSendable: number;
     walkIns: number;
+    hometown: number;
+    unlisted: number;
 }
 
 export type TicketsSection = 'scan' | 'attendees' | 'stats' | 'import' | 'template' | 'send';

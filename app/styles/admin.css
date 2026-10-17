@@ -2582,6 +2582,36 @@
     color: #3949ab;
 }
 
+/* Sold through HomeTown, the school's box office. */
+.admin-tickets-tag-hometown {
+    background: rgba(75, 46, 131, 0.14);
+    color: #4b2e83;
+}
+
+/* Let in while missing from the imported HomeTown list. */
+.admin-tickets-tag-unlisted {
+    background: rgba(254, 202, 87, 0.22);
+    color: #a15c00;
+}
+
+.admin-tickets-hometown h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-tickets-hometown-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.admin-tickets-hometown-admit {
+    margin-top: 6px;
+    font-weight: 600;
+}
+
 /* The same answer in words, under the email field and inside an opened row. */
 .admin-tickets-account-note {
     display: block;

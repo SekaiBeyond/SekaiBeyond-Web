@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ShowToast } from '../utils';
-import { ticketStatusCounts } from './helpers';
+import { anonymousAttendeeName, ticketStatusCounts } from './helpers';
 import { type AttendeeData, type AttendeeTotals, TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
 import type { AccountLink } from './useAccountLinks';
 
@@ -126,6 +126,14 @@ export function AttendeesSection({
                         <strong>{totals.walkIns}</strong> {isEnglish ? 'walk-in' : '现场登记'}
                     </span>
                 )}
+                {totals.hometown > 0 && (
+                    <span>
+                        <strong>{totals.hometown}</strong> HomeTown
+                        {totals.unlisted > 0 && (isEnglish
+                            ? ` (${totals.unlisted} not on list)`
+                            : `（${totals.unlisted} 张不在名单中）`)}
+                    </span>
+                )}
                 <button
                     className="admin-toggle-btn admin-toggle-save admin-tickets-refresh"
                     onClick={onAdd}
@@ -157,7 +165,7 @@ export function AttendeesSection({
                 <input
                     type="text"
                     className="admin-input"
-                    placeholder={isEnglish ? 'Search name or email...' : '搜索姓名或邮箱...'}
+                    placeholder={isEnglish ? 'Search name, email or ticket #...' : '搜索姓名、邮箱或门票号...'}
                     value={search}
                     onChange={(e) => onSearchChange(e.target.value)}
                 />
@@ -223,7 +231,7 @@ export function AttendeesSection({
                                 {/* Whatever they gave leads, and the second line says
                                     what's missing, keeping every row the same height. */}
                                 <div className="admin-user-name">
-                                    {a.name || a.email || (isEnglish ? 'Walk-in guest' : '现场来宾')}
+                                    {a.name || a.email || anonymousAttendeeName(a, isEnglish)}
                                 </div>
                                 {a.name && a.email
                                     ? <div className="admin-user-email">{a.email}</div>
@@ -243,10 +251,21 @@ export function AttendeesSection({
                                         {isEnglish ? 'Walk-in' : '现场'}
                                     </span>
                                 )}
-                                <span
-                                    className={`admin-tickets-tag admin-tickets-tag-type-${ticketType.toLowerCase().replace(/\s+/g, '-')}`}>
-                                    {ticketTypeLabel(ticketType, isEnglish)}
-                                </span>
+                                {a.hometown && (
+                                    <span className="admin-tickets-tag admin-tickets-tag-hometown">HomeTown</span>
+                                )}
+                                {a.unlisted && (
+                                    <span className="admin-tickets-tag admin-tickets-tag-unlisted">
+                                        {isEnglish ? 'Not on list' : '不在名单中'}
+                                    </span>
+                                )}
+                                {/* An unlisted HomeTown ticket's type isn't known until an import lists it. */}
+                                {!a.unlisted && (
+                                    <span
+                                        className={`admin-tickets-tag admin-tickets-tag-type-${ticketType.toLowerCase().replace(/\s+/g, '-')}`}>
+                                        {ticketTypeLabel(ticketType, isEnglish)}
+                                    </span>
+                                )}
                                 <span className="admin-tickets-attendee-count">
                                     {a.ticketCount} {isEnglish ? 'tickets' : '张'}
                                 </span>
@@ -265,8 +284,8 @@ export function AttendeesSection({
                                         {isEnglish ? 'Fresh' : '未使用'}
                                     </span>
                                 )}
-                                {/* Nothing to send without an address. */}
-                                {a.email && <span className={
+                                {/* Nothing to send without an address, and HomeTown sends its own. */}
+                                {a.email && !a.hometown && <span className={
                                                       a.emailScheduled
                                                           ? 'admin-tickets-tag admin-tickets-tag-queued'
                                                           : a.emailSent
@@ -296,6 +315,17 @@ export function AttendeesSection({
 
                         {isExpanded && (
                             <div className="admin-tickets-attendee-detail">
+                                {a.hometown && (
+                                    <p className="admin-helper-text">
+                                        {a.unlisted
+                                            ? (isEnglish
+                                                ? 'A HomeTown ticket let in at the door while it wasn\'t on the imported list. An import that lists it fills in the buyer.'
+                                                : '在不在已导入名单中时于现场放行的 HomeTown 门票。之后的导入若包含此票，会补上购票者信息。')
+                                            : (isEnglish
+                                                ? `Bought through HomeTown${a.hometownOrderId ? `, order #${a.hometownOrderId}` : ''}. HomeTown sent the ticket, so no email is sent from here.`
+                                                : `通过 HomeTown 购买${a.hometownOrderId ? `，订单号 ${a.hometownOrderId}` : ''}。门票由 HomeTown 发送，此处不发送邮件。`)}
+                                    </p>
+                                )}
                                 <p className="admin-helper-text admin-tickets-attendee-account">
                                     {!a.email
                                         ? (isEnglish
@@ -334,7 +364,7 @@ export function AttendeesSection({
                                         <button
                                             className="admin-toggle-btn admin-toggle-save"
                                             onClick={() => onResend(a)}
-                                            disabled={!a.email || a.tickets.every(t => t.voided)}
+                                            disabled={!a.email || a.hometown || a.tickets.every(t => t.voided)}
                                         >
                                             {isEnglish ? 'Resend Email' : '重发邮件'}
                                         </button>
@@ -371,7 +401,9 @@ export function AttendeesSection({
                                                         aria-label={isEnglish ? `Copy ticket ID ${t.ticketId}` : `复制门票 ID ${t.ticketId}`}
                                                         onClick={() => void copyTicketId(t.ticketId)}
                                                     >
-                                                        {t.ticketId.slice(0, 8)}…
+                                                        {/* A HomeTown number is short, and what's printed on
+                                                            the buyer's ticket, so it shows in full. */}
+                                                        {a.hometown ? t.ticketId : `${t.ticketId.slice(0, 8)}…`}
                                                         {copiedTicketId === t.ticketId ? (
                                                             <span
                                                                 className="admin-tickets-ticket-id-action admin-tickets-ticket-id-action--copied">

@@ -96,11 +96,18 @@ export function AttendeeModal({
     const account = lookupEmail ? accountLinks.get(lookupEmail) : undefined;
     const checkingAccount = !!lookupEmail && account === undefined && !accountLookupFailed;
 
-    // Add mode: warn when the email already has an attendee record.
+    // Add mode: warn when the email already has an attendee record. A HomeTown
+    // ticket is never re-issued by email, so only a walk-in is told about one:
+    // that person may just need finding under Attendees.
     const duplicate = useMemo(() => {
         if (attendee || !emailValid) return null;
-        return existingAttendees.find(a => a.email.toLowerCase() === trimmedEmail) ?? null;
-    }, [attendee, existingAttendees, trimmedEmail, emailValid]);
+        return existingAttendees.find(a => a.email.toLowerCase() === trimmedEmail && (walkIn || !a.hometown))
+            ?? null;
+    }, [attendee, existingAttendees, trimmedEmail, emailValid, walkIn]);
+
+    // A HomeTown ticket keeps its number, so only its name can change here; its
+    // type changes from the ticket list.
+    const hometownLocked = !!attendee?.hometown;
 
     // A walk-in's email can't already be on the list: re-issuing would void the
     // tickets that person was sent.
@@ -340,7 +347,7 @@ export function AttendeeModal({
                         onChange={(e) => setTicketCount(e.target.value)}
                         min={1}
                         max={50}
-                        disabled={saving}
+                        disabled={saving || hometownLocked}
                     />
                 </label>
 
@@ -350,7 +357,7 @@ export function AttendeeModal({
                         className="admin-input"
                         value={type}
                         onChange={(e) => setType(e.target.value as TicketType)}
-                        disabled={saving}
+                        disabled={saving || hometownLocked}
                     >
                         {TICKET_TYPES.map(t => (
                             <option key={t.value} value={t.value}>
@@ -389,6 +396,14 @@ export function AttendeeModal({
                         {isEnglish
                             ? `An attendee with this email already exists (${duplicate.name ? `${duplicate.name}, ` : ''}${duplicate.ticketCount} ticket${duplicate.ticketCount === 1 ? '' : 's'}). Saving will re-issue their tickets and reset the email-sent status.`
                             : `该邮箱已存在参加者（${duplicate.name ? `${duplicate.name}，` : ''}${duplicate.ticketCount} 张门票）。保存将重新签发其门票并重置邮件发送状态。`}
+                    </p>
+                )}
+
+                {hometownLocked && (
+                    <p className="admin-helper-text">
+                        {isEnglish
+                            ? 'A HomeTown ticket keeps its HomeTown number, so it can\'t be re-issued. Change its type from the ticket list.'
+                            : 'HomeTown 门票沿用其 HomeTown 门票号，无法重新签发。可在门票列表中修改类型。'}
                     </p>
                 )}
 

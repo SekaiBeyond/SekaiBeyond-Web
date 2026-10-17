@@ -4,42 +4,44 @@ import { callRedeemTicket, functionsErrorCode } from '~/lib/firebase';
 import { useQrScanner } from '~/lib/useQrScanner';
 import { type ScanOutcome, useScanSound, useScanVibration } from '~/lib/useScanFeedback';
 import { QrScannerViewport } from './QrScannerViewport';
+import { isHometownTicketId } from './tickets/hometown';
 import { ticketTypeLabel } from './tickets/types';
+
+/** Who a ticket belongs to, as a result shows it. */
+interface ScannedTicket {
+    ticketId: string;
+    attendeeName: string;
+    attendeeEmail: string;
+    ticketType: string;
+    hometown: boolean;
+    /** A HomeTown ticket missing from the imported list, let in with a warning. */
+    unlisted: boolean;
+}
 
 type ScanStatus =
     | {kind: 'idle'}
     | {kind: 'scanning'}
     | {kind: 'loading'; ticketId: string}
-    | {
+    | (ScannedTicket & {
     kind: 'success';
-    attendeeName: string;
-    attendeeEmail: string;
-    ticketType: string;
     userCheckedIn: boolean;
     /** When it went up. A fresh one restarts the countdown to clearing it. */
     shownAt: number
-}
-    | {
+})
+    | (ScannedTicket & {
     kind: 'already';
-    attendeeName: string;
-    attendeeEmail: string;
-    ticketType: string;
     redeemedBy: string;
     redeemedAt: string | null;
     shownAt: number
-}
+})
     | {kind: 'error'; reason: string; shownAt: number};
 
-/** A result on show, which clears itself after {@link CLEAR_AFTER_MS}. */
+/** A result on show, which clears itself after {@link showFor}. */
 type ShownStatus = Extract<ScanStatus, {shownAt: number}>;
 
-interface CachedRedemption {
-    ticketId: string;
+interface CachedRedemption extends ScannedTicket {
     /** When the server's grace window for it closes, on this device's clock. */
     until: number;
-    attendeeName: string;
-    attendeeEmail: string;
-    ticketType: string;
     userCheckedIn: boolean;
 }
 
@@ -62,13 +64,22 @@ const CLEAR_AFTER_MS: Record<ShownStatus['kind'], number> = {
 /** The last stretch of that, over which a result fades out. Matches the CSS. */
 const FADE_MS = 300;
 
+/**
+ * How long a result stays up. An unlisted HomeTown ticket got in, but its
+ * warning is there to be read, so it stays up as long as a problem.
+ */
+const showFor = (status: ShownStatus): number =>
+    status.kind === 'success' && status.unlisted ? CLEAR_AFTER_MS.already : CLEAR_AFTER_MS[status.kind];
+
 interface TicketScannerProps {
     eventId: string;
     eventTitle: string;
+    /** Whether a HomeTown ticket missing from the imported list is let in, with a warning. */
+    admitUnlistedHometown: boolean;
     onRedeemed: () => void;
 }
 
-export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerProps) {
+export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRedeemed}: TicketScannerProps) {
     const {isEnglish} = useLanguage();
     const lastScanRef = useRef<{ticketId: string; at: number} | null>(null);
     const redeemedCacheRef = useRef<CachedRedemption[]>([]);
@@ -105,15 +116,9 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         // must get "already redeemed".
         const cached = redeemedCacheRef.current.find(c => c.ticketId === ticketId && now < c.until);
         if (cached) {
-            setStatus({
-                kind: 'success',
-                attendeeName: cached.attendeeName,
-                attendeeEmail: cached.attendeeEmail,
-                ticketType: cached.ticketType,
-                userCheckedIn: cached.userCheckedIn,
-                shownAt: now,
-            });
-            cue('success', ticketId);
+            const {until: _until, ...shown} = cached;
+            setStatus({kind: 'success', ...shown, shownAt: now});
+            cue(cached.unlisted ? 'issue' : 'success', ticketId);
             return;
         }
 
@@ -123,32 +128,34 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         try {
             const result = await callRedeemTicket({eventId, ticketId});
             const d = result.data;
+            const scanned: ScannedTicket = {
+                ticketId,
+                attendeeName: d.attendeeName ?? '',
+                attendeeEmail: d.attendeeEmail ?? '',
+                ticketType: d.ticketType ?? 'normal',
+                hometown: !!d.hometown,
+                unlisted: !!d.unlisted,
+            };
             if (d.alreadyRedeemed) {
                 setStatus({
                     kind: 'already',
-                    attendeeName: d.attendeeName ?? '',
-                    attendeeEmail: d.attendeeEmail ?? '',
-                    ticketType: d.ticketType ?? 'normal',
+                    ...scanned,
                     redeemedBy: d.redeemedBy ?? '',
                     redeemedAt: d.redeemedAt ?? null,
                     shownAt: Date.now(),
                 });
                 cue('issue', ticketId);
             } else {
-                const successData = {
-                    attendeeName: d.attendeeName ?? '',
-                    attendeeEmail: d.attendeeEmail ?? '',
-                    ticketType: d.ticketType ?? 'normal',
-                    userCheckedIn: !!d.userCheckedIn,
-                };
+                const successData = {...scanned, userCheckedIn: !!d.userCheckedIn};
                 setStatus({kind: 'success', ...successData, shownAt: Date.now()});
-                cue('success', ticketId);
+                // Let in, but the operator should look up at the warning.
+                cue(scanned.unlisted ? 'issue' : 'success', ticketId);
 
                 // The server says how much of the window is left, as a duration so
                 // this phone's clock doesn't matter. Without it, the entry expires
                 // at once.
                 redeemedCacheRef.current = [
-                    {ticketId, until: now + (d.graceRemainingMs ?? 0), ...successData},
+                    {...successData, until: now + (d.graceRemainingMs ?? 0)},
                     ...redeemedCacheRef.current.filter(c => c.ticketId !== ticketId),
                 ].slice(0, CACHE_SIZE);
 
@@ -161,6 +168,10 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 reason = isEnglish ? 'This ticket has been voided.' : '此门票已作废。';
             } else if (code === 'invalid') {
                 reason = isEnglish ? 'Ticket not found.' : '未找到此门票。';
+            } else if (code === 'hometown-unlisted') {
+                reason = isEnglish
+                    ? 'This HomeTown ticket isn\'t on the imported list. Ask an admin to import the latest HomeTown guest list.'
+                    : '此 HomeTown 门票不在已导入的名单中。请管理员导入最新的 HomeTown 来宾名单。';
             } else if (code === 'not-authorized') {
                 reason = isEnglish ? 'You are not authorized to scan for this event.' : '你没有权限扫描此活动的门票。';
             } else if (code === 'not-event-day') {
@@ -179,11 +190,14 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
         }
     }, [eventId, isEnglish, onRedeemed, cue]);
 
-    // Redeem a code for this event, warn on another event's, ignore the rest.
-    // Always false, to keep scanning.
+    // Redeem a code for this event, warn on another event's, ignore the rest. A
+    // HomeTown QR is just its number, naming no event, so it's taken as this
+    // one's. Always false, to keep scanning.
     const onDecode = useCallback((raw: string): boolean => {
         const parsed = parseTicketUrl(raw);
-        if (parsed && parsed.eventId === eventId) {
+        if (!parsed && isHometownTicketId(raw.trim())) {
+            void handleTicket(raw.trim());
+        } else if (parsed && parsed.eventId === eventId) {
             void handleTicket(parsed.ticketId);
         } else if (parsed && parsed.eventId !== eventId) {
             setStatus({
@@ -213,7 +227,7 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
     // it clears once the code is put away.
     useEffect(() => {
         if (!('shownAt' in status)) return;
-        const ms = CLEAR_AFTER_MS[status.kind];
+        const ms = showFor(status);
         const fade = setTimeout(() => setLeaving(true), ms - FADE_MS);
         const clear = setTimeout(
             () => setStatus(scanner.cameraActive ? {kind: 'scanning'} : {kind: 'idle'}),
@@ -249,6 +263,14 @@ export function TicketScanner({eventId, eventTitle, onRedeemed}: TicketScannerPr
                 {isEnglish
                     ? `Scanning tickets for "${eventTitle}". Point the camera at a ticket QR to redeem.`
                     : `正在扫描"${eventTitle}"的门票。将摄像头对准二维码进行验证。`}
+                {' '}
+                {admitUnlistedHometown
+                    ? (isEnglish
+                        ? 'HomeTown tickets missing from the imported list are let in with a warning.'
+                        : '不在已导入名单中的 HomeTown 门票将在提示后放行。')
+                    : (isEnglish
+                        ? 'HomeTown tickets must be on the imported list.'
+                        : 'HomeTown 门票须在已导入的名单中。')}
             </p>
 
             <QrScannerViewport scanner={scanner} isEnglish={isEnglish} startDisabled={busy}>
@@ -336,16 +358,26 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
     if (status.kind === 'success') {
         return (
             <div className={`admin-tickets-scan-banner admin-tickets-scan-success${leavingClass}`}>
-                <strong>{isEnglish ? '✓ Redeemed' : '✓ 验证成功'}</strong>
-                <div>{status.attendeeName || status.attendeeEmail || (isEnglish ? 'Walk-in guest' : '现场来宾')} <span
-                    className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{ticketTypeLabel(status.ticketType, isEnglish)}</span>
-                </div>
+                <strong>
+                    {status.unlisted
+                        ? (isEnglish ? '✓ Let in — not on the HomeTown list' : '✓ 已放行 — 不在 HomeTown 名单中')
+                        : (isEnglish ? '✓ Redeemed' : '✓ 验证成功')}
+                </strong>
+                <div>{holderName(status, isEnglish)} <TicketTags ticket={status} isEnglish={isEnglish}/></div>
                 {status.attendeeName && <div className="admin-user-email">{status.attendeeEmail}</div>}
-                <div className="admin-helper-text">
-                    {status.userCheckedIn
-                        ? (isEnglish ? 'User auto-checked in.' : '用户已自动签到。')
-                        : (isEnglish ? 'Attendee not registered on site.' : '参加者未注册账号。')}
-                </div>
+                {status.unlisted ? (
+                    <div className="admin-helper-text admin-tickets-edit-warning">
+                        {isEnglish
+                            ? 'Bought after the last import, or not a real ticket. It\'s recorded now, so a second scan of it will be refused.'
+                            : '可能是上次导入后购买的，也可能不是真票。此票现已记录，再次扫描将被拒绝。'}
+                    </div>
+                ) : (
+                    <div className="admin-helper-text">
+                        {status.userCheckedIn
+                            ? (isEnglish ? 'User auto-checked in.' : '用户已自动签到。')
+                            : (isEnglish ? 'Attendee not registered on site.' : '参加者未注册账号。')}
+                    </div>
+                )}
                 <Countdown status={status}/>
             </div>
         );
@@ -354,9 +386,7 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
         return (
             <div className={`admin-tickets-scan-banner admin-tickets-scan-already${leavingClass}`}>
                 <strong>{isEnglish ? '! Already redeemed' : '! 此门票已验证'}</strong>
-                <div>{status.attendeeName || status.attendeeEmail || (isEnglish ? 'Walk-in guest' : '现场来宾')} <span
-                    className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{ticketTypeLabel(status.ticketType, isEnglish)}</span>
-                </div>
+                <div>{holderName(status, isEnglish)} <TicketTags ticket={status} isEnglish={isEnglish}/></div>
                 {status.attendeeName && <div className="admin-user-email">{status.attendeeEmail}</div>}
                 <div className="admin-helper-text">
                     {isEnglish ? 'Redeemed by ' : '验证人：'}
@@ -366,6 +396,9 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
                             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                         })}</>
                     )}
+                    {status.unlisted && (isEnglish
+                        ? ', while it wasn\'t on the HomeTown list.'
+                        : '，当时不在 HomeTown 名单中。')}
                 </div>
                 <Countdown status={status}/>
             </div>
@@ -377,6 +410,24 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
             <div>{status.reason}</div>
             <Countdown status={status}/>
         </div>
+    );
+}
+
+/** Who a result names: whatever they gave, else an unlisted HomeTown ticket's number. */
+const holderName = (ticket: ScannedTicket, isEnglish: boolean): string =>
+    ticket.attendeeName || ticket.attendeeEmail
+    || (ticket.hometown ? `HomeTown #${ticket.ticketId}` : (isEnglish ? 'Walk-in guest' : '现场来宾'));
+
+/** The ticket's type, which an unlisted HomeTown ticket doesn't know yet, and where it was sold. */
+function TicketTags({ticket, isEnglish}: {ticket: ScannedTicket; isEnglish: boolean}) {
+    return (
+        <>
+            {!ticket.unlisted && (
+                <span
+                    className={`admin-tickets-tag admin-tickets-tag-type-${ticket.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{ticketTypeLabel(ticket.ticketType, isEnglish)}</span>
+            )}
+            {ticket.hometown && <span className="admin-tickets-tag admin-tickets-tag-hometown">HomeTown</span>}
+        </>
     );
 }
 
@@ -392,7 +443,7 @@ function Countdown({status}: {status: ShownStatus}) {
                 key={status.shownAt}
                 className="admin-tickets-scan-countdown-ring"
                 cx="18" cy="18" r="15.9155"
-                style={{animationDuration: `${CLEAR_AFTER_MS[status.kind]}ms`}}
+                style={{animationDuration: `${showFor(status)}ms`}}
             />
         </svg>
     );

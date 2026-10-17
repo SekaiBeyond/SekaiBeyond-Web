@@ -85,7 +85,7 @@ export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) =>
  * behind with the event.
  */
 async function deleteEventSubcollections(eventRef: FirebaseFirestore.DocumentReference): Promise<void> {
-    const snaps = await Promise.all(["attendees", "emailTemplate"].map(sub => eventRef.collection(sub).get()));
+    const snaps = await Promise.all(["attendees", "emailTemplate", "settings"].map(sub => eventRef.collection(sub).get()));
     const ops = snaps.flatMap(snap => snap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)));
     if (ops.length > 0) await commitInChunks(ops);
 }
@@ -597,13 +597,17 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     // Reconcile before deleting: otherwise late changes are lost, and anything
     // left strands under upcomingEvents/{deletedId}, which
     // onUpcomingEventDeleted skips once a pastEvents doc exists.
-    const [liveAttendees, liveTemplate] = await Promise.all([
+    const [liveAttendees, liveTemplate, liveSettings] = await Promise.all([
         attendeesSrc.get(),
         emailTemplateSrc.get(),
+        // Door settings (setHometownAdmitUnlisted) only matter while the event
+        // runs, so they go without a copy.
+        db.collection("upcomingEvents").doc(eventId).collection("settings").get(),
     ]);
     const moveOps = [
         ...reconcileCopy(attendeesSnap, liveAttendees, pastAttendeesCol),
         ...reconcileCopy(emailTemplateSnap, liveTemplate, pastEmailTemplateCol),
+        ...liveSettings.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
     ];
     if (moveOps.length > 0) await commitInChunks(moveOps);
 

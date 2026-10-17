@@ -370,6 +370,17 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>imported attendees for {event} ({added} added, {replaced} replaced)</>
                 : <>导入了 {event} 的参加者（新增 {added}，替换 {replaced}）</>;
         }
+        case 'hometown-import': {
+            const added = r.addedCount ?? 0;
+            const confirmed = r.confirmedCount ?? 0;
+            return isEnglish
+                ? <>imported HomeTown tickets for {event} ({added} added, {confirmed} unlisted confirmed)</>
+                : <>导入了 {event} 的 HomeTown 门票（新增 {added}，确认未列入名单 {confirmed}）</>;
+        }
+        case 'hometown-admit-unlisted':
+            return isEnglish
+                ? <>{r.enabled ? 'started' : 'stopped'} letting in HomeTown tickets missing from the list at {event}</>
+                : <>{r.enabled ? '开始' : '停止'}在 {event} 放行不在名单中的 HomeTown 门票</>;
         case 'ticket-walk-in': {
             const count = r.ticketCount ?? 0;
             return isEnglish

@@ -247,10 +247,24 @@ export const callAddWalkInAttendee = (data: {
 }) => httpsCallable<typeof data, {attendeeId: string; checkedIn: boolean; userCheckedIn: boolean}>(
     getFunctions(), 'addWalkInAttendee')(data);
 
+/** HomeTown guest list rows, one per ticket, added by number (importHometownTickets in functions). */
+export const callImportHometownTickets = (data: {
+    eventId: string;
+    tickets: Array<{ticketId: string; name: string; email: string; type: string; orderId: string}>;
+}) => httpsCallable<typeof data, {added: number; confirmed: number; skipped: number; total: number}>(
+    getFunctions(), 'importHometownTickets')(data);
+
+export const callSetHometownAdmitUnlisted = (data: {eventId: string; enabled: boolean}) =>
+    httpsCallable<typeof data, {enabled: boolean}>(getFunctions(), 'setHometownAdmitUnlisted')(data);
+
 export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
     httpsCallable<typeof data, {
         success?: boolean;
         alreadyRedeemed?: boolean;
+        // A HomeTown ticket, and whether it was only ever let in unlisted: on
+        // success, just now.
+        hometown?: boolean;
+        unlisted?: boolean;
         attendeeName: string;
         attendeeEmail: string;
         eventTitle: string;

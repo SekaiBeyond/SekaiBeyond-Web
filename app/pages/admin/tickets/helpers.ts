@@ -102,6 +102,9 @@ export const mapAttendeeDoc = (
         tickets,
         ticketIds: Array.isArray(data.ticketIds) ? (data.ticketIds as string[]) : [],
         walkIn: data.walkIn === true,
+        hometown: data.source === 'hometown',
+        unlisted: data.unlisted === true,
+        hometownOrderId: (data.hometownOrderId as string) ?? '',
     };
 };
 
@@ -110,6 +113,12 @@ export const attendeeLabel = (a: Pick<AttendeeData, 'name' | 'email'>, isEnglish
     if (a.name && a.email) return isEnglish ? `${a.name} (${a.email})` : `${a.name}（${a.email}）`;
     return a.name || a.email || (isEnglish ? 'this walk-in guest' : '这位现场来宾');
 };
+
+/** What a nameless, emailless attendee is called: an unlisted HomeTown ticket by its number. */
+export const anonymousAttendeeName = (a: Pick<AttendeeData, 'hometown' | 'ticketIds'>, isEnglish: boolean): string =>
+    a.hometown
+        ? `HomeTown #${a.ticketIds[0] ?? ''}`
+        : (isEnglish ? 'Walk-in guest' : '现场来宾');
 
 export const ticketStatusCounts = (a: AttendeeData) => {
     let used = 0;
@@ -131,11 +140,13 @@ const csvDateTime = (d: Date | null): string => {
 /**
  * Every attendee, one row each. The email, name, count, type and createdAt
  * headers are ones the import picks up, so the file imports into another event,
- * all but the walk-ins without an email.
+ * all but the walk-ins without an email. HomeTown rows carry their ticket number,
+ * which that import can't keep.
  */
 export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
     buildCsv(
-        ['email', 'name', 'ticketCount', 'type', 'redeemed', 'voided', 'emailSent', 'emailSentAt', 'createdAt', 'walkIn'],
+        ['email', 'name', 'ticketCount', 'type', 'redeemed', 'voided', 'emailSent', 'emailSentAt', 'createdAt', 'walkIn',
+            'hometownTicket'],
         attendees.map(a => {
             const {used, voided} = ticketStatusCounts(a);
             return [
@@ -145,11 +156,12 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
                 ticketTypeLabel(a.tickets[0]?.type || 'normal', true),
                 String(used),
                 String(voided),
-                // Never "yes" without an address: there was nothing to send.
-                a.email ? (a.emailSent ? 'yes' : 'no') : '',
+                // Never "yes" without an address, or for HomeTown, which sends its own.
+                a.email && !a.hometown ? (a.emailSent ? 'yes' : 'no') : '',
                 csvDateTime(a.emailSentAt),
                 csvDateTime(a.createdAt),
                 a.walkIn ? 'yes' : 'no',
+                a.hometown ? (a.ticketIds[0] ?? '') : '',
             ];
         }),
     );

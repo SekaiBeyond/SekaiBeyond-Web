@@ -96,7 +96,7 @@ export const RECORD_CATEGORIES = {
         en: 'Ticket', zh: '门票',
         types: ['ticket-import', 'ticket-walk-in', 'ticket-redeem', 'ticket-void', 'ticket-unvoid', 'ticket-reset',
             'ticket-type-edit', 'ticket-attendee-delete', 'ticket-attendee-edit', 'ticket-regenerate',
-            'ticket-email-send', 'ticket-email-queue'],
+            'ticket-email-send', 'ticket-email-queue', 'hometown-import', 'hometown-admit-unlisted'],
     },
     tag: {
         en: 'Tag', zh: '标签',
@@ -192,5 +192,9 @@ export interface ActivityRecord {
     /** A walk-in's tickets, and whether they were checked in as they were added. */
     ticketCount?: number;
     checkedIn?: boolean;
+    /** HomeTown tickets admitted unlisted at the door that an import then found. */
+    confirmedCount?: number;
+    /** Whether unlisted HomeTown tickets are now admitted. */
+    enabled?: boolean;
     timestamp: Date;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, orderBy, query } from 'firebase/firestore';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -21,6 +21,7 @@ import { AttendeeModal } from '../AttendeeModal';
 import { TicketScanner } from '../TicketScanner';
 import type { ShowToast } from '../utils';
 import { AttendeesSection } from './AttendeesSection';
+import { HometownSection } from './HometownSection';
 import { ImportSection } from './ImportSection';
 import { SendSection } from './SendSection';
 import { StatsSection } from './StatsSection';
@@ -109,6 +110,22 @@ export function TicketsSubtab({
         void loadAttendees();
     }, [loadAttendees]);
 
+    // Whether unlisted HomeTown tickets are let in (setHometownAdmitUnlisted).
+    // Null while loading; an archived event has no door to keep.
+    const [admitUnlisted, setAdmitUnlisted] = useState<boolean | null>(null);
+    useEffect(() => {
+        if (collectionRoot !== 'upcomingEvents') return;
+        let cancelled = false;
+        getDoc(doc(getFirebaseDb(), 'upcomingEvents', eventId, 'settings', 'hometown'))
+            .then(snap => {
+                if (!cancelled) setAdmitUnlisted(snap.data()?.admitUnlisted === true);
+            })
+            .catch(err => console.error('[TicketsSubtab] hometown settings', err));
+        return () => {
+            cancelled = true;
+        };
+    }, [eventId, collectionRoot]);
+
     useEffect(() => {
         setDisplayCount(10);
     }, [search, filterUnsent, ticketTypeFilter, statusFilter]);
@@ -132,8 +149,10 @@ export function TicketsSubtab({
                 if (!hasStatus) return false;
             }
             if (!needle) return true;
+            // By ticket number too, as HomeTown's own door app finds a ticket.
             return a.email.toLowerCase().includes(needle)
-                || a.name.toLowerCase().includes(needle);
+                || a.name.toLowerCase().includes(needle)
+                || a.ticketIds.some(id => id.toLowerCase().includes(needle));
         });
     }, [attendees, search, filterUnsent, ticketTypeFilter, statusFilter]);
 
@@ -145,6 +164,8 @@ export function TicketsSubtab({
         let sendable = 0;
         let unsentSendable = 0;
         let walkIns = 0;
+        let hometown = 0;
+        let unlisted = 0;
 
         for (const a of attendees) {
             tickets += a.ticketCount;
@@ -158,9 +179,12 @@ export function TicketsSubtab({
             }
             if (!a.emailSent) unsent++;
             if (a.walkIn) walkIns++;
+            if (a.hometown) hometown++;
+            if (a.unlisted) unlisted++;
 
-            // A walk-in without an email has nowhere to be sent.
-            if (activeInThisAttendee > 0 && a.email) {
+            // A walk-in without an email has nowhere to be sent, and HomeTown
+            // sends its own.
+            if (activeInThisAttendee > 0 && a.email && !a.hometown) {
                 sendable++;
                 if (!a.emailSent) unsentSendable++;
             }
@@ -168,7 +192,7 @@ export function TicketsSubtab({
         return {
             attendees: attendees.length,
             tickets, used, voided, unsent,
-            sendable, unsentSendable, walkIns,
+            sendable, unsentSendable, walkIns, hometown, unlisted,
         };
     }, [attendees]);
 
@@ -409,6 +433,7 @@ export function TicketsSubtab({
                 <TicketScanner
                     eventId={eventId}
                     eventTitle={isEnglish ? event.title : (event.titleCn || event.title)}
+                    admitUnlistedHometown={admitUnlisted === true}
                     onRedeemed={() => void loadAttendees()}
                 />
             )}
@@ -488,7 +513,20 @@ export function TicketsSubtab({
             {section === 'import' && (
                 <ImportSection
                     eventId={eventId}
-                    existingAttendees={attendees}
+                    // HomeTown tickets aren't re-issued by email, so they're no duplicate.
+                    existingAttendees={attendees.filter(a => !a.hometown)}
+                    readOnly={readOnly}
+                    showToast={showToast}
+                    onImported={() => void loadAttendees()}
+                />
+            )}
+
+            {section === 'import' && collectionRoot === 'upcomingEvents' && (
+                <HometownSection
+                    eventId={eventId}
+                    attendees={attendees}
+                    admitUnlisted={admitUnlisted}
+                    onAdmitUnlistedChange={setAdmitUnlisted}
                     readOnly={readOnly}
                     showToast={showToast}
                     onImported={() => void loadAttendees()}
