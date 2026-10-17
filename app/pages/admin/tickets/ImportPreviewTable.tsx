@@ -78,7 +78,7 @@ export function ImportPreviewTable({
                                             <span className="admin-tickets-import-diff-old">{r.existingName}</span>
                                             <span className="admin-tickets-import-diff-new">{r.name}</span>
                                         </>
-                                    ) : r.name}
+                                    ) : (r.name || '-')}
                                 </td>
                                 <td className={countChanged ? 'admin-tickets-import-cell-changed' : undefined}>
                                     {countChanged ? (

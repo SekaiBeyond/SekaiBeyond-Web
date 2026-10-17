@@ -2466,6 +2466,10 @@
     white-space: nowrap;
 }
 
+.admin-tickets-attendee-no-name {
+    font-style: italic;
+}
+
 .admin-tickets-attendee-stats {
     display: flex;
     flex-wrap: wrap;

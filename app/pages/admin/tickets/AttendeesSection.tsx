@@ -210,8 +210,16 @@ export function AttendeesSection({
                             onClick={() => toggleExpand(a.id)}
                         >
                             <div className="admin-tickets-attendee-info">
-                                <div className="admin-user-name">{a.name}</div>
-                                <div className="admin-user-email">{a.email}</div>
+                                {/* Without a name, the email leads and the second line
+                                    says so, keeping every row the same height. */}
+                                <div className="admin-user-name">{a.name || a.email}</div>
+                                {a.name
+                                    ? <div className="admin-user-email">{a.email}</div>
+                                    : (
+                                        <div className="admin-user-email admin-tickets-attendee-no-name">
+                                            {isEnglish ? 'No name' : '未填写姓名'}
+                                        </div>
+                                    )}
                             </div>
                             <div className="admin-tickets-attendee-stats">
                                 <span

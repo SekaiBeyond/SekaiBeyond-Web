@@ -248,6 +248,7 @@ export function AttendeeModal({
                         className="admin-input"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
+                        placeholder={isEnglish ? 'Leave blank to use the email' : '留空则使用邮箱'}
                         maxLength={100}
                         disabled={saving}
                     />
