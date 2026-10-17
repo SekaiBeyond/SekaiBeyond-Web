@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callImportEventAttendees, callUpdateEventAttendee, functionsErrorCode } from '~/lib/firebase';
+import {
+    callAddWalkInAttendee,
+    callImportEventAttendees,
+    callUpdateEventAttendee,
+    functionsErrorCode,
+} from '~/lib/firebase';
 import { ModalShell } from './ModalShell';
 import { type AttendeeData, TICKET_TYPES, type TicketType } from './tickets/types';
 import { useAccountLinks } from './tickets/useAccountLinks';
@@ -20,6 +25,11 @@ interface AttendeeModalProps {
     attendee: AttendeeData | null;
     /** Add mode: current attendees, for the duplicate-email check. */
     existingAttendees?: AttendeeData[];
+    /**
+     * Add mode on the event's days: someone at the door, whose email is optional
+     * and who can be checked in as they're added.
+     */
+    walkIn?: boolean;
     onClose: () => void;
     /** Add mode: called after a successful add (the modal closes itself). */
     onAdded?: () => void;
@@ -34,6 +44,7 @@ export function AttendeeModal({
                                   eventId,
                                   attendee,
                                   existingAttendees = [],
+                                  walkIn = false,
                                   onClose,
                                   onAdded,
                                   onSaved,
@@ -46,6 +57,8 @@ export function AttendeeModal({
     const [ticketCount, setTicketCount] = useState(attendee ? String(attendee.ticketCount) : '1');
     const originalType: TicketType = attendee?.tickets[0]?.type || 'normal';
     const [type, setType] = useState<TicketType>(originalType);
+    // On by default: a walk-in is usually standing at the door.
+    const [checkIn, setCheckIn] = useState(true);
     const [saving, setSaving] = useState(false);
 
     const trimmedEmail = email.trim().toLowerCase();
@@ -53,6 +66,8 @@ export function AttendeeModal({
     const parsedCount = parseInt(ticketCount, 10);
 
     const emailValid = EMAIL_RE.test(trimmedEmail);
+    // Only a walk-in may go without one.
+    const emailOk = emailValid || (walkIn && trimmedEmail === '');
     // Optional: a ticket only needs an email to reach someone.
     const nameValid = trimmedName.length <= 100;
     const countValid = Number.isInteger(parsedCount) && parsedCount >= 1 && parsedCount <= 50;
@@ -87,9 +102,51 @@ export function AttendeeModal({
         return existingAttendees.find(a => a.email.toLowerCase() === trimmedEmail) ?? null;
     }, [attendee, existingAttendees, trimmedEmail, emailValid]);
 
+    // A walk-in's email can't already be on the list: re-issuing would void the
+    // tickets that person was sent.
     const canSave = !saving && nameValid && countValid && (attendee
         ? (nameChanged || countChanged || typeChanged)
-        : emailValid);
+        : emailOk && !(walkIn && duplicate));
+
+    const submitWalkIn = async () => {
+        setSaving(true);
+        try {
+            const result = await callAddWalkInAttendee({
+                eventId,
+                email: trimmedEmail,
+                name: trimmedName,
+                ticketCount: parsedCount,
+                type,
+                checkIn,
+            });
+            showToast(
+                result.data.checkedIn
+                    ? (isEnglish
+                        ? `Added and checked in ${parsedCount} ticket${parsedCount === 1 ? '' : 's'}.`
+                        : `已添加并签到 ${parsedCount} 张门票。`)
+                    : (isEnglish ? 'Walk-in added.' : '现场来宾已添加。'),
+                'success',
+            );
+            onAdded?.();
+            onClose();
+        } catch (err) {
+            const code = functionsErrorCode(err);
+            showToast(
+                code === 'attendee-exists'
+                    ? (isEnglish
+                        ? 'This email is already on the list. Check them in from Attendees.'
+                        : '该邮箱已在名单中，请在参加者列表中为其签到。')
+                    : code === 'not-event-day'
+                        ? (isEnglish
+                            ? 'Walk-ins can only be added on the day of the event.'
+                            : '仅可在活动当天现场登记。')
+                        : (isEnglish ? 'Failed to add walk-in.' : '现场登记失败。'),
+                'error',
+            );
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const submitAdd = async () => {
         if (duplicate) {
@@ -169,14 +226,16 @@ export function AttendeeModal({
 
     const submit = () => {
         if (!canSave) return;
-        void (attendee ? submitEdit(attendee) : submitAdd());
+        void (attendee ? submitEdit(attendee) : walkIn ? submitWalkIn() : submitAdd());
     };
 
     return (
         <ModalShell
             title={attendee
                 ? (isEnglish ? 'Edit Attendee' : '编辑参加者')
-                : (isEnglish ? 'Add Attendee' : '添加参加者')}
+                : walkIn
+                    ? (isEnglish ? 'Add Walk-in' : '现场登记')
+                    : (isEnglish ? 'Add Attendee' : '添加参加者')}
             onClose={onClose}
             closeDisabled={saving}
         >
@@ -188,18 +247,27 @@ export function AttendeeModal({
                         <span>
                             {attendee
                                 ? (isEnglish ? 'Email (read-only)' : '邮箱（不可修改）')
-                                : (isEnglish ? 'Email' : '邮箱')}
+                                : walkIn
+                                    ? (isEnglish ? 'Email (optional)' : '邮箱（可选）')
+                                    : (isEnglish ? 'Email' : '邮箱')}
                         </span>
                     <input
                         type="email"
                         className="admin-input"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="person@example.com"
+                        placeholder={attendee ? (isEnglish ? 'No email' : '无邮箱') : 'person@example.com'}
                         readOnly={!!attendee}
                         disabled={!attendee && saving}
                         autoFocus={!attendee}
                     />
+                    {walkIn && trimmedEmail === '' && (
+                        <span className="admin-helper-text">
+                            {isEnglish
+                                ? 'Without an email, no tickets are sent and no account is credited.'
+                                : '不填写邮箱则不会发送门票，也不会计入任何账户。'}
+                        </span>
+                    )}
                     {/* Whether this address reaches someone's profile. A note
                         only: a ticket without an account still works, and credits
                         them if they sign up with it. */}
@@ -248,7 +316,9 @@ export function AttendeeModal({
                         className="admin-input"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        placeholder={isEnglish ? 'Leave blank to use the email' : '留空则使用邮箱'}
+                        placeholder={walkIn && trimmedEmail === ''
+                            ? undefined
+                            : (isEnglish ? 'Leave blank to use the email' : '留空则使用邮箱')}
                         maxLength={100}
                         disabled={saving}
                     />
@@ -283,7 +353,31 @@ export function AttendeeModal({
                     </select>
                 </label>
 
-                {duplicate && (
+                {walkIn && (
+                    <label className="admin-checkbox-label admin-tickets-walk-in-check">
+                        <input
+                            type="checkbox"
+                            checked={checkIn}
+                            onChange={(e) => setCheckIn(e.target.checked)}
+                            disabled={saving}
+                        />
+                        <span>
+                            {isEnglish
+                                ? `Check in now (marks ${countValid && parsedCount > 1 ? `all ${parsedCount} tickets` : 'the ticket'} redeemed)`
+                                : `立即签到（将${countValid && parsedCount > 1 ? `全部 ${parsedCount} 张门票` : '门票'}标记为已验证）`}
+                        </span>
+                    </label>
+                )}
+
+                {duplicate && walkIn && (
+                    <p className="admin-helper-text admin-tickets-edit-warning">
+                        {isEnglish
+                            ? `This email is already on the list (${duplicate.ticketCount} ticket${duplicate.ticketCount === 1 ? '' : 's'}). Find them under Attendees to check them in.`
+                            : `该邮箱已在名单中（${duplicate.ticketCount} 张门票）。请在参加者列表中为其签到。`}
+                    </p>
+                )}
+
+                {duplicate && !walkIn && (
                     <p className="admin-helper-text admin-tickets-edit-warning">
                         {isEnglish
                             ? `An attendee with this email already exists (${duplicate.name ? `${duplicate.name}, ` : ''}${duplicate.ticketCount} ticket${duplicate.ticketCount === 1 ? '' : 's'}). Saving will re-issue their tickets and reset the email-sent status.`
@@ -309,9 +403,13 @@ export function AttendeeModal({
                             ? (saving
                                 ? (isEnglish ? 'Saving...' : '保存中...')
                                 : (isEnglish ? 'Save' : '保存'))
-                            : (saving
+                            : saving
                                 ? (isEnglish ? 'Adding...' : '添加中...')
-                                : (isEnglish ? 'Add Attendee' : '添加参加者'))}
+                                : walkIn
+                                    ? (checkIn
+                                        ? (isEnglish ? 'Add & Check In' : '添加并签到')
+                                        : (isEnglish ? 'Add Walk-in' : '添加'))
+                                    : (isEnglish ? 'Add Attendee' : '添加参加者')}
                     </button>
                     <button
                         type="button"

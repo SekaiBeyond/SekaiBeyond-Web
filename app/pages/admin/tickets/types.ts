@@ -50,6 +50,8 @@ export interface AttendeeData {
     updatedAt: Date;
     tickets: TicketData[];
     ticketIds: string[];
+    /** Added at the door, with an email only if they gave one. */
+    walkIn: boolean;
 }
 
 export interface EmailTemplate {
@@ -84,6 +86,7 @@ export interface AttendeeTotals {
     unsent: number;
     sendable: number;
     unsentSendable: number;
+    walkIns: number;
 }
 
 export type TicketsSection = 'scan' | 'attendees' | 'stats' | 'import' | 'template' | 'send';

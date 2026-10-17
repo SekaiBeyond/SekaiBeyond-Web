@@ -25,7 +25,7 @@ import { ImportSection } from './ImportSection';
 import { SendSection } from './SendSection';
 import { StatsSection } from './StatsSection';
 import { TemplateSection } from './TemplateSection';
-import { buildAttendeeCsv, mapAttendeeDoc } from './helpers';
+import { attendeeLabel, buildAttendeeCsv, mapAttendeeDoc } from './helpers';
 import { useAccountLinks } from './useAccountLinks';
 import { type AttendeeData, type TicketData, type TicketsSection, type TicketType } from './types';
 
@@ -68,6 +68,9 @@ export function TicketsSubtab({
 
     const canScan = scanAccess !== 'none';
     const scanOpen = scanAccess === 'always' || (scanAccess === 'event-days' && eventDay === 'during');
+    // Adding someone at the door, email optional, is for the event's days only;
+    // addWalkInAttendee enforces it.
+    const canAddWalkIn = !readOnly && eventDay === 'during';
 
     const [section, setSection] = useState<TicketsSection>(scanOpen && readOnly ? 'scan' : 'attendees');
     const [attendees, setAttendees] = useState<AttendeeData[]>([]);
@@ -141,6 +144,7 @@ export function TicketsSubtab({
         let unsent = 0;
         let sendable = 0;
         let unsentSendable = 0;
+        let walkIns = 0;
 
         for (const a of attendees) {
             tickets += a.ticketCount;
@@ -153,8 +157,10 @@ export function TicketsSubtab({
                 }
             }
             if (!a.emailSent) unsent++;
+            if (a.walkIn) walkIns++;
 
-            if (activeInThisAttendee > 0) {
+            // A walk-in without an email has nowhere to be sent.
+            if (activeInThisAttendee > 0 && a.email) {
                 sendable++;
                 if (!a.emailSent) unsentSendable++;
             }
@@ -162,7 +168,7 @@ export function TicketsSubtab({
         return {
             attendees: attendees.length,
             tickets, used, voided, unsent,
-            sendable, unsentSendable
+            sendable, unsentSendable, walkIns,
         };
     }, [attendees]);
 
@@ -283,8 +289,8 @@ export function TicketsSubtab({
     const deleteAttendeeAction = async (a: AttendeeData) => {
         if (readOnly) return;
         const ok = window.confirm(isEnglish
-            ? `Remove ${a.name ? `${a.name} (${a.email})` : a.email} and void all ${a.ticketCount} ticket(s)?`
-            : `移除 ${a.name ? `${a.name}（${a.email}）` : a.email} 并作废全部 ${a.ticketCount} 张门票？`);
+            ? `Remove ${attendeeLabel(a, true)} and void all ${a.ticketCount} ticket(s)?`
+            : `移除 ${attendeeLabel(a, false)} 并作废全部 ${a.ticketCount} 张门票？`);
         if (!ok) return;
         try {
             await callDeleteEventAttendee({eventId, attendeeId: a.id});
@@ -407,6 +413,23 @@ export function TicketsSubtab({
                 />
             )}
 
+            {/* At the door, someone without a ticket is added without leaving the scanner. */}
+            {section === 'scan' && scanOpen && canAddWalkIn && (
+                <div className="admin-tickets-walk-in-card">
+                    <p className="admin-helper-text">
+                        {isEnglish
+                            ? 'No ticket? Add them as a walk-in and check them in at once. Their email is optional.'
+                            : '没有门票？现场登记并立即签到，邮箱可不填。'}
+                    </p>
+                    <button
+                        className="admin-toggle-btn admin-toggle-save"
+                        onClick={() => setAddingAttendee(true)}
+                    >
+                        {isEnglish ? 'Add Walk-in' : '现场登记'}
+                    </button>
+                </div>
+            )}
+
             {section === 'scan' && canScan && !scanOpen && (
                 <p className="admin-no-results">
                     {eventDay === 'before'
@@ -435,6 +458,7 @@ export function TicketsSubtab({
                     statusFilter={statusFilter}
                     onStatusFilterChange={setStatusFilter}
                     readOnly={readOnly}
+                    walkIn={canAddWalkIn}
                     onEdit={setEditingAttendee}
                     onAdd={() => setAddingAttendee(true)}
                     onExport={exportAttendees}
@@ -512,6 +536,7 @@ export function TicketsSubtab({
                     eventId={eventId}
                     attendee={null}
                     existingAttendees={attendees}
+                    walkIn={canAddWalkIn}
                     onClose={() => setAddingAttendee(false)}
                     onAdded={() => void loadAttendees()}
                     showToast={showToast}

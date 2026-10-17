@@ -101,7 +101,14 @@ export const mapAttendeeDoc = (
         updatedAt: tsToDate(data.updatedAt) ?? new Date(),
         tickets,
         ticketIds: Array.isArray(data.ticketIds) ? (data.ticketIds as string[]) : [],
+        walkIn: data.walkIn === true,
     };
+};
+
+/** An attendee in a sentence: name and email, whichever one they gave, or neither. */
+export const attendeeLabel = (a: Pick<AttendeeData, 'name' | 'email'>, isEnglish: boolean): string => {
+    if (a.name && a.email) return isEnglish ? `${a.name} (${a.email})` : `${a.name}（${a.email}）`;
+    return a.name || a.email || (isEnglish ? 'this walk-in guest' : '这位现场来宾');
 };
 
 export const ticketStatusCounts = (a: AttendeeData) => {
@@ -123,11 +130,12 @@ const csvDateTime = (d: Date | null): string => {
 
 /**
  * Every attendee, one row each. The email, name, count, type and createdAt
- * headers are ones the import picks up, so the file imports into another event.
+ * headers are ones the import picks up, so the file imports into another event,
+ * all but the walk-ins without an email.
  */
 export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
     buildCsv(
-        ['email', 'name', 'ticketCount', 'type', 'redeemed', 'voided', 'emailSent', 'emailSentAt', 'createdAt'],
+        ['email', 'name', 'ticketCount', 'type', 'redeemed', 'voided', 'emailSent', 'emailSentAt', 'createdAt', 'walkIn'],
         attendees.map(a => {
             const {used, voided} = ticketStatusCounts(a);
             return [
@@ -137,9 +145,11 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
                 ticketTypeLabel(a.tickets[0]?.type || 'normal', true),
                 String(used),
                 String(voided),
-                a.emailSent ? 'yes' : 'no',
+                // Never "yes" without an address: there was nothing to send.
+                a.email ? (a.emailSent ? 'yes' : 'no') : '',
                 csvDateTime(a.emailSentAt),
                 csvDateTime(a.createdAt),
+                a.walkIn ? 'yes' : 'no',
             ];
         }),
     );

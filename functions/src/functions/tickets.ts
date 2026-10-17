@@ -396,6 +396,111 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
     return {added: addedCount, replaced: replacedCount, skipped: skippedCount, total: normalized.size};
 });
 
+/**
+ * Someone added at the door, on the event's days only. The email is optional
+ * here and nowhere else, since without one nobody can be sent their tickets;
+ * with `checkIn` the tickets are redeemed on the spot, crediting the account as
+ * a scan would. An email already on the list is refused rather than re-issued,
+ * which would void the tickets they were sent.
+ */
+export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {
+        eventId?: string;
+        email?: unknown;
+        name?: unknown;
+        ticketCount?: unknown;
+        type?: unknown;
+        checkIn?: unknown;
+    };
+    const eventId = validateDocId(input.eventId, "eventId");
+    const email = input.email == null || (typeof input.email === "string" && input.email.trim() === "")
+        ? ""
+        : validateEmail(input.email, "email");
+    const name = sanitizeDisplayText(validateStr(input.name, "name", 100));
+    const ticketCount = validateTicketCount(input.ticketCount);
+    const type = validateTicketType(input.type);
+    const checkIn = input.checkIn === true;
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeesCol = eventRef.collection("attendees");
+        const eventSnap = await txn.get(eventRef);
+        // An archived event's tickets are read-only; see archiveUpcomingEvent.
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+
+        const now = Timestamp.now();
+        if (!isOnEventDay(eventSnap.data()?.startAt, eventSnap.data()?.endAt, now.toMillis())) {
+            throw new HttpsError("failed-precondition", "Walk-ins can only be added on the day of the event.",
+                {code: "not-event-day"});
+        }
+
+        // Every read before the first write.
+        let account: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+        if (email) {
+            const existing = await txn.get(attendeesCol.where("email", "==", email).limit(1));
+            if (!existing.empty) {
+                throw new HttpsError("already-exists", "An attendee with this email already exists.",
+                    {code: "attendee-exists"});
+            }
+            if (checkIn) {
+                const users = await txn.get(db.collection("users").where("email", "==", email).limit(1));
+                if (!users.empty) account = users.docs[0];
+            }
+        }
+
+        const callerName: string = callerSnap.data()?.displayName ?? "";
+        const {tickets, ticketIds} = buildFreshTickets(ticketCount, type);
+        const issued = checkIn
+            ? tickets.map(t => ({
+                ...t,
+                redeemed: true,
+                redeemedAt: now,
+                redeemedBy: uid,
+                redeemedByName: callerName,
+                checkedIn: account !== null,
+                checkedInAt: account ? now : null,
+            }))
+            : tickets;
+
+        if (account) {
+            const attended: string[] = account.data().attendedEvents ?? [];
+            if (!attended.includes(eventId)) {
+                txn.update(account.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
+            }
+        }
+
+        const attendeeRef = attendeesCol.doc();
+        txn.set(attendeeRef, {
+            email,
+            name,
+            ticketCount,
+            tickets: issued,
+            ticketIds,
+            walkIn: true,
+            // Without an address there's nothing to send, which also keeps it out
+            // of the unsent drain.
+            emailSent: !email,
+            emailSentAt: null,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        txn.set(recordRef(), recordDoc("ticket-walk-in", {
+            performedBy: uid,
+            performedByName: callerName,
+            eventId,
+            eventTitle: eventSnap.data()?.title ?? eventId,
+            targetEmail: email,
+            targetName: name,
+            ticketCount,
+            checkedIn: checkIn,
+        }));
+
+        return {attendeeId: attendeeRef.id, checkedIn: checkIn, userCheckedIn: account !== null};
+    });
+});
+
 /** One ticket as its holder sees it: enough to show a QR and say where it stands. */
 interface HeldTicket {
     ticketId: string;
@@ -670,18 +775,20 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
             };
         }
 
-        // Try to link to a registered user by email.
-        const matchingUserSnap = await txn.get(
-            db.collection("users").where("email", "==", attendeeEmail).limit(1)
-        );
+        // Try to link to a registered user by email; a walk-in may have none.
         let userCheckedIn = false;
-        if (!matchingUserSnap.empty) {
-            const userDoc = matchingUserSnap.docs[0];
-            const attended: string[] = userDoc.data().attendedEvents ?? [];
-            if (!attended.includes(eventId)) {
-                txn.update(userDoc.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
+        if (attendeeEmail) {
+            const matchingUserSnap = await txn.get(
+                db.collection("users").where("email", "==", attendeeEmail).limit(1)
+            );
+            if (!matchingUserSnap.empty) {
+                const userDoc = matchingUserSnap.docs[0];
+                const attended: string[] = userDoc.data().attendedEvents ?? [];
+                if (!attended.includes(eventId)) {
+                    txn.update(userDoc.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
+                }
+                userCheckedIn = true;
             }
-            userCheckedIn = true;
         }
 
         tickets[idx] = {
@@ -994,7 +1101,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             ticketCount,
             tickets,
             ticketIds,
-            emailSent: false,
+            emailSent: !data.email,
             emailSentAt: null,
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -1246,7 +1353,8 @@ export const sendTicketEmails = onCall(
             const rawTickets: any[] = data.tickets ?? [];
             const activeTickets = rawTickets.filter(t => !t.voided);
 
-            if (activeTickets.length === 0) {
+            // A walk-in without an email has nowhere to send to.
+            if (activeTickets.length === 0 || !data.email) {
                 ticketlessTargets.push(target);
                 continue;
             }
@@ -1254,7 +1362,8 @@ export const sendTicketEmails = onCall(
             candidates.push({target, data, tickets: activeTickets});
         }
 
-        // No tickets, or all voided: mark sent so the 'unsent' drain doesn't spin on it.
+        // No tickets, all voided, or no email: mark sent so the 'unsent' drain
+        // doesn't spin on it.
         for (const target of ticketlessTargets) {
             ops.push(b => b.update(target.ref, {
                 emailSent: true,

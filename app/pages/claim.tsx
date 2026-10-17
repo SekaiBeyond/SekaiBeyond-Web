@@ -274,7 +274,9 @@ export const ClaimPage = () => {
                         {ticketInfo.eventTitle && (
                             <p className="claim-event-title">{ticketInfo.eventTitle}</p>
                         )}
-                        <p><strong>{ticketInfo.attendeeName || ticketInfo.attendeeEmail}</strong></p>
+                        <p>
+                            <strong>{ticketInfo.attendeeName || ticketInfo.attendeeEmail || (isEnglish ? 'Walk-in guest' : '现场来宾')}</strong>
+                        </p>
                         {ticketInfo.attendeeName && <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>}
                         <p className="admin-helper-text">
                             {ticketInfo.userCheckedIn
@@ -290,7 +292,9 @@ export const ClaimPage = () => {
                         {ticketInfo.eventTitle && (
                             <p className="claim-event-title">{ticketInfo.eventTitle}</p>
                         )}
-                        <p><strong>{ticketInfo.attendeeName || ticketInfo.attendeeEmail}</strong></p>
+                        <p>
+                            <strong>{ticketInfo.attendeeName || ticketInfo.attendeeEmail || (isEnglish ? 'Walk-in guest' : '现场来宾')}</strong>
+                        </p>
                         {ticketInfo.attendeeName && <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>}
                         <p className="admin-helper-text">
                             {isEnglish ? 'Redeemed by ' : '验证人：'}

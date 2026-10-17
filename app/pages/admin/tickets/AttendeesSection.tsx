@@ -24,6 +24,8 @@ interface AttendeesSectionProps {
     statusFilter: 'all' | 'redeemed' | 'unredeemed' | 'voided';
     onStatusFilterChange: (v: 'all' | 'redeemed' | 'unredeemed' | 'voided') => void;
     readOnly: boolean;
+    /** The event is on, so Add takes walk-ins. */
+    walkIn: boolean;
     onEdit: (a: AttendeeData) => void;
     onAdd: () => void;
     /** Downloads every attendee, whatever the filters show. */
@@ -56,6 +58,7 @@ export function AttendeesSection({
                                      statusFilter,
                                      onStatusFilterChange,
                                      readOnly,
+                                     walkIn,
                                      onEdit,
                                      onAdd,
                                      onExport,
@@ -118,12 +121,19 @@ export function AttendeesSection({
                 <span>
                     <strong>{totals.unsent}</strong> {isEnglish ? 'unsent' : '未发送'}
                 </span>
+                {totals.walkIns > 0 && (
+                    <span>
+                        <strong>{totals.walkIns}</strong> {isEnglish ? 'walk-in' : '现场登记'}
+                    </span>
+                )}
                 <button
                     className="admin-toggle-btn admin-toggle-save admin-tickets-refresh"
                     onClick={onAdd}
                     disabled={readOnly}
                 >
-                    {isEnglish ? 'Add Attendee' : '添加参加者'}
+                    {walkIn
+                        ? (isEnglish ? 'Add Walk-in' : '现场登记')
+                        : (isEnglish ? 'Add Attendee' : '添加参加者')}
                 </button>
                 <button
                     className="admin-toggle-btn admin-toggle-edit"
@@ -210,18 +220,29 @@ export function AttendeesSection({
                             onClick={() => toggleExpand(a.id)}
                         >
                             <div className="admin-tickets-attendee-info">
-                                {/* Without a name, the email leads and the second line
-                                    says so, keeping every row the same height. */}
-                                <div className="admin-user-name">{a.name || a.email}</div>
-                                {a.name
+                                {/* Whatever they gave leads, and the second line says
+                                    what's missing, keeping every row the same height. */}
+                                <div className="admin-user-name">
+                                    {a.name || a.email || (isEnglish ? 'Walk-in guest' : '现场来宾')}
+                                </div>
+                                {a.name && a.email
                                     ? <div className="admin-user-email">{a.email}</div>
                                     : (
                                         <div className="admin-user-email admin-tickets-attendee-no-name">
-                                            {isEnglish ? 'No name' : '未填写姓名'}
+                                            {a.email
+                                                ? (isEnglish ? 'No name' : '未填写姓名')
+                                                : a.name
+                                                    ? (isEnglish ? 'No email' : '未填写邮箱')
+                                                    : (isEnglish ? 'No name or email' : '未填写姓名和邮箱')}
                                         </div>
                                     )}
                             </div>
                             <div className="admin-tickets-attendee-stats">
+                                {a.walkIn && (
+                                    <span className="admin-tickets-tag admin-tickets-tag-walk-in">
+                                        {isEnglish ? 'Walk-in' : '现场'}
+                                    </span>
+                                )}
                                 <span
                                     className={`admin-tickets-tag admin-tickets-tag-type-${ticketType.toLowerCase().replace(/\s+/g, '-')}`}>
                                     {ticketTypeLabel(ticketType, isEnglish)}
@@ -244,19 +265,20 @@ export function AttendeesSection({
                                         {isEnglish ? 'Fresh' : '未使用'}
                                     </span>
                                 )}
-                                <span className={
-                                          a.emailScheduled
-                                              ? 'admin-tickets-tag admin-tickets-tag-queued'
-                                              : a.emailSent
-                                                  ? 'admin-tickets-tag admin-tickets-tag-sent'
-                                                  : 'admin-tickets-tag admin-tickets-tag-unsent'
-                                      }>
+                                {/* Nothing to send without an address. */}
+                                {a.email && <span className={
+                                                      a.emailScheduled
+                                                          ? 'admin-tickets-tag admin-tickets-tag-queued'
+                                                          : a.emailSent
+                                                              ? 'admin-tickets-tag admin-tickets-tag-sent'
+                                                              : 'admin-tickets-tag admin-tickets-tag-unsent'
+                                                  }>
                                     {a.emailScheduled
                                         ? (isEnglish ? 'Queued' : '待发送')
                                         : a.emailSent
                                             ? (isEnglish ? 'Sent' : '已发送')
                                             : (isEnglish ? 'Unsent' : '未发送')}
-                                </span>
+                                </span>}
                                 {account !== undefined && (
                                     <span className={account
                                         ? 'admin-tickets-tag admin-tickets-tag-linked'
@@ -275,15 +297,19 @@ export function AttendeesSection({
                         {isExpanded && (
                             <div className="admin-tickets-attendee-detail">
                                 <p className="admin-helper-text admin-tickets-attendee-account">
-                                    {account === undefined
-                                        ? (isEnglish ? 'Checking for an account…' : '正在查询账户…')
-                                        : account
-                                            ? (isEnglish
-                                                ? 'Scanning a ticket will mark this event attended on '
-                                                : '扫描门票时，将在以下账户标记参加本活动：')
-                                            : (isEnglish
-                                                ? 'No account uses this email yet. Tickets still work — attendance is credited if they sign up with it later.'
-                                                : '暂无账户使用该邮箱。门票照常可用 — 若其日后以该邮箱注册，参加记录会被补上。')}
+                                    {!a.email
+                                        ? (isEnglish
+                                            ? 'No email, so no tickets can be sent and no account is credited.'
+                                            : '未填写邮箱，因此无法发送门票，也不会计入任何账户。')
+                                        : account === undefined
+                                            ? (isEnglish ? 'Checking for an account…' : '正在查询账户…')
+                                            : account
+                                                ? (isEnglish
+                                                    ? 'Scanning a ticket will mark this event attended on '
+                                                    : '扫描门票时，将在以下账户标记参加本活动：')
+                                                : (isEnglish
+                                                    ? 'No account uses this email yet. Tickets still work — attendance is credited if they sign up with it later.'
+                                                    : '暂无账户使用该邮箱。门票照常可用 — 若其日后以该邮箱注册，参加记录会被补上。')}
                                     {account && (account.uid
                                         ? (
                                             <a
@@ -308,7 +334,7 @@ export function AttendeesSection({
                                         <button
                                             className="admin-toggle-btn admin-toggle-save"
                                             onClick={() => onResend(a)}
-                                            disabled={a.tickets.every(t => t.voided)}
+                                            disabled={!a.email || a.tickets.every(t => t.voided)}
                                         >
                                             {isEnglish ? 'Resend Email' : '重发邮件'}
                                         </button>

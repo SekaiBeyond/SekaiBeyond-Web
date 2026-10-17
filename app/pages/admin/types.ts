@@ -94,7 +94,7 @@ export const RECORD_CATEGORIES = {
     },
     ticket: {
         en: 'Ticket', zh: '门票',
-        types: ['ticket-import', 'ticket-redeem', 'ticket-void', 'ticket-unvoid', 'ticket-reset',
+        types: ['ticket-import', 'ticket-walk-in', 'ticket-redeem', 'ticket-void', 'ticket-unvoid', 'ticket-reset',
             'ticket-type-edit', 'ticket-attendee-delete', 'ticket-attendee-edit', 'ticket-regenerate',
             'ticket-email-send', 'ticket-email-queue'],
     },
@@ -189,5 +189,8 @@ export interface ActivityRecord {
     addedCount?: number;
     replacedCount?: number;
     sentCount?: number;
+    /** A walk-in's tickets, and whether they were checked in as they were added. */
+    ticketCount?: number;
+    checkedIn?: boolean;
     timestamp: Date;
 }

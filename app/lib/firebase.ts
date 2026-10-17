@@ -236,6 +236,17 @@ export const callImportEventAttendees = (data: {
 }) => httpsCallable<typeof data, {added: number; replaced: number; skipped: number; total: number}>(
     getFunctions(), 'importEventAttendees')(data);
 
+export const callAddWalkInAttendee = (data: {
+    eventId: string;
+    /** Empty for none. */
+    email: string;
+    name: string;
+    ticketCount: number;
+    type: string;
+    checkIn: boolean;
+}) => httpsCallable<typeof data, {attendeeId: string; checkedIn: boolean; userCheckedIn: boolean}>(
+    getFunctions(), 'addWalkInAttendee')(data);
+
 export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
     httpsCallable<typeof data, {
         success?: boolean;

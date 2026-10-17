@@ -2576,6 +2576,12 @@
     color: #a15c00;
 }
 
+/* Added at the door rather than ahead of the event. */
+.admin-tickets-tag-walk-in {
+    background: rgba(92, 107, 192, 0.15);
+    color: #3949ab;
+}
+
 /* The same answer in words, under the email field and inside an opened row. */
 .admin-tickets-account-note {
     display: block;
@@ -3250,6 +3256,28 @@ select.admin-tickets-tag:focus {
     background: rgba(255, 255, 255, 0.85);
     border: 1px solid rgba(255, 107, 157, 0.12);
     border-radius: 14px;
+}
+
+/* Under the scanner on the event's days: add someone who has no ticket. */
+.admin-tickets-walk-in-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    padding: 16px 18px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+}
+
+.admin-tickets-walk-in-card .admin-helper-text {
+    flex: 1 1 220px;
+    margin: 0;
+}
+
+.admin-tickets-walk-in-check {
+    align-self: flex-start;
 }
 
 .admin-tickets-scanner-manual-row {

@@ -101,8 +101,9 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
     const target = r.targetUid ? clickableName(r.targetUid, r.targetName ?? '') : r.targetName;
     const event = clickableEvent(r.eventId, r.eventTitle);
     const badge = clickableBadge(r.badgeId, r.badgeName);
-    // Ticket holders are attendees, not accounts: an email instead of a UID.
-    const attendee = r.targetName || r.targetEmail || '';
+    // Ticket holders are attendees, not accounts: an email instead of a UID. A
+    // walk-in may have neither.
+    const attendee = r.targetName || r.targetEmail || (isEnglish ? 'a walk-in guest' : '一位现场来宾');
     const code = r.code ? <> <span className="record-code">{r.code}</span></> : null;
 
     switch (r.type) {
@@ -368,6 +369,13 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>imported attendees for {event} ({added} added, {replaced} replaced)</>
                 : <>导入了 {event} 的参加者（新增 {added}，替换 {replaced}）</>;
+        }
+        case 'ticket-walk-in': {
+            const count = r.ticketCount ?? 0;
+            return isEnglish
+                ? <>added
+                    walk-in {attendee} to {event} with {count} ticket{count === 1 ? '' : 's'}{r.checkedIn ? ', checked in' : ''}</>
+                : <>在 {event} 现场登记了 {attendee}（{count} 张门票{r.checkedIn ? '，已签到' : ''}）</>;
         }
         case 'ticket-redeem':
             return isEnglish

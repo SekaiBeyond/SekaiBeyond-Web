@@ -55,6 +55,7 @@ export type RecordType =
     | "upcoming-event-unpublish"
     | "upcoming-event-email-template-update"
     | "ticket-import"
+    | "ticket-walk-in"
     | "ticket-redeem"
     | "ticket-void"
     | "ticket-unvoid"
@@ -147,6 +148,9 @@ export interface RecordFields {
     addedCount?: number;
     replacedCount?: number;
     sentCount?: number;
+    /** A walk-in's tickets, and whether they were checked in as they were added. */
+    ticketCount?: number;
+    checkedIn?: boolean;
 }
 
 /** Where a new record goes. A fixed `id` makes a retried write land on the same record. */

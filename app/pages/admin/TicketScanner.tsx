@@ -337,7 +337,7 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
         return (
             <div className={`admin-tickets-scan-banner admin-tickets-scan-success${leavingClass}`}>
                 <strong>{isEnglish ? '✓ Redeemed' : '✓ 验证成功'}</strong>
-                <div>{status.attendeeName || status.attendeeEmail} <span
+                <div>{status.attendeeName || status.attendeeEmail || (isEnglish ? 'Walk-in guest' : '现场来宾')} <span
                     className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{ticketTypeLabel(status.ticketType, isEnglish)}</span>
                 </div>
                 {status.attendeeName && <div className="admin-user-email">{status.attendeeEmail}</div>}
@@ -354,7 +354,7 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
         return (
             <div className={`admin-tickets-scan-banner admin-tickets-scan-already${leavingClass}`}>
                 <strong>{isEnglish ? '! Already redeemed' : '! 此门票已验证'}</strong>
-                <div>{status.attendeeName || status.attendeeEmail} <span
+                <div>{status.attendeeName || status.attendeeEmail || (isEnglish ? 'Walk-in guest' : '现场来宾')} <span
                     className={`admin-tickets-tag admin-tickets-tag-type-${status.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{ticketTypeLabel(status.ticketType, isEnglish)}</span>
                 </div>
                 {status.attendeeName && <div className="admin-user-email">{status.attendeeEmail}</div>}
