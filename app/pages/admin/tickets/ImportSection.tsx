@@ -226,7 +226,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         }
     };
 
-    const canImport = !readOnly && !importing && rows.length > 0 && errors.filter(e => e.row === 0).length === 0 && !!emailCol && !!nameCol;
+    const canImport = !readOnly && !importing && rows.length > 0 && errors.filter(e => e.row === 0).length === 0 && !!emailCol;
 
     return (
         <div className="admin-tickets-import">
@@ -270,7 +270,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                                 disabled={readOnly || busy}
                                 style={MAPPING_SELECT_STYLE}
                             >
-                                <option value="">-- {isEnglish ? 'Select' : '选择'} --</option>
+                                <option value="">-- {isEnglish ? 'Select (Optional)' : '选择（可选）'} --</option>
                                 {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
                         </label>

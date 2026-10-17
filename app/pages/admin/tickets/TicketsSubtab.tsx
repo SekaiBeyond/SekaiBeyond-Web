@@ -275,8 +275,8 @@ export function TicketsSubtab({
     const deleteAttendeeAction = async (a: AttendeeData) => {
         if (readOnly) return;
         const ok = window.confirm(isEnglish
-            ? `Remove ${a.name} (${a.email}) and void all ${a.ticketCount} ticket(s)?`
-            : `移除 ${a.name}（${a.email}）并作废全部 ${a.ticketCount} 张门票？`);
+            ? `Remove ${a.name ? `${a.name} (${a.email})` : a.email} and void all ${a.ticketCount} ticket(s)?`
+            : `移除 ${a.name ? `${a.name}（${a.email}）` : a.email} 并作废全部 ${a.ticketCount} 张门票？`);
         if (!ok) return;
         try {
             await callDeleteEventAttendee({eventId, attendeeId: a.id});

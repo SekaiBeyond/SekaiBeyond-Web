@@ -289,8 +289,8 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         }
         const r = row as Record<string, unknown>;
         const email = validateEmail(r.email, "email");
-        const name = sanitizeDisplayText(validateStr(r.name, "name", 100, true));
-        if (!name) throw new HttpsError("invalid-argument", "name is required.");
+        // Optional: a ticket only needs an email to reach someone.
+        const name = sanitizeDisplayText(validateStr(r.name, "name", 100));
         const ticketCount = validateTicketCount(r.ticketCount);
         const type = validateTicketType(r.type);
 
@@ -354,7 +354,6 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
             replacedCount++;
             const dataToUpdate: any = {
                 email: row.email,
-                name: row.name,
                 ticketCount: row.ticketCount,
                 tickets,
                 ticketIds,
@@ -362,6 +361,8 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
                 emailSentAt: null,
                 updatedAt: customDate || now,
             };
+            // A blank name keeps the one on file.
+            if (row.name) dataToUpdate.name = row.name;
             if (customDate) dataToUpdate.createdAt = customDate;
             ops.push(b => b.set(existing.ref, dataToUpdate, {merge: true}));
         } else {
@@ -944,8 +945,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
     };
     const eventId = validateDocId(input.eventId, "eventId");
     const attendeeId = validateDocId(input.attendeeId, "attendeeId");
-    const name = sanitizeDisplayText(validateStr(input.name, "name", 100, true));
-    if (!name) throw new HttpsError("invalid-argument", "name is required.");
+    const name = sanitizeDisplayText(validateStr(input.name, "name", 100));
     const ticketCount = validateTicketCount(input.ticketCount);
     const type = validateTicketType(input.type);
 
@@ -1330,12 +1330,15 @@ export const sendTicketEmails = onCall(
         for (const item of sendableTargets) {
             const {target, data, tickets, queued} = item;
             const ticketBlock = renderTicketQrBlock(tickets, eventId);
+            // The name is optional, so "Hi {{attendeeName}}," falls back to the
+            // address rather than reading "Hi ,".
+            const attendeeName = data.name || data.email || "";
 
             // Strip control characters so a newline in eventTitle or
             // attendeeName can't inject headers.
             const renderedSubject = renderTemplate(template.subject, {
                 attendeeEmail: data.email ?? "",
-                attendeeName: data.name ?? "",
+                attendeeName,
                 eventTitle, eventTitleCn,
                 eventDate: eventDateEn,
                 emailHeaderBg,
@@ -1345,7 +1348,7 @@ export const sendTicketEmails = onCall(
             }, false).replace(/[\x00-\x1F\x7F]+/g, " ").trim();
             const html = renderTemplate(template.bodyHtml, {
                 attendeeEmail: data.email ?? "",
-                attendeeName: data.name ?? "",
+                attendeeName,
                 eventTitle, eventTitleCn,
                 eventDate: eventDateEn,
                 emailHeaderBg,

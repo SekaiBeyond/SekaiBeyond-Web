@@ -53,7 +53,8 @@ export function AttendeeModal({
     const parsedCount = parseInt(ticketCount, 10);
 
     const emailValid = EMAIL_RE.test(trimmedEmail);
-    const nameValid = trimmedName.length > 0 && trimmedName.length <= 100;
+    // Optional: a ticket only needs an email to reach someone.
+    const nameValid = trimmedName.length <= 100;
     const countValid = Number.isInteger(parsedCount) && parsedCount >= 1 && parsedCount <= 50;
 
     // Edit mode: only enable Save once something actually changed.
@@ -241,7 +242,7 @@ export function AttendeeModal({
                 </label>
 
                 <label className="admin-tickets-template-field">
-                    <span>{isEnglish ? 'Name' : '姓名'}</span>
+                    <span>{isEnglish ? 'Name (optional)' : '姓名（可选）'}</span>
                     <input
                         type="text"
                         className="admin-input"
@@ -284,8 +285,8 @@ export function AttendeeModal({
                 {duplicate && (
                     <p className="admin-helper-text admin-tickets-edit-warning">
                         {isEnglish
-                            ? `An attendee with this email already exists (${duplicate.name}, ${duplicate.ticketCount} ticket${duplicate.ticketCount === 1 ? '' : 's'}). Saving will re-issue their tickets and reset the email-sent status.`
-                            : `该邮箱已存在参加者（${duplicate.name}，${duplicate.ticketCount} 张门票）。保存将重新签发其门票并重置邮件发送状态。`}
+                            ? `An attendee with this email already exists (${duplicate.name ? `${duplicate.name}, ` : ''}${duplicate.ticketCount} ticket${duplicate.ticketCount === 1 ? '' : 's'}). Saving will re-issue their tickets and reset the email-sent status.`
+                            : `该邮箱已存在参加者（${duplicate.name ? `${duplicate.name}，` : ''}${duplicate.ticketCount} 张门票）。保存将重新签发其门票并重置邮件发送状态。`}
                     </p>
                 )}
 

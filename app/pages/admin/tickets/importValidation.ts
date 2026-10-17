@@ -116,14 +116,14 @@ export const validateRows = (
     const errs: ParseError[] = [];
     const seen = new Map<string, number>();
 
-    if (!emailKey || !nameKey) {
+    if (!emailKey) {
         return {
             rows: [],
             errors: [{
                 row: 0,
                 message: isEnglish
-                    ? 'Please select columns for Email and Name.'
-                    : '请选择用于邮箱和姓名的列。',
+                    ? 'Please select a column for Email.'
+                    : '请选择用于邮箱的列。',
             }],
         };
     }
@@ -131,7 +131,8 @@ export const validateRows = (
     records.forEach((row, i) => {
         const rowNum = i + 2;
         const email = (row[emailKey] ?? '').trim().toLowerCase();
-        const name = (row[nameKey] ?? '').trim();
+        // Optional: a ticket only needs an email to reach someone.
+        const name = nameKey ? (row[nameKey] ?? '').trim() : '';
         const countRaw = countKey ? (row[countKey] ?? '').trim() : '';
         const typeRaw = typeKey ? (row[typeKey] ?? '') : '';
         const timestampRaw = (timestampKey ? (row[timestampKey] ?? '').trim() : '');
@@ -142,13 +143,6 @@ export const validateRows = (
             errs.push({
                 row: rowNum,
                 message: isEnglish ? `Invalid email: "${email}"` : `邮箱无效："${email}"`,
-            });
-            return;
-        }
-        if (!name) {
-            errs.push({
-                row: rowNum,
-                message: isEnglish ? 'Name is empty.' : '姓名为空。',
             });
             return;
         }
@@ -196,7 +190,8 @@ export const validateRows = (
         const existing = existingEmails.get(email);
         parsedRows.push({
             email,
-            name,
+            // A blank name keeps the one on file, as the server does.
+            name: name || existing?.name || '',
             ticketCount: count,
             type,
             timestamp,
