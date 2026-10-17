@@ -157,18 +157,25 @@ export function AttendeeModal({
         }
         setSaving(true);
         try {
+            // Re-issue only what was confirmed above. A duplicate this list didn't
+            // know about, added elsewhere since it loaded, is skipped.
             const result = await callImportEventAttendees({
                 eventId,
                 attendees: [{email: trimmedEmail, name: trimmedName, ticketCount: parsedCount, type}],
+                onDuplicate: duplicate ? 'override' : 'skip',
             });
-            const {added, replaced} = result.data;
+            const {added, replaced, skipped} = result.data;
             showToast(
                 added > 0
                     ? (isEnglish ? 'Attendee added.' : '参加者已添加。')
                     : replaced > 0
                         ? (isEnglish ? 'Attendee updated — tickets re-issued.' : '参加者已更新，门票已重新签发。')
-                        : (isEnglish ? 'No changes.' : '无更改。'),
-                replaced > 0 ? 'warning' : 'success',
+                        : skipped > 0
+                            ? (isEnglish
+                                ? 'This email was added since the list loaded, so nothing changed. The list is refreshed.'
+                                : '该邮箱在列表加载后已被添加，未作更改。列表已刷新。')
+                            : (isEnglish ? 'No changes.' : '无更改。'),
+                added > 0 ? 'success' : 'warning',
             );
             onAdded?.();
             onClose();
