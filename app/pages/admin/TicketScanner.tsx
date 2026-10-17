@@ -16,7 +16,12 @@ interface ScannedTicket {
     hometown: boolean;
     /** A HomeTown ticket missing from the imported list, let in with a warning. */
     unlisted: boolean;
+    /** A HomeTown ticket left out of the latest export: refunded or transferred, most likely. */
+    missingFromHometown: boolean;
 }
+
+/** A result the operator should read before moving on, though the ticket got in. */
+const hasWarning = (ticket: ScannedTicket): boolean => ticket.unlisted || ticket.missingFromHometown;
 
 type ScanStatus =
     | {kind: 'idle'}
@@ -65,11 +70,11 @@ const CLEAR_AFTER_MS: Record<ShownStatus['kind'], number> = {
 const FADE_MS = 300;
 
 /**
- * How long a result stays up. An unlisted HomeTown ticket got in, but its
+ * How long a result stays up. A HomeTown ticket with a warning got in, but the
  * warning is there to be read, so it stays up as long as a problem.
  */
 const showFor = (status: ShownStatus): number =>
-    status.kind === 'success' && status.unlisted ? CLEAR_AFTER_MS.already : CLEAR_AFTER_MS[status.kind];
+    status.kind === 'success' && hasWarning(status) ? CLEAR_AFTER_MS.already : CLEAR_AFTER_MS[status.kind];
 
 interface TicketScannerProps {
     eventId: string;
@@ -118,7 +123,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
         if (cached) {
             const {until: _until, ...shown} = cached;
             setStatus({kind: 'success', ...shown, shownAt: now});
-            cue(cached.unlisted ? 'issue' : 'success', ticketId);
+            cue(hasWarning(cached) ? 'issue' : 'success', ticketId);
             return;
         }
 
@@ -135,6 +140,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                 ticketType: d.ticketType ?? 'normal',
                 hometown: !!d.hometown,
                 unlisted: !!d.unlisted,
+                missingFromHometown: !!d.missingFromHometown,
             };
             if (d.alreadyRedeemed) {
                 setStatus({
@@ -149,7 +155,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                 const successData = {...scanned, userCheckedIn: !!d.userCheckedIn};
                 setStatus({kind: 'success', ...successData, shownAt: Date.now()});
                 // Let in, but the operator should look up at the warning.
-                cue(scanned.unlisted ? 'issue' : 'success', ticketId);
+                cue(hasWarning(scanned) ? 'issue' : 'success', ticketId);
 
                 // The server says how much of the window is left, as a duration so
                 // this phone's clock doesn't matter. Without it, the entry expires
@@ -370,6 +376,12 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
                         {isEnglish
                             ? 'Bought after the last import, or not a real ticket. It\'s recorded now, so a second scan of it will be refused.'
                             : '可能是上次导入后购买的，也可能不是真票。此票现已记录，再次扫描将被拒绝。'}
+                    </div>
+                ) : status.missingFromHometown ? (
+                    <div className="admin-helper-text admin-tickets-edit-warning">
+                        {isEnglish
+                            ? 'Not in the latest HomeTown export: it may have been refunded or transferred. Ask to see their HomeTown ticket email if in doubt.'
+                            : '不在最新的 HomeTown 导出中：可能已退款或转让。如有疑问，请查看其 HomeTown 购票邮件。'}
                     </div>
                 ) : (
                     <div className="admin-helper-text">

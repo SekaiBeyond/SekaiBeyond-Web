@@ -155,6 +155,12 @@ export interface RecordFields {
     checkedIn?: boolean;
     /** HomeTown tickets admitted unlisted at the door that an import then found. */
     confirmedCount?: number;
+    /**
+     * A HomeTown import that updated existing tickets: how many changed, and how
+     * many listed ones the file left out.
+     */
+    updatedCount?: number;
+    missingCount?: number;
     /** Whether unlisted HomeTown tickets are now admitted. */
     enabled?: boolean;
 }

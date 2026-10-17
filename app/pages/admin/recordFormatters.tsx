@@ -373,9 +373,13 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         case 'hometown-import': {
             const added = r.addedCount ?? 0;
             const confirmed = r.confirmedCount ?? 0;
+            // Counted only by an import that updated existing tickets.
+            const updating = r.updatedCount !== undefined;
             return isEnglish
-                ? <>imported HomeTown tickets for {event} ({added} added, {confirmed} unlisted confirmed)</>
-                : <>导入了 {event} 的 HomeTown 门票（新增 {added}，确认未列入名单 {confirmed}）</>;
+                ? <>imported HomeTown tickets for {event} ({added} added, {confirmed} unlisted
+                    confirmed{updating && `, ${r.updatedCount} updated, ${r.missingCount ?? 0} not in the file`})</>
+                : <>导入了 {event} 的 HomeTown 门票（新增 {added}，确认未列入名单 {confirmed}{updating
+                    && `，更新 ${r.updatedCount}，不在文件中 ${r.missingCount ?? 0}`}）</>;
         }
         case 'hometown-admit-unlisted':
             return isEnglish

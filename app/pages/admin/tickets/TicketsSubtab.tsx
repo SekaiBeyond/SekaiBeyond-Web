@@ -28,7 +28,7 @@ import { StatsSection } from './StatsSection';
 import { TemplateSection } from './TemplateSection';
 import { attendeeLabel, buildAttendeeCsv, mapAttendeeDoc } from './helpers';
 import { useAccountLinks } from './useAccountLinks';
-import { type AttendeeData, type TicketData, type TicketsSection, type TicketType } from './types';
+import { type AttendeeData, type StatusFilter, type TicketData, type TicketsSection, type TicketType } from './types';
 
 interface TicketsSubtabProps {
     event: UpcomingEvent;
@@ -81,7 +81,7 @@ export function TicketsSubtab({
     const [search, setSearch] = useState('');
     const [filterUnsent, setFilterUnsent] = useState(false);
     const [ticketTypeFilter, setTicketTypeFilter] = useState<TicketType | 'all'>('all');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'redeemed' | 'unredeemed' | 'voided'>('all');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
     const [editingAttendee, setEditingAttendee] = useState<AttendeeData | null>(null);
     const [addingAttendee, setAddingAttendee] = useState(false);
@@ -138,7 +138,11 @@ export function TicketsSubtab({
                 const hasType = a.tickets.some(t => t.type === ticketTypeFilter);
                 if (!hasType) return false;
             }
-            if (statusFilter !== 'all') {
+            if (statusFilter === 'unlisted') {
+                if (!a.unlisted) return false;
+            } else if (statusFilter === 'missing') {
+                if (!a.missingFromHometown) return false;
+            } else if (statusFilter !== 'all') {
                 const hasStatus = a.tickets.some(t =>
                     statusFilter === 'redeemed'
                         ? t.redeemed
@@ -166,6 +170,7 @@ export function TicketsSubtab({
         let walkIns = 0;
         let hometown = 0;
         let unlisted = 0;
+        let missingFromHometown = 0;
 
         for (const a of attendees) {
             tickets += a.ticketCount;
@@ -181,6 +186,7 @@ export function TicketsSubtab({
             if (a.walkIn) walkIns++;
             if (a.hometown) hometown++;
             if (a.unlisted) unlisted++;
+            if (a.missingFromHometown) missingFromHometown++;
 
             // A walk-in without an email has nowhere to be sent, and HomeTown
             // sends its own.
@@ -192,7 +198,7 @@ export function TicketsSubtab({
         return {
             attendees: attendees.length,
             tickets, used, voided, unsent,
-            sendable, unsentSendable, walkIns, hometown, unlisted,
+            sendable, unsentSendable, walkIns, hometown, unlisted, missingFromHometown,
         };
     }, [attendees]);
 

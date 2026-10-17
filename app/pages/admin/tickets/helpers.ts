@@ -104,9 +104,15 @@ export const mapAttendeeDoc = (
         walkIn: data.walkIn === true,
         hometown: data.source === 'hometown',
         unlisted: data.unlisted === true,
+        missingFromHometown: data.missingFromHometown === true,
+        hometownSeenAt: tsToDate(data.hometownSeenAt),
         hometownOrderId: (data.hometownOrderId as string) ?? '',
     };
 };
+
+/** Where a HomeTown ticket stands against HomeTown's list, or '' for one of ours. */
+export const hometownStatus = (a: Pick<AttendeeData, 'hometown' | 'unlisted' | 'missingFromHometown'>) =>
+    !a.hometown ? '' : a.unlisted ? 'unlisted' : a.missingFromHometown ? 'missing' : 'listed';
 
 /** An attendee in a sentence: name and email, whichever one they gave, or neither. */
 export const attendeeLabel = (a: Pick<AttendeeData, 'name' | 'email'>, isEnglish: boolean): string => {
@@ -141,12 +147,12 @@ const csvDateTime = (d: Date | null): string => {
  * Every attendee, one row each. The email, name, count, type and createdAt
  * headers are ones the import picks up, so the file imports into another event,
  * all but the walk-ins without an email. HomeTown rows carry their ticket number,
- * which that import can't keep.
+ * which that import can't keep, and where they stand against HomeTown's list.
  */
 export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
     buildCsv(
         ['email', 'name', 'ticketCount', 'type', 'redeemed', 'voided', 'emailSent', 'emailSentAt', 'createdAt', 'walkIn',
-            'hometownTicket'],
+            'hometownTicket', 'hometownStatus'],
         attendees.map(a => {
             const {used, voided} = ticketStatusCounts(a);
             return [
@@ -162,6 +168,7 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
                 csvDateTime(a.createdAt),
                 a.walkIn ? 'yes' : 'no',
                 a.hometown ? (a.ticketIds[0] ?? '') : '',
+                hometownStatus(a),
             ];
         }),
     );

@@ -56,6 +56,10 @@ export interface AttendeeData {
     hometown: boolean;
     /** A HomeTown ticket let in at the door while missing from the imported list. */
     unlisted: boolean;
+    /** A listed HomeTown ticket left out of a later export: refunded or transferred, most likely. */
+    missingFromHometown: boolean;
+    /** When it last appeared in an imported export. */
+    hometownSeenAt: Date | null;
     hometownOrderId: string;
 }
 
@@ -94,6 +98,13 @@ export interface AttendeeTotals {
     walkIns: number;
     hometown: number;
     unlisted: number;
+    missingFromHometown: number;
 }
+
+/**
+ * What the attendee list's status filter shows: tickets by their state, or
+ * HomeTown tickets the list hasn't confirmed.
+ */
+export type StatusFilter = 'all' | 'redeemed' | 'unredeemed' | 'voided' | 'unlisted' | 'missing';
 
 export type TicketsSection = 'scan' | 'attendees' | 'stats' | 'import' | 'template' | 'send';

@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ShowToast } from '../utils';
 import { anonymousAttendeeName, ticketStatusCounts } from './helpers';
-import { type AttendeeData, type AttendeeTotals, TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
+import {
+    type AttendeeData,
+    type AttendeeTotals,
+    type StatusFilter,
+    TICKET_TYPES,
+    type TicketType,
+    ticketTypeLabel,
+} from './types';
 import type { AccountLink } from './useAccountLinks';
 
 interface AttendeesSectionProps {
@@ -21,8 +28,8 @@ interface AttendeesSectionProps {
     onFilterUnsentChange: (v: boolean) => void;
     ticketTypeFilter: TicketType | 'all';
     onTicketTypeFilterChange: (v: TicketType | 'all') => void;
-    statusFilter: 'all' | 'redeemed' | 'unredeemed' | 'voided';
-    onStatusFilterChange: (v: 'all' | 'redeemed' | 'unredeemed' | 'voided') => void;
+    statusFilter: StatusFilter;
+    onStatusFilterChange: (v: StatusFilter) => void;
     readOnly: boolean;
     /** The event is on, so Add takes walk-ins. */
     walkIn: boolean;
@@ -129,9 +136,15 @@ export function AttendeesSection({
                 {totals.hometown > 0 && (
                     <span>
                         <strong>{totals.hometown}</strong> HomeTown
-                        {totals.unlisted > 0 && (isEnglish
-                            ? ` (${totals.unlisted} not on list)`
-                            : `（${totals.unlisted} 张不在名单中）`)}
+                        {(totals.unlisted > 0 || totals.missingFromHometown > 0) && (isEnglish
+                            ? ` (${[
+                                totals.unlisted > 0 && `${totals.unlisted} not on list`,
+                                totals.missingFromHometown > 0 && `${totals.missingFromHometown} not in latest export`,
+                            ].filter(Boolean).join(', ')})`
+                            : `（${[
+                                totals.unlisted > 0 && `${totals.unlisted} 张不在名单中`,
+                                totals.missingFromHometown > 0 && `${totals.missingFromHometown} 张不在最新导出中`,
+                            ].filter(Boolean).join('，')}）`)}
                     </span>
                 )}
                 <button
@@ -186,12 +199,21 @@ export function AttendeesSection({
                     className="admin-input"
                     style={{width: 'auto', minWidth: '120px'}}
                     value={statusFilter}
-                    onChange={(e) => onStatusFilterChange(e.target.value as 'all' | 'redeemed' | 'unredeemed' | 'voided')}
+                    onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}
                 >
                     <option value="all">{isEnglish ? 'All Statuses' : '所有状态'}</option>
                     <option value="redeemed">{isEnglish ? 'Redeemed' : '已验证'}</option>
                     <option value="unredeemed">{isEnglish ? 'Not Redeemed' : '未验证'}</option>
                     <option value="voided">{isEnglish ? 'Voided' : '已作废'}</option>
+                    {/* The HomeTown tickets to review: likely fakes, and likely refunds. */}
+                    {totals.hometown > 0 && (
+                        <>
+                            <option value="unlisted">{isEnglish ? 'HomeTown: not on list' : 'HomeTown：不在名单中'}</option>
+                            <option value="missing">
+                                {isEnglish ? 'HomeTown: not in latest export' : 'HomeTown：不在最新导出中'}
+                            </option>
+                        </>
+                    )}
                 </select>
                 <label className="admin-checkbox-label admin-tickets-filter-checkbox">
                     <input
@@ -259,6 +281,11 @@ export function AttendeesSection({
                                         {isEnglish ? 'Not on list' : '不在名单中'}
                                     </span>
                                 )}
+                                {a.missingFromHometown && (
+                                    <span className="admin-tickets-tag admin-tickets-tag-missing">
+                                        {isEnglish ? 'Not in latest export' : '不在最新导出中'}
+                                    </span>
+                                )}
                                 {/* An unlisted HomeTown ticket's type isn't known until an import lists it. */}
                                 {!a.unlisted && (
                                     <span
@@ -324,6 +351,13 @@ export function AttendeesSection({
                                             : (isEnglish
                                                 ? `Bought through HomeTown${a.hometownOrderId ? `, order #${a.hometownOrderId}` : ''}. HomeTown sent the ticket, so no email is sent from here.`
                                                 : `通过 HomeTown 购买${a.hometownOrderId ? `，订单号 ${a.hometownOrderId}` : ''}。门票由 HomeTown 发送，此处不发送邮件。`)}
+                                    </p>
+                                )}
+                                {a.missingFromHometown && (
+                                    <p className="admin-helper-text admin-tickets-edit-warning">
+                                        {isEnglish
+                                            ? `Not in the latest HomeTown export${a.hometownSeenAt ? ` (last in one ${a.hometownSeenAt.toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})})` : ''}. It was probably refunded or transferred; the ticket still works until it's voided here.`
+                                            : `不在最新的 HomeTown 导出中${a.hometownSeenAt ? `（最后出现于 ${a.hometownSeenAt.toLocaleString('zh-CN', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})} 的导出）` : ''}。可能已退款或转让；在此作废前门票仍然有效。`}
                                     </p>
                                 )}
                                 <p className="admin-helper-text admin-tickets-attendee-account">

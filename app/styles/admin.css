@@ -2594,6 +2594,16 @@
     color: #a15c00;
 }
 
+/* Left out of a later HomeTown export: refunded or transferred, most likely. */
+.admin-tickets-tag-missing {
+    background: rgba(224, 85, 85, 0.12);
+    color: #8a1f33;
+}
+
+.admin-tickets-hometown-update {
+    font-weight: 600;
+}
+
 .admin-tickets-hometown h3 {
     margin: 0;
     font-size: 18px;
