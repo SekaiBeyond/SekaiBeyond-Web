@@ -159,7 +159,8 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
                 a.email,
                 a.name,
                 String(a.ticketCount),
-                ticketTypeLabel(a.tickets[0]?.type || 'normal', true),
+                // Unknown for an unlisted HomeTown ticket until an import lists it.
+                a.unlisted ? '' : ticketTypeLabel(a.tickets[0]?.type || 'normal', true),
                 String(used),
                 String(voided),
                 // Never "yes" without an address, or for HomeTown, which sends its own.
