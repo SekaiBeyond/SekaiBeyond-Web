@@ -99,6 +99,7 @@ export const ClaimPage = () => {
                         setState('ticket-voided');
                         break;
                     case 'invalid':
+                    case 'hometown-unlisted':
                         setState('ticket-invalid');
                         break;
                     case 'not-authorized':
@@ -277,7 +278,9 @@ export const ClaimPage = () => {
                         <p>
                             <strong>{ticketInfo.attendeeName || ticketInfo.attendeeEmail || (isEnglish ? 'Walk-in guest' : '现场来宾')}</strong>
                         </p>
-                        {ticketInfo.attendeeName && <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>}
+                        {ticketInfo.attendeeName && ticketInfo.attendeeEmail && (
+                            <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>
+                        )}
                         <p className="admin-helper-text">
                             {ticketInfo.userCheckedIn
                                 ? (isEnglish ? 'Attendee auto-checked in.' : '参加者已自动签到。')
@@ -295,7 +298,9 @@ export const ClaimPage = () => {
                         <p>
                             <strong>{ticketInfo.attendeeName || ticketInfo.attendeeEmail || (isEnglish ? 'Walk-in guest' : '现场来宾')}</strong>
                         </p>
-                        {ticketInfo.attendeeName && <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>}
+                        {ticketInfo.attendeeName && ticketInfo.attendeeEmail && (
+                            <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>
+                        )}
                         <p className="admin-helper-text">
                             {isEnglish ? 'Redeemed by ' : '验证人：'}
                             {ticketInfo.redeemedBy || (isEnglish ? 'unknown' : '未知')}

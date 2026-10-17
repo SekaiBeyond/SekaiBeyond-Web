@@ -2,7 +2,7 @@ import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportHometownTickets, callSetHometownAdmitUnlisted } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
-import { type HometownTicketRow, hometownAttendeeId, parseHometownFile } from './hometown';
+import { hometownAttendeeId, type HometownTicketRow, parseHometownFile } from './hometown';
 import { type AttendeeData, type ParseError, TICKET_TYPES, ticketTypeLabel } from './types';
 
 /** Tickets per import call, well under the server's row cap. */
@@ -278,8 +278,8 @@ export function HometownSection({
                         )}
                         <span>
                             <strong>{preview.unchanged}</strong> {updateExisting
-                                ? (isEnglish ? 'unchanged' : '未变')
-                                : (isEnglish ? 'already here' : '已存在')}
+                            ? (isEnglish ? 'unchanged' : '未变')
+                            : (isEnglish ? 'already here' : '已存在')}
                         </span>
                         {preview.confirmed > 0 && (
                             <span>

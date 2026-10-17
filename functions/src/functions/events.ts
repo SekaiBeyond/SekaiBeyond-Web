@@ -81,8 +81,8 @@ export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) =>
 });
 
 /**
- * Deletes an event's attendees and email template, which Firestore leaves
- * behind with the event.
+ * Deletes an event's attendees, email template and settings, which Firestore
+ * leaves behind with the event.
  */
 async function deleteEventSubcollections(eventRef: FirebaseFirestore.DocumentReference): Promise<void> {
     const snaps = await Promise.all(["attendees", "emailTemplate", "settings"].map(sub => eventRef.collection(sub).get()));

@@ -264,7 +264,6 @@ export const callImportHometownTickets = (data: {
     missing: number;
     /** Flagged tickets back in this file. */
     restored: number;
-    total: number;
 }>(getFunctions(), 'importHometownTickets')(data);
 
 export const callSetHometownAdmitUnlisted = (data: {eventId: string; enabled: boolean}) =>

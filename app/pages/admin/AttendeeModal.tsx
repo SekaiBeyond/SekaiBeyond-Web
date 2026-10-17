@@ -101,12 +101,16 @@ export function AttendeeModal({
     // that person may just need finding under Attendees.
     const duplicate = useMemo(() => {
         if (attendee || !emailValid) return null;
-        return existingAttendees.find(a => a.email.toLowerCase() === trimmedEmail && (walkIn || !a.hometown))
-            ?? null;
+        const matches = existingAttendees.filter(a => a.email.toLowerCase() === trimmedEmail && (walkIn || !a.hometown));
+        if (matches.length === 0) return null;
+        return {
+            name: matches.find(a => a.name)?.name ?? '',
+            ticketCount: matches.reduce((sum, a) => sum + a.ticketCount, 0),
+        };
     }, [attendee, existingAttendees, trimmedEmail, emailValid, walkIn]);
 
     // A HomeTown ticket keeps its number, so only its name can change here; its
-    // type changes from the ticket list.
+    // type changes from the ticket list once an import lists it.
     const hometownLocked = !!attendee?.hometown;
 
     // A walk-in's email can't already be on the list: re-issuing would void the
@@ -351,21 +355,23 @@ export function AttendeeModal({
                     />
                 </label>
 
-                <label className="admin-tickets-template-field">
-                    <span>{isEnglish ? 'Ticket Type' : '门票类型'}</span>
-                    <select
-                        className="admin-input"
-                        value={type}
-                        onChange={(e) => setType(e.target.value as TicketType)}
-                        disabled={saving || hometownLocked}
-                    >
-                        {TICKET_TYPES.map(t => (
-                            <option key={t.value} value={t.value}>
-                                {isEnglish ? t.labelEn : t.labelCn}
-                            </option>
-                        ))}
-                    </select>
-                </label>
+                {!attendee?.unlisted && (
+                    <label className="admin-tickets-template-field">
+                        <span>{isEnglish ? 'Ticket Type' : '门票类型'}</span>
+                        <select
+                            className="admin-input"
+                            value={type}
+                            onChange={(e) => setType(e.target.value as TicketType)}
+                            disabled={saving || hometownLocked}
+                        >
+                            {TICKET_TYPES.map(t => (
+                                <option key={t.value} value={t.value}>
+                                    {isEnglish ? t.labelEn : t.labelCn}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
 
                 {walkIn && (
                     <label className="admin-checkbox-label admin-tickets-walk-in-check">
@@ -401,9 +407,13 @@ export function AttendeeModal({
 
                 {hometownLocked && (
                     <p className="admin-helper-text">
-                        {isEnglish
-                            ? 'A HomeTown ticket keeps its HomeTown number, so it can\'t be re-issued. Change its type from the ticket list.'
-                            : 'HomeTown 门票沿用其 HomeTown 门票号，无法重新签发。可在门票列表中修改类型。'}
+                        {attendee?.unlisted
+                            ? (isEnglish
+                                ? 'A HomeTown ticket keeps its HomeTown number, so it can\'t be re-issued. An import that lists it fills in its type.'
+                                : 'HomeTown 门票沿用其 HomeTown 门票号，无法重新签发。之后的导入若包含此票，会补上其类型。')
+                            : (isEnglish
+                                ? 'A HomeTown ticket keeps its HomeTown number, so it can\'t be re-issued. Change its type from the ticket list.'
+                                : 'HomeTown 门票沿用其 HomeTown 门票号，无法重新签发。可在门票列表中修改类型。')}
                     </p>
                 )}
 

@@ -370,7 +370,9 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
                         : (isEnglish ? '✓ Redeemed' : '✓ 验证成功')}
                 </strong>
                 <div>{holderName(status, isEnglish)} <TicketTags ticket={status} isEnglish={isEnglish}/></div>
-                {status.attendeeName && <div className="admin-user-email">{status.attendeeEmail}</div>}
+                {status.attendeeName && status.attendeeEmail && (
+                    <div className="admin-user-email">{status.attendeeEmail}</div>
+                )}
                 {status.unlisted ? (
                     <div className="admin-helper-text admin-tickets-edit-warning">
                         {isEnglish
@@ -399,7 +401,9 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
             <div className={`admin-tickets-scan-banner admin-tickets-scan-already${leavingClass}`}>
                 <strong>{isEnglish ? '! Already redeemed' : '! 此门票已验证'}</strong>
                 <div>{holderName(status, isEnglish)} <TicketTags ticket={status} isEnglish={isEnglish}/></div>
-                {status.attendeeName && <div className="admin-user-email">{status.attendeeEmail}</div>}
+                {status.attendeeName && status.attendeeEmail && (
+                    <div className="admin-user-email">{status.attendeeEmail}</div>
+                )}
                 <div className="admin-helper-text">
                     {isEnglish ? 'Redeemed by ' : '验证人：'}
                     {status.redeemedBy || (isEnglish ? 'unknown' : '未知')}

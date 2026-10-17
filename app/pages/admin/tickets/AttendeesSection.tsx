@@ -208,7 +208,8 @@ export function AttendeesSection({
                     {/* The HomeTown tickets to review: likely fakes, and likely refunds. */}
                     {totals.hometown > 0 && (
                         <>
-                            <option value="unlisted">{isEnglish ? 'HomeTown: not on list' : 'HomeTown：不在名单中'}</option>
+                            <option
+                                value="unlisted">{isEnglish ? 'HomeTown: not on list' : 'HomeTown：不在名单中'}</option>
                             <option value="missing">
                                 {isEnglish ? 'HomeTown: not in latest export' : 'HomeTown：不在最新导出中'}
                             </option>
@@ -313,12 +314,12 @@ export function AttendeesSection({
                                 )}
                                 {/* Nothing to send without an address, and HomeTown sends its own. */}
                                 {a.email && !a.hometown && <span className={
-                                                      a.emailScheduled
-                                                          ? 'admin-tickets-tag admin-tickets-tag-queued'
-                                                          : a.emailSent
-                                                              ? 'admin-tickets-tag admin-tickets-tag-sent'
-                                                              : 'admin-tickets-tag admin-tickets-tag-unsent'
-                                                  }>
+                                                                     a.emailScheduled
+                                                                         ? 'admin-tickets-tag admin-tickets-tag-queued'
+                                                                         : a.emailSent
+                                                                             ? 'admin-tickets-tag admin-tickets-tag-sent'
+                                                                             : 'admin-tickets-tag admin-tickets-tag-unsent'
+                                                                 }>
                                     {a.emailScheduled
                                         ? (isEnglish ? 'Queued' : '待发送')
                                         : a.emailSent
@@ -356,8 +357,18 @@ export function AttendeesSection({
                                 {a.missingFromHometown && (
                                     <p className="admin-helper-text admin-tickets-edit-warning">
                                         {isEnglish
-                                            ? `Not in the latest HomeTown export${a.hometownSeenAt ? ` (last seen in an import on ${a.hometownSeenAt.toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})})` : ''}. It was probably refunded or transferred; the ticket still works until it's voided here.`
-                                            : `不在最新的 HomeTown 导出中${a.hometownSeenAt ? `（最后出现于 ${a.hometownSeenAt.toLocaleString('zh-CN', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})} 的导出）` : ''}。可能已退款或转让；在此作废前门票仍然有效。`}
+                                            ? `Not in the latest HomeTown export${a.hometownSeenAt ? ` (last seen in an import on ${a.hometownSeenAt.toLocaleString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: 'numeric',
+                                                minute: '2-digit'
+                                            })})` : ''}. It was probably refunded or transferred; the ticket still works until it's voided here.`
+                                            : `不在最新的 HomeTown 导出中${a.hometownSeenAt ? `（最后出现于 ${a.hometownSeenAt.toLocaleString('zh-CN', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })} 的导出）` : ''}。可能已退款或转让；在此作废前门票仍然有效。`}
                                     </p>
                                 )}
                                 <p className="admin-helper-text admin-tickets-attendee-account">
@@ -451,7 +462,7 @@ export function AttendeesSection({
                                                     </button>
                                                 </td>
                                                 <td>
-                                                    {readOnly ? (
+                                                    {a.unlisted ? '—' : readOnly ? (
                                                         <span
                                                             className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}>
                                                             {ticketTypeLabel(t.type || 'normal', isEnglish)}

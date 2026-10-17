@@ -114,17 +114,22 @@ export const mapAttendeeDoc = (
 export const hometownStatus = (a: Pick<AttendeeData, 'hometown' | 'unlisted' | 'missingFromHometown'>) =>
     !a.hometown ? '' : a.unlisted ? 'unlisted' : a.missingFromHometown ? 'missing' : 'listed';
 
-/** An attendee in a sentence: name and email, whichever one they gave, or neither. */
-export const attendeeLabel = (a: Pick<AttendeeData, 'name' | 'email'>, isEnglish: boolean): string => {
-    if (a.name && a.email) return isEnglish ? `${a.name} (${a.email})` : `${a.name}（${a.email}）`;
-    return a.name || a.email || (isEnglish ? 'this walk-in guest' : '这位现场来宾');
-};
-
 /** What a nameless, emailless attendee is called: an unlisted HomeTown ticket by its number. */
 export const anonymousAttendeeName = (a: Pick<AttendeeData, 'hometown' | 'ticketIds'>, isEnglish: boolean): string =>
     a.hometown
         ? `HomeTown #${a.ticketIds[0] ?? ''}`
         : (isEnglish ? 'Walk-in guest' : '现场来宾');
+
+/** An attendee in a sentence: name and email, whichever one they gave, or neither. */
+export const attendeeLabel = (
+    a: Pick<AttendeeData, 'name' | 'email' | 'hometown' | 'ticketIds'>,
+    isEnglish: boolean,
+): string => {
+    if (a.name && a.email) return isEnglish ? `${a.name} (${a.email})` : `${a.name}（${a.email}）`;
+    return a.name || a.email || (a.hometown
+        ? `HomeTown #${a.ticketIds[0] ?? ''}`
+        : (isEnglish ? 'this walk-in guest' : '这位现场来宾'));
+};
 
 export const ticketStatusCounts = (a: AttendeeData) => {
     let used = 0;

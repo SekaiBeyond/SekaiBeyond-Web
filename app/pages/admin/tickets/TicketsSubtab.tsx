@@ -135,8 +135,8 @@ export function TicketsSubtab({
         return attendees.filter(a => {
             if (filterUnsent && a.emailSent) return false;
             if (ticketTypeFilter !== 'all') {
-                const hasType = a.tickets.some(t => t.type === ticketTypeFilter);
-                if (!hasType) return false;
+                // An unlisted HomeTown ticket's type isn't known yet.
+                if (a.unlisted || !a.tickets.some(t => t.type === ticketTypeFilter)) return false;
             }
             if (statusFilter === 'unlisted') {
                 if (!a.unlisted) return false;
@@ -201,6 +201,12 @@ export function TicketsSubtab({
             sendable, unsentSendable, walkIns, hometown, unlisted, missingFromHometown,
         };
     }, [attendees]);
+
+    useEffect(() => {
+        if (totals.hometown === 0 && (statusFilter === 'unlisted' || statusFilter === 'missing')) {
+            setStatusFilter('all');
+        }
+    }, [totals.hometown, statusFilter]);
 
     const visibleAttendees = useMemo(() => {
         return filteredAttendees.slice(0, displayCount);

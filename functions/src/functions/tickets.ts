@@ -639,6 +639,25 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
         });
     }
 
+    // Credits the buyer when an export supplies or changes the email on a
+    // ticket that was already scanned.
+    const creditScannedBuyer = async (
+        txn: FirebaseFirestore.Transaction,
+        email: string,
+        prevEmail: string,
+        tickets: NewTicket[],
+    ): Promise<boolean> => {
+        if (!email || email === prevEmail || !tickets.some(isScannedTicket)) return false;
+        const users = await txn.get(db.collection("users").where("email", "==", email).limit(1));
+        if (users.empty) return false;
+        const account = users.docs[0];
+        const attended: string[] = account.data().attendedEvents ?? [];
+        if (!attended.includes(eventId)) {
+            txn.update(account.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
+        }
+        return true;
+    };
+
     // Each its own transaction, since a door may be admitting the same ticket
     // right now and a blind write would undo that admission.
     const importRow = (row: HometownRow) => db.runTransaction(async (txn): Promise<HometownOutcome> => {
@@ -664,20 +683,8 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
         const data = snap.data()!;
         if (data.unlisted !== true) return "skipped";
 
-        // Admitted unlisted, so the scan credited nobody: credit the buyer now,
-        // as redeemTicket would have.
         const tickets = (data.tickets ?? []) as NewTicket[];
-        let account: FirebaseFirestore.QueryDocumentSnapshot | null = null;
-        if (row.email && tickets.some(isScannedTicket)) {
-            const users = await txn.get(db.collection("users").where("email", "==", row.email).limit(1));
-            if (!users.empty) account = users.docs[0];
-        }
-        if (account) {
-            const attended: string[] = account.data().attendedEvents ?? [];
-            if (!attended.includes(eventId)) {
-                txn.update(account.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
-            }
-        }
+        const credited = await creditScannedBuyer(txn, row.email, data.email ?? "", tickets);
         txn.update(ref, {
             email: row.email,
             name: row.name,
@@ -685,7 +692,7 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
             tickets: tickets.map(t => ({
                 ...t,
                 type: row.type,
-                ...(account && isScannedTicket(t) ? {checkedIn: true, checkedInAt: t.redeemedAt} : {}),
+                ...(credited && isScannedTicket(t) ? {checkedIn: true, checkedInAt: t.redeemedAt} : {}),
             })),
             unlisted: FieldValue.delete(),
             hometownSeenAt: seenAt,
@@ -700,11 +707,17 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
         const data = (await txn.get(ref)).data();
         // Removed since the read pass: leave it gone.
         if (!data) return "skipped";
+        const tickets = (data.tickets ?? []) as NewTicket[];
+        const credited = await creditScannedBuyer(txn, row.email, data.email ?? "", tickets);
         txn.update(ref, {
             email: row.email,
             name: row.name,
             hometownOrderId: row.orderId,
-            tickets: ((data.tickets ?? []) as NewTicket[]).map(t => ({...t, type: row.type})),
+            tickets: tickets.map(t => ({
+                ...t,
+                type: row.type,
+                ...(credited && isScannedTicket(t) ? {checkedIn: true, checkedInAt: t.redeemedAt} : {}),
+            })),
             hometownSeenAt: seenAt,
             missingFromHometown: FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp(),
@@ -760,7 +773,6 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
         skipped: rows.size - count("added") - count("confirmed") - count("updated"),
         missing: missingCount,
         restored: restoredCount,
-        total: rows.size,
     };
 });
 
@@ -847,8 +859,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
             .where("email", "==", email).get();
         if (attendeeSnap.empty) return null;
 
-        // Import dedupes by email, so this is one doc in practice; a hand-made
-        // duplicate still shows its tickets.
+        // One doc per HomeTown ticket, or per imported email.
         const tickets: HeldTicket[] = [];
         for (const doc of attendeeSnap.docs) {
             const rawTickets: unknown[] = Array.isArray(doc.data().tickets) ? doc.data().tickets : [];
@@ -1188,6 +1199,14 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         };
     });
 });
+
+/** How a record names an attendee: by its HomeTown number when it has no name or email. */
+function attendeeRecordName(data: FirebaseFirestore.DocumentData): string {
+    if (data.name) return data.name as string;
+    if (!data.email && data.source === "hometown") return `HomeTown #${data.ticketIds?.[0] ?? ""}`;
+    return "";
+}
+
 export const voidTicket = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
 
@@ -1226,7 +1245,7 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
         }));
 
         return {voided: true};
@@ -1270,7 +1289,7 @@ export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
         }));
 
         return {unvoided: true};
@@ -1350,7 +1369,7 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
         }));
 
         return {redeemed: true};
@@ -1404,7 +1423,7 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
         }));
 
         return {reset: true};
@@ -1465,7 +1484,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
                 eventId,
                 eventTitle,
                 targetEmail: data.email ?? "",
-                oldName: data.name ?? "",
+                oldName: attendeeRecordName(data),
                 newName: name,
             }));
             return {updated: true, regenerated: false};
@@ -1539,7 +1558,7 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
             oldType,
             newType: type,
         }));
@@ -1578,7 +1597,7 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
         }));
         return {deleted: true, ticketCount: tickets.length};
     });
