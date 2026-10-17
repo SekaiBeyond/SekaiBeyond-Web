@@ -26,6 +26,8 @@ interface AttendeesSectionProps {
     readOnly: boolean;
     onEdit: (a: AttendeeData) => void;
     onAdd: () => void;
+    /** Downloads every attendee, whatever the filters show. */
+    onExport: () => void;
     onVoidTicket: (a: AttendeeData, ticketId: string) => void;
     onUnvoidTicket: (a: AttendeeData, ticketId: string) => void;
     onRedeemTicket: (a: AttendeeData, ticketId: string) => void;
@@ -56,6 +58,7 @@ export function AttendeesSection({
                                      readOnly,
                                      onEdit,
                                      onAdd,
+                                     onExport,
                                      onVoidTicket,
                                      onUnvoidTicket,
                                      onRedeemTicket,
@@ -121,6 +124,13 @@ export function AttendeesSection({
                     disabled={readOnly}
                 >
                     {isEnglish ? 'Add Attendee' : '添加参加者'}
+                </button>
+                <button
+                    className="admin-toggle-btn admin-toggle-edit"
+                    onClick={onExport}
+                    disabled={loading || totals.attendees === 0}
+                >
+                    {isEnglish ? 'Export All' : '导出全部'}
                 </button>
                 <button
                     className="admin-toggle-btn admin-toggle-edit"

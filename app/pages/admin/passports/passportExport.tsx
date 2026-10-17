@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { buildCsv } from '~/lib/csv';
 import { passportScanUrl } from '~/lib/passports';
 import { buildZip, downloadBlob, type ZipEntry } from '~/lib/zip';
 import { canvasToPng, useQrCanvasBatch } from '../tools/qr/qrExport';
@@ -78,27 +79,6 @@ export const usePassportPngExport = (onFailure: () => void): {
         node,
     };
 };
-
-/**
- * `YYYYMMDD-HHMM` in the admin's zone, for export filenames: an export covers
- * whatever is on screen, so the time is what tells two apart.
- */
-export const fileStamp = (): string => {
-    const now = new Date();
-    const pad = (value: number): string => String(value).padStart(2, '0');
-    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
-        + `-${pad(now.getHours())}${pad(now.getMinutes())}`;
-};
-
-const csvCell = (value: string): string =>
-    /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-
-/** CRLF rows, and a BOM so Excel opens it as UTF-8. */
-const buildCsv = (header: string[], rows: string[][]): Blob =>
-    new Blob(
-        [`﻿${[header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n')}\r\n`],
-        {type: 'text/csv;charset=utf-8'},
-    );
 
 /**
  * The print shop's pairing list, from the generator or a selection's Keys CSV.

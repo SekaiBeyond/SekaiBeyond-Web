@@ -1,8 +1,9 @@
 import { Timestamp } from 'firebase/firestore';
+import { buildCsv } from '~/lib/csv';
 import { sanitizeEmailHtml } from '~/lib/emailSanitize';
 import { SITE_TIME_ZONE } from '~/lib/siteTime';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
-import type { AttendeeData, EmailTemplate, TicketData } from './types';
+import { type AttendeeData, type EmailTemplate, type TicketData, ticketTypeLabel } from './types';
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -112,6 +113,36 @@ export const ticketStatusCounts = (a: AttendeeData) => {
     }
     return {used, voided, remaining: a.ticketCount - used - voided};
 };
+
+/** `YYYY-MM-DD HH:MM` in the admin's zone, which the import reads back the same way. */
+const csvDateTime = (d: Date | null): string => {
+    if (!d) return '';
+    const pad = (value: number): string => String(value).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+/**
+ * Every attendee, one row each. The email, name, count, type and createdAt
+ * headers are ones the import picks up, so the file imports into another event.
+ */
+export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
+    buildCsv(
+        ['email', 'name', 'ticketCount', 'type', 'redeemed', 'voided', 'emailSent', 'emailSentAt', 'createdAt'],
+        attendees.map(a => {
+            const {used, voided} = ticketStatusCounts(a);
+            return [
+                a.email,
+                a.name,
+                String(a.ticketCount),
+                ticketTypeLabel(a.tickets[0]?.type || 'normal', true),
+                String(used),
+                String(voided),
+                a.emailSent ? 'yes' : 'no',
+                csvDateTime(a.emailSentAt),
+                csvDateTime(a.createdAt),
+            ];
+        }),
+    );
 
 const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
 

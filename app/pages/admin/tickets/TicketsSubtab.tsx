@@ -13,8 +13,10 @@ import {
     functionsErrorCode,
     getFirebaseDb,
 } from '~/lib/firebase';
+import { fileStamp } from '~/lib/csv';
 import { eventDayStatus, formatEventDays } from '~/lib/eventDays';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
+import { downloadBlob } from '~/lib/zip';
 import { AttendeeModal } from '../AttendeeModal';
 import { TicketScanner } from '../TicketScanner';
 import type { ShowToast } from '../utils';
@@ -23,7 +25,7 @@ import { ImportSection } from './ImportSection';
 import { SendSection } from './SendSection';
 import { StatsSection } from './StatsSection';
 import { TemplateSection } from './TemplateSection';
-import { mapAttendeeDoc } from './helpers';
+import { buildAttendeeCsv, mapAttendeeDoc } from './helpers';
 import { useAccountLinks } from './useAccountLinks';
 import { type AttendeeData, type TicketData, type TicketsSection, type TicketType } from './types';
 
@@ -272,6 +274,12 @@ export function TicketsSubtab({
         }
     };
 
+    const exportAttendees = () => {
+        // Characters filenames can't hold, on any system.
+        const base = event.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || eventId;
+        downloadBlob(buildAttendeeCsv(attendees), `${base}-attendees-${fileStamp()}.csv`);
+    };
+
     const deleteAttendeeAction = async (a: AttendeeData) => {
         if (readOnly) return;
         const ok = window.confirm(isEnglish
@@ -429,6 +437,7 @@ export function TicketsSubtab({
                     readOnly={readOnly}
                     onEdit={setEditingAttendee}
                     onAdd={() => setAddingAttendee(true)}
+                    onExport={exportAttendees}
                     onVoidTicket={voidTicketAction}
                     onUnvoidTicket={unvoidTicketAction}
                     onRedeemTicket={redeemTicketAction}

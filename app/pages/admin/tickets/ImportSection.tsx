@@ -95,7 +95,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         const cCol = fieldName(fields, 'ticketcount', 'ticket count',
             'ticket_count', 'tickets', 'quantity', 'count');
         const tCol = fieldName(fields, 'type', 'ticket type', 'ticket_type', 'category');
-        const tsCol = fieldName(fields, 'timestamp', 'date', 'created at', 'created_at', 'time');
+        const tsCol = fieldName(fields, 'timestamp', 'date', 'createdat', 'created at', 'created_at', 'time');
 
         setEmailCol(eCol);
         setNameCol(nCol);

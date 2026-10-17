@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { fileStamp } from '~/lib/csv';
 import { callDeletePassports, callExportPassportKeys } from '~/lib/firebase';
 import {
     MAX_PASSPORT_DELETE,
@@ -11,7 +12,7 @@ import {
 import { downloadBlob } from '~/lib/zip';
 import { fetchUsersByUids, type ShowToast } from '../utils';
 import type { UserRecord } from '../types';
-import { buildPassportCsv, buildPassportIdCsv, fileStamp, usePassportPngExport } from './passportExport';
+import { buildPassportCsv, buildPassportIdCsv, usePassportPngExport } from './passportExport';
 import { type Column, PassportStockTable, type SortDir, type SortKey } from './PassportStockTable';
 
 /**
