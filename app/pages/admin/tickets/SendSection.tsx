@@ -14,7 +14,11 @@ interface SendSectionProps {
     readOnly: boolean;
     showToast: ShowToast;
     onSent: () => void;
-    onOpenTemplate: () => void;
+    /**
+     * Whether the template below has edits that aren't saved, or was never
+     * saved: a send would go out without them, so it waits.
+     */
+    templateUnsaved: boolean;
 }
 
 interface SendProgress {
@@ -33,7 +37,7 @@ interface QuotaState {
 }
 
 export function SendSection({
-                                eventId, totals, readOnly, showToast, onSent, onOpenTemplate,
+                                eventId, totals, readOnly, showToast, onSent, templateUnsaved,
                             }: SendSectionProps) {
     const {isEnglish} = useLanguage();
     const [sending, setSending] = useState(false);
@@ -75,7 +79,7 @@ export function SendSection({
     const chunkSize = quota?.chunkSize ?? FALLBACK_CHUNK_SIZE;
 
     const send = async (mode: 'unsent' | 'all') => {
-        if (readOnly || sending) return;
+        if (readOnly || sending || templateUnsaved) return;
         const target = mode === 'unsent' ? totals.unsentSendable : totals.sendable;
         if (target === 0) {
             showToast(isEnglish ? 'No sendable recipients.' : '没有可发送的收件人。', 'warning');
@@ -216,28 +220,23 @@ export function SendSection({
 
     return (
         <div className="admin-tickets-send">
+            <h3>{isEnglish ? 'Send ticket emails' : '发送门票邮件'}</h3>
             <p className="admin-helper-text">
                 {isEnglish
                     ? 'Sends ticket QRs through Resend. Each email contains one QR per ticket for that attendee.'
                     : '通过 Resend 发送门票二维码。每封邮件为对应参加者的每张门票包含一个二维码。'}
             </p>
 
-            {noTemplate && (
+            {(noTemplate || templateUnsaved) && (
                 <div className="admin-tickets-send-banner admin-tickets-send-banner-warning">
                     <strong>
                         {isEnglish ? 'Email template not saved.' : '邮件模板尚未保存。'}
                     </strong>
                     <p>
                         {isEnglish
-                            ? 'Save the template for this event before sending.'
-                            : '发送前请先保存此活动的邮件模板。'}
+                            ? 'Save the template below before sending. Emails go out with the saved version.'
+                            : '发送前请先保存下方的模板。邮件将按已保存的版本发送。'}
                     </p>
-                    <button
-                        className="admin-toggle-btn admin-toggle-edit"
-                        onClick={onOpenTemplate}
-                    >
-                        {isEnglish ? 'Open Template Editor' : '打开模板编辑器'}
-                    </button>
                 </div>
             )}
 
@@ -296,7 +295,7 @@ export function SendSection({
                 <button
                     className="admin-toggle-btn admin-toggle-save"
                     onClick={() => send('unsent')}
-                    disabled={readOnly || sending || totals.unsentSendable === 0 || fullyBlocked}
+                    disabled={readOnly || sending || templateUnsaved || totals.unsentSendable === 0 || fullyBlocked}
                 >
                     {sending && progress?.mode === 'unsent'
                         ? (isEnglish ? 'Sending...' : '发送中...')
@@ -305,7 +304,7 @@ export function SendSection({
                 <button
                     className="admin-toggle-btn admin-toggle-revoke"
                     onClick={() => send('all')}
-                    disabled={readOnly || sending || totals.sendable === 0 || fullyBlocked}
+                    disabled={readOnly || sending || templateUnsaved || totals.sendable === 0 || fullyBlocked}
                 >
                     {sending && progress?.mode === 'all'
                         ? (isEnglish ? 'Sending...' : '发送中...')

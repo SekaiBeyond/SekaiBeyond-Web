@@ -2605,7 +2605,9 @@
 }
 
 .admin-tickets-hometown h3,
-.admin-tickets-settings h3 {
+.admin-tickets-settings h3,
+.admin-tickets-send h3,
+.admin-tickets-template h3 {
     margin: 0;
     font-size: 18px;
     font-weight: 700;

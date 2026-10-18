@@ -107,4 +107,4 @@ export interface AttendeeTotals {
  */
 export type StatusFilter = 'all' | 'redeemed' | 'unredeemed' | 'voided' | 'unlisted' | 'missing';
 
-export type TicketsSection = 'scan' | 'attendees' | 'stats' | 'import' | 'template' | 'send' | 'settings';
+export type TicketsSection = 'scan' | 'attendees' | 'stats' | 'import' | 'emails' | 'settings';

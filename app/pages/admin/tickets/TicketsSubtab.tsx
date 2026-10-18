@@ -21,12 +21,11 @@ import { AttendeeModal } from '../AttendeeModal';
 import { TicketScanner } from '../TicketScanner';
 import type { ShowToast } from '../utils';
 import { AttendeesSection } from './AttendeesSection';
+import { EmailsSection } from './EmailsSection';
 import { HometownSection } from './HometownSection';
 import { ImportSection } from './ImportSection';
-import { SendSection } from './SendSection';
 import { SettingsSection } from './SettingsSection';
 import { StatsSection } from './StatsSection';
-import { TemplateSection } from './TemplateSection';
 import { attendeeLabel, buildAttendeeCsv, mapAttendeeDoc } from './helpers';
 import { useAccountLinks } from './useAccountLinks';
 import { type AttendeeData, type StatusFilter, type TicketData, type TicketsSection, type TicketType } from './types';
@@ -114,10 +113,10 @@ export function TicketsSubtab({
         }
     }, [eventId, collectionRoot]);
 
-    // Every section but Scan, the email template and Settings shows the list,
-    // and adding someone checks their email against it. A failed load waits for
-    // the next section change or a refresh.
-    const listShown = (section !== 'scan' && section !== 'template' && section !== 'settings') || addingAttendee;
+    // Every section but Scan and Settings shows the list, and adding someone
+    // checks their email against it. A failed load waits for the next section
+    // change or a refresh.
+    const listShown = (section !== 'scan' && section !== 'settings') || addingAttendee;
     const listCurrent = loadedFor === listKey;
     useEffect(() => {
         if (listShown && !listCurrent) void loadAttendees();
@@ -398,7 +397,7 @@ export function TicketsSubtab({
 
     const tabVisible = (t: TicketsSection) => {
         if (t === 'scan') return canScan;
-        if (t === 'import' || t === 'template' || t === 'send') return !readOnly;
+        if (t === 'import' || t === 'emails') return !readOnly;
         // An archived event has no door to keep.
         if (t === 'settings') return !readOnly && collectionRoot === 'upcomingEvents';
         return true;
@@ -435,20 +434,12 @@ export function TicketsSubtab({
                         {isEnglish ? 'Import' : '导入'}
                     </button>
                 )}
-                {tabVisible('template') && (
+                {tabVisible('emails') && (
                     <button
-                        className={`admin-sub-tab ${section === 'template' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('template')}
+                        className={`admin-sub-tab ${section === 'emails' ? 'admin-sub-tab-active' : ''}`}
+                        onClick={() => setSection('emails')}
                     >
-                        {isEnglish ? 'Email Template' : '邮件模板'}
-                    </button>
-                )}
-                {tabVisible('send') && (
-                    <button
-                        className={`admin-sub-tab ${section === 'send' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('send')}
-                    >
-                        {isEnglish ? 'Send Emails' : '发送邮件'}
+                        {isEnglish ? 'Emails' : '邮件'}
                     </button>
                 )}
                 {tabVisible('settings') && (
@@ -574,22 +565,13 @@ export function TicketsSubtab({
                 />
             )}
 
-            {section === 'template' && (
-                <TemplateSection
+            {section === 'emails' && (
+                <EmailsSection
                     event={event}
-                    readOnly={readOnly}
-                    showToast={showToast}
-                />
-            )}
-
-            {section === 'send' && (
-                <SendSection
-                    eventId={eventId}
                     totals={totals}
                     readOnly={readOnly}
                     showToast={showToast}
                     onSent={() => void loadAttendees()}
-                    onOpenTemplate={() => setSection('template')}
                 />
             )}
 

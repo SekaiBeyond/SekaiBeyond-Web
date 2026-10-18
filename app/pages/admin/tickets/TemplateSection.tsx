@@ -20,9 +20,11 @@ interface TemplateSectionProps {
     event: UpcomingEvent;
     readOnly: boolean;
     showToast: ShowToast;
+    /** Whether what's in the editor differs from what's saved, as a template never saved does. */
+    onUnsavedChange: (unsaved: boolean) => void;
 }
 
-export function TemplateSection({event, readOnly, showToast}: TemplateSectionProps) {
+export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: TemplateSectionProps) {
     const {isEnglish} = useLanguage();
     const {config} = useSiteConfig();
     const [template, setTemplate] = useState<EmailTemplate>({
@@ -91,6 +93,10 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
     const isDirty = template.subject !== initialTemplate.subject
         || template.bodyHtml !== initialTemplate.bodyHtml;
 
+    useEffect(() => {
+        onUnsavedChange(isDirty);
+    }, [isDirty, onUnsavedChange]);
+
     const isAtDefault = template.subject === DEFAULT_TEMPLATE_SUBJECT
         && template.bodyHtml === DEFAULT_TEMPLATE_BODY_EN;
 
@@ -148,6 +154,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
 
     return (
         <div className="admin-tickets-template">
+            <h3>{isEnglish ? 'Email template' : '邮件模板'}</h3>
             <p className="admin-helper-text">
                 {isEnglish
                     ? 'Supported placeholders: {{ attendeeName }}, {{ attendeeEmail }}, {{ eventTitle }}, {{ eventDate }}, {{ eventHeader }} (renders cropped header image as <img>), {{ ticketCount }}, {{ ticketIds[] }} (renders one QR per ticket), {{ contactEmail }} (the Contact Email in Site Config; also works in mailto: links).'
