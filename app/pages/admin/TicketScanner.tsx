@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FirebaseError } from 'firebase/app';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callRedeemTicket, functionsErrorCode } from '~/lib/firebase';
+import { callRedeemTicket, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
 import { useQrScanner } from '~/lib/useQrScanner';
 import { type ScanOutcome, useScanSound, useScanVibration } from '~/lib/useScanFeedback';
 import { QrScannerViewport } from './QrScannerViewport';
@@ -68,6 +69,11 @@ const CLEAR_AFTER_MS: Record<ShownStatus['kind'], number> = {
 };
 /** The last stretch of that, over which a result fades out. Matches the CSS. */
 const FADE_MS = 300;
+/**
+ * How long a scan waits before saying it's still checking: a server that has
+ * sat idle takes a few seconds to start, which shouldn't read as a freeze.
+ */
+const SLOW_MS = 3000;
 
 /**
  * How long a result stays up. A HomeTown ticket with a warning got in, but the
@@ -76,11 +82,22 @@ const FADE_MS = 300;
 const showFor = (status: ShownStatus): number =>
     status.kind === 'success' && hasWarning(status) ? CLEAR_AFTER_MS.already : CLEAR_AFTER_MS[status.kind];
 
+/**
+ * Whether a result holds the line: until it clears or Next Scan is pressed, the
+ * camera takes no other code, so the next person's ticket can't replace a
+ * refusal or a warning before the operator has read it. A plain admission has
+ * nothing to read.
+ */
+const holdsLine = (status: ShownStatus): boolean => status.kind !== 'success' || hasWarning(status);
+
 interface TicketScannerProps {
     eventId: string;
     eventTitle: string;
-    /** Whether a HomeTown ticket missing from the imported list is let in, with a warning. */
-    admitUnlistedHometown: boolean;
+    /**
+     * Whether a HomeTown ticket missing from the imported list is let in, with a
+     * warning, as it stands now. Null while it loads.
+     */
+    admitUnlistedHometown: boolean | null;
     onRedeemed: () => void;
 }
 
@@ -89,6 +106,11 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
     const lastScanRef = useRef<{ticketId: string; at: number} | null>(null);
     const redeemedCacheRef = useRef<CachedRedemption[]>([]);
     const lastCueRef = useRef<{key: string; at: number} | null>(null);
+    // A scan waiting on the server: nothing else is sent until it answers, so an
+    // earlier ticket's answer can't land over a later one's.
+    const inFlightRef = useRef(false);
+    // Set with a result that holds the line (holdsLine), cleared when it goes.
+    const holdingRef = useRef(false);
     const sound = useScanSound();
     const vibration = useScanVibration();
     const {play: playSound} = sound;
@@ -98,6 +120,20 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
     const [manualTicketId, setManualTicketId] = useState('');
     const [busy, setBusy] = useState(false);
     const [leaving, setLeaving] = useState(false);
+    const [slow, setSlow] = useState(false);
+
+    // Every result goes up through here, setting the hold in the same step, so
+    // no frame decoded before the re-render slips past it.
+    const show = useCallback((next: ShownStatus) => {
+        holdingRef.current = holdsLine(next);
+        setStatus(next);
+    }, []);
+
+    // Back to waiting for a code, with any hold released.
+    const ready = useCallback((cameraActive: boolean) => {
+        holdingRef.current = false;
+        setStatus(cameraActive ? {kind: 'scanning'} : {kind: 'idle'});
+    }, []);
 
     // Once per showing of a code: a repeat inside CUE_QUIET_MS restarts the
     // quiet.
@@ -112,6 +148,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
     }, [playSound, vibrate]);
 
     const handleTicket = useCallback(async (ticketId: string) => {
+        if (inFlightRef.current) return;
         const last = lastScanRef.current;
         const now = Date.now();
         if (last && last.ticketId === ticketId && now - last.at < DEDUPE_MS) return;
@@ -122,12 +159,13 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
         const cached = redeemedCacheRef.current.find(c => c.ticketId === ticketId && now < c.until);
         if (cached) {
             const {until: _until, ...shown} = cached;
-            setStatus({kind: 'success', ...shown, shownAt: now});
+            show({kind: 'success', ...shown, shownAt: now});
             cue(hasWarning(cached) ? 'issue' : 'success', ticketId);
             return;
         }
 
         lastScanRef.current = {ticketId, at: now};
+        inFlightRef.current = true;
         setBusy(true);
         setStatus({kind: 'loading', ticketId});
         try {
@@ -143,7 +181,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                 missingFromHometown: !!d.missingFromHometown,
             };
             if (d.alreadyRedeemed) {
-                setStatus({
+                show({
                     kind: 'already',
                     ...scanned,
                     redeemedBy: d.redeemedBy ?? '',
@@ -153,7 +191,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                 cue('issue', ticketId);
             } else {
                 const successData = {...scanned, userCheckedIn: !!d.userCheckedIn};
-                setStatus({kind: 'success', ...successData, shownAt: Date.now()});
+                show({kind: 'success', ...successData, shownAt: Date.now()});
                 // Let in, but the operator should look up at the warning.
                 cue(hasWarning(scanned) ? 'issue' : 'success', ticketId);
 
@@ -186,27 +224,42 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                     : '门票仅可在活动当天扫描。';
             } else if (code === 'event-missing') {
                 reason = isEnglish ? 'Event not found.' : '活动不存在。';
+            } else if (code === 'rate-limited') {
+                // Every call this account makes shares one budget per minute.
+                const ms = functionsErrorDetails<{retryAfterMs?: number}>(err)?.retryAfterMs;
+                const seconds = typeof ms === 'number' ? Math.max(1, Math.ceil(ms / 1000)) : null;
+                reason = isEnglish
+                    ? `Too many scans from this account in the last minute. Wait ${seconds ? `${seconds} seconds` : 'a moment'}, then scan again.`
+                    : `此账号最近一分钟内扫描次数过多。请${seconds ? `等待 ${seconds} 秒` : '稍候'}再扫描。`;
+            } else if (err instanceof FirebaseError && err.code === 'functions/deadline-exceeded') {
+                // The server may still have let it in, which a rescan will say.
+                reason = isEnglish
+                    ? 'No answer from the server. Check the connection and scan again. If it then shows as already redeemed by you, the first scan went through.'
+                    : '服务器无响应。请检查网络后重新扫描。若随后显示已由你验证，说明第一次扫描已成功。';
             } else {
                 reason = isEnglish ? 'Scan failed. Please try again.' : '扫描失败，请重试。';
             }
-            setStatus({kind: 'error', reason, shownAt: Date.now()});
+            show({kind: 'error', reason, shownAt: Date.now()});
             cue('issue', ticketId);
         } finally {
+            inFlightRef.current = false;
             setBusy(false);
         }
-    }, [eventId, isEnglish, onRedeemed, cue]);
+    }, [eventId, isEnglish, onRedeemed, cue, show]);
 
     // Redeem a code for this event, warn on another event's, ignore the rest. A
     // HomeTown QR is just its number, naming no event, so it's taken as this
-    // one's. Always false, to keep scanning.
+    // one's. Nothing is read while a scan is out or a result holds the line.
+    // Always false, to keep scanning.
     const onDecode = useCallback((raw: string): boolean => {
+        if (inFlightRef.current || holdingRef.current) return false;
         const parsed = parseTicketUrl(raw);
         if (!parsed && isHometownTicketId(raw.trim())) {
             void handleTicket(raw.trim());
         } else if (parsed && parsed.eventId === eventId) {
             void handleTicket(parsed.ticketId);
         } else if (parsed && parsed.eventId !== eventId) {
-            setStatus({
+            show({
                 kind: 'error',
                 reason: isEnglish
                     ? 'QR code is for a different event.'
@@ -216,12 +269,12 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
             cue('issue', raw);
         }
         return false;
-    }, [eventId, handleTicket, isEnglish, cue]);
+    }, [eventId, handleTicket, isEnglish, cue, show]);
 
     const scanner = useQrScanner({
         onDecode,
-        onStart: () => setStatus({kind: 'scanning'}),
-        onStartError: () => setStatus({kind: 'idle'}),
+        onStart: () => ready(true),
+        onStartError: () => ready(false),
         cameraErrorMessage: isEnglish
             ? 'Camera permission denied or not available. Use manual entry below.'
             : '无法访问摄像头，请使用下方手动输入。',
@@ -235,16 +288,22 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
         if (!('shownAt' in status)) return;
         const ms = showFor(status);
         const fade = setTimeout(() => setLeaving(true), ms - FADE_MS);
-        const clear = setTimeout(
-            () => setStatus(scanner.cameraActive ? {kind: 'scanning'} : {kind: 'idle'}),
-            ms,
-        );
+        const clear = setTimeout(() => ready(scanner.cameraActive), ms);
         return () => {
             clearTimeout(fade);
             clearTimeout(clear);
             setLeaving(false);
         };
-    }, [status, scanner.cameraActive]);
+    }, [status, scanner.cameraActive, ready]);
+
+    useEffect(() => {
+        if (status.kind !== 'loading') return;
+        const timer = setTimeout(() => setSlow(true), SLOW_MS);
+        return () => {
+            clearTimeout(timer);
+            setSlow(false);
+        };
+    }, [status]);
 
     const submitManual = async () => {
         const raw = manualTicketId.trim();
@@ -258,7 +317,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
     };
 
     const clearStatus = () => {
-        setStatus(scanner.cameraActive ? {kind: 'scanning'} : {kind: 'idle'});
+        ready(scanner.cameraActive);
         lastScanRef.current = null;
         lastCueRef.current = null;
     };
@@ -269,14 +328,18 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                 {isEnglish
                     ? `Scanning tickets for "${eventTitle}". Point the camera at a ticket QR to redeem.`
                     : `正在扫描"${eventTitle}"的门票。将摄像头对准二维码进行验证。`}
-                {' '}
-                {admitUnlistedHometown
-                    ? (isEnglish
-                        ? 'HomeTown tickets missing from the imported list are let in with a warning.'
-                        : '不在已导入名单中的 HomeTown 门票将在提示后放行。')
-                    : (isEnglish
-                        ? 'HomeTown tickets must be on the imported list.'
-                        : 'HomeTown 门票须在已导入的名单中。')}
+                {admitUnlistedHometown !== null && (
+                    <span
+                        className={`admin-tickets-tag admin-tickets-scanner-mode ${admitUnlistedHometown ? 'admin-tickets-tag-unlisted' : 'admin-tickets-tag-hometown'}`}>
+                        {admitUnlistedHometown
+                            ? (isEnglish
+                                ? 'HomeTown tickets not on the imported list: let in with a warning'
+                                : '不在已导入名单中的 HomeTown 门票：提示后放行')
+                            : (isEnglish
+                                ? 'HomeTown tickets not on the imported list: refused'
+                                : '不在已导入名单中的 HomeTown 门票：拒绝')}
+                    </span>
+                )}
             </p>
 
             <QrScannerViewport scanner={scanner} isEnglish={isEnglish} startDisabled={busy}>
@@ -307,7 +370,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                 </div>
             </QrScannerViewport>
 
-            <ResultBanner status={status} leaving={leaving} isEnglish={isEnglish}/>
+            <ResultBanner status={status} leaving={leaving} slow={slow} isEnglish={isEnglish}/>
 
             <div className="admin-tickets-scanner-manual">
                 <label className="admin-tickets-template-field">
@@ -350,7 +413,13 @@ function parseTicketUrl(raw: string): {ticketId: string; eventId: string} | null
     return null;
 }
 
-function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving: boolean; isEnglish: boolean}) {
+function ResultBanner({status, leaving, slow, isEnglish}: {
+    status: ScanStatus;
+    leaving: boolean;
+    /** A scan still out after SLOW_MS. */
+    slow: boolean;
+    isEnglish: boolean
+}) {
     if (status.kind === 'idle' || status.kind === 'scanning') return null;
     const leavingClass = leaving ? ' admin-tickets-scan-leaving' : '';
     if (status.kind === 'loading') {
@@ -358,6 +427,13 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
             <div className="admin-tickets-scan-banner admin-tickets-scan-loading">
                 <strong>{isEnglish ? 'Detecting...' : '检测中...'}</strong>
                 <div>{isEnglish ? 'Ticket ID:' : '门票 ID：'} {status.ticketId}</div>
+                {slow && (
+                    <div className="admin-helper-text">
+                        {isEnglish
+                            ? 'Still checking: the server may be starting up. Wait for the result.'
+                            : '仍在检测：服务器可能正在启动，请等待结果。'}
+                    </div>
+                )}
             </div>
         );
     }
@@ -376,8 +452,8 @@ function ResultBanner({status, leaving, isEnglish}: {status: ScanStatus; leaving
                 {status.unlisted ? (
                     <div className="admin-helper-text admin-tickets-edit-warning">
                         {isEnglish
-                            ? 'Bought after the last import, or not a real ticket. It\'s recorded now, so a second scan of it will be refused.'
-                            : '可能是上次导入后购买的，也可能不是真票。此票现已记录，再次扫描将被拒绝。'}
+                            ? 'Check their HomeTown confirmation email shows this number; if it doesn\'t, get an admin. Bought after the last import, or not a real ticket. It\'s recorded now, so a second scan of it will be refused.'
+                            : '请核对其 HomeTown 购票确认邮件中的门票号；若不一致或无法出示，请联系管理员。可能是上次导入后购买的，也可能不是真票。此票现已记录，再次扫描将被拒绝。'}
                     </div>
                 ) : status.missingFromHometown ? (
                     <div className="admin-helper-text admin-tickets-edit-warning">

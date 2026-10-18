@@ -21,7 +21,11 @@ export async function checkRateLimit(uid: string): Promise<void> {
         }
 
         if (data.count >= RATE_LIMIT_MAX) {
-            throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {code: "rate-limited"});
+            // retryAfterMs: until the window reopens, so a caller can say how long to wait.
+            throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {
+                code: "rate-limited",
+                retryAfterMs: data.windowStart + RATE_LIMIT_WINDOW_MS - now,
+            });
         }
 
         txn.update(ref, {count: FieldValue.increment(1)});

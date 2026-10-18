@@ -269,6 +269,12 @@ export const callImportHometownTickets = (data: {
 export const callSetHometownAdmitUnlisted = (data: {eventId: string; enabled: boolean}) =>
     httpsCallable<typeof data, {enabled: boolean}>(getFunctions(), 'setHometownAdmitUnlisted')(data);
 
+/**
+ * How long a scan waits for the server, well under the SDK's 70 s default: a
+ * door can't stand still that long, and a scanner waits on each answer.
+ */
+const REDEEM_TIMEOUT_MS = 20_000;
+
 export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
     httpsCallable<typeof data, {
         success?: boolean;
@@ -291,7 +297,7 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
         // On success: how much longer a rescan here still reads as success, as a
         // duration so the scanner times it on its own clock.
         graceRemainingMs?: number;
-    }>(getFunctions(), 'redeemTicket')(data);
+    }>(getFunctions(), 'redeemTicket', {timeout: REDEEM_TIMEOUT_MS})(data);
 
 /** One of the caller's own tickets, as /profile shows it. */
 export interface HeldTicket {

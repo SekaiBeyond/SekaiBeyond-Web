@@ -3284,6 +3284,15 @@ select.admin-tickets-tag:focus {
     flex-wrap: wrap;
 }
 
+/* How the door treats HomeTown tickets missing from the list, kept current. */
+.admin-tickets-scanner-mode {
+    display: block;
+    width: fit-content;
+    margin-top: 6px;
+    font-size: 12px;
+    white-space: normal;
+}
+
 .admin-tickets-scanner-feedback {
     margin-left: auto;
     display: flex;
@@ -3369,6 +3378,13 @@ select.admin-tickets-tag:focus {
 .admin-tickets-scan-banner .admin-helper-text {
     margin: 4px 0 0;
     font-size: 12px;
+}
+
+/* What the operator should do about a ticket that got in, read at arm's length. */
+.admin-tickets-scan-banner .admin-tickets-edit-warning {
+    margin-top: 6px;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .admin-tickets-scan-success {

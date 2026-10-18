@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, doc, getDoc, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -88,6 +88,12 @@ export function TicketsSubtab({
 
     const [displayCount, setDisplayCount] = useState(10);
 
+    // Which event the list was last loaded for; null once a scan may have
+    // changed it. It loads only when a section that shows it opens, so a phone
+    // that only scans never reads the whole list.
+    const listKey = `${collectionRoot}/${eventId}`;
+    const [loadedFor, setLoadedFor] = useState<string | null>(null);
+
     const loadAttendees = useCallback(async () => {
         setLoadingAttendees(true);
         setAttendeesFailed(false);
@@ -98,6 +104,7 @@ export function TicketsSubtab({
             const list = snap.docs.map(d => mapAttendeeDoc(d.id, d.data()));
             setAttendees(list);
             setDisplayCount(10);
+            setLoadedFor(`${collectionRoot}/${eventId}`);
         } catch (err) {
             console.error('[TicketsSubtab] loadAttendees', err);
             setAttendeesFailed(true);
@@ -106,24 +113,26 @@ export function TicketsSubtab({
         }
     }, [eventId, collectionRoot]);
 
+    // Every section but Scan and the email template shows the list, and adding
+    // someone checks their email against it. A failed load waits for the next
+    // section change or a refresh.
+    const listShown = (section !== 'scan' && section !== 'template') || addingAttendee;
+    const listCurrent = loadedFor === listKey;
     useEffect(() => {
-        void loadAttendees();
-    }, [loadAttendees]);
+        if (listShown && !listCurrent) void loadAttendees();
+    }, [listShown, listCurrent, loadAttendees]);
 
-    // Whether unlisted HomeTown tickets are let in (setHometownAdmitUnlisted).
-    // Null while loading; an archived event has no door to keep.
+    // Whether unlisted HomeTown tickets are let in (setHometownAdmitUnlisted),
+    // followed live so every open scanner shows the door as it is now. Null
+    // while loading; an archived event has no door to keep.
     const [admitUnlisted, setAdmitUnlisted] = useState<boolean | null>(null);
     useEffect(() => {
         if (collectionRoot !== 'upcomingEvents') return;
-        let cancelled = false;
-        getDoc(doc(getFirebaseDb(), 'upcomingEvents', eventId, 'settings', 'hometown'))
-            .then(snap => {
-                if (!cancelled) setAdmitUnlisted(snap.data()?.admitUnlisted === true);
-            })
-            .catch(err => console.error('[TicketsSubtab] hometown settings', err));
-        return () => {
-            cancelled = true;
-        };
+        return onSnapshot(
+            doc(getFirebaseDb(), 'upcomingEvents', eventId, 'settings', 'hometown'),
+            snap => setAdmitUnlisted(snap.data()?.admitUnlisted === true),
+            err => console.error('[TicketsSubtab] hometown settings', err),
+        );
     }, [eventId, collectionRoot]);
 
     useEffect(() => {
@@ -445,8 +454,9 @@ export function TicketsSubtab({
                 <TicketScanner
                     eventId={eventId}
                     eventTitle={isEnglish ? event.title : (event.titleCn || event.title)}
-                    admitUnlistedHometown={admitUnlisted === true}
-                    onRedeemed={() => void loadAttendees()}
+                    admitUnlistedHometown={admitUnlisted}
+                    // Left for the list to catch up on when it's next shown.
+                    onRedeemed={() => setLoadedFor(null)}
                 />
             )}
 
@@ -588,7 +598,8 @@ export function TicketsSubtab({
                     existingAttendees={attendees}
                     walkIn={canAddWalkIn}
                     onClose={() => setAddingAttendee(false)}
-                    onAdded={() => void loadAttendees()}
+                    // Reloaded at once on a section that shows the list, not on Scan.
+                    onAdded={() => setLoadedFor(null)}
                     showToast={showToast}
                 />
             )}
