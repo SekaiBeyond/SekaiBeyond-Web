@@ -6,7 +6,7 @@ import { useQrScanner } from '~/lib/useQrScanner';
 import { type ScanOutcome, useScanSound, useScanVibration } from '~/lib/useScanFeedback';
 import { QrScannerViewport } from './QrScannerViewport';
 import { isHometownTicketId } from './tickets/hometown';
-import { ticketTypeLabel } from './tickets/types';
+import { anonymousAttendeeName, ticketTypeLabel } from './tickets/types';
 
 /** Who a ticket belongs to, as a result shows it. */
 interface ScannedTicket {
@@ -216,6 +216,11 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                 reason = isEnglish
                     ? 'This HomeTown ticket isn\'t on the imported list. Ask an admin to import the latest HomeTown guest list.'
                     : '此 HomeTown 门票不在已导入的名单中。请管理员导入最新的 HomeTown 来宾名单。';
+            } else if (code === 'hometown-other-event') {
+                const other = functionsErrorDetails<{eventTitle?: string}>(err)?.eventTitle;
+                reason = isEnglish
+                    ? `This HomeTown ticket is for another event${other ? `: ${other}` : ''}.`
+                    : `此 HomeTown 门票属于其他活动${other ? `：${other}` : ''}。`;
             } else if (code === 'not-authorized') {
                 reason = isEnglish ? 'You are not authorized to scan for this event.' : '你没有权限扫描此活动的门票。';
             } else if (code === 'not-event-day') {
@@ -225,7 +230,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
             } else if (code === 'event-missing') {
                 reason = isEnglish ? 'Event not found.' : '活动不存在。';
             } else if (code === 'rate-limited') {
-                // Every call this account makes shares one budget per minute.
+                // Scans have a per-minute budget of their own, per account.
                 const ms = functionsErrorDetails<{retryAfterMs?: number}>(err)?.retryAfterMs;
                 const seconds = typeof ms === 'number' ? Math.max(1, Math.ceil(ms / 1000)) : null;
                 reason = isEnglish
@@ -452,8 +457,8 @@ function ResultBanner({status, leaving, slow, isEnglish}: {
                 {status.unlisted ? (
                     <div className="admin-helper-text admin-tickets-edit-warning">
                         {isEnglish
-                            ? 'Check their HomeTown confirmation email shows this number; if it doesn\'t, get an admin. Bought after the last import, or not a real ticket. It\'s recorded now, so a second scan of it will be refused.'
-                            : '请核对其 HomeTown 购票确认邮件中的门票号；若不一致或无法出示，请联系管理员。可能是上次导入后购买的，也可能不是真票。此票现已记录，再次扫描将被拒绝。'}
+                            ? 'Check their HomeTown confirmation email is for this event and shows this number; if not, get an admin. Bought after the last import, or not a real ticket for this event. It\'s recorded now, so a second scan of it will be refused.'
+                            : '请核对其 HomeTown 购票确认邮件是否为本活动且门票号一致；若不一致或无法出示，请联系管理员。可能是上次导入后购买的，也可能不是本活动的真票。此票现已记录，再次扫描将被拒绝。'}
                     </div>
                 ) : status.missingFromHometown ? (
                     <div className="admin-helper-text admin-tickets-edit-warning">
@@ -508,7 +513,7 @@ function ResultBanner({status, leaving, slow, isEnglish}: {
 /** Who a result names: whatever they gave, else an unlisted HomeTown ticket's number. */
 const holderName = (ticket: ScannedTicket, isEnglish: boolean): string =>
     ticket.attendeeName || ticket.attendeeEmail
-    || (ticket.hometown ? `HomeTown #${ticket.ticketId}` : (isEnglish ? 'Walk-in guest' : '现场来宾'));
+    || anonymousAttendeeName({hometown: ticket.hometown, ticketIds: [ticket.ticketId]}, isEnglish);
 
 /** The ticket's type, which an unlisted HomeTown ticket doesn't know yet, and where it was sold. */
 function TicketTags({ticket, isEnglish}: {ticket: ScannedTicket; isEnglish: boolean}) {

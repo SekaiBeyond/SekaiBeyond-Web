@@ -141,6 +141,28 @@
       ]
     },
     {
+      "collectionGroup": "attendees",
+      "fieldPath": "ticketIds",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
       "collectionGroup": "badgeActivationCodes",
       "fieldPath": "expiresAt",
       "ttl": true,

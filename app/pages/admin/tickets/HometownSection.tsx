@@ -1,14 +1,29 @@
 import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callImportHometownTickets } from '~/lib/firebase';
+import { callImportHometownTickets, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 import { hometownAttendeeId, type HometownTicketRow, parseHometownFile } from './hometown';
 import { type AttendeeData, type ParseError, TICKET_TYPES, ticketTypeLabel } from './types';
 
 /** Tickets per import call, well under the server's row cap. */
 const IMPORT_CHUNK = 500;
+/** Times one chunk waits out the rate limit before the import gives up. */
+const RATE_LIMIT_RETRIES = 3;
 /** Issues listed before the rest are summed up. */
 const MAX_ISSUES = 20;
+
+/** One chunk, sent again once the window reopens if the rate limit refuses it. */
+const importChunk = async (data: Parameters<typeof callImportHometownTickets>[0]) => {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return (await callImportHometownTickets(data)).data;
+        } catch (err) {
+            if (functionsErrorCode(err) !== 'rate-limited' || attempt >= RATE_LIMIT_RETRIES) throw err;
+            const ms = functionsErrorDetails<{retryAfterMs?: number}>(err)?.retryAfterMs;
+            await new Promise(resolve => setTimeout(resolve, (typeof ms === 'number' ? ms : 10_000) + 1000));
+        }
+    }
+};
 
 interface HometownSectionProps {
     eventId: string;
@@ -56,10 +71,10 @@ export function HometownSection({
             const existing = byId.get(hometownAttendeeId(t.ticketId));
             if (!existing) added++;
             else if (existing.unlisted) confirmed++;
-            else if (updateExisting) {
+            else {
                 if (existing.missingFromHometown) restored++;
-                if (existing.name !== t.name || existing.email !== t.email
-                    || existing.hometownOrderId !== t.orderId || (existing.tickets[0]?.type ?? 'normal') !== t.type) {
+                if (updateExisting && (existing.name !== t.name || existing.email !== t.email
+                    || existing.hometownOrderId !== t.orderId || (existing.tickets[0]?.type ?? 'normal') !== t.type)) {
                     updated++;
                 }
             }
@@ -120,11 +135,13 @@ export function HometownSection({
 
         setImporting(true);
         const totals = {added: 0, confirmed: 0, updated: 0, skipped: 0, missing: 0, restored: 0};
+        const importId = crypto.randomUUID();
         try {
             for (let i = 0; i < tickets.length; i += IMPORT_CHUNK) {
                 const last = i + IMPORT_CHUNK >= tickets.length;
-                const {data} = await callImportHometownTickets({
+                const data = await importChunk({
                     eventId,
+                    importId,
                     tickets: tickets.slice(i, i + IMPORT_CHUNK),
                     // The whole file's numbers go with its last chunk, once the
                     // rest are in, so nothing it holds reads as missing.
@@ -177,8 +194,11 @@ export function HometownSection({
     };
 
     const issues = [...errors, ...warnings];
+    // A row that can't be read drops its ticket from the file's numbers, so an
+    // update would flag that ticket as missing.
+    const rowErrors = errors.some(e => e.row > 0);
     const canImport = !readOnly && !busy && !importing && tickets.length > 0
-        && !errors.some(e => e.row === 0);
+        && !errors.some(e => e.row === 0) && !(updateExisting && rowErrors);
 
     return (
         <div className="admin-tickets-import admin-tickets-hometown">
@@ -264,6 +284,13 @@ export function HometownSection({
                             <span><strong>{preview.missing}</strong> {isEnglish ? 'not in file, to flag' : '不在文件中，将标记'}</span>
                         )}
                     </div>
+                    {updateExisting && rowErrors && (
+                        <p className="admin-helper-text admin-tickets-edit-warning">
+                            {isEnglish
+                                ? 'Some rows have a ticket number that can\'t be read, and updating would flag those tickets "Not in latest export". Fix the file, or untick "Update existing tickets" to import the rest.'
+                                : '部分行的门票号无法识别，更新将把这些门票标记为"不在最新导出中"。请修正文件，或取消勾选"用此文件更新已有门票"以导入其余门票。'}
+                        </p>
+                    )}
                     {preview.missing > 0 && (
                         <p className="admin-helper-text admin-tickets-edit-warning">
                             {isEnglish

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ShowToast } from '../utils';
-import { anonymousAttendeeName, ticketStatusCounts } from './helpers';
+import { ticketStatusCounts } from './helpers';
 import {
+    anonymousAttendeeName,
     type AttendeeData,
     type AttendeeTotals,
     type StatusFilter,
@@ -416,6 +417,11 @@ export function AttendeesSection({
                                         <button
                                             className="admin-toggle-btn admin-toggle-revoke"
                                             onClick={() => onDelete(a)}
+                                            // Its record is what stops the number getting in again.
+                                            disabled={a.hometown}
+                                            title={a.hometown
+                                                ? (isEnglish ? 'HomeTown tickets are voided, not removed.' : 'HomeTown 门票只能作废，不能移除。')
+                                                : undefined}
                                         >
                                             {isEnglish ? 'Remove' : '移除'}
                                         </button>

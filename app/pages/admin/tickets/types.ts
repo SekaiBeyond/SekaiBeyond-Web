@@ -25,6 +25,16 @@ export const ticketTypeLabel = (type: TicketType | string, isEnglish: boolean): 
     return isEnglish ? tt.labelEn : tt.labelCn;
 };
 
+/**
+ * Who a nameless, emailless attendee is: a HomeTown ticket by its number. Kept
+ * here, not in helpers, so the claim page can use it without the admin's
+ * dependencies.
+ */
+export const anonymousAttendeeName = (a: Pick<AttendeeData, 'hometown' | 'ticketIds'>, isEnglish: boolean): string =>
+    a.hometown
+        ? `HomeTown #${a.ticketIds[0] ?? ''}`
+        : (isEnglish ? 'Walk-in guest' : '现场来宾');
+
 export interface TicketData {
     ticketId: string;
     type: TicketType;

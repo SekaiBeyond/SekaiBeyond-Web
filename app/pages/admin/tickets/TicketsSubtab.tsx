@@ -143,9 +143,11 @@ export function TicketsSubtab({
                 if (!hasStatus) return false;
             }
             if (!needle) return true;
+            // Part of a HomeTown number, which is all digits, but only the whole
+            // of one of ours: a few letters would match half the UUIDs.
             return a.email.toLowerCase().includes(needle)
                 || a.name.toLowerCase().includes(needle)
-                || a.ticketIds.some(id => id.toLowerCase().includes(needle));
+                || a.ticketIds.some(id => a.hometown ? id.includes(needle) : id.toLowerCase() === needle);
         });
     }, [attendees, search, filterUnsent, ticketTypeFilter, statusFilter]);
 
@@ -312,8 +314,11 @@ export function TicketsSubtab({
             await callDeleteEventAttendee({eventId, attendeeId: a.id});
             setAttendees(prev => prev.filter(x => x.id !== a.id));
             showToast(isEnglish ? 'Attendee removed.' : '参加者已移除。', 'warning');
-        } catch {
-            showToast(isEnglish ? 'Failed to remove attendee.' : '移除失败。', 'error');
+        } catch (err) {
+            showToast(functionsErrorCode(err) === 'hometown-ticket'
+                    ? (isEnglish ? 'HomeTown tickets can\'t be removed. Void the ticket instead.' : 'HomeTown 门票不能移除，请改为作废。')
+                    : (isEnglish ? 'Failed to remove attendee.' : '移除失败。'),
+                'error');
         }
     };
 

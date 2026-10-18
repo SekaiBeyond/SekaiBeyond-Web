@@ -109,19 +109,10 @@ export const mapAttendeeDoc = (
 const hometownStatus = (a: Pick<AttendeeData, 'hometown' | 'unlisted' | 'missingFromHometown'>) =>
     !a.hometown ? '' : a.unlisted ? 'unlisted' : a.missingFromHometown ? 'missing' : 'listed';
 
-export const anonymousAttendeeName = (a: Pick<AttendeeData, 'hometown' | 'ticketIds'>, isEnglish: boolean): string =>
-    a.hometown
-        ? `HomeTown #${a.ticketIds[0] ?? ''}`
-        : (isEnglish ? 'Walk-in guest' : '现场来宾');
-
-export const attendeeLabel = (
-    a: Pick<AttendeeData, 'name' | 'email' | 'hometown' | 'ticketIds'>,
-    isEnglish: boolean,
-): string => {
+/** Who removing an attendee removes. Never a HomeTown ticket: those are voided, not removed. */
+export const attendeeLabel = (a: Pick<AttendeeData, 'name' | 'email'>, isEnglish: boolean): string => {
     if (a.name && a.email) return isEnglish ? `${a.name} (${a.email})` : `${a.name}（${a.email}）`;
-    return a.name || a.email || (a.hometown
-        ? `HomeTown #${a.ticketIds[0] ?? ''}`
-        : (isEnglish ? 'this walk-in guest' : '这位现场来宾'));
+    return a.name || a.email || (isEnglish ? 'this walk-in guest' : '这位现场来宾');
 };
 
 export const ticketStatusCounts = (a: AttendeeData) => {

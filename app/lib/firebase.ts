@@ -246,6 +246,8 @@ export const callImportHometownTickets = (data: {
     updateExisting?: boolean;
     /** With updateExisting, on the last chunk: every number in the file, to flag the rest missing. */
     completeTicketIds?: string[];
+    /** The same for every chunk of one file, which then leaves one record. */
+    importId: string;
 }) => httpsCallable<typeof data, {
     added: number;
     confirmed: number;

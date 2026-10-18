@@ -420,11 +420,16 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>removed attendee {attendee} from {event}</>
                 : <>将 {attendee} 从 {event} 的名单中移除</>;
         case 'ticket-attendee-edit': {
-            const oldName = r.oldName || r.targetEmail || attendee;
-            const newName = r.newName || r.targetEmail || attendee;
+            const oldName = r.oldName || attendee;
+            // Not a rename to the email or number a nameless attendee shows as.
+            if (!r.newName) {
+                return isEnglish
+                    ? <>cleared the name of attendee {oldName} at {event}</>
+                    : <>清除了 {event} 的参加者 {oldName} 的姓名</>;
+            }
             return isEnglish
-                ? <>renamed attendee {oldName} to {newName} at {event}</>
-                : <>将 {event} 的参加者 {oldName} 改名为 {newName}</>;
+                ? <>renamed attendee {oldName} to {r.newName} at {event}</>
+                : <>将 {event} 的参加者 {oldName} 改名为 {r.newName}</>;
         }
         case 'ticket-regenerate':
             return isEnglish

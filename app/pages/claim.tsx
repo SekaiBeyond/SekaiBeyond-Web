@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callClaimEventCode, callRedeemTicket, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
+import { anonymousAttendeeName } from './admin/tickets/types';
 
 type ClaimState =
     'loading'
@@ -21,6 +22,8 @@ type ClaimState =
     | 'ticket-already-redeemed'
     | 'ticket-voided'
     | 'ticket-invalid'
+    | 'ticket-hometown-unlisted'
+    | 'ticket-other-event'
     | 'ticket-not-authorized'
     | 'ticket-event-missing';
 
@@ -32,9 +35,15 @@ interface EventInfo {
 }
 
 interface TicketInfo {
+    ticketId: string;
     attendeeName: string;
     attendeeEmail: string;
     eventTitle: string;
+    hometown: boolean;
+    /** A HomeTown ticket missing from the imported list, let in with a warning. */
+    unlisted: boolean;
+    /** A HomeTown ticket left out of the latest export: refunded or transferred, most likely. */
+    missingFromHometown: boolean;
     userCheckedIn: boolean;
     redeemedBy?: string;
     redeemedAt?: string | null;
@@ -52,6 +61,8 @@ export const ClaimPage = () => {
     const [state, setState] = useState<ClaimState>('loading');
     const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
     const [ticketInfo, setTicketInfo] = useState<TicketInfo | null>(null);
+    // The event a HomeTown ticket refused here belongs to.
+    const [otherEventTitle, setOtherEventTitle] = useState('');
     const [retryCount, setRetryCount] = useState(0);
     // Whether there is a profile, not the object: a claim refreshes it, and
     // re-running on the new one would claim again.
@@ -77,9 +88,13 @@ export const ClaimPage = () => {
                 });
                 const d = result.data;
                 setTicketInfo({
+                    ticketId: ticketIdParam!,
                     attendeeName: d.attendeeName ?? '',
                     attendeeEmail: d.attendeeEmail ?? '',
                     eventTitle: d.eventTitle ?? '',
+                    hometown: !!d.hometown,
+                    unlisted: !!d.unlisted,
+                    missingFromHometown: !!d.missingFromHometown,
                     userCheckedIn: !!d.userCheckedIn,
                     redeemedBy: d.redeemedBy,
                     redeemedAt: d.redeemedAt ?? null,
@@ -99,8 +114,14 @@ export const ClaimPage = () => {
                         setState('ticket-voided');
                         break;
                     case 'invalid':
-                    case 'hometown-unlisted':
                         setState('ticket-invalid');
+                        break;
+                    case 'hometown-unlisted':
+                        setState('ticket-hometown-unlisted');
+                        break;
+                    case 'hometown-other-event':
+                        setOtherEventTitle(functionsErrorDetails<{eventTitle?: string}>(err)?.eventTitle ?? '');
+                        setState('ticket-other-event');
                         break;
                     case 'not-authorized':
                         setState('ticket-not-authorized');
@@ -171,6 +192,9 @@ export const ClaimPage = () => {
             </div>
         );
     }
+
+    const holder = ticketInfo && (ticketInfo.attendeeName || ticketInfo.attendeeEmail
+        || anonymousAttendeeName({hometown: ticketInfo.hometown, ticketIds: [ticketInfo.ticketId]}, isEnglish));
 
     return (
         <div className="profile-login-prompt">
@@ -271,21 +295,40 @@ export const ClaimPage = () => {
 
                 {state === 'ticket-redeemed' && ticketInfo && (
                     <>
-                        <h2>{isEnglish ? '✓ Ticket Redeemed' : '✓ 门票已验证'}</h2>
+                        <h2>
+                            {ticketInfo.unlisted
+                                ? (isEnglish ? '✓ Let In — Not on the HomeTown List' : '✓ 已放行 — 不在 HomeTown 名单中')
+                                : (isEnglish ? '✓ Ticket Redeemed' : '✓ 门票已验证')}
+                        </h2>
                         {ticketInfo.eventTitle && (
                             <p className="claim-event-title">{ticketInfo.eventTitle}</p>
                         )}
                         <p>
-                            <strong>{ticketInfo.attendeeName || ticketInfo.attendeeEmail || (isEnglish ? 'Walk-in guest' : '现场来宾')}</strong>
+                            <strong>{holder}</strong>
                         </p>
                         {ticketInfo.attendeeName && ticketInfo.attendeeEmail && (
                             <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>
                         )}
-                        <p className="admin-helper-text">
-                            {ticketInfo.userCheckedIn
-                                ? (isEnglish ? 'Attendee auto-checked in.' : '参加者已自动签到。')
-                                : (isEnglish ? 'Ticket redeemed (attendee not registered on site).' : '门票验证成功（参加者未注册账号）。')}
-                        </p>
+                        {/* The scanner's warnings, for a code read with a phone's camera. */}
+                        {ticketInfo.unlisted ? (
+                            <p className="admin-helper-text admin-tickets-edit-warning">
+                                {isEnglish
+                                    ? 'Check their HomeTown confirmation email is for this event and shows this number; if not, get an admin. Bought after the last import, or not a real ticket for this event. It\'s recorded now, so a second scan of it will be refused.'
+                                    : '请核对其 HomeTown 购票确认邮件是否为本活动且门票号一致；若不一致或无法出示，请联系管理员。可能是上次导入后购买的，也可能不是本活动的真票。此票现已记录，再次扫描将被拒绝。'}
+                            </p>
+                        ) : ticketInfo.missingFromHometown ? (
+                            <p className="admin-helper-text admin-tickets-edit-warning">
+                                {isEnglish
+                                    ? 'Not in the latest HomeTown export: it may have been refunded or transferred. Ask to see their HomeTown ticket email if in doubt.'
+                                    : '不在最新的 HomeTown 导出中：可能已退款或转让。如有疑问，请查看其 HomeTown 购票邮件。'}
+                            </p>
+                        ) : (
+                            <p className="admin-helper-text">
+                                {ticketInfo.userCheckedIn
+                                    ? (isEnglish ? 'Attendee auto-checked in.' : '参加者已自动签到。')
+                                    : (isEnglish ? 'Ticket redeemed (attendee not registered on site).' : '门票验证成功（参加者未注册账号）。')}
+                            </p>
+                        )}
                     </>
                 )}
 
@@ -296,7 +339,7 @@ export const ClaimPage = () => {
                             <p className="claim-event-title">{ticketInfo.eventTitle}</p>
                         )}
                         <p>
-                            <strong>{ticketInfo.attendeeName || ticketInfo.attendeeEmail || (isEnglish ? 'Walk-in guest' : '现场来宾')}</strong>
+                            <strong>{holder}</strong>
                         </p>
                         {ticketInfo.attendeeName && ticketInfo.attendeeEmail && (
                             <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>
@@ -309,6 +352,9 @@ export const ClaimPage = () => {
                                     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                                 })}</>
                             )}
+                            {ticketInfo.unlisted && (isEnglish
+                                ? ', while it wasn\'t on the HomeTown list.'
+                                : '，当时不在 HomeTown 名单中。')}
                         </p>
                     </>
                 )}
@@ -324,6 +370,24 @@ export const ClaimPage = () => {
                     <>
                         <h2>{isEnglish ? 'Invalid Ticket' : '无效的门票'}</h2>
                         <p>{isEnglish ? 'This ticket was not found.' : '未找到此门票。'}</p>
+                    </>
+                )}
+
+                {state === 'ticket-hometown-unlisted' && (
+                    <>
+                        <h2>{isEnglish ? 'Not on the HomeTown List' : '不在 HomeTown 名单中'}</h2>
+                        <p>{isEnglish
+                            ? 'This HomeTown ticket isn\'t on the imported list. Ask an admin to import the latest HomeTown guest list.'
+                            : '此 HomeTown 门票不在已导入的名单中。请管理员导入最新的 HomeTown 来宾名单。'}</p>
+                    </>
+                )}
+
+                {state === 'ticket-other-event' && (
+                    <>
+                        <h2>{isEnglish ? 'Ticket for Another Event' : '其他活动的门票'}</h2>
+                        <p>{isEnglish
+                            ? `This HomeTown ticket is for another event${otherEventTitle ? `: ${otherEventTitle}` : ''}.`
+                            : `此 HomeTown 门票属于其他活动${otherEventTitle ? `：${otherEventTitle}` : ''}。`}</p>
                     </>
                 )}
 
