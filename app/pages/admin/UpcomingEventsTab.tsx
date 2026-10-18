@@ -80,10 +80,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
     const [showPosterCropModal, setShowPosterCropModal] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    const selectEvent = (eventId: string) => {
-        setSelectedEvent(eventId);
-    };
-    useImperativeHandle(forwardedRef, () => ({selectEvent}));
+    useImperativeHandle(forwardedRef, () => ({selectEvent: setSelectedEvent}));
 
     const resetForm = () => {
         setForm(emptyForm);
@@ -130,15 +127,12 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
 
     const saveEvent = async () => {
         if (!form.title.trim() || !form.startAt || !form.endAt) return;
-        // Typed on the Pacific clock, whatever the admin's own computer is set to.
         const startAt = parseSiteTime(form.startAt);
         const endAt = parseSiteTime(form.endAt);
         if (endAt <= startAt) {
             showToast(isEnglish ? 'End time must be after start time.' : '结束时间必须晚于开始时间。', 'error');
             return;
         }
-        // Paid → free keeps the attendees and template on the server, so it can
-        // be undone, but hides the tickets tab; say so.
         if (editingEvent && editingEvent.paid && !form.paid) {
             const ok = confirm(isEnglish
                 ? 'Switching this event from paid to free will hide the tickets tab. Attendee and ticket data is kept on the server so you can switch back, but it will no longer be visible here. To permanently delete attendees, do that from the tickets tab before switching. Continue?'
@@ -414,7 +408,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                             <button
                                 key={event.id}
                                 className="admin-event-card"
-                                onClick={() => selectEvent(event.id)}
+                                onClick={() => setSelectedEvent(event.id)}
                             >
                                 {event.poster ? (
                                     <img src={event.poster} alt="" className="admin-event-card-img"/>

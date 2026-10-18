@@ -10,11 +10,8 @@ import { useModalEffects } from '~/lib/useModalEffects';
 const OPEN_EVENT = 'open-redeem-modal';
 const PASSPORT_CLAIMED_EVENT = 'passport-claimed';
 
-/** Opens the Redeem Code modal, which root mounts once for every page. */
 export const openRedeemModal = () => window.dispatchEvent(new CustomEvent(OPEN_EVENT));
 
-/** Calls `handler` with the id of each passport the modal activates, so a page
- * showing that passport can re-read it. Returns the unsubscribe. */
 export const onPassportClaimed = (handler: (passportId: string) => void) => {
     const listener = (e: Event) => handler((e as CustomEvent<string>).detail);
     window.addEventListener(PASSPORT_CLAIMED_EVENT, listener);
@@ -51,7 +48,6 @@ export const RedeemModal = () => {
     const inputRef = useRef<HTMLInputElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
     const submittingRef = useRef(false);
-    // Escape closes it, but not mid-claim: the answer would land in a closed modal.
     useModalEffects(show, overlayRef, () => {
         if (!submittingRef.current) setShow(false);
     });
@@ -148,8 +144,6 @@ export const RedeemModal = () => {
                 case 'max-uses':
                     setError(isEnglish ? 'This code has reached its maximum uses.' : '此兑换码已达到最大使用次数。');
                     break;
-                // Only a passport key gets here, and its passport was found, so
-                // "invalid" would be wrong.
                 case 'already-claimed':
                     setError(isEnglish
                         ? 'This passport has already been activated.'
@@ -165,7 +159,6 @@ export const RedeemModal = () => {
                         ? (isEnglish ? 'You are already staff for this event.' : '您已是此活动的工作人员。')
                         : (isEnglish ? 'You already have this badge.' : '您已拥有此徽章。'));
                     break;
-                // A check-in code names itself, so it's turned away by name.
                 case 'event-code':
                     setError(isEnglish
                         ? 'That code checks you in at an event — use the link or QR code from the event itself.'

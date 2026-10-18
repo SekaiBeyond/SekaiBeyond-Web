@@ -1,25 +1,14 @@
 import { type QueryDocumentSnapshot } from 'firebase/firestore';
 import { createCollectionCache } from './collectionCache';
 
-/**
- * A traffic source for tracked QR codes: one code per platform for the same
- * URL, so scan counts compare click-through.
- */
 export interface SocialPlatform {
     id: string;
     label: string;
-    /** Chinese display name, when the brand differs (falls back to `label`). */
     labelCn?: string;
-    /** Sort order in the picker (ascending). */
     order: number;
 }
 
-/**
- * The built-in platforms. They seed `socialPlatforms` and stand in until it has
- * entries, so the picker is never empty. Stable ids keep {@link
- * seedSocialPlatforms} idempotent.
- */
-export const DEFAULT_SOCIAL_PLATFORMS: SocialPlatform[] = [
+const DEFAULT_SOCIAL_PLATFORMS: SocialPlatform[] = [
     {id: 'instagram', label: 'Instagram', order: 0},
     {id: 'x', label: 'X (Twitter)', order: 1},
     {id: 'tiktok', label: 'TikTok', order: 2},
@@ -46,42 +35,25 @@ const cache = createCollectionCache<SocialPlatform>('socialPlatforms', mapDoc);
 const sortPlatforms = (list: SocialPlatform[]): SocialPlatform[] =>
     [...list].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
 
-/** The collection once it has entries, else the built-in defaults. */
 function effective(items: SocialPlatform[] | null): SocialPlatform[] {
     return items && items.length ? sortPlatforms(items) : DEFAULT_SOCIAL_PLATFORMS;
 }
 
-/**
- * The live platform list. `customized` is true once the collection has its own
- * entries.
- */
 export function useSocialPlatforms(): {
     platforms: SocialPlatform[];
     customized: boolean;
-    loading: boolean;
     refresh: () => Promise<void>;
 } {
-    const {items, loading, refresh} = cache.useItems();
-    return {platforms: effective(items), customized: items.length > 0, loading, refresh};
+    const {items, refresh} = cache.useItems();
+    return {platforms: effective(items), customized: items.length > 0, refresh};
 }
 
-/** Synchronous effective list for code that runs outside React (e.g. qrToDraft). */
-export function socialPlatformsSnapshot(): SocialPlatform[] {
-    return effective(cache.peek());
-}
-
-export const getSocialPlatform = (
-    id: string,
-    platforms: SocialPlatform[] = socialPlatformsSnapshot(),
-): SocialPlatform | undefined => platforms.find(p => p.id === id);
-
-/** A platform tag's display name, or the raw id for a deleted platform. */
 export function socialPlatformName(
     id: string,
     isEnglish: boolean,
-    platforms: SocialPlatform[] = socialPlatformsSnapshot(),
+    platforms: SocialPlatform[] = DEFAULT_SOCIAL_PLATFORMS,
 ): string {
-    const p = getSocialPlatform(id, platforms);
+    const p = platforms.find(item => item.id === id);
     if (!p) return id;
     return isEnglish ? p.label : (p.labelCn ?? p.label);
 }

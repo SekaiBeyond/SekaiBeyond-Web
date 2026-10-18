@@ -1,61 +1,46 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-/** What a scan came to, as far as the person at the door needs to hear or feel it. */
 export type ScanOutcome = 'success' | 'issue';
 
 interface Tone {
-    /** Pitch, in Hz. */
     freq: number;
-    /** Seconds after the sound starts. */
     at: number;
-    /** Seconds. */
     length: number;
     wave: OscillatorType;
     volume: number;
 }
 
-// Synthesised: nothing to download or allow in the CSP, and no delay.
 const SOUNDS: Record<ScanOutcome, Tone[]> = {
-    // Two quick rising beeps, the checkout "accepted".
     success: [
         {freq: 880, at: 0, length: 0.09, wave: 'sine', volume: 0.6},
         {freq: 1320, at: 0.11, length: 0.15, wave: 'sine', volume: 0.6},
     ],
-    // A low double buzz, unmistakable for the chirp over a noisy queue. Square,
-    // because phone speakers barely reproduce 220 Hz and its overtones carry.
+    // Square wave so phone speakers carry the 220 Hz low double buzz via overtones.
     issue: [
         {freq: 220, at: 0, length: 0.18, wave: 'square', volume: 0.3},
         {freq: 220, at: 0.24, length: 0.18, wave: 'square', volume: 0.3},
     ],
 };
 
-/** Fade in and out over this many seconds, so tones don't click. */
 const RAMP_S = 0.005;
 
-// On/off milliseconds: short taps against long buzzes, told apart by feel.
 const VIBRATIONS: Record<ScanOutcome, number[]> = {
     success: [50, 50, 50],
     issue: [250, 100, 250],
 };
 
-export interface ScanSoundControls {
+interface ScanSoundControls {
     enabled: boolean;
     setEnabled: (on: boolean) => void;
     play: (outcome: ScanOutcome) => void;
 }
 
-/**
- * Beeps for ticket scan results, on or off per device. Audio can only start
- * from a gesture and results arrive without one, so the operator's own taps
- * (Start Camera, Redeem, the toggle) wake it.
- */
 export function useScanSound(): ScanSoundControls {
     const [enabled, store] = useDeviceSetting('ticketScanSound');
     const enabledRef = useRef(enabled);
     enabledRef.current = enabled;
     const ctxRef = useRef<AudioContext | null>(null);
 
-    // Only does anything from inside a gesture handler.
     const wake = useCallback((): AudioContext | null => {
         if (typeof AudioContext === 'undefined') return null;
         // Safari defaults to 'ambient', which the silent switch mutes.
@@ -91,8 +76,6 @@ export function useScanSound(): ScanSoundControls {
     const setEnabled = useCallback((on: boolean) => {
         store(on);
         if (on) {
-            // The toggle's tap wakes the audio, and a sample lets them check the
-            // volume.
             const ctx = wake();
             if (ctx) void ctx.resume().then(() => playTones(ctx, 'success'));
         } else {
@@ -112,29 +95,21 @@ export function useScanSound(): ScanSoundControls {
     return {enabled, setEnabled, play};
 }
 
-export interface ScanVibrationControls extends ScanSoundControls {
-    /** Whether this device can vibrate, and so whether a toggle is worth showing. */
+interface ScanVibrationControls extends ScanSoundControls {
     supported: boolean;
 }
 
-/**
- * Vibration for ticket scan results, on or off per device. Android only (iOS
- * has no Vibration API), and like audio it needs a prior tap, which Start
- * Camera always is.
- */
 export function useScanVibration(): ScanVibrationControls {
     const [enabled, store] = useDeviceSetting('ticketScanVibrate');
     const [supported, setSupported] = useState(false);
 
-    // Desktop Chrome has the API without a motor; a coarse pointer is the best
-    // sign of a handheld.
+    // Desktop Chrome exposes navigator.vibrate without a motor; coarse pointer identifies handhelds.
     useEffect(() => {
         setSupported('vibrate' in navigator && matchMedia('(pointer: coarse)').matches);
     }, []);
 
     const setEnabled = useCallback((on: boolean) => {
         store(on);
-        // A sample, so whoever turned it on knows it works on this phone.
         if (on && supported) navigator.vibrate(VIBRATIONS.success);
     }, [store, supported]);
 
@@ -145,7 +120,6 @@ export function useScanVibration(): ScanVibrationControls {
     return {enabled, setEnabled, play, supported};
 }
 
-/** An on/off setting kept on this device, on until switched off. */
 function useDeviceSetting(key: string): [boolean, (on: boolean) => void] {
     const [on, setOn] = useState(true);
 

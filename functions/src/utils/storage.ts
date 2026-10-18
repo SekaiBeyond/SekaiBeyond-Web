@@ -1,7 +1,7 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { getStorage } from "firebase-admin/storage";
 
-export const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "upcoming-events/headers/", "badges/", "team/", "config/", "passports/", "con/"];
+const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "badges/", "team/", "config/", "passports/", "con/"];
 export const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
 export const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
@@ -22,7 +22,7 @@ export function validateStoragePath(path: string): void {
     }
 }
 
-export const IMAGE_SIGNATURES: {mime: string; magic: Buffer}[] = [
+const IMAGE_SIGNATURES: {mime: string; magic: Buffer}[] = [
     {mime: "image/jpeg", magic: Buffer.from([0xFF, 0xD8, 0xFF])},
     {mime: "image/png", magic: Buffer.from([0x89, 0x50, 0x4E, 0x47])},
     {mime: "image/gif", magic: Buffer.from([0x47, 0x49, 0x46, 0x38])},

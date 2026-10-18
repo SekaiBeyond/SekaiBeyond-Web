@@ -4,7 +4,6 @@ import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 export interface BadgeCode {
     id: string;
     code: string;
-    eventId: string;
     active: boolean;
     activeFrom: string | null;
     activeUntil: string | null;
@@ -15,22 +14,17 @@ export interface BadgeCode {
 export interface BadgeActivationCode {
     id: string;
     code: string;
-    badgeId: string;
     active: boolean;
     activeFrom: string | null;
     activeUntil: string | null;
     maxUses: number;
     usedCount: number;
-    createdBy: string;
-    createdAt: Date;
 }
 
 export interface BadgeDef extends BaseBadgeDef {
-    createdBy: string;
     createdByUid: string;
     createdByName: string;
     createdByLink: string;
-    createdAt: Date;
 }
 
 export interface UserRecord {
@@ -96,7 +90,7 @@ export const RECORD_CATEGORIES = {
         en: 'Ticket', zh: '门票',
         types: ['ticket-import', 'ticket-walk-in', 'ticket-redeem', 'ticket-void', 'ticket-unvoid', 'ticket-reset',
             'ticket-type-edit', 'ticket-attendee-delete', 'ticket-attendee-edit', 'ticket-regenerate',
-            'ticket-email-send', 'ticket-email-queue'],
+            'ticket-email-send', 'ticket-email-queue', 'hometown-import', 'hometown-admit-unlisted'],
     },
     tag: {
         en: 'Tag', zh: '标签',
@@ -133,7 +127,7 @@ export const RECORD_CATEGORIES = {
 } as const satisfies Record<string, {en: string; zh: string; types: readonly string[]}>;
 
 export type RecordCategory = keyof typeof RECORD_CATEGORIES;
-export type RecordType = (typeof RECORD_CATEGORIES)[RecordCategory]['types'][number];
+type RecordType = (typeof RECORD_CATEGORIES)[RecordCategory]['types'][number];
 
 /** A record as the Records tab reads it. Mirrors RecordFields in functions/src/utils/records.ts. */
 export interface ActivityRecord {
@@ -192,5 +186,15 @@ export interface ActivityRecord {
     /** A walk-in's tickets, and whether they were checked in as they were added. */
     ticketCount?: number;
     checkedIn?: boolean;
+    /** HomeTown tickets admitted unlisted at the door that an import then found. */
+    confirmedCount?: number;
+    /**
+     * A HomeTown import that updated existing tickets: how many changed, and how
+     * many listed ones the file left out.
+     */
+    updatedCount?: number;
+    missingCount?: number;
+    /** Whether unlisted HomeTown tickets are now admitted. */
+    enabled?: boolean;
     timestamp: Date;
 }

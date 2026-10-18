@@ -33,8 +33,6 @@ export function EventStaffSection({
             setLoading(true);
             try {
                 const db = getFirebaseDb();
-                // From users' eventStaffEvents, which keeps the past-event id on
-                // archive, so this covers past events too.
                 const q = query(
                     collection(db, 'users'),
                     where('eventStaffEvents', 'array-contains', eventId),
@@ -68,15 +66,7 @@ export function EventStaffSection({
             const attendeeRemoved = result.data.attendeeRemoved;
             setStaffList(prev => {
                 if (prev.some(u => u.uid === user.uid)) return prev;
-                const next = [...prev, {
-                    ...user,
-                    eventStaffEvents: [...user.eventStaffEvents, eventId],
-                    attendedEvents: attendeeRemoved
-                        ? user.attendedEvents.filter(e => e !== eventId)
-                        : user.attendedEvents.includes(eventId)
-                            ? user.attendedEvents
-                            : [...user.attendedEvents, eventId],
-                }];
+                const next = [...prev, user];
                 onCountChange?.(next.length);
                 return next;
             });

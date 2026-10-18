@@ -26,7 +26,7 @@ export const SENDER_DOMAIN = (() => {
 })();
 export const DEFAULT_SENDER_PREFIX = "no-reply";
 export const IMPORT_MAX_ROWS = Number(process.env.IMPORT_MAX_ROWS) || 1000;
-export const RECORD_RETENTION_DAYS = 30;
+const RECORD_RETENTION_DAYS = 30;
 
 export function recordExpiresAt(): Timestamp {
     return Timestamp.fromMillis(Date.now() + RECORD_RETENTION_DAYS * 24 * 60 * 60 * 1000);
@@ -34,13 +34,13 @@ export function recordExpiresAt(): Timestamp {
 
 // Kept a year so trend charts cover a full event season. The TTL policy is on
 // the `scans` collection group (firestore.indexes.json).
-export const SCAN_RETENTION_DAYS = 365;
+const SCAN_RETENTION_DAYS = 365;
 
 export function scanExpiresAt(): Timestamp {
     return Timestamp.fromMillis(Date.now() + SCAN_RETENTION_DAYS * 24 * 60 * 60 * 1000);
 }
 
-export const DELETION_COOLDOWN_HOURS = 48;
+const DELETION_COOLDOWN_HOURS = 48;
 
 export function deletionExpiresAt(): Timestamp {
     return Timestamp.fromMillis(Date.now() + DELETION_COOLDOWN_HOURS * 60 * 60 * 1000);

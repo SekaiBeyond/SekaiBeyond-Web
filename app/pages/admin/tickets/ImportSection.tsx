@@ -23,7 +23,7 @@ const MAPPING_SPAN_STYLE = {
 const MAPPING_SELECT_STYLE = {
     padding: '4px 8px',
     borderRadius: '4px',
-    border: '1px solid var(--border-color, #ccc)',
+    border: '1px solid #ccc',
     width: '100%',
     textOverflow: 'ellipsis',
 };
@@ -45,8 +45,6 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
     const [importing, setImporting] = useState(false);
     const [busy, setBusy] = useState(false);
 
-    // Only the rows on show, so a thousand-row paste doesn't spend a lookup per
-    // row.
     const previewEmails = useMemo(
         () => rows.slice(0, MAX_PREVIEW).map(r => r.email),
         [rows],

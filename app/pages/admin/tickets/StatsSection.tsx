@@ -26,7 +26,15 @@ interface StatsSectionProps {
     onRefresh: () => void;
 }
 
-const TYPE_COLORS: Record<TicketType, string> = {
+/** An unlisted HomeTown ticket's type, unknown until an import lists it. */
+const UNKNOWN_TYPE = 'unknown';
+type StatType = TicketType | typeof UNKNOWN_TYPE;
+const STAT_TYPES: StatType[] = [...TICKET_TYPES.map(t => t.value), UNKNOWN_TYPE];
+
+const statTypeLabel = (type: StatType, isEnglish: boolean): string =>
+    type === UNKNOWN_TYPE ? (isEnglish ? 'Unknown' : '未知') : ticketTypeLabel(type, isEnglish);
+
+const TYPE_COLORS: Record<StatType, string> = {
     normal: '#6c757d',
     'early-bird': '#ffc107',
     student: '#6f42c1',
@@ -35,6 +43,7 @@ const TYPE_COLORS: Record<TicketType, string> = {
     'Comp Ticket': '#28a745',
     guest: '#17a2b8',
     vendor: '#fd7e14',
+    [UNKNOWN_TYPE]: '#ced4da',
 };
 
 const STATUS_COLORS = {
@@ -57,7 +66,7 @@ interface TypeStatusDatum {
 
 interface TimelineEntry {
     date: Date;
-    type: TicketType;
+    type: StatType;
 }
 
 // Per bucket: a label, the running total, and a count per ticket type for the
@@ -65,11 +74,11 @@ interface TimelineEntry {
 type TimelineDatum = {
     label: string;
     cumulative: number;
-} & Partial<Record<TicketType, number>>;
+} & Partial<Record<StatType, number>>;
 
 interface Timeline {
     data: TimelineDatum[];
-    types: TicketType[];
+    types: StatType[];
 }
 
 // Hour, day or week buckets by span, split by type, with a running total.
@@ -80,8 +89,8 @@ const buildTimeline = (entries: TimelineEntry[], isEnglish: boolean): Timeline =
     const granularity = granularityForSpan(sorted[0].date, sorted[sorted.length - 1].date);
     const bucketOf = bucketStart[granularity];
 
-    const buckets = new Map<number, Partial<Record<TicketType, number>>>();
-    const seen = new Set<TicketType>();
+    const buckets = new Map<number, Partial<Record<StatType, number>>>();
+    const seen = new Set<StatType>();
     for (const {date, type} of entries) {
         const key = bucketOf(date).getTime();
         const rec = buckets.get(key) ?? {};
@@ -90,7 +99,7 @@ const buildTimeline = (entries: TimelineEntry[], isEnglish: boolean): Timeline =
         seen.add(type);
     }
 
-    const types = TICKET_TYPES.map(t => t.value).filter(v => seen.has(v));
+    const types = STAT_TYPES.filter(v => seen.has(v));
 
     const data: TimelineDatum[] = [];
     let cumulative = 0;
@@ -135,7 +144,7 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
                     activeTickets++;
                     if (t.redeemed) redeemedTickets++;
                 }
-                const type = t.type || 'normal';
+                const type: StatType = a.unlisted ? UNKNOWN_TYPE : (t.type || 'normal');
                 typeCounts[type] = (typeCounts[type] || 0) + 1;
                 // Active tickets per type, split into redeemed and not.
                 if (!t.voided) {
@@ -150,11 +159,11 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
             }
         }
 
-        const typeData: ChartDatum[] = TICKET_TYPES
-            .map(tt => ({
-                name: isEnglish ? tt.labelEn : tt.labelCn,
-                value: typeCounts[tt.value] || 0,
-                color: TYPE_COLORS[tt.value],
+        const typeData: ChartDatum[] = STAT_TYPES
+            .map(type => ({
+                name: statTypeLabel(type, isEnglish),
+                value: typeCounts[type] || 0,
+                color: TYPE_COLORS[type],
             }))
             .filter(d => d.value > 0);
 
@@ -176,11 +185,11 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
             },
         ].filter(d => d.value > 0);
 
-        const typeStatusData: TypeStatusDatum[] = TICKET_TYPES
-            .map(tt => ({
-                name: isEnglish ? tt.labelEn : tt.labelCn,
-                redeemed: redeemedByType[tt.value] || 0,
-                unredeemed: unredeemedByType[tt.value] || 0,
+        const typeStatusData: TypeStatusDatum[] = STAT_TYPES
+            .map(type => ({
+                name: statTypeLabel(type, isEnglish),
+                redeemed: redeemedByType[type] || 0,
+                unredeemed: unredeemedByType[type] || 0,
             }))
             .filter(d => d.redeemed > 0 || d.unredeemed > 0);
 
@@ -424,7 +433,7 @@ function ChartTypeStatus(
 const CUMULATIVE_KEY = 'cumulative';
 
 function ChartTimeline(
-    {data, types, isEnglish}: {data: TimelineDatum[]; types: TicketType[]; isEnglish: boolean},
+    {data, types, isEnglish}: {data: TimelineDatum[]; types: StatType[]; isEnglish: boolean},
 ) {
     // Series toggled off in the legend.
     const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -484,7 +493,7 @@ function ChartTimeline(
                         yAxisId="left"
                         stackId="created"
                         dataKey={type}
-                        name={ticketTypeLabel(type, isEnglish)}
+                        name={statTypeLabel(type, isEnglish)}
                         fill={TYPE_COLORS[type]}
                         maxBarSize={48}
                         hide={hidden.has(type)}

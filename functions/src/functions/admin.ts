@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
-import { adminTransaction, checkRateLimit, normalizeGroup, requireAdmin, requireAuth, } from "../utils/auth";
+import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
 import { DEFAULT_SENDER_PREFIX, RESEND_QUEUE_CAP, SENDER_DOMAIN } from "../utils/config";
 import { db } from "../utils/firebase";
 import { EMAIL_PROVIDER, syncProviderUsage } from "../utils/emailProvider";
@@ -141,9 +141,7 @@ export const getUploadLimits = onCall({maxInstances: 10}, async () => ({
 }));
 
 export const saveTag = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as Record<string, unknown>;
     const tagId = input.tagId ? validateDocId(input.tagId, "tagId") : null;
@@ -181,9 +179,7 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const deleteTag = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const tagId = validateDocId((request.data as {tagId?: string})?.tagId, "tagId");
 
@@ -201,9 +197,7 @@ export const deleteTag = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const savePolicy = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as Record<string, unknown>;
     const contentEn = validateStr(input.contentEn, "contentEn", 20000);
@@ -305,9 +299,7 @@ async function resolveXiaohongshuShareLink(shareLink: string): Promise<string> {
 }
 
 export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as Record<string, unknown>;
 
@@ -921,9 +913,7 @@ function conAssetUrls(content: Record<string, any>): string[] {
  * firestore.rules.
  */
 export const saveConContent = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as Record<string, unknown>;
     const sections = CON_SECTIONS.filter(section => input[section] !== undefined);
@@ -1063,9 +1053,7 @@ function venueUwFields(input: Record<string, unknown>): {
 }
 
 export const saveVenue = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as Record<string, unknown>;
     const venueId = input.venueId ? validateDocId(input.venueId, "venueId") : null;
@@ -1107,9 +1095,7 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     return {venueId: docId};
 });
 export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const venueId = validateDocId((request.data as {venueId?: string})?.venueId, "venueId");
 
@@ -1130,9 +1116,7 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
     return {deleted: true};
 });
 export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {teamMembers?: any[]};
     const members = Array.isArray(input.teamMembers) ? input.teamMembers : [];
@@ -1226,7 +1210,6 @@ const GROUP_LABELS: Record<string, {en: string; zh: string}> = {
     "president": {en: "President", zh: "社长"},
 };
 
-// An account's effective title per language: its explicit title, else its group label.
 const accountEffectiveTitle = (acc: {group: string; title: string; titleCn: string}) => {
     const labels = GROUP_LABELS[acc.group] ?? {en: "", zh: ""};
     return {
@@ -1330,12 +1313,6 @@ export const getSenderSettings = onCall({maxInstances: 10}, async (request) => {
 
 // Outbound-email capacity for the Email Quota tool. Core-staff+, like the sends
 // it describes.
-//
-// Two numbers come back: providerReported, the provider's own count read live
-// (null when unavailable), and sentToday, the local counter that gates sends,
-// confirmed plus in-flight. The local counter only updates on sends, so between
-// them it drifts from the provider's rolling window; reading the provider here
-// re-anchors it.
 export const getEmailQuotaStatus = onCall({
     maxInstances: 5,
     secrets: [RESEND_API_KEY],
@@ -1343,10 +1320,6 @@ export const getEmailQuotaStatus = onCall({
     const uid = await requireAuth(request);
     await requireAdmin(uid);
 
-    // Folded into the cache with a zero send-delta, which refreshes `confirmed`
-    // without touching in-flight reservations, so the rest of this request and
-    // the next send see it. Mid-send this can briefly double-count, which errs
-    // toward the safe side for the cap.
     const usage = await syncProviderUsage();
 
     const [quota, queue, fromAddress] = await Promise.all([
@@ -1355,31 +1328,23 @@ export const getEmailQuotaStatus = onCall({
         getSenderAddress(),
     ]);
 
-    // "cached": the live read failed but an earlier send recorded one, shown
-    // aged. "unavailable": never read at all, which the panel must not show as
-    // 0 of 100.
     const readingSource = usage !== null ? "live"
         : quota.observedAt !== null ? "cached"
             : "unavailable";
 
     return {
         provider: {
-            id: EMAIL_PROVIDER.id,
             name: EMAIL_PROVIDER.name,
             windowKind: EMAIL_PROVIDER.windowKind,
             fromAddress,
         },
         providerReported: readingSource === "unavailable" ? null : quota.confirmed,
         readingSource,
-        // The scan hit its page budget before the window edge, so the figure is
-        // a floor.
         usageTruncated: usage?.truncated ?? false,
         ...quota,
         ...queue,
         queueCap: RESEND_QUEUE_CAP,
         drainIntervalMinutes: DRAIN_INTERVAL_MINUTES,
-        // So the client can age observedAt/oldestQueuedAt without trusting its
-        // own clock.
         serverNow: new Date().toISOString(),
     };
 });

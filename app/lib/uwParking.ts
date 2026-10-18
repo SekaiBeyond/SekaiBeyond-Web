@@ -58,41 +58,33 @@ export interface WalkingTime {
     meters: number;
 }
 
-export interface VenueWalking {
-    /** The venue location the times were measured from. */
+interface VenueWalking {
     lat: number;
     lng: number;
     lots: Record<string, WalkingTime>;
 }
 
 /**
- * A venue's building footprint. Each polygon maps ring index to a flat
- * [lng, lat, lng, lat, …] list (Firestore can't nest arrays), outline first.
+ * Building footprint polygons mapping ring index to flat `[lng, lat, lng, lat, …]`
+ * coordinate lists.
  */
 export interface VenueOutline {
-    /** The UW building code it was looked up by. */
-    code: string;
     polygons: Record<string, number[]>[];
 }
 
 export interface UwParkingData {
     lots: UwLot[];
-    /** When UW generated the lot file, as UW writes it. */
     lotsGeneratedAt: string;
-    lotsSyncedAt: Date | null;
     eventPricing: UwEventPricing[];
     walking: Record<string, VenueWalking>;
-    /** Keyed by venue document ID, like walking. */
     outlines: Record<string, VenueOutline>;
     lastRunAt: Date | null;
-    /** Sources the last sync could not refresh; their previous copy was kept. */
     lastRunErrors: string[];
 }
 
 const EMPTY: UwParkingData = {
     lots: [],
     lotsGeneratedAt: '',
-    lotsSyncedAt: null,
     eventPricing: [],
     walking: {},
     outlines: {},
@@ -107,7 +99,6 @@ const cache = createValueCache<UwParkingData>('uwParking', async () => {
     return {
         lots: Array.isArray(data.lots) ? data.lots : [],
         lotsGeneratedAt: typeof data.lotsGeneratedAt === 'string' ? data.lotsGeneratedAt : '',
-        lotsSyncedAt: toDate(data.lotsSyncedAt),
         eventPricing: Array.isArray(data.eventPricing) ? data.eventPricing : [],
         walking: data.walking && typeof data.walking === 'object' ? data.walking : {},
         outlines: data.outlines && typeof data.outlines === 'object' ? data.outlines : {},
@@ -132,16 +123,12 @@ const LOT_TYPES: Record<string, {en: string; zh: string}> = {
     'Underground Garage': {en: 'Underground garage', zh: '地下停车库'},
 };
 
-/** Localized lot type (e.g. "Underground garage" / "地下停车库"), or UW's own words for a type it adds. */
 export function uwLotTypeLabel(type: string, isEnglish: boolean): string {
     return LOT_TYPES[type]?.[isEnglish ? 'en' : 'zh'] ?? type;
 }
 
-/** Whether UW calls the lot a garage of any kind. */
 export const isGarage = (lot: Pick<UwLot, 'type'>): boolean => /Garage/.test(lot.type);
 
-/** Badge glyph for a lot: G for garages, P for surface lots. */
 export const uwLotGlyph = (type: string): string => isGarage({type}) ? 'G' : 'P';
 
-/** Whole minutes for a walk, never less than one. */
 export const walkMinutes = (seconds: number): number => Math.max(1, Math.round(seconds / 60));

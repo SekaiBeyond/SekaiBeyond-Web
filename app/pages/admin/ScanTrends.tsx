@@ -163,7 +163,7 @@ interface ScanTrendsProps {
 }
 
 /** One QR code's scan history over time. */
-export function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
+function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
     const {isEnglish} = useLanguage();
     const {platforms: platformDefs} = useSocialPlatforms();
     // Platform id being viewed ('' = the Direct bucket); null = all stacked.

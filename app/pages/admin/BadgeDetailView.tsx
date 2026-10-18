@@ -139,14 +139,11 @@ export const BadgeDetailView = ({
                 return {
                     id: docSnap.id,
                     code: data.code,
-                    badgeId: data.badgeId,
                     active: data.active ?? true,
                     activeFrom: data.activeFrom ?? null,
                     activeUntil: data.activeUntil ?? null,
                     maxUses: data.maxUses ?? 0,
                     usedCount: data.usedCount ?? 0,
-                    createdBy: data.createdBy ?? '',
-                    createdAt: data.createdAt?.toDate?.() ?? new Date(),
                 };
             }));
         } finally {
@@ -289,14 +286,12 @@ export const BadgeDetailView = ({
             const {id, code} = result.data;
 
             setBadgeActivationCodes(prev => [{
-                id, code, badgeId,
+                id, code,
                 active: true,
                 activeFrom: params.activeFrom ?? null,
                 activeUntil: params.activeUntil ?? null,
                 maxUses: newCodeMaxUses,
                 usedCount: 0,
-                createdBy: user.uid,
-                createdAt: new Date(),
             }, ...prev]);
             setNewCodeMaxUses(100);
             setNewCodeUnlimited(false);

@@ -15,7 +15,7 @@ const cache = createCollectionCache<Tag>('eventLabels', docSnap => {
     };
 });
 
-export function useTags(): {tags: Tag[]; loading: boolean; refresh: () => Promise<void>} {
-    const {items, loading, refresh} = cache.useItems();
-    return {tags: items, loading, refresh};
+export function useTags(): {tags: Tag[]; refresh: () => Promise<void>} {
+    const {items, refresh} = cache.useItems();
+    return {tags: items, refresh};
 }

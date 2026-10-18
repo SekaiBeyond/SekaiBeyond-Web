@@ -59,7 +59,6 @@ export const Hero = () => {
                         <span>{isEnglish ? "Become a Member" : "成为会员"}</span>
                         <span>🌸</span>
                     </a>
-                    {/* Past events are always there, so they hold this spot until an upcoming event takes it. */}
                     {hasActive ? (
                         <a href="#upcoming" className="btn btn-secondary" onClick={(e) => scrollTo(e, "upcoming")}>
                             <span>{isEnglish ? (activeEvents.length === 1 ? "See Upcoming Event" : "See Upcoming Events") : "查看活动预告"}</span>

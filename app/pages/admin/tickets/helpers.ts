@@ -82,10 +82,7 @@ export const mapAttendeeDoc = (
             createdAt: tsToDate(tk.createdAt),
             redeemed: (tk.redeemed as boolean) ?? false,
             redeemedAt: tsToDate(tk.redeemedAt),
-            redeemedBy: (tk.redeemedBy as string) ?? '',
             redeemedByName: (tk.redeemedByName as string) ?? '',
-            checkedIn: (tk.checkedIn as boolean) ?? false,
-            checkedInAt: tsToDate(tk.checkedInAt),
             voided: (tk.voided as boolean) ?? false,
         };
     });
@@ -98,14 +95,21 @@ export const mapAttendeeDoc = (
         emailScheduled: (data.emailScheduled as boolean) ?? false,
         emailSentAt: tsToDate(data.emailSentAt),
         createdAt: tsToDate(data.createdAt) ?? new Date(),
-        updatedAt: tsToDate(data.updatedAt) ?? new Date(),
         tickets,
         ticketIds: Array.isArray(data.ticketIds) ? (data.ticketIds as string[]) : [],
         walkIn: data.walkIn === true,
+        hometown: data.source === 'hometown',
+        unlisted: data.unlisted === true,
+        missingFromHometown: data.missingFromHometown === true,
+        hometownSeenAt: tsToDate(data.hometownSeenAt),
+        hometownOrderId: (data.hometownOrderId as string) ?? '',
     };
 };
 
-/** An attendee in a sentence: name and email, whichever one they gave, or neither. */
+const hometownStatus = (a: Pick<AttendeeData, 'hometown' | 'unlisted' | 'missingFromHometown'>) =>
+    !a.hometown ? '' : a.unlisted ? 'unlisted' : a.missingFromHometown ? 'missing' : 'listed';
+
+/** Who removing an attendee removes. Never a HomeTown ticket: those are voided, not removed. */
 export const attendeeLabel = (a: Pick<AttendeeData, 'name' | 'email'>, isEnglish: boolean): string => {
     if (a.name && a.email) return isEnglish ? `${a.name} (${a.email})` : `${a.name}（${a.email}）`;
     return a.name || a.email || (isEnglish ? 'this walk-in guest' : '这位现场来宾');
@@ -121,35 +125,32 @@ export const ticketStatusCounts = (a: AttendeeData) => {
     return {used, voided, remaining: a.ticketCount - used - voided};
 };
 
-/** `YYYY-MM-DD HH:MM` in the admin's zone, which the import reads back the same way. */
 const csvDateTime = (d: Date | null): string => {
     if (!d) return '';
     const pad = (value: number): string => String(value).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-/**
- * Every attendee, one row each. The email, name, count, type and createdAt
- * headers are ones the import picks up, so the file imports into another event,
- * all but the walk-ins without an email.
- */
 export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
     buildCsv(
-        ['email', 'name', 'ticketCount', 'type', 'redeemed', 'voided', 'emailSent', 'emailSentAt', 'createdAt', 'walkIn'],
+        ['email', 'name', 'ticketCount', 'type', 'redeemed', 'voided', 'emailSent', 'emailSentAt', 'createdAt', 'walkIn',
+            'hometownTicket', 'hometownStatus'],
         attendees.map(a => {
             const {used, voided} = ticketStatusCounts(a);
             return [
                 a.email,
                 a.name,
                 String(a.ticketCount),
-                ticketTypeLabel(a.tickets[0]?.type || 'normal', true),
+                // Unknown for an unlisted HomeTown ticket until an import lists it.
+                a.unlisted ? '' : ticketTypeLabel(a.tickets[0]?.type || 'normal', true),
                 String(used),
                 String(voided),
-                // Never "yes" without an address: there was nothing to send.
-                a.email ? (a.emailSent ? 'yes' : 'no') : '',
+                a.email && !a.hometown ? (a.emailSent ? 'yes' : 'no') : '',
                 csvDateTime(a.emailSentAt),
                 csvDateTime(a.createdAt),
                 a.walkIn ? 'yes' : 'no',
+                a.hometown ? (a.ticketIds[0] ?? '') : '',
+                hometownStatus(a),
             ];
         }),
     );
@@ -178,23 +179,17 @@ const SAMPLE_TICKET_BLOCK = [
     `</div>`,
 ).join('\n');
 
-/**
- * Mirrors renderTemplate on the server with sample attendee values, escaped in
- * the body and raw in the subject. A blank contactEmail leaves its placeholder
- * showing.
- */
 const fillSample = (text: string, event: UpcomingEvent, contactEmail: string, htmlContext: boolean): string => {
     const sub = htmlContext ? escapeHtml : (s: string) => s;
     const headerImage = event.emailHeaderBg
         ? `<img src="${escapeHtml(event.emailHeaderBg)}" alt="${sub(event.title)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
         : `<div style="background-color:#ff6b9d;height:120px;"></div>`;
-    // In the zone the server writes it in, whatever the admin's own clock says.
     const eventDate = event.startAt.toLocaleString('en-US', {
         timeZone: SITE_TIME_ZONE,
         year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
         timeZoneName: 'shortGeneric',
     });
-    // Function replacements, as on the server, so a $ in the event's title shows as typed.
+    // Function replacements, as on the server, so a `$` in the title isn't read as a pattern.
     return text
         .replace(/{{\s*attendeeEmail\s*}}/g, () => 'sample@example.com')
         .replace(/{{\s*attendeeName\s*}}/g, () => 'Sample Attendee')
@@ -210,7 +205,5 @@ const fillSample = (text: string, event: UpcomingEvent, contactEmail: string, ht
 export const renderSampleSubject = (template: EmailTemplate, event: UpcomingEvent, contactEmail: string): string =>
     fillSample(template.subject, event, contactEmail, false);
 
-// The server's save-time allowlist, so the preview shows only what survives a
-// save.
 export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEvent, contactEmail: string): string =>
     sanitizeEmailHtml(fillSample(template.bodyHtml, event, contactEmail, true));

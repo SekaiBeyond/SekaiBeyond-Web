@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -21,25 +21,20 @@ import { AttendeeModal } from '../AttendeeModal';
 import { TicketScanner } from '../TicketScanner';
 import type { ShowToast } from '../utils';
 import { AttendeesSection } from './AttendeesSection';
+import { EmailsSection } from './EmailsSection';
+import { HometownSection } from './HometownSection';
 import { ImportSection } from './ImportSection';
-import { SendSection } from './SendSection';
+import { SettingsSection } from './SettingsSection';
 import { StatsSection } from './StatsSection';
-import { TemplateSection } from './TemplateSection';
 import { attendeeLabel, buildAttendeeCsv, mapAttendeeDoc } from './helpers';
 import { useAccountLinks } from './useAccountLinks';
-import { type AttendeeData, type TicketData, type TicketsSection, type TicketType } from './types';
+import { type AttendeeData, type StatusFilter, type TicketData, type TicketsSection, type TicketType } from './types';
 
 interface TicketsSubtabProps {
     event: UpcomingEvent;
     readOnly: boolean;
-    /**
-     * Who may scan, as redeemTicket decides: 'always' for core staff,
-     * 'event-days' for the staff group and the event's staff.
-     */
     scanAccess: 'always' | 'event-days' | 'none';
     showToast: ShowToast;
-    // Where ticket attendees live: under `pastEvents` once archived, else
-    // `upcomingEvents`.
     collectionRoot?: 'upcomingEvents' | 'pastEvents';
 }
 
@@ -56,8 +51,6 @@ export function TicketsSubtab({
     const startMs = event.startAt.getTime();
     const endMs = event.endAt.getTime();
 
-    // Checked each minute, so a scanner left open overnight opens on the day.
-    // The server enforces it regardless.
     const [eventDay, setEventDay] = useState(() => eventDayStatus(event.startAt, event.endAt));
     useEffect(() => {
         const check = () => setEventDay(eventDayStatus(new Date(startMs), new Date(endMs)));
@@ -68,24 +61,25 @@ export function TicketsSubtab({
 
     const canScan = scanAccess !== 'none';
     const scanOpen = scanAccess === 'always' || (scanAccess === 'event-days' && eventDay === 'during');
-    // Adding someone at the door, email optional, is for the event's days only;
-    // addWalkInAttendee enforces it.
     const canAddWalkIn = !readOnly && eventDay === 'during';
 
     const [section, setSection] = useState<TicketsSection>(scanOpen && readOnly ? 'scan' : 'attendees');
     const [attendees, setAttendees] = useState<AttendeeData[]>([]);
     const [loadingAttendees, setLoadingAttendees] = useState(false);
-    // A flag rather than the message, so a language toggle doesn't refetch.
     const [attendeesFailed, setAttendeesFailed] = useState(false);
     const [search, setSearch] = useState('');
     const [filterUnsent, setFilterUnsent] = useState(false);
     const [ticketTypeFilter, setTicketTypeFilter] = useState<TicketType | 'all'>('all');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'redeemed' | 'unredeemed' | 'voided'>('all');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
     const [editingAttendee, setEditingAttendee] = useState<AttendeeData | null>(null);
     const [addingAttendee, setAddingAttendee] = useState(false);
 
     const [displayCount, setDisplayCount] = useState(10);
+
+    // Load attendees lazily so a scanner-only session doesn't fetch the full list.
+    const listKey = `${collectionRoot}/${eventId}`;
+    const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
     const loadAttendees = useCallback(async () => {
         setLoadingAttendees(true);
@@ -97,6 +91,7 @@ export function TicketsSubtab({
             const list = snap.docs.map(d => mapAttendeeDoc(d.id, d.data()));
             setAttendees(list);
             setDisplayCount(10);
+            setLoadedFor(`${collectionRoot}/${eventId}`);
         } catch (err) {
             console.error('[TicketsSubtab] loadAttendees', err);
             setAttendeesFailed(true);
@@ -105,9 +100,21 @@ export function TicketsSubtab({
         }
     }, [eventId, collectionRoot]);
 
+    const listShown = (section !== 'scan' && section !== 'settings') || addingAttendee;
+    const listCurrent = loadedFor === listKey;
     useEffect(() => {
-        void loadAttendees();
-    }, [loadAttendees]);
+        if (listShown && !listCurrent) void loadAttendees();
+    }, [listShown, listCurrent, loadAttendees]);
+
+    const [admitUnlisted, setAdmitUnlisted] = useState<boolean | null>(null);
+    useEffect(() => {
+        if (collectionRoot !== 'upcomingEvents') return;
+        return onSnapshot(
+            doc(getFirebaseDb(), 'upcomingEvents', eventId, 'settings', 'hometown'),
+            snap => setAdmitUnlisted(snap.data()?.admitUnlisted === true),
+            err => console.error('[TicketsSubtab] hometown settings', err),
+        );
+    }, [eventId, collectionRoot]);
 
     useEffect(() => {
         setDisplayCount(10);
@@ -118,10 +125,14 @@ export function TicketsSubtab({
         return attendees.filter(a => {
             if (filterUnsent && a.emailSent) return false;
             if (ticketTypeFilter !== 'all') {
-                const hasType = a.tickets.some(t => t.type === ticketTypeFilter);
-                if (!hasType) return false;
+                // An unlisted HomeTown ticket's type isn't known yet.
+                if (a.unlisted || !a.tickets.some(t => t.type === ticketTypeFilter)) return false;
             }
-            if (statusFilter !== 'all') {
+            if (statusFilter === 'unlisted') {
+                if (!a.unlisted) return false;
+            } else if (statusFilter === 'missing') {
+                if (!a.missingFromHometown) return false;
+            } else if (statusFilter !== 'all') {
                 const hasStatus = a.tickets.some(t =>
                     statusFilter === 'redeemed'
                         ? t.redeemed
@@ -132,8 +143,11 @@ export function TicketsSubtab({
                 if (!hasStatus) return false;
             }
             if (!needle) return true;
+            // Part of a HomeTown number, which is all digits, but only the whole
+            // of one of ours: a few letters would match half the UUIDs.
             return a.email.toLowerCase().includes(needle)
-                || a.name.toLowerCase().includes(needle);
+                || a.name.toLowerCase().includes(needle)
+                || a.ticketIds.some(id => a.hometown ? id.includes(needle) : id.toLowerCase() === needle);
         });
     }, [attendees, search, filterUnsent, ticketTypeFilter, statusFilter]);
 
@@ -145,6 +159,9 @@ export function TicketsSubtab({
         let sendable = 0;
         let unsentSendable = 0;
         let walkIns = 0;
+        let hometown = 0;
+        let unlisted = 0;
+        let missingFromHometown = 0;
 
         for (const a of attendees) {
             tickets += a.ticketCount;
@@ -158,9 +175,12 @@ export function TicketsSubtab({
             }
             if (!a.emailSent) unsent++;
             if (a.walkIn) walkIns++;
+            if (a.hometown) hometown++;
+            if (a.unlisted) unlisted++;
+            if (a.missingFromHometown) missingFromHometown++;
 
-            // A walk-in without an email has nowhere to be sent.
-            if (activeInThisAttendee > 0 && a.email) {
+            // Emailless walk-ins can't be sent to, and HomeTown sends its own.
+            if (activeInThisAttendee > 0 && a.email && !a.hometown) {
                 sendable++;
                 if (!a.emailSent) unsentSendable++;
             }
@@ -168,21 +188,23 @@ export function TicketsSubtab({
         return {
             attendees: attendees.length,
             tickets, used, voided, unsent,
-            sendable, unsentSendable, walkIns,
+            sendable, unsentSendable, walkIns, hometown, unlisted, missingFromHometown,
         };
     }, [attendees]);
+
+    useEffect(() => {
+        if (totals.hometown === 0 && (statusFilter === 'unlisted' || statusFilter === 'missing')) {
+            setStatusFilter('all');
+        }
+    }, [totals.hometown, statusFilter]);
 
     const visibleAttendees = useMemo(() => {
         return filteredAttendees.slice(0, displayCount);
     }, [filteredAttendees, displayCount]);
 
-    // Which addresses have an account, deciding whether a scan reaches a
-    // profile. Asked for the whole list, so revealed rows already have answers.
     const attendeeEmails = useMemo(() => attendees.map(a => a.email), [attendees]);
     const {links: accountLinks} = useAccountLinks(eventId, attendeeEmails);
 
-    // Merged into the attendee as it is when the call returns, so two in-flight
-    // actions don't undo each other.
     const updateAttendee = (attendeeId: string, changes: Partial<AttendeeData>) => {
         setAttendees(prev => prev.map(a => a.id === attendeeId ? {...a, ...changes} : a));
     };
@@ -258,10 +280,7 @@ export function TicketsSubtab({
             updateTicket(a.id, ticketId, {
                 redeemed: false,
                 redeemedAt: null,
-                redeemedBy: '',
                 redeemedByName: '',
-                checkedIn: false,
-                checkedInAt: null,
             });
             showToast(isEnglish ? 'Ticket reset.' : '门票已重置。', 'success');
         } catch {
@@ -281,7 +300,6 @@ export function TicketsSubtab({
     };
 
     const exportAttendees = () => {
-        // Characters filenames can't hold, on any system.
         const base = event.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || eventId;
         downloadBlob(buildAttendeeCsv(attendees), `${base}-attendees-${fileStamp()}.csv`);
     };
@@ -296,8 +314,11 @@ export function TicketsSubtab({
             await callDeleteEventAttendee({eventId, attendeeId: a.id});
             setAttendees(prev => prev.filter(x => x.id !== a.id));
             showToast(isEnglish ? 'Attendee removed.' : '参加者已移除。', 'warning');
-        } catch {
-            showToast(isEnglish ? 'Failed to remove attendee.' : '移除失败。', 'error');
+        } catch (err) {
+            showToast(functionsErrorCode(err) === 'hometown-ticket'
+                    ? (isEnglish ? 'HomeTown tickets can\'t be removed. Void the ticket instead.' : 'HomeTown 门票不能移除，请改为作废。')
+                    : (isEnglish ? 'Failed to remove attendee.' : '移除失败。'),
+                'error');
         }
     };
 
@@ -350,12 +371,6 @@ export function TicketsSubtab({
         ? (isEnglish ? 'Failed to load attendees.' : '加载参加者失败。')
         : null;
 
-    const tabVisible = (t: TicketsSection) => {
-        if (t === 'scan') return canScan;
-        if (t === 'import' || t === 'template' || t === 'send') return !readOnly;
-        return true;
-    };
-
     return (
         <div className="admin-tickets-section">
             <div className="admin-tickets-inner-tabs">
@@ -379,7 +394,7 @@ export function TicketsSubtab({
                 >
                     {isEnglish ? 'Stats' : '统计'}
                 </button>
-                {tabVisible('import') && (
+                {!readOnly && (
                     <button
                         className={`admin-sub-tab ${section === 'import' ? 'admin-sub-tab-active' : ''}`}
                         onClick={() => setSection('import')}
@@ -387,20 +402,20 @@ export function TicketsSubtab({
                         {isEnglish ? 'Import' : '导入'}
                     </button>
                 )}
-                {tabVisible('template') && (
+                {!readOnly && (
                     <button
-                        className={`admin-sub-tab ${section === 'template' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('template')}
+                        className={`admin-sub-tab ${section === 'emails' ? 'admin-sub-tab-active' : ''}`}
+                        onClick={() => setSection('emails')}
                     >
-                        {isEnglish ? 'Email Template' : '邮件模板'}
+                        {isEnglish ? 'Emails' : '邮件'}
                     </button>
                 )}
-                {tabVisible('send') && (
+                {!readOnly && collectionRoot === 'upcomingEvents' && (
                     <button
-                        className={`admin-sub-tab ${section === 'send' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('send')}
+                        className={`admin-sub-tab ${section === 'settings' ? 'admin-sub-tab-active' : ''}`}
+                        onClick={() => setSection('settings')}
                     >
-                        {isEnglish ? 'Send Emails' : '发送邮件'}
+                        {isEnglish ? 'Settings' : '设置'}
                     </button>
                 )}
             </div>
@@ -409,11 +424,11 @@ export function TicketsSubtab({
                 <TicketScanner
                     eventId={eventId}
                     eventTitle={isEnglish ? event.title : (event.titleCn || event.title)}
-                    onRedeemed={() => void loadAttendees()}
+                    admitUnlistedHometown={admitUnlisted}
+                    onRedeemed={() => setLoadedFor(null)}
                 />
             )}
 
-            {/* At the door, someone without a ticket is added without leaving the scanner. */}
             {section === 'scan' && scanOpen && canAddWalkIn && (
                 <div className="admin-tickets-walk-in-card">
                     <p className="admin-helper-text">
@@ -488,29 +503,41 @@ export function TicketsSubtab({
             {section === 'import' && (
                 <ImportSection
                     eventId={eventId}
-                    existingAttendees={attendees}
+                    // HomeTown tickets aren't re-issued by email, so they're no duplicate.
+                    existingAttendees={attendees.filter(a => !a.hometown)}
                     readOnly={readOnly}
                     showToast={showToast}
                     onImported={() => void loadAttendees()}
                 />
             )}
 
-            {section === 'template' && (
-                <TemplateSection
-                    event={event}
+            {section === 'import' && collectionRoot === 'upcomingEvents' && (
+                <HometownSection
+                    eventId={eventId}
+                    attendees={attendees}
+                    readOnly={readOnly}
+                    showToast={showToast}
+                    onImported={() => void loadAttendees()}
+                />
+            )}
+
+            {section === 'settings' && collectionRoot === 'upcomingEvents' && (
+                <SettingsSection
+                    eventId={eventId}
+                    admitUnlisted={admitUnlisted}
+                    onAdmitUnlistedChange={setAdmitUnlisted}
                     readOnly={readOnly}
                     showToast={showToast}
                 />
             )}
 
-            {section === 'send' && (
-                <SendSection
-                    eventId={eventId}
+            {section === 'emails' && (
+                <EmailsSection
+                    event={event}
                     totals={totals}
                     readOnly={readOnly}
                     showToast={showToast}
                     onSent={() => void loadAttendees()}
-                    onOpenTemplate={() => setSection('template')}
                 />
             )}
 
@@ -538,7 +565,7 @@ export function TicketsSubtab({
                     existingAttendees={attendees}
                     walkIn={canAddWalkIn}
                     onClose={() => setAddingAttendee(false)}
-                    onAdded={() => void loadAttendees()}
+                    onAdded={() => setLoadedFor(null)}
                     showToast={showToast}
                 />
             )}

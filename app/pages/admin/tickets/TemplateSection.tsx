@@ -20,16 +20,17 @@ interface TemplateSectionProps {
     event: UpcomingEvent;
     readOnly: boolean;
     showToast: ShowToast;
+    onUnsavedChange: (unsaved: boolean) => void;
 }
 
-export function TemplateSection({event, readOnly, showToast}: TemplateSectionProps) {
+export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: TemplateSectionProps) {
     const {isEnglish} = useLanguage();
     const {config} = useSiteConfig();
     const [template, setTemplate] = useState<EmailTemplate>({
-        subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
+        subject: '', bodyHtml: '', updatedAt: null,
     });
     const [initialTemplate, setInitialTemplate] = useState<EmailTemplate>({
-        subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
+        subject: '', bodyHtml: '', updatedAt: null,
     });
     const [loading, setLoading] = useState(true);
     const [loadFailed, setLoadFailed] = useState(false);
@@ -53,21 +54,18 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
                         subject: (data.subject as string) ?? '',
                         bodyHtml: (data.bodyHtml as string) ?? '',
                         updatedAt: tsToDate(data.updatedAt),
-                        updatedBy: (data.updatedBy as string) ?? '',
                     };
                     setTemplate(t);
                     setInitialTemplate(t);
                 } else {
-                    // Nothing saved yet: pre-fill defaults, with initialTemplate
-                    // empty so Save is enabled.
+                    // Pre-fill defaults while keeping initialTemplate empty so Save stays enabled.
                     setTemplate({
                         subject: DEFAULT_TEMPLATE_SUBJECT,
                         bodyHtml: DEFAULT_TEMPLATE_BODY_EN,
                         updatedAt: null,
-                        updatedBy: '',
                     });
                     setInitialTemplate({
-                        subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
+                        subject: '', bodyHtml: '', updatedAt: null,
                     });
                 }
             } catch (err) {
@@ -90,6 +88,10 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
 
     const isDirty = template.subject !== initialTemplate.subject
         || template.bodyHtml !== initialTemplate.bodyHtml;
+
+    useEffect(() => {
+        onUnsavedChange(isDirty);
+    }, [isDirty, onUnsavedChange]);
 
     const isAtDefault = template.subject === DEFAULT_TEMPLATE_SUBJECT
         && template.bodyHtml === DEFAULT_TEMPLATE_BODY_EN;
@@ -134,8 +136,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
         return <div className="spinner spinner-centered"/>;
     }
 
-    // No editor after a failed read, which would invite saving over the stored
-    // template.
+    // No editor after a failed read, so the stored template can't be saved over.
     if (loadFailed) {
         return (
             <p className="admin-no-results">
@@ -148,6 +149,7 @@ export function TemplateSection({event, readOnly, showToast}: TemplateSectionPro
 
     return (
         <div className="admin-tickets-template">
+            <h3>{isEnglish ? 'Email template' : '邮件模板'}</h3>
             <p className="admin-helper-text">
                 {isEnglish
                     ? 'Supported placeholders: {{ attendeeName }}, {{ attendeeEmail }}, {{ eventTitle }}, {{ eventDate }}, {{ eventHeader }} (renders cropped header image as <img>), {{ ticketCount }}, {{ ticketIds[] }} (renders one QR per ticket), {{ contactEmail }} (the Contact Email in Site Config; also works in mailto: links).'

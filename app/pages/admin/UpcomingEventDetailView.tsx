@@ -226,7 +226,7 @@ export const UpcomingEventDetailView = ({
                         className={`admin-sub-tab ${subTab === 'attendees' ? 'admin-sub-tab-active' : ''}`}
                         onClick={() => {
                             setEventSubTab('attendees');
-                            loadEventAttendees(event.id).then();
+                            void loadEventAttendees(event.id);
                         }}
                     >
                         {isEnglish ? 'Attendees' : '参加者'}

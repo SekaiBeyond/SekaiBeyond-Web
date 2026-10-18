@@ -1,14 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import {
-    adminTransaction,
-    checkRateLimit,
-    MANAGEABLE_GROUPS,
-    normalizeGroup,
-    requireAdmin,
-    requireAuth
-} from "../utils/auth";
+import { adminTransaction, MANAGEABLE_GROUPS, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
 import { deletionExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
@@ -25,9 +18,7 @@ import {
 } from "../utils/validation";
 
 export const requestEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
     const deleteAt = deletionExpiresAt();
@@ -53,9 +44,7 @@ export const requestEventDeletion = onCall({maxInstances: 10}, async (request) =
     return {deleteAt: deleteAt.toDate().toISOString()};
 });
 export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
 
@@ -81,11 +70,11 @@ export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) =>
 });
 
 /**
- * Deletes an event's attendees and email template, which Firestore leaves
- * behind with the event.
+ * Deletes an event's attendees, email template and settings, which Firestore
+ * leaves behind with the event.
  */
 async function deleteEventSubcollections(eventRef: FirebaseFirestore.DocumentReference): Promise<void> {
-    const snaps = await Promise.all(["attendees", "emailTemplate"].map(sub => eventRef.collection(sub).get()));
+    const snaps = await Promise.all(["attendees", "emailTemplate", "settings"].map(sub => eventRef.collection(sub).get()));
     const ops = snaps.flatMap(snap => snap.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)));
     if (ops.length > 0) await commitInChunks(ops);
 }
@@ -141,9 +130,7 @@ export const onPastEventDeleted = onDocumentDeleted(
     }
 );
 export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as Record<string, unknown>;
     const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : null;
@@ -200,9 +187,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     return result;
 });
 export const setPastEventPublished = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {eventId?: string; published?: boolean};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -225,9 +210,7 @@ export const setPastEventPublished = onCall({maxInstances: 10}, async (request) 
     });
 });
 export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as Record<string, unknown>;
     const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : null;
@@ -333,9 +316,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     return result;
 });
 export const setUpcomingEventPublished = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {eventId?: string; published?: boolean};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -358,9 +339,7 @@ export const setUpcomingEventPublished = onCall({maxInstances: 10}, async (reque
     });
 });
 export const requestUpcomingEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
     const deleteAt = deletionExpiresAt();
@@ -386,9 +365,7 @@ export const requestUpcomingEventDeletion = onCall({maxInstances: 10}, async (re
     return {deleteAt: deleteAt.toDate().toISOString()};
 });
 export const cancelUpcomingEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
 
@@ -512,9 +489,7 @@ function reconcileCopy(
 }
 
 export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {eventId?: string; tagIds?: unknown};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -597,13 +572,17 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     // Reconcile before deleting: otherwise late changes are lost, and anything
     // left strands under upcomingEvents/{deletedId}, which
     // onUpcomingEventDeleted skips once a pastEvents doc exists.
-    const [liveAttendees, liveTemplate] = await Promise.all([
+    const [liveAttendees, liveTemplate, liveSettings] = await Promise.all([
         attendeesSrc.get(),
         emailTemplateSrc.get(),
+        // Door settings (setHometownAdmitUnlisted) only matter while the event
+        // runs, so they go without a copy.
+        db.collection("upcomingEvents").doc(eventId).collection("settings").get(),
     ]);
     const moveOps = [
         ...reconcileCopy(attendeesSnap, liveAttendees, pastAttendeesCol),
         ...reconcileCopy(emailTemplateSnap, liveTemplate, pastEmailTemplateCol),
+        ...liveSettings.docs.map(d => (b: FirebaseFirestore.WriteBatch) => b.delete(d.ref)),
     ];
     if (moveOps.length > 0) await commitInChunks(moveOps);
 
@@ -616,9 +595,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     return {pastEventId};
 });
 export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {targetUid?: string; eventId?: string; grant?: boolean};
     const targetUid = validateDocId(input.targetUid, "targetUid");

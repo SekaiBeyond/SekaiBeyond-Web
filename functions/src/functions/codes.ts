@@ -1,6 +1,6 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { ADMIN_GROUPS, adminTransaction, checkRateLimit, requireAuth } from "../utils/auth";
+import { adminTransaction, requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
 import { codeKind, issueCode, normalizeCode } from "../utils/codes";
 import { validateCodeInTransaction } from "../utils/helpers";
@@ -199,12 +199,7 @@ async function redeemBadgeCode(uid: string, code: string) {
 }
 
 export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {
         badgeId?: string;
@@ -218,20 +213,12 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
     const activeUntil = validateInstant(input.activeUntil, "activeUntil");
     const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
-    let code = "";
-
     for (let attempt = 0; attempt < 5; attempt++) {
-        code = issueCode("badge");
+        const code = issueCode("badge");
         const codeRef = db.collection("badgeActivationCodes").doc(code);
 
         try {
-            await db.runTransaction(async (txn) => {
-                // Verify admin inside the transaction for atomicity
-                const callerSnap = await txn.get(db.collection("users").doc(uid));
-                if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
-                    throw new HttpsError("permission-denied", "Insufficient permissions.");
-                }
-
+            await adminTransaction(uid, async (txn, callerSnap) => {
                 const badgeSnap = await txn.get(db.collection("badges").doc(badgeId));
                 if (!badgeSnap.exists) {
                     throw new HttpsError("not-found", "Badge not found.");
@@ -262,10 +249,7 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
             });
             return {id: codeRef.id, code};
         } catch (err) {
-            if (err instanceof Error && err.message === "duplicate") {
-                if (attempt === 4) throw new HttpsError("internal", "code-generation-failed");
-                continue;
-            }
+            if (err instanceof Error && err.message === "duplicate") continue;
             throw err;
         }
     }
@@ -273,12 +257,7 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
     throw new HttpsError("internal", "code-generation-failed");
 });
 export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {
         eventId?: string;
@@ -290,20 +269,12 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     const activeUntil = validateInstant(input.activeUntil, "activeUntil");
     const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
-    let code = "";
-
     for (let attempt = 0; attempt < 5; attempt++) {
-        code = issueCode("event");
+        const code = issueCode("event");
         const codeRef = db.collection("claimCodes").doc(code);
 
         try {
-            await db.runTransaction(async (txn) => {
-                // Verify admin inside the transaction for atomicity
-                const callerSnap = await txn.get(db.collection("users").doc(uid));
-                if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
-                    throw new HttpsError("permission-denied", "Insufficient permissions.");
-                }
-
+            await adminTransaction(uid, async (txn, callerSnap) => {
                 const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
                 if (!eventSnap.exists) {
                     throw new HttpsError("not-found", "Event not found.");
@@ -355,10 +326,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
             });
             return {id: codeRef.id, code};
         } catch (err) {
-            if (err instanceof Error && err.message === "duplicate") {
-                if (attempt === 4) throw new HttpsError("internal", "code-generation-failed");
-                continue;
-            }
+            if (err instanceof Error && err.message === "duplicate") continue;
             throw err;
         }
     }
@@ -366,9 +334,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     throw new HttpsError("internal", "code-generation-failed");
 });
 export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {codeId?: string; active?: boolean};
     const codeId = validateDocId(input.codeId, "codeId");
@@ -397,9 +363,7 @@ export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) 
     });
 });
 export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {codeId?: string; activeFrom?: string; activeUntil?: string};
     const codeId = validateDocId(input.codeId, "codeId");
@@ -431,9 +395,7 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
     });
 });
 export const toggleBadgeCodeActive = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {codeId?: string; active?: boolean};
     const codeId = validateDocId(input.codeId, "codeId");
@@ -461,9 +423,7 @@ export const toggleBadgeCodeActive = onCall({maxInstances: 10}, async (request) 
     });
 });
 export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const codeId = validateDocId((request.data as {codeId?: string})?.codeId, "codeId");
 
@@ -487,11 +447,7 @@ export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (reque
     });
 });
 export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {eventId?: string; activeFrom?: string; activeUntil?: string; maxUses?: number};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -500,19 +456,12 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
     const maxUses = validateMaxUses(input.maxUses);
     const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
-    let code = "";
-
     for (let attempt = 0; attempt < 5; attempt++) {
-        code = issueCode("staff");
+        const code = issueCode("staff");
         const codeRef = db.collection("staffClaimCodes").doc(code);
 
         try {
-            await db.runTransaction(async (txn) => {
-                const callerSnap = await txn.get(db.collection("users").doc(uid));
-                if (!ADMIN_GROUPS.includes(callerSnap.data()?.group)) {
-                    throw new HttpsError("permission-denied", "Insufficient permissions.");
-                }
-
+            await adminTransaction(uid, async (txn, callerSnap) => {
                 // Staff codes also work for past events, to credit staff after the
                 // fact.
                 const [upcomingSnap, pastSnap] = await Promise.all([
@@ -636,14 +585,12 @@ async function redeemStaffCode(uid: string, code: string) {
         if (attendanceChanged) {
             txn.set(recordRef(), recordDoc(isPastEvent ? "event-unattend" : "event-attend", fields));
         }
-        return {eventId, eventTitle, eventTitleCn, eventPoster};
+        return {eventTitle, eventTitleCn, eventPoster};
     });
 }
 
 export const toggleStaffCodeActive = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {codeId?: string; active?: boolean};
     const codeId = validateDocId(input.codeId, "codeId");
@@ -671,9 +618,7 @@ export const toggleStaffCodeActive = onCall({maxInstances: 10}, async (request) 
     });
 });
 export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {codeId?: string; activeFrom?: string; activeUntil?: string; maxUses?: number};
     const codeId = validateDocId(input.codeId, "codeId");
@@ -713,9 +658,7 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
  * switched off first. Staff it admitted stay staff.
  */
 export const deleteStaffCode = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const codeId = validateDocId((request.data as {codeId?: string})?.codeId, "codeId");
 

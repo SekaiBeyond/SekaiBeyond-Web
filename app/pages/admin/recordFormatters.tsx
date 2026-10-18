@@ -12,7 +12,7 @@ for (const [category, {types}] of Object.entries(RECORD_CATEGORIES)) {
 }
 
 // A config-update's sections, labelled as the Site Config tab's navigator labels them.
-export const CONFIG_SECTION_LABELS: Record<string, {en: string; zh: string}> = {
+const CONFIG_SECTION_LABELS: Record<string, {en: string; zh: string}> = {
     video: {en: 'Featured Video', zh: '精选视频'},
     contact: {en: 'Contact Email', zh: '联系邮箱'},
     'social-links': {en: 'Social Links', zh: '社交链接'},
@@ -370,6 +370,21 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>imported attendees for {event} ({added} added, {replaced} replaced)</>
                 : <>导入了 {event} 的参加者（新增 {added}，替换 {replaced}）</>;
         }
+        case 'hometown-import': {
+            const added = r.addedCount ?? 0;
+            const confirmed = r.confirmedCount ?? 0;
+            // Counted only by an import that updated existing tickets.
+            const updating = r.updatedCount !== undefined;
+            return isEnglish
+                ? <>imported HomeTown tickets for {event} ({added} added, {confirmed} unlisted
+                    confirmed{updating && `, ${r.updatedCount} updated, ${r.missingCount ?? 0} not in the file`})</>
+                : <>导入了 {event} 的 HomeTown 门票（新增 {added}，确认未列入名单 {confirmed}{updating
+                    && `，更新 ${r.updatedCount}，不在文件中 ${r.missingCount ?? 0}`}）</>;
+        }
+        case 'hometown-admit-unlisted':
+            return isEnglish
+                ? <>{r.enabled ? 'started' : 'stopped'} letting in HomeTown tickets missing from the list at {event}</>
+                : <>{r.enabled ? '开始' : '停止'}在 {event} 放行不在名单中的 HomeTown 门票</>;
         case 'ticket-walk-in': {
             const count = r.ticketCount ?? 0;
             return isEnglish
@@ -405,11 +420,16 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>removed attendee {attendee} from {event}</>
                 : <>将 {attendee} 从 {event} 的名单中移除</>;
         case 'ticket-attendee-edit': {
-            const oldName = r.oldName || r.targetEmail || '';
-            const newName = r.newName ?? '';
+            const oldName = r.oldName || attendee;
+            // Not a rename to the email or number a nameless attendee shows as.
+            if (!r.newName) {
+                return isEnglish
+                    ? <>cleared the name of attendee {oldName} at {event}</>
+                    : <>清除了 {event} 的参加者 {oldName} 的姓名</>;
+            }
             return isEnglish
-                ? <>renamed attendee {oldName} to {newName} at {event}</>
-                : <>将 {event} 的参加者 {oldName} 改名为 {newName}</>;
+                ? <>renamed attendee {oldName} to {r.newName} at {event}</>
+                : <>将 {event} 的参加者 {oldName} 改名为 {r.newName}</>;
         }
         case 'ticket-regenerate':
             return isEnglish

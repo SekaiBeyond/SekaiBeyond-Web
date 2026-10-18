@@ -5,17 +5,13 @@ import { db } from "./firebase";
 
 const QUOTA = "scanQuota";
 
-export const SCAN_QUOTA_WINDOW_MS = 30 * 60_000;
+const SCAN_QUOTA_WINDOW_MS = 30 * 60_000;
 
 /**
- * Scans one client may add to one code per window.
- *
- * A poster is scanned by a whole room behind one venue NAT, which looks like
- * very few clients, so a tight ceiling would stop counting exactly when the
- * analytics matter. This is loose enough that honest traffic won't reach it; it
- * stops one client asking thousands of times.
+ * Scans one client may add to one code per window. Loose enough that honest
+ * traffic behind a shared venue NAT won't reach it.
  */
-export const SCAN_QUOTA = 500;
+const SCAN_QUOTA = 500;
 
 // Salts a hash thrown away within the hour. Set SCAN_CLIENT_SALT to make
 // digests unguessable from a database export; the fallback still keeps raw

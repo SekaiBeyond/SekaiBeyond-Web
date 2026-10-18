@@ -2,11 +2,23 @@ import { type CallableRequest, HttpsError } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "./firebase";
 
-export const RATE_LIMIT_WINDOW_MS = 60_000;
-export const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 10;
 
-export async function checkRateLimit(uid: string): Promise<void> {
-    const ref = db.collection("rateLimits").doc(uid);
+/**
+ * Calls that run at a pace of their own, each with a per-minute budget kept
+ * apart from the shared one: a door scans a ticket every few seconds, and a
+ * large HomeTown file goes up in dozens of chunks.
+ */
+const RATE_LIMIT_BUCKETS = {
+    scan: 60,
+    "hometown-import": 60,
+};
+export type RateLimitBucket = keyof typeof RATE_LIMIT_BUCKETS;
+
+async function checkRateLimit(uid: string, bucket?: RateLimitBucket): Promise<void> {
+    const ref = db.collection("rateLimits").doc(bucket ? `${uid}_${bucket}` : uid);
+    const max = bucket ? RATE_LIMIT_BUCKETS[bucket] : RATE_LIMIT_MAX;
     const now = Date.now();
     // expiresAt lets the TTL policy in firestore.indexes.json delete stale documents.
     const expiresAt = new Date(now + RATE_LIMIT_WINDOW_MS * 2);
@@ -20,8 +32,12 @@ export async function checkRateLimit(uid: string): Promise<void> {
             return;
         }
 
-        if (data.count >= RATE_LIMIT_MAX) {
-            throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {code: "rate-limited"});
+        if (data.count >= max) {
+            // retryAfterMs: until the window reopens, so a caller can say how long to wait.
+            throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {
+                code: "rate-limited",
+                retryAfterMs: data.windowStart + RATE_LIMIT_WINDOW_MS - now,
+            });
         }
 
         txn.update(ref, {count: FieldValue.increment(1)});
@@ -48,12 +64,12 @@ export function isValidGroup(raw: unknown): raw is UserGroup {
     return typeof raw === "string" && (USER_GROUPS as readonly string[]).includes(raw);
 }
 
-export async function requireAuth(request: CallableRequest<unknown>): Promise<string> {
+export async function requireAuth(request: CallableRequest<unknown>, bucket?: RateLimitBucket): Promise<string> {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
     }
     const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    await checkRateLimit(uid, bucket);
     return uid;
 }
 

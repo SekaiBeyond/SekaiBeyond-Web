@@ -6,7 +6,6 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     ADMIN_GROUPS,
     adminTransaction,
-    checkRateLimit,
     isValidGroup,
     MANAGEABLE_GROUPS,
     normalizeGroup,
@@ -23,12 +22,7 @@ import { recordDoc, recordRef } from "../utils/records";
 import { isScannedTicket } from "../utils/tickets";
 
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     // ID tokens outlive account deletion by up to an hour, so a deleted user's
     // client could recreate the doc after onUserDeleted ran; only Auth knows
@@ -44,9 +38,9 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
 
     const userRef = db.collection("users").doc(uid);
 
-    const rawName = request.auth.token.name ?? "";
-    const email = request.auth.token.email ?? "";
-    const photoURL = request.auth.token.picture ?? "";
+    const rawName = request.auth!.token.name ?? "";
+    const email = request.auth!.token.email ?? "";
+    const photoURL = request.auth!.token.picture ?? "";
 
     const displayName = sanitizeDisplayText(typeof rawName === "string" ? rawName : "").slice(0, 50);
 
@@ -70,7 +64,7 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
         });
     });
 
-    if (!alreadyExists && email && request.auth.token.email_verified === true) {
+    if (!alreadyExists && email && request.auth!.token.email_verified === true) {
         try {
             await creditScannedTickets(userRef, email.trim().toLowerCase());
         } catch (err) {
@@ -114,11 +108,7 @@ async function creditScannedTickets(
 }
 
 export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    await checkRateLimit(request.auth.uid);
+    const callerUid = await requireAuth(request);
 
     const targetUid = validateDocId((request.data as {uid?: string})?.uid, "uid");
     const userSnap = await db.collection("users").doc(targetUid).get();
@@ -133,7 +123,7 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     const visibility = readVisibility(data.profileVisibility);
     // Your own profile is never filtered, or you couldn't tell a hidden section
     // from an empty one.
-    const isSelf = request.auth.uid === targetUid;
+    const isSelf = callerUid === targetUid;
     const showBadges = isSelf || visibility.badges;
     const showEvents = isSelf || visibility.events;
 
@@ -285,12 +275,7 @@ async function googlePhotoURL(uid: string): Promise<string> {
 }
 
 export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {displayName?: string; targetUid?: string};
     const raw = input?.displayName;
@@ -325,12 +310,7 @@ export const updateDisplayName = onCall({maxInstances: 20}, async (request) => {
     return {displayName: sanitized};
 });
 export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {data?: string; contentType?: string; targetUid?: string};
     const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input.targetUid);
@@ -358,12 +338,7 @@ export const uploadAvatar = onCall({maxInstances: 10}, async (request) => {
     return {url: downloadUrl};
 });
 export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {targetUid?: string};
     const {targetUid, isSelf, targetData, callerName} = await resolveProfileTarget(uid, input?.targetUid);
@@ -384,7 +359,7 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     }
 
     const googlePhoto = isSelf
-        ? (request.auth.token.picture ?? "")
+        ? (request.auth!.token.picture ?? "")
         : await googlePhotoURL(targetUid);
     const photoURL = googlePhoto.slice(0, 500);
     await db.collection("users").doc(targetUid).update({photoURL});
@@ -447,11 +422,7 @@ export const deleteBanner = onCall({maxInstances: 10}, async (request) => {
     return {deleted: true};
 });
 export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
+    const uid = await requireAuth(request);
 
     const input = request.data as {targetUid?: string; newGroup?: string; title?: string; titleCn?: string};
     const targetUid = validateDocId(input.targetUid, "targetUid");
@@ -476,8 +447,6 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
             throw new HttpsError("invalid-argument", "Title can only be set for staff or core-staff.");
         }
     }
-
-    await checkRateLimit(uid);
 
     let oldGroup: string = "";
     let oldTitle: string = "";
@@ -553,11 +522,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 // Membership is time-boxed, not a group: this never writes `group`, which only
 // changeUserGroup does.
 export const setMembership = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
+    const uid = await requireAuth(request);
     const input = request.data as {targetUid?: string; expiresAt?: string | null; extendDays?: number};
     const targetUid = validateDocId(input.targetUid, "targetUid");
 
@@ -585,8 +550,6 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
                 `extendDays must be a non-zero integer within ${MAX_GRANT_DAYS} days.`);
         }
     }
-
-    await checkRateLimit(uid);
 
     return db.runTransaction(async (txn) => {
         const [callerSnap, targetSnap] = await Promise.all([
@@ -637,11 +600,7 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Must be signed in.");
-    }
-
-    const uid = request.auth.uid;
+    const uid = await requireAuth(request);
     const input = request.data as {targetUid?: string; title?: string; titleCn?: string};
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const title = typeof input.title === "string" ? sanitizeDisplayText(input.title) : input.title;
@@ -650,8 +609,6 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     if ((title != null && title.length > 100) || (titleCn != null && titleCn.length > 100)) {
         throw new HttpsError("invalid-argument", "Invalid title.");
     }
-
-    await checkRateLimit(uid);
 
     await db.runTransaction(async (txn) => {
         const [callerSnap, targetSnap] = await Promise.all([
@@ -699,9 +656,7 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     return {success: true};
 });
 export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as {targetUid?: string; badgeId?: string; grant?: boolean};
     const targetUid = validateDocId(input.targetUid, "targetUid");

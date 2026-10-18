@@ -1,20 +1,14 @@
 import { HttpsError } from "firebase-functions/v2/https";
 
 /**
- * The profile sections a member can hide from others, one at a time, on
- * /profile's Settings tab.
- *
- * Name and photo aren't among them: a passport page exists to say whose
- * passport it is. The coarser `hidePassportPage` switch covers that.
- *
+ * Profile sections a member can hide from others on /profile's Settings tab.
  * Mirrors PROFILE_SECTIONS in app/lib/privacy.ts.
  */
-export const PROFILE_SECTIONS = ["badges", "events"] as const;
+const PROFILE_SECTIONS = ["badges", "events"] as const;
 
-export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
+type ProfileSection = (typeof PROFILE_SECTIONS)[number];
 
-/** Per-section visibility. `true` means other people see that section. */
-export type ProfileVisibility = Record<ProfileSection, boolean>;
+type ProfileVisibility = Record<ProfileSection, boolean>;
 
 /**
  * The stored map, with anything unset visible: only an explicit `false` hides a

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export interface CardHighlightHandle {
+interface CardHighlightHandle {
     /** Scroll the card for `id` into view and briefly highlight it. */
     highlight: (id: string) => void;
 }

@@ -7,13 +7,10 @@ export default [
     route("admin", "routes/admin.tsx"),
     route("claim", "routes/claim.tsx"),
     route("policy", "routes/policy.tsx"),
-    // The single URL printed on every passport sticker. Short on purpose: it is
-    // typed by hand when a sticker is too scuffed to scan.
+    // Short URL printed on physical passport stickers for easy manual entry.
     route("p/:passportId", "routes/passport.tsx"),
     route("qr", "routes/qr.tsx"),
     route("qr/expired", "routes/qrExpired.tsx"),
-    // `/parking/venue/<venue id>` opens the guide on a venue, `/parking/lot/<lot code>` on a UW lot, and
-    // `/parking/event/<event id>` on an event, with `/lot/<lot code>` after it for a lot. One route, so
-    // the guide (and its map) stays put as the address follows it.
+    // Wildcard keeps a single map instance mounted across venue, event, and lot sub-routes.
     route("parking/*", "routes/parking.tsx"),
 ] satisfies RouteConfig;

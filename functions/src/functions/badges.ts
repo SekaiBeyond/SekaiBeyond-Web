@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue } from "firebase-admin/firestore";
-import { adminTransaction, checkRateLimit } from "../utils/auth";
+import { adminTransaction, requireAuth } from "../utils/auth";
 import { deletionExpiresAt } from "../utils/config";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
@@ -16,9 +16,7 @@ import {
 } from "../utils/validation";
 
 export const requestBadgeDeletion = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const badgeId = validateDocId((request.data as {badgeId?: string})?.badgeId, "badgeId");
     const deleteAt = deletionExpiresAt();
@@ -44,9 +42,7 @@ export const requestBadgeDeletion = onCall({maxInstances: 10}, async (request) =
     return {deleteAt: deleteAt.toDate().toISOString()};
 });
 export const cancelBadgeDeletion = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const badgeId = validateDocId((request.data as {badgeId?: string})?.badgeId, "badgeId");
 
@@ -107,9 +103,7 @@ export const onBadgeDeleted = onDocumentDeleted(
     }
 );
 export const saveBadge = onCall({maxInstances: 10}, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
-    const uid = request.auth.uid;
-    await checkRateLimit(uid);
+    const uid = await requireAuth(request);
 
     const input = request.data as Record<string, unknown>;
     const badgeId = input.badgeId ? validateDocId(input.badgeId, "badgeId") : null;

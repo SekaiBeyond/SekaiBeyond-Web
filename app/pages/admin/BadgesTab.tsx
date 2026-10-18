@@ -81,11 +81,9 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 description: createForm.description.trim(),
                 descriptionCn: createForm.descriptionCn.trim(),
                 imageUrl,
-                createdBy: user.uid,
                 createdByUid: creatorUid,
                 createdByName: creatorName,
                 createdByLink: creatorLink,
-                createdAt: new Date(),
                 deleteAt: null,
             }]);
 

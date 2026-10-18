@@ -2582,6 +2582,49 @@
     color: #3949ab;
 }
 
+/* Sold through HomeTown, the school's box office. */
+.admin-tickets-tag-hometown {
+    background: rgba(75, 46, 131, 0.14);
+    color: #4b2e83;
+}
+
+/* Let in while missing from the imported HomeTown list. */
+.admin-tickets-tag-unlisted {
+    background: rgba(254, 202, 87, 0.22);
+    color: #a15c00;
+}
+
+/* Left out of a later HomeTown export: refunded or transferred, most likely. */
+.admin-tickets-tag-missing {
+    background: rgba(224, 85, 85, 0.12);
+    color: #8a1f33;
+}
+
+.admin-tickets-hometown-update {
+    font-weight: 600;
+}
+
+.admin-tickets-hometown h3,
+.admin-tickets-settings h3,
+.admin-tickets-send h3,
+.admin-tickets-template h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-tickets-hometown-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.admin-tickets-hometown-admit {
+    margin-top: 6px;
+    font-weight: 600;
+}
+
 /* The same answer in words, under the email field and inside an opened row. */
 .admin-tickets-account-note {
     display: block;
@@ -2821,10 +2864,11 @@ select.admin-tickets-tag:focus {
     font-size: 11px;
 }
 
-/* The Tickets sub-tab's three panels share one shell. */
+/* The Tickets sub-tab's panels share one shell. */
 .admin-tickets-import,
 .admin-tickets-template,
-.admin-tickets-send {
+.admin-tickets-send,
+.admin-tickets-settings {
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -3244,6 +3288,15 @@ select.admin-tickets-tag:focus {
     flex-wrap: wrap;
 }
 
+/* How the door treats HomeTown tickets missing from the list, kept current. */
+.admin-tickets-scanner-mode {
+    display: block;
+    width: fit-content;
+    margin-top: 6px;
+    font-size: 12px;
+    white-space: normal;
+}
+
 .admin-tickets-scanner-feedback {
     margin-left: auto;
     display: flex;
@@ -3329,6 +3382,13 @@ select.admin-tickets-tag:focus {
 .admin-tickets-scan-banner .admin-helper-text {
     margin: 4px 0 0;
     font-size: 12px;
+}
+
+/* What the operator should do about a ticket that got in, read at arm's length. */
+.admin-tickets-scan-banner .admin-tickets-edit-warning {
+    margin-top: 6px;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .admin-tickets-scan-success {
@@ -4485,8 +4545,7 @@ select.admin-tickets-tag:focus {
     box-shadow: 0 4px 14px rgba(74, 81, 96, 0.1);
 }
 
-.admin-qr-paper canvas,
-.admin-qr-paper svg {
+.admin-qr-paper canvas {
     display: block;
     width: 100%;
     height: auto;

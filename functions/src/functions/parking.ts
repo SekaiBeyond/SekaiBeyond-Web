@@ -26,7 +26,7 @@ const PARKING_DOC = db.collection("uwParking").doc("current");
 // Pause between walking-router calls, to stay well inside FOSSGIS's fair use.
 const ROUTER_PAUSE_MS = 1_000;
 
-export interface ParkingSyncSummary {
+interface ParkingSyncSummary {
     lotCount: number;
     pricingDayCount: number;
     walkingVenueCount: number;

@@ -6,7 +6,6 @@ interface LanguageContextType {
     currentLanguage: Language;
     setLanguage: (lang: Language) => void;
     isEnglish: boolean;
-    isChinese: boolean;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -27,8 +26,8 @@ export const LanguageProvider: FC<LanguageProviderProps> = ({children}) => {
     const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
 
     useEffect(() => {
-        const savedLanguage = localStorage.getItem('language') as Language;
-        if (savedLanguage && (savedLanguage === 'en' || savedLanguage === 'zh')) {
+        const savedLanguage = localStorage.getItem('language');
+        if (savedLanguage === 'en' || savedLanguage === 'zh') {
             setCurrentLanguage(savedLanguage);
         } else {
             const browserLanguage = navigator.language.toLowerCase();
@@ -51,7 +50,6 @@ export const LanguageProvider: FC<LanguageProviderProps> = ({children}) => {
         currentLanguage,
         setLanguage,
         isEnglish: currentLanguage === 'en',
-        isChinese: currentLanguage === 'zh'
     };
 
     return (

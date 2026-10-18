@@ -25,16 +25,23 @@ export const ticketTypeLabel = (type: TicketType | string, isEnglish: boolean): 
     return isEnglish ? tt.labelEn : tt.labelCn;
 };
 
+/**
+ * Who a nameless, emailless attendee is: a HomeTown ticket by its number. Kept
+ * here, not in helpers, so the claim page can use it without the admin's
+ * dependencies.
+ */
+export const anonymousAttendeeName = (a: Pick<AttendeeData, 'hometown' | 'ticketIds'>, isEnglish: boolean): string =>
+    a.hometown
+        ? `HomeTown #${a.ticketIds[0] ?? ''}`
+        : (isEnglish ? 'Walk-in guest' : '现场来宾');
+
 export interface TicketData {
     ticketId: string;
     type: TicketType;
     createdAt: Date | null;
     redeemed: boolean;
     redeemedAt: Date | null;
-    redeemedBy: string;
     redeemedByName: string;
-    checkedIn: boolean;
-    checkedInAt: Date | null;
     voided: boolean;
 }
 
@@ -47,18 +54,22 @@ export interface AttendeeData {
     emailScheduled: boolean;
     emailSentAt: Date | null;
     createdAt: Date;
-    updatedAt: Date;
     tickets: TicketData[];
     ticketIds: string[];
-    /** Added at the door, with an email only if they gave one. */
     walkIn: boolean;
+    hometown: boolean;
+    /** A HomeTown ticket let in at the door while missing from the imported list. */
+    unlisted: boolean;
+    /** A listed HomeTown ticket left out of a later export. */
+    missingFromHometown: boolean;
+    hometownSeenAt: Date | null;
+    hometownOrderId: string;
 }
 
 export interface EmailTemplate {
     subject: string;
     bodyHtml: string;
     updatedAt: Date | null;
-    updatedBy: string;
 }
 
 export interface ParsedRow {
@@ -87,6 +98,11 @@ export interface AttendeeTotals {
     sendable: number;
     unsentSendable: number;
     walkIns: number;
+    hometown: number;
+    unlisted: number;
+    missingFromHometown: number;
 }
 
-export type TicketsSection = 'scan' | 'attendees' | 'stats' | 'import' | 'template' | 'send';
+export type StatusFilter = 'all' | 'redeemed' | 'unredeemed' | 'voided' | 'unlisted' | 'missing';
+
+export type TicketsSection = 'scan' | 'attendees' | 'stats' | 'import' | 'emails' | 'settings';

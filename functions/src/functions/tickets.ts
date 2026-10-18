@@ -19,7 +19,7 @@ import { RESEND_API_KEY, type ResendEnvelope, ResendSendError, sendEmails } from
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 import { EMAIL_RE, sanitizeDisplayText, validateDocId, validateEmail, validateStr } from "../utils/validation";
 import { recordDoc, recordRef } from "../utils/records";
-import { isScannedTicket } from "../utils/tickets";
+import { hometownAttendeeId, isHometownTicketId, isScannedTicket } from "../utils/tickets";
 
 function validateTicketCount(value: unknown): number {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 50) {
@@ -59,24 +59,28 @@ interface NewTicket {
     voided: boolean;
 }
 
+function freshTicket(ticketId: string, type: string): NewTicket {
+    return {
+        ticketId,
+        type,
+        createdAt: Timestamp.now(),
+        redeemed: false,
+        redeemedAt: null,
+        redeemedBy: "",
+        redeemedByName: "",
+        checkedIn: false,
+        checkedInAt: null,
+        voided: false,
+    };
+}
+
 function buildFreshTickets(count: number, type = "normal"): {tickets: NewTicket[]; ticketIds: string[]} {
     const tickets: NewTicket[] = [];
     const ticketIds: string[] = [];
     for (let i = 0; i < count; i++) {
         const ticketId = crypto.randomUUID();
         ticketIds.push(ticketId);
-        tickets.push({
-            ticketId,
-            type,
-            createdAt: Timestamp.now(),
-            redeemed: false,
-            redeemedAt: null,
-            redeemedBy: "",
-            redeemedByName: "",
-            checkedIn: false,
-            checkedInAt: null,
-            voided: false,
-        });
+        tickets.push(freshTicket(ticketId, type));
     }
     return {tickets, ticketIds};
 }
@@ -320,6 +324,8 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         const chunk = emails.slice(i, i + 30);
         const snap = await attendeesCol.where("email", "in", chunk).get();
         for (const doc of snap.docs) {
+            // A HomeTown ticket is kept by its number, never re-issued by email.
+            if (doc.data().source === "hometown") continue;
             const email = doc.data().email;
             if (typeof email === "string") existingByEmail.set(email, doc);
         }
@@ -501,6 +507,332 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
     });
 });
 
+interface HometownRow {
+    ticketId: string;
+    email: string;
+    name: string;
+    type: string;
+    orderId: string;
+}
+
+/** Rows a HomeTown import works through at once, each its own transaction. */
+const HOMETOWN_IMPORT_CONCURRENCY = 20;
+
+/** Ticket numbers one import may name as the whole file, for flagging what's missing. */
+const HOMETOWN_COMPLETE_MAX = 20_000;
+
+/** Whether a ticket on file differs from its row in HomeTown's export. */
+function hometownDetailsDiffer(row: HometownRow, data: FirebaseFirestore.DocumentData): boolean {
+    return row.name !== (data.name ?? "")
+        || row.email !== (data.email ?? "")
+        || row.orderId !== (data.hometownOrderId ?? "")
+        || row.type !== ((data.tickets?.[0]?.type as string | undefined) ?? "normal");
+}
+
+type HometownOutcome = "added" | "confirmed" | "updated" | "skipped";
+
+/**
+ * Tickets sold through the school's HomeTown box office, from its guest list
+ * export: one attendee doc per ticket, named for its number (see
+ * hometownAttendeeId), so the number is what every import matches on. A newer
+ * export imports over an older one at any time, during the event too. One
+ * admitted at the door while missing from the list (see redeemTicket) gets its
+ * buyer filled in and keeps its admission.
+ *
+ * Otherwise a ticket already here is only marked seen, unless `updateExisting`
+ * takes the export as the truth for it: changed buyer details and type are
+ * copied over, never its check-in or void. With that, `completeTicketIds` (the
+ * whole file's numbers, sent with its last chunk) flags a listed ticket missing
+ * from the file as missingFromHometown, refunded or transferred most likely, for
+ * an admin to review; flagged rather than voided, since a partial export would
+ * otherwise void real tickets. A flagged ticket back in any later export is
+ * unflagged.
+ *
+ * Every chunk of one file passes the same `importId`, so the file leaves one
+ * record however many chunks it takes.
+ *
+ * They're marked sent: HomeTown emailed the ticket, and ours would be a second,
+ * different QR.
+ */
+export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 300}, async (request) => {
+    const uid = await requireAuth(request, "hometown-import");
+
+    const input = request.data as {
+        eventId?: string;
+        tickets?: unknown;
+        updateExisting?: unknown;
+        completeTicketIds?: unknown;
+        importId?: unknown;
+    };
+    const eventId = validateDocId(input.eventId, "eventId");
+    const importId = input.importId == null ? null : validateDocId(input.importId, "importId");
+    if (!Array.isArray(input.tickets) || input.tickets.length === 0) {
+        throw new HttpsError("invalid-argument", "tickets must be a non-empty array.");
+    }
+    if (input.tickets.length > IMPORT_MAX_ROWS) {
+        throw new HttpsError("invalid-argument",
+            `Too many tickets in a single import (max ${IMPORT_MAX_ROWS}).`);
+    }
+
+    // Later row wins, as in importEventAttendees.
+    const rows = new Map<string, HometownRow>();
+    for (const row of input.tickets) {
+        if (!row || typeof row !== "object") {
+            throw new HttpsError("invalid-argument", "Each ticket row must be an object.");
+        }
+        const r = row as Record<string, unknown>;
+        const ticketId = validateStr(r.ticketId, "ticketId", 12, true);
+        if (!isHometownTicketId(ticketId)) {
+            throw new HttpsError("invalid-argument", `Not a HomeTown ticket number: ${ticketId}`);
+        }
+        // A box office sale may have no email; the ticket still gets in.
+        const email = r.email == null || (typeof r.email === "string" && r.email.trim() === "")
+            ? ""
+            : validateEmail(r.email, "email");
+        const name = sanitizeDisplayText(validateStr(r.name, "name", 100));
+        const type = validateTicketType(r.type);
+        const orderId = sanitizeDisplayText(validateStr(r.orderId, "orderId", 32));
+        rows.set(ticketId, {ticketId, email, name, type, orderId});
+    }
+
+    const updateExisting = input.updateExisting === true;
+    let complete: Set<string> | null = null;
+    if (updateExisting && input.completeTicketIds != null) {
+        if (!Array.isArray(input.completeTicketIds) || input.completeTicketIds.length > HOMETOWN_COMPLETE_MAX) {
+            throw new HttpsError("invalid-argument",
+                `completeTicketIds must be an array of at most ${HOMETOWN_COMPLETE_MAX} ticket numbers.`);
+        }
+        complete = new Set(rows.keys());
+        for (const id of input.completeTicketIds) {
+            if (typeof id !== "string" || !isHometownTicketId(id)) {
+                throw new HttpsError("invalid-argument", `Not a HomeTown ticket number: ${String(id)}`);
+            }
+            complete.add(id);
+        }
+    }
+
+    const eventTitle = await adminTransaction(uid, async (txn) => {
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        return (eventSnap.data()?.title ?? eventId) as string;
+    });
+
+    const eventRef = db.collection("upcomingEvents").doc(eventId);
+    const attendeesCol = eventRef.collection("attendees");
+    // When each ticket last appeared in an export, for tracing a flag.
+    const seenAt = Timestamp.now();
+
+    // Most of a re-import is already here, so one read pass sorts the rows: new
+    // and unlisted ones go through importRow, and when updating, changed ones
+    // through updateRow. The rest are only marked seen, which also unflags one
+    // an earlier export left out.
+    const all = Array.from(rows.values());
+    const pending: HometownRow[] = [];
+    const changed: HometownRow[] = [];
+    const seenOnly: FirebaseFirestore.DocumentReference[] = [];
+    let restoredCount = 0;
+    for (let i = 0; i < all.length; i += 100) {
+        const chunk = all.slice(i, i + 100);
+        const snaps = await db.getAll(...chunk.map(r => attendeesCol.doc(hometownAttendeeId(r.ticketId))));
+        snaps.forEach((snap, j) => {
+            const data = snap.data();
+            if (!data || data.unlisted === true) {
+                pending.push(chunk[j]);
+                return;
+            }
+            if (data.missingFromHometown === true) restoredCount++;
+            if (updateExisting && hometownDetailsDiffer(chunk[j], data)) changed.push(chunk[j]);
+            else seenOnly.push(snap.ref);
+        });
+    }
+
+    // Credits the buyer when an export supplies or changes the email on a
+    // ticket that was already scanned.
+    const creditScannedBuyer = async (
+        txn: FirebaseFirestore.Transaction,
+        email: string,
+        prevEmail: string,
+        tickets: NewTicket[],
+    ): Promise<boolean> => {
+        if (!email || email === prevEmail || !tickets.some(isScannedTicket)) return false;
+        const users = await txn.get(db.collection("users").where("email", "==", email).limit(1));
+        if (users.empty) return false;
+        const account = users.docs[0];
+        const attended: string[] = account.data().attendedEvents ?? [];
+        if (!attended.includes(eventId)) {
+            txn.update(account.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
+        }
+        return true;
+    };
+
+    // Copies a row's buyer and type onto a ticket on file, along with `fields`.
+    const applyRow = async (
+        txn: FirebaseFirestore.Transaction,
+        ref: FirebaseFirestore.DocumentReference,
+        row: HometownRow,
+        data: FirebaseFirestore.DocumentData,
+        fields: Record<string, FieldValue>,
+    ): Promise<void> => {
+        const tickets = (data.tickets ?? []) as NewTicket[];
+        const credited = await creditScannedBuyer(txn, row.email, data.email ?? "", tickets);
+        txn.update(ref, {
+            email: row.email,
+            name: row.name,
+            hometownOrderId: row.orderId,
+            tickets: tickets.map(t => ({
+                ...t,
+                type: row.type,
+                ...(credited && isScannedTicket(t) ? {checkedIn: true, checkedInAt: t.redeemedAt} : {}),
+            })),
+            hometownSeenAt: seenAt,
+            updatedAt: FieldValue.serverTimestamp(),
+            ...fields,
+        });
+    };
+
+    // Re-read in every row's transaction, so once an archive deletes the event
+    // the rest of the import refuses rather than creating tickets under it.
+    const readTicket = async (txn: FirebaseFirestore.Transaction, ref: FirebaseFirestore.DocumentReference) => {
+        const [eventSnap, snap] = await Promise.all([txn.get(eventRef), txn.get(ref)]);
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        return snap;
+    };
+
+    // Each its own transaction, since a door may be admitting the same ticket
+    // right now and a blind write would undo that admission.
+    const importRow = (row: HometownRow) => db.runTransaction(async (txn): Promise<HometownOutcome> => {
+        const ref = attendeesCol.doc(hometownAttendeeId(row.ticketId));
+        const snap = await readTicket(txn, ref);
+        if (!snap.exists) {
+            txn.create(ref, {
+                email: row.email,
+                name: row.name,
+                ticketCount: 1,
+                tickets: [freshTicket(row.ticketId, row.type)],
+                ticketIds: [row.ticketId],
+                source: "hometown",
+                hometownOrderId: row.orderId,
+                hometownSeenAt: seenAt,
+                emailSent: true,
+                emailSentAt: null,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+            return "added";
+        }
+        const data = snap.data()!;
+        if (data.unlisted !== true) return "skipped";
+        await applyRow(txn, ref, row, data, {unlisted: FieldValue.delete()});
+        return "confirmed";
+    });
+
+    // A transaction too: the type sits in the tickets array a scan rewrites.
+    const updateRow = (row: HometownRow) => db.runTransaction(async (txn): Promise<HometownOutcome> => {
+        const ref = attendeesCol.doc(hometownAttendeeId(row.ticketId));
+        const data = (await readTicket(txn, ref)).data();
+        // Removed since the read pass: leave it gone.
+        if (!data) return "skipped";
+        await applyRow(txn, ref, row, data, {missingFromHometown: FieldValue.delete()});
+        return "updated";
+    });
+
+    const work = [...pending.map(row => () => importRow(row)), ...changed.map(row => () => updateRow(row))];
+    const outcomes: HometownOutcome[] = [];
+    for (let i = 0; i < work.length; i += HOMETOWN_IMPORT_CONCURRENCY) {
+        outcomes.push(...await Promise.all(work.slice(i, i + HOMETOWN_IMPORT_CONCURRENCY).map(run => run())));
+    }
+    const count = (outcome: HometownOutcome) => outcomes.filter(o => o === outcome).length;
+
+    // Field writes alone, which can't undo a scan. Updates, unlike the
+    // transactions' creates, can't leave a ticket behind under an archived event.
+    if (seenOnly.length > 0) {
+        await commitInChunks(seenOnly.map(ref => (b: FirebaseFirestore.WriteBatch) =>
+            b.update(ref, {hometownSeenAt: seenAt, missingFromHometown: FieldValue.delete()})));
+    }
+
+    let missingCount = 0;
+    if (complete) {
+        const onFile = await attendeesCol.where("source", "==", "hometown").get();
+        const toFlag: FirebaseFirestore.DocumentReference[] = [];
+        for (const doc of onFile.docs) {
+            const data = doc.data();
+            // An unlisted one was never on HomeTown's list, so its absence says nothing.
+            if (data.unlisted === true || complete.has(data.ticketIds?.[0] ?? "")) continue;
+            missingCount++;
+            if (data.missingFromHometown !== true) toFlag.push(doc.ref);
+        }
+        if (toFlag.length > 0) {
+            await commitInChunks(toFlag.map(ref => (b: FirebaseFirestore.WriteBatch) =>
+                b.update(ref, {missingFromHometown: true})));
+        }
+    }
+
+    // Each chunk adds its counts to the file's record, and the one carrying the
+    // whole file's numbers sets how many it left out.
+    const callerSnap = await db.collection("users").doc(uid).get();
+    await recordRef(importId ? `hometown-import-${importId}` : undefined).set({
+        ...recordDoc("hometown-import", {
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle,
+        }),
+        addedCount: FieldValue.increment(count("added")),
+        confirmedCount: FieldValue.increment(count("confirmed")),
+        ...(updateExisting ? {updatedCount: FieldValue.increment(count("updated"))} : {}),
+        ...(complete ? {missingCount} : {}),
+    }, {merge: true});
+
+    return {
+        added: count("added"),
+        confirmed: count("confirmed"),
+        updated: count("updated"),
+        skipped: rows.size - count("added") - count("confirmed") - count("updated"),
+        missing: missingCount,
+        restored: restoredCount,
+    };
+});
+
+/**
+ * Whether a HomeTown ticket missing from the imported list is let in, with a
+ * warning to the scanner, and recorded so a second scan of it is refused. Off
+ * unless an admin turns it on, since a fake ticket gets in the same way.
+ *
+ * Kept in the event's settings subcollection, which only staff read: the event
+ * doc is public once published, and this says which doors a fake would pass.
+ */
+export const setHometownAdmitUnlisted = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {eventId?: string; enabled?: unknown};
+    const eventId = validateDocId(input.eventId, "eventId");
+    if (typeof input.enabled !== "boolean") {
+        throw new HttpsError("invalid-argument", "enabled must be a boolean.");
+    }
+    const enabled = input.enabled;
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const eventSnap = await txn.get(eventRef);
+        // An archived event's tickets are read-only; see archiveUpcomingEvent.
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+
+        txn.set(eventRef.collection("settings").doc("hometown"), {
+            admitUnlisted: enabled,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: uid,
+        }, {merge: true});
+        txn.set(recordRef(), recordDoc("hometown-admit-unlisted", {
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle: eventSnap.data()?.title ?? eventId,
+            enabled,
+        }));
+        return {enabled};
+    });
+});
+
 /** One ticket as its holder sees it: enough to show a QR and say where it stands. */
 interface HeldTicket {
     ticketId: string;
@@ -544,8 +876,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
             .where("email", "==", email).get();
         if (attendeeSnap.empty) return null;
 
-        // Import dedupes by email, so this is one doc in practice; a hand-made
-        // duplicate still shows its tickets.
+        // One doc per HomeTown ticket, or per imported email.
         const tickets: HeldTicket[] = [];
         for (const doc of attendeeSnap.docs) {
             const rawTickets: unknown[] = Array.isArray(doc.data().tickets) ? doc.data().tickets : [];
@@ -672,8 +1003,15 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
 
     return {accounts};
 });
+/**
+ * How long after admitting a ticket the same scanner reading it again is told it
+ * succeeded, so a ticket still held to the camera doesn't flip to "already
+ * redeemed". Timed from the admission.
+ */
+const REDEEM_GRACE_PERIOD_MS = 15_000;
+
 export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "scan");
 
     const input = request.data as {eventId?: string; ticketId?: string};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -710,14 +1048,87 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                 {code: "not-event-day"});
         }
 
-        const attendeeQuery = await txn.get(
-            attendeesCol.where("ticketIds", "array-contains", ticketId).limit(1)
-        );
-        if (attendeeQuery.empty) {
+        const callerName: string = callerData.displayName ?? "";
+        const eventTitle: string = eventSnap.data()?.title ?? "";
+
+        // A HomeTown ticket is read by its doc, which also locks the number for
+        // the unlisted admission below.
+        const hometown = isHometownTicketId(ticketId);
+        let attendeeDoc: FirebaseFirestore.DocumentSnapshot | null;
+        if (hometown) {
+            const snap = await txn.get(attendeesCol.doc(hometownAttendeeId(ticketId)));
+            attendeeDoc = snap.exists ? snap : null;
+        } else {
+            const attendeeQuery = await txn.get(
+                attendeesCol.where("ticketIds", "array-contains", ticketId).limit(1)
+            );
+            attendeeDoc = attendeeQuery.empty ? null : attendeeQuery.docs[0];
+        }
+
+        const refuseUnlisted = async () => {
+            const settingsSnap = await txn.get(eventSnap.ref.collection("settings").doc("hometown"));
+            if (settingsSnap.data()?.admitUnlisted !== true) {
+                throw new HttpsError("not-found", "HomeTown ticket is not on the imported list.",
+                    {code: "hometown-unlisted"});
+            }
+        };
+
+        if (!attendeeDoc && hometown) {
+            // The QR names no event, so a number this event doesn't know may be a
+            // real ticket for another show. One on another event's list is
+            // refused, whatever the setting.
+            const elsewhere = await txn.get(db.collectionGroup("attendees")
+                .where("ticketIds", "array-contains", ticketId).limit(5));
+            const listedElsewhere = elsewhere.docs.find(d =>
+                d.ref.parent.path !== attendeesCol.path && d.data().unlisted !== true);
+            if (listedElsewhere) {
+                const otherEventSnap = await txn.get(listedElsewhere.ref.parent.parent!);
+                throw new HttpsError("failed-precondition", "This HomeTown ticket is for another event.",
+                    {code: "hometown-other-event", eventTitle: otherEventSnap.data()?.title ?? ""});
+            }
+            await refuseUnlisted();
+
+            // Bought after the last import, or fake: let in with a warning, and
+            // recorded so the same number is refused next time. An import that
+            // later lists it fills in the buyer.
+            txn.create(attendeesCol.doc(hometownAttendeeId(ticketId)), {
+                email: "",
+                name: "",
+                ticketCount: 1,
+                tickets: [{
+                    ...freshTicket(ticketId, "normal"),
+                    redeemed: true,
+                    redeemedAt: now,
+                    redeemedBy: uid,
+                    redeemedByName: callerName,
+                }],
+                ticketIds: [ticketId],
+                source: "hometown",
+                hometownOrderId: "",
+                unlisted: true,
+                emailSent: true,
+                emailSentAt: null,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+            return {
+                success: true,
+                hometown: true,
+                unlisted: true,
+                missingFromHometown: false,
+                attendeeName: "",
+                attendeeEmail: "",
+                eventTitle,
+                ticketIndex: 0,
+                ticketType: "normal",
+                userCheckedIn: false,
+                graceRemainingMs: REDEEM_GRACE_PERIOD_MS,
+            };
+        }
+        if (!attendeeDoc) {
             throw new HttpsError("not-found", "Ticket not found.", {code: "invalid"});
         }
-        const attendeeDoc = attendeeQuery.docs[0];
-        const attendeeData = attendeeDoc.data();
+        const attendeeData = attendeeDoc.data() ?? {};
         const tickets: NewTicket[] = (attendeeData.tickets ?? []).map(
             (t: Record<string, unknown>) => t as unknown as NewTicket
         );
@@ -732,15 +1143,15 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                 {code: "voided"});
         }
 
-        const callerName: string = callerData.displayName ?? "";
         const attendeeEmail: string = attendeeData.email ?? "";
         const attendeeName: string = attendeeData.name ?? "";
-        const eventTitle: string = eventSnap.data()?.title ?? "";
-
-        // How long after admitting a ticket the same scanner reading it again is
-        // told it succeeded, so a ticket still held to the camera doesn't flip to
-        // "already redeemed". Timed from the admission.
-        const REDEEM_GRACE_PERIOD_MS = 15_000;
+        // So the scanner can say a HomeTown ticket was only ever let in unlisted,
+        // or has dropped out of HomeTown's latest export.
+        const source = {
+            hometown,
+            unlisted: attendeeData.unlisted === true,
+            missingFromHometown: attendeeData.missingFromHometown === true,
+        };
 
         if (ticket.redeemed) {
             const sinceRedeemedMs = now.toMillis() - (ticket.redeemedAt?.toMillis?.() ?? 0);
@@ -750,6 +1161,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
             if (!isWithinGracePeriod || !isSameScanner) {
                 return {
                     alreadyRedeemed: true,
+                    ...source,
                     attendeeName,
                     attendeeEmail,
                     eventTitle,
@@ -765,6 +1177,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
             // every rescan.
             return {
                 success: true,
+                ...source,
                 attendeeName,
                 attendeeEmail,
                 eventTitle,
@@ -774,6 +1187,10 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                 graceRemainingMs: Math.min(REDEEM_GRACE_PERIOD_MS, REDEEM_GRACE_PERIOD_MS - sinceRedeemedMs),
             };
         }
+
+        // Only let in unlisted while the switch is on, even once on file: a
+        // ticket reset or unvoided after it went off has still never been listed.
+        if (source.unlisted) await refuseUnlisted();
 
         // Try to link to a registered user by email; a walk-in may have none.
         let userCheckedIn = false;
@@ -808,6 +1225,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
 
         return {
             success: true,
+            ...source,
             attendeeName,
             attendeeEmail,
             eventTitle,
@@ -818,6 +1236,14 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         };
     });
 });
+
+/** How a record names an attendee: by its HomeTown number when it has no name or email. */
+function attendeeRecordName(data: FirebaseFirestore.DocumentData): string {
+    if (data.name) return data.name as string;
+    if (!data.email && data.source === "hometown") return `HomeTown #${data.ticketIds?.[0] ?? ""}`;
+    return "";
+}
+
 export const voidTicket = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
 
@@ -856,7 +1282,7 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
         }));
 
         return {voided: true};
@@ -900,7 +1326,7 @@ export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
         }));
 
         return {unvoided: true};
@@ -980,7 +1406,7 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
         }));
 
         return {redeemed: true};
@@ -1034,7 +1460,7 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
         }));
 
         return {reset: true};
@@ -1078,6 +1504,12 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
         const countChanged = ticketCount !== prevTicketCount;
         const typeChanged = type !== prevType;
 
+        // A HomeTown ticket is its number; re-issuing would swap it for one of ours.
+        if (data.source === "hometown" && (countChanged || typeChanged)) {
+            throw new HttpsError("failed-precondition", "HomeTown tickets can't be re-issued.",
+                {code: "hometown-ticket"});
+        }
+
         if (!countChanged && !typeChanged) {
             if (name === data.name) {
                 return {updated: false, regenerated: false};
@@ -1089,7 +1521,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
                 eventId,
                 eventTitle,
                 targetEmail: data.email ?? "",
-                oldName: data.name ?? "",
+                oldName: attendeeRecordName(data),
                 newName: name,
             }));
             return {updated: true, regenerated: false};
@@ -1163,7 +1595,7 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
             oldType,
             newType: type,
         }));
@@ -1191,9 +1623,12 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             throw new HttpsError("not-found", "Attendee not found.");
         }
         const data = attendeeSnap.data()!;
-        const tickets: NewTicket[] = (data.tickets ?? []).map(
-            (t: Record<string, unknown>) => t as unknown as NewTicket
-        );
+        // Its doc is what keeps the number from getting in again, unlisted or
+        // by the next import, so it's voided instead.
+        if (data.source === "hometown") {
+            throw new HttpsError("failed-precondition", "HomeTown tickets can't be removed; void them instead.",
+                {code: "hometown-ticket"});
+        }
         const eventTitle: string = eventSnap.data()?.title ?? eventId;
         txn.delete(attendeeRef);
         txn.set(recordRef(), recordDoc("ticket-attendee-delete", {
@@ -1202,9 +1637,9 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
-            targetName: data.name ?? "",
+            targetName: attendeeRecordName(data),
         }));
-        return {deleted: true, ticketCount: tickets.length};
+        return {deleted: true};
     });
 });
 
@@ -1350,6 +1785,8 @@ export const sendTicketEmails = onCall(
                 break;
             }
             const data = target.data();
+            // HomeTown emailed these itself; ours would be a second, different QR.
+            if (data.source === "hometown") continue;
             const rawTickets: any[] = data.tickets ?? [];
             const activeTickets = rawTickets.filter(t => !t.voided);
 

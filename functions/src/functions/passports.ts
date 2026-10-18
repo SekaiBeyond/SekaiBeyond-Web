@@ -473,17 +473,14 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
         }));
 
         return {
-            ownerUid,
-            ownerName,
             daysRemoved: reduced?.daysRemoved ?? 0,
-            membershipExpiresAt: reduced?.expiresAt.toDate().toISOString() ?? null,
             // Days were asked for but none were left (lapsed membership or
             // deleted account); the screen says so.
             nothingToSubtract: subtractDays && !reduced,
         };
     });
 
-    return {deleted: true, ...outcome};
+    return outcome;
 });
 
 /** Hide or show the caller's own passport page. Self only, no admin path. */

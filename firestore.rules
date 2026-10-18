@@ -127,6 +127,12 @@ service cloud.firestore {
                 allow read: if request.auth != null
                     && isCoreStaffOrAbove();
             }
+            // Door settings, kept off the public event doc. Read by whoever
+            // scans, so the scanner can say how unlisted tickets are treated.
+            match /settings/{docId} {
+                allow read: if request.auth != null
+                    && (isStaffOrAbove() || isEventStaffFor(eventId));
+            }
         }
 
         // Policy page content — publicly readable; writes via Cloud Functions

@@ -11,25 +11,16 @@ export const LoginButton = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        if (!isOpen) return;
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
             }
         };
-
-        if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-        } else {
-            document.removeEventListener('mousedown', handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen]);
 
-    // Only waits for auth, not the profile: the avatar falls back to the cached and
-    // account photos, and the profile fills in the rest when it arrives.
     if (!authReady) return null;
 
     const closeDropdown = () => setIsOpen(false);
@@ -90,7 +81,7 @@ export const LoginButton = () => {
                     <div className="user-dropdown-divider"/>
                     <button className="user-dropdown-item user-dropdown-signout" onClick={() => {
                         closeDropdown();
-                        signOut().then();
+                        void signOut();
                     }}>
                         {isEnglish ? 'Sign Out' : '退出登录'}
                     </button>

@@ -66,6 +66,8 @@ export type RecordType =
     | "ticket-regenerate"
     | "ticket-email-send"
     | "ticket-email-queue"
+    | "hometown-import"
+    | "hometown-admit-unlisted"
     | "tag-create"
     | "tag-edit"
     | "tag-delete"
@@ -151,6 +153,16 @@ export interface RecordFields {
     /** A walk-in's tickets, and whether they were checked in as they were added. */
     ticketCount?: number;
     checkedIn?: boolean;
+    /** HomeTown tickets admitted unlisted at the door that an import then found. */
+    confirmedCount?: number;
+    /**
+     * A HomeTown import that updated existing tickets: how many changed, and how
+     * many listed ones the file left out.
+     */
+    updatedCount?: number;
+    missingCount?: number;
+    /** Whether unlisted HomeTown tickets are now admitted. */
+    enabled?: boolean;
 }
 
 /** Where a new record goes. A fixed `id` makes a retried write land on the same record. */

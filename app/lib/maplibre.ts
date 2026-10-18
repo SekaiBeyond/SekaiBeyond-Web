@@ -16,24 +16,13 @@ import {
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { useEffect, useRef, useState } from 'react';
 
-/**
- * What every map on the site shares: MapLibre GL on OpenFreeMap's OpenStreetMap
- * tiles, with no key, billing or request limit.
- */
-
 // MapLibre looks for its worker beside its own script, which the bundle moves.
 setWorkerUrl(maplibreWorkerUrl);
 
-export const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
 export type { MapLibreMap };
 
-/**
- * A map in `container` with the site's defaults: no rotation or tilt, zoom
- * buttons top-right, compact attribution bottom-right (`attribution` adds to
- * OpenStreetMap's), and the base map tidied. Null when MapLibre can't start,
- * almost always for lack of WebGL.
- */
 export function createMap(
     container: HTMLElement,
     {attribution, ...options}: Omit<MapOptions, 'container'> & {attribution?: string},
@@ -57,8 +46,7 @@ export function createMap(
     map.keyboard.disableRotation();
     map.addControl(new NavigationControl({showCompass: false}), 'top-right');
     map.addControl(new AttributionControl({compact: true, customAttribution: attribution}), 'bottom-right');
-    // Some places ask for icons the sprite lacks; a blank stand-in keeps their
-    // names and stops a warning per icon.
+    // Stub missing sprite icons with a 1x1 transparent pixel to suppress MapLibre warnings.
     map.setMissingStyleImageResolver(id => {
         if (!map.hasImage(id)) map.addImage(id, {width: 1, height: 1, data: new Uint8Array(4)});
     });
@@ -67,10 +55,8 @@ export function createMap(
 }
 
 /**
- * The base map as the site wants it, before anything is drawn: flat buildings
- * rather than 3D; no OpenStreetMap parking icons beside the guide's own pins
- * (they include lots visitors can't use); and no highway shields, whose filters
- * warn on every tile.
+ * Strips 3D buildings, OSM parking POI icons (which include non-visitor lots),
+ * and highway shield layers from the base style.
  */
 function tidyStyle(style: StyleSpecification): StyleSpecification {
     const notParking = ['!=', ['get', 'class'], 'parking'] as FilterSpecification;
@@ -87,30 +73,24 @@ function tidyStyle(style: StyleSpecification): StyleSpecification {
     return {...style, layers};
 }
 
-/** The first label layer above the buildings: a layer added before it sits on the buildings, under the labels. */
+/** First symbol layer above building polygons, used to insert overlays beneath labels. */
 export function firstLabelAboveBuildings(map: MapLibreMap): string | undefined {
     const layers = map.getStyle().layers;
     const lastBuilding = layers.findLastIndex(l => 'source-layer' in l && l['source-layer'] === 'building');
     return layers.slice(lastBuilding + 1).find(l => l.type === 'symbol')?.id;
 }
 
-export interface MarkerPoint {
+interface MarkerPoint {
     key: string;
     lng: number;
     lat: number;
 }
 
-export interface PlacedMarkers {
-    /** A bare element per point for React to render into with a portal; MapLibre owns its classes and transform. */
+interface PlacedMarkers {
     elements: Record<string, HTMLElement>;
     markers: Record<string, Marker>;
 }
 
-/**
- * One marker per point, each a bare wrapper to portal React content into,
- * remade when the points or their positions change. The default anchor (top,
- * lifted 15px) centres a 30px pin on the point with its label hanging below.
- */
 export function useMarkerElements(
     map: MapLibreMap | null,
     points: MarkerPoint[],

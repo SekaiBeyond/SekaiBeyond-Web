@@ -29,18 +29,10 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
             const startTime = event.startAt.getTime();
             const endTime = event.endAt.getTime();
 
-            if (now < startTime) {
-                setIsInProgress(false);
-                const difference = startTime - now;
-                setTimeLeft({
-                    days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-                    hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-                    minutes: Math.floor((difference / 1000 / 60) % 60),
-                    seconds: Math.floor((difference / 1000) % 60)
-                });
-            } else if (now >= startTime && now < endTime) {
-                setIsInProgress(true);
-                const difference = endTime - now;
+            if (now < endTime) {
+                const inProgress = now >= startTime;
+                const difference = (inProgress ? endTime : startTime) - now;
+                setIsInProgress(inProgress);
                 setTimeLeft({
                     days: Math.floor(difference / (1000 * 60 * 60 * 24)),
                     hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
@@ -49,12 +41,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                 });
             } else {
                 setIsInProgress(false);
-                setTimeLeft({
-                    days: 0,
-                    hours: 0,
-                    minutes: 0,
-                    seconds: 0
-                });
+                setTimeLeft({days: 0, hours: 0, minutes: 0, seconds: 0});
             }
         };
 

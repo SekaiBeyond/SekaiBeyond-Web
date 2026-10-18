@@ -1,22 +1,15 @@
 /**
- * The profile sections others can be shown, each switchable on /profile's
- * Settings tab. Mirrors PROFILE_SECTIONS in functions/src/utils/visibility.ts,
- * which enforces them server-side.
+ * Profile sections switchable on /profile's Settings tab. Mirrors
+ * `PROFILE_SECTIONS` in functions/src/utils/visibility.ts.
  */
-export const PROFILE_SECTIONS = ['badges', 'events'] as const;
+const PROFILE_SECTIONS = ['badges', 'events'] as const;
 
 export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
 
-/** Per-section visibility. `true` means other people see that section. */
 export type ProfileVisibility = Record<ProfileSection, boolean>;
 
-/**
- * Every switch on the settings page. The passport page isn't a section (it
- * decides whether /p/<code> resolves at all), but it reads and saves like one.
- */
 export type PrivacyKey = 'passportPage' | ProfileSection;
 
-/** Unset reads as visible. */
 export const readVisibility = (raw: unknown): ProfileVisibility => {
     const stored = (raw ?? {}) as Record<string, unknown>;
     return {
@@ -25,20 +18,14 @@ export const readVisibility = (raw: unknown): ProfileVisibility => {
     };
 };
 
-export interface PrivacyRow {
+interface PrivacyRow {
     key: PrivacyKey;
     title: {en: string; zh: string};
-    /** What the switch covers, under the title. */
     help: {en: string; zh: string};
-    /** How each state reads — also the wording of the toast that confirms it. */
     on: {en: string; zh: string};
     off: {en: string; zh: string};
 }
 
-/**
- * In display order. The passport page leads: it decides whether a scanned
- * sticker shows anything.
- */
 export const PRIVACY_ROWS: PrivacyRow[] = [
     {
         key: 'passportPage',

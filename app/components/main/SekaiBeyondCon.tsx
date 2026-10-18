@@ -11,7 +11,6 @@ export const SekaiBeyondCon = () => {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const {content: conContent, loading: conLoading} = useConContent();
 
-    // Hide the entire section while loading or when there's no edition configured.
     if (loading || conLoading || !config.conEdition) {
         return null;
     }

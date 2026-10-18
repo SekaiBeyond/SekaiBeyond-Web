@@ -11,25 +11,12 @@ export const toDate = (v: unknown): Date | null =>
         : null;
 
 /**
- * A module-level read-through cache shared by every component that uses it: the first
- * `useValue()` fetches once and every subscriber gets the result, and `refresh()` fans a
- * new value out app-wide. For small, rarely-changing data loaded whole, not a substitute
- * for `onSnapshot`.
+ * Module-level read-through cache shared across subscribers; `enabled: false`
+ * defers fetching and returns `initialValue`.
  */
-export interface ValueCache<T> {
-    /**
-     * The cached value, a loading flag, an `error`, and `refresh`. `error` is set
-     * only while `value` is still the fallback: it answers "is this real data?", so
-     * a failed refresh over loaded data leaves it null.
-     *
-     * `enabled: false` holds off the fetch, for a cache this viewer can't read. It
-     * reports the fallback with `loading: false` and fetches once `enabled` turns
-     * true.
-     */
+interface ValueCache<T> {
     useValue: (enabled?: boolean) => {value: T; loading: boolean; error: unknown; refresh: () => Promise<void>};
-    /** Re-fetch and notify all subscribers. Returns the fresh value. */
     refresh: () => Promise<T>;
-    /** Synchronous snapshot of the cached value, or null if it hasn't loaded yet. */
     peek: () => T | null;
 }
 
@@ -51,7 +38,6 @@ export function createValueCache<T>(
                 cached = await fetcher();
                 return cached;
             } finally {
-                // Cleared either way, so a failed fetch can be retried.
                 fetchPromise = null;
             }
         })();
@@ -75,7 +61,6 @@ export function createValueCache<T>(
     interface State {
         value: T;
         error: unknown;
-        /** Whether this consumer has a resolved answer — a value or a failure. */
         settled: boolean;
     }
 
@@ -122,20 +107,9 @@ export function createValueCache<T>(
     return {useValue, refresh, peek: () => cached};
 }
 
-/**
- * A `ValueCache` over a Firestore collection and optional query constraints, for
- * small, rarely-changing top-level collections such as tags and venues.
- */
-export interface CollectionCache<T> {
-    /**
-     * Hook returning the cached list, a loading flag, and a `refresh` that re-fetches;
-     * `enabled` as in `ValueCache.useValue`.
-     */
+interface CollectionCache<T> {
     useItems: (enabled?: boolean) => {items: T[]; loading: boolean; refresh: () => Promise<void>};
-    /** Re-fetch from Firestore and notify all subscribers. Returns the fresh list. */
     refresh: () => Promise<T[]>;
-    /** Synchronous snapshot of the cached list, or null if it hasn't loaded yet. */
-    peek: () => T[] | null;
 }
 
 export function createCollectionCache<T>(
@@ -154,5 +128,5 @@ export function createCollectionCache<T>(
         return {items, loading, refresh};
     }
 
-    return {useItems, refresh: cache.refresh, peek: cache.peek};
+    return {useItems, refresh: cache.refresh};
 }

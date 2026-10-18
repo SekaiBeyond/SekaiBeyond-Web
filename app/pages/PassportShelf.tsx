@@ -3,24 +3,20 @@ import { Link } from 'react-router';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { fetchPassportsByOwner, type Passport, passportName, usePassportDesigns, } from '~/lib/passports';
 
-/**
- * One passport on the shelf: its cover art, name, and whatever the surface
- * wants under it. `date` comes pre-formatted.
- */
-export const PassportShelfCard = ({designId, year, date, code, to}: {
+const PassportShelfCard = ({designId, year, date, code, to}: {
     designId: string;
     year: number;
     date?: string;
-    code?: string;
-    to?: string;
+    code: string;
+    to: string;
 }) => {
     const {isEnglish} = useLanguage();
     const {designs} = usePassportDesigns();
     const design = designs.find(d => d.id === designId);
     const name = passportName(design, isEnglish);
 
-    const body = (
-        <>
+    return (
+        <Link to={to} className="passport-shelf-card">
             {design?.coverImageUrl ? (
                 <img src={design.coverImageUrl} alt={name} className="passport-shelf-cover"/>
             ) : (
@@ -28,13 +24,9 @@ export const PassportShelfCard = ({designId, year, date, code, to}: {
             )}
             <span className="passport-shelf-name">{name}</span>
             {date && <span className="passport-shelf-date">{date}</span>}
-            {code && <span className="passport-shelf-code">{code}</span>}
-        </>
+            <span className="passport-shelf-code">{code}</span>
+        </Link>
     );
-
-    return to
-        ? <Link to={to} className="passport-shelf-card">{body}</Link>
-        : <div className="passport-shelf-card">{body}</div>;
 };
 
 /**

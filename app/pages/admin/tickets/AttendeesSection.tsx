@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ShowToast } from '../utils';
 import { ticketStatusCounts } from './helpers';
-import { type AttendeeData, type AttendeeTotals, TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
+import {
+    anonymousAttendeeName,
+    type AttendeeData,
+    type AttendeeTotals,
+    type StatusFilter,
+    TICKET_TYPES,
+    type TicketType,
+    ticketTypeLabel,
+} from './types';
 import type { AccountLink } from './useAccountLinks';
 
 interface AttendeesSectionProps {
@@ -21,8 +29,8 @@ interface AttendeesSectionProps {
     onFilterUnsentChange: (v: boolean) => void;
     ticketTypeFilter: TicketType | 'all';
     onTicketTypeFilterChange: (v: TicketType | 'all') => void;
-    statusFilter: 'all' | 'redeemed' | 'unredeemed' | 'voided';
-    onStatusFilterChange: (v: 'all' | 'redeemed' | 'unredeemed' | 'voided') => void;
+    statusFilter: StatusFilter;
+    onStatusFilterChange: (v: StatusFilter) => void;
     readOnly: boolean;
     /** The event is on, so Add takes walk-ins. */
     walkIn: boolean;
@@ -126,6 +134,20 @@ export function AttendeesSection({
                         <strong>{totals.walkIns}</strong> {isEnglish ? 'walk-in' : '现场登记'}
                     </span>
                 )}
+                {totals.hometown > 0 && (
+                    <span>
+                        <strong>{totals.hometown}</strong> HomeTown
+                        {(totals.unlisted > 0 || totals.missingFromHometown > 0) && (isEnglish
+                            ? ` (${[
+                                totals.unlisted > 0 && `${totals.unlisted} not on list`,
+                                totals.missingFromHometown > 0 && `${totals.missingFromHometown} not in latest export`,
+                            ].filter(Boolean).join(', ')})`
+                            : `（${[
+                                totals.unlisted > 0 && `${totals.unlisted} 张不在名单中`,
+                                totals.missingFromHometown > 0 && `${totals.missingFromHometown} 张不在最新导出中`,
+                            ].filter(Boolean).join('，')}）`)}
+                    </span>
+                )}
                 <button
                     className="admin-toggle-btn admin-toggle-save admin-tickets-refresh"
                     onClick={onAdd}
@@ -157,7 +179,7 @@ export function AttendeesSection({
                 <input
                     type="text"
                     className="admin-input"
-                    placeholder={isEnglish ? 'Search name or email...' : '搜索姓名或邮箱...'}
+                    placeholder={isEnglish ? 'Search name, email or ticket #...' : '搜索姓名、邮箱或门票号...'}
                     value={search}
                     onChange={(e) => onSearchChange(e.target.value)}
                 />
@@ -178,12 +200,22 @@ export function AttendeesSection({
                     className="admin-input"
                     style={{width: 'auto', minWidth: '120px'}}
                     value={statusFilter}
-                    onChange={(e) => onStatusFilterChange(e.target.value as 'all' | 'redeemed' | 'unredeemed' | 'voided')}
+                    onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}
                 >
                     <option value="all">{isEnglish ? 'All Statuses' : '所有状态'}</option>
                     <option value="redeemed">{isEnglish ? 'Redeemed' : '已验证'}</option>
                     <option value="unredeemed">{isEnglish ? 'Not Redeemed' : '未验证'}</option>
                     <option value="voided">{isEnglish ? 'Voided' : '已作废'}</option>
+                    {/* The HomeTown tickets to review: likely fakes, and likely refunds. */}
+                    {totals.hometown > 0 && (
+                        <>
+                            <option
+                                value="unlisted">{isEnglish ? 'HomeTown: not on list' : 'HomeTown：不在名单中'}</option>
+                            <option value="missing">
+                                {isEnglish ? 'HomeTown: not in latest export' : 'HomeTown：不在最新导出中'}
+                            </option>
+                        </>
+                    )}
                 </select>
                 <label className="admin-checkbox-label admin-tickets-filter-checkbox">
                     <input
@@ -223,7 +255,7 @@ export function AttendeesSection({
                                 {/* Whatever they gave leads, and the second line says
                                     what's missing, keeping every row the same height. */}
                                 <div className="admin-user-name">
-                                    {a.name || a.email || (isEnglish ? 'Walk-in guest' : '现场来宾')}
+                                    {a.name || a.email || anonymousAttendeeName(a, isEnglish)}
                                 </div>
                                 {a.name && a.email
                                     ? <div className="admin-user-email">{a.email}</div>
@@ -243,10 +275,26 @@ export function AttendeesSection({
                                         {isEnglish ? 'Walk-in' : '现场'}
                                     </span>
                                 )}
-                                <span
-                                    className={`admin-tickets-tag admin-tickets-tag-type-${ticketType.toLowerCase().replace(/\s+/g, '-')}`}>
-                                    {ticketTypeLabel(ticketType, isEnglish)}
-                                </span>
+                                {a.hometown && (
+                                    <span className="admin-tickets-tag admin-tickets-tag-hometown">HomeTown</span>
+                                )}
+                                {a.unlisted && (
+                                    <span className="admin-tickets-tag admin-tickets-tag-unlisted">
+                                        {isEnglish ? 'Not on list' : '不在名单中'}
+                                    </span>
+                                )}
+                                {a.missingFromHometown && (
+                                    <span className="admin-tickets-tag admin-tickets-tag-missing">
+                                        {isEnglish ? 'Not in latest export' : '不在最新导出中'}
+                                    </span>
+                                )}
+                                {/* An unlisted HomeTown ticket's type isn't known until an import lists it. */}
+                                {!a.unlisted && (
+                                    <span
+                                        className={`admin-tickets-tag admin-tickets-tag-type-${ticketType.toLowerCase().replace(/\s+/g, '-')}`}>
+                                        {ticketTypeLabel(ticketType, isEnglish)}
+                                    </span>
+                                )}
                                 <span className="admin-tickets-attendee-count">
                                     {a.ticketCount} {isEnglish ? 'tickets' : '张'}
                                 </span>
@@ -265,14 +313,14 @@ export function AttendeesSection({
                                         {isEnglish ? 'Fresh' : '未使用'}
                                     </span>
                                 )}
-                                {/* Nothing to send without an address. */}
-                                {a.email && <span className={
-                                                      a.emailScheduled
-                                                          ? 'admin-tickets-tag admin-tickets-tag-queued'
-                                                          : a.emailSent
-                                                              ? 'admin-tickets-tag admin-tickets-tag-sent'
-                                                              : 'admin-tickets-tag admin-tickets-tag-unsent'
-                                                  }>
+                                {/* Nothing to send without an address, and HomeTown sends its own. */}
+                                {a.email && !a.hometown && <span className={
+                                                                     a.emailScheduled
+                                                                         ? 'admin-tickets-tag admin-tickets-tag-queued'
+                                                                         : a.emailSent
+                                                                             ? 'admin-tickets-tag admin-tickets-tag-sent'
+                                                                             : 'admin-tickets-tag admin-tickets-tag-unsent'
+                                                                 }>
                                     {a.emailScheduled
                                         ? (isEnglish ? 'Queued' : '待发送')
                                         : a.emailSent
@@ -296,6 +344,34 @@ export function AttendeesSection({
 
                         {isExpanded && (
                             <div className="admin-tickets-attendee-detail">
+                                {a.hometown && (
+                                    <p className="admin-helper-text">
+                                        {a.unlisted
+                                            ? (isEnglish
+                                                ? 'A HomeTown ticket let in at the door while it wasn\'t on the imported list. An import that lists it fills in the buyer.'
+                                                : '在不在已导入名单中时于现场放行的 HomeTown 门票。之后的导入若包含此票，会补上购票者信息。')
+                                            : (isEnglish
+                                                ? `Bought through HomeTown${a.hometownOrderId ? `, order #${a.hometownOrderId}` : ''}. HomeTown sent the ticket, so no email is sent from here.`
+                                                : `通过 HomeTown 购买${a.hometownOrderId ? `，订单号 ${a.hometownOrderId}` : ''}。门票由 HomeTown 发送，此处不发送邮件。`)}
+                                    </p>
+                                )}
+                                {a.missingFromHometown && (
+                                    <p className="admin-helper-text admin-tickets-edit-warning">
+                                        {isEnglish
+                                            ? `Not in the latest HomeTown export${a.hometownSeenAt ? ` (last seen in an import on ${a.hometownSeenAt.toLocaleString('en-US', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: 'numeric',
+                                                minute: '2-digit'
+                                            })})` : ''}. It was probably refunded or transferred; the ticket still works until it's voided here.`
+                                            : `不在最新的 HomeTown 导出中${a.hometownSeenAt ? `（最后出现于 ${a.hometownSeenAt.toLocaleString('zh-CN', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })} 的导出）` : ''}。可能已退款或转让；在此作废前门票仍然有效。`}
+                                    </p>
+                                )}
                                 <p className="admin-helper-text admin-tickets-attendee-account">
                                     {!a.email
                                         ? (isEnglish
@@ -334,13 +410,18 @@ export function AttendeesSection({
                                         <button
                                             className="admin-toggle-btn admin-toggle-save"
                                             onClick={() => onResend(a)}
-                                            disabled={!a.email || a.tickets.every(t => t.voided)}
+                                            disabled={!a.email || a.hometown || a.tickets.every(t => t.voided)}
                                         >
                                             {isEnglish ? 'Resend Email' : '重发邮件'}
                                         </button>
                                         <button
                                             className="admin-toggle-btn admin-toggle-revoke"
                                             onClick={() => onDelete(a)}
+                                            // Its record is what stops the number getting in again.
+                                            disabled={a.hometown}
+                                            title={a.hometown
+                                                ? (isEnglish ? 'HomeTown tickets are voided, not removed.' : 'HomeTown 门票只能作废，不能移除。')
+                                                : undefined}
                                         >
                                             {isEnglish ? 'Remove' : '移除'}
                                         </button>
@@ -371,7 +452,9 @@ export function AttendeesSection({
                                                         aria-label={isEnglish ? `Copy ticket ID ${t.ticketId}` : `复制门票 ID ${t.ticketId}`}
                                                         onClick={() => void copyTicketId(t.ticketId)}
                                                     >
-                                                        {t.ticketId.slice(0, 8)}…
+                                                        {/* A HomeTown number is short, and what's printed on
+                                                            the buyer's ticket, so it shows in full. */}
+                                                        {a.hometown ? t.ticketId : `${t.ticketId.slice(0, 8)}…`}
                                                         {copiedTicketId === t.ticketId ? (
                                                             <span
                                                                 className="admin-tickets-ticket-id-action admin-tickets-ticket-id-action--copied">
@@ -385,7 +468,7 @@ export function AttendeesSection({
                                                     </button>
                                                 </td>
                                                 <td>
-                                                    {readOnly ? (
+                                                    {a.unlisted ? '—' : readOnly ? (
                                                         <span
                                                             className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}>
                                                             {ticketTypeLabel(t.type || 'normal', isEnglish)}

@@ -2,43 +2,27 @@ import { RESEND_DAILY_CAP } from "./config";
 import { applyProviderUsage } from "./quota";
 import { RESEND_API_KEY } from "./resendClient";
 
-// The platform outbound mail goes through, for anything that talks about
-// sending rather than sends. The admin quota view renders from this, so
-// switching providers means changing it and the usage reader, not hunting for
-// "Resend" in the UI. Sending itself is in resendClient.
-export interface EmailProviderInfo {
-    id: string;
-    // Shown to admins verbatim.
+interface EmailProviderInfo {
     name: string;
     dailyCap: number;
-    // How the allowance refills, which the panel explains and
-    // fetchProviderUsage counts over.
     windowKind: "rolling24h" | "calendarDay";
 }
 
 export const EMAIL_PROVIDER: EmailProviderInfo = {
-    id: "resend",
     name: "Resend",
     dailyCap: RESEND_DAILY_CAP,
-    // Resend's daily quota is a sliding 24-hour window: each email's allowance
-    // rolls off on its own.
     windowKind: "rolling24h",
 };
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const LIST_URL = "https://api.resend.com/emails";
-// Resend caps `limit` at 100.
 const PAGE_SIZE = 100;
-// A page budget so a large account can't stall the panel or hit the rate limit:
-// 1000 emails, far above a plausible day here. Running out sets `truncated`.
 const MAX_PAGES = 10;
 
-export interface ProviderUsage {
-    // Recipients charged against the window. Every to/cc/bcc address counts, as
-    // the provider meters it.
+interface ProviderUsage {
+    /** Total to/cc/bcc recipients charged against the current window. */
     used: number;
-    // The scan stopped short of the window edge, so `used` is a floor ("at
-    // least").
+    /** True when pagination stopped before reaching the start of the window. */
     truncated: boolean;
 }
 
