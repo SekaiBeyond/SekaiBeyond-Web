@@ -8,8 +8,9 @@
     "build": "npm --prefix functions run build && react-router build",
     "start": "react-router-serve ./build/server/index.js",
     "update-csp-hashes": "node scripts/update-csp-hashes.ts",
-    "deploy": "npm run build && npm run update-csp-hashes && firebase deploy --config firebase.generated.json",
-    "deploy:rules": "npm --prefix functions run build && firebase deploy --only functions,firestore,storage"
+    "deploy": "npm run build && npm run update-csp-hashes && node scripts/deploy-functions.ts && firebase deploy --config firebase.generated.json --except functions",
+    "deploy:functions": "npm --prefix functions run build && node scripts/deploy-functions.ts",
+    "deploy:rules": "npm run deploy:functions && firebase deploy --only firestore,storage"
   },
   "dependencies": {
     "@react-router/node": "^8.4.0",
