@@ -1,6 +1,6 @@
 import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callImportHometownTickets, callSetHometownAdmitUnlisted } from '~/lib/firebase';
+import { callImportHometownTickets } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 import { hometownAttendeeId, type HometownTicketRow, parseHometownFile } from './hometown';
 import { type AttendeeData, type ParseError, TICKET_TYPES, ticketTypeLabel } from './types';
@@ -13,9 +13,6 @@ const MAX_ISSUES = 20;
 interface HometownSectionProps {
     eventId: string;
     attendees: AttendeeData[];
-    /** Null while the setting loads. */
-    admitUnlisted: boolean | null;
-    onAdmitUnlistedChange: (enabled: boolean) => void;
     readOnly: boolean;
     showToast: ShowToast;
     onImported: () => void;
@@ -23,14 +20,12 @@ interface HometownSectionProps {
 
 /**
  * Tickets sold through HomeTown, the school's box office: its guest list export
- * imported by ticket number, and whether a HomeTown ticket missing from it is
- * let in at the door.
+ * imported by ticket number. Whether a HomeTown ticket missing from it is let
+ * in at the door is set in Settings.
  */
 export function HometownSection({
                                     eventId,
                                     attendees,
-                                    admitUnlisted,
-                                    onAdmitUnlistedChange,
                                     readOnly,
                                     showToast,
                                     onImported,
@@ -43,7 +38,6 @@ export function HometownSection({
     const [warnings, setWarnings] = useState<ParseError[]>([]);
     const [busy, setBusy] = useState(false);
     const [importing, setImporting] = useState(false);
-    const [savingAdmit, setSavingAdmit] = useState(false);
     // Off after each import, since it flags whatever the file leaves out.
     const [updateExisting, setUpdateExisting] = useState(false);
 
@@ -182,29 +176,6 @@ export function HometownSection({
         }
     };
 
-    const toggleAdmit = async (enabled: boolean) => {
-        if (readOnly) return;
-        if (enabled) {
-            const ok = window.confirm(isEnglish
-                ? 'Let in HomeTown tickets that aren\'t on the imported list? Each is recorded so it can\'t be used twice, but a fake ticket gets in the same way.'
-                : '放行不在已导入名单中的 HomeTown 门票？每张都会被记录以防重复使用，但假票也会以同样方式入场。');
-            if (!ok) return;
-        }
-        setSavingAdmit(true);
-        try {
-            await callSetHometownAdmitUnlisted({eventId, enabled});
-            onAdmitUnlistedChange(enabled);
-            showToast(enabled
-                    ? (isEnglish ? 'Unlisted HomeTown tickets are now let in.' : '现已放行未列入名单的 HomeTown 门票。')
-                    : (isEnglish ? 'HomeTown tickets must now be on the list.' : 'HomeTown 门票现须在名单中。'),
-                enabled ? 'warning' : 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to change the setting.' : '更改设置失败。', 'error');
-        } finally {
-            setSavingAdmit(false);
-        }
-    };
-
     const issues = [...errors, ...warnings];
     const canImport = !readOnly && !busy && !importing && tickets.length > 0
         && !errors.some(e => e.row === 0);
@@ -331,24 +302,6 @@ export function HometownSection({
                 </>
             )}
 
-            <label className="admin-checkbox-label admin-tickets-hometown-admit">
-                <input
-                    type="checkbox"
-                    checked={admitUnlisted === true}
-                    onChange={(e) => void toggleAdmit(e.target.checked)}
-                    disabled={readOnly || admitUnlisted === null || savingAdmit}
-                />
-                <span>
-                    {isEnglish
-                        ? 'Let in HomeTown tickets that aren\'t on the imported list'
-                        : '放行不在已导入名单中的 HomeTown 门票'}
-                </span>
-            </label>
-            <p className="admin-helper-text">
-                {isEnglish
-                    ? 'For tickets bought after the last import. The scanner warns, lets them in and records the number, so the same ticket is refused if it\'s scanned again; a later import that lists it fills in the buyer. A fake ticket gets in the same way, so this is off unless turned on.'
-                    : '用于上次导入后购买的门票。扫码时会提示并放行，同时记录门票号，同一张票再次扫描将被拒绝；之后的导入若包含此票，会补上购票者信息。假票也会以同样方式入场，因此默认关闭。'}
-            </p>
         </div>
     );
 }

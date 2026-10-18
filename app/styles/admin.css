@@ -2604,7 +2604,8 @@
     font-weight: 600;
 }
 
-.admin-tickets-hometown h3 {
+.admin-tickets-hometown h3,
+.admin-tickets-settings h3 {
     margin: 0;
     font-size: 18px;
     font-weight: 700;
@@ -2861,10 +2862,11 @@ select.admin-tickets-tag:focus {
     font-size: 11px;
 }
 
-/* The Tickets sub-tab's three panels share one shell. */
+/* The Tickets sub-tab's panels share one shell. */
 .admin-tickets-import,
 .admin-tickets-template,
-.admin-tickets-send {
+.admin-tickets-send,
+.admin-tickets-settings {
     display: flex;
     flex-direction: column;
     gap: 14px;

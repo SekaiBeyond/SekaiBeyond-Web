@@ -24,6 +24,7 @@ import { AttendeesSection } from './AttendeesSection';
 import { HometownSection } from './HometownSection';
 import { ImportSection } from './ImportSection';
 import { SendSection } from './SendSection';
+import { SettingsSection } from './SettingsSection';
 import { StatsSection } from './StatsSection';
 import { TemplateSection } from './TemplateSection';
 import { attendeeLabel, buildAttendeeCsv, mapAttendeeDoc } from './helpers';
@@ -113,10 +114,10 @@ export function TicketsSubtab({
         }
     }, [eventId, collectionRoot]);
 
-    // Every section but Scan and the email template shows the list, and adding
-    // someone checks their email against it. A failed load waits for the next
-    // section change or a refresh.
-    const listShown = (section !== 'scan' && section !== 'template') || addingAttendee;
+    // Every section but Scan, the email template and Settings shows the list,
+    // and adding someone checks their email against it. A failed load waits for
+    // the next section change or a refresh.
+    const listShown = (section !== 'scan' && section !== 'template' && section !== 'settings') || addingAttendee;
     const listCurrent = loadedFor === listKey;
     useEffect(() => {
         if (listShown && !listCurrent) void loadAttendees();
@@ -398,6 +399,8 @@ export function TicketsSubtab({
     const tabVisible = (t: TicketsSection) => {
         if (t === 'scan') return canScan;
         if (t === 'import' || t === 'template' || t === 'send') return !readOnly;
+        // An archived event has no door to keep.
+        if (t === 'settings') return !readOnly && collectionRoot === 'upcomingEvents';
         return true;
     };
 
@@ -446,6 +449,14 @@ export function TicketsSubtab({
                         onClick={() => setSection('send')}
                     >
                         {isEnglish ? 'Send Emails' : '发送邮件'}
+                    </button>
+                )}
+                {tabVisible('settings') && (
+                    <button
+                        className={`admin-sub-tab ${section === 'settings' ? 'admin-sub-tab-active' : ''}`}
+                        onClick={() => setSection('settings')}
+                    >
+                        {isEnglish ? 'Settings' : '设置'}
                     </button>
                 )}
             </div>
@@ -547,11 +558,19 @@ export function TicketsSubtab({
                 <HometownSection
                     eventId={eventId}
                     attendees={attendees}
+                    readOnly={readOnly}
+                    showToast={showToast}
+                    onImported={() => void loadAttendees()}
+                />
+            )}
+
+            {section === 'settings' && collectionRoot === 'upcomingEvents' && (
+                <SettingsSection
+                    eventId={eventId}
                     admitUnlisted={admitUnlisted}
                     onAdmitUnlistedChange={setAdmitUnlisted}
                     readOnly={readOnly}
                     showToast={showToast}
-                    onImported={() => void loadAttendees()}
                 />
             )}
 
