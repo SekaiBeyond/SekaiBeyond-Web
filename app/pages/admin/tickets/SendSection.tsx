@@ -14,10 +14,6 @@ interface SendSectionProps {
     readOnly: boolean;
     showToast: ShowToast;
     onSent: () => void;
-    /**
-     * Whether the template below has edits that aren't saved, or was never
-     * saved: a send would go out without them, so it waits.
-     */
     templateUnsaved: boolean;
 }
 
@@ -42,11 +38,8 @@ export function SendSection({
     const {isEnglish} = useLanguage();
     const [sending, setSending] = useState(false);
     const [progress, setProgress] = useState<SendProgress | null>(null);
-    const [noTemplate, setNoTemplate] = useState(false);
     const [quota, setQuota] = useState<QuotaState | null>(null);
     const [quotaError, setQuotaError] = useState(false);
-    // Read by the send loop between chunks; the state only re-renders the
-    // button and note at once.
     const cancelRef = useRef(false);
     const [cancelling, setCancelling] = useState(false);
 
@@ -118,7 +111,6 @@ export function SendSection({
 
         cancelRef.current = false;
         setSending(true);
-        setNoTemplate(false);
         setProgress({mode, sent: 0, queued: 0, target});
 
         let totalSent = 0;
@@ -137,10 +129,7 @@ export function SendSection({
                 setProgress({mode, sent: totalSent, queued: totalQueued, target});
                 if (!hasMore) break;
                 cursor = nextCursor;
-                if (!cursor && mode === 'all') {
-                    // Safety: mode='all' with hasMore should always return a cursor.
-                    break;
-                }
+                if (!cursor && mode === 'all') break;
             }
             if (cancelRef.current) {
                 showToast(
@@ -175,7 +164,6 @@ export function SendSection({
         } catch (err) {
             const code = functionsErrorCode(err);
             if (code === 'no-template') {
-                setNoTemplate(true);
                 showToast(
                     isEnglish
                         ? 'Save the email template before sending.'
@@ -227,7 +215,7 @@ export function SendSection({
                     : '通过 Resend 发送门票二维码。每封邮件为对应参加者的每张门票包含一个二维码。'}
             </p>
 
-            {(noTemplate || templateUnsaved) && (
+            {templateUnsaved && (
                 <div className="admin-tickets-send-banner admin-tickets-send-banner-warning">
                     <strong>
                         {isEnglish ? 'Email template not saved.' : '邮件模板尚未保存。'}

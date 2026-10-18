@@ -16,7 +16,6 @@ export const Navigation = () => {
     const {content: conContent} = useConContent();
     const conPublished = conContent.settings.published;
     const {config, loading: configLoading} = useSiteConfig();
-    // Matches when the Follow Us section hides itself.
     const followHidden = !configLoading && !hasFollowLinks(config.socialLinks);
     const [mobileOpen, setMobileOpen] = useState(false);
     const singleUpcoming = activeEvents.length === 1;

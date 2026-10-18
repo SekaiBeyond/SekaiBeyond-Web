@@ -9,15 +9,9 @@ import { resolveVenueById, useVenues } from './venues';
 import { isHallTable } from '~/pages/con/hall';
 import type { Localized } from '~/pages/con/i18n';
 
-/* Everything on /con that admins edit in Admin → Con Content, plus the page's fixed
-   pieces. The editor saves to the staff-only `conContent/draft`, mirrored whole to
-   the public `conContent/main` while the con is published. */
+/* Admin-editable /con content: saved to staff-only `conContent/draft` and mirrored
+   to public `conContent/main` while published. */
 
-// Fixed in code
-
-/**
- * Shown in the hero, the navbar logo and the footer; the same every edition.
- */
 export const CON_NAME: Localized = {en: 'Sekai Beyond Con', zh: '彼世界动漫游戏展'};
 
 export interface NavLink {
@@ -25,7 +19,6 @@ export interface NavLink {
     label: Localized
 }
 
-/** Each id is a section's anchor on the page, which an admin cannot add. */
 const NAV_LINKS: NavLink[] = [
     {id: 'tickets', label: {en: 'Tickets', zh: '门票'}},
     {id: 'about', label: {en: 'About', zh: '关于漫展'}},
@@ -37,76 +30,46 @@ const NAV_LINKS: NavLink[] = [
     {id: 'faq', label: {en: 'FAQ', zh: '常见问题'}},
 ];
 
-/**
- * Chip colours a room can use. Fixed in code because each is a CSS class
- * (`sbc-accent--pink`).
- */
+/** Chip colours a room can use (`sbc-accent--pink`, etc.). */
 export const ROOM_ACCENTS = ['pink', 'violet', 'amber', 'sky', 'mint', 'slate'] as const;
 
 export type RoomAccent = typeof ROOM_ACCENTS[number]
 
 /**
- * The sections an admin can hide. Each is both an anchor id and a content key,
- * so hiding one also keeps its copy out of the public mirror.
+ * Sections an admin can hide. Each is both an anchor id and a content key, so
+ * hiding one also omits its copy from the public mirror.
  */
 export const HIDEABLE_SECTIONS = ['guests', 'vendors'] as const;
 
 export type HideableSection = typeof HIDEABLE_SECTIONS[number]
 
-// What each section holds
-
-/** Page-level switches, kept apart from the copy they govern. */
-export interface ConSettings {
-    /**
-     * When false, /con is for staff and above only; everyone else gets a "coming
-     * soon" card. Off by default, and publishing is what creates the public mirror,
-     * so an unannounced line-up is never readable from the database.
-     */
+interface ConSettings {
     published: boolean
-    /**
-     * Sections taken off the page, navbar and footer, in HIDEABLE_SECTIONS
-     * order so the editor's JSON dirty check doesn't see a reordering as a
-     * change.
-     */
+    /** Stored in HIDEABLE_SECTIONS order so the editor's JSON dirty check is order-stable. */
     hiddenSections: HideableSection[]
 }
 
-export interface ConEvent {
+interface ConEvent {
     tagline: Localized
     intro: Localized
-    /**
-     * The con as listed in `upcomingEvents`, the one source of its hours, venue and
-     * ticket link (see useConListing); empty until one is picked.
-     */
+    /** Linked `upcomingEvents` doc id providing hours, venue, and ticket URL. */
     upcomingEventId: string
 }
 
-/**
- * The hero backdrop, a short silent loop. Without one, or for reduced motion, the
- * hero is a gradient.
- */
-export interface ConHeroVideo {
+interface ConHeroVideo {
     webm: string;
 }
 
 export interface Room {
-    /** Stable slug referenced by `ScheduleItem.room`. */
     id: string
     name: Localized
     accent: RoomAccent
 }
 
 export interface ScheduleItem {
-    /**
-     * Both omitted for an announced but unscheduled slot, which the page lists
-     * under the grid as "time to be confirmed".
-     */
+    /** Omitted for announced slots whose time is still TBA. */
     start?: string
     end?: string
-    /**
-     * A `Room.id`, absent on a slot with no time: the room and the hour are booked
-     * together. The server refuses an id matching no room.
-     */
     room?: string
     title: Localized
 }
@@ -115,57 +78,40 @@ export interface Guest {
     name: string
     role: Localized
     blurb: Localized
-    /** Path under public/, e.g. '/guests/name.webp'. Falls back to an initial badge. */
     avatar?: string
     link?: string
 }
 
-/** One of the maids at the café, shown on the page as their poster. */
 export interface Maid {
     name: string
-    /** Blank until uploaded — a maid can be announced before their poster is drawn. */
     poster: string
 }
 
-/** The maid café, with a poster of its own and one per maid. */
 export interface MaidCafe {
-    /** This edition's theme, e.g. "Trick or Treat Tea Time". */
     theme: Localized
     intro: Localized
-    /** Where in the venue, e.g. "HUB 214". */
     location: Localized
-    /** HH:MM on the con's day, both or neither — blank until the hours are set. */
     start: string
     end: string
-    /** The café's own poster. Blank until one is uploaded. */
     poster: string
     maids: Maid[]
 }
 
-/** Who is at a table on the main hall floor plan (con/hall.ts). */
 export interface Vendor {
-    /** A table on the floor plan, e.g. "A1" — one of HALL_TABLES. One vendor per table. */
+    /** Table code from `HALL_TABLES` (e.g. "A1"). */
     table: string
-    /** As they asked to be listed; a shared table is one entry, "A & B". */
     name: string
     link?: string
 }
 
-export interface VendorCta {
-    /**
-     * Off unless turned on: a recruiting call left up after the tables are taken
-     * would be an offer the con can't keep.
-     */
+interface VendorCta {
     visible: boolean
     heading: Localized
     body: Localized
     label: Localized
 }
 
-/**
- * A cheaper price until `endsAt`, a zoneless `YYYY-MM-DDTHH:MM` on the Pacific
- * clock. After that the page shows the regular `price`.
- */
+/** Discounted price valid until `endsAt` (`YYYY-MM-DDTHH:MM` on the Pacific clock). */
 export interface EarlyBird {
     price: number
     endsAt: string
@@ -174,10 +120,6 @@ export interface EarlyBird {
 export interface TicketTier {
     id: string
     name: Localized
-    /**
-     * The regular price in US dollars. `formatPrice` renders it per language; 0
-     * reads as "Free".
-     */
     price: number
     earlyBird?: EarlyBird
     note: Localized
@@ -185,18 +127,11 @@ export interface TicketTier {
     featured?: boolean
 }
 
-/**
- * What buying online adds per paid ticket: a share of the price plus a flat
- * amount. Both at 0 means no fee line.
- */
 export interface TicketFee {
-    /** Percent of the ticket price, e.g. 2.9 for 2.9%. */
     percent: number
-    /** US dollars. */
     flat: number
 }
 
-/** One day the in-person table is selling. Zoneless, read on the Pacific clock. */
 export interface InPersonSession {
     /** YYYY-MM-DD */
     date: string
@@ -205,26 +140,17 @@ export interface InPersonSession {
     end: string
 }
 
-/**
- * Tickets sold in person before the con, without the online fee. Each session
- * drops off the page once it ends.
- */
 export interface InPersonSales {
     location: Localized
-    /** Optional — payment methods, where to find the table. */
     note: Localized
     sessions: InPersonSession[]
 }
 
-export interface FaqEntry {
+interface FaqEntry {
     q: Localized
     a: Localized
 }
 
-/**
- * The admin-editable part of the con page. Each key is one Save button in Con
- * Content, stored under that name in the draft and the mirror.
- */
 export interface ConContent {
     settings: ConSettings;
     event: ConEvent;
@@ -249,7 +175,7 @@ const BLANK: Localized = {en: '', zh: ''};
  * when the read fails. Blank on purpose: this file ships in the public bundle,
  * so anything written here would be public before the con is.
  */
-export const DEFAULT_CON_CONTENT: ConContent = {
+const DEFAULT_CON_CONTENT: ConContent = {
     settings: {published: false, hiddenSections: []},
     event: {tagline: BLANK, intro: BLANK, upcomingEventId: ''},
     heroVideo: {webm: ''},
@@ -264,11 +190,6 @@ export const DEFAULT_CON_CONTENT: ConContent = {
     faq: [],
 };
 
-/**
- * `saveConContent` validates everything, so these readers are for a half-written
- * doc or an unknown field, where the alternative is the page crashing on a
- * missing `.en`.
- */
 const loc = (raw: unknown): Localized => {
     if (!raw || typeof raw !== 'object') return BLANK;
     const {en, zh} = raw as Partial<Localized>;
@@ -278,14 +199,12 @@ const loc = (raw: unknown): Localized => {
 
 const str = (raw: unknown): string => (typeof raw === 'string' ? raw : '');
 
-/** Optional string fields are dropped when blank, so `guest.link &&` stays meaningful. */
 const optStr = (raw: unknown): string | undefined =>
     typeof raw === 'string' && raw.trim() !== '' ? raw : undefined;
 
 const obj = (raw: unknown): Record<string, unknown> =>
     raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
 
-/** Anything but an array reads as empty, the same as a section never saved. */
 const list = <T>(raw: unknown, read: (item: Record<string, unknown>) => T): T[] => {
     if (!Array.isArray(raw)) return [];
     return raw.filter(item => !!item && typeof item === 'object').map(item => read(item as Record<string, unknown>));
@@ -304,8 +223,6 @@ const readRooms = (raw: unknown): Room[] =>
     }));
 
 const readSettings = (raw: unknown): ConSettings => {
-    // Only an explicit `true` publishes; anything else means nobody has agreed to
-    // show it.
     const s = obj(raw);
     const hidden = Array.isArray(s.hiddenSections) ? s.hiddenSections : [];
     return {
@@ -323,11 +240,9 @@ const readEvent = (raw: unknown): ConEvent => {
     };
 };
 
-/** Empty when no clip is uploaded; the hero shows its gradient. */
 const readHeroVideo = (raw: unknown): ConHeroVideo => ({webm: str(obj(raw).webm)});
 
 const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({
-    // Absent times mean TBA, so they stay undefined rather than becoming ''.
     start: optStr(item.start),
     end: optStr(item.end),
     room: optStr(item.room),
@@ -363,8 +278,6 @@ const readVendors = (raw: unknown): ConContent['vendors'] => {
     const cta = obj(v.cta);
     const seen = new Set<string>();
     return {
-        // A table the plan doesn't have, or one listed twice, has nowhere to be
-        // drawn, so it is dropped rather than kept invisibly.
         tables: list(v.tables, vendor => ({
             table: str(vendor.table),
             name: str(vendor.name),
@@ -375,7 +288,6 @@ const readVendors = (raw: unknown): ConContent['vendors'] => {
             return true;
         }),
         cta: {
-            // Only an explicit true, as with `published`.
             visible: cta.visible === true,
             heading: loc(cta.heading),
             body: loc(cta.body),
@@ -390,8 +302,6 @@ const nonNegative = (raw: unknown): number =>
 const readEarlyBird = (raw: unknown): EarlyBird | undefined => {
     const e = obj(raw);
     const endsAt = optStr(e.endsAt);
-    // The deadline is what makes it an early bird; without one the tier is
-    // regular-priced.
     return endsAt ? {price: nonNegative(e.price), endsAt} : undefined;
 };
 
@@ -400,8 +310,7 @@ const readTickets = (raw: unknown): TicketTier[] =>
         id: str(tier.id),
         name: loc(tier.name),
         price: nonNegative(tier.price),
-        // Always present, even undefined, so the key sits where the editor's
-        // draft has it for the JSON dirty check.
+        // Always present so key order matches the editor's draft for JSON dirty checks.
         earlyBird: readEarlyBird(tier.earlyBird),
         note: loc(tier.note),
         perks: Array.isArray(tier.perks) ? tier.perks.map(perk => loc(perk)) : [],
@@ -443,10 +352,7 @@ const readSections = (data: Record<string, unknown>): Omit<ConContent, 'settings
     faq: readFaq(data.faq),
 });
 
-/**
- * The public mirror. It exists only while the con is published, so its existence
- * is the publish switch.
- */
+/** Exists only while the con is published. */
 const publicCache = createValueCache<ConContent>('con content', async () => {
     const db = getFirebaseDb();
     const snap = await getDoc(doc(db, 'conContent', 'main'));
@@ -455,9 +361,6 @@ const publicCache = createValueCache<ConContent>('con content', async () => {
     return {...readSections(data), settings: {...readSettings(data.settings), published: true}};
 }, DEFAULT_CON_CONTENT);
 
-/**
- * The draft, staff only: what the admin panel edits and staff preview on /con.
- */
 const draftCache = createValueCache<ConContent>('con content draft', async () => {
     const db = getFirebaseDb();
     const snap = await getDoc(doc(db, 'conContent', 'draft'));
@@ -467,29 +370,18 @@ const draftCache = createValueCache<ConContent>('con content draft', async () =>
     return {...readSections(data), settings: readSettings(data.settings)};
 }, DEFAULT_CON_CONTENT);
 
-export interface ConContentRead {
+interface ConContentRead {
     content: ConContent;
     loading: boolean;
-    /**
-     * True when `content` is the fallback because the read failed, not because
-     * nothing is stored: the page mustn't take an unreadable switch as
-     * "published", and the editor mustn't save defaults over the real document. A
-     * failed refresh over a loaded document doesn't set this.
-     */
+    /** True when the initial read failed, so callers don't treat fallback defaults as real data. */
     failed: boolean;
-    refresh: () => Promise<void>;
 }
 
-/**
- * What /con renders for this viewer: the mirror for the public, the draft for
- * staff to preview. Resolved here so no page renders half of each.
- */
+/** Reads the public mirror for visitors and the draft for staff preview. */
 export function useConContent(): ConContentRead {
     const {profile, loading: authLoading} = useAuth();
     const canPreview = !!profile && hasPermission(profile.group, 'staff');
 
-    // Only one is fetched; asking for the staff-only draft anonymously would just
-    // be denied.
     const pub = publicCache.useValue(!authLoading && !canPreview);
     const draft = draftCache.useValue(!authLoading && canPreview);
     const chosen = canPreview ? draft : pub;
@@ -498,33 +390,23 @@ export function useConContent(): ConContentRead {
         content: chosen.value,
         loading: authLoading || chosen.loading,
         failed: chosen.error !== null,
-        refresh: chosen.refresh,
     };
 }
 
-/** What the con's upcoming event says about it; each part is empty when the event doesn't say. */
-export interface ConListing {
-    /** The event's start and end on the Pacific clock, no zone suffix — read with parseSiteTime. */
+interface ConListing {
+    /** Pacific-clock `YYYY-MM-DDTHH:MM` without zone suffix. */
     date: string;
     endTime: string;
-    /** A document in `venues`, managed in Admin → Locations. */
     venueId: string;
     ticketUrl: string;
 }
 
 const NO_LISTING: ConListing = {date: '', endTime: '', venueId: '', ticketUrl: ''};
 
-/**
- * The con's hours, venue and ticket link, from the upcoming event it's listed as.
- * Staff previewing see it unpublished too, as they see the draft; everyone else,
- * only once it's published. Blank until then, or while none is linked or the
- * linked one is archived or deleted.
- */
 export function useConListing(): {listing: ConListing; loading: boolean} {
     const {profile, loading: authLoading} = useAuth();
     const canPreview = !!profile && hasPermission(profile.group, 'staff');
     const {content, loading: contentLoading} = useConContent();
-    // Only one is fetched; the unpublished ones would be denied to the public.
     const published = useUpcomingEvents(!authLoading && !canPreview);
     const all = useAllUpcomingEvents(!authLoading && canPreview);
     const events = canPreview ? all : published;
@@ -542,15 +424,11 @@ export function useConListing(): {listing: ConListing; loading: boolean} {
     };
 }
 
-export interface ConVenue {
+interface ConVenue {
     name: Localized;
     parkingUrl: string;
 }
 
-/**
- * Where the con is, from the venue on its upcoming event. Null when that event
- * isn't found, has no venue, or its venue was deleted.
- */
 export function useConVenue(): ConVenue | null {
     const {upcomingEventId} = useConContent().content.event;
     const venue = resolveVenueById(useConListing().listing.venueId, useVenues().venues);
@@ -561,11 +439,6 @@ export function useConVenue(): ConVenue | null {
     };
 }
 
-/**
- * The navbar and footer links, less hidden sections, whose anchors aren't on the
- * page. Memoised because the navbar's IntersectionObserver rebuilds on every new
- * array.
- */
 export function useConNavLinks(): NavLink[] {
     const {hiddenSections} = useConContent().content.settings;
     return useMemo(
@@ -574,21 +447,14 @@ export function useConNavLinks(): NavLink[] {
     );
 }
 
-/**
- * The draft, for the admin panel. Always the draft: going through
- * `useConContent` would hand anyone who can't preview the public mirror to
- * edit.
- */
 export function useConDraft(): ConContentRead {
-    const {value: content, loading, error, refresh} = draftCache.useValue();
-    return {content, loading, failed: error !== null, refresh};
+    const {value: content, loading, error} = draftCache.useValue();
+    return {content, loading, failed: error !== null};
 }
 
 /**
- * Re-fetches and returns the stored draft, so the editor re-seeds from what the
- * server kept (trimmed copy, generated ids) rather than what it sent. The public
- * mirror is refreshed too, but only if something subscribes to it, so a save isn't
- * reported failed over a copy nobody is viewing.
+ * Re-fetches and returns the stored draft so the editor re-seeds from server-normalized
+ * values; refreshes the public mirror too if subscribed.
  */
 export const refreshConContent = async (): Promise<ConContent> => {
     const [draft] = await Promise.all([

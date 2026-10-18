@@ -118,8 +118,7 @@ export const callClaimEventCode = (data: {code: string}) =>
         eventPoster: string;
     }>(getFunctions(), 'claimEventCode')(data);
 
-/** What one typed code turned out to be. */
-export type RedeemResult =
+type RedeemResult =
     | {
     kind: 'badge';
     badgeId: string;
@@ -129,7 +128,7 @@ export type RedeemResult =
     badgeDescriptionCn: string;
     badgeImageUrl: string;
 }
-    | {kind: 'staff'; eventId: string; eventTitle: string; eventTitleCn: string; eventPoster: string}
+    | {kind: 'staff'; eventTitle: string; eventTitleCn: string; eventPoster: string}
     | {
     kind: 'passport-claim';
     passportId: string;
@@ -140,7 +139,6 @@ export type RedeemResult =
     coverImageUrl: string;
 };
 
-/** One call for any code a member can type — see redeemCode in functions. */
 export const callRedeemCode = (data: {code: string}) =>
     httpsCallable<{code: string}, RedeemResult>(getFunctions(), 'redeemCode')(data);
 
@@ -154,11 +152,7 @@ export const callGenerateBadgeActivationCode = (data: {
         getFunctions(), 'generateBadgeActivationCode'
     )(data);
 
-export const callGenerateEventCode = (data: {
-    eventId: string;
-    activeFrom?: string;
-    activeUntil?: string;
-}) =>
+export const callGenerateEventCode = (data: {eventId: string}) =>
     httpsCallable<typeof data, {id: string; code: string}>(
         getFunctions(), 'generateEventCode'
     )(data);
@@ -238,7 +232,6 @@ export const callImportEventAttendees = (data: {
 
 export const callAddWalkInAttendee = (data: {
     eventId: string;
-    /** Empty for none. */
     email: string;
     name: string;
     ticketCount: number;
@@ -247,11 +240,9 @@ export const callAddWalkInAttendee = (data: {
 }) => httpsCallable<typeof data, {attendeeId: string; checkedIn: boolean; userCheckedIn: boolean}>(
     getFunctions(), 'addWalkInAttendee')(data);
 
-/** HomeTown guest list rows, one per ticket, matched by number (importHometownTickets in functions). */
 export const callImportHometownTickets = (data: {
     eventId: string;
     tickets: Array<{ticketId: string; name: string; email: string; type: string; orderId: string}>;
-    /** Copy changed details onto tickets already here. */
     updateExisting?: boolean;
     /** With updateExisting, on the last chunk: every number in the file, to flag the rest missing. */
     completeTicketIds?: string[];
@@ -260,9 +251,7 @@ export const callImportHometownTickets = (data: {
     confirmed: number;
     updated: number;
     skipped: number;
-    /** Listed tickets the file left out, now flagged. */
     missing: number;
-    /** Flagged tickets back in this file. */
     restored: number;
 }>(getFunctions(), 'importHometownTickets')(data);
 
@@ -279,11 +268,8 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
     httpsCallable<typeof data, {
         success?: boolean;
         alreadyRedeemed?: boolean;
-        // A HomeTown ticket, and whether it was only ever let in unlisted: on
-        // success, just now.
         hometown?: boolean;
         unlisted?: boolean;
-        // A HomeTown ticket left out of the latest export imported with updates.
         missingFromHometown?: boolean;
         attendeeName: string;
         attendeeEmail: string;
@@ -291,15 +277,11 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
         ticketIndex: number;
         ticketType: string;
         userCheckedIn?: boolean;
-        // Who first redeemed it, by name; only when alreadyRedeemed.
         redeemedBy?: string;
         redeemedAt?: string | null;
-        // On success: how much longer a rescan here still reads as success, as a
-        // duration so the scanner times it on its own clock.
         graceRemainingMs?: number;
     }>(getFunctions(), 'redeemTicket', {timeout: REDEEM_TIMEOUT_MS})(data);
 
-/** One of the caller's own tickets, as /profile shows it. */
 export interface HeldTicket {
     ticketId: string;
     type: string;
@@ -308,7 +290,6 @@ export interface HeldTicket {
     voided: boolean;
 }
 
-/** An event the caller holds tickets for, with the tickets they hold. */
 export interface HeldTicketEvent {
     eventId: string;
     title: string;
@@ -321,28 +302,16 @@ export interface HeldTicketEvent {
     tickets: HeldTicket[];
 }
 
-/**
- * The caller's tickets for events not yet over, matched on the purchase email,
- * scanned ones included. Attendee docs are staff-only, so this is the only way
- * to them (getMyTickets in functions).
- */
 export const callGetMyTickets = () =>
     httpsCallable<Record<string, never>, {events: HeldTicketEvent[]}>(getFunctions(), 'getMyTickets')({});
 
-/**
- * A ticket email that belongs to a registered account. `uid` and `displayName`
- * only come back for core staff.
- */
+/** `uid` and `displayName` are populated for core-staff+ callers only. */
 export interface AttendeeAccount {
     email: string;
     uid?: string;
     displayName?: string;
 }
 
-/**
- * Which of these ticket emails have an account; only matches come back
- * (getAttendeeAccounts in functions).
- */
 export const callGetAttendeeAccounts = (data: {eventId: string; emails: string[]}) =>
     httpsCallable<typeof data, {accounts: AttendeeAccount[]}>(getFunctions(), 'getAttendeeAccounts')(data);
 
@@ -360,7 +329,7 @@ export const callResetTicket = (data: {eventId: string; attendeeId: string; tick
     httpsCallable<typeof data, {reset: boolean}>(getFunctions(), 'resetTicket')(data);
 
 export const callDeleteEventAttendee = (data: {eventId: string; attendeeId: string}) =>
-    httpsCallable<typeof data, {deleted: boolean; ticketCount: number}>(
+    httpsCallable<typeof data, {deleted: boolean}>(
         getFunctions(), 'deleteEventAttendee')(data);
 
 export const callUpdateEventAttendee = (data: {
@@ -401,22 +370,15 @@ export const callGetTicketEmailQuota = () =>
         queueCap: number;
     }>(getFunctions(), 'getTicketEmailQuota')({});
 
-// Outbound-email capacity for the Email Quota tool, core-staff+.
-// `providerReported` is a live reading that matches the provider's dashboard;
-// `sentToday` is the local counter that gates sends, including in-flight
-// reservations.
 export const callGetEmailQuotaStatus = () =>
     httpsCallable<Record<string, never>, {
         provider: {
-            id: string;
             name: string;
             windowKind: 'rolling24h' | 'calendarDay';
             fromAddress: string;
         };
-        // null when unreadable, never to be shown as zero.
         providerReported: number | null;
         readingSource: 'live' | 'cached' | 'unavailable';
-        // The count stopped at its page budget, so providerReported is a floor.
         usageTruncated: boolean;
         sentToday: number;
         dailyCap: number;
@@ -454,20 +416,14 @@ export const callSaveSiteConfig = (data: {
     senderPrefix?: string,
     conEdition?: ConEdition | null
 }) =>
-    // `socialLinks` comes back as stored, with a Xiaohongshu share link
-    // resolved to its profile.
     httpsCallable<typeof data, {saved: boolean, socialLinks?: SocialLinks}>(getFunctions(), 'saveSiteConfig')(data);
 
-// Only the sections in `data` are written, so each Save button leaves the
-// others alone.
 export const callSaveConContent = (data: Partial<ConContent>) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveConContent')(data);
 
 export const callSaveTeamMembers = (data: {teamMembers: any[]}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveTeamMembers')(data);
 
-// Public: team members with account-linked fields filled from the account's
-// live data.
 export const callGetPublicTeamMembers = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getPublicTeamMembers')({});
 
@@ -477,8 +433,6 @@ export const callGetSenderSettings = () =>
         defaultPrefix: string
     }>(getFunctions(), 'getSenderSettings')({});
 
-// The full roster, with linked uids and follow flags, from the server-only
-// teamRoster doc. Staff+.
 export const callGetTeamRoster = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getTeamRoster')({});
 
@@ -510,12 +464,7 @@ export const callToggleBadgeCodeActive = (data: {codeId: string; active: boolean
 export const callDeleteBadgeActivationCode = (data: {codeId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteBadgeActivationCode')(data);
 
-export const callGenerateStaffCode = (data: {
-    eventId: string;
-    activeFrom?: string;
-    activeUntil?: string;
-    maxUses?: number;
-}) =>
+export const callGenerateStaffCode = (data: {eventId: string}) =>
     httpsCallable<typeof data, {id: string; code: string}>(
         getFunctions(), 'generateStaffCode'
     )(data);
@@ -552,16 +501,13 @@ export const callSaveVenue = (data: {
 
 export interface UwBuildingLookup {
     building: {code: string; name: string; address: string; lat: number; lng: number; parkingTip: string};
-    /** Visitor lots named in UW's parking note for the building. */
     recommendedLots: string[];
-    /** Visitor lots nearest on foot, closest first. */
-    nearestLots: Array<{code: string; seconds: number; meters: number}>;
+    nearestLots: Array<{code: string; seconds: number}>;
 }
 
 export const callLookUpUwBuilding = (data: {code: string}) =>
     httpsCallable<typeof data, UwBuildingLookup>(getFunctions(), 'lookUpUwBuilding')(data);
 
-// Waits as long as the sync may run on the server, instead of the client's default 70 seconds.
 export const callSyncUwParking = () =>
     httpsCallable<Record<string, never>, {
         lotCount: number;
@@ -610,8 +556,6 @@ export const callDeleteSocialPlatform = (data: {id: string}) =>
 export const callSeedSocialPlatforms = () =>
     httpsCallable<Record<string, never>, {seeded: number}>(getFunctions(), 'seedSocialPlatforms')({});
 
-// Physical passports. callGeneratePassports returns the new keys;
-// callExportPassportKeys and callRevealPassportKey serve them again.
 export const callGeneratePassports = (data: {designId: string; count: number}) =>
     httpsCallable<typeof data, {
         designId: string;
@@ -627,8 +571,6 @@ export const callRevealPassportKey = (data: {passportId: string}) =>
     httpsCallable<typeof data, {passportId: string; activationCode: string}>(
         getFunctions(), 'revealPassportKey')(data);
 
-// Admin only, recorded once per call, up to MAX_PASSPORT_KEY_EXPORT ids; a
-// passport with no key comes back in `missing`.
 export const callExportPassportKeys = (data: {passportIds: string[]}) =>
     httpsCallable<typeof data, {
         passports: Array<{passportId: string; activationCode: string}>;
@@ -638,7 +580,6 @@ export const callExportPassportKeys = (data: {passportIds: string[]}) =>
 export const callGetPassportPublicProfile = (data: {passportId: string}) =>
     httpsCallable<typeof data, PassportPublicProfile>(getFunctions(), 'getPassportPublicProfile')(data);
 
-// Claimed and already-gone passports are skipped and reported, not fatal.
 export const callDeletePassports = (data: {passportIds: string[]}) =>
     httpsCallable<typeof data, {
         deleted: string[];
@@ -646,21 +587,9 @@ export const callDeletePassports = (data: {passportIds: string[]}) =>
         missing: string[];
     }>(getFunctions(), 'deletePassports')(data);
 
-/**
- * One claimed passport, from its own page, never from a selection.
- *
- * `subtractDays` takes the term it granted back off the holder's membership,
- * floored at today; `daysRemoved` is what was actually taken. Left off, the
- * membership isn't touched.
- */
 export const callDeleteClaimedPassport = (data: {passportId: string; subtractDays: boolean}) =>
     httpsCallable<typeof data, {
-        deleted: boolean;
-        ownerUid: string | null;
-        ownerName: string;
         daysRemoved: number;
-        membershipExpiresAt: string | null;
-        /** Days were asked for and none could be taken: already lapsed, or no account. */
         nothingToSubtract: boolean;
     }>(getFunctions(), 'deleteClaimedPassport')(data);
 

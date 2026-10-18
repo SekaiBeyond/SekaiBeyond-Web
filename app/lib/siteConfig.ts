@@ -17,11 +17,9 @@ export interface ConEdition {
     }[];
 }
 
-// The accounts the site links to, each with an icon drawn in code. Mirrored by
-// SOCIAL_LINK_PATTERNS in functions/src/functions/admin.ts.
+// Mirrors SOCIAL_LINK_PATTERNS in functions/src/functions/admin.ts.
 export const SOCIAL_LINK_KEYS = ['discord', 'instagram', 'bilibili', 'xiaohongshu', 'linkedin', 'github'] as const;
 export type SocialLinkKey = typeof SOCIAL_LINK_KEYS[number];
-/** Profile URL per account. Blank hides every link to that account. */
 export type SocialLinks = Record<SocialLinkKey, string>;
 
 export const SOCIAL_LINK_NAMES: Record<SocialLinkKey, {en: string; zh: string}> = {
@@ -51,23 +49,18 @@ export interface TeamMemberConfig {
     roleCn: string;
     imageUrl: string;
     isHonorary?: boolean;
-    // With a linked account (uid set), each flag makes a field follow the account's live
-    // value, keeping the stored one as a fallback: role follows its title (titleCn for
-    // Chinese), photo its photoURL. Names stay custom; linking only prefills a blank
-    // one.
+    /** When `uid` is set, follow the linked account's live title / photoURL. */
     useAccountRole?: boolean;
     useAccountPhoto?: boolean;
 }
 
-export interface SiteConfig {
+interface SiteConfig {
     bilibiliVideoBvid: string;
     bilibiliVideoCoverUrl: string;
     teamMembers: TeamMemberConfig[];
     conEdition: ConEdition | null;
     contactEmail: string;
     socialLinks: SocialLinks;
-    // The part before the @ of the From address; the server sets the domain.
-    // Blank uses its default prefix.
     senderPrefix: string;
 }
 
@@ -96,7 +89,6 @@ const cache = createValueCache<SiteConfig>('site config', async () => {
     };
 }, DEFAULT_CONFIG);
 
-/** `failed` means the read never succeeded, so `config` is DEFAULT_CONFIG. */
 export function useSiteConfig(): {
     config: SiteConfig;
     loading: boolean;

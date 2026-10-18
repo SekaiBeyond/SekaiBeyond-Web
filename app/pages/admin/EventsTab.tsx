@@ -51,11 +51,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     const [eventImage, setEventImage] = useState<File | null>(null);
     const [eventImagePreview, setEventImagePreview] = useState<string | null>(null);
 
-    const selectManagedEvent = (eventId: string) => {
-        setManagedEvent(eventId);
-    };
-
-    useImperativeHandle(forwardedRef, () => ({selectManagedEvent}));
+    useImperativeHandle(forwardedRef, () => ({selectManagedEvent: setManagedEvent}));
 
     const resetEventForm = () => {
         setEventForm({
@@ -243,7 +239,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                             <button
                                 key={event.id}
                                 className="admin-event-card"
-                                onClick={() => selectManagedEvent(event.id)}
+                                onClick={() => setManagedEvent(event.id)}
                             >
                                 <img src={event.icon} alt="" className="admin-event-card-img"/>
                                 <div className="admin-event-card-info">

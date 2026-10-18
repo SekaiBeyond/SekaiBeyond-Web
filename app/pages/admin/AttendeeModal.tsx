@@ -7,34 +7,20 @@ import {
     functionsErrorCode,
 } from '~/lib/firebase';
 import { ModalShell } from './ModalShell';
+import { EMAIL_RE } from './tickets/helpers';
 import { type AttendeeData, TICKET_TYPES, type TicketType } from './tickets/types';
 import { useAccountLinks } from './tickets/useAccountLinks';
 import type { ShowToast } from './utils';
 
-/**
- * Typing must settle before the lookup: every callable shares one rate-limit
- * budget.
- */
 const LOOKUP_DEBOUNCE_MS = 600;
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface AttendeeModalProps {
     eventId: string;
-    /** The attendee to edit, or null to add a new one. */
     attendee: AttendeeData | null;
-    /** Add mode: current attendees, for the duplicate-email check. */
     existingAttendees?: AttendeeData[];
-    /**
-     * Add mode on the event's days: someone at the door, whose email is optional
-     * and who can be checked in as they're added.
-     */
     walkIn?: boolean;
     onClose: () => void;
-    /** Add mode: called after a successful add (the modal closes itself). */
     onAdded?: () => void;
-    // A name-only edit is an optimistic patch to merge. A regenerated edit
-    // mints ticket ids server-side, so the parent must refetch.
     onSaved?: (changes: Partial<AttendeeData>) => void;
     onRegenerated?: () => void;
     showToast: ShowToast;
@@ -57,7 +43,6 @@ export function AttendeeModal({
     const [ticketCount, setTicketCount] = useState(attendee ? String(attendee.ticketCount) : '1');
     const originalType: TicketType = attendee?.tickets[0]?.type || 'normal';
     const [type, setType] = useState<TicketType>(originalType);
-    // On by default: a walk-in is usually standing at the door.
     const [checkIn, setCheckIn] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -66,19 +51,14 @@ export function AttendeeModal({
     const parsedCount = parseInt(ticketCount, 10);
 
     const emailValid = EMAIL_RE.test(trimmedEmail);
-    // Only a walk-in may go without one.
     const emailOk = emailValid || (walkIn && trimmedEmail === '');
-    // Optional: a ticket only needs an email to reach someone.
     const nameValid = trimmedName.length <= 100;
     const countValid = Number.isInteger(parsedCount) && parsedCount >= 1 && parsedCount <= 50;
 
-    // Edit mode: only enable Save once something actually changed.
     const nameChanged = !!attendee && nameValid && trimmedName !== attendee.name;
     const countChanged = !!attendee && countValid && parsedCount !== attendee.ticketCount;
     const typeChanged = !!attendee && type !== originalType;
 
-    // The address being looked up: at once when editing (it's read-only), after
-    // typing settles when adding.
     const [lookupEmail, setLookupEmail] = useState(attendee?.email.trim().toLowerCase() ?? '');
     useEffect(() => {
         if (attendee) return;
@@ -92,13 +72,10 @@ export function AttendeeModal({
 
     const lookupEmails = useMemo(() => lookupEmail ? [lookupEmail] : [], [lookupEmail]);
     const {links: accountLinks, failed: accountLookupFailed} = useAccountLinks(eventId, lookupEmails);
-    // undefined while asking or not asked; null for no account.
     const account = lookupEmail ? accountLinks.get(lookupEmail) : undefined;
     const checkingAccount = !!lookupEmail && account === undefined && !accountLookupFailed;
 
-    // Add mode: warn when the email already has an attendee record. A HomeTown
-    // ticket is never re-issued by email, so only a walk-in is told about one:
-    // that person may just need finding under Attendees.
+    // HomeTown tickets aren't re-issued by email, so only warn about HomeTown matches for walk-ins.
     const duplicate = useMemo(() => {
         if (attendee || !emailValid) return null;
         const matches = existingAttendees.filter(a => a.email.toLowerCase() === trimmedEmail && (walkIn || !a.hometown));
@@ -109,12 +86,8 @@ export function AttendeeModal({
         };
     }, [attendee, existingAttendees, trimmedEmail, emailValid, walkIn]);
 
-    // A HomeTown ticket keeps its number, so only its name can change here; its
-    // type changes from the ticket list once an import lists it.
     const hometownLocked = !!attendee?.hometown;
 
-    // A walk-in's email can't already be on the list: re-issuing would void the
-    // tickets that person was sent.
     const canSave = !saving && nameValid && countValid && (attendee
         ? (nameChanged || countChanged || typeChanged)
         : emailOk && !(walkIn && duplicate));
@@ -168,8 +141,7 @@ export function AttendeeModal({
         }
         setSaving(true);
         try {
-            // Re-issue only what was confirmed above. A duplicate this list didn't
-            // know about, added elsewhere since it loaded, is skipped.
+            // Only override a duplicate confirmed above; one added elsewhere since load is skipped.
             const result = await callImportEventAttendees({
                 eventId,
                 attendees: [{email: trimmedEmail, name: trimmedName, ticketCount: parsedCount, type}],
@@ -221,7 +193,7 @@ export function AttendeeModal({
             if (regenerated) {
                 onRegenerated?.();
             } else {
-                onSaved?.({name: trimmedName, updatedAt: new Date()});
+                onSaved?.({name: trimmedName});
             }
             showToast(
                 regenerated
@@ -286,9 +258,6 @@ export function AttendeeModal({
                                 : '不填写邮箱则不会发送门票，也不会计入任何账户。'}
                         </span>
                     )}
-                    {/* Whether this address reaches someone's profile. A note
-                        only: a ticket without an account still works, and credits
-                        them if they sign up with it. */}
                     {emailValid && (
                         <span className={`admin-helper-text admin-tickets-account-note${
                             account ? ' admin-tickets-account-note--linked' : ''}`}>
@@ -302,7 +271,6 @@ export function AttendeeModal({
                                         ? (
                                             <>
                                                 {isEnglish ? 'Registered account: ' : '已注册账户：'}
-                                                {/* uid only comes back for core staff. */}
                                                 {account.uid
                                                     ? (
                                                         <a

@@ -4,11 +4,10 @@ import sanitizeHtml from 'sanitize-html';
 import { createValueCache } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
-export interface Policy {
+interface Policy {
     contentEn: string;
     contentCn: string;
     updatedAt?: Date;
-    updatedByName?: string;
 }
 
 const EMPTY_POLICY: Policy = {contentEn: '', contentCn: ''};
@@ -21,11 +20,9 @@ const cache = createValueCache<Policy>('policy', async () => {
         contentEn: data?.contentEn ?? '',
         contentCn: data?.contentCn ?? '',
         updatedAt: data?.updatedAt?.toDate?.(),
-        updatedByName: data?.updatedByName,
     };
 }, EMPTY_POLICY);
 
-/** `failed` means the read never succeeded, so `policy` is empty. */
 export function usePolicy(): {policy: Policy; loading: boolean; failed: boolean; refresh: () => Promise<void>} {
     const {value: policy, loading, error, refresh} = cache.useValue();
     return {policy, loading, failed: error !== null, refresh};

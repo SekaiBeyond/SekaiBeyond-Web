@@ -64,10 +64,6 @@ const TEXT: Record<Variant, VariantText> = {
     },
 };
 
-/**
- * Whether the code would be accepted now and, if not, why:
- * validateCodeInTransaction's checks, in its order.
- */
 type CodeState = 'active' | 'disabled' | 'scheduled' | 'expired' | 'used-up';
 
 const codeState = (code: BadgeCode, now: Date): CodeState => {
@@ -92,33 +88,21 @@ const formatWhen = (value: string, isEnglish: boolean) =>
         year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
     });
 
-/**
- * A stored window bound as an ISO moment, or null. A zoneless bound reads as
- * Pacific, as validateCodeInTransaction reads it; an unreadable one is no
- * bound.
- */
 const storedBound = (value: unknown): string | null => {
     if (typeof value !== 'string' || !value) return null;
     const date = parseSiteTime(value);
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
-/** A bound as its datetime-local input shows it: on the Pacific clock, wherever the admin is. */
 const boundInput = (bound: string | null): string => bound ? toDatetimeLocal(new Date(bound)) : '';
 
-/** A datetime-local input's value as the bound it sends, which names its zone. */
 const inputBound = (value: string): string | null => value ? parseSiteTime(value).toISOString() : null;
 
 interface ClaimCodeSectionProps {
     eventId: string;
-    /**
-     * 'checkin': attendee codes (claimCodes), shown as a claim-URL QR. 'staff': staff
-     * codes (staffClaimCodes), a raw code with a max-uses cap.
-     */
     variant: Variant;
     showToast: ShowToast;
     readOnly?: boolean;
-    /** When given, offers a button that fills Active until with this time. */
     eventEndAt?: Date;
 }
 
@@ -150,12 +134,8 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     const [code, setCode] = useState<BadgeCode | null>(null);
     const [codeFrom, setCodeFrom] = useState('');
     const [codeUntil, setCodeUntil] = useState('');
-    // Whether there's a cap, and the cap as typed, so clearing the field to
-    // retype doesn't lift it.
     const [limitUses, setLimitUses] = useState(false);
     const [maxUsesText, setMaxUsesText] = useState('');
-    // Staff codes show a window summary to open; check-in codes always show the
-    // inputs.
     const [editingWindow, setEditingWindow] = useState(false);
     const [copied, setCopied] = useState(false);
     const [generating, setGenerating] = useState(false);
@@ -189,7 +169,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                     return {
                         id: docSnap.id,
                         code: data.code,
-                        eventId: data.eventId ?? '',
                         active: data.active ?? true,
                         activeFrom: storedBound(data.activeFrom),
                         activeUntil: storedBound(data.activeUntil),
@@ -217,8 +196,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         return () => {
             stale = true;
         };
-        // Not keyed on isEnglish: a language toggle would reload over an unsaved
-        // window.
+        // Not keyed on isEnglish: a toggle would reload over an unsaved window.
     }, [eventId, variant, showToast]);
 
     useEffect(() => {
@@ -233,7 +211,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
             const result = await api.generate();
             const {id, code: newCode} = result.data;
             setCode({
-                id, code: newCode, eventId, active: true,
+                id, code: newCode, active: true,
                 activeFrom: null, activeUntil: null, maxUses: 0, usedCount: 0,
             });
             setCodeFrom('');
@@ -339,8 +317,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
 
     const eventEndLocal = eventEndAt ? toDatetimeLocal(eventEndAt) : '';
 
-    // Staff codes are typed, so they copy dashed; check-in codes are scanned
-    // from a URL.
     const copyValue = code ? (isStaff ? formatCode(code.code) : getClaimUrl(code.code)) : '';
 
     const copyCode = async () => {
@@ -381,9 +357,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
         </div>
     );
 
-    // "No code yet" only for an empty read. Generating retires every existing
-    // code, so offering it after a failed read could kill a printed code without
-    // the regenerate warning.
+    // No Generate after a failed read: it retires existing codes without the regenerate warning.
     if (loadFailed) {
         return (
             <div className="admin-codes-section">
@@ -431,10 +405,8 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
     }
 
     const windowDirty = codeFrom !== boundInput(code.activeFrom) || codeUntil !== boundInput(code.activeUntil);
-    // datetime-local values share one fixed format and one clock, so they compare as strings.
     const windowBackwards = !!codeFrom && !!codeUntil && codeFrom >= codeUntil;
 
-    // `trailing` sits at the end of the inputs' row, after Use Event End and Clear.
     const windowFields = (trailing?: ReactNode) => (
         <>
             <div className="admin-code-time-inputs">
@@ -518,7 +490,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                     ? (isEnglish ? 'Regenerating...' : '重新生成中...')
                     : (isEnglish ? 'Regenerate' : '重新生成')}
             </button>
-            {/* Only a disabled staff code can be deleted, as deleteStaffCode requires. */}
             {isStaff && !code.active && (
                 <button
                     className="admin-toggle-btn admin-toggle-revoke"
@@ -579,7 +550,6 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
 
     const usageFull = savedMaxUses > 0 && usedCount >= savedMaxUses;
     const maxUsesDirty = draftMaxUses !== savedMaxUses;
-    // A cap at or under the uses already spent shuts the code for anyone new.
     const capClosesCode = limitUses && draftMaxUsesValid && maxUsesDirty && draftMaxUses <= usedCount;
 
     return (

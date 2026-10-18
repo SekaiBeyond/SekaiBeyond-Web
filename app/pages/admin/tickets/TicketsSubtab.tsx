@@ -33,14 +33,8 @@ import { type AttendeeData, type StatusFilter, type TicketData, type TicketsSect
 interface TicketsSubtabProps {
     event: UpcomingEvent;
     readOnly: boolean;
-    /**
-     * Who may scan, as redeemTicket decides: 'always' for core staff,
-     * 'event-days' for the staff group and the event's staff.
-     */
     scanAccess: 'always' | 'event-days' | 'none';
     showToast: ShowToast;
-    // Where ticket attendees live: under `pastEvents` once archived, else
-    // `upcomingEvents`.
     collectionRoot?: 'upcomingEvents' | 'pastEvents';
 }
 
@@ -57,8 +51,6 @@ export function TicketsSubtab({
     const startMs = event.startAt.getTime();
     const endMs = event.endAt.getTime();
 
-    // Checked each minute, so a scanner left open overnight opens on the day.
-    // The server enforces it regardless.
     const [eventDay, setEventDay] = useState(() => eventDayStatus(event.startAt, event.endAt));
     useEffect(() => {
         const check = () => setEventDay(eventDayStatus(new Date(startMs), new Date(endMs)));
@@ -69,14 +61,11 @@ export function TicketsSubtab({
 
     const canScan = scanAccess !== 'none';
     const scanOpen = scanAccess === 'always' || (scanAccess === 'event-days' && eventDay === 'during');
-    // Adding someone at the door, email optional, is for the event's days only;
-    // addWalkInAttendee enforces it.
     const canAddWalkIn = !readOnly && eventDay === 'during';
 
     const [section, setSection] = useState<TicketsSection>(scanOpen && readOnly ? 'scan' : 'attendees');
     const [attendees, setAttendees] = useState<AttendeeData[]>([]);
     const [loadingAttendees, setLoadingAttendees] = useState(false);
-    // A flag rather than the message, so a language toggle doesn't refetch.
     const [attendeesFailed, setAttendeesFailed] = useState(false);
     const [search, setSearch] = useState('');
     const [filterUnsent, setFilterUnsent] = useState(false);
@@ -88,9 +77,7 @@ export function TicketsSubtab({
 
     const [displayCount, setDisplayCount] = useState(10);
 
-    // Which event the list was last loaded for; null once a scan may have
-    // changed it. It loads only when a section that shows it opens, so a phone
-    // that only scans never reads the whole list.
+    // Load attendees lazily so a scanner-only session doesn't fetch the full list.
     const listKey = `${collectionRoot}/${eventId}`;
     const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
@@ -113,18 +100,12 @@ export function TicketsSubtab({
         }
     }, [eventId, collectionRoot]);
 
-    // Every section but Scan and Settings shows the list, and adding someone
-    // checks their email against it. A failed load waits for the next section
-    // change or a refresh.
     const listShown = (section !== 'scan' && section !== 'settings') || addingAttendee;
     const listCurrent = loadedFor === listKey;
     useEffect(() => {
         if (listShown && !listCurrent) void loadAttendees();
     }, [listShown, listCurrent, loadAttendees]);
 
-    // Whether unlisted HomeTown tickets are let in (setHometownAdmitUnlisted),
-    // followed live so every open scanner shows the door as it is now. Null
-    // while loading; an archived event has no door to keep.
     const [admitUnlisted, setAdmitUnlisted] = useState<boolean | null>(null);
     useEffect(() => {
         if (collectionRoot !== 'upcomingEvents') return;
@@ -162,7 +143,6 @@ export function TicketsSubtab({
                 if (!hasStatus) return false;
             }
             if (!needle) return true;
-            // By ticket number too, as HomeTown's own door app finds a ticket.
             return a.email.toLowerCase().includes(needle)
                 || a.name.toLowerCase().includes(needle)
                 || a.ticketIds.some(id => id.toLowerCase().includes(needle));
@@ -197,8 +177,7 @@ export function TicketsSubtab({
             if (a.unlisted) unlisted++;
             if (a.missingFromHometown) missingFromHometown++;
 
-            // A walk-in without an email has nowhere to be sent, and HomeTown
-            // sends its own.
+            // Emailless walk-ins can't be sent to, and HomeTown sends its own.
             if (activeInThisAttendee > 0 && a.email && !a.hometown) {
                 sendable++;
                 if (!a.emailSent) unsentSendable++;
@@ -221,13 +200,9 @@ export function TicketsSubtab({
         return filteredAttendees.slice(0, displayCount);
     }, [filteredAttendees, displayCount]);
 
-    // Which addresses have an account, deciding whether a scan reaches a
-    // profile. Asked for the whole list, so revealed rows already have answers.
     const attendeeEmails = useMemo(() => attendees.map(a => a.email), [attendees]);
     const {links: accountLinks} = useAccountLinks(eventId, attendeeEmails);
 
-    // Merged into the attendee as it is when the call returns, so two in-flight
-    // actions don't undo each other.
     const updateAttendee = (attendeeId: string, changes: Partial<AttendeeData>) => {
         setAttendees(prev => prev.map(a => a.id === attendeeId ? {...a, ...changes} : a));
     };
@@ -303,10 +278,7 @@ export function TicketsSubtab({
             updateTicket(a.id, ticketId, {
                 redeemed: false,
                 redeemedAt: null,
-                redeemedBy: '',
                 redeemedByName: '',
-                checkedIn: false,
-                checkedInAt: null,
             });
             showToast(isEnglish ? 'Ticket reset.' : '门票已重置。', 'success');
         } catch {
@@ -326,7 +298,6 @@ export function TicketsSubtab({
     };
 
     const exportAttendees = () => {
-        // Characters filenames can't hold, on any system.
         const base = event.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || eventId;
         downloadBlob(buildAttendeeCsv(attendees), `${base}-attendees-${fileStamp()}.csv`);
     };
@@ -395,14 +366,6 @@ export function TicketsSubtab({
         ? (isEnglish ? 'Failed to load attendees.' : '加载参加者失败。')
         : null;
 
-    const tabVisible = (t: TicketsSection) => {
-        if (t === 'scan') return canScan;
-        if (t === 'import' || t === 'emails') return !readOnly;
-        // An archived event has no door to keep.
-        if (t === 'settings') return !readOnly && collectionRoot === 'upcomingEvents';
-        return true;
-    };
-
     return (
         <div className="admin-tickets-section">
             <div className="admin-tickets-inner-tabs">
@@ -426,7 +389,7 @@ export function TicketsSubtab({
                 >
                     {isEnglish ? 'Stats' : '统计'}
                 </button>
-                {tabVisible('import') && (
+                {!readOnly && (
                     <button
                         className={`admin-sub-tab ${section === 'import' ? 'admin-sub-tab-active' : ''}`}
                         onClick={() => setSection('import')}
@@ -434,7 +397,7 @@ export function TicketsSubtab({
                         {isEnglish ? 'Import' : '导入'}
                     </button>
                 )}
-                {tabVisible('emails') && (
+                {!readOnly && (
                     <button
                         className={`admin-sub-tab ${section === 'emails' ? 'admin-sub-tab-active' : ''}`}
                         onClick={() => setSection('emails')}
@@ -442,7 +405,7 @@ export function TicketsSubtab({
                         {isEnglish ? 'Emails' : '邮件'}
                     </button>
                 )}
-                {tabVisible('settings') && (
+                {!readOnly && collectionRoot === 'upcomingEvents' && (
                     <button
                         className={`admin-sub-tab ${section === 'settings' ? 'admin-sub-tab-active' : ''}`}
                         onClick={() => setSection('settings')}
@@ -457,12 +420,10 @@ export function TicketsSubtab({
                     eventId={eventId}
                     eventTitle={isEnglish ? event.title : (event.titleCn || event.title)}
                     admitUnlistedHometown={admitUnlisted}
-                    // Left for the list to catch up on when it's next shown.
                     onRedeemed={() => setLoadedFor(null)}
                 />
             )}
 
-            {/* At the door, someone without a ticket is added without leaving the scanner. */}
             {section === 'scan' && scanOpen && canAddWalkIn && (
                 <div className="admin-tickets-walk-in-card">
                     <p className="admin-helper-text">
@@ -599,7 +560,6 @@ export function TicketsSubtab({
                     existingAttendees={attendees}
                     walkIn={canAddWalkIn}
                     onClose={() => setAddingAttendee(false)}
-                    // Reloaded at once on a section that shows the list, not on Scan.
                     onAdded={() => setLoadedFor(null)}
                     showToast={showToast}
                 />

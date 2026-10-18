@@ -91,7 +91,6 @@ export const parseFile = async (file: File) => {
     return {fields, records};
 };
 
-/** Which file column each attendee field is read from; '' leaves a field unmapped. */
 export interface ColumnMapping {
     email: string;
     name: string;
@@ -114,7 +113,7 @@ export const validateRows = (
     }]) || []);
     const parsedRows: ParsedRow[] = [];
     const errs: ParseError[] = [];
-    const seen = new Map<string, number>();
+    const seen = new Set<string>();
 
     if (!emailKey) {
         return {
@@ -131,7 +130,6 @@ export const validateRows = (
     records.forEach((row, i) => {
         const rowNum = i + 2;
         const email = (row[emailKey] ?? '').trim().toLowerCase();
-        // Optional: a ticket only needs an email to reach someone.
         const name = nameKey ? (row[nameKey] ?? '').trim() : '';
         const countRaw = countKey ? (row[countKey] ?? '').trim() : '';
         const typeRaw = typeKey ? (row[typeKey] ?? '') : '';
@@ -186,11 +184,10 @@ export const validateRows = (
                     : `邮箱"${email}"重复，将以后一行为准。`,
             });
         }
-        seen.set(email, parsedRows.length);
+        seen.add(email);
         const existing = existingEmails.get(email);
         parsedRows.push({
             email,
-            // A blank name keeps the one on file, as the server does.
             name: name || existing?.name || '',
             ticketCount: count,
             type,

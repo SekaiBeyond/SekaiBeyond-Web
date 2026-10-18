@@ -31,10 +31,7 @@ export interface TicketData {
     createdAt: Date | null;
     redeemed: boolean;
     redeemedAt: Date | null;
-    redeemedBy: string;
     redeemedByName: string;
-    checkedIn: boolean;
-    checkedInAt: Date | null;
     voided: boolean;
 }
 
@@ -47,18 +44,14 @@ export interface AttendeeData {
     emailScheduled: boolean;
     emailSentAt: Date | null;
     createdAt: Date;
-    updatedAt: Date;
     tickets: TicketData[];
     ticketIds: string[];
-    /** Added at the door, with an email only if they gave one. */
     walkIn: boolean;
-    /** One ticket sold through HomeTown, kept by its number. */
     hometown: boolean;
     /** A HomeTown ticket let in at the door while missing from the imported list. */
     unlisted: boolean;
-    /** A listed HomeTown ticket left out of a later export: refunded or transferred, most likely. */
+    /** A listed HomeTown ticket left out of a later export. */
     missingFromHometown: boolean;
-    /** When it last appeared in an imported export. */
     hometownSeenAt: Date | null;
     hometownOrderId: string;
 }
@@ -67,7 +60,6 @@ export interface EmailTemplate {
     subject: string;
     bodyHtml: string;
     updatedAt: Date | null;
-    updatedBy: string;
 }
 
 export interface ParsedRow {
@@ -101,10 +93,6 @@ export interface AttendeeTotals {
     missingFromHometown: number;
 }
 
-/**
- * What the attendee list's status filter shows: tickets by their state, or
- * HomeTown tickets the list hasn't confirmed.
- */
 export type StatusFilter = 'all' | 'redeemed' | 'unredeemed' | 'voided' | 'unlisted' | 'missing';
 
 export type TicketsSection = 'scan' | 'attendees' | 'stats' | 'import' | 'emails' | 'settings';

@@ -1,4 +1,4 @@
-export interface QrPoint {
+interface QrPoint {
     x: number;
     y: number;
 }
@@ -21,20 +21,18 @@ export function cornersOf(location: JsQRLocation): QrCorners {
 
 let jsQRModule: Promise<JsQRFn> | null = null;
 
-/** jsQR, fetched the first time any scanner needs it and shared after that. */
 export function loadJsQR(): Promise<JsQRFn> {
     jsQRModule ??= import('jsqr').then(
         mod => mod.default as JsQRFn,
         err => {
-            jsQRModule = null; // let the next scan retry a chunk that failed to load
+            jsQRModule = null;
             throw err;
         },
     );
     return jsQRModule;
 }
 
-// Longest edge of each attempt, in pixels. jsQR is slow on 12MP photos, so
-// small sizes go first; large ones are for a code filling only a corner.
+// Try smaller resolutions first since jsQR is slow on 12MP photos; larger sizes catch small corner codes.
 const DECODE_SIZES = [800, 1600, 3200];
 
 export interface QrRect {
@@ -44,19 +42,16 @@ export interface QrRect {
     height: number;
 }
 
-export interface QrRead {
+interface QrRead {
     data: string;
     corners: QrCorners;
-    /** The canvas the code was found on, which `corners` refer to. */
     frame: HTMLCanvasElement;
-    /** Where the image sits on `frame`; the rest is margin added for decoding. */
     bounds: QrRect;
 }
 
 /**
- * Finds a QR code in a photo or screenshot, or null; nothing leaves the device.
- * Each attempt draws on white with a margin, since a transparent PNG would read
- * black-on-black and a tightly cropped code has no quiet zone.
+ * Decodes a QR code from an image blob. Draws on a white background with a quiet-zone
+ * margin so transparent PNGs and tightly cropped codes still decode.
  */
 export async function decodeQrImage(image: Blob): Promise<QrRead | null> {
     const jsQR = await loadJsQR();
@@ -81,7 +76,7 @@ export async function decodeQrImage(image: Blob): Promise<QrRead | null> {
                 const bounds = {x: pad, y: pad, width: w, height: h};
                 return {data: code.data, corners: cornersOf(code.location), frame: canvas, bounds};
             }
-            if (scale === 1) break; // full resolution tried; larger sizes would be the same
+            if (scale === 1) break;
         }
         return null;
     } finally {
@@ -90,21 +85,15 @@ export async function decodeQrImage(image: Blob): Promise<QrRead | null> {
 }
 
 export interface QrSnapshot {
-    /** A JPEG data URL. */
     url: string;
     width: number;
     height: number;
-    /** The code's corners, mapped into the snapshot. */
     corners: QrCorners;
 }
 
 const SNAPSHOT_ASPECT = 16 / 10;
 const SNAPSHOT_MAX_WIDTH = 960;
 
-/**
- * Crops a frame at 16:10 around the code read, so a scanner can show which one
- * it was. Only `bounds` is drawn; `backdrop` beyond it.
- */
 export function snapshotAround(
     frame: HTMLCanvasElement,
     corners: QrCorners,

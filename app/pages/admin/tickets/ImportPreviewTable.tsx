@@ -137,7 +137,7 @@ export function ImportPreviewTable({
                                                 style={{
                                                     padding: '2px 4px',
                                                     borderRadius: '4px',
-                                                    border: '1px solid var(--border-color, #ccc)',
+                                                    border: '1px solid #ccc',
                                                     width: '90px',
                                                 }}
                                             >
@@ -167,7 +167,7 @@ export function ImportPreviewTable({
                                                 style={{
                                                     padding: '2px 4px',
                                                     borderRadius: '4px',
-                                                    border: '1px solid var(--border-color, #ccc)',
+                                                    border: '1px solid #ccc',
                                                     width: '90px',
                                                 }}
                                             >

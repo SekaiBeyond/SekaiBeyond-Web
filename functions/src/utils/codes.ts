@@ -9,9 +9,9 @@ import { generateSecureCode } from "./helpers";
  * working.
  */
 
-export const CODE_BODY_LENGTH = 12;
+const CODE_BODY_LENGTH = 12;
 
-export type CodeKind = "badge" | "staff" | "event";
+type CodeKind = "badge" | "staff" | "event";
 
 // From CODE_ALPHABET, so nothing can be misread as I/1 or O/0.
 const PREFIX_BY_KIND: Record<CodeKind, string> = {

@@ -16,19 +16,18 @@ export const QuickQrGenerator = () => {
 
     const trimmed = url.trim();
     const valid = isValidHttpUrl(trimmed);
-    const qrValue = trimmed;
 
     const downloadPng = () => {
         const now = new Date();
         const pad = (n: number) => String(n).padStart(2, '0');
         const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-        requestDownload(qrValue, `qr-code-${stamp}`);
+        requestDownload(trimmed, `qr-code-${stamp}`);
     };
 
     const [copyLabel, setCopyLabel] = useState('');
     const copyUrl = () => {
         if (!valid) return;
-        navigator.clipboard.writeText(qrValue)
+        navigator.clipboard.writeText(trimmed)
             .then(() => {
                 setCopyLabel(isEnglish ? 'Copied!' : '已复制');
                 setTimeout(() => setCopyLabel(''), 1500);
@@ -62,12 +61,12 @@ export const QuickQrGenerator = () => {
             ) : (
                 <div className="admin-single-code admin-single-code-narrow">
                     <div className="admin-single-code-qr">
-                        <QrPreview value={qrValue} size={QR_SIZE}/>
+                        <QrPreview value={trimmed} size={QR_SIZE}/>
                     </div>
                     <div className="admin-code-url">
                         <input
                             readOnly
-                            value={qrValue}
+                            value={trimmed}
                             onClick={e => (e.target as HTMLInputElement).select()}
                             className="admin-code-input"
                         />

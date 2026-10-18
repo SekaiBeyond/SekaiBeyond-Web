@@ -12,7 +12,7 @@ for (const [category, {types}] of Object.entries(RECORD_CATEGORIES)) {
 }
 
 // A config-update's sections, labelled as the Site Config tab's navigator labels them.
-export const CONFIG_SECTION_LABELS: Record<string, {en: string; zh: string}> = {
+const CONFIG_SECTION_LABELS: Record<string, {en: string; zh: string}> = {
     video: {en: 'Featured Video', zh: '精选视频'},
     contact: {en: 'Contact Email', zh: '联系邮箱'},
     'social-links': {en: 'Social Links', zh: '社交链接'},

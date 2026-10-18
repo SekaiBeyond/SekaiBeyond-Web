@@ -6,7 +6,6 @@ export const Video = () => {
     const {config, loading} = useSiteConfig();
 
     const bvid = config.bilibiliVideoBvid;
-    const bilibiliWatchUrl = `https://www.bilibili.com/video/${bvid}`;
     const coverUrl = config.bilibiliVideoCoverUrl;
 
     if (!loading && !bvid) {
@@ -41,7 +40,7 @@ export const Video = () => {
 
                 <a
                     className="video-wrapper video-wrapper--mobile"
-                    href={bvid ? bilibiliWatchUrl : undefined}
+                    href={bvid ? `https://www.bilibili.com/video/${bvid}` : undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={isEnglish ? "Watch on Bilibili" : "在B站观看"}

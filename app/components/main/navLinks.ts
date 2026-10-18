@@ -1,17 +1,12 @@
 export interface NavLink {
     id: string;
-    /** Blank for the footer's email and GitHub links, whose targets are site config. */
     href: string;
     labelEn: string;
     labelCn: string;
-    /**
-     * A route to open instead of scrolling to `href` once the page behind it is
-     * published. `href` stays the fallback so visitors never land on a placeholder.
-     */
+    /** Route used instead of scrolling to `href` once the target page is published. */
     publishedRoute?: string;
 }
 
-/** The link a nav item should currently point at. */
 export const resolveNavHref = (link: NavLink, published: boolean): string =>
     published && link.publishedRoute ? link.publishedRoute : link.href;
 

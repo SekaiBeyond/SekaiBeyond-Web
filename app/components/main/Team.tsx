@@ -6,8 +6,7 @@ import { type TeamMemberConfig, useSiteConfig } from "~/lib/siteConfig";
 export const Team = () => {
     const {isEnglish} = useLanguage();
     const {config, loading} = useSiteConfig();
-    // Fields that follow a linked account are resolved by a public function, since the
-    // site can't read users; the config snapshot stands in if it fails.
+    // Linked-account fields are resolved via callable since users docs aren't publicly readable.
     const [resolvedMembers, setResolvedMembers] = useState<TeamMemberConfig[] | null>(null);
 
     useEffect(() => {
@@ -17,7 +16,6 @@ export const Team = () => {
                 if (active) setResolvedMembers(res.data.teamMembers);
             })
             .catch(() => {
-                // Keep the config snapshot on failure.
             });
         return () => {
             active = false;

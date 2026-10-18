@@ -62,7 +62,6 @@ const mapDoc = (docSnap: FirestoreDocLike): UpcomingEvent => {
     };
 };
 
-/** Published events only, for the public site. */
 const publishedCache = createCollectionCache<UpcomingEvent>(
     'upcomingEvents',
     mapDoc,
@@ -70,22 +69,19 @@ const publishedCache = createCollectionCache<UpcomingEvent>(
     orderBy('startAt', 'asc'),
 );
 
-/** All events including unpublished, for the admin panel. */
 const adminCache = createCollectionCache<UpcomingEvent>(
     'upcomingEvents',
     mapDoc,
     orderBy('startAt', 'asc'),
 );
 
-/** Published upcoming events only. Used by the public site. `enabled: false` holds off the fetch. */
 export function useUpcomingEvents(enabled: boolean = true): {
     upcomingEvents: UpcomingEvent[];
     activeEvents: UpcomingEvent[];
     hasActive: boolean;
     loading: boolean;
-    refresh: () => Promise<void>;
 } {
-    const {items: upcomingEvents, loading, refresh} = publishedCache.useItems(enabled);
+    const {items: upcomingEvents, loading} = publishedCache.useItems(enabled);
 
     const activeEvents = useMemo(
         () => upcomingEvents.filter(e => e.endAt > new Date()),
@@ -93,10 +89,9 @@ export function useUpcomingEvents(enabled: boolean = true): {
     );
     const hasActive = activeEvents.length > 0;
 
-    return {upcomingEvents, activeEvents, hasActive, loading, refresh};
+    return {upcomingEvents, activeEvents, hasActive, loading};
 }
 
-/** All upcoming events including unpublished. For staff and up only; `enabled: false` holds off the fetch. */
 export function useAllUpcomingEvents(enabled: boolean = true): {
     upcomingEvents: UpcomingEvent[];
     loading: boolean;

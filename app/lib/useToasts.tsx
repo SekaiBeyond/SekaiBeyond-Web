@@ -1,20 +1,17 @@
 import { useCallback, useState } from 'react';
 
-export type ToastType = 'success' | 'warning' | 'error';
+type ToastType = 'success' | 'warning' | 'error';
 
-export interface Toast {
+interface Toast {
     id: number;
     message: string;
     type: ToastType;
 }
 
-/** What {@link useToasts} hands out, for anything that takes a toaster as a prop. */
 export type ShowToast = (message: string, type: ToastType) => void;
 
-// Module-level so ids stay unique even if several toast hosts mount over a session.
 let toastCounter = 0;
 
-/** Self-expiring toast list. Render the returned `toasts` with {@link ToastContainer}. */
 export function useToasts() {
     const [toasts, setToasts] = useState<Toast[]>([]);
 

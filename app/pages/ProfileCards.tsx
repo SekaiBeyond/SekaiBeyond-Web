@@ -59,7 +59,7 @@ const ProfileAction = ({to, onClick, children}: {to?: string; onClick?: () => vo
         ? <Link to={to} className="profile-action">{children}</Link>
         : <button type="button" className="profile-action" onClick={onClick}>{children}</button>;
 
-export type CollectionKind = 'events' | 'badges' | 'passports';
+type CollectionKind = 'events' | 'badges' | 'passports';
 
 interface CollectionPrompt {
     icon: IconType;
@@ -127,7 +127,7 @@ function useCollectionPrompts(): Record<CollectionKind, CollectionPrompt> {
 }
 
 /** Your own empty section: what it is waiting for, and the button that starts it. */
-export const OwnEmptyNote = ({kind}: {kind: CollectionKind}) => {
+const OwnEmptyNote = ({kind}: {kind: CollectionKind}) => {
     const prompt = useCollectionPrompts()[kind];
     return (
         <ProfileCardNote icon={prompt.icon} action={prompt.action}>

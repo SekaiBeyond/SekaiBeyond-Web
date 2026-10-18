@@ -43,7 +43,7 @@ export interface LotView {
 }
 
 export type LotFilter = 'free' | 'ada' | 'ev' | 'moto' | 'garage';
-export const LOT_FILTERS: LotFilter[] = ['free', 'ada', 'ev', 'moto', 'garage'];
+const LOT_FILTERS: LotFilter[] = ['free', 'ada', 'ev', 'moto', 'garage'];
 
 /** The filters worth offering: "free" only while some lot is free then. */
 export const offeredFilters = (views: LotView[]): LotFilter[] =>

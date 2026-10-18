@@ -1586,9 +1586,6 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             throw new HttpsError("not-found", "Attendee not found.");
         }
         const data = attendeeSnap.data()!;
-        const tickets: NewTicket[] = (data.tickets ?? []).map(
-            (t: Record<string, unknown>) => t as unknown as NewTicket
-        );
         const eventTitle: string = eventSnap.data()?.title ?? eventId;
         txn.delete(attendeeRef);
         txn.set(recordRef(), recordDoc("ticket-attendee-delete", {
@@ -1599,7 +1596,7 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             targetEmail: data.email ?? "",
             targetName: attendeeRecordName(data),
         }));
-        return {deleted: true, ticketCount: tickets.length};
+        return {deleted: true};
     });
 });
 

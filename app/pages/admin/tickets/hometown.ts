@@ -3,18 +3,15 @@ import type { ParseError, TicketType } from './types';
 
 /**
  * A HomeTown ticket number: its QR holds just these 12 digits, with no event or
- * signature. Ours are UUIDs, so the two never collide. Mirrors
- * functions/src/utils/tickets.ts.
+ * signature. Mirrors functions/src/utils/tickets.ts.
  */
 const HOMETOWN_TICKET_RE = /^\d{12}$/;
 
 export const isHometownTicketId = (raw: string): boolean => HOMETOWN_TICKET_RE.test(raw);
 
-/** The attendee doc holding one HomeTown ticket, as importHometownTickets names it. */
 export const hometownAttendeeId = (ticketId: string): string => `hometown-${ticketId}`;
 
-/** HomeTown's type names ("Early Bird Student Ticket", "Regular VIP Ticket") as ours. */
-export const hometownTicketType = (label: string): TicketType => {
+const hometownTicketType = (label: string): TicketType => {
     const s = label.toLowerCase();
     const earlyBird = /early\s*bird/.test(s);
     if (/\bcomp\b|complimentary/.test(s)) return 'Comp Ticket';
@@ -26,16 +23,13 @@ export const hometownTicketType = (label: string): TicketType => {
 export interface HometownTicketRow {
     ticketId: string;
     name: string;
-    /** Empty when the export had none, or none that's valid. */
     email: string;
     type: TicketType;
     orderId: string;
 }
 
-/** Folds a header so "Ticket/Reserv#" and "ticket reserv" read alike. */
 const foldHeader = (raw: string) => raw.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** The guest list export's headers, folded, for each field read from it. */
 const HEADERS = {
     ticketId: ['ticketreserv', 'ticketreservation', 'ticketnumber'],
     firstName: ['firstname'],
@@ -45,18 +39,13 @@ const HEADERS = {
     orderId: ['orderid'],
 } as const;
 
-/**
- * Reads HomeTown's guest list export (Export Guest List, a CSV with one row per
- * ticket). A row whose ticket number isn't one is an error and left out; a bad
- * email only drops the email, since the ticket still gets in.
- */
 export const parseHometownFile = async (file: File, isEnglish: boolean): Promise<{
     tickets: HometownTicketRow[];
     errors: ParseError[];
     warnings: ParseError[];
 }> => {
     const XLSX = await import('xlsx/dist/xlsx.mini.min.js');
-    // Raw, so ticket numbers stay as written rather than becoming numbers.
+    // Raw, so ticket numbers stay as strings rather than becoming numbers.
     const workbook = XLSX.read(await file.arrayBuffer(), {type: 'array', raw: true});
     const sheet = workbook.Sheets[workbook.SheetNames[0] ?? ''];
     const records = sheet

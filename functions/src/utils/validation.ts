@@ -1,7 +1,7 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { getStorage } from "firebase-admin/storage";
 
-export const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 export function validateISODate(value: unknown, name: string): string | null {
     if (value === undefined || value === null || value === "") return null;
@@ -40,7 +40,7 @@ export function validateEmail(value: unknown, name: string): string {
 
 // The part before the @ on our own domain: letters, digits and single . _ + -
 // between them, narrower than RFC 5322 so every mail system accepts it.
-export const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
+const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
 
 /** Trimmed and lowercased. */
 export function validateSenderPrefix(value: unknown, name: string): string {

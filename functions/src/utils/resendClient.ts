@@ -16,7 +16,7 @@ export interface ResendEnvelope {
     bcc?: string[];
 }
 
-export interface SendResult {
+interface SendResult {
     sentCount: number;
     ids: string[];
     // x-resend-daily-quota: Resend's own count for the free plan's 24-hour

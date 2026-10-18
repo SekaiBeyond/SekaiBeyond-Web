@@ -19,7 +19,7 @@ export const PASSPORT_ID_LENGTH = 10;
 // The slip's secret: 31^12 ≈ 7.9e17 (~59 bits), like a badge code, redeemed from
 // the same box under the same rate limit. The length is what makes it safe to
 // accept without the sticker.
-export const ACTIVATION_KEY_LENGTH = 12;
+const ACTIVATION_KEY_LENGTH = 12;
 
 // Each design sets its own term; this only stands in for a passport that has
 // none.
@@ -35,8 +35,6 @@ export const MAX_DELETE_COUNT = MAX_GENERATE_COUNT;
 // Reads only, so bounded by one getAll; the client splits bigger selections.
 export const MAX_KEY_EXPORT_COUNT = 500;
 
-// Codes are typed by hand: case is folded, and printed dashes and stray spaces
-// are dropped.
 const SEPARATORS_RE = /[\s-]+/g;
 
 function normalizeCode(raw: unknown, length: number): string | null {
@@ -49,10 +47,6 @@ function normalizeCode(raw: unknown, length: number): string | null {
     return cleaned;
 }
 
-/**
- * The canonical id, or null when the input can't be one. Callers answer both
- * unknown and malformed as "invalid".
- */
 export function normalizePassportId(raw: unknown): string | null {
     return normalizeCode(raw, PASSPORT_ID_LENGTH);
 }
@@ -81,7 +75,7 @@ export function newActivationKey(): {key: string; salt: string; secretHash: stri
     return {key, salt, secretHash: hashActivationKey(key, salt)};
 }
 
-export function activationKeyMatches(key: string, secret: {salt?: unknown; secretHash?: unknown}): boolean {
+function activationKeyMatches(key: string, secret: {salt?: unknown; secretHash?: unknown}): boolean {
     if (typeof secret.salt !== "string" || typeof secret.secretHash !== "string") return false;
     const expected = Buffer.from(secret.secretHash, "hex");
     const actual = Buffer.from(hashActivationKey(key, secret.salt), "hex");

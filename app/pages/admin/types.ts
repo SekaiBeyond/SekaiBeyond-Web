@@ -4,7 +4,6 @@ import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 export interface BadgeCode {
     id: string;
     code: string;
-    eventId: string;
     active: boolean;
     activeFrom: string | null;
     activeUntil: string | null;
@@ -15,22 +14,17 @@ export interface BadgeCode {
 export interface BadgeActivationCode {
     id: string;
     code: string;
-    badgeId: string;
     active: boolean;
     activeFrom: string | null;
     activeUntil: string | null;
     maxUses: number;
     usedCount: number;
-    createdBy: string;
-    createdAt: Date;
 }
 
 export interface BadgeDef extends BaseBadgeDef {
-    createdBy: string;
     createdByUid: string;
     createdByName: string;
     createdByLink: string;
-    createdAt: Date;
 }
 
 export interface UserRecord {
@@ -133,7 +127,7 @@ export const RECORD_CATEGORIES = {
 } as const satisfies Record<string, {en: string; zh: string; types: readonly string[]}>;
 
 export type RecordCategory = keyof typeof RECORD_CATEGORIES;
-export type RecordType = (typeof RECORD_CATEGORIES)[RecordCategory]['types'][number];
+type RecordType = (typeof RECORD_CATEGORIES)[RecordCategory]['types'][number];
 
 /** A record as the Records tab reads it. Mirrors RecordFields in functions/src/utils/records.ts. */
 export interface ActivityRecord {

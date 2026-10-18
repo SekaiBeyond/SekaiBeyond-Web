@@ -2,10 +2,10 @@ import { type CallableRequest, HttpsError } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "./firebase";
 
-export const RATE_LIMIT_WINDOW_MS = 60_000;
-export const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 10;
 
-export async function checkRateLimit(uid: string): Promise<void> {
+async function checkRateLimit(uid: string): Promise<void> {
     const ref = db.collection("rateLimits").doc(uid);
     const now = Date.now();
     // expiresAt lets the TTL policy in firestore.indexes.json delete stale documents.

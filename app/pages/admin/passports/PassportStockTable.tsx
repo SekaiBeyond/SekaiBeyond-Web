@@ -13,7 +13,7 @@ export interface Column {
     first: SortDir;
 }
 
-export const COLUMNS: Column[] = [
+const COLUMNS: Column[] = [
     {key: 'code', label: {en: 'Code', cn: '编号'}, first: 'asc'},
     {key: 'status', label: {en: 'Status', cn: '状态'}, first: 'asc'},
     {key: 'holder', label: {en: 'Holder', cn: '持有者'}, first: 'asc'},

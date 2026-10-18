@@ -20,7 +20,6 @@ interface TemplateSectionProps {
     event: UpcomingEvent;
     readOnly: boolean;
     showToast: ShowToast;
-    /** Whether what's in the editor differs from what's saved, as a template never saved does. */
     onUnsavedChange: (unsaved: boolean) => void;
 }
 
@@ -28,10 +27,10 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: T
     const {isEnglish} = useLanguage();
     const {config} = useSiteConfig();
     const [template, setTemplate] = useState<EmailTemplate>({
-        subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
+        subject: '', bodyHtml: '', updatedAt: null,
     });
     const [initialTemplate, setInitialTemplate] = useState<EmailTemplate>({
-        subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
+        subject: '', bodyHtml: '', updatedAt: null,
     });
     const [loading, setLoading] = useState(true);
     const [loadFailed, setLoadFailed] = useState(false);
@@ -55,21 +54,18 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: T
                         subject: (data.subject as string) ?? '',
                         bodyHtml: (data.bodyHtml as string) ?? '',
                         updatedAt: tsToDate(data.updatedAt),
-                        updatedBy: (data.updatedBy as string) ?? '',
                     };
                     setTemplate(t);
                     setInitialTemplate(t);
                 } else {
-                    // Nothing saved yet: pre-fill defaults, with initialTemplate
-                    // empty so Save is enabled.
+                    // Pre-fill defaults while keeping initialTemplate empty so Save stays enabled.
                     setTemplate({
                         subject: DEFAULT_TEMPLATE_SUBJECT,
                         bodyHtml: DEFAULT_TEMPLATE_BODY_EN,
                         updatedAt: null,
-                        updatedBy: '',
                     });
                     setInitialTemplate({
-                        subject: '', bodyHtml: '', updatedAt: null, updatedBy: '',
+                        subject: '', bodyHtml: '', updatedAt: null,
                     });
                 }
             } catch (err) {
@@ -140,8 +136,7 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: T
         return <div className="spinner spinner-centered"/>;
     }
 
-    // No editor after a failed read, which would invite saving over the stored
-    // template.
+    // No editor after a failed read, so the stored template can't be saved over.
     if (loadFailed) {
         return (
             <p className="admin-no-results">

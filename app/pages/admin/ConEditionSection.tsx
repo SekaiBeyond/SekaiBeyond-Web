@@ -207,7 +207,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                     />
                 </div>
 
-                <div style={{marginTop: '24px', borderTop: '1px solid var(--color-border)', paddingTop: '16px'}}>
+                <div style={{marginTop: '24px', borderTop: '1px solid #e5e7eb', paddingTop: '16px'}}>
                     <div style={{
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -253,7 +253,7 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
                                 <button
                                     className="admin-btn admin-btn--link"
                                     style={{
-                                        color: 'var(--color-danger)',
+                                        color: 'var(--color-error)',
                                         border: 'none',
                                         padding: '8px',
                                         marginBottom: 0

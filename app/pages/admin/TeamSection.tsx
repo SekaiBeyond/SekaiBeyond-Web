@@ -205,7 +205,7 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
                         display: 'flex',
                         justifyContent: 'space-between',
                         marginTop: '12px',
-                        borderTop: '1px solid var(--color-border)',
+                        borderTop: '1px solid #e5e7eb',
                         paddingTop: '8px'
                     }}>
                         <div style={{display: 'flex', gap: '4px'}}>
@@ -230,7 +230,7 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
                                 padding: '4px 8px',
                                 marginBottom: 0,
                                 minHeight: 0,
-                                color: saving ? 'var(--color-text-light)' : 'var(--color-danger)'
+                                color: saving ? 'var(--color-text-light)' : 'var(--color-error)'
                             }} onClick={() => removeMember(index)} disabled={saving}>
                                 {isEnglish ? 'Remove' : '删除'}
                             </button>

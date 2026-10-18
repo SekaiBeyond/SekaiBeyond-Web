@@ -13,8 +13,6 @@ export const Footer = () => {
     const {config} = useSiteConfig();
     const conPublished = useConContent().content.settings.published;
 
-    // The email and GitHub links go wherever site config says, and are hidden
-    // while it says nowhere.
     const hrefFor = (link: NavLink): string => {
         if (link.id === 'email') return config.contactEmail && `mailto:${config.contactEmail}`;
         if (link.id === 'github') return config.socialLinks.github;

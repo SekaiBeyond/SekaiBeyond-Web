@@ -4545,8 +4545,7 @@ select.admin-tickets-tag:focus {
     box-shadow: 0 4px 14px rgba(74, 81, 96, 0.1);
 }
 
-.admin-qr-paper canvas,
-.admin-qr-paper svg {
+.admin-qr-paper canvas {
     display: block;
     width: 100%;
     height: auto;

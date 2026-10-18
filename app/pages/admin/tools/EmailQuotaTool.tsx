@@ -10,7 +10,6 @@ interface EmailQuotaToolProps {
 
 interface QuotaStatus {
     provider: {
-        id: string;
         name: string;
         windowKind: 'rolling24h' | 'calendarDay';
         fromAddress: string;

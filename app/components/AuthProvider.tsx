@@ -39,8 +39,7 @@ export function normalizeGroup(raw: unknown): UserGroup {
     return raw === 'staff' || raw === 'core-staff' || raw === 'president' ? raw : 'user';
 }
 
-// Active purely by comparison, so nothing needs undoing when it ends.
-export function isMembershipActive(expiresAt: Date | null | undefined): boolean {
+function isMembershipActive(expiresAt: Date | null | undefined): boolean {
     return expiresAt instanceof Date && expiresAt.getTime() > Date.now();
 }
 
@@ -67,20 +66,16 @@ export function formatGroupWithTitle(
     isEnglish: boolean,
 ): string {
     const label = isEnglish ? GROUP_LABELS[group].en : GROUP_LABELS[group].zh;
-    // Prefer the viewer's language, falling back to the other so a title set in
-    // only one language still renders.
     const resolved = (isEnglish ? title || titleCn : titleCn || title)?.trim();
     return resolved ? `${label} - ${resolved}` : label;
 }
 
-// An account's title per language: its explicit title, else its group label (e.g.
-// "President").
 export function accountEffectiveTitle(
     group: UserGroup,
     title: string | undefined,
     titleCn: string | undefined,
 ): {en: string; zh: string} {
-    const labels = GROUP_LABELS[group] ?? {en: '', zh: ''};
+    const labels = GROUP_LABELS[group];
     return {
         en: (title || titleCn || labels.en).trim(),
         zh: (titleCn || title || labels.zh).trim(),
@@ -91,7 +86,6 @@ export interface UserProfile {
     displayName: string;
     email: string;
     photoURL: string;
-    /** The member's uploaded profile banner; empty when they have none. */
     bannerURL: string;
     joinedAt: Date;
     attendedEvents: string[];
@@ -99,10 +93,6 @@ export interface UserProfile {
     badgeEarnedAt: Record<string, Date>;
     group: UserGroup;
     membershipExpiresAt: Date | null;
-    /**
-     * When the current run of membership began; null for someone who has never
-     * had one. Left over from the last run once it lapses.
-     */
     membershipStartedAt: Date | null;
     /** Opt-out for the public passport page at /p/:passportId. Default false. */
     hidePassportPage: boolean;
@@ -146,17 +136,11 @@ function toUserProfile(data: DocumentData, email: string): UserProfile {
 interface AuthContextType {
     user: User | null;
     profile: UserProfile | null;
-    // From profile.membershipExpiresAt, so pages don't each re-check it.
-    // Recomputed on render.
     isMember: boolean;
-    // True until both the signed-in user and their profile are known.
     loading: boolean;
-    // True once the signed-in user is known, without waiting for the profile.
+    /** True once Firebase Auth resolves, before the Firestore profile finishes loading. */
     authReady: boolean;
-    // The profile photo last seen on this device for this user, shown until the
-    // profile loads.
     cachedPhotoURL: string;
-    authError: Error | null;
     signIn: () => Promise<void>;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
@@ -187,7 +171,6 @@ function cachePhoto(uid: string, photoURL: string) {
     try {
         localStorage.setItem(PHOTO_CACHE_KEY, JSON.stringify({uid, photoURL}));
     } catch {
-        // Storage can be full or blocked; the avatar just waits for the profile.
     }
 }
 
@@ -195,7 +178,6 @@ function clearCachedPhoto() {
     try {
         localStorage.removeItem(PHOTO_CACHE_KEY);
     } catch {
-        // Nothing to clear if storage is blocked.
     }
 }
 
@@ -217,14 +199,12 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
     const [loading, setLoading] = useState(true);
     const [authReady, setAuthReady] = useState(false);
     const [cachedPhotoURL, setCachedPhotoURL] = useState('');
-    const [authError, setAuthError] = useState<Error | null>(null);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(getFirebaseAuth(), async (firebaseUser) => {
             setUser(firebaseUser);
             setCachedPhotoURL(firebaseUser ? readCachedPhoto(firebaseUser.uid) : '');
             setAuthReady(true);
-            setAuthError(null);
 
             try {
                 if (firebaseUser) {
@@ -250,7 +230,6 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
             } catch (error) {
                 console.error('AuthProvider: failed to load or create user profile', error);
                 setProfile(null);
-                setAuthError(error instanceof Error ? error : new Error(String(error)));
             } finally {
                 setLoading(false);
             }
@@ -319,7 +298,6 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         loading,
         authReady,
         cachedPhotoURL,
-        authError,
         signIn,
         signOut,
         refreshProfile,

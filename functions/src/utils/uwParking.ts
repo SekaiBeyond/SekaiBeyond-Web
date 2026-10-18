@@ -11,8 +11,8 @@ import { PUBLIC_ORIGIN } from "./config";
  * - WALKING_ROUTER_URL: FOSSGIS's public OSRM foot router. Fair use only, so
  *   called once per venue per sync, and only when the venue or a lot moved.
  */
-export const UW_LOTS_URL = "https://depts.washington.edu/tsevents/data/master-data.json";
-export const UW_EVENT_PRICING_URL = "https://www.trumba.com/calendars/sea_commute.json";
+const UW_LOTS_URL = "https://depts.washington.edu/tsevents/data/master-data.json";
+const UW_EVENT_PRICING_URL = "https://www.trumba.com/calendars/sea_commute.json";
 const WALKING_ROUTER_URL = "https://routing.openstreetmap.de/routed-foot/table/v1/foot/";
 
 // The format UW's own map checks for (EXPECTED_VERSION in its bundle).
@@ -32,7 +32,7 @@ export const UW_BUILDING_CODE_RE = /^[A-Z0-9]{2,8}$/;
 const VISITOR_ACCESS = ["Permits or Pay", "Pay to Park"] as const;
 const CLOCK_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-export interface ClockRange {
+interface ClockRange {
     start: string;
     end: string;
 }
@@ -71,7 +71,7 @@ export interface UwLot {
     gateHours: ClockRange | null;
 }
 
-export interface UwEventPricing {
+interface UwEventPricing {
     /** YYYY-MM-DD on the site clock. */
     date: string;
     /** HH:mm, or both null when the rate is in effect all day. An end of 00:00 is the midnight closing the day. */
