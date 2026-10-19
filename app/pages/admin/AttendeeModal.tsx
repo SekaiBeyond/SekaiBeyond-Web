@@ -43,11 +43,16 @@ export function AttendeeModal({
     const [ticketCount, setTicketCount] = useState(attendee ? String(attendee.ticketCount) : '1');
     const originalType: TicketType = attendee?.tickets[0]?.type || 'normal';
     const [type, setType] = useState<TicketType>(originalType);
+    const ticketNotes = new Set(attendee?.tickets.map(t => t.notes));
+    // The note every ticket has, or null when they differ.
+    const originalNotes = ticketNotes.size > 1 ? null : ([...ticketNotes][0] ?? '');
+    const [notes, setNotes] = useState(originalNotes ?? '');
     const [checkIn, setCheckIn] = useState(true);
     const [saving, setSaving] = useState(false);
 
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedName = name.trim();
+    const trimmedNotes = notes.trim();
     const parsedCount = parseInt(ticketCount, 10);
 
     const emailValid = EMAIL_RE.test(trimmedEmail);
@@ -58,6 +63,8 @@ export function AttendeeModal({
     const nameChanged = !!attendee && nameValid && trimmedName !== attendee.name;
     const countChanged = !!attendee && countValid && parsedCount !== attendee.ticketCount;
     const typeChanged = !!attendee && type !== originalType;
+    // Left blank over differing notes, each ticket keeps its own.
+    const notesChanged = !!attendee && (originalNotes === null ? trimmedNotes !== '' : trimmedNotes !== originalNotes);
 
     const [lookupEmail, setLookupEmail] = useState(attendee?.email.trim().toLowerCase() ?? '');
     useEffect(() => {
@@ -89,7 +96,7 @@ export function AttendeeModal({
     const hometownLocked = !!attendee?.hometown;
 
     const canSave = !saving && nameValid && countValid && (attendee
-        ? (nameChanged || countChanged || typeChanged)
+        ? (nameChanged || countChanged || typeChanged || notesChanged)
         : emailOk && !(walkIn && duplicate));
 
     const submitWalkIn = async () => {
@@ -101,6 +108,7 @@ export function AttendeeModal({
                 name: trimmedName,
                 ticketCount: parsedCount,
                 type,
+                notes: trimmedNotes,
                 checkIn,
             });
             showToast(
@@ -144,7 +152,13 @@ export function AttendeeModal({
             // Only override a duplicate confirmed above; one added elsewhere since load is skipped.
             const result = await callImportEventAttendees({
                 eventId,
-                attendees: [{email: trimmedEmail, name: trimmedName, ticketCount: parsedCount, type}],
+                attendees: [{
+                    email: trimmedEmail,
+                    name: trimmedName,
+                    ticketCount: parsedCount,
+                    type,
+                    notes: trimmedNotes
+                }],
                 onDuplicate: duplicate ? 'override' : 'skip',
             });
             const {added, replaced, skipped} = result.data;
@@ -188,12 +202,20 @@ export function AttendeeModal({
                 name: trimmedName,
                 ticketCount: parsedCount,
                 type,
+                // Every ticket gets it, re-issued ones too, unless it's blank over
+                // differing notes, which each ticket keeps.
+                ...(originalNotes !== null || trimmedNotes !== '' ? {notes: trimmedNotes} : {}),
             });
-            const regenerated = result.data.regenerated;
+            const {regenerated, notes: savedNotes} = result.data;
             if (regenerated) {
                 onRegenerated?.();
             } else {
-                onSaved?.({name: trimmedName});
+                onSaved?.({
+                    name: trimmedName,
+                    ...(savedNotes !== undefined
+                        ? {tickets: existing.tickets.map(t => ({...t, notes: savedNotes}))}
+                        : {}),
+                });
             }
             showToast(
                 regenerated
@@ -340,6 +362,32 @@ export function AttendeeModal({
                         </select>
                     </label>
                 )}
+
+                <label className="admin-tickets-template-field">
+                    <span>{isEnglish ? 'Notes (optional)' : '备注（可选）'}</span>
+                    <input
+                        type="text"
+                        className="admin-input"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder={isEnglish ? 'Only staff see this' : '仅工作人员可见'}
+                        maxLength={500}
+                        disabled={saving}
+                    />
+                    {originalNotes === null ? (
+                        <span className="admin-helper-text">
+                            {isEnglish
+                                ? 'These tickets have different notes. A note here replaces them all; leave it blank to keep them.'
+                                : '这些门票的备注各不相同。在此填写会替换全部备注；留空则保留原备注。'}
+                        </span>
+                    ) : countValid && parsedCount > 1 && (
+                        <span className="admin-helper-text">
+                            {isEnglish
+                                ? 'Goes on every ticket. To note just one, edit it in the ticket list.'
+                                : '将应用于每张门票。如只需备注其中一张，请在门票列表中修改。'}
+                        </span>
+                    )}
+                </label>
 
                 {walkIn && (
                     <label className="admin-checkbox-label admin-tickets-walk-in-check">

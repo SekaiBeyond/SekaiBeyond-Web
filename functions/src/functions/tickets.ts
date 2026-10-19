@@ -46,6 +46,13 @@ function validateTicketType(value: unknown): string {
     return value;
 }
 
+const TICKET_NOTES_MAX = 500;
+
+/** A staff note on a ticket. Optional: empty for none. */
+function validateTicketNotes(value: unknown): string {
+    return sanitizeDisplayText(validateStr(value, "notes", TICKET_NOTES_MAX));
+}
+
 interface NewTicket {
     ticketId: string;
     type: string;
@@ -76,13 +83,13 @@ function freshTicket(ticketId: string, type: string): NewTicket {
     };
 }
 
-function buildFreshTickets(count: number, type = "normal"): {tickets: NewTicket[]; ticketIds: string[]} {
+function buildFreshTickets(count: number, type = "normal", notes = ""): {tickets: NewTicket[]; ticketIds: string[]} {
     const tickets: NewTicket[] = [];
     const ticketIds: string[] = [];
     for (let i = 0; i < count; i++) {
         const ticketId = crypto.randomUUID();
         ticketIds.push(ticketId);
-        tickets.push(freshTicket(ticketId, type));
+        tickets.push(notes ? {...freshTicket(ticketId, type), notes} : freshTicket(ticketId, type));
     }
     return {tickets, ticketIds};
 }
@@ -287,6 +294,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         name: string;
         ticketCount: number;
         type: string;
+        notes: string;
         timestamp?: Date
     }>();
     for (const row of input.attendees) {
@@ -299,6 +307,8 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         const name = sanitizeDisplayText(validateStr(r.name, "name", 100));
         const ticketCount = validateTicketCount(r.ticketCount);
         const type = validateTicketType(r.type);
+        // Set by Add Attendee, which is one row; a file has no notes column.
+        const notes = validateTicketNotes(r.notes);
 
         let timestamp: Date | undefined;
         if (r.timestamp && typeof r.timestamp === "string") {
@@ -306,7 +316,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
             if (!isNaN(parsed.getTime())) timestamp = parsed;
         }
 
-        normalized.set(email, {email, name, ticketCount, type, timestamp});
+        normalized.set(email, {email, name, ticketCount, type, notes, timestamp});
     }
 
     // Only the admin and event checks are transactional; the import itself is
@@ -351,7 +361,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
             continue;
         }
 
-        const {tickets, ticketIds} = buildFreshTickets(row.ticketCount, row.type);
+        const {tickets, ticketIds} = buildFreshTickets(row.ticketCount, row.type, row.notes);
         const now = FieldValue.serverTimestamp();
         const customDate = row.timestamp ? Timestamp.fromDate(row.timestamp) : undefined;
 
@@ -420,6 +430,7 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
         name?: unknown;
         ticketCount?: unknown;
         type?: unknown;
+        notes?: unknown;
         checkIn?: unknown;
     };
     const eventId = validateDocId(input.eventId, "eventId");
@@ -429,6 +440,7 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
     const name = sanitizeDisplayText(validateStr(input.name, "name", 100));
     const ticketCount = validateTicketCount(input.ticketCount);
     const type = validateTicketType(input.type);
+    const notes = validateTicketNotes(input.notes);
     const checkIn = input.checkIn === true;
 
     return adminTransaction(uid, async (txn, callerSnap) => {
@@ -459,7 +471,7 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
         }
 
         const callerName: string = callerSnap.data()?.displayName ?? "";
-        const {tickets, ticketIds} = buildFreshTickets(ticketCount, type);
+        const {tickets, ticketIds} = buildFreshTickets(ticketCount, type, notes);
         const issued = checkIn
             ? tickets.map(t => ({
                 ...t,
@@ -1481,12 +1493,15 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
         name?: unknown;
         ticketCount?: unknown;
         type?: unknown;
+        notes?: unknown;
     };
     const eventId = validateDocId(input.eventId, "eventId");
     const attendeeId = validateDocId(input.attendeeId, "attendeeId");
     const name = sanitizeDisplayText(validateStr(input.name, "name", 100));
     const ticketCount = validateTicketCount(input.ticketCount);
     const type = validateTicketType(input.type);
+    // Left out, each ticket keeps its own note; given, every ticket gets it.
+    const notes = input.notes === undefined ? undefined : validateTicketNotes(input.notes);
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         const eventRef = db.collection("upcomingEvents").doc(eventId);
@@ -1506,9 +1521,11 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
         const prevType = prevTickets[0]?.type ?? "normal";
 
         const eventTitle: string = eventSnap.data()?.title ?? eventId;
+        const callerName: string = callerSnap.data()?.displayName ?? "";
 
         const countChanged = ticketCount !== prevTicketCount;
         const typeChanged = type !== prevType;
+        const notesChanged = notes !== undefined && prevTickets.some(t => (t.notes ?? "") !== notes);
 
         // A HomeTown ticket is its number; re-issuing would swap it for one of ours.
         if (data.source === "hometown" && (countChanged || typeChanged)) {
@@ -1516,27 +1533,45 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
                 {code: "hometown-ticket"});
         }
 
-        if (!countChanged && !typeChanged) {
-            if (name === data.name) {
-                return {updated: false, regenerated: false};
-            }
-            txn.update(attendeeRef, {name, updatedAt: FieldValue.serverTimestamp()});
-            txn.set(recordRef(), recordDoc("ticket-attendee-edit", {
+        if (notesChanged) {
+            txn.set(recordRef(), recordDoc("ticket-notes-edit", {
                 performedBy: uid,
-                performedByName: callerSnap.data()?.displayName ?? "",
+                performedByName: callerName,
                 eventId,
                 eventTitle,
                 targetEmail: data.email ?? "",
-                oldName: attendeeRecordName(data),
-                newName: name,
+                targetName: attendeeRecordName({...data, name}),
             }));
-            return {updated: true, regenerated: false};
         }
 
-        const {tickets: freshTickets, ticketIds} = buildFreshTickets(ticketCount, type);
-        // Staff notes carry over by position, so a re-issue doesn't lose them.
-        const tickets = freshTickets.map((t, i) =>
-            prevTickets[i]?.notes ? {...t, notes: prevTickets[i].notes} : t);
+        if (!countChanged && !typeChanged) {
+            const nameChanged = name !== data.name;
+            if (!nameChanged && !notesChanged) {
+                return {updated: false, regenerated: false};
+            }
+            const update: Record<string, unknown> = {updatedAt: FieldValue.serverTimestamp()};
+            if (nameChanged) update.name = name;
+            if (notesChanged) update.tickets = prevTickets.map(t => ({...t, notes}));
+            txn.update(attendeeRef, update);
+            if (nameChanged) {
+                txn.set(recordRef(), recordDoc("ticket-attendee-edit", {
+                    performedBy: uid,
+                    performedByName: callerName,
+                    eventId,
+                    eventTitle,
+                    targetEmail: data.email ?? "",
+                    oldName: attendeeRecordName(data),
+                    newName: name,
+                }));
+            }
+            return {updated: true, regenerated: false, notes};
+        }
+
+        const {tickets: freshTickets, ticketIds} = buildFreshTickets(ticketCount, type, notes);
+        // Without a new note, each keeps its own by position, so a re-issue doesn't lose them.
+        const tickets = notes !== undefined
+            ? freshTickets
+            : freshTickets.map((t, i) => prevTickets[i]?.notes ? {...t, notes: prevTickets[i].notes} : t);
         txn.update(attendeeRef, {
             name,
             ticketCount,
@@ -1548,7 +1583,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
         });
         txn.set(recordRef(), recordDoc("ticket-regenerate", {
             performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            performedByName: callerName,
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
@@ -1612,8 +1647,6 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
         return {updated: true};
     });
 });
-const TICKET_NOTES_MAX = 500;
-
 export const updateTicketNotes = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
 
@@ -1626,8 +1659,8 @@ export const updateTicketNotes = onCall({maxInstances: 10}, async (request) => {
     const eventId = validateDocId(input.eventId, "eventId");
     const attendeeId = validateDocId(input.attendeeId, "attendeeId");
     const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
-    // Optional: an empty note clears it.
-    const notes = sanitizeDisplayText(validateStr(input.notes, "notes", TICKET_NOTES_MAX));
+    // An empty note clears it.
+    const notes = validateTicketNotes(input.notes);
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         const eventRef = db.collection("upcomingEvents").doc(eventId);

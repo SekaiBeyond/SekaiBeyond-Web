@@ -229,7 +229,7 @@ export const callArchiveUpcomingEvent = (data: {eventId: string; tagIds: string[
 
 export const callImportEventAttendees = (data: {
     eventId: string;
-    attendees: Array<{email: string; name: string; ticketCount: number; type: string}>;
+    attendees: Array<{email: string; name: string; ticketCount: number; type: string; notes?: string}>;
     onDuplicate?: 'skip' | 'override';
 }) => httpsCallable<typeof data, {added: number; replaced: number; skipped: number; total: number}>(
     getFunctions(), 'importEventAttendees')(data);
@@ -240,6 +240,7 @@ export const callAddWalkInAttendee = (data: {
     name: string;
     ticketCount: number;
     type: string;
+    notes: string;
     checkIn: boolean;
 }) => httpsCallable<typeof data, {attendeeId: string; checkedIn: boolean; userCheckedIn: boolean}>(
     getFunctions(), 'addWalkInAttendee')(data);
@@ -345,7 +346,9 @@ export const callUpdateEventAttendee = (data: {
     name: string;
     ticketCount: number;
     type: string;
-}) => httpsCallable<typeof data, {updated: boolean; regenerated: boolean}>(
+    /** Left out to keep each ticket's own note; given, it's set on every ticket. */
+    notes?: string;
+}) => httpsCallable<typeof data, {updated: boolean; regenerated: boolean; notes?: string}>(
     getFunctions(), 'updateEventAttendee')(data);
 
 export const callUpdateTicketType = (data: {
