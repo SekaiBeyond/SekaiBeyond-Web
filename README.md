@@ -62,7 +62,7 @@ This repository contains the source code for the official **Sekai Beyond** websi
    npm run dev
    ```
 
-   It starts local Firebase emulators and runs the site against them, never the production database. See [Local Development](DEPLOY.md#3-local-development) for signing in as an admin and what differs from production.
+   It starts local Firebase emulators and runs the site against them, never the production database. See [EMULATORS.md](EMULATORS.md) for signing in as an admin and what differs from production.
 
 4. **Open your browser**
 

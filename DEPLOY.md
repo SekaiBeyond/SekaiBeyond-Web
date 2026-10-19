@@ -199,25 +199,7 @@ The `VITE_*` secrets are injected as build-time environment variables. `FIREBASE
 
 ### 3. Local Development
 
-`npm run dev` runs the site against the [Firebase Local Emulator Suite](https://firebase.google.com/docs/emulator-suite), never production. The emulators keep their own Auth accounts, Firestore data, Storage files and Cloud Functions, under `demo-sekaibeyond`, a demo project ID that can't reach any real Firebase or Google Cloud service. It needs the Firebase CLI (`npm install -g firebase-tools`) and Java 21 or later for the Firestore and Storage emulators.
-
-```bash
-npm run dev
-```
-
-In one terminal, it builds the functions, starts the Auth, Firestore, Functions and Storage emulators, and starts the site once they're up. It also rebuilds the functions as you edit them, and the emulators reload after each build.
-
-No `.env` is needed. The site reads the committed [`.env.emulator`](.env.emulator), which takes precedence over `.env`. The Emulator UI at http://127.0.0.1:4000 shows and edits the data. When you stop `npm run dev` (Ctrl+C), the data is saved to `.emulator-data/` and loaded again on the next start. Delete that folder to start over.
-
-**Becoming an admin.** Signing in opens the Auth emulator's account picker instead of Google's, where you can add any account. Then promote that account the way production's first president is set up (see [User Groups](#4-user-groups)): in the Emulator UI's **Firestore** tab, set `group` to `president` on your `users` document.
-
-**What differs from production:**
-
-- No email is sent. Resend is never called: each email is logged in the emulators' output (`Emulator, not sent: …`) and counted as sent. The log also says the emulator couldn't access `RESEND_API_KEY` from Secret Manager, which is expected.
-- App Check is off. The site skips it, and the functions don't enforce it when emulated.
-- Scheduled functions don't run, so `scheduledMailDrain` and `uwParkingNightlySync` are skipped. The parking guide has no lot data until an admin runs **Sync now** under **UW Parking Data** in the admin panel.
-- TTL policies don't run, so an account, event or badge whose deletion was requested is never deleted. Deleting its document in the Emulator UI still runs the cleanup trigger.
-- Composite indexes aren't enforced. A query missing from `firestore.indexes.json` works here but fails in production.
+`npm run dev` runs the site against the [Firebase Local Emulator Suite](https://firebase.google.com/docs/emulator-suite), never production, and needs no `.env`. See [EMULATORS.md](EMULATORS.md) for running them, signing in as an admin, and what differs from production.
 
 **Against production.** `npm run dev:prod` runs the site against the real project, using the config in `.env`. Every change it makes is live, and sending tickets emails real attendees, so use it only for what the emulators can't do, such as real Google sign-in, App Check or production data. Copy `.env.example` to `.env` first and fill in the same Firebase config values as the GitHub secrets:
 
@@ -262,7 +244,7 @@ Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deplo
 4. Authenticates to Google Cloud via the service account
 5. Runs `firebase deploy` (firebase-tools pinned to major version 15) — ships hosting, Cloud Functions, Firestore rules/indexes/TTL policies, and Storage rules in a single command. Functions whose source hasn't changed are skipped, and hosting is released last so the new frontend never goes live ahead of a function it calls.
 
-Pushes that only touch `README.md`, `DEPLOY.md`, `Trademarks.md`, or `LICENSE` don't deploy.
+Pushes that only touch `README.md`, `DEPLOY.md`, `EMULATORS.md`, `Trademarks.md`, or `LICENSE` don't deploy.
 
 You can also trigger a deployment manually from the **Actions** tab > **Deploy to Firebase** > **Run workflow**.
 
