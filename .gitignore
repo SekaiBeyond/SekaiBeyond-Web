@@ -3,6 +3,8 @@
 
 # React Router
 .env
+# Secrets for the Functions emulator, such as RESEND_API_KEY
+.secret.local
 .firebaserc
 firebase.generated.json
 public/index.html

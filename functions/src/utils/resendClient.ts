@@ -92,11 +92,6 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
         throw new Error(`Send size ${envelopes.length} exceeds Resend's ${RESEND_BATCH_MAX} cap.`);
     }
 
-    const apiKey = RESEND_API_KEY.value();
-    if (!apiKey) {
-        throw new Error("RESEND_API_KEY is not set on this function.");
-    }
-
     // Shape check per envelope, so a bad one fails with a message naming it
     // rather than an opaque 422 for the batch. An address Resend rejects still
     // fails the whole batch.
@@ -113,6 +108,22 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
     // A failed read throws before Resend is called; callers treat that like a
     // network error.
     const from = await getSenderAddress();
+
+    // The emulator never reaches Resend, whatever key it has: each email is
+    // logged and counted as sent, releasing the pre-charge as a paid plan does.
+    if (process.env.FUNCTIONS_EMULATOR === "true") {
+        for (const e of envelopes) {
+            const to = Array.isArray(e.to) ? e.to : [e.to];
+            console.log(`Emulator, not sent: "${e.subject}" from ${from} to ${to.join(", ")}`);
+        }
+        await rollbackQuotaReservation(countRecipients(envelopes));
+        return {sentCount: envelopes.length, ids: [], dailyConsumed: null};
+    }
+
+    const apiKey = RESEND_API_KEY.value();
+    if (!apiKey) {
+        throw new Error("RESEND_API_KEY is not set on this function.");
+    }
 
     const single = envelopes.length === 1;
     const url = single ? RESEND_SINGLE_URL : RESEND_BATCH_URL;

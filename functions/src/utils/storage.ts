@@ -58,10 +58,14 @@ export function detectImageMime(buffer: Buffer): string | null {
     return match?.mime ?? null;
 }
 
+// Download URLs are Firebase Storage's, or under the emulators the Storage
+// emulator's, which it serves over plain http.
+export const STORAGE_HOST = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? "firebasestorage.googleapis.com";
+export const STORAGE_ORIGIN = `${process.env.FIREBASE_STORAGE_EMULATOR_HOST ? "http" : "https"}://${STORAGE_HOST}`;
+const STORAGE_PATH_RE = new RegExp(`${STORAGE_HOST.replace(/\./g, "\\.")}/v0/b/[^/]+/o/([^?]+)`);
+
 export function extractStoragePath(downloadUrl: string): string | null {
-    const match = downloadUrl.match(
-        /firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/([^?]+)/
-    );
+    const match = downloadUrl.match(STORAGE_PATH_RE);
     if (!match) return null;
     return decodeURIComponent(match[1]);
 }

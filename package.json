@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "react-router dev",
+    "dev": "node scripts/dev.ts",
+    "dev:prod": "react-router dev",
     "typecheck": "react-router typegen && tsc && tsc -p functions --noEmit",
     "build": "npm --prefix functions run build && react-router build",
     "start": "react-router-serve ./build/server/index.js",

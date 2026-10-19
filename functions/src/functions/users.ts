@@ -15,7 +15,7 @@ import { deletionExpiresAt } from "../utils/config";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
 import { pastEventIds, toStringIds } from "../utils/publicProfile";
-import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB } from "../utils/storage";
+import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, STORAGE_HOST } from "../utils/storage";
 import { sanitizeDisplayText, validateDocId, validateInstant } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
@@ -346,7 +346,7 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
     // Without a membership you can't upload an avatar, but may remove one an
     // admin gave you.
     const hasUploadedAvatar = typeof targetData.photoURL === "string"
-        && targetData.photoURL.includes("firebasestorage.googleapis.com");
+        && targetData.photoURL.includes(STORAGE_HOST);
     if (isSelf && !canSetOwnImages(targetData) && !hasUploadedAvatar) {
         throw new HttpsError("permission-denied", "An active membership is required to delete an avatar.");
     }

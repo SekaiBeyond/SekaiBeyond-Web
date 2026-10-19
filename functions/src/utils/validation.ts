@@ -1,5 +1,6 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { getStorage } from "firebase-admin/storage";
+import { STORAGE_ORIGIN } from "./storage";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
@@ -102,8 +103,7 @@ export function validateStorageImageUrl(value: string, name: string): void {
         const url = new URL(value);
         const expectedPrefix = `/v0/b/${getStorage().bucket().name}/o/`;
         if (
-            url.protocol !== "https:"
-            || url.hostname !== "firebasestorage.googleapis.com"
+            url.origin !== STORAGE_ORIGIN
             || !url.pathname.startsWith(expectedPrefix)
         ) {
             throw new HttpsError("invalid-argument", `${name} must be a Firebase Storage URL for this project.`);

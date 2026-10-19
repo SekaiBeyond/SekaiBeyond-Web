@@ -46,10 +46,14 @@ const firebaseConfig = {
 };
 
 // Points the site at the local emulators (Auth, Firestore and Functions on their
-// default ports). Pair it with a demo- VITE_FIREBASE_PROJECT_ID, which the
-// emulators treat as offline-only. App Check stays off: the emulators don't
-// enforce it.
+// default ports), as npm run dev does through .env.emulator. App Check stays
+// off, and the emulated functions don't enforce it.
 const USE_EMULATORS = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true';
+
+// Whether a URL is a file uploaded to Storage, rather than, say, a Google photo.
+// The Storage emulator serves its files from its own port.
+const STORAGE_HOST = USE_EMULATORS ? '127.0.0.1:9199' : 'firebasestorage.googleapis.com';
+export const isStorageUrl = (url: string | undefined) => url?.includes(STORAGE_HOST) ?? false;
 
 let app: FirebaseApp;
 let auth: Auth;

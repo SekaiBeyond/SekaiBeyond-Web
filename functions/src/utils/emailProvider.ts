@@ -58,9 +58,12 @@ function countRecipientsOf(email: ListedEmail): number {
 // plan, unlike the quota header, which comes only on free-plan send responses.
 // Newest first, so the scan stops at the first record older than the window.
 //
-// Null means unknown, never zero: no API key bound, the request failed, or the
-// key can't list emails (a sending-only key gets 401/403).
+// Null means unknown, never zero: the emulator, which never reaches Resend
+// whatever key functions/.secret.local gives it; no API key bound; the request
+// failed; or the key can't list emails (a sending-only key gets 401/403).
 export async function fetchProviderUsage(): Promise<ProviderUsage | null> {
+    if (process.env.FUNCTIONS_EMULATOR === "true") return null;
+
     const apiKey = RESEND_API_KEY.value();
     if (!apiKey) return null;
 

@@ -37,6 +37,8 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
 - [Node.js](https://nodejs.org/) (v26 or higher recommended)
 - npm, yarn, pnpm, or bun
+- [Firebase CLI](https://firebase.google.com/docs/cli) (`npm install -g firebase-tools`)
+- Java 21 or higher, for the Firestore and Storage emulators
 
 ### Installation
 
@@ -51,6 +53,7 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
    ```bash
    npm install
+   npm --prefix functions install
    ```
 
 3. **Start the development server**
@@ -58,6 +61,8 @@ This repository contains the source code for the official **Sekai Beyond** websi
    ```bash
    npm run dev
    ```
+
+   It starts local Firebase emulators and runs the site against them, never the production database. See [Local Development](DEPLOY.md#3-local-development) for signing in as an admin and what differs from production.
 
 4. **Open your browser**
 
@@ -67,7 +72,8 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
 | Command                | Description                                                       |
 |------------------------|-------------------------------------------------------------------|
-| `npm run dev`          | Start development server with HMR                                 |
+| `npm run dev`          | Start development server with HMR, against local emulators        |
+| `npm run dev:prod`     | Start development server against production, configured in `.env` |
 | `npm run build`        | Build for production                                              |
 | `npm run start`        | Run production server                                             |
 | `npm run typecheck`    | Run TypeScript compiler check                                     |

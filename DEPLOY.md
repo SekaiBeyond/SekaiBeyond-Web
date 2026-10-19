@@ -9,7 +9,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 > **Note:** Steps 5–9 below (rules, indexes, storage, functions, TTL policies) are re-applied automatically by the GitHub Actions workflow on every push to `main`. You only need to run them manually for the initial project setup or when CI is unavailable.
 
 1. Go to [console.firebase.google.com](https://console.firebase.google.com) and create a project
-2. Add a **Web app** and copy the Firebase config values — you'll paste these into [GitHub secrets](#2-github-repository-secrets) for CI and [`.env`](#3-local-development) for local dev
+2. Add a **Web app** and copy the Firebase config values — you'll paste these into [GitHub secrets](#2-github-repository-secrets) for CI, and into [`.env`](#3-local-development) to run the dev server against production
 3. Enable **Google sign-in** under Authentication > Sign-in method
 4. Create a **Cloud Firestore** database (choose a nearby region)
 5. Set Firestore **Security Rules** — copy the contents of [`firestore.rules`](firestore.rules) into the Firestore Rules editor
@@ -111,7 +111,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     Add `VITE_RECAPTCHA_SITE_KEY=<site-key>` to:
     - GitHub repo secrets (see [GitHub Repository Secrets](#2-github-repository-secrets) below) — required for production builds.
-    - Local `.env` — required for `npm run dev` to obtain real tokens.
+    - Local `.env` — required for `npm run dev:prod` to obtain real tokens. (`npm run dev` runs against the emulators, which skip App Check.)
 
     Vite inlines `VITE_*` at build time, so the bundle must be rebuilt after the secret is added or App Check will silently no-op in production.
 
@@ -125,7 +125,7 @@ The site deploys automatically to Firebase Hosting when you push to `main` via G
 
     **Optional — Debug tokens for local development**
 
-    For local dev (or staging hosts not registered with reCAPTCHA), set `VITE_APP_CHECK_DEBUG_TOKEN=true` in `.env`. The first page load logs a debug token to the browser console; copy it into Firebase Console > App Check > Apps > **Manage debug tokens** to allow that specific token through enforced services. Set `VITE_APP_CHECK_DEBUG_TOKEN=<token>` in `.env` to reuse the same token across sessions.
+    For `npm run dev:prod` (or staging hosts not registered with reCAPTCHA), set `VITE_APP_CHECK_DEBUG_TOKEN=true` in `.env`. The first page load logs a debug token to the browser console; copy it into Firebase Console > App Check > Apps > **Manage debug tokens** to allow that specific token through enforced services. Set `VITE_APP_CHECK_DEBUG_TOKEN=<token>` in `.env` to reuse the same token across sessions.
 
 12. Override `PUBLIC_ORIGIN` for forks — ticket emails from `sendTicketEmails` embed QR images served from `{PUBLIC_ORIGIN}/api/ticket-qr`, and `serveTicketQr` encodes a ticket-claim URL (`{PUBLIC_ORIGIN}/claim?ticket=X&event=Y`) into each one. Its host is also the domain every email is sent from (see Step 10), less any leading `www.`. Without this, forks will send QR codes pointing at the original site (`https://sekaibeyond.com`, the in-source default — see `functions/src/utils/config.ts`) instead of their own deployment, from a sender Resend rejects.
 
@@ -199,13 +199,31 @@ The `VITE_*` secrets are injected as build-time environment variables. `FIREBASE
 
 ### 3. Local Development
 
-Copy `.env.example` to `.env` and fill in the same Firebase config values:
+`npm run dev` runs the site against the [Firebase Local Emulator Suite](https://firebase.google.com/docs/emulator-suite), never production. The emulators keep their own Auth accounts, Firestore data, Storage files and Cloud Functions, under `demo-sekaibeyond`, a demo project ID that can't reach any real Firebase or Google Cloud service. It needs the Firebase CLI (`npm install -g firebase-tools`) and Java 21 or later for the Firestore and Storage emulators.
+
+```bash
+npm run dev
+```
+
+In one terminal, it builds the functions, starts the Auth, Firestore, Functions and Storage emulators, and starts the site once they're up. It also rebuilds the functions as you edit them, and the emulators reload after each build.
+
+No `.env` is needed. The site reads the committed [`.env.emulator`](.env.emulator), which takes precedence over `.env`. The Emulator UI at http://127.0.0.1:4000 shows and edits the data. When you stop `npm run dev` (Ctrl+C), the data is saved to `.emulator-data/` and loaded again on the next start. Delete that folder to start over.
+
+**Becoming an admin.** Signing in opens the Auth emulator's account picker instead of Google's, where you can add any account. Then promote that account the way production's first president is set up (see [User Groups](#4-user-groups)): in the Emulator UI's **Firestore** tab, set `group` to `president` on your `users` document.
+
+**What differs from production:**
+
+- No email is sent. Resend is never called: each email is logged in the emulators' output (`Emulator, not sent: …`) and counted as sent. The log also says the emulator couldn't access `RESEND_API_KEY` from Secret Manager, which is expected.
+- App Check is off. The site skips it, and the functions don't enforce it when emulated.
+- Scheduled functions don't run, so `scheduledMailDrain` and `uwParkingNightlySync` are skipped. The parking guide has no lot data until an admin runs **Sync now** under **UW Parking Data** in the admin panel.
+- TTL policies don't run, so an account, event or badge whose deletion was requested is never deleted. Deleting its document in the Emulator UI still runs the cleanup trigger.
+- Composite indexes aren't enforced. A query missing from `firestore.indexes.json` works here but fails in production.
+
+**Against production.** `npm run dev:prod` runs the site against the real project, using the config in `.env`. Every change it makes is live, and sending tickets emails real attendees, so use it only for what the emulators can't do, such as real Google sign-in, App Check or production data. Copy `.env.example` to `.env` first and fill in the same Firebase config values as the GitHub secrets:
 
 ```bash
 cp .env.example .env
 ```
-
-Then run `npm run dev` to start the dev server.
 
 ### 4. User Groups
 

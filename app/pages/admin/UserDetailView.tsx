@@ -15,6 +15,7 @@ import {
     callUploadAvatar,
     functionsErrorCode,
     getFirebaseDb,
+    isStorageUrl,
 } from '~/lib/firebase';
 import {
     canAssignGroup,
@@ -375,7 +376,7 @@ export const UserDetailView = ({
         ? (isEnglish ? 'You cannot manage a user at or above your level' : '你不能管理同级或更高级别的用户')
         : undefined;
     const canEditProfile = !readOnly && canManage;
-    const hasCustomPhoto = userRecord.photoURL.includes('firebasestorage.googleapis.com');
+    const hasCustomPhoto = isStorageUrl(userRecord.photoURL);
 
     return (
         <div className="admin-user-detail">

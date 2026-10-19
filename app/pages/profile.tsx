@@ -22,7 +22,7 @@ import {
 } from '~/components/AuthProvider';
 import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGetPublicProfile, getFirebaseDb } from '~/lib/firebase';
+import { callGetPublicProfile, getFirebaseDb, isStorageUrl } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import { useTags } from '~/lib/tags';
@@ -323,7 +323,7 @@ export const ProfilePage = () => {
         [isViewingOther, viewedEarnedAt, ownEarnedAt],
     );
 
-    const hasCustomPhoto = profile?.photoURL?.includes('firebasestorage.googleapis.com') ?? false;
+    const hasCustomPhoto = isStorageUrl(profile?.photoURL);
 
     useEffect(() => {
         setAvatarError(false);
