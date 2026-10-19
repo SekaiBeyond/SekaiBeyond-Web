@@ -4,9 +4,9 @@ on:
   push:
     branches: [ main ]
     paths-ignore:
+      - docs/**
       - README.md
-      - DEPLOY.md
-      - EMULATORS.md
+      - CONTRIBUTING.md
       - Trademarks.md
       - LICENSE
   workflow_dispatch:

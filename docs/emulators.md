@@ -21,9 +21,9 @@ npm run dev
 
 In one terminal, it builds the functions, starts the Auth, Firestore, Functions and Storage emulators, and starts the site at http://localhost:5173 once they're up. It also rebuilds the functions as you edit them, and the emulators reload after each build.
 
-No `.env` is needed. The site reads the committed [`.env.emulator`](.env.emulator), which takes precedence over `.env`.
+No `.env` is needed. The site reads the committed [`.env.emulator`](../.env.emulator), which takes precedence over `.env`.
 
-The emulators listen on these ports, set under `emulators` in [`firebase.json`](firebase.json):
+The emulators listen on these ports, set under `emulators` in [`firebase.json`](../firebase.json):
 
 | Emulator  | Address                |
 |-----------|------------------------|
@@ -39,7 +39,7 @@ The Emulator UI at http://127.0.0.1:4000 shows and edits the data. When you stop
 
 ## Becoming an admin
 
-Signing in opens the Auth emulator's account picker instead of Google's, where you can add any account. Then promote that account the way production's first president is set up (see [User Groups](DEPLOY.md#4-user-groups)): in the Emulator UI's **Firestore** tab, set `group` to `president` on your `users` document.
+Signing in opens the Auth emulator's account picker instead of Google's, where you can add any account. Then promote that account the way production's first president is set up (see [Bootstrapping the first president](user-groups.md#bootstrapping-the-first-president)): in the Emulator UI's **Firestore** tab, set `group` to `president` on your `users` document.
 
 ## What differs from production
 
@@ -49,4 +49,4 @@ Signing in opens the Auth emulator's account picker instead of Google's, where y
 - TTL policies don't run, so an account, event or badge whose deletion was requested is never deleted. Deleting its document in the Emulator UI still runs the cleanup trigger.
 - Composite indexes aren't enforced. A query missing from `firestore.indexes.json` works here but fails in production.
 
-For what the emulators can't do, such as real Google sign-in, App Check or production data, `npm run dev:prod` runs the site against the real project instead. See [Local Development](DEPLOY.md#3-local-development) for its setup, and use it with care: every change it makes is live.
+For what the emulators can't do, such as real Google sign-in, App Check or production data, `npm run dev:prod` runs the site against the real project instead. See [Local Development](deploy.md#3-local-development) for its setup, and use it with care: every change it makes is live.

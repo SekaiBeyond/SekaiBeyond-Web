@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://sekaibeyond.com">Website</a> •
   <a href="#getting-started">Getting Started</a> •
-  <a href="DEPLOY.md">Deployment</a> •
+  <a href="#documentation">Documentation</a> •
   <a href="#contributing">Contributing</a>
 </p>
 
@@ -62,7 +62,7 @@ This repository contains the source code for the official **Sekai Beyond** websi
    npm run dev
    ```
 
-   It starts local Firebase emulators and runs the site against them, never the production database. See [EMULATORS.md](EMULATORS.md) for signing in as an admin and what differs from production.
+   It starts local Firebase emulators and runs the site against them, never the production database. See [Testing with the Emulators](docs/emulators.md) for signing in as an admin and what differs from production.
 
 4. **Open your browser**
 
@@ -80,19 +80,20 @@ This repository contains the source code for the official **Sekai Beyond** websi
 | `npm run deploy`       | Build and deploy to Firebase                                      |
 | `npm run deploy:rules` | Deploy functions, Firestore rules/indexes/TTL, and Storage rules  |
 
-## Deployment
+## Documentation
 
-See [DEPLOY.md](DEPLOY.md) for full deployment instructions, including Firebase setup, GitHub secrets, user groups, and the deployment workflow.
+| Doc                                                     | Covers                                                             |
+|---------------------------------------------------------|--------------------------------------------------------------------|
+| [Deployment](docs/deploy.md)                            | First-time Firebase setup, GitHub secrets, and the deploy workflow |
+| [Testing with the Emulators](docs/emulators.md)         | Running the site locally against Firebase emulators                |
+| [Ticket Email](docs/email.md)                           | Sending ticket emails through Resend                               |
+| [App Check](docs/app-check.md)                          | reCAPTCHA v3 protection for Firestore, Storage, and Functions      |
+| [Firestore Indexes and TTL Policies](docs/firestore.md) | The composite indexes and TTL policies the app needs               |
+| [User Groups](docs/user-groups.md)                      | Roles, admin access, the first president, and membership           |
 
 ## Contributing
 
-We welcome contributions from the community! Here's how you can help:
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
+We welcome contributions from the community! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to submit changes, test them, and update dependencies.
 
 ## License
 
