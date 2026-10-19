@@ -2864,6 +2864,19 @@ select.admin-tickets-tag:focus {
     font-size: 11px;
 }
 
+/* A ticket's note, wide enough to read a sentence in the table. */
+.admin-tickets-notes-input {
+    width: 100%;
+    min-width: 180px;
+}
+
+.admin-tickets-notes {
+    display: block;
+    min-width: 180px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
 /* The Tickets sub-tab's panels share one shell. */
 .admin-tickets-import,
 .admin-tickets-template,
@@ -3389,6 +3402,29 @@ select.admin-tickets-tag:focus {
     margin-top: 6px;
     font-size: 14px;
     font-weight: 600;
+}
+
+/* A staff note on the ticket, as readable as a warning but not styled as one. */
+.admin-tickets-scan-note {
+    margin-top: 6px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    color: var(--color-text);
+    font-size: 14px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.admin-tickets-scan-note-label {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
 }
 
 .admin-tickets-scan-success {

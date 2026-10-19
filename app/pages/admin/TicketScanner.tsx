@@ -19,10 +19,15 @@ interface ScannedTicket {
     unlisted: boolean;
     /** A HomeTown ticket left out of the latest export: refunded or transferred, most likely. */
     missingFromHometown: boolean;
+    /** The staff note on the ticket, empty for none. */
+    notes: string;
 }
 
 /** A result the operator should read before moving on, though the ticket got in. */
 const hasWarning = (ticket: ScannedTicket): boolean => ticket.unlisted || ticket.missingFromHometown;
+
+/** Something to read on an admitted ticket: a warning, or a note that isn't one. */
+const hasReading = (ticket: ScannedTicket): boolean => hasWarning(ticket) || ticket.notes !== '';
 
 type ScanStatus =
     | {kind: 'idle'}
@@ -76,11 +81,11 @@ const FADE_MS = 300;
 const SLOW_MS = 3000;
 
 /**
- * How long a result stays up. A HomeTown ticket with a warning got in, but the
- * warning is there to be read, so it stays up as long as a problem.
+ * How long a result stays up. A ticket with a warning or a note got in, but
+ * those are there to be read, so it stays up as long as a problem.
  */
 const showFor = (status: ShownStatus): number =>
-    status.kind === 'success' && hasWarning(status) ? CLEAR_AFTER_MS.already : CLEAR_AFTER_MS[status.kind];
+    status.kind === 'success' && hasReading(status) ? CLEAR_AFTER_MS.already : CLEAR_AFTER_MS[status.kind];
 
 /**
  * Whether a result holds the line: until it clears or Next Scan is pressed, the
@@ -88,7 +93,7 @@ const showFor = (status: ShownStatus): number =>
  * refusal or a warning before the operator has read it. A plain admission has
  * nothing to read.
  */
-const holdsLine = (status: ShownStatus): boolean => status.kind !== 'success' || hasWarning(status);
+const holdsLine = (status: ShownStatus): boolean => status.kind !== 'success' || hasReading(status);
 
 interface TicketScannerProps {
     eventId: string;
@@ -179,6 +184,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                 hometown: !!d.hometown,
                 unlisted: !!d.unlisted,
                 missingFromHometown: !!d.missingFromHometown,
+                notes: d.notes ?? '',
             };
             if (d.alreadyRedeemed) {
                 show({
@@ -473,6 +479,7 @@ function ResultBanner({status, leaving, slow, isEnglish}: {
                             : (isEnglish ? 'Attendee not registered on site.' : '参加者未注册账号。')}
                     </div>
                 )}
+                <TicketNote ticket={status} isEnglish={isEnglish}/>
                 <Countdown status={status}/>
             </div>
         );
@@ -497,6 +504,7 @@ function ResultBanner({status, leaving, slow, isEnglish}: {
                         ? ', while it wasn\'t on the HomeTown list.'
                         : '，当时不在 HomeTown 名单中。')}
                 </div>
+                <TicketNote ticket={status} isEnglish={isEnglish}/>
                 <Countdown status={status}/>
             </div>
         );
@@ -525,6 +533,17 @@ function TicketTags({ticket, isEnglish}: {ticket: ScannedTicket; isEnglish: bool
             )}
             {ticket.hometown && <span className="admin-tickets-tag admin-tickets-tag-hometown">HomeTown</span>}
         </>
+    );
+}
+
+/** The note staff left on the ticket in the admin panel, if any. */
+function TicketNote({ticket, isEnglish}: {ticket: ScannedTicket; isEnglish: boolean}) {
+    if (!ticket.notes) return null;
+    return (
+        <div className="admin-tickets-scan-note">
+            <span className="admin-tickets-scan-note-label">{isEnglish ? 'Note' : '备注'}</span>
+            {ticket.notes}
+        </div>
     );
 }
 

@@ -8,6 +8,7 @@ import {
     callResetTicket,
     callSendTicketEmails,
     callUnvoidTicket,
+    callUpdateTicketNotes,
     callUpdateTicketType,
     callVoidTicket,
     functionsErrorCode,
@@ -147,7 +148,8 @@ export function TicketsSubtab({
             // of one of ours: a few letters would match half the UUIDs.
             return a.email.toLowerCase().includes(needle)
                 || a.name.toLowerCase().includes(needle)
-                || a.ticketIds.some(id => a.hometown ? id.includes(needle) : id.toLowerCase() === needle);
+                || a.ticketIds.some(id => a.hometown ? id.includes(needle) : id.toLowerCase() === needle)
+                || a.tickets.some(t => t.notes.toLowerCase().includes(needle));
         });
     }, [attendees, search, filterUnsent, ticketTypeFilter, statusFilter]);
 
@@ -296,6 +298,20 @@ export function TicketsSubtab({
             showToast(isEnglish ? 'Ticket type updated.' : '门票类型已更新。', 'success');
         } catch {
             showToast(isEnglish ? 'Failed to update ticket type.' : '更新门票类型失败。', 'error');
+        }
+    };
+
+    // The note as saved, which the server may have trimmed, or null if it wasn't.
+    const updateTicketNotesAction = async (a: AttendeeData, ticketId: string, notes: string): Promise<string | null> => {
+        if (readOnly) return null;
+        try {
+            const res = await callUpdateTicketNotes({eventId, attendeeId: a.id, ticketId, notes});
+            updateTicket(a.id, ticketId, {notes: res.data.notes});
+            if (res.data.updated) showToast(isEnglish ? 'Note saved.' : '备注已保存。', 'success');
+            return res.data.notes;
+        } catch {
+            showToast(isEnglish ? 'Failed to save note.' : '保存备注失败。', 'error');
+            return null;
         }
     };
 
@@ -482,6 +498,7 @@ export function TicketsSubtab({
                     onRedeemTicket={redeemTicketAction}
                     onResetTicket={resetTicketAction}
                     onUpdateTicketType={updateTicketTypeAction}
+                    onUpdateTicketNotes={updateTicketNotesAction}
                     onResend={resendToAttendee}
                     onDelete={deleteAttendeeAction}
                     onRefresh={() => void loadAttendees()}

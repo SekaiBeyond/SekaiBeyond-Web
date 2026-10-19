@@ -282,6 +282,7 @@ export const callRedeemTicket = (data: {eventId: string; ticketId: string}) =>
         eventTitle: string;
         ticketIndex: number;
         ticketType: string;
+        notes?: string;
         userCheckedIn?: boolean;
         redeemedBy?: string;
         redeemedAt?: string | null;
@@ -354,6 +355,14 @@ export const callUpdateTicketType = (data: {
     type: string;
 }) => httpsCallable<typeof data, {updated: boolean}>(
     getFunctions(), 'updateTicketType')(data);
+
+export const callUpdateTicketNotes = (data: {
+    eventId: string;
+    attendeeId: string;
+    ticketId: string;
+    notes: string;
+}) => httpsCallable<typeof data, {updated: boolean; notes: string}>(
+    getFunctions(), 'updateTicketNotes')(data);
 
 export const callSendTicketEmails = (data: {
     eventId: string;

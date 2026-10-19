@@ -89,7 +89,7 @@ export const RECORD_CATEGORIES = {
     ticket: {
         en: 'Ticket', zh: '门票',
         types: ['ticket-import', 'ticket-walk-in', 'ticket-redeem', 'ticket-void', 'ticket-unvoid', 'ticket-reset',
-            'ticket-type-edit', 'ticket-attendee-delete', 'ticket-attendee-edit', 'ticket-regenerate',
+            'ticket-type-edit', 'ticket-notes-edit', 'ticket-attendee-delete', 'ticket-attendee-edit', 'ticket-regenerate',
             'ticket-email-send', 'ticket-email-queue', 'hometown-import', 'hometown-admit-unlisted'],
     },
     tag: {

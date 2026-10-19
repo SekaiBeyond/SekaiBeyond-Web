@@ -61,6 +61,7 @@ export type RecordType =
     | "ticket-unvoid"
     | "ticket-reset"
     | "ticket-type-edit"
+    | "ticket-notes-edit"
     | "ticket-attendee-delete"
     | "ticket-attendee-edit"
     | "ticket-regenerate"

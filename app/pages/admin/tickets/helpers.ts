@@ -84,6 +84,7 @@ export const mapAttendeeDoc = (
             redeemedAt: tsToDate(tk.redeemedAt),
             redeemedByName: (tk.redeemedByName as string) ?? '',
             voided: (tk.voided as boolean) ?? false,
+            notes: (tk.notes as string) ?? '',
         };
     });
     return {
@@ -134,7 +135,7 @@ const csvDateTime = (d: Date | null): string => {
 export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
     buildCsv(
         ['email', 'name', 'ticketCount', 'type', 'redeemed', 'voided', 'emailSent', 'emailSentAt', 'createdAt', 'walkIn',
-            'hometownTicket', 'hometownStatus'],
+            'hometownTicket', 'hometownStatus', 'notes'],
         attendees.map(a => {
             const {used, voided} = ticketStatusCounts(a);
             return [
@@ -151,6 +152,11 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
                 a.walkIn ? 'yes' : 'no',
                 a.hometown ? (a.ticketIds[0] ?? '') : '',
                 hometownStatus(a),
+                // Numbered by ticket when there's more than one to tell apart.
+                a.tickets
+                    .map((t, i) => t.notes && (a.tickets.length > 1 ? `#${i + 1}: ${t.notes}` : t.notes))
+                    .filter(Boolean)
+                    .join('; '),
             ];
         }),
     );

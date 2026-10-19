@@ -43,6 +43,8 @@ interface AttendeesSectionProps {
     onRedeemTicket: (a: AttendeeData, ticketId: string) => void;
     onResetTicket: (a: AttendeeData, ticketId: string) => void;
     onUpdateTicketType: (a: AttendeeData, ticketId: string, newType: TicketType) => void;
+    /** Resolves to the note as saved, or null if it wasn't. */
+    onUpdateTicketNotes: (a: AttendeeData, ticketId: string, notes: string) => Promise<string | null>;
     onResend: (a: AttendeeData) => void;
     onDelete: (a: AttendeeData) => void;
     onRefresh: () => void;
@@ -75,6 +77,7 @@ export function AttendeesSection({
                                      onRedeemTicket,
                                      onResetTicket,
                                      onUpdateTicketType,
+                                     onUpdateTicketNotes,
                                      onResend,
                                      onDelete,
                                      onRefresh,
@@ -179,7 +182,7 @@ export function AttendeesSection({
                 <input
                     type="text"
                     className="admin-input"
-                    placeholder={isEnglish ? 'Search name, email or ticket #...' : '搜索姓名、邮箱或门票号...'}
+                    placeholder={isEnglish ? 'Search name, email, ticket # or note...' : '搜索姓名、邮箱、门票号或备注...'}
                     value={search}
                     onChange={(e) => onSearchChange(e.target.value)}
                 />
@@ -437,6 +440,7 @@ export function AttendeesSection({
                                             <th>{isEnglish ? 'Status' : '状态'}</th>
                                             <th>{isEnglish ? 'Created' : '创建时间'}</th>
                                             <th>{isEnglish ? 'Redeemed By' : '验证人'}</th>
+                                            <th>{isEnglish ? 'Notes' : '备注'}</th>
                                             <th></th>
                                         </tr>
                                         </thead>
@@ -537,6 +541,18 @@ export function AttendeesSection({
                                                     ) : '—'}
                                                 </td>
                                                 <td>
+                                                    {readOnly ? (
+                                                        t.notes ?
+                                                            <span className="admin-tickets-notes">{t.notes}</span> : '—'
+                                                    ) : (
+                                                        <TicketNotesInput
+                                                            notes={t.notes}
+                                                            onSave={(notes) => onUpdateTicketNotes(a, t.ticketId, notes)}
+                                                            isEnglish={isEnglish}
+                                                        />
+                                                    )}
+                                                </td>
+                                                <td>
                                                     {t.voided ? (
                                                         <button
                                                             className="admin-toggle-btn admin-toggle-save"
@@ -602,5 +618,48 @@ export function AttendeesSection({
                 </div>
             )}
         </div>
+    );
+}
+
+/** A ticket's note, saved on Enter or leaving the field; Escape puts back the saved one. */
+function TicketNotesInput({notes, onSave, isEnglish}: {
+    notes: string;
+    onSave: (notes: string) => Promise<string | null>;
+    isEnglish: boolean;
+}) {
+    const [draft, setDraft] = useState(notes);
+    const [saving, setSaving] = useState(false);
+
+    // Follows a refresh that changes it.
+    useEffect(() => setDraft(notes), [notes]);
+
+    const save = async () => {
+        const next = draft.trim();
+        if (next === notes) {
+            setDraft(notes);
+            return;
+        }
+        setSaving(true);
+        const saved = await onSave(next);
+        setSaving(false);
+        setDraft(saved ?? notes);
+    };
+
+    return (
+        <input
+            type="text"
+            className="admin-input admin-input--sm admin-tickets-notes-input"
+            value={draft}
+            maxLength={500}
+            disabled={saving}
+            placeholder={isEnglish ? 'Add a note' : '添加备注'}
+            aria-label={isEnglish ? 'Ticket note' : '门票备注'}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => void save()}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+                else if (e.key === 'Escape') setDraft(notes);
+            }}
+        />
     );
 }

@@ -57,6 +57,8 @@ interface NewTicket {
     checkedIn: boolean;
     checkedInAt: Timestamp | null;
     voided: boolean;
+    /** A staff comment, shown only to staff: in the admin panel and on the scanner. Absent until one is written. */
+    notes?: string;
 }
 
 function freshTicket(ticketId: string, type: string): NewTicket {
@@ -1121,6 +1123,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                 eventTitle,
                 ticketIndex: 0,
                 ticketType: "normal",
+                notes: "",
                 userCheckedIn: false,
                 graceRemainingMs: REDEEM_GRACE_PERIOD_MS,
             };
@@ -1167,6 +1170,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                     eventTitle,
                     ticketIndex: idx,
                     ticketType: ticket.type || "normal",
+                    notes: ticket.notes ?? "",
                     redeemedBy: ticket.redeemedByName,
                     redeemedAt: ticket.redeemedAt?.toDate?.()?.toISOString() ?? null,
                 };
@@ -1183,6 +1187,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                 eventTitle,
                 ticketIndex: idx,
                 ticketType: ticket.type || "normal",
+                notes: ticket.notes ?? "",
                 userCheckedIn: ticket.checkedIn === true,
                 graceRemainingMs: Math.min(REDEEM_GRACE_PERIOD_MS, REDEEM_GRACE_PERIOD_MS - sinceRedeemedMs),
             };
@@ -1231,6 +1236,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
             eventTitle,
             ticketIndex: idx,
             ticketType: ticket.type || "normal",
+            notes: ticket.notes ?? "",
             userCheckedIn,
             graceRemainingMs: REDEEM_GRACE_PERIOD_MS,
         };
@@ -1527,7 +1533,10 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             return {updated: true, regenerated: false};
         }
 
-        const {tickets, ticketIds} = buildFreshTickets(ticketCount, type);
+        const {tickets: freshTickets, ticketIds} = buildFreshTickets(ticketCount, type);
+        // Staff notes carry over by position, so a re-issue doesn't lose them.
+        const tickets = freshTickets.map((t, i) =>
+            prevTickets[i]?.notes ? {...t, notes: prevTickets[i].notes} : t);
         txn.update(attendeeRef, {
             name,
             ticketCount,
@@ -1601,6 +1610,61 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
         }));
 
         return {updated: true};
+    });
+});
+const TICKET_NOTES_MAX = 500;
+
+export const updateTicketNotes = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+
+    const input = request.data as {
+        eventId?: string;
+        attendeeId?: string;
+        ticketId?: string;
+        notes?: unknown;
+    };
+    const eventId = validateDocId(input.eventId, "eventId");
+    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
+    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+    // Optional: an empty note clears it.
+    const notes = sanitizeDisplayText(validateStr(input.notes, "notes", TICKET_NOTES_MAX));
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventRef = db.collection("upcomingEvents").doc(eventId);
+        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
+        const [eventSnap, attendeeSnap] = await Promise.all([
+            txn.get(eventRef),
+            txn.get(attendeeRef),
+        ]);
+        // An archived event's tickets are read-only; see archiveUpcomingEvent.
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        if (!attendeeSnap.exists) {
+            throw new HttpsError("not-found", "Attendee not found.");
+        }
+        const data = attendeeSnap.data()!;
+        const tickets: NewTicket[] = (data.tickets ?? []).map(
+            (t: Record<string, unknown>) => t as unknown as NewTicket
+        );
+        const idx = tickets.findIndex(t => t.ticketId === ticketId);
+        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
+
+        if ((tickets[idx].notes ?? "") === notes) return {updated: false, notes};
+
+        tickets[idx] = {...tickets[idx], notes};
+
+        const eventTitle: string = eventSnap.data()?.title ?? eventId;
+
+        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
+        txn.set(recordRef(), recordDoc("ticket-notes-edit", {
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle,
+            targetEmail: data.email ?? "",
+            targetName: attendeeRecordName(data),
+        }));
+
+        return {updated: true, notes};
     });
 });
 export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) => {

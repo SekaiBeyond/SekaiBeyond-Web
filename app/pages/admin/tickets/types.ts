@@ -43,6 +43,8 @@ export interface TicketData {
     redeemedAt: Date | null;
     redeemedByName: string;
     voided: boolean;
+    /** A staff comment, empty for none. */
+    notes: string;
 }
 
 export interface AttendeeData {

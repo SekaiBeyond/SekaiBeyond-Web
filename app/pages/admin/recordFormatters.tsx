@@ -415,6 +415,10 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>changed {attendee}'s ticket type from {from} to {to} at {event}</>
                 : <>将 {attendee} 在 {event} 的门票类型从 {from} 改为 {to}</>;
         }
+        case 'ticket-notes-edit':
+            return isEnglish
+                ? <>edited the note on a ticket for {attendee} at {event}</>
+                : <>编辑了 {attendee} 在 {event} 的门票备注</>;
         case 'ticket-attendee-delete':
             return isEnglish
                 ? <>removed attendee {attendee} from {event}</>
