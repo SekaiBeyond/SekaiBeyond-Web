@@ -215,7 +215,7 @@ export const uwParkingNightlySync = onSchedule({
 
 // The same sync on demand, e.g. right after a UW change the nightly run has not picked up yet.
 export const syncUwParking = onCall({maxInstances: 2, timeoutSeconds: 300}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
     const summary = await runUwParkingSync();
     await recordRef().set(recordDoc("parking-sync", {
@@ -232,7 +232,7 @@ export const syncUwParking = onCall({maxInstances: 2, timeoutSeconds: 300}, asyn
  * names, and the visitor lots nearest on foot.
  */
 export const lookUpUwBuilding = onCall({maxInstances: 5, timeoutSeconds: 60}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
     const raw = (request.data as {code?: unknown})?.code;
     const code = typeof raw === "string" ? raw.trim().toUpperCase() : "";

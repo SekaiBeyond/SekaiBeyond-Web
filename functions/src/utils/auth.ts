@@ -7,16 +7,28 @@ const RATE_LIMIT_MAX = 10;
 
 /**
  * Calls that run at a pace of their own, each with a per-minute budget kept
- * apart from the shared one: a door scans a ticket every few seconds, and a
- * large HomeTown file goes up in dozens of chunks.
+ * apart from the shared one: a door scans a ticket every few seconds, a large
+ * HomeTown file goes up in dozens of chunks, and staff at work in the admin
+ * panel make many calls a minute, account lookups and quota checks among them.
+ *
+ * The shared budget is there to stop code guessing, so the calls anyone can
+ * make keep it; the staff one is only a ceiling on a runaway loop.
  */
 const RATE_LIMIT_BUCKETS = {
     scan: 60,
     "hometown-import": 60,
+    staff: 120,
 };
 export type RateLimitBucket = keyof typeof RATE_LIMIT_BUCKETS;
 
-async function checkRateLimit(uid: string, bucket?: RateLimitBucket): Promise<void> {
+async function checkRateLimit(uid: string, requested?: RateLimitBucket): Promise<void> {
+    // The staff budget is for staff and above only: anyone else trying a staff
+    // call is charged the shared one, as for any other call.
+    let bucket = requested;
+    if (bucket === "staff") {
+        const group = normalizeGroup((await db.collection("users").doc(uid).get()).data()?.group);
+        if (group === "user") bucket = undefined;
+    }
     const ref = db.collection("rateLimits").doc(bucket ? `${uid}_${bucket}` : uid);
     const max = bucket ? RATE_LIMIT_BUCKETS[bucket] : RATE_LIMIT_MAX;
     const now = Date.now();

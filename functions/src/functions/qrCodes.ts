@@ -45,7 +45,7 @@ function readSpot(input: Record<string, unknown>): {lat: number; lng: number} {
  * without reprinting. Scan counts survive edits.
  */
 export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const qrId = input.qrId ? validateDocId(input.qrId, "qrId") : null;
@@ -133,7 +133,7 @@ export const saveQrCode = onCall({maxInstances: 10}, async (request) => {
  * and the redirect page sends their location here.
  */
 export const setQrSpot = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const qrId = validateDocId(input.qrId, "qrId");
@@ -159,7 +159,7 @@ export const setQrSpot = onCall({maxInstances: 10}, async (request) => {
 });
 
 export const deleteQrCode = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
     const qrId = validateDocId((request.data as {qrId?: string})?.qrId, "qrId");

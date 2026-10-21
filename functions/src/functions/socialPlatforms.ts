@@ -32,7 +32,7 @@ function validateOrder(value: unknown): number {
  * Read client-side, written only here.
  */
 export const saveSocialPlatform = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const platformId = input.id ? validateDocId(input.id, "id") : null;
@@ -63,7 +63,7 @@ export const saveSocialPlatform = onCall({maxInstances: 10}, async (request) => 
 });
 
 export const deleteSocialPlatform = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const platformId = validateDocId((request.data as {id?: string})?.id, "id");
 
@@ -87,7 +87,7 @@ export const deleteSocialPlatform = onCall({maxInstances: 10}, async (request) =
  * created, so re-running keeps customisations.
  */
 export const seedSocialPlatforms = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
 
     const col = db.collection("socialPlatforms");

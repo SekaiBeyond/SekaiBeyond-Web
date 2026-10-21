@@ -43,7 +43,7 @@ const performerName = (snap: FirebaseFirestore.DocumentSnapshot): string => snap
  * them again.
  */
 export const generatePassports = onCall({maxInstances: 5}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
     const input = request.data as {designId?: unknown; count?: unknown};
@@ -117,7 +117,7 @@ export const generatePassports = onCall({maxInstances: 5}, async (request) => {
  * lost slip only needs revealPassportKey. The old key stops working.
  */
 export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
     const passportId = normalizePassportId((request.data as {passportId?: unknown})?.passportId);
@@ -159,7 +159,7 @@ export const reissuePassportKey = onCall({maxInstances: 10}, async (request) => 
  * key is what makes unsold stock worth stealing.
  */
 export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
     const passportId = normalizePassportId((request.data as {passportId?: unknown})?.passportId);
@@ -203,7 +203,7 @@ export const revealPassportKey = onCall({maxInstances: 10}, async (request) => {
  * than failing the rest. The record is written before anything is returned.
  */
 export const exportPassportKeys = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
     const input = (request.data as {passportIds?: unknown})?.passportIds;
@@ -325,7 +325,7 @@ export const getPassportPublicProfile = onCall({maxInstances: 20}, async (reques
  * Only the `records` entry this writes survives.
  */
 export const deletePassports = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
     const input = (request.data as {passportIds?: unknown})?.passportIds;
@@ -403,7 +403,7 @@ export const deletePassports = onCall({maxInstances: 10}, async (request) => {
  * taken.
  */
 export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {passportId?: unknown; subtractDays?: unknown};
     const passportId = normalizePassportId(input.passportId);
@@ -514,7 +514,7 @@ const shownNames = (design: {name?: unknown; nameCn?: unknown}): string[] => {
  * creation; a term change only applies to passports generated afterwards.
  */
 export const savePassportDesign = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const designId = input.designId ? validateDocId(input.designId, "designId") : null;
@@ -597,7 +597,7 @@ export const savePassportDesign = onCall({maxInstances: 10}, async (request) => 
  * nothing to render.
  */
 export const deletePassportDesign = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const callerSnap = await requireAdmin(uid);
 
     const designId = validateDocId((request.data as {designId?: unknown})?.designId, "designId");

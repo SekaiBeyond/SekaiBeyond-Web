@@ -275,7 +275,7 @@ function renderTemplate(
 }
 
 export const importEventAttendees = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; attendees?: unknown; onDuplicate?: string};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -422,7 +422,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
  * which would void the tickets they were sent.
  */
 export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {
         eventId?: string;
@@ -816,7 +816,7 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
  * doc is public once published, and this says which doors a fake would pass.
  */
 export const setHometownAdmitUnlisted = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; enabled?: unknown};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -963,7 +963,7 @@ const ACCOUNT_LOOKUP_MAX = 500;
  * one.
  */
 export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; emails?: unknown};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -1263,7 +1263,7 @@ function attendeeRecordName(data: FirebaseFirestore.DocumentData): string {
 }
 
 export const voidTicket = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -1307,7 +1307,7 @@ export const voidTicket = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -1351,7 +1351,7 @@ export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -1431,7 +1431,7 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const resetTicket = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -1485,7 +1485,7 @@ export const resetTicket = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const updateEventAttendee = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {
         eventId?: string;
@@ -1594,7 +1594,7 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
     });
 });
 export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {
         eventId?: string;
@@ -1649,7 +1649,7 @@ export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const updateTicketNotes = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {
         eventId?: string;
@@ -1702,7 +1702,7 @@ export const updateTicketNotes = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; attendeeId?: string};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -1744,7 +1744,7 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
 export const sendTicketEmails = onCall(
     {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB", secrets: [RESEND_API_KEY]},
     async (request) => {
-        const uid = await requireAuth(request);
+        const uid = await requireAuth(request, "staff");
         await requireAdmin(uid);
 
         const input = request.data as {
@@ -2139,7 +2139,7 @@ export const getTicketEmailQuota = onCall({
     // the cached counter.
     secrets: [RESEND_API_KEY],
 }, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
 
     // The send path's re-anchor, so the headroom shown matches what
@@ -2158,7 +2158,7 @@ export const getTicketEmailQuota = onCall({
     };
 });
 export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {
         eventId?: string;

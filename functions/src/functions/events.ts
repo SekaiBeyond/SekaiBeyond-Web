@@ -18,7 +18,7 @@ import {
 } from "../utils/validation";
 
 export const requestEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
     const deleteAt = deletionExpiresAt();
@@ -44,7 +44,7 @@ export const requestEventDeletion = onCall({maxInstances: 10}, async (request) =
     return {deleteAt: deleteAt.toDate().toISOString()};
 });
 export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
 
@@ -130,7 +130,7 @@ export const onPastEventDeleted = onDocumentDeleted(
     }
 );
 export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : null;
@@ -187,7 +187,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     return result;
 });
 export const setPastEventPublished = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; published?: boolean};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -210,7 +210,7 @@ export const setPastEventPublished = onCall({maxInstances: 10}, async (request) 
     });
 });
 export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : null;
@@ -316,7 +316,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     return result;
 });
 export const setUpcomingEventPublished = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; published?: boolean};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -339,7 +339,7 @@ export const setUpcomingEventPublished = onCall({maxInstances: 10}, async (reque
     });
 });
 export const requestUpcomingEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
     const deleteAt = deletionExpiresAt();
@@ -365,7 +365,7 @@ export const requestUpcomingEventDeletion = onCall({maxInstances: 10}, async (re
     return {deleteAt: deleteAt.toDate().toISOString()};
 });
 export const cancelUpcomingEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
 
@@ -489,7 +489,7 @@ function reconcileCopy(
 }
 
 export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; tagIds?: unknown};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -595,7 +595,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     return {pastEventId};
 });
 export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {targetUid?: string; eventId?: string; grant?: boolean};
     const targetUid = validateDocId(input.targetUid, "targetUid");
@@ -665,7 +665,7 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {targetUid?: string; eventId?: string};
     const targetUid = validateDocId(input.targetUid, "targetUid");
@@ -751,7 +751,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {targetUid?: string; eventId?: string};
     const targetUid = validateDocId(input.targetUid, "targetUid");

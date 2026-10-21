@@ -37,7 +37,7 @@ import { UW_BUILDING_CODE_RE, UW_LOT_CODE_RE } from "../utils/uwParking";
 import { dropVenueParking, refreshVenueParking } from "./parking";
 
 export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
 
     const input = request.data as {
@@ -85,7 +85,7 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
  * folding video in would give every image upload the video size ceiling.
  */
 export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
 
     const input = request.data as {
@@ -141,7 +141,7 @@ export const getUploadLimits = onCall({maxInstances: 10}, async () => ({
 }));
 
 export const saveTag = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const tagId = input.tagId ? validateDocId(input.tagId, "tagId") : null;
@@ -179,7 +179,7 @@ export const saveTag = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const deleteTag = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const tagId = validateDocId((request.data as {tagId?: string})?.tagId, "tagId");
 
@@ -197,7 +197,7 @@ export const deleteTag = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const savePolicy = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const contentEn = validateStr(input.contentEn, "contentEn", 20000);
@@ -299,7 +299,7 @@ async function resolveXiaohongshuShareLink(shareLink: string): Promise<string> {
 }
 
 export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
 
@@ -913,7 +913,7 @@ function conAssetUrls(content: Record<string, any>): string[] {
  * firestore.rules.
  */
 export const saveConContent = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const sections = CON_SECTIONS.filter(section => input[section] !== undefined);
@@ -1053,7 +1053,7 @@ function venueUwFields(input: Record<string, unknown>): {
 }
 
 export const saveVenue = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const venueId = input.venueId ? validateDocId(input.venueId, "venueId") : null;
@@ -1095,7 +1095,7 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     return {venueId: docId};
 });
 export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const venueId = validateDocId((request.data as {venueId?: string})?.venueId, "venueId");
 
@@ -1116,7 +1116,7 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
     return {deleted: true};
 });
 export const saveTeamMembers = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {teamMembers?: any[]};
     const members = Array.isArray(input.teamMembers) ? input.teamMembers : [];
@@ -1288,7 +1288,7 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
 // The full roster for the "Our Team" editor, from the server-only teamRoster/main.
 // Staff+, matching who can view Site Config; saveTeamMembers stays core-staff+.
 export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const callerSnap = await db.collection("users").doc(uid).get();
     const group = callerSnap.data()?.group;
     if (!["staff", "core-staff", "president"].includes(group)) {
@@ -1303,7 +1303,7 @@ export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
 // domain comes from PUBLIC_ORIGIN, which the client can't see. Staff+, like
 // getTeamRoster.
 export const getSenderSettings = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const callerSnap = await db.collection("users").doc(uid).get();
     if (!["staff", "core-staff", "president"].includes(callerSnap.data()?.group)) {
         throw new HttpsError("permission-denied", "Insufficient permissions.");
@@ -1317,7 +1317,7 @@ export const getEmailQuotaStatus = onCall({
     maxInstances: 5,
     secrets: [RESEND_API_KEY],
 }, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
 
     const usage = await syncProviderUsage();

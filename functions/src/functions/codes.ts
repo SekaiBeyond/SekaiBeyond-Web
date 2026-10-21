@@ -199,7 +199,7 @@ async function redeemBadgeCode(uid: string, code: string) {
 }
 
 export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {
         badgeId?: string;
@@ -257,7 +257,7 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
     throw new HttpsError("internal", "code-generation-failed");
 });
 export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {
         eventId?: string;
@@ -334,7 +334,7 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     throw new HttpsError("internal", "code-generation-failed");
 });
 export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {codeId?: string; active?: boolean};
     const codeId = validateDocId(input.codeId, "codeId");
@@ -363,7 +363,7 @@ export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) 
     });
 });
 export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {codeId?: string; activeFrom?: string; activeUntil?: string};
     const codeId = validateDocId(input.codeId, "codeId");
@@ -395,7 +395,7 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
     });
 });
 export const toggleBadgeCodeActive = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {codeId?: string; active?: boolean};
     const codeId = validateDocId(input.codeId, "codeId");
@@ -423,7 +423,7 @@ export const toggleBadgeCodeActive = onCall({maxInstances: 10}, async (request) 
     });
 });
 export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const codeId = validateDocId((request.data as {codeId?: string})?.codeId, "codeId");
 
@@ -447,7 +447,7 @@ export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (reque
     });
 });
 export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; activeFrom?: string; activeUntil?: string; maxUses?: number};
     const eventId = validateDocId(input.eventId, "eventId");
@@ -590,7 +590,7 @@ async function redeemStaffCode(uid: string, code: string) {
 }
 
 export const toggleStaffCodeActive = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {codeId?: string; active?: boolean};
     const codeId = validateDocId(input.codeId, "codeId");
@@ -618,7 +618,7 @@ export const toggleStaffCodeActive = onCall({maxInstances: 10}, async (request) 
     });
 });
 export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {codeId?: string; activeFrom?: string; activeUntil?: string; maxUses?: number};
     const codeId = validateDocId(input.codeId, "codeId");
@@ -658,7 +658,7 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
  * switched off first. Staff it admitted stay staff.
  */
 export const deleteStaffCode = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const codeId = validateDocId((request.data as {codeId?: string})?.codeId, "codeId");
 

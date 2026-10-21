@@ -422,7 +422,7 @@ export const deleteBanner = onCall({maxInstances: 10}, async (request) => {
     return {deleted: true};
 });
 export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {targetUid?: string; newGroup?: string; title?: string; titleCn?: string};
     const targetUid = validateDocId(input.targetUid, "targetUid");
@@ -522,7 +522,7 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
 // Membership is time-boxed, not a group: this never writes `group`, which only
 // changeUserGroup does.
 export const setMembership = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const input = request.data as {targetUid?: string; expiresAt?: string | null; extendDays?: number};
     const targetUid = validateDocId(input.targetUid, "targetUid");
 
@@ -600,7 +600,7 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
     });
 });
 export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
     const input = request.data as {targetUid?: string; title?: string; titleCn?: string};
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const title = typeof input.title === "string" ? sanitizeDisplayText(input.title) : input.title;
@@ -656,7 +656,7 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     return {success: true};
 });
 export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as {targetUid?: string; badgeId?: string; grant?: boolean};
     const targetUid = validateDocId(input.targetUid, "targetUid");

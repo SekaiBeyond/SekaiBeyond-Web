@@ -16,7 +16,7 @@ import {
 } from "../utils/validation";
 
 export const requestBadgeDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const badgeId = validateDocId((request.data as {badgeId?: string})?.badgeId, "badgeId");
     const deleteAt = deletionExpiresAt();
@@ -42,7 +42,7 @@ export const requestBadgeDeletion = onCall({maxInstances: 10}, async (request) =
     return {deleteAt: deleteAt.toDate().toISOString()};
 });
 export const cancelBadgeDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const badgeId = validateDocId((request.data as {badgeId?: string})?.badgeId, "badgeId");
 
@@ -103,7 +103,7 @@ export const onBadgeDeleted = onDocumentDeleted(
     }
 );
 export const saveBadge = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request);
+    const uid = await requireAuth(request, "staff");
 
     const input = request.data as Record<string, unknown>;
     const badgeId = input.badgeId ? validateDocId(input.badgeId, "badgeId") : null;
