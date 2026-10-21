@@ -47,7 +47,6 @@ export function HometownSection({
                                 }: HometownSectionProps) {
     const {isEnglish} = useLanguage();
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [fileName, setFileName] = useState('');
     const [tickets, setTickets] = useState<HometownTicketRow[]>([]);
     const [errors, setErrors] = useState<ParseError[]>([]);
     const [warnings, setWarnings] = useState<ParseError[]>([]);
@@ -94,7 +93,6 @@ export function HometownSection({
     }, [attendees, tickets, updateExisting]);
 
     const clearForm = () => {
-        setFileName('');
         setTickets([]);
         setErrors([]);
         setWarnings([]);
@@ -105,7 +103,6 @@ export function HometownSection({
         const file = e.target.files?.[0];
         if (!file) return;
         setBusy(true);
-        setFileName(file.name);
         setTickets([]);
         setErrors([]);
         setWarnings([]);
@@ -160,7 +157,8 @@ export function HometownSection({
             const parts = isEnglish
                 ? [
                     `${totals.added} added`,
-                    totals.confirmed > 0 && `${totals.confirmed} unlisted tickets confirmed`,
+                    totals.confirmed > 0
+                    && `${totals.confirmed} unlisted ${totals.confirmed === 1 ? 'ticket' : 'tickets'} confirmed`,
                     updateExisting && `${totals.updated} updated`,
                     `${totals.skipped} ${updateExisting ? 'unchanged' : 'already here'}`,
                     totals.restored > 0 && `${totals.restored} back in the export`,
@@ -216,7 +214,6 @@ export function HometownSection({
                     onChange={handleFile}
                     disabled={readOnly || busy || importing}
                 />
-                {fileName && <span className="admin-tickets-import-filename">{fileName}</span>}
             </div>
 
             <label className="admin-checkbox-label admin-tickets-hometown-update">

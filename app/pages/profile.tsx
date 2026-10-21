@@ -589,6 +589,9 @@ export const ProfilePage = () => {
         : passportsFailed ? 'failed'
             : passports === null ? 'loading'
                 : passports.length > 0 ? 'filled' : 'empty';
+    // Checked in with a ticket for an event still on, which joins the events
+    // only once archived: the events prompt says so rather than to check in.
+    const checkedIn = !!ticketEvents?.some(e => e.tickets.some(t => t.redeemed && !t.voided));
     const states = [badgeState, passportState, eventState].filter((s): s is SectionState => s !== null);
     const anyFilled = states.includes('filled');
     const allEmpty = states.every(s => s === 'empty');
@@ -944,7 +947,7 @@ export const ProfilePage = () => {
                     ) : settling ? (
                         <div className="spinner spinner-centered"/>
                     ) : isOwnProfile && allEmpty ? (
-                        <ProfileWelcome/>
+                        <ProfileWelcome checkedIn={checkedIn}/>
                     ) : !isOwnProfile && allEmpty ? (
                         <ProfileCard compact>
                             <ProfileCardNote icon={FiStar} muted>
@@ -1009,6 +1012,7 @@ export const ProfilePage = () => {
                                 title={isEnglish ? 'Events Attended' : '参与活动'}
                                 state={eventState}
                                 own={isOwnProfile}
+                                checkedIn={checkedIn}
                                 count={attendedEvents.length}
                                 icon={FiCalendar}
                                 none={isEnglish ? 'No events attended yet.' : '还没有参加过活动。'}

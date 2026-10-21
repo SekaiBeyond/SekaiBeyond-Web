@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
-import { useAuth } from '~/components/AuthProvider';
+import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     callAdminRedeemTicket,
@@ -27,7 +27,7 @@ import { HometownSection } from './HometownSection';
 import { ImportSection } from './ImportSection';
 import { SettingsSection } from './SettingsSection';
 import { StatsSection } from './StatsSection';
-import { attendeeLabel, buildAttendeeCsv, mapAttendeeDoc } from './helpers';
+import { attendeeLabel, buildAttendeeCsv, checkedInWalkIn, mapAttendeeDoc } from './helpers';
 import { useAccountLinks } from './useAccountLinks';
 import { type AttendeeData, type StatusFilter, type TicketData, type TicketsSection, type TicketType } from './types';
 
@@ -48,6 +48,9 @@ export function TicketsSubtab({
                               }: TicketsSubtabProps) {
     const {isEnglish} = useLanguage();
     const {profile} = useAuth();
+    // By group, not readOnly: an archived event's list is read-only for everyone,
+    // and that's when it's exported most.
+    const canExport = !!profile && hasPermission(profile.group, 'core-staff');
     const eventId = event.id;
     const startMs = event.startAt.getTime();
     const endMs = event.endAt.getTime();
@@ -124,7 +127,7 @@ export function TicketsSubtab({
     const filteredAttendees = useMemo(() => {
         const needle = search.trim().toLowerCase();
         return attendees.filter(a => {
-            if (filterUnsent && a.emailSent) return false;
+            if (filterUnsent && (a.emailSent || checkedInWalkIn(a))) return false;
             if (ticketTypeFilter !== 'all') {
                 // An unlisted HomeTown ticket's type isn't known yet.
                 if (a.unlisted || !a.tickets.some(t => t.type === ticketTypeFilter)) return false;
@@ -175,7 +178,9 @@ export function TicketsSubtab({
                     if (t.redeemed) used++;
                 }
             }
-            if (!a.emailSent) unsent++;
+            // A walk-in already in at the door is owed no email.
+            const owed = !a.emailSent && !checkedInWalkIn(a);
+            if (owed) unsent++;
             if (a.walkIn) walkIns++;
             if (a.hometown) hometown++;
             if (a.unlisted) unlisted++;
@@ -184,7 +189,7 @@ export function TicketsSubtab({
             // Emailless walk-ins can't be sent to, and HomeTown sends its own.
             if (activeInThisAttendee > 0 && a.email && !a.hometown) {
                 sendable++;
-                if (!a.emailSent) unsentSendable++;
+                if (owed) unsentSendable++;
             }
         }
         return {
@@ -316,6 +321,7 @@ export function TicketsSubtab({
     };
 
     const exportAttendees = () => {
+        if (!canExport) return;
         const base = event.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || eventId;
         downloadBlob(buildAttendeeCsv(attendees), `${base}-attendees-${fileStamp()}.csv`);
     };
@@ -441,6 +447,7 @@ export function TicketsSubtab({
                     eventId={eventId}
                     eventTitle={isEnglish ? event.title : (event.titleCn || event.title)}
                     admitUnlistedHometown={admitUnlisted}
+                    canManage={!readOnly}
                     onRedeemed={() => setLoadedFor(null)}
                 />
             )}
@@ -492,7 +499,7 @@ export function TicketsSubtab({
                     walkIn={canAddWalkIn}
                     onEdit={setEditingAttendee}
                     onAdd={() => setAddingAttendee(true)}
-                    onExport={exportAttendees}
+                    onExport={canExport ? exportAttendees : undefined}
                     onVoidTicket={voidTicketAction}
                     onUnvoidTicket={unvoidTicketAction}
                     onRedeemTicket={redeemTicketAction}

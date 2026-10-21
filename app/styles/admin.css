@@ -311,6 +311,18 @@
     border: var(--admin-field-border);
 }
 
+/* A user with no photo: their initial, rather than a broken image. */
+.admin-user-avatar-initial {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--color-primary);
+    font-size: 17px;
+    font-weight: 700;
+}
+
 .admin-user-info {
     flex: 1;
     min-width: 0;
@@ -397,6 +409,12 @@
     border-radius: 50%;
     border: 3px solid var(--color-primary);
     object-fit: cover;
+}
+
+/* The wrapper sets line-height 0 for the photo; the letter needs its own. */
+.admin-detail-avatar.admin-user-avatar-initial {
+    font-size: 26px;
+    line-height: 1;
 }
 
 .admin-detail-avatar-wrapper {
@@ -872,8 +890,22 @@
         font-size: 13px;
     }
 
+    /* One row that scrolls sideways rather than a column of nine, out to the
+       screen's edges so a tab cut off there shows there are more. */
     .admin-tabs {
-        flex-direction: column;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        margin: 16px calc(-1 * max(16px, env(safe-area-inset-right))) 20px calc(-1 * max(16px, env(safe-area-inset-left)));
+        padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+        scrollbar-width: none;
+    }
+
+    .admin-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .admin-tab {
+        padding: 8px 18px;
     }
 
     .admin-event-grid {
@@ -1479,8 +1511,10 @@
     color: #fff;
 }
 
+/* Wraps on a phone, where an event's four actions don't fit one row. */
 .admin-form-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     align-items: center;
 }
@@ -1633,6 +1667,7 @@
 
 .admin-btn-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     align-items: center;
 }
@@ -2470,6 +2505,12 @@
     font-style: italic;
 }
 
+/* Upright even after "No email", so the number reads as one. */
+.admin-tickets-attendee-number {
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+}
+
 .admin-tickets-attendee-stats {
     display: flex;
     flex-wrap: wrap;
@@ -2853,6 +2894,19 @@ select.admin-tickets-tag:focus {
     cursor: not-allowed;
 }
 
+/* A ticket row's actions, at the row's end. */
+.admin-tickets-ticket-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.admin-tickets-ticket-btn {
+    padding: 2px 8px;
+    font-size: 12px;
+}
+
 .admin-tickets-redeemed-meta {
     font-size: 12px;
     color: var(--color-text);
@@ -2901,13 +2955,6 @@ select.admin-tickets-tag:focus {
 .admin-tickets-import-file-row input[type="file"] {
     font-size: 13px;
     color: var(--color-text);
-}
-
-.admin-tickets-import-filename {
-    font-size: 13px;
-    color: var(--color-text-muted);
-    font-style: italic;
-    word-break: break-all;
 }
 
 .admin-tickets-import-errors {
@@ -3275,6 +3322,9 @@ select.admin-tickets-tag:focus {
     overflow: hidden;
     border: 2px solid rgba(255, 107, 157, 0.25);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+    /* Scrolled into view as the camera starts: clear of the fixed nav, with its
+       button row below it in view too. */
+    scroll-margin: 84px 0 72px;
 }
 
 .admin-tickets-scanner-video {
@@ -3295,10 +3345,6 @@ select.admin-tickets-tag:focus {
     font-weight: 600;
     letter-spacing: 0.5px;
     text-transform: uppercase;
-}
-
-.admin-tickets-scanner .admin-btn-row {
-    flex-wrap: wrap;
 }
 
 /* How the door treats HomeTown tickets missing from the list, kept current. */
@@ -3360,6 +3406,16 @@ select.admin-tickets-tag:focus {
 
 .admin-tickets-scanner-manual-row .admin-toggle-btn {
     flex-shrink: 0;
+}
+
+/* Scrolled into view as a result shows: clear of the fixed nav above, and off
+   the screen's bottom edge. Empty, it takes no gap in the scanner's column. */
+.admin-tickets-scan-result {
+    scroll-margin: 84px 0 16px;
+}
+
+.admin-tickets-scan-result:empty {
+    display: none;
 }
 
 .admin-tickets-scan-banner {
@@ -3586,6 +3642,95 @@ select.admin-tickets-tag:focus {
     .admin-data-table th,
     .admin-data-table td {
         padding: 8px 8px;
+    }
+
+    /* An attendee's tickets as cards, not a table to scroll sideways: number, ID
+       and type on top, then a labelled line each, the note, and the actions as
+       buttons big enough for a thumb. */
+    .admin-tickets-table,
+    .admin-tickets-table tbody {
+        display: block;
+        background: none;
+    }
+
+    .admin-tickets-table thead {
+        display: none;
+    }
+
+    .admin-tickets-table tr {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px 10px;
+        margin-bottom: 10px;
+        padding: 12px 14px;
+        background: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(255, 107, 157, 0.12);
+        border-radius: 12px;
+    }
+
+    .admin-tickets-table tbody tr:last-child {
+        margin-bottom: 0;
+    }
+
+    .admin-tickets-table td,
+    .admin-tickets-table tbody tr:last-child td {
+        padding: 0;
+        border: none;
+    }
+
+    .admin-tickets-cell-index {
+        color: var(--color-text-muted);
+        font-weight: 700;
+    }
+
+    .admin-tickets-table td[data-label] {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        text-align: right;
+    }
+
+    .admin-tickets-table td[data-label]::before {
+        content: attr(data-label);
+        flex-shrink: 0;
+        color: var(--color-text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+    }
+
+    /* Over td[data-label]: the note takes the card's width, under its label. */
+    .admin-tickets-table td.admin-tickets-cell-notes {
+        display: block;
+        text-align: left;
+    }
+
+    .admin-tickets-table .admin-tickets-cell-notes::before {
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .admin-tickets-table .admin-tickets-notes,
+    .admin-tickets-table .admin-tickets-notes-input {
+        min-width: 0;
+    }
+
+    .admin-tickets-cell-actions {
+        grid-column: 1 / -1;
+    }
+
+    .admin-tickets-ticket-actions > * {
+        flex: 1;
+    }
+
+    .admin-tickets-table .admin-tickets-ticket-btn,
+    .admin-tickets-table .admin-tickets-void-btn {
+        padding: 10px 14px;
+        font-size: 14px;
     }
 
     .admin-tickets-scanner-manual-row {
@@ -6469,17 +6614,6 @@ select.admin-tickets-tag:focus {
 }
 
 /* Stands in for a missing photo at avatar size: the holder's first letter. */
-.admin-passport-holder-initial {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 107, 157, 0.12);
-    color: var(--color-primary);
-    font-size: 17px;
-    font-weight: 700;
-}
-
 .admin-passport-holder-lines {
     flex: 1;
     display: flex;

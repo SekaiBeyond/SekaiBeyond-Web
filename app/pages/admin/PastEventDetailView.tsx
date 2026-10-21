@@ -156,7 +156,9 @@ export const PastEventDetailView = ({
             </button>
 
             <div className="admin-event-detail-header">
-                <img src={event.icon} alt="" className="admin-event-detail-img"/>
+                {event.icon && (
+                    <img src={event.icon} alt="" className="admin-event-detail-img"/>
+                )}
                 <div>
                     <h3>{isEnglish ? event.title : (event.titleCn || event.title)}</h3>
                     <p className="admin-event-detail-meta">

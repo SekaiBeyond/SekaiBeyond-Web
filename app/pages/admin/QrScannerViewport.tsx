@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, type Ref } from 'react';
 import type { QrScanner } from '~/lib/useQrScanner';
 
 interface QrScannerViewportProps {
@@ -6,6 +6,8 @@ interface QrScannerViewportProps {
     isEnglish: boolean;
     /** Disables the "Start Camera" button (e.g. while a scan is in flight). */
     startDisabled?: boolean;
+    /** The camera's frame, for a caller that brings it into view. */
+    viewportRef?: Ref<HTMLDivElement>;
     /** Extra controls rendered in the button row, after Start/Stop. */
     children?: ReactNode;
 }
@@ -15,11 +17,11 @@ interface QrScannerViewportProps {
  * {@link useQrScanner}. The caller decides what a code means and renders the
  * result.
  */
-export function QrScannerViewport({scanner, isEnglish, startDisabled, children}: QrScannerViewportProps) {
+export function QrScannerViewport({scanner, isEnglish, startDisabled, viewportRef, children}: QrScannerViewportProps) {
     const {videoRef, canvasRef, cameraActive, cameraError, startCamera, stopCamera} = scanner;
     return (
         <>
-            <div className="admin-tickets-scanner-viewport">
+            <div ref={viewportRef} className="admin-tickets-scanner-viewport">
                 <video ref={videoRef} playsInline muted className="admin-tickets-scanner-video"/>
                 <canvas ref={canvasRef} hidden/>
                 {!cameraActive && (

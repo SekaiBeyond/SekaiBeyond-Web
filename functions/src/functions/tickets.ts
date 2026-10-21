@@ -19,7 +19,7 @@ import { RESEND_API_KEY, type ResendEnvelope, ResendSendError, sendEmails } from
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 import { EMAIL_RE, sanitizeDisplayText, validateDocId, validateEmail, validateStr } from "../utils/validation";
 import { recordDoc, recordRef } from "../utils/records";
-import { hometownAttendeeId, isHometownTicketId, isScannedTicket } from "../utils/tickets";
+import { hometownAttendeeId, isCheckedInWalkIn, isHometownTicketId, isScannedTicket } from "../utils/tickets";
 
 function validateTicketCount(value: unknown): number {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 50) {
@@ -1564,7 +1564,8 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
                     newName: name,
                 }));
             }
-            return {updated: true, regenerated: false, notes};
+            // Left out rather than undefined, which a callable sends as null.
+            return {updated: true, regenerated: false, ...(notes !== undefined && {notes})};
         }
 
         const {tickets: freshTickets, ticketIds} = buildFreshTickets(ticketCount, type, notes);
@@ -1815,12 +1816,18 @@ export const sendTicketEmails = onCall(
             queriedCount = filtered.length;
         } else if (mode === "unsent") {
             // A drain: processed attendees leave the result set. createdAt order keeps
-            // chunks FIFO on the (emailSent, createdAt) index.
-            const snap = await attendeesCol
+            // chunks FIFO on the (emailSent, createdAt) index. The cursor steps past
+            // the ones passed by and left in it, checked-in walk-ins, so however many
+            // there are they never hold up the rest.
+            let q = attendeesCol
                 .where("emailSent", "==", false)
                 .orderBy("createdAt", "asc")
-                .limit(chunkSize)
-                .get();
+                .limit(chunkSize);
+            if (cursor) {
+                const after = await attendeesCol.doc(cursor).get();
+                if (after.exists) q = q.startAfter(after);
+            }
+            const snap = await q.get();
             targets = snap.docs;
             queriedCount = snap.docs.length;
         } else {
@@ -1884,6 +1891,10 @@ export const sendTicketEmails = onCall(
             const data = target.data();
             // HomeTown emailed these itself; ours would be a second, different QR.
             if (data.source === "hometown") continue;
+            // Already in at the door, so nothing is owed them. Left unsent rather
+            // than marked, so a reset ticket brings them back; Resend Email still
+            // sends to one on purpose.
+            if (mode === "unsent" && isCheckedInWalkIn(data)) continue;
             const rawTickets: any[] = data.tickets ?? [];
             const activeTickets = rawTickets.filter(t => !t.voided);
 
@@ -2118,7 +2129,7 @@ export const sendTicketEmails = onCall(
         // attendeeIds the client does the chunking.
         const hasMore = !attendeeIds && (queriedCount >= chunkSize || handled < targets.length);
         const resumeAfter = handled > 0 ? targets[handled - 1].id : cursor;
-        const nextCursor = mode === "all" && hasMore && resumeAfter ? resumeAfter : undefined;
+        const nextCursor = hasMore && resumeAfter ? resumeAfter : undefined;
 
         return {sentCount, queuedCount, hasMore, ...(nextCursor ? {nextCursor} : {})};
     });

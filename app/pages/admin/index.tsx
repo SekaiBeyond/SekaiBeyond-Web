@@ -48,7 +48,11 @@ export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
     const {pastEvents: rawPastEvents, refresh: refreshEvents} = usePastEvents();
-    const {upcomingEvents: allUpcomingEvents, refresh: refreshAllUpcoming} = useAllUpcomingEvents();
+    // Only staff and above may read the whole collection; for anyone else the
+    // read is refused, so it isn't made.
+    const {upcomingEvents: allUpcomingEvents, refresh: refreshAllUpcoming} = useAllUpcomingEvents(
+        !!profile && hasPermission(profile.group, 'staff'),
+    );
     // Per-ID fetch for event-staff: avoids collection-level permission errors.
     const staffEventIds = profile?.eventStaffEvents ?? [];
     const {
@@ -79,6 +83,19 @@ export const AdminPage = () => {
     const setActiveTab = (tab: Tab) => {
         if (confirmExit()) selectTab(tab);
     };
+    const activeTabRef = useRef<HTMLButtonElement>(null);
+    // On a phone the tabs scroll sideways: keep the open one in view, scrolling
+    // only the row, never the page.
+    useEffect(() => {
+        const tab = activeTabRef.current;
+        const row = tab?.parentElement;
+        if (!tab || !row) return;
+        const rowBox = row.getBoundingClientRect();
+        const tabBox = tab.getBoundingClientRect();
+        if (tabBox.left < rowBox.left || tabBox.right > rowBox.right) {
+            row.scrollLeft += tabBox.left - rowBox.left - (rowBox.width - tabBox.width) / 2;
+        }
+    }, [activeTab]);
     const [upcomingInDetail, setUpcomingInDetail] = useState(false);
     const [eventsInDetail, setEventsInDetail] = useState(false);
     const [badgeDefs, setBadgeDefs] = useState<BadgeDef[]>([]);
@@ -264,6 +281,7 @@ export const AdminPage = () => {
                         return (
                             <button
                                 key={tab.id}
+                                ref={activeTab === tab.id ? activeTabRef : null}
                                 className={`admin-tab ${activeTab === tab.id ? 'admin-tab-active' : ''}`}
                                 onClick={() => setActiveTab(tab.id)}
                             >

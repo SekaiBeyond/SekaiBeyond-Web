@@ -33,6 +33,7 @@ import type { BadgeDef, UserRecord } from './types';
 import { validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 import { MembershipSection } from './MembershipSection';
+import { UserAvatar } from './UserRow';
 
 interface UserDetailViewProps {
     userRecord: UserRecord;
@@ -387,11 +388,14 @@ export const UserDetailView = ({
             <div className="admin-detail-header">
                 <div
                     className={`admin-detail-avatar-wrapper${canEditProfile ? ' admin-detail-avatar-editable' : ''}${photoBusy ? ' admin-detail-avatar-saving' : ''}`}>
-                    <img src={userRecord.photoURL} alt="" className="admin-detail-avatar"
-                         referrerPolicy="no-referrer"
-                         onClick={canEditProfile
-                             ? () => !photoBusy && fileInputRef.current?.click()
-                             : undefined}/>
+                    <UserAvatar
+                        photoURL={userRecord.photoURL}
+                        displayName={userRecord.displayName}
+                        className="admin-detail-avatar"
+                        onClick={canEditProfile
+                            ? () => !photoBusy && fileInputRef.current?.click()
+                            : undefined}
+                    />
                     {canEditProfile && (
                         <>
                             <div
@@ -726,8 +730,9 @@ export const UserDetailView = ({
 
             <h4 className="admin-badges-title">
                 {isEnglish ? 'Events Attended' : '参与活动'}
+                {/* Of the past events listed: attendedEvents also holds ones still to be archived. */}
                 <span className="admin-badges-count">
-                    {userRecord.attendedEvents.length}/{pastEvents.length}
+                    {pastEvents.filter(e => userRecord.attendedEvents.includes(e.id)).length}/{pastEvents.length}
                 </span>
             </h4>
 
@@ -736,7 +741,10 @@ export const UserDetailView = ({
                     const has = userRecord.attendedEvents.includes(event.id);
                     return (
                         <div key={event.id} className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
-                            <img src={event.icon} alt="" className="admin-badge-img"/>
+                            {/* An empty tile for one archived without a poster, keeping the rows aligned. */}
+                            {event.icon
+                                ? <img src={event.icon} alt="" className="admin-badge-img"/>
+                                : <span className="admin-badge-img admin-no-poster" aria-hidden="true"/>}
                             <div className="admin-badge-info">
                                 <span className="admin-badge-name">
                                     {isEnglish ? event.title : (event.titleCn || event.title)}

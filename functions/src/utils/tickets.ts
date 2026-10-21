@@ -9,6 +9,17 @@ export function isScannedTicket(raw: unknown): boolean {
 }
 
 /**
+ * A walk-in whose every live ticket is checked in: a ticket email would carry
+ * nothing they can use, so Send Unsent passes them by. Mirrors checkedInWalkIn
+ * in app/pages/admin/tickets/helpers.ts.
+ */
+export function isCheckedInWalkIn(data: {walkIn?: unknown; tickets?: unknown}): boolean {
+    if (data.walkIn !== true || !Array.isArray(data.tickets)) return false;
+    const live = data.tickets.filter(t => (t as {voided?: unknown} | null)?.voided !== true);
+    return live.length > 0 && live.every(isScannedTicket);
+}
+
+/**
  * A HomeTown ticket number: its QR holds just these 12 digits, with no event or
  * signature, so an unknown one can't be told from a fake. Ours are UUIDs, so
  * the two never collide. Mirrors app/pages/admin/tickets/hometown.ts.

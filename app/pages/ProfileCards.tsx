@@ -72,8 +72,12 @@ interface CollectionPrompt {
     action: ReactNode;
 }
 
-/** How each of your collections fills up, and the button that starts it. */
-function useCollectionPrompts(): Record<CollectionKind, CollectionPrompt> {
+/**
+ * How each of your collections fills up, and the button that starts it.
+ * `checkedIn`: you're checked in at an event still on, which only shows up here
+ * once it wraps up, so the events prompt says that rather than to check in.
+ */
+function useCollectionPrompts(checkedIn: boolean): Record<CollectionKind, CollectionPrompt> {
     const {isEnglish} = useLanguage();
     // With nothing scheduled the home page hides its upcoming section, so point
     // at past events instead.
@@ -82,10 +86,16 @@ function useCollectionPrompts(): Record<CollectionKind, CollectionPrompt> {
     return {
         events: {
             icon: FiCalendar,
-            title: isEnglish ? 'Check in at an event' : '参加一场活动',
-            how: isEnglish
-                ? 'Check in at a club event — with its QR code or your ticket — and it shows up here.'
-                : '在社团活动现场签到（扫描活动二维码或出示门票），活动就会显示在这里。',
+            title: checkedIn
+                ? (isEnglish ? 'You’re checked in' : '你已签到')
+                : (isEnglish ? 'Check in at an event' : '参加一场活动'),
+            how: checkedIn
+                ? (isEnglish
+                    ? 'The event you checked in to shows up here once it wraps up.'
+                    : '你签到的活动结束后会显示在这里。')
+                : (isEnglish
+                    ? 'Check in at a club event — with its QR code or your ticket — and it shows up here.'
+                    : '在社团活动现场签到（扫描活动二维码或出示门票），活动就会显示在这里。'),
             none: isEnglish ? 'No events yet.' : '还没有参加过活动。',
             action: hasActive ? (
                 <ProfileAction to="/#upcoming">
@@ -127,8 +137,8 @@ function useCollectionPrompts(): Record<CollectionKind, CollectionPrompt> {
 }
 
 /** Your own empty section: what it is waiting for, and the button that starts it. */
-const OwnEmptyNote = ({kind}: {kind: CollectionKind}) => {
-    const prompt = useCollectionPrompts()[kind];
+const OwnEmptyNote = ({kind, checkedIn}: {kind: CollectionKind; checkedIn: boolean}) => {
+    const prompt = useCollectionPrompts(checkedIn)[kind];
     return (
         <ProfileCardNote icon={prompt.icon} action={prompt.action}>
             <strong>{prompt.none}</strong> {prompt.how}
@@ -143,12 +153,26 @@ export type SectionState = 'loading' | 'failed' | 'private' | 'empty' | 'filled'
  * One collection: its grid under a counted title, or a single note. Your own
  * empty one says how to fill it.
  */
-export const ProfileSection = ({kind, title, state, count, own, icon = FiAward, none, hidden, failed, children}: {
+export const ProfileSection = ({
+                                   kind,
+                                   title,
+                                   state,
+                                   count,
+                                   own,
+                                   checkedIn = false,
+                                   icon = FiAward,
+                                   none,
+                                   hidden,
+                                   failed,
+                                   children,
+                               }: {
     kind: CollectionKind;
     title: string;
     state: SectionState;
     count: number;
     own: boolean;
+    /** You're checked in at an event still on; see useCollectionPrompts. */
+    checkedIn?: boolean;
     /** Leads the note on someone else's empty section. */
     icon?: IconType;
     /** Someone else's empty section. */
@@ -164,7 +188,7 @@ export const ProfileSection = ({kind, title, state, count, own, icon = FiAward, 
             : state === 'loading' ? <div className="spinner spinner-centered"/>
                 : state === 'failed' ? <ProfileCardNote icon={FiAlertCircle} muted>{failed}</ProfileCardNote>
                     : state === 'private' ? <ProfileCardNote icon={FiLock} muted>{hidden}</ProfileCardNote>
-                        : own ? <OwnEmptyNote kind={kind}/>
+                        : own ? <OwnEmptyNote kind={kind} checkedIn={checkedIn}/>
                             : <ProfileCardNote icon={icon} muted>{none}</ProfileCardNote>}
     </ProfileCard>
 );
@@ -175,9 +199,9 @@ const WELCOME_ORDER: CollectionKind[] = ['events', 'badges', 'passports'];
  * A brand-new account's profile: one card of the three ways in, gone once any
  * of them has something.
  */
-export const ProfileWelcome = () => {
+export const ProfileWelcome = ({checkedIn = false}: {checkedIn?: boolean}) => {
     const {isEnglish} = useLanguage();
-    const prompts = useCollectionPrompts();
+    const prompts = useCollectionPrompts(checkedIn);
 
     return (
         <section className="profile-welcome">

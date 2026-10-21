@@ -7,6 +7,23 @@ interface UserRowProps {
     children?: ReactNode;
 }
 
+/** A user's photo, or their initial when they have none, rather than a broken image. */
+export function UserAvatar({photoURL, displayName, className = 'admin-user-avatar', onClick}: {
+    photoURL: string;
+    displayName: string;
+    /** The size and frame; the list avatar's by default. */
+    className?: string;
+    onClick?: () => void;
+}) {
+    return photoURL ? (
+        <img src={photoURL} alt="" className={className} referrerPolicy="no-referrer" onClick={onClick}/>
+    ) : (
+        <span className={`${className} admin-user-avatar-initial`} aria-hidden="true" onClick={onClick}>
+            {Array.from(displayName.trim())[0]?.toUpperCase() ?? '?'}
+        </span>
+    );
+}
+
 /** The avatar + name + email row every admin user list is built from. */
 export function UserRow({user, onClick, children}: UserRowProps) {
     return (
@@ -22,8 +39,7 @@ export function UserRow({user, onClick, children}: UserRowProps) {
                 }
             } : undefined}
         >
-            <img src={user.photoURL} alt="" className="admin-user-avatar"
-                 referrerPolicy="no-referrer"/>
+            <UserAvatar photoURL={user.photoURL} displayName={user.displayName}/>
             <div className="admin-user-info">
                 <div className="admin-user-name">{user.displayName}</div>
                 <div className="admin-user-email">{user.email}</div>

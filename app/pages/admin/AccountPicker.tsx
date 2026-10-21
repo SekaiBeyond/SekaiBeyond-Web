@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { UserRecord } from './types';
-import { UserRow } from './UserRow';
+import { UserAvatar, UserRow } from './UserRow';
 import { searchUsers } from './utils';
 
 interface AccountPickerProps {
@@ -54,7 +54,7 @@ export const AccountPicker = ({
             )}
             {selected ? (
                 <div className="admin-creator-selected">
-                    <img src={selected.photoURL} alt="" className="admin-user-avatar" referrerPolicy="no-referrer"/>
+                    <UserAvatar photoURL={selected.photoURL} displayName={selected.displayName}/>
                     <div>
                         <div className="admin-user-name">{selected.displayName}</div>
                         <div className="admin-user-email">{selected.email}</div>

@@ -10,8 +10,10 @@ import {
     Pie,
     PieChart,
     ResponsiveContainer,
+    Text,
     Tooltip,
     XAxis,
+    type XAxisTickContentProps,
     YAxis,
 } from 'recharts';
 import { useLanguage } from '~/components/LanguageContextProvider';
@@ -371,8 +373,10 @@ function ChartPie({data, donut}: {data: ChartDatum[]; donut?: boolean}) {
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    innerRadius={donut ? 50 : 0}
-                    outerRadius={90}
+                    // Shares of the room the legend leaves, which shrinks on a phone
+                    // as it wraps, so the labels outside the pie stay in the chart.
+                    innerRadius={donut ? '36%' : 0}
+                    outerRadius="65%"
                     paddingAngle={data.length > 1 ? 2 : 0}
                     label={(entry: {percent?: number}) => {
                         const pct = Math.round((entry.percent ?? 0) * 100);
@@ -395,15 +399,43 @@ function ChartPie({data, donut}: {data: ChartDatum[]; donut?: boolean}) {
     );
 }
 
+/**
+ * A type's name wrapped to its own bar's slot, so on a phone "Early Bird
+ * Student" stacks rather than running into its neighbours.
+ */
+const WrappedTypeTick = ({
+                             x,
+                             y,
+                             width,
+                             visibleTicksCount,
+                             payload,
+                             textAnchor,
+                             verticalAnchor,
+                             fill
+                         }: XAxisTickContentProps) => (
+    <Text
+        x={x}
+        y={y}
+        width={Number(width) / Math.max(1, visibleTicksCount)}
+        textAnchor={textAnchor}
+        verticalAnchor={verticalAnchor}
+        fill={fill}
+        fontSize={11}
+    >
+        {String(payload.value)}
+    </Text>
+);
+
 function ChartTypeStatus(
     {data, isEnglish}: {data: TypeStatusDatum[]; isEnglish: boolean},
 ) {
     return (
-        <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={data} margin={{top: 8, right: 8, left: -12, bottom: 0}}>
+        <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={data} margin={{top: 8, right: 8, left: 0, bottom: 0}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.06)"/>
-                <XAxis dataKey="name" tick={{fontSize: 11}} interval={0}/>
-                <YAxis allowDecimals={false} tick={{fontSize: 11}} width={32}/>
+                {/* Tall enough for a name wrapped to three lines. */}
+                <XAxis dataKey="name" tick={WrappedTypeTick} interval={0} height={44}/>
+                <YAxis allowDecimals={false} tick={{fontSize: 11}} width="auto"/>
                 <Tooltip/>
                 <Legend
                     verticalAlign="bottom"
@@ -456,7 +488,7 @@ function ChartTimeline(
 
     return (
         <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={data} margin={{top: 8, right: 8, left: -12, bottom: 0}}>
+            <ComposedChart data={data} margin={{top: 8, right: 8, left: 0, bottom: 0}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.06)"/>
                 <XAxis
                     dataKey="label"
@@ -464,13 +496,13 @@ function ChartTimeline(
                     interval="preserveStartEnd"
                     minTickGap={24}
                 />
-                <YAxis yAxisId="left" allowDecimals={false} tick={{fontSize: 11}} width={32}/>
+                <YAxis yAxisId="left" allowDecimals={false} tick={{fontSize: 11}} width="auto"/>
                 <YAxis
                     yAxisId="right"
                     orientation="right"
                     allowDecimals={false}
                     tick={{fontSize: 11}}
-                    width={32}
+                    width="auto"
                 />
                 <Tooltip/>
                 <Legend

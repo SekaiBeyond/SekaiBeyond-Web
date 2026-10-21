@@ -225,12 +225,12 @@ function ScanTrends({scans, platforms = []}: ScanTrendsProps) {
                 </p>
             ) : (
                 <ResponsiveContainer width="100%" height={280}>
-                    <ComposedChart data={data} margin={{top: 8, right: 8, left: -12, bottom: 0}}>
+                    <ComposedChart data={data} margin={{top: 8, right: 8, left: 0, bottom: 0}}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.06)"/>
                         <XAxis dataKey="label" tick={{fontSize: 11}} interval="preserveStartEnd" minTickGap={24}/>
-                        <YAxis yAxisId="left" allowDecimals={false} tick={{fontSize: 11}} width={32}/>
+                        <YAxis yAxisId="left" allowDecimals={false} tick={{fontSize: 11}} width="auto"/>
                         <YAxis yAxisId="right" orientation="right" allowDecimals={false} tick={{fontSize: 11}}
-                               width={32}/>
+                               width="auto"/>
                         <Tooltip/>
                         {/* Legend in stack order with Cumulative last; the default sorts by name. */}
                         <Legend verticalAlign="top" iconType="circle" wrapperStyle={{fontSize: '12px'}}

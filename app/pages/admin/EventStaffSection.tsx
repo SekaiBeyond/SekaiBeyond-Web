@@ -25,12 +25,21 @@ export function EventStaffSection({
     const {isEnglish} = useLanguage();
     const [staffList, setStaffList] = useState<UserRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loaded, setLoaded] = useState(false);
     const [busyUid, setBusyUid] = useState<string | null>(null);
+
+    // From an effect, not inside a list update, where setting the parent's state
+    // happens mid-render. Only a list that loaded, so a failed load leaves the
+    // parent's count as it was.
+    useEffect(() => {
+        if (loaded) onCountChange?.(staffList.length);
+    }, [loaded, staffList.length, onCountChange]);
 
     useEffect(() => {
         let stale = false;
         const load = async () => {
             setLoading(true);
+            setLoaded(false);
             try {
                 const db = getFirebaseDb();
                 const q = query(
@@ -40,7 +49,7 @@ export function EventStaffSection({
                 const snap = await getDocs(q);
                 if (stale) return;
                 setStaffList(snap.docs.map(docToUserRecord));
-                onCountChange?.(snap.size);
+                setLoaded(true);
             } catch {
                 if (!stale) {
                     showToast(
@@ -57,19 +66,14 @@ export function EventStaffSection({
             stale = true;
         };
         // Not keyed on isEnglish: a language toggle shouldn't refetch.
-    }, [eventId, showToast, onCountChange]);
+    }, [eventId, showToast]);
 
     const addStaff = async (user: UserRecord) => {
         setBusyUid(user.uid);
         try {
             const result = await callAssignEventStaff({targetUid: user.uid, eventId});
             const attendeeRemoved = result.data.attendeeRemoved;
-            setStaffList(prev => {
-                if (prev.some(u => u.uid === user.uid)) return prev;
-                const next = [...prev, user];
-                onCountChange?.(next.length);
-                return next;
-            });
+            setStaffList(prev => prev.some(u => u.uid === user.uid) ? prev : [...prev, user]);
             if (attendeeRemoved) onAttendeeRemoved?.();
             showToast(
                 isEnglish
@@ -83,14 +87,12 @@ export function EventStaffSection({
             );
         } catch (err) {
             const code = functionsErrorCode(err);
-            const msg = code === 'has-ticket'
-                ? (isEnglish
-                    ? `${user.displayName} has a ticket for this event. Delete their attendee record before assigning as staff.`
-                    : `${user.displayName} 已有该活动的门票，请先删除其参加者记录再设为工作人员。`)
-                : (isEnglish
+            showToast(
+                isEnglish
                     ? `Failed to add staff${code ? ` (${code})` : ''}.`
-                    : `添加失败${code ? `（${code}）` : ''}。`);
-            showToast(msg, 'error');
+                    : `添加失败${code ? `（${code}）` : ''}。`,
+                'error',
+            );
         } finally {
             setBusyUid(null);
         }
@@ -104,11 +106,7 @@ export function EventStaffSection({
         setBusyUid(user.uid);
         try {
             await callRemoveEventStaff({targetUid: user.uid, eventId});
-            setStaffList(prev => {
-                const next = prev.filter(u => u.uid !== user.uid);
-                onCountChange?.(next.length);
-                return next;
-            });
+            setStaffList(prev => prev.filter(u => u.uid !== user.uid));
             showToast(
                 isEnglish ? `${user.displayName} removed from event staff.` : `已撤销 ${user.displayName} 的权限。`,
                 'warning',

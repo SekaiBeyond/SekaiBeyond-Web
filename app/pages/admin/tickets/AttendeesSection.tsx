@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ShowToast } from '../utils';
-import { ticketStatusCounts } from './helpers';
+import { checkedInWalkIn, ticketStatusCounts, ticketTypeCounts } from './helpers';
 import {
     anonymousAttendeeName,
     type AttendeeData,
@@ -36,8 +36,8 @@ interface AttendeesSectionProps {
     walkIn: boolean;
     onEdit: (a: AttendeeData) => void;
     onAdd: () => void;
-    /** Downloads every attendee, whatever the filters show. */
-    onExport: () => void;
+    /** Downloads every attendee, whatever the filters show. Left out for those who may not. */
+    onExport?: () => void;
     onVoidTicket: (a: AttendeeData, ticketId: string) => void;
     onUnvoidTicket: (a: AttendeeData, ticketId: string) => void;
     onRedeemTicket: (a: AttendeeData, ticketId: string) => void;
@@ -151,22 +151,25 @@ export function AttendeesSection({
                             ].filter(Boolean).join('，')}）`)}
                     </span>
                 )}
-                <button
-                    className="admin-toggle-btn admin-toggle-save admin-tickets-refresh"
-                    onClick={onAdd}
-                    disabled={readOnly}
-                >
-                    {walkIn
-                        ? (isEnglish ? 'Add Walk-in' : '现场登记')
-                        : (isEnglish ? 'Add Attendee' : '添加参加者')}
-                </button>
-                <button
-                    className="admin-toggle-btn admin-toggle-edit"
-                    onClick={onExport}
-                    disabled={loading || totals.attendees === 0}
-                >
-                    {isEnglish ? 'Export All' : '导出全部'}
-                </button>
+                {!readOnly && (
+                    <button
+                        className="admin-toggle-btn admin-toggle-save admin-tickets-refresh"
+                        onClick={onAdd}
+                    >
+                        {walkIn
+                            ? (isEnglish ? 'Add Walk-in' : '现场登记')
+                            : (isEnglish ? 'Add Attendee' : '添加参加者')}
+                    </button>
+                )}
+                {onExport && (
+                    <button
+                        className="admin-toggle-btn admin-toggle-edit"
+                        onClick={onExport}
+                        disabled={loading || totals.attendees === 0}
+                    >
+                        {isEnglish ? 'Export All' : '导出全部'}
+                    </button>
+                )}
                 <button
                     className="admin-toggle-btn admin-toggle-edit"
                     onClick={onRefresh}
@@ -245,9 +248,17 @@ export function AttendeesSection({
             {attendees.map((a) => {
                 const {used, voided, remaining} = ticketStatusCounts(a);
                 const isExpanded = expanded.has(a.id);
-                const ticketType = a.tickets[0]?.type || 'normal';
                 // undefined while asking; null for no account.
                 const account = accountLinks.get(a.email.toLowerCase());
+                // Nothing to send without an address, HomeTown sends its own, and a
+                // walk-in already in at the door is owed nothing.
+                const emailState = !a.email || a.hometown ? null
+                    : a.emailScheduled ? 'queued'
+                        : a.emailSent ? 'sent'
+                            : checkedInWalkIn(a) ? null : 'unsent';
+                // A buyer with several HomeTown tickets has a row for each, told
+                // apart by number; a nameless, emailless one already leads with it.
+                const hometownNumber = a.hometown && (a.name || a.email) ? a.ticketIds[0] : '';
                 return (
                     <div key={a.id} className="admin-tickets-attendee-row">
                         <div
@@ -261,7 +272,12 @@ export function AttendeesSection({
                                     {a.name || a.email || anonymousAttendeeName(a, isEnglish)}
                                 </div>
                                 {a.name && a.email
-                                    ? <div className="admin-user-email">{a.email}</div>
+                                    ? (
+                                        <div className="admin-user-email">
+                                            {a.email}
+                                            {hometownNumber && <HometownNumber number={hometownNumber}/>}
+                                        </div>
+                                    )
                                     : (
                                         <div className="admin-user-email admin-tickets-attendee-no-name">
                                             {a.email
@@ -269,6 +285,7 @@ export function AttendeesSection({
                                                 : a.name
                                                     ? (isEnglish ? 'No email' : '未填写邮箱')
                                                     : (isEnglish ? 'No name or email' : '未填写姓名和邮箱')}
+                                            {hometownNumber && <HometownNumber number={hometownNumber}/>}
                                         </div>
                                     )}
                             </div>
@@ -291,15 +308,17 @@ export function AttendeesSection({
                                         {isEnglish ? 'Not in latest export' : '不在最新导出中'}
                                     </span>
                                 )}
-                                {/* An unlisted HomeTown ticket's type isn't known until an import lists it. */}
-                                {!a.unlisted && (
+                                {/* An unlisted HomeTown ticket's type isn't known until an import
+                                    lists it; tickets changed one by one can hold several. */}
+                                {!a.unlisted && ticketTypeCounts(a).map(([type]) => (
                                     <span
-                                        className={`admin-tickets-tag admin-tickets-tag-type-${ticketType.toLowerCase().replace(/\s+/g, '-')}`}>
-                                        {ticketTypeLabel(ticketType, isEnglish)}
+                                        key={type}
+                                        className={`admin-tickets-tag admin-tickets-tag-type-${type.toLowerCase().replace(/\s+/g, '-')}`}>
+                                        {ticketTypeLabel(type, isEnglish)}
                                     </span>
-                                )}
+                                ))}
                                 <span className="admin-tickets-attendee-count">
-                                    {a.ticketCount} {isEnglish ? 'tickets' : '张'}
+                                    {a.ticketCount} {isEnglish ? (a.ticketCount === 1 ? 'ticket' : 'tickets') : '张'}
                                 </span>
                                 {used > 0 && (
                                     <span className="admin-tickets-tag admin-tickets-tag-used">
@@ -316,20 +335,15 @@ export function AttendeesSection({
                                         {isEnglish ? 'Fresh' : '未使用'}
                                     </span>
                                 )}
-                                {/* Nothing to send without an address, and HomeTown sends its own. */}
-                                {a.email && !a.hometown && <span className={
-                                                                     a.emailScheduled
-                                                                         ? 'admin-tickets-tag admin-tickets-tag-queued'
-                                                                         : a.emailSent
-                                                                             ? 'admin-tickets-tag admin-tickets-tag-sent'
-                                                                             : 'admin-tickets-tag admin-tickets-tag-unsent'
-                                                                 }>
-                                    {a.emailScheduled
-                                        ? (isEnglish ? 'Queued' : '待发送')
-                                        : a.emailSent
-                                            ? (isEnglish ? 'Sent' : '已发送')
-                                            : (isEnglish ? 'Unsent' : '未发送')}
-                                </span>}
+                                {emailState && (
+                                    <span className={`admin-tickets-tag admin-tickets-tag-${emailState}`}>
+                                        {emailState === 'queued'
+                                            ? (isEnglish ? 'Queued' : '待发送')
+                                            : emailState === 'sent'
+                                                ? (isEnglish ? 'Sent' : '已发送')
+                                                : (isEnglish ? 'Unsent' : '未发送')}
+                                    </span>
+                                )}
                                 {account !== undefined && (
                                     <span className={account
                                         ? 'admin-tickets-tag admin-tickets-tag-linked'
@@ -377,9 +391,13 @@ export function AttendeesSection({
                                 )}
                                 <p className="admin-helper-text admin-tickets-attendee-account">
                                     {!a.email
-                                        ? (isEnglish
-                                            ? 'No email, so no tickets can be sent and no account is credited.'
-                                            : '未填写邮箱，因此无法发送门票，也不会计入任何账户。')
+                                        ? a.hometown
+                                            ? (isEnglish
+                                                ? 'No email, so no account is credited.'
+                                                : '未填写邮箱，因此不会计入任何账户。')
+                                            : (isEnglish
+                                                ? 'No email, so no tickets can be sent and no account is credited.'
+                                                : '未填写邮箱，因此无法发送门票，也不会计入任何账户。')
                                         : account === undefined
                                             ? (isEnglish ? 'Checking for an account…' : '正在查询账户…')
                                             : account
@@ -402,6 +420,13 @@ export function AttendeesSection({
                                         )
                                         : (isEnglish ? 'their profile.' : '该用户主页。'))}
                                 </p>
+                                {a.email && !a.hometown && !a.emailSent && checkedInWalkIn(a) && (
+                                    <p className="admin-helper-text">
+                                        {isEnglish
+                                            ? 'Checked in at the door, so Send Unsent passes them by. Resend Email still sends their tickets.'
+                                            : '已在现场签到，因此"发送未发送"会跳过此人。"重发邮件"仍可发送其门票。'}
+                                    </p>
+                                )}
                                 {!readOnly && (
                                     <div className="admin-tickets-attendee-actions">
                                         <button
@@ -431,7 +456,8 @@ export function AttendeesSection({
                                     </div>
                                 )}
                                 <div className="admin-data-table-wrap">
-                                    <table className="admin-data-table">
+                                    {/* On a phone each row is a card, its cells labelled from data-label. */}
+                                    <table className="admin-data-table admin-tickets-table">
                                         <thead>
                                         <tr>
                                             <th>#</th>
@@ -441,14 +467,14 @@ export function AttendeesSection({
                                             <th>{isEnglish ? 'Created' : '创建时间'}</th>
                                             <th>{isEnglish ? 'Redeemed By' : '验证人'}</th>
                                             <th>{isEnglish ? 'Notes' : '备注'}</th>
-                                            <th></th>
+                                            {!readOnly && <th></th>}
                                         </tr>
                                         </thead>
                                         <tbody>
                                         {a.tickets.map((t, i) => (
                                             <tr key={t.ticketId}>
-                                                <td>{i + 1}</td>
-                                                <td>
+                                                <td className="admin-tickets-cell-index">{i + 1}</td>
+                                                <td className="admin-tickets-cell-id">
                                                     <button
                                                         type="button"
                                                         className="admin-tickets-ticket-id"
@@ -471,7 +497,7 @@ export function AttendeesSection({
                                                         )}
                                                     </button>
                                                 </td>
-                                                <td>
+                                                <td className="admin-tickets-cell-type">
                                                     {a.unlisted ? '—' : readOnly ? (
                                                         <span
                                                             className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}>
@@ -498,7 +524,7 @@ export function AttendeesSection({
                                                         </select>
                                                     )}
                                                 </td>
-                                                <td>
+                                                <td data-label={isEnglish ? 'Status' : '状态'}>
                                                     {t.voided ? (
                                                         <span className="admin-tickets-tag admin-tickets-tag-voided">
                                                         {isEnglish ? 'Voided' : '作废'}
@@ -513,7 +539,7 @@ export function AttendeesSection({
                                                     </span>
                                                     )}
                                                 </td>
-                                                <td>
+                                                <td data-label={isEnglish ? 'Created' : '创建时间'}>
                                                     {t.createdAt ? (
                                                         <span className="admin-tickets-redeemed-meta">
                                                             {t.createdAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
@@ -523,7 +549,7 @@ export function AttendeesSection({
                                                         </span>
                                                     ) : '—'}
                                                 </td>
-                                                <td>
+                                                <td data-label={isEnglish ? 'Redeemed by' : '验证人'}>
                                                     {t.redeemed ? (
                                                         <span className="admin-tickets-redeemed-meta">
                                                         {t.redeemedByName || '—'}
@@ -540,7 +566,8 @@ export function AttendeesSection({
                                                     </span>
                                                     ) : '—'}
                                                 </td>
-                                                <td>
+                                                <td className="admin-tickets-cell-notes"
+                                                    data-label={isEnglish ? 'Notes' : '备注'}>
                                                     {readOnly ? (
                                                         t.notes ?
                                                             <span className="admin-tickets-notes">{t.notes}</span> : '—'
@@ -552,53 +579,45 @@ export function AttendeesSection({
                                                         />
                                                     )}
                                                 </td>
-                                                <td>
-                                                    {t.voided ? (
-                                                        <button
-                                                            className="admin-toggle-btn admin-toggle-save"
-                                                            onClick={() => onUnvoidTicket(a, t.ticketId)}
-                                                            disabled={readOnly}
-                                                            style={{padding: '2px 8px', fontSize: '12px'}}
-                                                        >
-                                                            {isEnglish ? 'Unvoid' : '撤销作废'}
-                                                        </button>
-                                                    ) : (
-                                                        <div className="admin-tickets-ticket-actions"
-                                                             style={{
-                                                                 display: 'flex',
-                                                                 gap: '6px',
-                                                                 justifyContent: 'flex-end',
-                                                                 flexWrap: 'wrap',
-                                                             }}>
-                                                            {t.redeemed ? (
+                                                {/* Read-only gets no actions rather than greyed-out ones. */}
+                                                {!readOnly && (
+                                                    <td className="admin-tickets-cell-actions">
+                                                        <div className="admin-tickets-ticket-actions">
+                                                            {t.voided ? (
                                                                 <button
-                                                                    className="admin-toggle-btn admin-toggle-edit"
-                                                                    onClick={() => onResetTicket(a, t.ticketId)}
-                                                                    disabled={readOnly}
-                                                                    style={{padding: '2px 8px', fontSize: '12px'}}
+                                                                    className="admin-toggle-btn admin-toggle-save admin-tickets-ticket-btn"
+                                                                    onClick={() => onUnvoidTicket(a, t.ticketId)}
                                                                 >
-                                                                    {isEnglish ? 'Reset' : '重置'}
+                                                                    {isEnglish ? 'Unvoid' : '撤销作废'}
                                                                 </button>
                                                             ) : (
-                                                                <button
-                                                                    className="admin-toggle-btn admin-toggle-save"
-                                                                    onClick={() => onRedeemTicket(a, t.ticketId)}
-                                                                    disabled={readOnly}
-                                                                    style={{padding: '2px 8px', fontSize: '12px'}}
-                                                                >
-                                                                    {isEnglish ? 'Redeem' : '验证'}
-                                                                </button>
+                                                                <>
+                                                                    {t.redeemed ? (
+                                                                        <button
+                                                                            className="admin-toggle-btn admin-toggle-edit admin-tickets-ticket-btn"
+                                                                            onClick={() => onResetTicket(a, t.ticketId)}
+                                                                        >
+                                                                            {isEnglish ? 'Reset' : '重置'}
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button
+                                                                            className="admin-toggle-btn admin-toggle-save admin-tickets-ticket-btn"
+                                                                            onClick={() => onRedeemTicket(a, t.ticketId)}
+                                                                        >
+                                                                            {isEnglish ? 'Redeem' : '验证'}
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        className="admin-tickets-void-btn"
+                                                                        onClick={() => onVoidTicket(a, t.ticketId)}
+                                                                    >
+                                                                        {isEnglish ? 'Void' : '作废'}
+                                                                    </button>
+                                                                </>
                                                             )}
-                                                            <button
-                                                                className="admin-tickets-void-btn"
-                                                                onClick={() => onVoidTicket(a, t.ticketId)}
-                                                                disabled={readOnly}
-                                                            >
-                                                                {isEnglish ? 'Void' : '作废'}
-                                                            </button>
                                                         </div>
-                                                    )}
-                                                </td>
+                                                    </td>
+                                                )}
                                             </tr>
                                         ))}
                                         </tbody>
@@ -620,6 +639,11 @@ export function AttendeesSection({
         </div>
     );
 }
+
+/** A HomeTown ticket's number after the row's second line, as printed on the buyer's ticket. */
+const HometownNumber = ({number}: {number: string}) => (
+    <span className="admin-tickets-attendee-number"> · #{number}</span>
+);
 
 /** A ticket's note, saved on Enter or leaving the field; Escape puts back the saved one. */
 function TicketNotesInput({notes, onSave, isEnglish}: {

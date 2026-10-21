@@ -254,9 +254,22 @@ export function SendSection({
 
             <div className="admin-tickets-send-stats">
                 <p>
-                    <strong>{totals.attendees}</strong> {isEnglish ? 'total attendees' : '位参加者'},{' '}
-                    <strong>{totals.sendable}</strong> {isEnglish ? 'with active tickets' : '持有有效门票'},{' '}
-                    <strong>{totals.unsentSendable}</strong> {isEnglish ? 'not yet sent' : '尚未发送'}.
+                    {isEnglish ? (
+                        <>
+                            <strong>{totals.sendable}</strong> of {totals.attendees} attendees get their tickets by
+                            email from here; <strong>{totals.unsentSendable}</strong> not sent yet.
+                        </>
+                    ) : (
+                        <>
+                            {totals.attendees} 位参加者中有 <strong>{totals.sendable}</strong> 位通过此处接收门票邮件，其中{' '}
+                            <strong>{totals.unsentSendable}</strong> 位尚未发送。
+                        </>
+                    )}
+                </p>
+                <p className="admin-helper-text">
+                    {isEnglish
+                        ? 'HomeTown buyers get theirs from HomeTown, and walk-ins without an email can\'t be sent any. Send Unsent also passes by walk-ins already checked in at the door.'
+                        : 'HomeTown 购票者的门票由 HomeTown 发送，未填写邮箱的现场登记者无法接收邮件。"发送未发送"也会跳过已在现场签到的现场登记者。'}
                 </p>
             </div>
 

@@ -20,6 +20,7 @@ import {
 import { addSiteDays, formatSiteTime } from '~/lib/siteTime';
 import { QrPreview } from '../tools/qr/qrExport';
 import type { UserRecord } from '../types';
+import { UserAvatar } from '../UserRow';
 import { docToUserRecord, type ShowToast } from '../utils';
 import { usePassportPngExport } from './passportExport';
 
@@ -368,15 +369,7 @@ export const PassportDetail = ({
                     className="admin-passport-holder-card"
                     onClick={() => onLookupUser(owner.uid)}
                 >
-                    {owner.photoURL ? (
-                        <img src={owner.photoURL} alt="" className="admin-user-avatar"
-                             referrerPolicy="no-referrer"/>
-                    ) : (
-                        // No photo: an initial rather than a broken image.
-                        <span className="admin-user-avatar admin-passport-holder-initial">
-                            {Array.from(owner.displayName.trim())[0]?.toUpperCase() ?? '?'}
-                        </span>
-                    )}
+                    <UserAvatar photoURL={owner.photoURL} displayName={owner.displayName}/>
                     <span className="admin-passport-holder-lines">
                         <span className="admin-passport-holder-display">{owner.displayName}</span>
                         <span className="admin-passport-holder-mail">{owner.email}</span>

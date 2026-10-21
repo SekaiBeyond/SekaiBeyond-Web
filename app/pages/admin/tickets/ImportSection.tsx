@@ -41,7 +41,6 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [rows, setRows] = useState<ParsedRow[]>([]);
     const [errors, setErrors] = useState<ParseError[]>([]);
-    const [fileName, setFileName] = useState<string>('');
     const [importing, setImporting] = useState(false);
     const [busy, setBusy] = useState(false);
 
@@ -63,7 +62,6 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
     const clearForm = () => {
         setRows([]);
         setErrors([]);
-        setFileName('');
         setRawFields([]);
         setRawRecords([]);
         setEmailCol('');
@@ -148,7 +146,6 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         const file = e.target.files?.[0];
         if (!file) return;
         setBusy(true);
-        setFileName(file.name);
         setRows([]);
         setErrors([]);
         try {
@@ -241,7 +238,6 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                     onChange={handleFile}
                     disabled={readOnly || busy}
                 />
-                {fileName && <span className="admin-tickets-import-filename">{fileName}</span>}
             </div>
 
             {rawFields.length > 0 && (

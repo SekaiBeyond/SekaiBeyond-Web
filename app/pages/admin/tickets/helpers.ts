@@ -3,7 +3,7 @@ import { buildCsv } from '~/lib/csv';
 import { sanitizeEmailHtml } from '~/lib/emailSanitize';
 import { SITE_TIME_ZONE } from '~/lib/siteTime';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
-import { type AttendeeData, type EmailTemplate, type TicketData, ticketTypeLabel } from './types';
+import { type AttendeeData, type EmailTemplate, type TicketData, type TicketType, ticketTypeLabel } from './types';
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -116,6 +116,26 @@ export const attendeeLabel = (a: Pick<AttendeeData, 'name' | 'email'>, isEnglish
     return a.name || a.email || (isEnglish ? 'this walk-in guest' : '这位现场来宾');
 };
 
+/**
+ * A walk-in whose every live ticket is checked in: a ticket email would carry
+ * nothing they can use, so Send Unsent passes them by and they don't count as
+ * unsent. Mirrors isCheckedInWalkIn in functions/src/utils/tickets.ts.
+ */
+export const checkedInWalkIn = (a: Pick<AttendeeData, 'walkIn' | 'tickets'>): boolean => {
+    const live = a.tickets.filter(t => !t.voided);
+    return a.walkIn && live.length > 0 && live.every(t => t.redeemed);
+};
+
+/**
+ * Each type the attendee's tickets hold, with how many, in ticket order: one
+ * type for most, more once a single ticket's type is changed.
+ */
+export const ticketTypeCounts = (a: Pick<AttendeeData, 'tickets'>): [TicketType, number][] => {
+    const counts = new Map<TicketType, number>();
+    for (const t of a.tickets) counts.set(t.type || 'normal', (counts.get(t.type || 'normal') ?? 0) + 1);
+    return counts.size > 0 ? [...counts] : [['normal', 0]];
+};
+
 export const ticketStatusCounts = (a: AttendeeData) => {
     let used = 0;
     let voided = 0;
@@ -138,12 +158,16 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
             'hometownTicket', 'hometownStatus', 'notes'],
         attendees.map(a => {
             const {used, voided} = ticketStatusCounts(a);
+            const types = ticketTypeCounts(a);
             return [
                 a.email,
                 a.name,
                 String(a.ticketCount),
                 // Unknown for an unlisted HomeTown ticket until an import lists it.
-                a.unlisted ? '' : ticketTypeLabel(a.tickets[0]?.type || 'normal', true),
+                // Mixed types are each counted, as "Student ×2; VIP ×1".
+                a.unlisted ? ''
+                    : types.length === 1 ? ticketTypeLabel(types[0][0], true)
+                        : types.map(([type, n]) => `${ticketTypeLabel(type, true)} ×${n}`).join('; '),
                 String(used),
                 String(voided),
                 a.email && !a.hometown ? (a.emailSent ? 'yes' : 'no') : '',

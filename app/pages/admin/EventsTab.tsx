@@ -241,7 +241,14 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                 className="admin-event-card"
                                 onClick={() => setManagedEvent(event.id)}
                             >
-                                <img src={event.icon} alt="" className="admin-event-card-img"/>
+                                {/* One archived without a poster has no image. */}
+                                {event.icon ? (
+                                    <img src={event.icon} alt="" className="admin-event-card-img"/>
+                                ) : (
+                                    <div className="admin-event-card-img admin-no-poster">
+                                        {isEnglish ? 'No poster' : '无海报'}
+                                    </div>
+                                )}
                                 <div className="admin-event-card-info">
                                     <span
                                         className="admin-event-card-title">{isEnglish ? event.title : (event.titleCn || event.title)}</span>

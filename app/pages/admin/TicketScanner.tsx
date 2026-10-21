@@ -103,10 +103,18 @@ interface TicketScannerProps {
      * warning, as it stands now. Null while it loads.
      */
     admitUnlistedHometown: boolean | null;
+    /** Core staff and above, who can import the list or change the setting themselves. */
+    canManage: boolean;
     onRedeemed: () => void;
 }
 
-export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRedeemed}: TicketScannerProps) {
+export function TicketScanner({
+                                  eventId,
+                                  eventTitle,
+                                  admitUnlistedHometown,
+                                  canManage,
+                                  onRedeemed,
+                              }: TicketScannerProps) {
     const {isEnglish} = useLanguage();
     const lastScanRef = useRef<{ticketId: string; at: number} | null>(null);
     const redeemedCacheRef = useRef<CachedRedemption[]>([]);
@@ -122,6 +130,8 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
     const {play: vibrate} = vibration;
 
     const [status, setStatus] = useState<ScanStatus>({kind: 'idle'});
+    const resultRef = useRef<HTMLDivElement>(null);
+    const viewportRef = useRef<HTMLDivElement>(null);
     const [manualTicketId, setManualTicketId] = useState('');
     const [busy, setBusy] = useState(false);
     const [leaving, setLeaving] = useState(false);
@@ -219,9 +229,13 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
             } else if (code === 'invalid') {
                 reason = isEnglish ? 'Ticket not found.' : '未找到此门票。';
             } else if (code === 'hometown-unlisted') {
-                reason = isEnglish
-                    ? 'This HomeTown ticket isn\'t on the imported list. Ask an admin to import the latest HomeTown guest list.'
-                    : '此 HomeTown 门票不在已导入的名单中。请管理员导入最新的 HomeTown 来宾名单。';
+                reason = canManage
+                    ? (isEnglish
+                        ? 'This HomeTown ticket isn\'t on the imported list. Import HomeTown\'s latest guest list, or let unlisted tickets in under Settings.'
+                        : '此 HomeTown 门票不在已导入的名单中。请导入最新的 HomeTown 来宾名单，或在"设置"中放行不在名单中的门票。')
+                    : (isEnglish
+                        ? 'This HomeTown ticket isn\'t on the imported list. Ask an admin to import the latest HomeTown guest list.'
+                        : '此 HomeTown 门票不在已导入的名单中。请管理员导入最新的 HomeTown 来宾名单。');
             } else if (code === 'hometown-other-event') {
                 const other = functionsErrorDetails<{eventTitle?: string}>(err)?.eventTitle;
                 reason = isEnglish
@@ -256,7 +270,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
             inFlightRef.current = false;
             setBusy(false);
         }
-    }, [eventId, isEnglish, onRedeemed, cue, show]);
+    }, [eventId, isEnglish, canManage, onRedeemed, cue, show]);
 
     // Redeem a code for this event, warn on another event's, ignore the rest. A
     // HomeTown QR is just its number, naming no event, so it's taken as this
@@ -284,7 +298,12 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
 
     const scanner = useQrScanner({
         onDecode,
-        onStart: () => ready(true),
+        onStart: () => {
+            ready(true);
+            // On a phone the camera opens part below the fold; bring all of it,
+            // and its buttons, into view.
+            viewportRef.current?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+        },
         onStartError: () => ready(false),
         cameraErrorMessage: isEnglish
             ? 'Camera permission denied or not available. Use manual entry below.'
@@ -306,6 +325,14 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
             setLeaving(false);
         };
     }, [status, scanner.cameraActive, ready]);
+
+    // On a phone the result lands under the camera, below the fold. Scrolled up
+    // only as far as it takes, so the camera stays in view above it; one already
+    // on screen doesn't move the page.
+    useEffect(() => {
+        if (status.kind === 'idle' || status.kind === 'scanning') return;
+        resultRef.current?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+    }, [status]);
 
     useEffect(() => {
         if (status.kind !== 'loading') return;
@@ -353,7 +380,7 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                 )}
             </p>
 
-            <QrScannerViewport scanner={scanner} isEnglish={isEnglish} startDisabled={busy}>
+            <QrScannerViewport scanner={scanner} isEnglish={isEnglish} startDisabled={busy} viewportRef={viewportRef}>
                 {status.kind !== 'idle' && status.kind !== 'scanning' && (
                     <button className="admin-toggle-btn admin-toggle-edit" onClick={clearStatus}>
                         {isEnglish ? 'Next Scan' : '继续扫描'}
@@ -381,7 +408,9 @@ export function TicketScanner({eventId, eventTitle, admitUnlistedHometown, onRed
                 </div>
             </QrScannerViewport>
 
-            <ResultBanner status={status} leaving={leaving} slow={slow} isEnglish={isEnglish}/>
+            <div ref={resultRef} className="admin-tickets-scan-result">
+                <ResultBanner status={status} leaving={leaving} slow={slow} isEnglish={isEnglish}/>
+            </div>
 
             <div className="admin-tickets-scanner-manual">
                 <label className="admin-tickets-template-field">
