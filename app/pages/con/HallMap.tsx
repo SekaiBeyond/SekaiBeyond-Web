@@ -18,7 +18,7 @@ const LANDMARK_LABELS: Record<LandmarkKind, Localized> = {
 };
 
 interface HallMapProps {
-    /** Who is at each table. A table missing from it is drawn open. */
+    /** Who is at each table. A table missing from it is open, and drawn only with `pickOpen`. */
     vendors: ReadonlyMap<string, Vendor>;
     selected: string | null;
     onSelect: (table: string) => void;
@@ -26,7 +26,7 @@ interface HallMapProps {
     onHover?: (table: string | null) => void;
     /** While a search is running, the tables it found; the rest are dimmed. */
     matches?: ReadonlySet<string> | null;
-    /** Lets an open table be picked as well — the admin panel fills them in from here. */
+    /** Draws open tables and lets them be picked — the admin panel fills them in from here. /con leaves them off. */
     pickOpen?: boolean;
     label: string;
 }
@@ -67,13 +67,11 @@ export const HallMap = ({vendors, selected, onSelect, onHover, matches, pickOpen
 
                 {HALL_TABLE_PLACES.map(({table, style}) => {
                     const vendor = vendors.get(table);
+                    if (!vendor && !pickOpen) return null;
+
                     const dimmed = !!matches && !matches.has(table);
                     const cls = `sbc-hall-table${vendor ? '' : ' sbc-hall-table--open'}${
                         dimmed ? ' sbc-hall-table--dimmed' : ''}`;
-
-                    if (!vendor && !pickOpen) {
-                        return <div key={table} className={cls} style={style} aria-hidden="true">{table}</div>;
-                    }
 
                     return (
                         <button
@@ -97,7 +95,10 @@ export const HallMap = ({vendors, selected, onSelect, onHover, matches, pickOpen
 
             <ul className="sbc-hall-legend" aria-hidden="true">
                 <li><span className="sbc-hall-swatch"/>{t({en: 'Vendor', zh: '有摊主'})}</li>
-                <li><span className="sbc-hall-swatch sbc-hall-swatch--open"/>{t({en: 'Open table', zh: '空桌'})}</li>
+                {pickOpen && (
+                    <li><span className="sbc-hall-swatch sbc-hall-swatch--open"/>{t({en: 'Open table', zh: '空桌'})}
+                    </li>
+                )}
                 <li><span className="sbc-hall-swatch sbc-hall-swatch--door"/>{t({en: 'Door', zh: '出入口'})}</li>
             </ul>
         </div>

@@ -3,13 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ConContent } from '~/lib/conContent';
 import { byHallOrder, HALL_ROWS, HALL_TABLES, type HallRow, rowOf } from '~/pages/con/hall';
 import { HallMap } from '~/pages/con/HallMap';
-import {
-    HiddenSectionNote,
-    LocalizedField,
-    type SectionProps,
-    SectionShell,
-    useSectionEditor,
-} from './conContentShared';
+import { LocalizedField, type SectionProps, SectionShell, useSectionEditor, } from './conContentShared';
 
 type VendorDraft = ConContent['vendors']['tables'][number];
 
@@ -64,14 +58,12 @@ export const VendorsSection = ({content, loading, showToast, readOnly}: SectionP
         <SectionShell
             section="vendors"
             helper={{
-                en: 'Who is at each table on the main hall floor plan, and the “want a table?” callout under it. Type a name to put a vendor at a table, or clear it to leave the table open. Click a table on the plan to jump to it. The tables themselves are fixed to HUB’s layout.',
-                zh: '主会场平面图上各桌的摊主，以及下方「想要摊位？」的提示区块。输入名称即可将摊主安排到该桌，清空则该桌空置。点击平面图上的桌位可直接跳转。桌位布局按 HUB 场地固定。',
+                en: 'Who is at each table on the main hall floor plan, and the “want a table?” callout under it. Type a name to put a vendor at a table, or clear it to leave the table open. Click a table on the plan to jump to it. Open tables are left off the plan on /con. The tables themselves are fixed to HUB’s layout.',
+                zh: '主会场平面图上各桌的摊主，以及下方「想要摊位？」的提示区块。输入名称即可将摊主安排到该桌，清空则该桌空置。点击平面图上的桌位可直接跳转。空桌不会显示在 /con 的平面图上。桌位布局按 HUB 场地固定。',
             }}
             editor={editor}
             readOnly={readOnly}
         >
-            <HiddenSectionNote content={content} section="vendors"/>
-
             <div className="admin-con-card">
                 <div className="admin-con-card-head">
                     <span className="admin-con-card-title">

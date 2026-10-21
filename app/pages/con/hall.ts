@@ -15,10 +15,10 @@ import type { CSSProperties } from 'react';
  */
 
 export const HALL_ROWS = [
-    {letter: 'A', tables: 15},
-    {letter: 'B', tables: 15},
-    {letter: 'C', tables: 15},
-    {letter: 'D', tables: 15},
+    {letter: 'A', tables: 14},
+    {letter: 'B', tables: 14},
+    {letter: 'C', tables: 14},
+    {letter: 'D', tables: 14},
     {letter: 'E', tables: 3},
 ] as const;
 
@@ -57,9 +57,9 @@ const COLUMNS: Track[] = [
     ['10px', '8px'],
     ['minmax(84px, 6fr)', '84px'], // 3: free cheering space
     ['18px', '14px'],
-    ...Array.from({length: 30}, (): Track => ['minmax(0, 1fr)', '15px']), // 5–34: tables 1–15
+    ...Array.from({length: 28}, (): Track => ['minmax(0, 1fr)', '15px']), // 5–32: tables 1–14
     ['18px', '14px'],
-    ['minmax(72px, 4.5fr)', '58px'], // 36: photo booth
+    ['minmax(72px, 4.5fr)', '58px'], // 34: photo booth
     ['12px', '10px'],
     WALL,
 ];
@@ -135,7 +135,7 @@ export type LandmarkKind = 'stage' | 'cheer' | 'booth'
 export const HALL_LANDMARKS: {kind: LandmarkKind; style: CSSProperties}[] = [
     {kind: 'stage', style: place({col: 1, colSpan: 1, row: 2, rowSpan: 7})},
     {kind: 'cheer', style: place({col: 3, colSpan: 1, row: 2, rowSpan: 7})},
-    {kind: 'booth', style: place({col: 36, colSpan: 1, row: 5, rowSpan: 5})},
+    {kind: 'booth', style: place({col: 34, colSpan: 1, row: 5, rowSpan: 5})},
 ];
 
 /**
@@ -147,10 +147,10 @@ export const HALL_DOORS: {wall: 'end' | 'side'; style: CSSProperties}[] = [
     {wall: 'end', style: place({col: 0, colSpan: 1, row: 1, rowSpan: 2})},
     {wall: 'end', style: place({col: 0, colSpan: 1, row: 9, rowSpan: 2})},
     {wall: 'side', style: place({col: 1, colSpan: 1, row: ROWS.length - 1, rowSpan: 1})},
-    {wall: 'side', style: place({col: 22, colSpan: 3, row: 0, rowSpan: 1})},
-    {wall: 'side', style: place({col: 33, colSpan: 3, row: 0, rowSpan: 1})},
+    {wall: 'side', style: place({col: 21, colSpan: 3, row: 0, rowSpan: 1})},
+    {wall: 'side', style: place({col: 31, colSpan: 3, row: 0, rowSpan: 1})},
     {wall: 'end', style: place({col: COLUMNS.length - 1, colSpan: 1, row: 2, rowSpan: 3})},
 ];
 
 /** In the free corner beside the north doors, where it reads in either orientation. */
-export const HALL_COMPASS = place({col: 36, colSpan: 1, row: 2, rowSpan: 3});
+export const HALL_COMPASS = place({col: 34, colSpan: 1, row: 2, rowSpan: 3});

@@ -39,7 +39,7 @@ export type RoomAccent = typeof ROOM_ACCENTS[number]
  * Sections an admin can hide. Each is both an anchor id and a content key, so
  * hiding one also omits its copy from the public mirror.
  */
-export const HIDEABLE_SECTIONS = ['guests', 'vendors'] as const;
+export const HIDEABLE_SECTIONS = ['guests'] as const;
 
 export type HideableSection = typeof HIDEABLE_SECTIONS[number]
 

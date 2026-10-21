@@ -72,7 +72,7 @@ export const ConPage = () => {
                 <ShareCard/>
                 {!hidden.includes('guests') && <Guests/>}
                 <MaidCafe/>
-                {!hidden.includes('vendors') && <Vendors/>}
+                <Vendors/>
                 <Faq/>
             </main>
             <Footer/>

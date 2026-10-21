@@ -166,7 +166,7 @@ export const Vendors = () => {
 
             {tables.length > 0 && (
                 <div className="sbc-vendor-directory">
-                    {/* Narrow screens only, where four rows of fifteen won't fit side by
+                    {/* Narrow screens only, where four rows of fourteen won't fit side by
                         side. A search lists every row it matched instead. */}
                     {!found && groups.length > 1 && (
                         <div

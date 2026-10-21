@@ -469,7 +469,7 @@ const CON_SECTIONS = [
 type ConSection = typeof CON_SECTIONS[number];
 
 // Mirrors HIDEABLE_SECTIONS in app/lib/conContent.ts.
-const CON_HIDEABLE_SECTIONS = ["guests", "vendors"] as const satisfies readonly ConSection[];
+const CON_HIDEABLE_SECTIONS = ["guests"] as const satisfies readonly ConSection[];
 
 // Generous against real use, but bounded so a runaway client can't grow the
 // public document indefinitely.
@@ -488,7 +488,7 @@ const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 // Mirrors HALL_TABLES in app/pages/con/hall.ts: the hall floor plan's tables, in
 // plan order. A vendor can only sit at one of these.
-const CON_HALL_TABLES = ([["A", 15], ["B", 15], ["C", 15], ["D", 15], ["E", 3]] as const)
+const CON_HALL_TABLES = ([["A", 14], ["B", 14], ["C", 14], ["D", 14], ["E", 3]] as const)
     .flatMap(([row, count]) => Array.from({length: count}, (_, i) => `${row}${i + 1}`));
 
 interface LocalizedText {
