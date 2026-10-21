@@ -97,12 +97,6 @@ const holdsLine = (status: ShownStatus): boolean => status.kind !== 'success' ||
 
 interface TicketScannerProps {
     eventId: string;
-    eventTitle: string;
-    /**
-     * Whether a HomeTown ticket missing from the imported list is let in, with a
-     * warning, as it stands now. Null while it loads.
-     */
-    admitUnlistedHometown: boolean | null;
     /** Core staff and above, who can import the list or change the setting themselves. */
     canManage: boolean;
     onRedeemed: () => void;
@@ -110,8 +104,6 @@ interface TicketScannerProps {
 
 export function TicketScanner({
                                   eventId,
-                                  eventTitle,
-                                  admitUnlistedHometown,
                                   canManage,
                                   onRedeemed,
                               }: TicketScannerProps) {
@@ -362,24 +354,6 @@ export function TicketScanner({
 
     return (
         <div className="admin-tickets-scanner">
-            <p className="admin-helper-text">
-                {isEnglish
-                    ? `Scanning tickets for "${eventTitle}". Point the camera at a ticket QR to redeem.`
-                    : `正在扫描"${eventTitle}"的门票。将摄像头对准二维码进行验证。`}
-                {admitUnlistedHometown !== null && (
-                    <span
-                        className={`admin-tickets-tag admin-tickets-scanner-mode ${admitUnlistedHometown ? 'admin-tickets-tag-unlisted' : 'admin-tickets-tag-hometown'}`}>
-                        {admitUnlistedHometown
-                            ? (isEnglish
-                                ? 'HomeTown tickets not on the imported list: let in with a warning'
-                                : '不在已导入名单中的 HomeTown 门票：提示后放行')
-                            : (isEnglish
-                                ? 'HomeTown tickets not on the imported list: refused'
-                                : '不在已导入名单中的 HomeTown 门票：拒绝')}
-                    </span>
-                )}
-            </p>
-
             <QrScannerViewport scanner={scanner} isEnglish={isEnglish} startDisabled={busy} viewportRef={viewportRef}>
                 {status.kind !== 'idle' && status.kind !== 'scanning' && (
                     <button className="admin-toggle-btn admin-toggle-edit" onClick={clearStatus}>

@@ -3347,15 +3347,6 @@ select.admin-tickets-tag:focus {
     text-transform: uppercase;
 }
 
-/* How the door treats HomeTown tickets missing from the list, kept current. */
-.admin-tickets-scanner-mode {
-    display: block;
-    width: fit-content;
-    margin-top: 6px;
-    font-size: 12px;
-    white-space: normal;
-}
-
 .admin-tickets-scanner-feedback {
     margin-left: auto;
     display: flex;

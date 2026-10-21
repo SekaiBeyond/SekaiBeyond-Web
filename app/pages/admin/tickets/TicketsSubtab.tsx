@@ -445,8 +445,6 @@ export function TicketsSubtab({
             {section === 'scan' && scanOpen && (
                 <TicketScanner
                     eventId={eventId}
-                    eventTitle={isEnglish ? event.title : (event.titleCn || event.title)}
-                    admitUnlistedHometown={admitUnlisted}
                     canManage={!readOnly}
                     onRedeemed={() => setLoadedFor(null)}
                 />
