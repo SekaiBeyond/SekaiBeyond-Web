@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSetHometownAdmitUnlisted } from '~/lib/firebase';
+import { callSetHometownAdmitUnlisted, errorSuffix } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 
 interface SettingsSectionProps {
@@ -42,8 +42,11 @@ export function SettingsSection({
                     ? (isEnglish ? 'Unlisted HomeTown tickets are now let in.' : '现已放行未列入名单的 HomeTown 门票。')
                     : (isEnglish ? 'HomeTown tickets must now be on the list.' : 'HomeTown 门票现须在名单中。'),
                 enabled ? 'warning' : 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to change the setting.' : '更改设置失败。', 'error');
+        } catch (err) {
+            showToast(isEnglish
+                    ? `Failed to change the setting${errorSuffix(err, true)}.`
+                    : `更改设置失败${errorSuffix(err, false)}。`,
+                'error');
         } finally {
             setSaving(false);
         }

@@ -1,6 +1,6 @@
 import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callImportHometownTickets, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
+import { callImportHometownTickets, errorSuffix, functionsErrorCode, functionsErrorDetails, } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 import { hometownAttendeeId, type HometownTicketRow, parseHometownFile } from './hometown';
 import { type AttendeeData, type ParseError, TICKET_TYPES, ticketTypeLabel } from './types';
@@ -182,8 +182,8 @@ export function HometownSection({
             console.error('[HometownSection] import failed', err);
             // Earlier chunks may have landed; a re-import picks up where this stopped.
             showToast(isEnglish
-                    ? 'HomeTown import failed partway. Import the same file again to finish it.'
-                    : 'HomeTown 导入中途失败。请再次导入同一文件以完成。',
+                    ? `HomeTown import failed partway${errorSuffix(err, true)}. Import the same file again to finish it.`
+                    : `HomeTown 导入中途失败${errorSuffix(err, false)}。请再次导入同一文件以完成。`,
                 'error');
         } finally {
             setImporting(false);

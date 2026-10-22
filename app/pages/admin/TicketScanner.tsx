@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FirebaseError } from 'firebase/app';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callRedeemTicket, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
+import { callRedeemTicket, errorSuffix, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
 import { useQrScanner } from '~/lib/useQrScanner';
 import { type ScanOutcome, useScanSound, useScanVibration } from '~/lib/useScanFeedback';
 import { QrScannerViewport } from './QrScannerViewport';
@@ -254,7 +254,9 @@ export function TicketScanner({
                     ? 'No answer from the server. Check the connection and scan again. If it then shows as already redeemed by you, the first scan went through.'
                     : '服务器无响应。请检查网络后重新扫描。若随后显示已由你验证，说明第一次扫描已成功。';
             } else {
-                reason = isEnglish ? 'Scan failed. Please try again.' : '扫描失败，请重试。';
+                reason = isEnglish
+                    ? `Scan failed${errorSuffix(err, true)}. Please try again.`
+                    : `扫描失败${errorSuffix(err, false)}，请重试。`;
             }
             show({kind: 'error', reason, shownAt: Date.now()});
             cue('issue', ticketId);

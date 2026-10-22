@@ -4,6 +4,7 @@ import {
     callAddWalkInAttendee,
     callImportEventAttendees,
     callUpdateEventAttendee,
+    errorSuffix,
     functionsErrorCode,
 } from '~/lib/firebase';
 import { ModalShell } from './ModalShell';
@@ -132,7 +133,9 @@ export function AttendeeModal({
                         ? (isEnglish
                             ? 'Walk-ins can only be added on the day of the event.'
                             : '仅可在活动当天现场登记。')
-                        : (isEnglish ? 'Failed to add walk-in.' : '现场登记失败。'),
+                        : (isEnglish
+                            ? `Failed to add walk-in${errorSuffix(err, true)}.`
+                            : `现场登记失败${errorSuffix(err, false)}。`),
                 'error',
             );
         } finally {
@@ -177,10 +180,9 @@ export function AttendeeModal({
             onAdded?.();
             onClose();
         } catch (err) {
-            const code = functionsErrorCode(err);
             const msg = isEnglish
-                ? `Failed to add attendee${code ? ` (${code})` : ''}.`
-                : `添加参加者失败${code ? `（${code}）` : ''}。`;
+                ? `Failed to add attendee${errorSuffix(err, true)}.`
+                : `添加参加者失败${errorSuffix(err, false)}。`;
             showToast(msg, 'error');
         } finally {
             setSaving(false);
@@ -225,11 +227,10 @@ export function AttendeeModal({
                 regenerated ? 'warning' : 'success',
             );
         } catch (err) {
-            const code = functionsErrorCode(err);
             showToast(
                 isEnglish
-                    ? `Update failed${code ? ` (${code})` : ''}.`
-                    : `更新失败${code ? `（${code}）` : ''}。`,
+                    ? `Update failed${errorSuffix(err, true)}.`
+                    : `更新失败${errorSuffix(err, false)}。`,
                 'error',
             );
         } finally {
@@ -286,8 +287,8 @@ export function AttendeeModal({
                             account ? ' admin-tickets-account-note--linked' : ''}`}>
                             {accountLookupFailed
                                 ? (isEnglish
-                                    ? 'Could not check whether this email has an account.'
-                                    : '无法查询该邮箱是否已注册。')
+                                    ? `Could not check whether this email has an account${errorSuffix(accountLookupFailed.error, true)}.`
+                                    : `无法查询该邮箱是否已注册${errorSuffix(accountLookupFailed.error, false)}。`)
                                 : checkingAccount
                                     ? (isEnglish ? 'Checking for an account…' : '正在查询账户…')
                                     : account

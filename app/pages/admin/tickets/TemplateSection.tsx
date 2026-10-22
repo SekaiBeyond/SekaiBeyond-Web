@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callUpdateEventEmailTemplate, getFirebaseDb } from '~/lib/firebase';
+import { callUpdateEventEmailTemplate, errorSuffix, getFirebaseDb } from '~/lib/firebase';
 import { useSiteConfig } from '~/lib/siteConfig';
 import { ModalShell } from '../ModalShell';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
@@ -72,7 +72,9 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: T
                 console.error('[template] load', err);
                 if (!cancelled) setLoadFailed(true);
                 showToast(
-                    isEnglish ? 'Failed to load template.' : '加载模板失败。',
+                    isEnglish
+                        ? `Failed to load template${errorSuffix(err, true)}.`
+                        : `加载模板失败${errorSuffix(err, false)}。`,
                     'error',
                 );
             } finally {
@@ -125,8 +127,11 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: T
             });
             setInitialTemplate({...template, updatedAt: new Date()});
             showToast(isEnglish ? 'Template saved.' : '模板已保存。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to save template.' : '保存模板失败。', 'error');
+        } catch (err) {
+            showToast(isEnglish
+                    ? `Failed to save template${errorSuffix(err, true)}.`
+                    : `保存模板失败${errorSuffix(err, false)}。`,
+                'error');
         } finally {
             setSaving(false);
         }

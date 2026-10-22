@@ -13,11 +13,12 @@ export type AccountLink = AttendeeAccount | null;
  */
 export function useAccountLinks(eventId: string, emails: string[]): {
     links: Map<string, AccountLink>;
-    failed: boolean;
+    /** Set when a lookup fails, with the error to show the code of. */
+    failed: {error: unknown} | null;
 } {
     const cache = useRef(new Map<string, AccountLink>());
     const [links, setLinks] = useState<Map<string, AccountLink>>(() => new Map());
-    const [failed, setFailed] = useState(false);
+    const [failed, setFailed] = useState<{error: unknown} | null>(null);
 
     const wanted = useMemo(
         () => Array.from(new Set(
@@ -38,7 +39,7 @@ export function useAccountLinks(eventId: string, emails: string[]): {
         if (missing.length === 0) return;
 
         let stale = false;
-        setFailed(false);
+        setFailed(null);
 
         const lookUp = async () => {
             for (let i = 0; i < missing.length; i += LOOKUP_CHUNK) {
@@ -53,8 +54,8 @@ export function useAccountLinks(eventId: string, emails: string[]): {
             }
         };
 
-        lookUp().catch(() => {
-            if (!stale) setFailed(true);
+        lookUp().catch(err => {
+            if (!stale) setFailed({error: err});
         });
 
         return () => {

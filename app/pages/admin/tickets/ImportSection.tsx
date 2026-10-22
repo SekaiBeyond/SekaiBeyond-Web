@@ -1,6 +1,6 @@
 import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callImportEventAttendees, functionsErrorCode } from '~/lib/firebase';
+import { callImportEventAttendees, errorSuffix } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 import type { AttendeeData, ParsedRow, ParseError } from './types';
 import { useAccountLinks } from './useAccountLinks';
@@ -209,11 +209,10 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
             clearForm();
             onImported();
         } catch (err) {
-            const code = functionsErrorCode(err);
             showToast(
                 isEnglish
-                    ? `Import failed${code ? ` (${code})` : ''}.`
-                    : `导入失败${code ? ` (${code})` : ''}。`,
+                    ? `Import failed${errorSuffix(err, true)}.`
+                    : `导入失败${errorSuffix(err, false)}。`,
                 'error',
             );
         } finally {

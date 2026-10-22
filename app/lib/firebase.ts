@@ -747,6 +747,19 @@ export const functionsErrorCode = (err: unknown): string | null => {
     return null;
 };
 
+// The code to show in a message: the server's own when it sent one, else the
+// SDK's, such as "functions/internal" for a call that never reached the function
+// or "unavailable" for a Firestore read.
+const errorCodeToShow = (err: unknown): string | null =>
+    functionsErrorCode(err) ?? (err instanceof FirebaseError ? err.code : null);
+
+/** That code as a message's bracketed ending, " (code)" or "（code）", or "" without one. */
+export const errorSuffix = (err: unknown, isEnglish: boolean): string => {
+    const code = errorCodeToShow(err);
+    if (!code) return '';
+    return isEnglish ? ` (${code})` : `（${code}）`;
+};
+
 export const functionsErrorDetails = <T = unknown>(err: unknown): T | null => {
     if (err instanceof FirebaseError && "details" in err) {
         return ((err as FunctionsError).details as T | undefined) ?? null;

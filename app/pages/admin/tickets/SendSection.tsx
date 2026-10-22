@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGetTicketEmailQuota, callSendTicketEmails, functionsErrorCode, } from '~/lib/firebase';
+import { callGetTicketEmailQuota, callSendTicketEmails, errorSuffix, functionsErrorCode, } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 import type { AttendeeTotals } from './types';
 
@@ -187,8 +187,8 @@ export function SendSection({
             } else {
                 showToast(
                     isEnglish
-                        ? `Send failed${code ? ` (${code})` : ''}.`
-                        : `发送失败${code ? `（${code}）` : ''}。`,
+                        ? `Send failed${errorSuffix(err, true)}.`
+                        : `发送失败${errorSuffix(err, false)}。`,
                     'error',
                 );
             }

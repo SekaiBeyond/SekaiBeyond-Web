@@ -11,6 +11,7 @@ import {
     callUpdateTicketNotes,
     callUpdateTicketType,
     callVoidTicket,
+    errorSuffix,
     functionsErrorCode,
     getFirebaseDb,
 } from '~/lib/firebase';
@@ -70,7 +71,8 @@ export function TicketsSubtab({
     const [section, setSection] = useState<TicketsSection>(scanOpen && readOnly ? 'scan' : 'attendees');
     const [attendees, setAttendees] = useState<AttendeeData[]>([]);
     const [loadingAttendees, setLoadingAttendees] = useState(false);
-    const [attendeesFailed, setAttendeesFailed] = useState(false);
+    // Set on a failed load, with the error to show the code of.
+    const [attendeesFailed, setAttendeesFailed] = useState<{error: unknown} | null>(null);
     const [search, setSearch] = useState('');
     const [filterUnsent, setFilterUnsent] = useState(false);
     const [ticketTypeFilter, setTicketTypeFilter] = useState<TicketType | 'all'>('all');
@@ -87,7 +89,7 @@ export function TicketsSubtab({
 
     const loadAttendees = useCallback(async () => {
         setLoadingAttendees(true);
-        setAttendeesFailed(false);
+        setAttendeesFailed(null);
         try {
             const db = getFirebaseDb();
             const col = collection(db, collectionRoot, eventId, 'attendees');
@@ -98,7 +100,7 @@ export function TicketsSubtab({
             setLoadedFor(`${collectionRoot}/${eventId}`);
         } catch (err) {
             console.error('[TicketsSubtab] loadAttendees', err);
-            setAttendeesFailed(true);
+            setAttendeesFailed({error: err});
         } finally {
             setLoadingAttendees(false);
         }
@@ -233,8 +235,11 @@ export function TicketsSubtab({
             await callVoidTicket({eventId, attendeeId: a.id, ticketId});
             updateTicket(a.id, ticketId, {voided: true});
             showToast(isEnglish ? 'Ticket voided.' : '门票已作废。', 'warning');
-        } catch {
-            showToast(isEnglish ? 'Failed to void ticket.' : '作废门票失败。', 'error');
+        } catch (err) {
+            showToast(isEnglish
+                    ? `Failed to void ticket${errorSuffix(err, true)}.`
+                    : `作废门票失败${errorSuffix(err, false)}。`,
+                'error');
         }
     };
 
@@ -248,8 +253,11 @@ export function TicketsSubtab({
             await callUnvoidTicket({eventId, attendeeId: a.id, ticketId});
             updateTicket(a.id, ticketId, {voided: false});
             showToast(isEnglish ? 'Ticket unvoided.' : '门票已撤销作废。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to unvoid ticket.' : '撤销作废门票失败。', 'error');
+        } catch (err) {
+            showToast(isEnglish
+                    ? `Failed to unvoid ticket${errorSuffix(err, true)}.`
+                    : `撤销作废门票失败${errorSuffix(err, false)}。`,
+                'error');
         }
     };
 
@@ -271,8 +279,11 @@ export function TicketsSubtab({
                 redeemedByName: profile?.displayName ?? '',
             });
             showToast(isEnglish ? 'Ticket redeemed.' : '门票已验证。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to redeem ticket.' : '验证门票失败。', 'error');
+        } catch (err) {
+            showToast(isEnglish
+                    ? `Failed to redeem ticket${errorSuffix(err, true)}.`
+                    : `验证门票失败${errorSuffix(err, false)}。`,
+                'error');
         }
     };
 
@@ -290,8 +301,11 @@ export function TicketsSubtab({
                 redeemedByName: '',
             });
             showToast(isEnglish ? 'Ticket reset.' : '门票已重置。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to reset ticket.' : '重置门票失败。', 'error');
+        } catch (err) {
+            showToast(isEnglish
+                    ? `Failed to reset ticket${errorSuffix(err, true)}.`
+                    : `重置门票失败${errorSuffix(err, false)}。`,
+                'error');
         }
     };
 
@@ -301,8 +315,11 @@ export function TicketsSubtab({
             await callUpdateTicketType({eventId, attendeeId: a.id, ticketId, type: newType});
             updateTicket(a.id, ticketId, {type: newType});
             showToast(isEnglish ? 'Ticket type updated.' : '门票类型已更新。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to update ticket type.' : '更新门票类型失败。', 'error');
+        } catch (err) {
+            showToast(isEnglish
+                    ? `Failed to update ticket type${errorSuffix(err, true)}.`
+                    : `更新门票类型失败${errorSuffix(err, false)}。`,
+                'error');
         }
     };
 
@@ -314,8 +331,11 @@ export function TicketsSubtab({
             updateTicket(a.id, ticketId, {notes: res.data.notes});
             if (res.data.updated) showToast(isEnglish ? 'Note saved.' : '备注已保存。', 'success');
             return res.data.notes;
-        } catch {
-            showToast(isEnglish ? 'Failed to save note.' : '保存备注失败。', 'error');
+        } catch (err) {
+            showToast(isEnglish
+                    ? `Failed to save note${errorSuffix(err, true)}.`
+                    : `保存备注失败${errorSuffix(err, false)}。`,
+                'error');
             return null;
         }
     };
@@ -339,7 +359,9 @@ export function TicketsSubtab({
         } catch (err) {
             showToast(functionsErrorCode(err) === 'hometown-ticket'
                     ? (isEnglish ? 'HomeTown tickets can\'t be removed. Void the ticket instead.' : 'HomeTown 门票不能移除，请改为作废。')
-                    : (isEnglish ? 'Failed to remove attendee.' : '移除失败。'),
+                    : (isEnglish
+                        ? `Failed to remove attendee${errorSuffix(err, true)}.`
+                        : `移除失败${errorSuffix(err, false)}。`),
                 'error');
         }
     };
@@ -384,13 +406,18 @@ export function TicketsSubtab({
                     'warning',
                 );
             } else {
-                showToast(isEnglish ? 'Failed to send email.' : '发送邮件失败。', 'error');
+                showToast(isEnglish
+                        ? `Failed to send email${errorSuffix(err, true)}.`
+                        : `发送邮件失败${errorSuffix(err, false)}。`,
+                    'error');
             }
         }
     };
 
     const attendeesError = attendeesFailed
-        ? (isEnglish ? 'Failed to load attendees.' : '加载参加者失败。')
+        ? (isEnglish
+            ? `Failed to load attendees${errorSuffix(attendeesFailed.error, true)}.`
+            : `加载参加者失败${errorSuffix(attendeesFailed.error, false)}。`)
         : null;
 
     return (
