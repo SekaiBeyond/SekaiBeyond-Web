@@ -31,8 +31,8 @@ export const CafeSection = ({content, loading, showToast, readOnly}: SectionProp
     const editor = useSectionEditor('cafe', content.cafe, loading, showToast);
     const {draft, setDraft} = editor;
     /**
-     * The in-flight upload's preview, held apart from the draft as in
-     * GuestsSection: the server rejects `blob:` URLs.
+     * The in-flight upload's preview, held apart from the draft: the server
+     * rejects `blob:` URLs, so a mid-upload save would fail the section.
      */
     const [preview, setPreview] = useState<{target: PosterTarget; url: string} | null>(null);
 

@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from 'react-icons/si';
-import { CON_NAME, useConNavLinks } from '~/lib/conContent';
+import { CON_NAME, CON_NAV_LINKS } from '~/lib/conContent';
 import { SOCIAL_LINK_NAMES, useSiteConfig } from '~/lib/siteConfig';
 import { useT } from '~/pages/con/i18n';
 import { scrollToSection } from '~/pages/con/utils';
@@ -15,7 +15,6 @@ const SOCIALS = [
 export const Footer = () => {
     const t = useT();
     const {config} = useSiteConfig();
-    const navLinks = useConNavLinks();
 
     return (
         <footer className="sbc-footer">
@@ -29,7 +28,7 @@ export const Footer = () => {
                 </p>
 
                 <nav className="sbc-footer-nav" aria-label={t({en: 'Footer', zh: '页脚导航'})}>
-                    {navLinks.map(link => (
+                    {CON_NAV_LINKS.map(link => (
                         <a
                             key={link.id}
                             className="sbc-footer-link"

@@ -463,20 +463,16 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
 const CON_ROOM_ACCENTS = ["pink", "violet", "amber", "sky", "mint", "slate"] as const;
 
 const CON_SECTIONS = [
-    "settings", "event", "heroVideo", "rooms", "schedule", "guests", "cafe", "vendors", "tickets", "ticketFee",
-    "inPersonSales", "faq",
+    "settings", "event", "heroVideo", "rooms", "schedule", "cafe", "vendors", "tickets", "ticketFee", "inPersonSales",
+    "faq",
 ] as const;
 type ConSection = typeof CON_SECTIONS[number];
-
-// Mirrors HIDEABLE_SECTIONS in app/lib/conContent.ts.
-const CON_HIDEABLE_SECTIONS = ["guests"] as const satisfies readonly ConSection[];
 
 // Generous against real use, but bounded so a runaway client can't grow the
 // public document indefinitely.
 const CON_LIMITS = {
     rooms: 24,
     scheduleItems: 120,
-    guests: 60,
     maids: 40,
     tickets: 8,
     perks: 12,
@@ -558,24 +554,14 @@ function validateConLink(raw: unknown, name: string): string {
 
 /**
  * Page-level switches. `published` is a strict boolean because a stray truthy
- * value would republish the page. Leaving `hiddenSections` out shows every
- * section.
+ * value would republish the page.
  */
 function buildConSettings(raw: unknown) {
     const s = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
     if (typeof s.published !== "boolean") {
         throw new HttpsError("invalid-argument", "published must be true or false.");
     }
-    const hidden = s.hiddenSections ?? [];
-    const hideable: readonly unknown[] = CON_HIDEABLE_SECTIONS;
-    if (!Array.isArray(hidden) || hidden.some(section => !hideable.includes(section))) {
-        throw new HttpsError("invalid-argument", `hiddenSections may only list ${CON_HIDEABLE_SECTIONS.join(", ")}.`);
-    }
-    return {
-        published: s.published,
-        // Canonical order, matching what the editor compares its draft against.
-        hiddenSections: CON_HIDEABLE_SECTIONS.filter(section => hidden.includes(section)),
-    };
+    return {published: s.published};
 }
 
 function buildConEvent(raw: unknown) {
@@ -688,16 +674,6 @@ function buildConSchedule(raw: unknown) {
         // Stored in start order, so the editor needs no reorder buttons; TBA
         // items sort last.
         .sort((a, b) => (a.start ?? "99:99").localeCompare(b.start ?? "99:99"));
-}
-
-function buildConGuests(raw: unknown) {
-    return validateConArray(raw, "guests", CON_LIMITS.guests).map(guest => ({
-        name: sanitizeDisplayText(validateStr(guest.name, "guest name", 120, true)),
-        role: validateLocalized(guest.role, "guest role", 120),
-        blurb: validateLocalized(guest.blurb, "guest blurb", 1000),
-        avatar: validateConAsset(guest.avatar, "guest avatar"),
-        link: validateConLink(guest.link, "guest link"),
-    }));
 }
 
 /**
@@ -871,7 +847,6 @@ const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
     heroVideo: buildConHeroVideo,
     rooms: buildConRooms,
     schedule: buildConSchedule,
-    guests: buildConGuests,
     cafe: buildConCafe,
     vendors: buildConVendors,
     tickets: buildConTickets,
@@ -880,22 +855,17 @@ const CON_SECTION_BUILDERS: Record<ConSection, (raw: unknown) => unknown> = {
     faq: buildConFaq,
 };
 
-/**
- * Where the con editor uploads: the hero clip and café posters under con/, and
- * guest photos.
- */
-const CON_ASSET_PREFIXES = ["con/", "config/con-guest-"];
+/** Where the con editor uploads the hero clip and café posters. */
+const CON_ASSET_PREFIXES = ["con/"];
 
 /**
  * Every file URL con content points at; deleteStorageFile skips the ones that
  * aren't Storage URLs.
  */
 function conAssetUrls(content: Record<string, any>): string[] {
-    const guests: any[] = Array.isArray(content.guests) ? content.guests : [];
     const maids: any[] = Array.isArray(content.cafe?.maids) ? content.cafe.maids : [];
     return [
         content.heroVideo?.webm,
-        ...guests.map(guest => guest?.avatar),
         content.cafe?.poster,
         ...maids.map(maid => maid?.poster),
     ].filter((url): url is string => typeof url === "string" && url !== "");
@@ -973,21 +943,15 @@ export const saveConContent = onCall({maxInstances: 10}, async (request) => {
             updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
 
-        // The public mirror exists only while the con is published, and leaves out
-        // hidden sections, so nothing hidden is readable from the database directly.
-        // Written whole so a section deleted in the draft can't survive, and without
-        // `updatedBy`, which doesn't belong on a public doc.
+        // The public mirror exists only while the con is published. Written whole
+        // so a section deleted in the draft can't survive, and without `updatedBy`,
+        // which doesn't belong on a public doc.
         const merged = {...stored, ...updateData};
-        const settings = merged.settings as {published?: boolean; hiddenSections?: string[]} | undefined;
-        const published = settings?.published === true;
+        const published = (merged.settings as {published?: boolean} | undefined)?.published === true;
         if (published) {
-            // Only sections that can still be hidden; a stored draft may name one
-            // that no longer can.
-            const hideable: readonly string[] = CON_HIDEABLE_SECTIONS;
-            const hidden = new Set((settings?.hiddenSections ?? []).filter(section => hideable.includes(section)));
             const mirror: Record<string, any> = {updatedAt: FieldValue.serverTimestamp()};
             for (const section of CON_SECTIONS) {
-                if (merged[section] !== undefined && !hidden.has(section)) mirror[section] = merged[section];
+                if (merged[section] !== undefined) mirror[section] = merged[section];
             }
             txn.set(publicRef, mirror);
         } else {

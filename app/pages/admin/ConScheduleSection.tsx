@@ -1,16 +1,12 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callUploadAdminImage } from '~/lib/firebase';
 import type { ConContent } from '~/lib/conContent';
 import { useT } from '~/pages/con/i18n';
-import { ImageUploadField } from './ImageUploadField';
 import {
     AddButton,
     BLANK,
     EmptyRow,
-    HiddenSectionNote,
     LocalizedField,
-    moveAt,
     removeAt,
     replaceAt,
     RowActions,
@@ -203,141 +199,6 @@ export const ScheduleSection = ({content, loading, showToast, readOnly}: Section
                         en: 'Add and save a room above before adding schedule items.',
                         zh: '请先在上方添加并保存房间，然后再添加日程条目。',
                     }}
-                    readOnly={readOnly}
-                />
-            </div>
-        </SectionShell>
-    );
-};
-
-export const GuestsSection = ({content, loading, showToast, readOnly}: SectionProps) => {
-    const {isEnglish} = useLanguage();
-    const editor = useSectionEditor('guests', content.guests, loading, showToast);
-    const {draft, setDraft} = editor;
-    /**
-     * The in-flight upload's preview, held apart from the draft: the server
-     * rejects `blob:` URLs, so a mid-upload save would fail the section.
-     */
-    const [preview, setPreview] = useState<{index: number; url: string} | null>(null);
-
-    const update = (index: number, next: ConContent['guests'][number]) =>
-        setDraft(prev => replaceAt(prev, index, next));
-
-    const uploadAvatar = async (index: number, file: File, previewUrl: string) => {
-        setPreview({index, url: previewUrl});
-        try {
-            showToast(isEnglish ? 'Uploading photo...' : '正在上传照片...', 'warning');
-            // Time-stamped, not indexed, so reordering can't point a guest at
-            // someone else's photo.
-            const url = await callUploadAdminImage(file, `config/con-guest-${Date.now().toString(36)}.webp`);
-            setDraft(prev => replaceAt(prev, index, {...prev[index], avatar: url}));
-            showToast(isEnglish ? 'Photo uploaded.' : '照片已上传。', 'success');
-        } catch (e: any) {
-            // Nothing to roll back — the draft never held the preview.
-            showToast(e?.message ?? (isEnglish ? 'Photo upload failed.' : '照片上传失败。'), 'error');
-        } finally {
-            // Safe now: the <img> swaps to the stored URL in the same commit.
-            URL.revokeObjectURL(previewUrl);
-            setPreview(null);
-        }
-    };
-
-    return (
-        <SectionShell
-            section="guests"
-            helper={{
-                en: 'Cards appear in this order. A guest with no photo falls back to the first letter of their name.',
-                zh: '嘉宾卡片按此顺序展示。未上传照片时将显示名字首字母。',
-            }}
-            editor={editor}
-            busy={preview !== null}
-            busyLabel={{en: 'Waiting for the photo upload...', zh: '正在等待照片上传...'}}
-            readOnly={readOnly}
-        >
-            <HiddenSectionNote content={content} section="guests"/>
-            <div className="admin-con-list">
-                {draft.length === 0 && <EmptyRow label={{en: 'No guests announced yet.', zh: '暂未公布嘉宾。'}}/>}
-
-                {draft.map((guest, index) => (
-                    <div key={index} className="admin-con-card">
-                        <div className="admin-con-card-head">
-                            <span className="admin-con-card-title">
-                                {guest.name || (isEnglish ? `Guest ${index + 1}` : `嘉宾 ${index + 1}`)}
-                                {preview?.index === index && (
-                                    <span className="admin-con-dirty">
-                                        {isEnglish ? 'Uploading...' : '上传中...'}
-                                    </span>
-                                )}
-                            </span>
-                            {/* The photo lands by position, so the line-up holds
-                                still until it has. */}
-                            <RowActions
-                                index={index}
-                                count={draft.length}
-                                onMove={delta => setDraft(prev => moveAt(prev, index, delta))}
-                                onRemove={() => setDraft(prev => removeAt(prev, index))}
-                                readOnly={readOnly}
-                                disabled={preview !== null}
-                            />
-                        </div>
-
-                        <div className="admin-form-grid">
-                            <label>
-                                <span>{isEnglish ? 'Name' : '名称'}</span>
-                                <input
-                                    className="admin-input"
-                                    value={guest.name}
-                                    onChange={e => !readOnly && update(index, {...guest, name: e.target.value})}
-                                    readOnly={readOnly}
-                                />
-                            </label>
-                            <label>
-                                <span>{isEnglish ? 'Link (optional)' : '链接（可选）'}</span>
-                                <input
-                                    className="admin-input"
-                                    type="url"
-                                    value={guest.link ?? ''}
-                                    onChange={e => !readOnly && update(index, {...guest, link: e.target.value})}
-                                    readOnly={readOnly}
-                                    placeholder="https://..."
-                                />
-                            </label>
-
-                            <LocalizedField
-                                label={{en: 'Role', zh: '身份'}}
-                                value={guest.role}
-                                onChange={next => update(index, {...guest, role: next})}
-                                readOnly={readOnly}
-                            />
-                            <LocalizedField
-                                label={{en: 'Blurb', zh: '介绍'}}
-                                value={guest.blurb}
-                                onChange={next => update(index, {...guest, blurb: next})}
-                                readOnly={readOnly}
-                                multiline
-                            />
-
-                            {!readOnly && (
-                                <div className="admin-form-grid-full">
-                                    <ImageUploadField
-                                        label="Photo"
-                                        labelCn="照片"
-                                        preview={(preview?.index === index ? preview.url : guest.avatar) || null}
-                                        onFileChange={(file, url) => uploadAvatar(index, file, url)}
-                                        onCleanupPreview={url => URL.revokeObjectURL(url)}
-                                        cropAspect={1}
-                                        convertToWebp
-                                        showToast={showToast}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                ))}
-
-                <AddButton
-                    label={{en: 'guest', zh: '嘉宾'}}
-                    onClick={() => setDraft(prev => [...prev, {name: '', role: BLANK, blurb: BLANK}])}
                     readOnly={readOnly}
                 />
             </div>

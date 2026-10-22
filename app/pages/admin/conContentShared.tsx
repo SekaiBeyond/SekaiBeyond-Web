@@ -1,13 +1,7 @@
 import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveConContent } from '~/lib/firebase';
-import {
-    type ConContent,
-    type ConContentSection,
-    HIDEABLE_SECTIONS,
-    type HideableSection,
-    refreshConContent,
-} from '~/lib/conContent';
+import { type ConContent, type ConContentSection, refreshConContent } from '~/lib/conContent';
 import type { Localized } from '~/pages/con/i18n';
 import type { ShowToast } from './utils';
 
@@ -17,7 +11,6 @@ export const SECTION_LABELS: Record<ConContentSection, Localized> = {
     heroVideo: {en: 'Hero Video', zh: '首屏视频'},
     rooms: {en: 'Rooms', zh: '场地房间'},
     schedule: {en: 'Schedule', zh: '活动日程'},
-    guests: {en: 'Guests & Performers', zh: '嘉宾与演出者'},
     cafe: {en: 'Maid Café', zh: '女仆咖啡'},
     vendors: {en: 'Artist Alley', zh: '创作者市集'},
     tickets: {en: 'Tickets', zh: '门票'},
@@ -28,8 +21,8 @@ export const SECTION_LABELS: Record<ConContentSection, Localized> = {
 
 /** The section navigator's order — keep it matching the order ConContentTab renders them in. */
 export const SECTION_ORDER: ConContentSection[] = [
-    'settings', 'event', 'heroVideo', 'rooms', 'schedule', 'guests', 'cafe', 'vendors', 'tickets', 'ticketFee',
-    'inPersonSales', 'faq',
+    'settings', 'event', 'heroVideo', 'rooms', 'schedule', 'cafe', 'vendors', 'tickets', 'ticketFee', 'inPersonSales',
+    'faq',
 ];
 
 export const conSectionId = (section: ConContentSection) => `admin-sec-con-${section}`;
@@ -54,10 +47,6 @@ export const moveAt = <T, >(items: T[], index: number, delta: number): T[] => {
     [next[index], next[target]] = [next[target], next[index]];
     return next;
 };
-
-/** Kept in HIDEABLE_SECTIONS order, so ticking a box off and on again reads as no change. */
-export const setHidden = (hidden: HideableSection[], section: HideableSection, hide: boolean): HideableSection[] =>
-    HIDEABLE_SECTIONS.filter(s => (s === section ? hide : hidden.includes(s)));
 
 interface SectionEditor<T> {
     draft: T;
@@ -371,23 +360,6 @@ export const AddButton = ({label, onClick, readOnly, blocked, blockedHint}: AddB
 export const EmptyRow = ({label}: {label: Localized}) => {
     const {isEnglish} = useLanguage();
     return <p className="admin-con-empty">{isEnglish ? label.en : label.zh}</p>;
-};
-
-/**
- * Flags a section its saved settings keep off /con, so nobody wonders why edits
- * don't show.
- */
-export const HiddenSectionNote = ({content, section}: {content: ConContent; section: HideableSection}) => {
-    const {isEnglish} = useLanguage();
-    if (!content.settings.hiddenSections.includes(section)) return null;
-
-    return (
-        <p className="admin-helper-text admin-con-warning">
-            {isEnglish
-                ? 'Hidden from /con. Show it again under Page Visibility.'
-                : '已在 /con 隐藏。可在「页面可见性」中重新显示。'}
-        </p>
-    );
 };
 
 export interface SectionProps {

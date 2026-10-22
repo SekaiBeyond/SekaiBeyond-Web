@@ -32,7 +32,6 @@
 .sbc-ticket-card,
 .sbc-schedule,
 .sbc-hall-card,
-.sbc-guest-card,
 .sbc-faq-list {
     background: #fff;
     border: 1px solid var(--sbc-line);
@@ -904,71 +903,6 @@
     border-radius: 14px;
     border-left: 3px solid var(--sbc-accent-ink);
     background: var(--sbc-accent-tint);
-}
-
-.sbc-guest-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-    gap: 20px;
-}
-
-/* Avatar beside the text, so a phone's column of guests stays a scannable list. */
-.sbc-guest-card {
-    display: grid;
-    grid-template-columns: 64px 1fr;
-    align-items: start;
-    gap: 18px;
-    padding: 22px;
-}
-
-.sbc-guest-avatar {
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    object-fit: cover;
-}
-
-.sbc-guest-avatar--placeholder {
-    display: grid;
-    place-items: center;
-    background: var(--gradient-primary);
-    color: #fff;
-    font-family: var(--font-display);
-    font-size: 28px;
-}
-
-.sbc-guest-name {
-    font-size: 1.08rem;
-    font-weight: 700;
-    line-height: 1.35;
-    color: var(--sbc-heading);
-}
-
-.sbc-guest-role {
-    margin-bottom: 8px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--color-primary);
-}
-
-.sbc-guest-blurb {
-    font-size: 0.92rem;
-    font-weight: 500;
-    line-height: 1.6;
-    color: var(--color-text-body);
-}
-
-.sbc-guest-link {
-    display: inline-block;
-    margin-top: 10px;
-    font-size: 0.88rem;
-    font-weight: 700;
-    color: var(--color-primary);
-    text-decoration: none;
-}
-
-.sbc-guest-link:hover {
-    color: var(--color-accent);
 }
 
 /* Maid café: the café's poster beside its theme, room and hours, then a poster
@@ -2331,11 +2265,6 @@ button.sbc-hall-table:hover {
 
     .sbc-tba-grid {
         grid-template-columns: 1fr;
-    }
-
-    .sbc-guest-card {
-        padding: 18px;
-        gap: 16px;
     }
 
     .sbc-cafe {

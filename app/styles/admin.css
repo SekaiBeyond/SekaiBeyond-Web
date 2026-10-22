@@ -5488,8 +5488,8 @@ select.admin-tickets-tag:focus {
     margin-top: 4px;
 }
 
-/* Con Content tab: one card per editable entry (rooms, schedule items, guests,
-   tables, tiers, FAQ, sale days). The lighter .admin-con-item row is for smaller
+/* Con Content tab: one card per editable entry (rooms, schedule items, tables,
+   tiers, FAQ, sale days). The lighter .admin-con-item row is for smaller
    things, like a tier's perks. */
 .admin-con-list {
     display: flex;

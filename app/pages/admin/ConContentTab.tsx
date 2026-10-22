@@ -4,7 +4,7 @@ import type { ShowToast } from './utils';
 import { SectionNav } from './SectionNav';
 import { conSectionId, SECTION_LABELS, SECTION_ORDER, type SectionProps, } from './conContentShared';
 import { EventSection, HeroVideoSection, RoomsSection, SettingsSection, } from './ConEventSections';
-import { GuestsSection, ScheduleSection } from './ConScheduleGuestSections';
+import { ScheduleSection } from './ConScheduleSection';
 import { CafeSection } from './ConCafeSection';
 import { VendorsSection } from './ConVendorsSection';
 import { InPersonSalesSection, TicketFeeSection, TicketsSection, } from './ConTicketsSections';
@@ -74,8 +74,6 @@ export const ConContentTab = ({showToast, readOnly = false}: ConContentTabProps)
             <RoomsSection {...sectionProps}/>
             <div className="admin-divider"/>
             <ScheduleSection {...sectionProps}/>
-            <div className="admin-divider"/>
-            <GuestsSection {...sectionProps}/>
             <div className="admin-divider"/>
             <CafeSection {...sectionProps}/>
             <div className="admin-divider"/>

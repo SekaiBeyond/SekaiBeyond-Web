@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callUploadConVideo } from '~/lib/firebase';
-import { type ConContent, HIDEABLE_SECTIONS, ROOM_ACCENTS, type RoomAccent, } from '~/lib/conContent';
+import { type ConContent, ROOM_ACCENTS, type RoomAccent, } from '~/lib/conContent';
 import { formatSiteTime } from '~/lib/siteTime';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { useUploadLimits } from '~/lib/uploadLimits';
@@ -18,10 +18,8 @@ import {
     removeAt,
     replaceAt,
     RowActions,
-    SECTION_LABELS,
     type SectionProps,
     SectionShell,
-    setHidden,
     useSectionEditor,
 } from './conContentShared';
 
@@ -297,26 +295,6 @@ export const SettingsSection = ({content, loading, showToast, readOnly}: Section
                         ? 'Hidden from the public, and the saved copy is staff-only until you publish — safe for an unannounced line-up.'
                         : '当前对公众隐藏，且在发布前已保存的内容仅工作人员可见——可安全用于尚未公布的阵容。')}
             </p>
-
-            <p className="admin-helper-text admin-mt-12">
-                {isEnglish
-                    ? 'Sections to show. An unticked section leaves the page, the navbar and the footer, and its saved copy stays staff-only, so it can be filled in before it is announced.'
-                    : '要显示的板块。取消勾选的板块将从页面、导航栏与页脚中移除，其已保存的内容仅工作人员可见，可在公布前先行填写。'}
-            </p>
-            {HIDEABLE_SECTIONS.map(section => (
-                <label key={section} className="admin-checkbox-label admin-mt-8">
-                    <input
-                        type="checkbox"
-                        checked={!draft.hiddenSections.includes(section)}
-                        onChange={e => !readOnly && setDraft(prev => ({
-                            ...prev,
-                            hiddenSections: setHidden(prev.hiddenSections, section, !e.target.checked),
-                        }))}
-                        disabled={readOnly}
-                    />
-                    <span>{isEnglish ? SECTION_LABELS[section].en : SECTION_LABELS[section].zh}</span>
-                </label>
-            ))}
         </SectionShell>
     );
 };

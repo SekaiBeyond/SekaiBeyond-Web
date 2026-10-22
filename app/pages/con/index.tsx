@@ -9,7 +9,6 @@ import { Tickets } from '~/pages/con/Tickets';
 import { About } from '~/pages/con/About';
 import { Schedule } from '~/pages/con/Schedule';
 import { ShareCard } from '~/pages/con/ShareCard';
-import { Guests } from '~/pages/con/Guests';
 import { MaidCafe } from '~/pages/con/MaidCafe';
 import { Vendors } from '~/pages/con/Vendors';
 import { Faq } from '~/pages/con/Faq';
@@ -39,8 +38,6 @@ export const ConPage = () => {
     const canPreview = !!profile && hasPermission(profile.group, 'staff');
     // A failed read falls back to defaults nobody agreed to publish.
     const published = content.settings.published && !failed;
-    // Hidden for staff previews too, so the preview is the public page.
-    const hidden = content.settings.hiddenSections;
 
     // Rendering before the switch and the viewer's group are known could flash an
     // unpublished con.
@@ -70,7 +67,6 @@ export const ConPage = () => {
                 <About/>
                 <Schedule/>
                 <ShareCard/>
-                {!hidden.includes('guests') && <Guests/>}
                 <MaidCafe/>
                 <Vendors/>
                 <Faq/>

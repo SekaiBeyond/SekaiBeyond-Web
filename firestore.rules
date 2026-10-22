@@ -140,7 +140,7 @@ service cloud.firestore {
             allow read: if true;
         }
 
-        // Con page copy (schedule, guests, tickets, ...) — writes via saveConContent.
+        // Con page copy (schedule, café, tickets, ...) — writes via saveConContent.
         //
         // Split in two so that "unpublished" means the content is not on the public
         // web, not merely that the page declines to draw it:

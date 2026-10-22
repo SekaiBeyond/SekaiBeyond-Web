@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { createValueCache } from './collectionCache';
@@ -19,12 +18,11 @@ export interface NavLink {
     label: Localized
 }
 
-const NAV_LINKS: NavLink[] = [
+export const CON_NAV_LINKS: NavLink[] = [
     {id: 'tickets', label: {en: 'Tickets', zh: '门票'}},
     {id: 'about', label: {en: 'About', zh: '关于漫展'}},
     {id: 'schedule', label: {en: 'Schedule', zh: '活动日程'}},
     {id: 'lineup', label: {en: 'Share Card', zh: '分享卡'}},
-    {id: 'guests', label: {en: 'Guests', zh: '嘉宾'}},
     {id: 'cafe', label: {en: 'Maid Café', zh: '女仆咖啡'}},
     {id: 'vendors', label: {en: 'Artist Alley', zh: '创作者市集'}},
     {id: 'faq', label: {en: 'FAQ', zh: '常见问题'}},
@@ -35,18 +33,8 @@ export const ROOM_ACCENTS = ['pink', 'violet', 'amber', 'sky', 'mint', 'slate'] 
 
 export type RoomAccent = typeof ROOM_ACCENTS[number]
 
-/**
- * Sections an admin can hide. Each is both an anchor id and a content key, so
- * hiding one also omits its copy from the public mirror.
- */
-export const HIDEABLE_SECTIONS = ['guests'] as const;
-
-export type HideableSection = typeof HIDEABLE_SECTIONS[number]
-
 interface ConSettings {
     published: boolean
-    /** Stored in HIDEABLE_SECTIONS order so the editor's JSON dirty check is order-stable. */
-    hiddenSections: HideableSection[]
 }
 
 interface ConEvent {
@@ -72,14 +60,6 @@ export interface ScheduleItem {
     end?: string
     room?: string
     title: Localized
-}
-
-export interface Guest {
-    name: string
-    role: Localized
-    blurb: Localized
-    avatar?: string
-    link?: string
 }
 
 export interface Maid {
@@ -157,7 +137,6 @@ export interface ConContent {
     heroVideo: ConHeroVideo;
     rooms: Room[];
     schedule: ScheduleItem[];
-    guests: Guest[];
     cafe: MaidCafe;
     vendors: {tables: Vendor[]; cta: VendorCta};
     tickets: TicketTier[];
@@ -176,12 +155,11 @@ const BLANK: Localized = {en: '', zh: ''};
  * so anything written here would be public before the con is.
  */
 const DEFAULT_CON_CONTENT: ConContent = {
-    settings: {published: false, hiddenSections: []},
+    settings: {published: false},
     event: {tagline: BLANK, intro: BLANK, upcomingEventId: ''},
     heroVideo: {webm: ''},
     rooms: [],
     schedule: [],
-    guests: [],
     cafe: {theme: BLANK, intro: BLANK, location: BLANK, start: '', end: '', poster: '', maids: []},
     vendors: {tables: [], cta: {visible: false, heading: BLANK, body: BLANK, label: BLANK}},
     tickets: [],
@@ -222,14 +200,7 @@ const readRooms = (raw: unknown): Room[] =>
         accent: readAccent(room.accent),
     }));
 
-const readSettings = (raw: unknown): ConSettings => {
-    const s = obj(raw);
-    const hidden = Array.isArray(s.hiddenSections) ? s.hiddenSections : [];
-    return {
-        published: s.published === true,
-        hiddenSections: HIDEABLE_SECTIONS.filter(section => hidden.includes(section)),
-    };
-};
+const readSettings = (raw: unknown): ConSettings => ({published: obj(raw).published === true});
 
 const readEvent = (raw: unknown): ConEvent => {
     const e = obj(raw);
@@ -250,15 +221,6 @@ const readScheduleItem = (item: Record<string, unknown>): ScheduleItem => ({
 });
 
 const readSchedule = (raw: unknown): ScheduleItem[] => list(raw, readScheduleItem);
-
-const readGuests = (raw: unknown): Guest[] =>
-    list(raw, guest => ({
-        name: str(guest.name),
-        role: loc(guest.role),
-        blurb: loc(guest.blurb),
-        avatar: optStr(guest.avatar),
-        link: optStr(guest.link),
-    }));
 
 const readCafe = (raw: unknown): MaidCafe => {
     const c = obj(raw);
@@ -343,7 +305,6 @@ const readSections = (data: Record<string, unknown>): Omit<ConContent, 'settings
     heroVideo: readHeroVideo(data.heroVideo),
     rooms: readRooms(data.rooms),
     schedule: readSchedule(data.schedule),
-    guests: readGuests(data.guests),
     cafe: readCafe(data.cafe),
     vendors: readVendors(data.vendors),
     tickets: readTickets(data.tickets),
@@ -358,7 +319,7 @@ const publicCache = createValueCache<ConContent>('con content', async () => {
     const snap = await getDoc(doc(db, 'conContent', 'main'));
     const data = snap.data();
     if (!data) return DEFAULT_CON_CONTENT;
-    return {...readSections(data), settings: {...readSettings(data.settings), published: true}};
+    return {...readSections(data), settings: {published: true}};
 }, DEFAULT_CON_CONTENT);
 
 const draftCache = createValueCache<ConContent>('con content draft', async () => {
@@ -437,14 +398,6 @@ export function useConVenue(): ConVenue | null {
         name: {en: venue.nameEn, zh: venue.nameCn || venue.nameEn},
         parkingUrl: `/parking/event/${encodeURIComponent(upcomingEventId)}`,
     };
-}
-
-export function useConNavLinks(): NavLink[] {
-    const {hiddenSections} = useConContent().content.settings;
-    return useMemo(
-        () => NAV_LINKS.filter(link => !(hiddenSections as readonly string[]).includes(link.id)),
-        [hiddenSections],
-    );
 }
 
 export function useConDraft(): ConContentRead {
