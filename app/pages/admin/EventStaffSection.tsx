@@ -13,6 +13,11 @@ interface EventStaffSectionProps {
     readOnly?: boolean;
     onCountChange?: (count: number) => void;
     onAttendeeRemoved?: () => void;
+    /**
+     * Opens the user in Users Management. Left out for event staff, who can't
+     * open that tab, so a row opens the public profile instead.
+     */
+    onLookupUser?: (uid: string) => void;
 }
 
 export function EventStaffSection({
@@ -21,6 +26,7 @@ export function EventStaffSection({
                                       readOnly = false,
                                       onCountChange,
                                       onAttendeeRemoved,
+                                      onLookupUser,
                                   }: EventStaffSectionProps) {
     const {isEnglish} = useLanguage();
     const [staffList, setStaffList] = useState<UserRecord[]>([]);
@@ -144,11 +150,22 @@ export function EventStaffSection({
                         {staffList.length} {isEnglish ? 'staff' : '位工作人员'}
                     </p>
                     {staffList.map(u => (
-                        <UserRow key={u.uid} user={u}>
+                        <UserRow
+                            key={u.uid}
+                            user={u}
+                            // A new tab, so the event stays open behind the profile.
+                            onClick={() => onLookupUser
+                                ? onLookupUser(u.uid)
+                                : window.open(`/profile?uid=${u.uid}`, '_blank', 'noopener')}
+                        >
                             {!readOnly && (
                                 <button
                                     className="admin-toggle-btn admin-toggle-revoke"
-                                    onClick={() => removeStaff(u)}
+                                    onClick={(e) => {
+                                        e.stopPropagation(); // the row behind it opens the user
+                                        void removeStaff(u);
+                                    }}
+                                    onKeyDown={(e) => e.stopPropagation()}
                                     disabled={busyUid === u.uid}
                                 >
                                     {busyUid === u.uid

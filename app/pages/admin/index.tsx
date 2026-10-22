@@ -321,6 +321,8 @@ export const AdminPage = () => {
                                 showToast={showToast}
                                 readOnly={!isCoreStaffOrAbove}
                                 onDetailChange={setUpcomingInDetail}
+                                // Event staff have no Users tab to open.
+                                onLookupUser={isCoreStaffOrAbove || isStaffGroup ? handleLookupUser : undefined}
                             />
                         </div>
                         {(isCoreStaffOrAbove || isStaffGroup) && (
@@ -338,6 +340,7 @@ export const AdminPage = () => {
                                     showToast={showToast}
                                     onDetailChange={setEventsInDetail}
                                     readOnly={isStaffGroup}
+                                    onLookupUser={handleLookupUser}
                                 />
                             </div>
                         )}

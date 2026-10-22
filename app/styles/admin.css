@@ -293,12 +293,16 @@
     background: rgba(255, 255, 255, 0.85);
     border-radius: 14px;
     margin-bottom: 8px;
-    cursor: pointer;
     transition: all 0.2s ease;
     box-shadow: 0 2px 8px rgba(255, 150, 200, 0.06);
 }
 
-.admin-user-row:hover {
+/* Only a row with somewhere to go looks clickable. */
+.admin-user-row[role="button"] {
+    cursor: pointer;
+}
+
+.admin-user-row[role="button"]:hover {
     background: rgba(255, 255, 255, 0.95);
     transform: translateX(4px);
 }

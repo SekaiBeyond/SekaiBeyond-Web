@@ -35,6 +35,7 @@ interface UpcomingEventDetailViewProps {
     refreshPastEvents: () => Promise<void>;
     onBack: () => void;
     onEdit: (event: UpcomingEvent) => void;
+    onLookupUser?: (uid: string) => void;
 }
 
 export const UpcomingEventDetailView = ({
@@ -47,6 +48,7 @@ export const UpcomingEventDetailView = ({
                                             refreshPastEvents,
                                             onBack,
                                             onEdit,
+                                            onLookupUser,
                                         }: UpcomingEventDetailViewProps) => {
     const {isEnglish} = useLanguage();
     const [showArchive, setShowArchive] = useState(false);
@@ -288,6 +290,7 @@ export const UpcomingEventDetailView = ({
                     showToast={showToast}
                     readOnly={readOnly}
                     onCountChange={setStaffCount}
+                    onLookupUser={onLookupUser}
                 />
             )}
 

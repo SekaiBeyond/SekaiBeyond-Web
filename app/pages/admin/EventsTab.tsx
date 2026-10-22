@@ -18,6 +18,7 @@ interface EventsTabProps {
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     onDetailChange?: (inDetail: boolean) => void;
     readOnly?: boolean;
+    onLookupUser?: (uid: string) => void;
 }
 
 export interface EventsTabHandle {
@@ -31,6 +32,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                                                                           showToast,
                                                                           onDetailChange,
                                                                           readOnly = false,
+                                                                          onLookupUser,
                                                                       }, forwardedRef) => {
     const {isEnglish} = useLanguage();
     const {venues} = useVenues();
@@ -282,6 +284,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                         setManagedEvent(null);
                         openEditEvent(evt);
                     }}
+                    onLookupUser={onLookupUser}
                 />
             ) : (
                 <div className="admin-event-detail">

@@ -28,6 +28,7 @@ interface PastEventDetailViewProps {
     refreshEvents: () => Promise<void>;
     onBack: () => void;
     onEdit: (event: PastEvent) => void;
+    onLookupUser?: (uid: string) => void;
 }
 
 // An archived event in the UpcomingEvent shape TicketsSubtab expects; only the
@@ -65,6 +66,7 @@ export const PastEventDetailView = ({
                                         refreshEvents,
                                         onBack,
                                         onEdit,
+                                        onLookupUser,
                                     }: PastEventDetailViewProps) => {
     const {isEnglish} = useLanguage();
     const [eventAttendees, setEventAttendees] = useState<UserRecord[]>([]);
@@ -261,6 +263,7 @@ export const PastEventDetailView = ({
                     showToast={showToast}
                     onCountChange={setStaffCount}
                     onAttendeeRemoved={() => loadEventAttendees(event.id)}
+                    onLookupUser={onLookupUser}
                     readOnly={readOnly}
                 />
             )}
