@@ -55,8 +55,6 @@ export interface TeamMemberConfig {
 }
 
 interface SiteConfig {
-    bilibiliVideoBvid: string;
-    bilibiliVideoCoverUrl: string;
     teamMembers: TeamMemberConfig[];
     conEdition: ConEdition | null;
     contactEmail: string;
@@ -65,8 +63,6 @@ interface SiteConfig {
 }
 
 const DEFAULT_CONFIG: SiteConfig = {
-    bilibiliVideoBvid: '',
-    bilibiliVideoCoverUrl: '',
     teamMembers: [],
     conEdition: null,
     contactEmail: '',
@@ -79,8 +75,6 @@ const cache = createValueCache<SiteConfig>('site config', async () => {
     const snap = await getDoc(doc(db, 'config', 'main'));
     const data = snap.data();
     return {
-        bilibiliVideoBvid: data?.bilibiliVideoBvid ?? '',
-        bilibiliVideoCoverUrl: data?.bilibiliVideoCoverUrl ?? '',
         teamMembers: data?.teamMembers ?? [],
         conEdition: data?.conEdition ?? null,
         contactEmail: data?.contactEmail ?? '',

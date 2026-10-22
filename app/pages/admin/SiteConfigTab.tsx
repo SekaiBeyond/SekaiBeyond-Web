@@ -25,11 +25,6 @@ interface SiteConfigTabProps {
 // Mirrors SENDER_PREFIX_RE in functions/src/utils/validation.ts.
 const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
 
-function parseBvid(input: string): string {
-    const match = input.trim().match(/BV[a-zA-Z0-9]+/);
-    return match ? match[0] : '';
-}
-
 // A <div>, since `.admin-form-grid label span` would restyle spans in the
 // policy.
 const PolicyPreview = ({label, content}: {label: string; content: string}) => {
@@ -53,8 +48,6 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
     const {isEnglish} = useLanguage();
 
     const {config, loading: configLoading, failed: configFailed, refresh: refreshConfig} = useSiteConfig();
-    const [bvidInput, setBvidInput] = useState('');
-    const [savingVideo, setSavingVideo] = useState(false);
     const [emailInput, setEmailInput] = useState('');
     const [savingEmail, setSavingEmail] = useState(false);
     // Each field holds what the admin typed: an ID, or any link to the account.
@@ -76,7 +69,6 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
     useEffect(() => {
         if (!configLoading && !configInitialized) {
-            setBvidInput(config.bilibiliVideoBvid);
             setEmailInput(config.contactEmail);
             setSocialInputs(socialLinkInputs(config.socialLinks));
             setSenderInput(config.senderPrefix);
@@ -97,27 +89,6 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
             setPolicyInitialized(true);
         }
     }, [policyLoading, policy, policyInitialized]);
-
-    const saveVideo = async () => {
-        const bvid = parseBvid(bvidInput);
-        if (!bvid) {
-            showToast(
-                isEnglish ? 'Please enter a valid BV ID or Bilibili URL.' : '请输入有效的 BV 号或 B 站链接。',
-                'error'
-            );
-            return;
-        }
-        setSavingVideo(true);
-        try {
-            await callSaveSiteConfig({bilibiliVideoBvid: bvid});
-            await refreshAfterSave(refreshConfig, showToast, isEnglish);
-            showToast(isEnglish ? 'Video saved.' : '视频已保存。', 'success');
-        } catch {
-            showToast(isEnglish ? 'Failed to save video.' : '保存视频失败。', 'error');
-        } finally {
-            setSavingVideo(false);
-        }
-    };
 
     const saveEmail = async () => {
         const email = emailInput.trim().toLowerCase();
@@ -242,71 +213,10 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
         );
     }
 
-    const previewBvid = parseBvid(bvidInput);
     const defaultSender = senderSettings && `${senderSettings.defaultPrefix}@${senderSettings.domain}`;
 
     return (
         <>
-            <div id="admin-sec-video" className="admin-section">
-                <h3 className="admin-badges-title">
-                    {isEnglish ? 'Featured Video' : '精选视频'}
-                </h3>
-                <p className="admin-helper-text">
-                    {isEnglish
-                        ? 'Configure the featured video shown in the "See Us in Action" section.'
-                        : '设置「精彩时刻」板块展示的视频。'}
-                </p>
-                <div className="admin-form-grid admin-mt-12">
-                    <label>
-                        <span>{isEnglish ? 'Bilibili Video (BV ID or URL)' : 'B 站视频（BV 号或链接）'}</span>
-                        <input
-                            className="admin-input"
-                            type="text"
-                            value={bvidInput}
-                            onChange={e => !readOnly && setBvidInput(e.target.value)}
-                            readOnly={readOnly}
-                            placeholder="BV1GsfjB7E6J or https://www.bilibili.com/video/BV..."
-                        />
-                        {previewBvid && (
-                            <span className="admin-helper-text" style={{marginTop: 4, display: 'block'}}>
-                                {isEnglish ? 'Will link to: ' : '将跳转至：'}
-                                <code>https://www.bilibili.com/video/{previewBvid}</code>
-                            </span>
-                        )}
-                    </label>
-                    <div>
-                        <span style={{fontSize: 13, fontWeight: 600, color: 'var(--color-text)'}}>
-                            {isEnglish ? 'Cover Preview' : '封面预览'}
-                        </span>
-                        {config.bilibiliVideoCoverUrl
-                            ? <img
-                                className="admin-video-cover-preview"
-                                src={config.bilibiliVideoCoverUrl}
-                                alt={isEnglish ? 'Video cover' : '视频封面'}
-                            />
-                            : <div className="admin-video-cover-placeholder">
-                                {isEnglish ? 'Cover will appear after saving' : '保存后将显示封面'}
-                            </div>
-                        }
-                    </div>
-                </div>
-                {!readOnly && (
-                    <div className="admin-btn-row admin-mt-12">
-                        <button
-                            className="admin-toggle-btn admin-toggle-save"
-                            onClick={saveVideo}
-                            disabled={savingVideo}
-                        >
-                            {savingVideo
-                                ? (isEnglish ? 'Saving...' : '保存中...')
-                                : (isEnglish ? 'Save Video' : '保存视频')}
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            <div className="admin-divider"/>
-
             <div id="admin-sec-contact" className="admin-section">
                 <h3 className="admin-badges-title">
                     {isEnglish ? 'Contact Email' : '联系邮箱'}
@@ -352,8 +262,8 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                 </h3>
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? 'The accounts linked from the "Follow Us" section, the footers, the featured video, and the con FAQ. Leave one blank to hide every link to it.'
-                        : '「关注我们」板块、页脚、精选视频和漫展常见问题中链接的账号。留空则隐藏指向该账号的所有链接。'}
+                        ? 'The accounts linked from the "Follow Us" section, the footers, and the con FAQ. Leave one blank to hide every link to it.'
+                        : '「关注我们」板块、页脚和漫展常见问题中链接的账号。留空则隐藏指向该账号的所有链接。'}
                 </p>
                 <div className="admin-form-grid admin-mt-12">
                     {SOCIAL_LINK_KEYS.map(key => {
@@ -530,7 +440,6 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
             <SectionNav
                 sections={[
-                    {id: 'admin-sec-video', label: isEnglish ? 'Featured Video' : '精选视频'},
                     {id: 'admin-sec-contact', label: isEnglish ? 'Contact Email' : '联系邮箱'},
                     {id: 'admin-sec-social', label: isEnglish ? 'Social Links' : '社交链接'},
                     {id: 'admin-sec-sender', label: isEnglish ? 'Sender Email' : '发件邮箱'},

@@ -428,7 +428,6 @@ export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'savePolicy')(data);
 
 export const callSaveSiteConfig = (data: {
-    bilibiliVideoBvid?: string,
     contactEmail?: string,
     socialLinks?: SocialLinks,
     senderPrefix?: string,

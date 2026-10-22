@@ -218,20 +218,6 @@ export const savePolicy = onCall({maxInstances: 10}, async (request) => {
         return {saved: true};
     });
 });
-// picUrl is an untrusted field from Bilibili's API; fetching it unchecked would
-// be an SSRF vector, so only Bilibili's image CDNs are allowed.
-function isBilibiliImageUrl(value: string): boolean {
-    try {
-        const url = new URL(value);
-        if (url.protocol !== "https:") return false;
-        return url.hostname === "hdslb.com"
-            || url.hostname.endsWith(".hdslb.com")
-            || url.hostname === "biliimg.com"
-            || url.hostname.endsWith(".biliimg.com");
-    } catch {
-        return false;
-    }
-}
 
 // Con edition posters are config/con-<year>-<stamp>.webp, matched exactly
 // because guest photos (config/con-guest-*) share the prefix.
@@ -303,14 +289,6 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
 
     const input = request.data as Record<string, unknown>;
 
-    const bvid = input.bilibiliVideoBvid !== undefined
-        ? validateStr(input.bilibiliVideoBvid, "bilibiliVideoBvid", 100)
-        : undefined;
-
-    if (bvid && !/^BV[a-zA-Z0-9]+$/.test(bvid)) {
-        throw new HttpsError("invalid-argument", "Invalid Bilibili BV ID format.");
-    }
-
     // "" clears it, which hides the site's contact links.
     const contactEmail = input.contactEmail === undefined ? undefined
         : input.contactEmail === "" ? ""
@@ -347,54 +325,13 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         validateStorageImageUrl(conEdition.image, "convention image");
     }
 
-    // Checked before the Bilibili fetch and the config/video-cover write, which
-    // happen outside adminTransaction; otherwise any signed-in user could
-    // trigger a server-side fetch and overwrite the public cover.
+    // Checked before the share-link fetch, which happens outside
+    // adminTransaction; otherwise any signed-in user could trigger a server-side
+    // fetch.
     await requireAdmin(uid);
 
-    // Also a server-side fetch, so also behind the admin check.
     if (socialLinks && XIAOHONGSHU_SHARE_LINK.test(socialLinks.xiaohongshu)) {
         socialLinks.xiaohongshu = await resolveXiaohongshuShareLink(socialLinks.xiaohongshu);
-    }
-
-    let coverUrl = '';
-    if (bvid) {
-        try {
-            const apiResp = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`, {
-                headers: {'User-Agent': 'Mozilla/5.0'},
-                signal: AbortSignal.timeout(5000),
-            });
-            if (apiResp.ok) {
-                const json = await apiResp.json() as {code: number; data?: {pic?: string}};
-                const pic = json?.data?.pic ?? '';
-                const picUrl = pic.startsWith('http:') ? 'https:' + pic.slice(5) : pic;
-                if (picUrl && isBilibiliImageUrl(picUrl)) {
-                    const imgResp = await fetch(picUrl, {
-                        headers: {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.bilibili.com/'},
-                        signal: AbortSignal.timeout(10000),
-                    });
-                    if (imgResp.ok) {
-                        const buffer = Buffer.from(await imgResp.arrayBuffer());
-                        // Trust the bytes, not the content-type header.
-                        const detectedMime = detectImageMime(buffer);
-                        if (detectedMime && buffer.length <= MAX_UPLOAD_SIZE) {
-                            const bucket = getStorage().bucket();
-                            const file = bucket.file('config/video-cover');
-                            await file.save(buffer, {
-                                metadata: {
-                                    contentType: detectedMime,
-                                    cacheControl: 'public, max-age=31536000, immutable'
-                                },
-                            });
-                            const baseCoverUrl = await getDownloadURL(file);
-                            coverUrl = `${baseCoverUrl}&t=${Date.now()}`;
-                        }
-                    }
-                }
-            }
-        } catch {
-            // Best effort: save without a cover.
-        }
     }
 
     const configRef = db.collection("config").doc("main");
@@ -413,11 +350,6 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
         };
         // Each Site Config section saves on its own; the record names which.
         const configSections: string[] = [];
-        if (bvid !== undefined) {
-            updateData.bilibiliVideoBvid = bvid;
-            updateData.bilibiliVideoCoverUrl = coverUrl;
-            configSections.push("video");
-        }
         if (contactEmail !== undefined) {
             updateData.contactEmail = contactEmail;
             configSections.push("contact");

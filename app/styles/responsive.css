@@ -262,13 +262,6 @@
         gap: 10px;
     }
 
-    .video-section {
-        padding: 40px 16px;
-        margin-top: 20px;
-        margin-bottom: 20px;
-        border-radius: 20px;
-    }
-
     .about-section,
     .contact-section {
         margin: 20px 12px;
@@ -276,41 +269,6 @@
 
     .contact-inner {
         max-width: 90%;
-    }
-
-    .video-wrapper {
-        border-radius: 15px;
-    }
-
-    .video-wrapper::before {
-        border-radius: 18px;
-    }
-
-    .video-wrapper iframe {
-        border-radius: 15px;
-    }
-
-    .video-wrapper--desktop {
-        display: none;
-    }
-
-    .video-wrapper--mobile {
-        display: block;
-        text-decoration: none;
-    }
-
-    .video-mobile-card {
-        border-radius: 15px;
-    }
-
-    .video-caption {
-        font-size: 14px;
-        padding: 0 10px;
-    }
-
-    .video-cta {
-        padding: 12px 24px;
-        font-size: 14px;
     }
 }
 
@@ -486,19 +444,6 @@
         padding: 12px 28px;
         font-size: 14px;
         gap: 8px;
-    }
-
-    .video-section {
-        padding: 30px 12px;
-    }
-
-    .video-badge {
-        font-size: 12px;
-        padding: 6px 16px;
-    }
-
-    .video-caption {
-        font-size: 13px;
     }
 
     .convention-banner {

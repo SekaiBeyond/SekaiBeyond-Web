@@ -157,7 +157,7 @@ service cloud.firestore {
                 && isStaffOrAbove();
         }
 
-        // Site config (featured video, etc.) — publicly readable; writes via Cloud Functions.
+        // Site config (team, contact and social links, etc.) — publicly readable; writes via Cloud Functions.
         // config/main.teamMembers holds ONLY a display projection (no account uid/flags).
         // The full team roster (with linked-account uids) lives in the server-only
         // `teamRoster` collection below.
