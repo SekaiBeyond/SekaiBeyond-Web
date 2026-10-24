@@ -112,19 +112,26 @@ export const renderPassportSamplePreview = (
 ): string => sanitizeEmailHtml(fillSample(template.bodyHtml, design, contactEmail, origin, true));
 
 /**
- * The addresses in pasted text or an imported file, lowercased and each once,
- * in the order first listed. Anything with an @ that isn't an address is
- * returned as invalid; everything else (names, a CSV's headers and other
- * columns) is passed over.
+ * The addresses in pasted text or an imported file, lowercased, in order and as
+ * often as listed: an address listed twice is sent two passports. Anything with
+ * an @ that isn't an address is returned as invalid, once each; everything else
+ * (names, a CSV's headers and other columns) is passed over.
  */
 export const parseEmailList = (text: string): {emails: string[]; invalid: string[]} => {
-    const emails = new Set<string>();
+    const emails: string[] = [];
     const invalid = new Set<string>();
     for (const token of text.split(/[\s,;<>"'()[\]]+/)) {
         if (!token.includes('@')) continue;
         const email = token.replace(/^mailto:/i, '').toLowerCase();
-        if (email.length <= 320 && EMAIL_RE.test(email)) emails.add(email);
+        if (email.length <= 320 && EMAIL_RE.test(email)) emails.push(email);
         else invalid.add(token);
     }
-    return {emails: [...emails], invalid: [...invalid]};
+    return {emails, invalid: [...invalid]};
+};
+
+/** How many times each address is in `emails`. */
+export const countAddresses = (emails: string[]): Map<string, number> => {
+    const counts = new Map<string, number>();
+    for (const email of emails) counts.set(email, (counts.get(email) ?? 0) + 1);
+    return counts;
 };

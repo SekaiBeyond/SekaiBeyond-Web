@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callEmailPassports, callGetTicketEmailQuota, errorSuffix, functionsErrorCode } from '~/lib/firebase';
-import { MAX_PASSPORT_EMAIL, type PassportDesign } from '~/lib/passports';
+import { fetchPassportsByDesign, MAX_PASSPORT_EMAIL, type PassportDesign } from '~/lib/passports';
 import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
 import { parseFile } from '../tickets/importValidation';
 import type { ShowToast } from '../utils';
 import { PassportEmailTemplateSection } from './PassportEmailTemplateSection';
 import { designLabel } from './PassportGenerator';
-import { parseEmailList } from './passportEmail';
+import { countAddresses, parseEmailList } from './passportEmail';
 
 interface PassportEmailerProps {
     designs: PassportDesign[];
@@ -27,19 +27,29 @@ interface QuotaState {
 interface RunResult {
     sent: number;
     queued: number;
-    /** Already sent a passport of this design, so passed over. */
-    skipped: string[];
     /** Not sent, and put back in the list: no room, refused, or never reached. */
     left: number;
 }
+
+/** How many of an address's repeats a notice names before counting the rest. */
+const NAMED_MAX = 10;
+
+/** "a@x.com ×2, b@y.com ×3", the first NAMED_MAX, then how many more. */
+const nameAddresses = (entries: [string, number][], isEnglish: boolean): string => {
+    const named = entries.slice(0, NAMED_MAX).map(([email, n]) => `${email} ×${n}`).join(isEnglish ? ', ' : '、');
+    const more = entries.length - NAMED_MAX;
+    return more > 0 ? (isEnglish ? `${named} and ${more} more` : `${named} 等另外 ${more} 个`) : named;
+};
 
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
 /**
  * Passports sent by email: a list of addresses, pasted or imported, each sent
  * a passport of its own from one design, with its key in the email edited
- * below. Whatever doesn't go is put back in the list, so sending it again
- * picks up where this run stopped; anyone already sent one is skipped.
+ * below. An address listed twice gets two, for someone who bought two, so
+ * repeats, and anyone already sent one of the design, are pointed out rather
+ * than dropped. Whatever doesn't go is put back in the list, so sending it
+ * again picks up where this run stopped.
  */
 export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: PassportEmailerProps) => {
     const {isEnglish} = useLanguage();
@@ -58,6 +68,37 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
 
     const selectedDesign = designs.find(d => d.id === designId);
     const {emails, invalid} = useMemo(() => parseEmailList(text), [text]);
+    const listed = useMemo(() => countAddresses(emails), [emails]);
+    const repeated = useMemo(() => [...listed].filter(([, n]) => n > 1), [listed]);
+
+    // How many passports of this design each address was already sent, so a
+    // second one is a choice. Null while loading or if it couldn't be read.
+    const [sentBefore, setSentBefore] = useState<Map<string, number> | null>(null);
+    const sentBeforeToken = useRef(0);
+    const loadSentBefore = useCallback(async (target: string) => {
+        const mine = ++sentBeforeToken.current;
+        setSentBefore(null);
+        try {
+            const passports = await fetchPassportsByDesign(target);
+            if (mine === sentBeforeToken.current) {
+                setSentBefore(countAddresses(passports.map(p => p.sentTo).filter(Boolean)));
+            }
+        } catch (err) {
+            console.error('[PassportEmailer] earlier sends', err);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (designId) void loadSentBefore(designId);
+    }, [designId, loadSentBefore]);
+
+    const alreadySent = useMemo(
+        () => sentBefore ? [...listed.keys()].flatMap(email => {
+            const n = sentBefore.get(email) ?? 0;
+            return n > 0 ? [[email, n] as [string, number]] : [];
+        }) : [],
+        [listed, sentBefore],
+    );
 
     // Leaving would stop the run between chunks without saying where.
     useExitGuard(sending, isEnglish
@@ -100,20 +141,20 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
             } else {
                 content = await file.text();
             }
-            const found = parseEmailList(content);
-            const listed = new Set(emails);
-            const fresh = found.emails.filter(e => !listed.has(e));
-            if (fresh.length > 0) {
-                setText(prev => `${prev.trimEnd()}${prev.trim() ? '\n' : ''}${fresh.join('\n')}`);
+            // All of them, repeats too: the notices below point those out.
+            const found = parseEmailList(content).emails;
+            if (found.length > 0) {
+                setText(prev => `${prev.trimEnd()}${prev.trim() ? '\n' : ''}${found.join('\n')}`);
             }
             setResult(null);
+            const overlap = found.filter(e => listed.has(e)).length;
             showToast(
                 isEnglish
-                    ? `Added ${fresh.length} address${fresh.length === 1 ? '' : 'es'} from ${file.name}${
-                        found.emails.length > fresh.length ? ` (${found.emails.length - fresh.length} already listed)` : ''}.`
-                    : `已从 ${file.name} 添加 ${fresh.length} 个地址${
-                        found.emails.length > fresh.length ? `（${found.emails.length - fresh.length} 个已在列表中）` : ''}。`,
-                fresh.length > 0 ? 'success' : 'warning',
+                    ? `Added ${found.length} address${found.length === 1 ? '' : 'es'} from ${file.name}${
+                        overlap > 0 ? ` (${overlap} already in the list)` : ''}.`
+                    : `已从 ${file.name} 添加 ${found.length} 个地址${
+                        overlap > 0 ? `（${overlap} 个已在列表中）` : ''}。`,
+                found.length > 0 ? (overlap > 0 ? 'warning' : 'success') : 'warning',
             );
         } catch (err) {
             console.error('[PassportEmailer] import', err);
@@ -132,8 +173,18 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
         const total = emails.length;
         const ok = window.confirm([
             isEnglish
-                ? `Create ${total} “${designLabel(selectedDesign, true)}” passport${total === 1 ? '' : 's'} and email each address its activation key? Anyone already sent one of this design is skipped.`
-                : `创建 ${total} 本「${designLabel(selectedDesign, false)}」通行证，并将激活码发送至每个地址？已收到过此设计的地址将被跳过。`,
+                ? `Create ${total} “${designLabel(selectedDesign, true)}” passport${total === 1 ? '' : 's'} for ${listed.size} address${listed.size === 1 ? '' : 'es'}, each emailed its own activation key?`
+                : `为 ${listed.size} 个地址创建 ${total} 本「${designLabel(selectedDesign, false)}」通行证，并分别发送各自的激活码？`,
+            repeated.length > 0
+                ? (isEnglish
+                    ? `\n\n${repeated.length} address${repeated.length === 1 ? ' is' : 'es are'} listed more than once and will get a passport for each listing.`
+                    : `\n\n${repeated.length} 个地址在列表中出现多次，每出现一次都会收到一本通行证。`)
+                : '',
+            alreadySent.length > 0
+                ? (isEnglish
+                    ? `\n\n${alreadySent.length} address${alreadySent.length === 1 ? ' was' : 'es were'} already sent one of this design and will get another.`
+                    : `\n\n${alreadySent.length} 个地址已收到过此设计，将再收到一本。`)
+                : '',
             remainingToday !== null && total > remainingToday
                 ? (isEnglish
                     ? `\n\nOnly ${remainingToday} can go now. Up to ${remainingQueue} more will queue and go out as the daily cap frees up; any past that stay in the list for another day.`
@@ -149,7 +200,6 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
 
         let sent = 0;
         let queued = 0;
-        const skipped: string[] = [];
         // Not sent: put back in the list once the run ends.
         const leftOver: string[] = [];
         let done = 0;
@@ -160,7 +210,6 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
                 done += chunk.length;
                 sent += data.sentCount;
                 queued += data.queuedCount;
-                skipped.push(...data.skipped);
                 leftOver.push(...data.deferred, ...data.failed);
                 setProgress({done, total});
                 if (data.failed.length > 0) {
@@ -202,7 +251,8 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
             if (done > 0) {
                 const left = [...leftOver, ...emails.slice(done)];
                 setText(left.join('\n'));
-                setResult({sent, queued, skipped, left: left.length});
+                setResult({sent, queued, left: left.length});
+                void loadSentBefore(selectedDesign.id);
             }
             setSending(false);
             setProgress(null);
@@ -229,8 +279,8 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
                 <h3>{isEnglish ? 'Recipients' : '收件人'}</h3>
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? 'Each address gets a passport of its own from the design below, with its activation key in the email. No sticker is printed; once activated, the passport shows on the holder’s profile. An address already sent one of this design is skipped.'
-                        : '每个地址都会获得一本以下方设计生成的通行证，激活码随邮件发送。不打印贴纸；激活后，通行证会显示在持有者的个人主页上。已收到过此设计的地址将被跳过。'}
+                        ? 'Each address gets a passport of its own from the design below, with its activation key in the email. No sticker is printed; once activated, the passport shows on the holder’s profile. List an address twice to send it two, for someone who bought two.'
+                        : '每个地址都会获得一本以下方设计生成的通行证，激活码随邮件发送。不打印贴纸；激活后，通行证会显示在持有者的个人主页上。如有人购买了两本，将其地址列出两次即可发送两本。'}
                 </p>
 
                 <label className="admin-tickets-template-field">
@@ -293,9 +343,25 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
 
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? `${emails.length} address${emails.length === 1 ? '' : 'es'}, each counted once.`
-                        : `共 ${emails.length} 个地址（重复的只计一次）。`}
+                        ? `${emails.length} passport${emails.length === 1 ? '' : 's'} for ${listed.size} address${listed.size === 1 ? '' : 'es'}.`
+                        : `共 ${emails.length} 本通行证，发送至 ${listed.size} 个地址。`}
                 </p>
+                {/* Sent as listed, so a slip of the paste shows here before it
+                    costs a passport. */}
+                {repeated.length > 0 && (
+                    <p className="admin-helper-text admin-tickets-edit-warning">
+                        {isEnglish
+                            ? `Listed more than once, so sent a passport for each listing: ${nameAddresses(repeated, true)}. Remove the extras if that isn’t meant.`
+                            : `以下地址出现多次，每出现一次都会收到一本通行证：${nameAddresses(repeated, false)}。如非有意，请删除多余的条目。`}
+                    </p>
+                )}
+                {alreadySent.length > 0 && (
+                    <p className="admin-helper-text admin-tickets-edit-warning">
+                        {isEnglish
+                            ? `Already sent this design before, and will get another: ${nameAddresses(alreadySent, true)}.`
+                            : `以下地址此前已收到过此设计，将再收到一本：${nameAddresses(alreadySent, false)}。`}
+                    </p>
+                )}
                 {invalid.length > 0 && (
                     <p className="admin-helper-text admin-tickets-edit-warning">
                         {isEnglish
@@ -361,23 +427,14 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
                         result.left > 0 ? 'admin-tickets-send-banner-warning' : 'admin-tickets-send-banner-info'}`}>
                         <strong>
                             {isEnglish
-                                ? `Sent ${result.sent}${result.queued > 0 ? `, queued ${result.queued}` : ''}${
-                                    result.skipped.length > 0 ? `, skipped ${result.skipped.length}` : ''}.`
-                                : `已发送 ${result.sent}${result.queued > 0 ? `，已排队 ${result.queued}` : ''}${
-                                    result.skipped.length > 0 ? `，已跳过 ${result.skipped.length}` : ''}。`}
+                                ? `Sent ${result.sent}${result.queued > 0 ? `, queued ${result.queued}` : ''}.`
+                                : `已发送 ${result.sent}${result.queued > 0 ? `，已排队 ${result.queued}` : ''}。`}
                         </strong>
                         {result.queued > 0 && (
                             <p>
                                 {isEnglish
                                     ? 'Queued emails go out on their own as the daily cap frees up.'
                                     : '排队的邮件将在每日额度恢复后自动发送。'}
-                            </p>
-                        )}
-                        {result.skipped.length > 0 && (
-                            <p>
-                                {isEnglish
-                                    ? `Already sent one of this design: ${result.skipped.join(', ')}.`
-                                    : `已收到过此设计：${result.skipped.join('、')}。`}
                             </p>
                         )}
                         {result.left > 0 && (

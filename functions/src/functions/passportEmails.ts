@@ -41,14 +41,12 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
  * from the one saved template. There is no sticker; once claimed, the holder
  * reaches the passport's page from their profile shelf.
  *
- * The address stays on the passport as `sentTo`, so sending a list again skips
- * whoever already has one of that design.
+ * The address stays on the passport as `sentTo`, which the admin screen uses
+ * to point out anyone already sent one of the design. Nothing here refuses a
+ * repeat: someone who bought two is listed twice.
  */
 
 const templateRef = () => db.collection("passportEmailTemplate").doc("default");
-
-/** `in` takes at most 30 values. */
-const IN_QUERY_LIMIT = 30;
 
 /**
  * A key email that carries neither the key nor its link would be a passport no
@@ -88,14 +86,14 @@ function renderKeyEmail(
 }
 
 /**
- * Mint one passport per address and email each its key, up to MAX_EMAIL_COUNT
- * addresses a call; the client splits longer lists.
+ * Mint one passport per listed address and email each its key, up to
+ * MAX_EMAIL_COUNT a call; the client splits longer lists. An address listed
+ * twice gets two passports, each in an email of its own.
  *
  * What the daily cap leaves room for goes now, the overflow joins
  * /scheduledMail as sendTicketEmails' does, and anything past the queue's cap
- * comes back in `deferred`, minting nothing, for another day. Addresses that
- * already have a passport of the design come back in `skipped`, and those whose
- * email Resend refused in `failed`. Only passports whose email went or is
+ * comes back in `deferred`, minting nothing, for another day. Those whose email
+ * Resend refused come back in `failed`. Only passports whose email went or is
  * queued are kept, so a failed address can simply be sent again.
  */
 export const emailPassports = onCall(
@@ -109,8 +107,8 @@ export const emailPassports = onCall(
         if (!Array.isArray(input.emails) || input.emails.length < 1 || input.emails.length > MAX_EMAIL_COUNT) {
             throw new HttpsError("invalid-argument", `emails must hold between 1 and ${MAX_EMAIL_COUNT} addresses.`);
         }
-        // Lowercased, and each address once however often it's listed.
-        const emails = [...new Set(input.emails.map(e => validateEmail(e, "email")))];
+        // Lowercased, and kept as often as listed: one passport each.
+        const recipients = input.emails.map(e => validateEmail(e, "email"));
 
         const [design, template] = await Promise.all([
             readMintingDesign(designId),
@@ -122,21 +120,6 @@ export const emailPassports = onCall(
                 {code: "no-key-placeholder"});
         }
         const contactEmail = await contactEmailFor(template);
-
-        // Queried by address alone and narrowed to the design here, so no
-        // composite index is needed.
-        const alreadySent = new Set<string>();
-        for (let i = 0; i < emails.length; i += IN_QUERY_LIMIT) {
-            const snap = await db.collection("passports")
-                .where("sentTo", "in", emails.slice(i, i + IN_QUERY_LIMIT))
-                .get();
-            for (const doc of snap.docs) {
-                if (doc.data().designId === designId) alreadySent.add(doc.data().sentTo);
-            }
-        }
-        const skipped = emails.filter(e => alreadySent.has(e));
-        const recipients = emails.filter(e => !alreadySent.has(e));
-        if (recipients.length === 0) return {sentCount: 0, queuedCount: 0, skipped, deferred: [], failed: []};
 
         // The daily cap, gated as in sendTicketEmails: re-anchored against the
         // provider first, then a pre-check that only refuses when both the cap
@@ -266,7 +249,7 @@ export const emailPassports = onCall(
             else if (sentCount !== sendCount) await sendAuditRef.update({passportCount: sentCount});
         }
 
-        return {sentCount, queuedCount: queueCount, skipped, deferred, failed: unsent.map(u => u.email)};
+        return {sentCount, queuedCount: queueCount, deferred, failed: unsent.map(u => u.email)};
     });
 
 /** Save the one key email template. Core staff and up, like the ticket template. */
