@@ -2,6 +2,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { FieldValue } from "firebase-admin/firestore";
 import { syncProviderUsage } from "../utils/emailProvider";
 import { db } from "../utils/firebase";
+import { fillActivationKey } from "../utils/passports";
 import { recordDoc, recordRef } from "../utils/records";
 import {
     computeEmailQuota,
@@ -62,37 +63,71 @@ export const scheduledMailDrain = onSchedule({
         return;
     }
 
-    // Drop entries whose attendee was deleted since queueing: the mail would
-    // carry dead tickets, and the post-send update would fail and leave the
-    // entry stuck.
+    // Drop entries whose attendee or passport was deleted since queueing: the
+    // mail would carry dead tickets or a dead key, and the post-send update
+    // would fail and leave the entry stuck. A passport claimed meanwhile has no
+    // use for its key either.
     const checks = await Promise.all(snap.docs.map(async (doc) => {
         const data = doc.data();
-        const attendeePath = typeof data.attendeePath === "string" ? data.attendeePath : null;
-        if (!attendeePath) return {doc, data, attendeePath: null, orphan: false};
-        const attendeeSnap = await db.doc(attendeePath).get();
-        return {doc, data, attendeePath, orphan: !attendeeSnap.exists};
+        // Ticket emails queued before targetPath name their attendee this way.
+        const targetPath = typeof data.targetPath === "string" ? data.targetPath
+            : typeof data.attendeePath === "string" ? data.attendeePath : null;
+        const check = {
+            doc, data, targetPath,
+            isPassport: data.type === "passport",
+            targetExists: false,
+            key: null as string | null,
+            orphan: false,
+        };
+        if (!targetPath) return check;
+        const targetSnap = await db.doc(targetPath).get();
+        check.targetExists = targetSnap.exists;
+        check.orphan = !targetSnap.exists;
+        if (check.isPassport && targetSnap.exists) {
+            // The key is filled in only now (see emailPassports), so the one
+            // current at sending goes.
+            const key = (await db.collection("passportSecrets").doc(targetSnap.id).get()).data()?.key;
+            if (typeof key === "string" && targetSnap.data()?.status !== "claimed") check.key = key;
+            else check.orphan = true;
+        }
+        return check;
     }));
 
     const candidates: Array<{
         doc: FirebaseFirestore.QueryDocumentSnapshot;
         envelope: ResendEnvelope;
-        attendeePath: string | null;
+        targetPath: string | null;
+        isPassport: boolean;
     }> = [];
     let droppedOrphans = 0;
     let droppedMalformed = 0;
     for (const check of checks) {
         if (check.orphan) {
             try {
-                await check.doc.ref.delete();
+                const batch = db.batch();
+                batch.delete(check.doc.ref);
+                // A passport claimed meanwhile, or left keyless, isn't waiting
+                // on this any more.
+                if (check.targetExists && check.targetPath) {
+                    batch.update(db.doc(check.targetPath), {emailScheduled: false});
+                }
+                await batch.commit();
                 droppedOrphans++;
                 console.log("scheduledMailDrain: dropped orphan",
-                    check.doc.id, check.attendeePath);
+                    check.doc.id, check.targetPath);
             } catch (err) {
                 console.error("scheduledMailDrain: failed to drop orphan", check.doc.id, err);
             }
             continue;
         }
-        const envelope = extractEnvelope(check.data);
+        const parsed = extractEnvelope(check.data);
+        const envelope = parsed && check.key
+            ? {
+                ...parsed,
+                subject: fillActivationKey(parsed.subject, check.key),
+                html: fillActivationKey(parsed.html, check.key)
+            }
+            : parsed;
         if (!envelope) {
             console.error("scheduledMailDrain: deleting malformed doc", check.doc.id);
             try {
@@ -102,7 +137,7 @@ export const scheduledMailDrain = onSchedule({
             droppedMalformed++;
             continue;
         }
-        candidates.push({doc: check.doc, envelope, attendeePath: check.attendeePath});
+        candidates.push({doc: check.doc, envelope, targetPath: check.targetPath, isPassport: check.isPassport});
     }
 
     if (candidates.length === 0) {
@@ -136,18 +171,19 @@ export const scheduledMailDrain = onSchedule({
         }
     }
 
-    // Delete drained docs and clear emailScheduled on their attendees, one
-    // commit each so a bad one doesn't strand the rest.
+    // Delete drained docs and clear emailScheduled on their attendees and
+    // passports, one commit each so a bad one doesn't strand the rest.
     if (drained > 0) {
         for (let i = 0; i < drained; i++) {
-            const {doc, attendeePath} = candidates[i];
+            const {doc, targetPath, isPassport} = candidates[i];
             const batch = db.batch();
             batch.delete(doc.ref);
-            if (attendeePath) {
-                batch.update(db.doc(attendeePath), {
+            if (targetPath) {
+                batch.update(db.doc(targetPath), {
                     emailScheduled: false,
                     emailSentAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp(),
+                    // Passports keep no updatedAt.
+                    ...(isPassport ? {} : {updatedAt: FieldValue.serverTimestamp()}),
                 });
             }
             try {

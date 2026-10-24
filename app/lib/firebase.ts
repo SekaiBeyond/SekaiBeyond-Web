@@ -635,6 +635,26 @@ export const callSavePassportDesign = (data: {
 export const callDeletePassportDesign = (data: {designId: string}) =>
     httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deletePassportDesign')(data);
 
+/**
+ * Mints a passport for each address and emails it its key, up to
+ * MAX_PASSPORT_EMAIL a call. Addresses come back sorted by what became of them
+ * when they weren't sent or queued.
+ */
+export const callEmailPassports = (data: {designId: string; emails: string[]}) =>
+    httpsCallable<typeof data, {
+        sentCount: number;
+        queuedCount: number;
+        /** Already sent a passport of this design. */
+        skipped: string[];
+        /** Past both the daily cap and the queue: nothing minted. */
+        deferred: string[];
+        /** Resend refused the email, so the passport was deleted again. */
+        failed: string[];
+    }>(getFunctions(), 'emailPassports')(data);
+
+export const callUpdatePassportEmailTemplate = (data: {subject: string; bodyHtml: string}) =>
+    httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'updatePassportEmailTemplate')(data);
+
 export const callGetPublicProfile = (data: {uid: string}) =>
     httpsCallable<{uid: string}, {
         displayName: string; photoURL: string; bannerURL: string; joinedAt: string;

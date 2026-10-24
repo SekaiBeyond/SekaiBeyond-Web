@@ -1,6 +1,6 @@
 import sanitizeHtml from 'sanitize-html';
 
-// Must stay in sync with `EMAIL_HTML_SANITIZE_OPTIONS` in functions/src/functions/tickets.ts.
+// Must stay in sync with `EMAIL_HTML_SANITIZE_OPTIONS` in functions/src/utils/emailTemplate.ts.
 const EMAIL_HTML_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     allowedTags: [
         'p', 'div', 'span', 'strong', 'em', 'b', 'i', 'u', 'br', 'hr',

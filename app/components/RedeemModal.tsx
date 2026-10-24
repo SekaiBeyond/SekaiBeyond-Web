@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callRedeemCode, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
@@ -9,6 +9,8 @@ import { useModalEffects } from '~/lib/useModalEffects';
 
 const OPEN_EVENT = 'open-redeem-modal';
 const PASSPORT_CLAIMED_EVENT = 'passport-claimed';
+/** Set by fillActivationKey in functions/src/utils/passports.ts. */
+const REDEEM_PARAM = 'redeem';
 
 export const openRedeemModal = () => window.dispatchEvent(new CustomEvent(OPEN_EVENT));
 
@@ -36,6 +38,7 @@ export const RedeemModal = () => {
     const {user, profile, refreshProfile} = useAuth();
     const {isEnglish} = useLanguage();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [show, setShow] = useState(false);
     const [input, setInput] = useState('');
     const [state, setState] = useState<
@@ -52,22 +55,40 @@ export const RedeemModal = () => {
         if (!submittingRef.current) setShow(false);
     });
 
+    const open = useCallback((code: string) => {
+        setShow(true);
+        setInput(code);
+        setState('idle');
+        setBadge(null);
+        setEventInfo(null);
+        setPassport(null);
+        setError('');
+        submittingRef.current = false;
+        setTimeout(() => inputRef.current?.focus(), 50);
+    }, []);
+
     useEffect(() => {
         const handler = () => {
             if (!user || !profile) return;
-            setShow(true);
-            setInput('');
-            setState('idle');
-            setBadge(null);
-            setEventInfo(null);
-            setPassport(null);
-            setError('');
-            submittingRef.current = false;
-            setTimeout(() => inputRef.current?.focus(), 50);
+            open('');
         };
         window.addEventListener(OPEN_EVENT, handler);
         return () => window.removeEventListener(OPEN_EVENT, handler);
-    }, [user, profile]);
+    }, [user, profile, open]);
+
+    // A passport key email's link, ?redeem=<key>: the box opens with the key in
+    // it once the visitor is signed in, for them to redeem on the account they
+    // mean to. Taken off the URL so a reload doesn't open it again.
+    const linkedCode = searchParams.get(REDEEM_PARAM);
+    useEffect(() => {
+        if (!linkedCode || !user || !profile) return;
+        open(linkedCode);
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.delete(REDEEM_PARAM);
+            return next;
+        }, {replace: true});
+    }, [linkedCode, user, profile, open, setSearchParams]);
 
     useEffect(() => {
         if (!user || !profile) setShow(false);

@@ -225,6 +225,13 @@ service cloud.firestore {
             allow read: if true;
         }
 
+        // The email that sends a passport's key — core-staff+ can read, like
+        // the ticket templates; writes via updatePassportEmailTemplate only.
+        match /passportEmailTemplate/{docId} {
+            allow read: if request.auth != null
+                && isCoreStaffOrAbove();
+        }
+
         // Editable social-platform templates for the QR "Social profile" mode.
         // Only consumed in the admin UI (staff+), never by public scanners; all
         // writes go through Cloud Functions.

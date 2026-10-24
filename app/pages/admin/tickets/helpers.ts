@@ -190,7 +190,7 @@ const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
 export const usesContactEmail = (template: Pick<EmailTemplate, 'subject' | 'bodyHtml'>): boolean =>
     [template.subject, template.bodyHtml].some(t => t.search(CONTACT_EMAIL_PLACEHOLDER) !== -1);
 
-const escapeHtml = (s: string): string => s
+export const escapeHtml = (s: string): string => s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

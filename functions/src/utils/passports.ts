@@ -1,7 +1,7 @@
 import * as crypto from "crypto";
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
-import { BATCH_LIMIT } from "./config";
+import { BATCH_LIMIT, PUBLIC_ORIGIN, SEND_CHUNK_SIZE } from "./config";
 import { db } from "./firebase";
 import { CODE_ALPHABET, generateSecureCode } from "./helpers";
 import { extendedExpiry, startedAtAfter } from "./membership";
@@ -34,6 +34,10 @@ export const MAX_DELETE_COUNT = MAX_GENERATE_COUNT;
 
 // Reads only, so bounded by one getAll; the client splits bigger selections.
 export const MAX_KEY_EXPORT_COUNT = 500;
+
+// One emailPassports call mints and mails this many, within both the mint
+// ceiling and one Resend batch; the client splits bigger lists.
+export const MAX_EMAIL_COUNT = Math.min(MAX_GENERATE_COUNT, SEND_CHUNK_SIZE);
 
 const SEPARATORS_RE = /[\s-]+/g;
 
@@ -90,6 +94,97 @@ export function isPassportYear(value: unknown): value is number {
 
 const PASSPORTS = "passports";
 const SECRETS = "passportSecrets";
+
+/** What minting copies from a design, and what a key email shows of it. */
+export interface MintingDesign {
+    designId: string;
+    year: number;
+    name: string;
+    nameCn: string;
+    coverImageUrl: string;
+    termDays: number;
+}
+
+/**
+ * The design to mint from. Without one there is nothing to render on the shelf
+ * or the public page.
+ */
+export async function readMintingDesign(designId: string): Promise<MintingDesign> {
+    const snap = await db.collection("passportDesigns").doc(designId).get();
+    if (!snap.exists) {
+        throw new HttpsError("failed-precondition", "That passport design doesn't exist.", {code: "no-design"});
+    }
+    const data = snap.data()!;
+    return {
+        designId,
+        year: data.year,
+        name: data.name ?? "",
+        nameCn: data.nameCn ?? "",
+        coverImageUrl: data.coverImageUrl ?? "",
+        termDays: data.termDays,
+    };
+}
+
+/**
+ * One new unclaimed passport and its key, as a write for commitInChunks.
+ *
+ * The year is copied because it never changes, and the shelf and records use it
+ * without reading designs; the term because it can be edited, and a passport
+ * grants what it was issued with. `seen` only guards ids within one call;
+ * batch.create() fails on a collision with an existing passport rather than
+ * overwriting it. `extra` is set on the passport alongside.
+ */
+export function mintPassport(
+    design: MintingDesign,
+    seen: Set<string>,
+    by: {uid: string; name: string},
+    extra: Record<string, unknown> = {},
+): {passportId: string; key: string; write: (batch: FirebaseFirestore.WriteBatch) => void} {
+    let passportId = generateSecureCode(PASSPORT_ID_LENGTH);
+    while (seen.has(passportId)) passportId = generateSecureCode(PASSPORT_ID_LENGTH);
+    seen.add(passportId);
+
+    const {key, salt, secretHash} = newActivationKey();
+    return {
+        passportId,
+        key,
+        write: (batch) => {
+            batch.create(db.collection(PASSPORTS).doc(passportId), {
+                designId: design.designId,
+                year: design.year,
+                status: "unclaimed",
+                ownerUid: null,
+                claimedAt: null,
+                termDays: design.termDays,
+                createdAt: FieldValue.serverTimestamp(),
+                createdBy: by.uid,
+                createdByName: by.name,
+                keyIssuedAt: FieldValue.serverTimestamp(),
+                keyReissueCount: 0,
+                ...extra,
+            });
+            batch.create(db.collection(SECRETS).doc(passportId), {salt, secretHash, key});
+        },
+    };
+}
+
+export const ACTIVATION_CODE_PLACEHOLDER = /{{\s*activationCode\s*}}/g;
+export const ACTIVATE_URL_PLACEHOLDER = /{{\s*activateUrl\s*}}/g;
+
+/**
+ * A key email's two key placeholders: the key as printed on a slip, and the
+ * link that opens the Redeem Code box with it filled in. Filled apart from the
+ * rest of the template, so a queued email holds them unfilled and
+ * scheduledMailDrain fills in the key current when it goes.
+ */
+export function fillActivationKey(text: string, key: string): string {
+    const activationCode = formatActivationKey(key);
+    const activateUrl = `${PUBLIC_ORIGIN}/profile?redeem=${encodeURIComponent(activationCode)}`;
+    // Function replacements, so nothing in them is read as a pattern.
+    return text
+        .replace(ACTIVATION_CODE_PLACEHOLDER, () => activationCode)
+        .replace(ACTIVATE_URL_PLACEHOLDER, () => activateUrl);
+}
 
 /**
  * The passport whose current key is `key`, or null. Found through the plaintext

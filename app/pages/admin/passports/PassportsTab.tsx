@@ -5,11 +5,12 @@ import { StatTile } from '../StatTile';
 import type { ShowToast } from '../utils';
 import { PassportDesignsSection } from './PassportDesignsSection';
 import { PassportDetail } from './PassportDetail';
+import { PassportEmailer } from './PassportEmailer';
 import { designLabel, PassportGenerator } from './PassportGenerator';
 import { PassportSearch } from './PassportSearch';
 import { INITIAL_STOCK_VIEW, PassportStock, type StockView } from './PassportStock';
 
-type View = 'dashboard' | 'generate' | 'detail' | 'designs';
+type View = 'dashboard' | 'generate' | 'email' | 'detail' | 'designs';
 
 interface PassportsTabProps {
     /** Jumps to the holder in Users Management, as the records tab does. */
@@ -136,6 +137,20 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
         );
     }
 
+    if (view === 'email' && !readOnly) {
+        return (
+            <PassportEmailer
+                designs={designs}
+                defaultDesignId={designId}
+                onBack={() => {
+                    setView('dashboard');
+                    void refresh();
+                }}
+                showToast={showToast}
+            />
+        );
+    }
+
     return (
         <Dashboard
             designs={designs}
@@ -155,6 +170,7 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
                 setView('detail');
             }}
             onGenerate={() => setView('generate')}
+            onEmail={() => setView('email')}
             onDesigns={() => setView('designs')}
             showToast={showToast}
             readOnly={readOnly}
@@ -177,6 +193,7 @@ interface DashboardProps {
     onBulkDeleted: (passportIds: string[]) => void;
     onOpen: (id: string) => void;
     onGenerate: () => void;
+    onEmail: () => void;
     onDesigns: () => void;
     showToast: ShowToast;
     readOnly: boolean;
@@ -197,6 +214,7 @@ const Dashboard = ({
                        onBulkDeleted,
                        onOpen,
                        onGenerate,
+                       onEmail,
                        onDesigns,
                        showToast,
                        readOnly,
@@ -226,6 +244,18 @@ const Dashboard = ({
                     <button className="admin-toggle-btn admin-toggle-edit" onClick={onDesigns}>
                         {isEnglish ? 'Designs' : '设计'}
                     </button>
+                    {!readOnly && (
+                        <button
+                            className="admin-toggle-btn admin-toggle-edit"
+                            onClick={onEmail}
+                            disabled={designs.length === 0}
+                            title={designs.length === 0
+                                ? (isEnglish ? 'Create a design first' : '请先创建设计')
+                                : undefined}
+                        >
+                            {isEnglish ? 'Email Passports' : '邮件发送通行证'}
+                        </button>
+                    )}
                     {!readOnly && (
                         <button
                             className="admin-toggle-btn admin-toggle-save"

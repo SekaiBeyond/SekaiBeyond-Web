@@ -550,6 +550,20 @@ export const PassportDetail = ({
                                     <dd>{fmtDate(passport.claimedAt)}</dd>
                                 </div>
                             )}
+                            {/* Sent by email rather than printed. */}
+                            {passport.sentTo && (
+                                <div>
+                                    <dt>{isEnglish ? 'Emailed to' : '发送至'}</dt>
+                                    <dd>
+                                        {passport.sentTo}
+                                        <span className="admin-passport-fact-by">
+                                            {passport.emailScheduled
+                                                ? (isEnglish ? 'Queued' : '排队中')
+                                                : fmtDate(passport.emailSentAt)}
+                                        </span>
+                                    </dd>
+                                </div>
+                            )}
                             <div>
                                 <dt>{isEnglish ? 'Generated' : '生成时间'}</dt>
                                 <dd>

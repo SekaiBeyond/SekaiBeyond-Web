@@ -2,7 +2,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
-import { commitInChunks, generateSecureCode } from "../utils/helpers";
+import { commitInChunks } from "../utils/helpers";
 import { MAX_GRANT_DAYS, reducedExpiry, startedAtAfter } from "../utils/membership";
 import {
     formatActivationKey,
@@ -10,10 +10,11 @@ import {
     MAX_DELETE_COUNT,
     MAX_GENERATE_COUNT,
     MAX_KEY_EXPORT_COUNT,
+    mintPassport,
     newActivationKey,
     normalizePassportId,
-    PASSPORT_ID_LENGTH,
     PASSPORT_TERM_DAYS,
+    readMintingDesign,
 } from "../utils/passports";
 import { sanitizeDisplayText, validateDocId, validateStorageImageUrl, validateStr } from "../utils/validation";
 import { recordDoc, recordRef } from "../utils/records";
@@ -53,50 +54,17 @@ export const generatePassports = onCall({maxInstances: 5}, async (request) => {
         throw new HttpsError("invalid-argument", `count must be an integer between 1 and ${MAX_GENERATE_COUNT}.`);
     }
 
-    // Without a design there is nothing to render on the shelf or the public
-    // page.
-    const designSnap = await db.collection(DESIGNS).doc(designId).get();
-    if (!designSnap.exists) {
-        throw new HttpsError("failed-precondition", "That passport design doesn't exist.", {code: "no-design"});
-    }
-    // Copied onto every passport: the year never changes, and the shelf and
-    // records use it without reading designs.
-    const year: number = designSnap.data()!.year;
-    const designName: string = designSnap.data()!.name ?? "";
-    // Copied because the term can be edited, and a passport grants what its
-    // slip was sold with.
-    const termDays: number = designSnap.data()!.termDays;
+    const design = await readMintingDesign(designId);
 
     const issued: {passportId: string; activationCode: string}[] = [];
     const ops: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [];
     const seen = new Set<string>();
+    const by = {uid, name: performerName(callerSnap)};
 
     for (let i = 0; i < count; i++) {
-        let passportId = generateSecureCode(PASSPORT_ID_LENGTH);
-        // Only guards within this call; batch.create() below fails on a
-        // collision with an existing passport rather than overwriting it.
-        while (seen.has(passportId)) passportId = generateSecureCode(PASSPORT_ID_LENGTH);
-        seen.add(passportId);
-
-        const {key, salt, secretHash} = newActivationKey();
+        const {passportId, key, write} = mintPassport(design, seen, by);
         issued.push({passportId, activationCode: formatActivationKey(key)});
-
-        ops.push((batch) => {
-            batch.create(db.collection(PASSPORTS).doc(passportId), {
-                designId,
-                year,
-                status: "unclaimed",
-                ownerUid: null,
-                claimedAt: null,
-                termDays,
-                createdAt: FieldValue.serverTimestamp(),
-                createdBy: uid,
-                createdByName: performerName(callerSnap),
-                keyIssuedAt: FieldValue.serverTimestamp(),
-                keyReissueCount: 0,
-            });
-            batch.create(db.collection(SECRETS).doc(passportId), {salt, secretHash, key});
-        });
+        ops.push(write);
     }
 
     await commitInChunks(ops);
@@ -104,12 +72,12 @@ export const generatePassports = onCall({maxInstances: 5}, async (request) => {
     await recordRef().set(recordDoc("passport-generate", {
         performedBy: uid,
         performedByName: performerName(callerSnap),
-        passportDesignName: designName,
-        passportYear: year,
+        passportDesignName: design.name,
+        passportYear: design.year,
         passportCount: count,
     }));
 
-    return {designId, year, passports: issued};
+    return {designId, year: design.year, passports: issued};
 });
 
 /**

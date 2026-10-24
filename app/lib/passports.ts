@@ -28,6 +28,12 @@ export interface Passport {
     /** When the current activation key was minted — bumped by a key reissue. */
     keyIssuedAt: Date | null;
     keyReissueCount: number;
+    /** The address its key was emailed to; blank for printed stock. */
+    sentTo: string;
+    /** When the key email went; null while it waits in the queue. */
+    emailSentAt: Date | null;
+    /** Waiting in the overflow queue for the daily cap to reopen. */
+    emailScheduled: boolean;
 }
 
 /**
@@ -95,6 +101,9 @@ const toPassport = (docSnap: {id: string; data: () => Record<string, any>}): Pas
         createdByName: data.createdByName ?? '',
         keyIssuedAt: toDate(data.keyIssuedAt),
         keyReissueCount: typeof data.keyReissueCount === 'number' ? data.keyReissueCount : 0,
+        sentTo: typeof data.sentTo === 'string' ? data.sentTo : '',
+        emailSentAt: toDate(data.emailSentAt),
+        emailScheduled: data.emailScheduled === true,
     };
 };
 
@@ -193,6 +202,11 @@ export const DEFAULT_PASSPORT_TERM_DAYS = 365;
  * it.
  */
 export const MAX_PASSPORT_DELETE = 200;
+/**
+ * Mirrors MAX_EMAIL_COUNT in functions/src/utils/passports.ts, which enforces
+ * it: the addresses one emailPassports call takes.
+ */
+export const MAX_PASSPORT_EMAIL = 100;
 /**
  * Mirrors MAX_KEY_EXPORT_COUNT in functions/src/utils/passports.ts, which
  * enforces it.

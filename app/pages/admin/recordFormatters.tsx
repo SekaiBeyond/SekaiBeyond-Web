@@ -537,6 +537,20 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>deleted the {r.passportYear ?? ''} passport design “{r.passportDesignName ?? ''}”</>
                 : <>删除了 {r.passportYear ?? ''} 年通行证设计「{r.passportDesignName ?? ''}」</>;
+        case 'passport-email-send':
+            return isEnglish
+                ? <>emailed {r.passportCount ?? 0} {r.passportYear ?? ''} “{r.passportDesignName ?? ''}” passport
+                    {r.passportCount === 1 ? '' : 's'}</>
+                : <>通过邮件发送了 {r.passportCount ?? 0} 本 {r.passportYear ?? ''} 年「{r.passportDesignName ?? ''}」通行证</>;
+        case 'passport-email-queue':
+            return isEnglish
+                ? <>queued {r.passportCount ?? 0} {r.passportYear ?? ''} “{r.passportDesignName ?? ''}” passport
+                    email{r.passportCount === 1 ? '' : 's'} past the daily cap</>
+                : <>将 {r.passportCount ?? 0} 封 {r.passportYear ?? ''} 年「{r.passportDesignName ?? ''}」通行证邮件排入队列（已超出每日上限）</>;
+        case 'passport-email-template-update':
+            return isEnglish
+                ? <>updated the passport email template</>
+                : <>更新了通行证邮件模板</>;
         case 'qrcode-create':
             return isEnglish
                 ? <>created QR code {r.qrLabel ?? ''}</>
