@@ -36,10 +36,14 @@ export const Countdown = () => {
         {value: minutes, label: {en: 'Minutes', zh: '分'}},
         {value: seconds, label: {en: 'Seconds', zh: '秒'}},
     ];
+    // Leading units at 0 drop out (no "00 Days" a day out), down to seconds.
+    // A 0 after a larger unit stays, so 2 days 0 hours keeps its Hours box.
+    const firstShown = segments.findIndex(segment => segment.value > 0);
+    const shownSegments = segments.slice(firstShown === -1 ? segments.length - 1 : firstShown);
 
     return (
         <div className="sbc-countdown" role="timer" aria-live="off">
-            {segments.map(segment => (
+            {shownSegments.map(segment => (
                 <div key={segment.label.en} className="sbc-countdown-item">
                     <div className="sbc-countdown-value">{pad(segment.value)}</div>
                     <div className="sbc-countdown-label">{t(segment.label)}</div>

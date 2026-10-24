@@ -51,6 +51,17 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
         return () => clearInterval(timer);
     }, [event.startAt, event.endAt]);
 
+    const countdownSegments = [
+        {value: timeLeft.days, label: isEnglish ? 'Days' : '天'},
+        {value: timeLeft.hours, label: isEnglish ? 'Hours' : '时'},
+        {value: timeLeft.minutes, label: isEnglish ? 'Minutes' : '分'},
+        {value: timeLeft.seconds, label: isEnglish ? 'Seconds' : '秒'}
+    ];
+    // Leading units at 0 drop out (no "00 Days" a day out), down to seconds.
+    // A 0 after a larger unit stays, so 2 days 0 hours keeps its Hours box.
+    const firstShown = countdownSegments.findIndex(segment => segment.value > 0);
+    const shownSegments = countdownSegments.slice(firstShown === -1 ? countdownSegments.length - 1 : firstShown);
+
     return (
         <div className="convention-banner">
             <div className="con-banner-inner">
@@ -95,13 +106,9 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     </div>
                 )}
                 <div className="countdown-container">
-                    {[
-                        {value: timeLeft.days, label: isEnglish ? 'Days' : '天'},
-                        {value: timeLeft.hours, label: isEnglish ? 'Hours' : '时'},
-                        {value: timeLeft.minutes, label: isEnglish ? 'Minutes' : '分'},
-                        {value: timeLeft.seconds, label: isEnglish ? 'Seconds' : '秒'}
-                    ].map((item, index) => (
-                        <div key={index} className={`countdown-item${isInProgress ? ' countdown-item--progress' : ''}`}>
+                    {shownSegments.map(item => (
+                        <div key={item.label}
+                             className={`countdown-item${isInProgress ? ' countdown-item--progress' : ''}`}>
                             <div className="countdown-value">
                                 {String(item.value).padStart(2, '0')}
                             </div>
