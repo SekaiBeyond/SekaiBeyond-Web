@@ -17,6 +17,7 @@ import { uwLotTypeLabel } from '~/lib/uwParking';
  */
 const EN = {
     back: 'Back to Home',
+    backCon: 'Back to Con',
     title: 'Parking Guide',
     viewingFor: 'Viewing parking for',
     allCampus: 'All of campus',
@@ -146,6 +147,7 @@ type TextKey = keyof typeof EN;
 
 const ZH: Record<TextKey, string> = {
     back: '返回首页',
+    backCon: '返回漫展',
     title: '停车指南',
     viewingFor: '查看停车场地',
     allCampus: '全校园',

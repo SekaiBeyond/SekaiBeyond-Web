@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { prefersReducedMotion } from '~/lib/maplibre';
 import { useUpcomingEvents } from '~/lib/upcomingEvents';
@@ -24,11 +24,17 @@ import { Footer } from './parts';
 import { type ParkingText, useParkingText } from './text';
 import { VenueSwitcher } from './VenueSwitcher';
 
-const TopBar = ({tx}: {tx: ParkingText}) => (
+/**
+ * The location state a link into the guide can pass: the con page's says it's from
+ * there, so the guide's back link returns to the con instead of home.
+ */
+export type ParkingGuideState = {from?: 'con'};
+
+const TopBar = ({tx, fromCon}: {tx: ParkingText; fromCon: boolean}) => (
     <div className="parking-topbar">
-        <a href="/" className="parking-back-btn">
+        <a href={fromCon ? '/con' : '/'} className="parking-back-btn">
             <span className="parking-back-arrow">←</span>
-            {tx.t('back')}
+            {tx.t(fromCon ? 'backCon' : 'back')}
         </a>
         <LanguageSwitcher/>
     </div>
@@ -52,9 +58,12 @@ export const ParkingGuide = () => {
     const urlVenueId = kind === 'venue' ? id : '';
     const urlEventId = kind === 'event' ? id : '';
     const urlCode = (kind === 'lot' ? id : urlEventId && sub === 'lot' ? subId : '').toUpperCase();
+    // A guide opened from the con page goes back there, with `goTo` keeping that as the address changes.
+    const {state} = useLocation();
+    const fromCon = (state as ParkingGuideState | null)?.from === 'con';
     // The address names the event, the lot open, or else the venue picked, so any of them can be linked to.
     const navigate = useNavigate();
-    const goTo = (path: string) => navigate(path, {replace: true, preventScrollReset: true});
+    const goTo = (path: string) => navigate(path, {replace: true, preventScrollReset: true, state});
     const venuePath = (venueId: string) => venueId ? `/parking/venue/${encodeURIComponent(venueId)}` : '/parking';
     const eventPath = `/parking/event/${encodeURIComponent(urlEventId)}`;
     const tx = useParkingText();
@@ -176,7 +185,7 @@ export const ParkingGuide = () => {
     if (venues.length === 0) {
         return (
             <div className="parking-page">
-                <TopBar tx={tx}/>
+                <TopBar tx={tx} fromCon={fromCon}/>
                 <Notice icon="📍" title={tx.t('noVenuesTitle')} desc={tx.t('noVenuesDesc')}/>
             </div>
         );
@@ -189,7 +198,7 @@ export const ParkingGuide = () => {
             <div className="parking-deco-blob parking-deco-blob--1"/>
             <div className="parking-deco-blob parking-deco-blob--2"/>
 
-            <TopBar tx={tx}/>
+            <TopBar tx={tx} fromCon={fromCon}/>
 
             <header className="parking-header">
                 <span className="parking-header-sparkle">✦</span>

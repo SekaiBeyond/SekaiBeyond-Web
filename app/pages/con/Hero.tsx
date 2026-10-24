@@ -7,6 +7,7 @@ import { useT } from '~/pages/con/i18n';
 import { useMediaQuery } from '~/pages/con/hooks';
 import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/con/utils';
 import { Countdown } from '~/pages/con/Countdown';
+import type { ParkingGuideState } from '~/pages/parking';
 
 /**
  * The venue name's link: HUB on Google Maps. Fixed here, not taken from the
@@ -138,7 +139,11 @@ export const Hero = () => {
                         </a>
                     )}
                     {venue && (
-                        <Link className="btn sbc-btn-ghost" to={venue.parkingUrl}>
+                        <Link
+                            className="btn sbc-btn-ghost"
+                            to={venue.parkingUrl}
+                            state={{from: 'con'} satisfies ParkingGuideState}
+                        >
                             <span>{t({en: 'Parking Guide', zh: '停车指南'})}</span>
                             <LuSquareParking aria-hidden="true"/>
                         </Link>
