@@ -340,10 +340,16 @@ export function TicketsSubtab({
         }
     };
 
+    // Just the attendees the filters match, with the type and status picked
+    // named in the file so exports of different slices tell apart.
     const exportAttendees = () => {
         if (!canExport) return;
         const base = event.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || eventId;
-        downloadBlob(buildAttendeeCsv(attendees), `${base}-attendees-${fileStamp()}.csv`);
+        const slice = [ticketTypeFilter, statusFilter]
+            .filter(f => f !== 'all')
+            .map(f => `-${f.toLowerCase().replace(/\s+/g, '-')}`)
+            .join('');
+        downloadBlob(buildAttendeeCsv(filteredAttendees), `${base}-attendees${slice}-${fileStamp()}.csv`);
     };
 
     const deleteAttendeeAction = async (a: AttendeeData) => {
@@ -525,6 +531,7 @@ export function TicketsSubtab({
                     onEdit={setEditingAttendee}
                     onAdd={() => setAddingAttendee(true)}
                     onExport={canExport ? exportAttendees : undefined}
+                    matchCount={filteredAttendees.length}
                     onVoidTicket={voidTicketAction}
                     onUnvoidTicket={unvoidTicketAction}
                     onRedeemTicket={redeemTicketAction}

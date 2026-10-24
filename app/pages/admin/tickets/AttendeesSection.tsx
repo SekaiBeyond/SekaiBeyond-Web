@@ -36,8 +36,10 @@ interface AttendeesSectionProps {
     walkIn: boolean;
     onEdit: (a: AttendeeData) => void;
     onAdd: () => void;
-    /** Downloads every attendee, whatever the filters show. Left out for those who may not. */
+    /** Downloads the attendees the filters match. Left out for those who may not. */
     onExport?: () => void;
+    /** How many attendees the filters match, beyond the page shown. */
+    matchCount: number;
     onVoidTicket: (a: AttendeeData, ticketId: string) => void;
     onUnvoidTicket: (a: AttendeeData, ticketId: string) => void;
     onRedeemTicket: (a: AttendeeData, ticketId: string) => void;
@@ -72,6 +74,7 @@ export function AttendeesSection({
                                      onEdit,
                                      onAdd,
                                      onExport,
+                                     matchCount,
                                      onVoidTicket,
                                      onUnvoidTicket,
                                      onRedeemTicket,
@@ -88,6 +91,7 @@ export function AttendeesSection({
     const {isEnglish} = useLanguage();
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
     const [copiedTicketId, setCopiedTicketId] = useState<string | null>(null);
+    const filtered = !!search.trim() || filterUnsent || ticketTypeFilter !== 'all' || statusFilter !== 'all';
 
     useEffect(() => {
         if (!copiedTicketId) return;
@@ -161,13 +165,16 @@ export function AttendeesSection({
                             : (isEnglish ? 'Add Attendee' : '添加参加者')}
                     </button>
                 )}
+                {/* Exports what the filters match, so it says how many once any is set. */}
                 {onExport && (
                     <button
                         className="admin-toggle-btn admin-toggle-edit"
                         onClick={onExport}
-                        disabled={loading || totals.attendees === 0}
+                        disabled={loading || matchCount === 0}
                     >
-                        {isEnglish ? 'Export All' : '导出全部'}
+                        {!filtered
+                            ? (isEnglish ? 'Export All' : '导出全部')
+                            : (isEnglish ? `Export ${matchCount} Filtered` : `导出筛选结果（${matchCount}）`)}
                     </button>
                 )}
                 <button
