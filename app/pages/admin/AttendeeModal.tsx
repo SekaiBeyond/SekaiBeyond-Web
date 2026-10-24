@@ -127,8 +127,8 @@ export function AttendeeModal({
             showToast(
                 code === 'attendee-exists'
                     ? (isEnglish
-                        ? 'This email is already on the list. Check them in from Attendees.'
-                        : '该邮箱已在名单中，请在参加者列表中为其签到。')
+                        ? 'This email is already on the list. Scan their ticket to check them in.'
+                        : '该邮箱已在名单中，请扫描其门票签到。')
                     : code === 'not-event-day'
                         ? (isEnglish
                             ? 'Walk-ins can only be added on the day of the event.'
@@ -410,8 +410,8 @@ export function AttendeeModal({
                 {duplicate && walkIn && (
                     <p className="admin-helper-text admin-tickets-edit-warning">
                         {isEnglish
-                            ? `This email is already on the list (${duplicate.ticketCount} ticket${duplicate.ticketCount === 1 ? '' : 's'}). Find them under Attendees to check them in.`
-                            : `该邮箱已在名单中（${duplicate.ticketCount} 张门票）。请在参加者列表中为其签到。`}
+                            ? `This email is already on the list (${duplicate.ticketCount} ticket${duplicate.ticketCount === 1 ? '' : 's'}). Scan their ticket to check them in.`
+                            : `该邮箱已在名单中（${duplicate.ticketCount} 张门票）。请扫描其门票签到。`}
                     </p>
                 )}
 

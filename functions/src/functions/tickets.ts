@@ -383,10 +383,11 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
 });
 
 /**
- * Someone added at the door, on the event's days only. The email is optional
- * here and nowhere else, since without one nobody can be sent their tickets;
- * with `checkIn` the tickets are redeemed on the spot, crediting the account as
- * a scan would. An email already on the list is refused rather than re-issued,
+ * Someone added at the door, on the event's days only, by anyone who may scan
+ * there: core staff, the staff group, or the event's own staff. The email is
+ * optional here and nowhere else, since without one nobody can be sent their
+ * tickets; with `checkIn` the tickets are redeemed on the spot, crediting the
+ * account as a scan would. An email already on the list is refused rather than re-issued,
  * which would void the tickets they were sent.
  */
 export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
@@ -411,7 +412,18 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
     const notes = validateTicketNotes(input.notes);
     const checkIn = input.checkIn === true;
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    return db.runTransaction(async (txn) => {
+        // Whoever works the door, as redeemTicket lets scan: core staff, the
+        // staff group and the event's own staff, all on the event's days only.
+        const callerSnap = await txn.get(db.collection("users").doc(uid));
+        const callerData = callerSnap.data() ?? {};
+        const group = normalizeGroup(callerData.group);
+        const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
+        if (!ADMIN_GROUPS.includes(group) && group !== "staff" && !callerEventStaff.includes(eventId)) {
+            throw new HttpsError("permission-denied", "Not authorized to add walk-ins for this event.",
+                {code: "not-authorized"});
+        }
+
         const eventRef = db.collection("upcomingEvents").doc(eventId);
         const attendeesCol = eventRef.collection("attendees");
         const eventSnap = await txn.get(eventRef);
@@ -438,7 +450,7 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
             }
         }
 
-        const callerName: string = callerSnap.data()?.displayName ?? "";
+        const callerName: string = callerData.displayName ?? "";
         const {tickets, ticketIds} = buildFreshTickets(ticketCount, type, notes);
         const issued = checkIn
             ? tickets.map(t => ({

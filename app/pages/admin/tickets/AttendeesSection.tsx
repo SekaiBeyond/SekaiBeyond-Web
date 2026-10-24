@@ -32,7 +32,10 @@ interface AttendeesSectionProps {
     statusFilter: StatusFilter;
     onStatusFilterChange: (v: StatusFilter) => void;
     readOnly: boolean;
-    /** The event is on, so Add takes walk-ins. */
+    /**
+     * The event is on and the viewer may take walk-ins, so Add takes walk-ins,
+     * shown even when the list is otherwise read-only.
+     */
     walkIn: boolean;
     onEdit: (a: AttendeeData) => void;
     onAdd: () => void;
@@ -155,7 +158,8 @@ export function AttendeesSection({
                             ].filter(Boolean).join('，')}）`)}
                     </span>
                 )}
-                {!readOnly && (
+                {/* Read-only staff working the door still take walk-ins. */}
+                {(!readOnly || walkIn) && (
                     <button
                         className="admin-toggle-btn admin-toggle-save admin-tickets-refresh"
                         onClick={onAdd}

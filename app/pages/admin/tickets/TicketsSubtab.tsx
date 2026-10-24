@@ -66,7 +66,10 @@ export function TicketsSubtab({
 
     const canScan = scanAccess !== 'none';
     const scanOpen = scanAccess === 'always' || (scanAccess === 'event-days' && eventDay === 'during');
-    const canAddWalkIn = !readOnly && eventDay === 'during';
+    // Whoever works the door: core staff, and those who scan here on the
+    // event's days, the staff group and the event's own staff. Mirrors
+    // addWalkInAttendee.
+    const canAddWalkIn = eventDay === 'during' && (!readOnly || canScan);
 
     const [section, setSection] = useState<TicketsSection>(scanOpen && readOnly ? 'scan' : 'attendees');
     const [attendees, setAttendees] = useState<AttendeeData[]>([]);
