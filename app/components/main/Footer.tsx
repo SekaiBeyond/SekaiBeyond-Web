@@ -50,7 +50,7 @@ export const Footer = () => {
                                     {labelFor(link)}
                                 </a>
                             )}
-                            {link.id === 'team' && hasActive && (
+                            {link.id === 'team' && (
                                 <a href="/parking" className="footer-link">
                                     {isEnglish ? 'Parking Guide' : '停车指南'}
                                 </a>

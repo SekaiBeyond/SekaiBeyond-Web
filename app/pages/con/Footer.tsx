@@ -1,9 +1,10 @@
 import { Link } from 'react-router';
 import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from 'react-icons/si';
-import { CON_NAME, CON_NAV_LINKS } from '~/lib/conContent';
+import { CON_NAME, CON_NAV_LINKS, useConVenue } from '~/lib/conContent';
 import { SOCIAL_LINK_NAMES, useSiteConfig } from '~/lib/siteConfig';
 import { useT } from '~/pages/con/i18n';
 import { scrollToSection } from '~/pages/con/utils';
+import type { ParkingGuideState } from '~/pages/parking';
 
 const SOCIALS = [
     {key: 'discord', Icon: SiDiscord},
@@ -15,6 +16,7 @@ const SOCIALS = [
 export const Footer = () => {
     const t = useT();
     const {config} = useSiteConfig();
+    const venue = useConVenue();
 
     return (
         <footer className="sbc-footer">
@@ -38,6 +40,13 @@ export const Footer = () => {
                             {t(link.label)}
                         </a>
                     ))}
+                    <Link
+                        className="sbc-footer-link"
+                        to={venue?.parkingUrl ?? '/parking'}
+                        state={{from: 'con'} satisfies ParkingGuideState}
+                    >
+                        {t({en: 'Parking Guide', zh: '停车指南'})}
+                    </Link>
                     <Link className="sbc-footer-link" to="/">
                         {t({en: 'Sekai Beyond home', zh: '彼世界主站'})}
                     </Link>
