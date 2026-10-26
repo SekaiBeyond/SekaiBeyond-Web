@@ -1,29 +1,17 @@
 import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callImportHometownTickets, errorSuffix, functionsErrorCode, functionsErrorDetails, } from '~/lib/firebase';
+import { callImportHometownTickets, errorSuffix } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
-import { hometownAttendeeId, type HometownTicketRow, parseHometownFile } from './hometown';
+import { hometownAttendeeId, type HometownTicketRow, parseHometownFile, retryRateLimited } from './hometown';
 import { type AttendeeData, type ParseError, TICKET_TYPES, ticketTypeLabel } from './types';
 
 /** Tickets per import call, well under the server's row cap. */
 const IMPORT_CHUNK = 500;
-/** Times one chunk waits out the rate limit before the import gives up. */
-const RATE_LIMIT_RETRIES = 3;
 /** Issues listed before the rest are summed up. */
 const MAX_ISSUES = 20;
 
-/** One chunk, sent again once the window reopens if the rate limit refuses it. */
-const importChunk = async (data: Parameters<typeof callImportHometownTickets>[0]) => {
-    for (let attempt = 0; ; attempt++) {
-        try {
-            return (await callImportHometownTickets(data)).data;
-        } catch (err) {
-            if (functionsErrorCode(err) !== 'rate-limited' || attempt >= RATE_LIMIT_RETRIES) throw err;
-            const ms = functionsErrorDetails<{retryAfterMs?: number}>(err)?.retryAfterMs;
-            await new Promise(resolve => setTimeout(resolve, (typeof ms === 'number' ? ms : 10_000) + 1000));
-        }
-    }
-};
+const importChunk = (data: Parameters<typeof callImportHometownTickets>[0]) =>
+    retryRateLimited(async () => (await callImportHometownTickets(data)).data);
 
 interface HometownSectionProps {
     eventId: string;

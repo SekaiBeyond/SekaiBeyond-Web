@@ -68,6 +68,7 @@ export type RecordType =
     | "ticket-email-send"
     | "ticket-email-queue"
     | "hometown-import"
+    | "hometown-order-times"
     | "hometown-admit-unlisted"
     | "tag-create"
     | "tag-edit"
@@ -165,6 +166,12 @@ export interface RecordFields {
      */
     updatedCount?: number;
     missingCount?: number;
+    /**
+     * A HomeTown purchase time sync: tickets given their order's time, and
+     * orders in the file with no ticket here.
+     */
+    syncedCount?: number;
+    unmatchedCount?: number;
     /** Whether unlisted HomeTown tickets are now admitted. */
     enabled?: boolean;
 }

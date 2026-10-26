@@ -787,6 +787,120 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
     };
 });
 
+/** The earliest purchase time an order list may give, to catch a misread date. */
+const HOMETOWN_ORDER_TIME_MIN = Date.UTC(2020, 0, 1);
+
+/** How far ahead of the server's clock a purchase time may be, for clock skew. */
+const HOMETOWN_ORDER_TIME_SKEW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * When each HomeTown ticket was bought, from HomeTown's order list export (one
+ * row per order, which the guest list lacks): every ticket on file whose
+ * hometownOrderId is a listed order takes that order's time as its createdAt,
+ * and each of its tickets' too, so the sales timeline, the attendee list's
+ * order and the CSV export follow purchases rather than imports. Tickets of
+ * orders the list leaves out keep their times.
+ *
+ * Every chunk of one file passes the same `syncId`, so the file leaves one
+ * record however many chunks it takes.
+ */
+export const syncHometownOrderTimes = onCall({maxInstances: 10, timeoutSeconds: 300}, async (request) => {
+    const uid = await requireAuth(request, "hometown-import");
+
+    const input = request.data as {eventId?: string; orders?: unknown; syncId?: unknown};
+    const eventId = validateDocId(input.eventId, "eventId");
+    const syncId = input.syncId == null ? null : validateDocId(input.syncId, "syncId");
+    if (!Array.isArray(input.orders) || input.orders.length === 0) {
+        throw new HttpsError("invalid-argument", "orders must be a non-empty array.");
+    }
+    if (input.orders.length > IMPORT_MAX_ROWS) {
+        throw new HttpsError("invalid-argument", `Too many orders in a single sync (max ${IMPORT_MAX_ROWS}).`);
+    }
+
+    const latest = Date.now() + HOMETOWN_ORDER_TIME_SKEW_MS;
+    const times = new Map<string, Timestamp>();
+    for (const row of input.orders) {
+        if (!row || typeof row !== "object") {
+            throw new HttpsError("invalid-argument", "Each order row must be an object.");
+        }
+        const r = row as Record<string, unknown>;
+        // Cleaned as importHometownTickets cleans it, so the two match.
+        const orderId = sanitizeDisplayText(validateStr(r.orderId, "orderId", 32, true));
+        const ms = typeof r.orderedAt === "string" ? Date.parse(r.orderedAt) : NaN;
+        if (!(ms >= HOMETOWN_ORDER_TIME_MIN && ms <= latest)) {
+            throw new HttpsError("invalid-argument", `Order ${orderId} has an invalid purchase time.`);
+        }
+        times.set(orderId, Timestamp.fromMillis(ms));
+    }
+
+    const eventTitle = await adminTransaction(uid, async (txn) => {
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        return (eventSnap.data()?.title ?? eventId) as string;
+    });
+
+    const eventRef = db.collection("upcomingEvents").doc(eventId);
+    const attendeesCol = eventRef.collection("attendees");
+
+    const timeDiffers = (data: FirebaseFirestore.DocumentData, time: Timestamp) =>
+        !(data.createdAt instanceof Timestamp && data.createdAt.isEqual(time))
+        || ((data.tickets ?? []) as NewTicket[]).some(t => !(t.createdAt instanceof Timestamp && t.createdAt.isEqual(time)));
+
+    const onFile = await attendeesCol.where("source", "==", "hometown").get();
+    const matched = new Set<string>();
+    const pending: FirebaseFirestore.DocumentReference[] = [];
+    let matchedTickets = 0;
+    for (const doc of onFile.docs) {
+        const data = doc.data();
+        const time = times.get(data.hometownOrderId ?? "");
+        if (!time) continue;
+        matched.add(data.hometownOrderId);
+        matchedTickets++;
+        if (timeDiffers(data, time)) pending.push(doc.ref);
+    }
+
+    // A transaction each, since a door may be admitting the ticket right now and
+    // the times sit in the tickets array a scan rewrites.
+    const syncRow = (ref: FirebaseFirestore.DocumentReference) => db.runTransaction(async (txn) => {
+        const [eventSnap, snap] = await Promise.all([txn.get(eventRef), txn.get(ref)]);
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        const data = snap.data();
+        const time = times.get(data?.hometownOrderId ?? "");
+        // Removed or moved to another order since the read pass: leave it.
+        if (!data || !time || !timeDiffers(data, time)) return false;
+        txn.update(ref, {
+            createdAt: time,
+            tickets: ((data.tickets ?? []) as NewTicket[]).map(t => ({...t, createdAt: time})),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        return true;
+    });
+
+    let synced = 0;
+    for (let i = 0; i < pending.length; i += HOMETOWN_IMPORT_CONCURRENCY) {
+        const results = await Promise.all(pending.slice(i, i + HOMETOWN_IMPORT_CONCURRENCY).map(syncRow));
+        synced += results.filter(Boolean).length;
+    }
+
+    const callerSnap = await db.collection("users").doc(uid).get();
+    await recordRef(syncId ? `hometown-order-times-${syncId}` : undefined).set({
+        ...recordDoc("hometown-order-times", {
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle,
+        }),
+        syncedCount: FieldValue.increment(synced),
+        unmatchedCount: FieldValue.increment(times.size - matched.size),
+    }, {merge: true});
+
+    return {
+        synced,
+        unchanged: matchedTickets - synced,
+        unmatched: times.size - matched.size,
+    };
+});
+
 /**
  * Whether a HomeTown ticket missing from the imported list is let in, with a
  * warning to the scanner, and recorded so a second scan of it is refused. Off

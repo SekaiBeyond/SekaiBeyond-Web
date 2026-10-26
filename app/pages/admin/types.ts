@@ -90,7 +90,8 @@ export const RECORD_CATEGORIES = {
         en: 'Ticket', zh: '门票',
         types: ['ticket-import', 'ticket-walk-in', 'ticket-redeem', 'ticket-void', 'ticket-unvoid', 'ticket-reset',
             'ticket-type-edit', 'ticket-notes-edit', 'ticket-attendee-delete', 'ticket-attendee-edit', 'ticket-regenerate',
-            'ticket-email-send', 'ticket-email-queue', 'hometown-import', 'hometown-admit-unlisted'],
+            'ticket-email-send', 'ticket-email-queue', 'hometown-import', 'hometown-order-times',
+            'hometown-admit-unlisted'],
     },
     tag: {
         en: 'Tag', zh: '标签',
@@ -194,6 +195,12 @@ export interface ActivityRecord {
      */
     updatedCount?: number;
     missingCount?: number;
+    /**
+     * A HomeTown purchase time sync: tickets given their order's time, and
+     * orders in the file with no ticket here.
+     */
+    syncedCount?: number;
+    unmatchedCount?: number;
     /** Whether unlisted HomeTown tickets are now admitted. */
     enabled?: boolean;
     timestamp: Date;

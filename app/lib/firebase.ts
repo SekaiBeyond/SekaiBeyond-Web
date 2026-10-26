@@ -262,6 +262,14 @@ export const callImportHometownTickets = (data: {
     restored: number;
 }>(getFunctions(), 'importHometownTickets')(data);
 
+export const callSyncHometownOrderTimes = (data: {
+    eventId: string;
+    orders: Array<{orderId: string; orderedAt: string}>;
+    /** The same for every chunk of one file, which then leaves one record. */
+    syncId: string;
+}) => httpsCallable<typeof data, {synced: number; unchanged: number; unmatched: number}>(
+    getFunctions(), 'syncHometownOrderTimes')(data);
+
 export const callSetHometownAdmitUnlisted = (data: {eventId: string; enabled: boolean}) =>
     httpsCallable<typeof data, {enabled: boolean}>(getFunctions(), 'setHometownAdmitUnlisted')(data);
 

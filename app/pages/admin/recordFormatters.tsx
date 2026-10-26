@@ -380,6 +380,16 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 : <>导入了 {event} 的 HomeTown 门票（新增 {added}，确认未列入名单 {confirmed}{updating
                     && `，更新 ${r.updatedCount}，不在文件中 ${r.missingCount ?? 0}`}）</>;
         }
+        case 'hometown-order-times': {
+            const synced = r.syncedCount ?? 0;
+            const unmatched = r.unmatchedCount ?? 0;
+            return isEnglish
+                ? <>synced HomeTown purchase times
+                    for {event} ({synced} ticket{synced === 1 ? '' : 's'} updated{unmatched > 0
+                        && `, ${unmatched} order${unmatched === 1 ? '' : 's'} not found`})</>
+                : <>同步了 {event} 的 HomeTown
+                    购票时间（更新 {synced} 张门票{unmatched > 0 && `，${unmatched} 个订单未找到`}）</>;
+        }
         case 'hometown-admit-unlisted':
             return isEnglish
                 ? <>{r.enabled ? 'started' : 'stopped'} letting in HomeTown tickets missing from the list at {event}</>

@@ -24,6 +24,7 @@ import { TicketScanner } from '../TicketScanner';
 import type { ShowToast } from '../utils';
 import { AttendeesSection } from './AttendeesSection';
 import { EmailsSection } from './EmailsSection';
+import { HometownOrdersSection } from './HometownOrdersSection';
 import { HometownSection } from './HometownSection';
 import { ImportSection } from './ImportSection';
 import { SettingsSection } from './SettingsSection';
@@ -577,6 +578,16 @@ export function TicketsSubtab({
                     readOnly={readOnly}
                     showToast={showToast}
                     onImported={() => void loadAttendees()}
+                />
+            )}
+
+            {section === 'import' && collectionRoot === 'upcomingEvents' && (
+                <HometownOrdersSection
+                    eventId={eventId}
+                    attendees={attendees}
+                    readOnly={readOnly}
+                    showToast={showToast}
+                    onSynced={() => void loadAttendees()}
                 />
             )}
 
