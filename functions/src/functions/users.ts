@@ -14,7 +14,7 @@ import {
 import { deletionExpiresAt } from "../utils/config";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
-import { pastEventIds, toStringIds } from "../utils/publicProfile";
+import { pastEventIds, shelfPassports, toStringIds } from "../utils/publicProfile";
 import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, STORAGE_HOST } from "../utils/storage";
 import { sanitizeDisplayText, validateDocId, validateInstant } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
@@ -126,6 +126,7 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     const isSelf = callerUid === targetUid;
     const showBadges = isSelf || visibility.badges;
     const showEvents = isSelf || visibility.events;
+    const showPassports = isSelf || visibility.passports;
 
     const badgeEarnedAt: Record<string, string> = {};
     if (showBadges) {
@@ -139,7 +140,10 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
     // Past events only: upcoming ids would leak unpublished events whose titles
     // the rules withhold.
     const rawStaffEvents = showEvents ? toStringIds(data.eventStaffEvents) : [];
-    const pastEvents = await pastEventIds(rawStaffEvents);
+    const [pastEvents, passports] = await Promise.all([
+        pastEventIds(rawStaffEvents),
+        showPassports ? shelfPassports(targetUid) : [],
+    ]);
     const eventStaffEvents = rawStaffEvents.filter(id => pastEvents.has(id));
 
     return {
@@ -151,13 +155,16 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         eventStaffEvents,
         badges: showBadges ? (data.badges ?? []) : [],
         badgeEarnedAt,
+        passports,
+        // So the shelf doesn't link to a page that would turn the viewer away.
+        passportPageHidden: showPassports && data.hidePassportPage === true,
         group: normalizeGroup(data.group),
         // Only whether there is a membership; the expiry is the owner's
         // business.
         isMember: isMembershipActive(data),
         title: data.title ?? "",
         titleCn: data.titleCn ?? "",
-        visibility: {badges: showBadges, events: showEvents},
+        visibility: {badges: showBadges, events: showEvents, passports: showPassports},
     };
 });
 

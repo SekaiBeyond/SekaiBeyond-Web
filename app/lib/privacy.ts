@@ -2,7 +2,7 @@
  * Profile sections switchable on /profile's Settings tab. Mirrors
  * `PROFILE_SECTIONS` in functions/src/utils/visibility.ts.
  */
-const PROFILE_SECTIONS = ['badges', 'events'] as const;
+const PROFILE_SECTIONS = ['badges', 'events', 'passports'] as const;
 
 export type ProfileSection = (typeof PROFILE_SECTIONS)[number];
 
@@ -15,6 +15,7 @@ export const readVisibility = (raw: unknown): ProfileVisibility => {
     return {
         badges: stored.badges !== false,
         events: stored.events !== false,
+        passports: stored.passports !== false,
     };
 };
 
@@ -43,6 +44,16 @@ export const PRIVACY_ROWS: PrivacyRow[] = [
         help: {
             en: 'The badges you have earned, and when you earned them.',
             zh: '您已获得的徽章，以及获得时间。',
+        },
+        on: {en: 'Visible to everyone', zh: '所有人可见'},
+        off: {en: 'Only you', zh: '仅自己可见'},
+    },
+    {
+        key: 'passports',
+        title: {en: 'Passports', zh: '通行证'},
+        help: {
+            en: 'The passports you hold, shown on your profile, and when you activated them.',
+            zh: '您持有的通行证（显示在您的主页上），以及激活时间。',
         },
         on: {en: 'Visible to everyone', zh: '所有人可见'},
         off: {en: 'Only you', zh: '仅自己可见'},

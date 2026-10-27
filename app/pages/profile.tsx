@@ -4,6 +4,7 @@ import { FaStar } from 'react-icons/fa';
 import {
     FiAlertCircle,
     FiAward,
+    FiBookOpen,
     FiCalendar,
     FiClock,
     FiImage,
@@ -25,6 +26,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetPublicProfile, getFirebaseDb, isStorageUrl } from '~/lib/firebase';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
+import type { ShelfPassport } from '~/lib/passports';
 import { useTags } from '~/lib/tags';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
@@ -55,6 +57,9 @@ interface ViewedProfile {
     eventStaffEvents: string[];
     badges: string[];
     badgeEarnedAt: Record<string, Date>;
+    passports: ShelfPassport[];
+    /** Their passport page is private, so the shelf's cards don't link to it. */
+    passportPageHidden: boolean;
     group: UserGroup;
     isMember: boolean;
     title?: string;
@@ -63,7 +68,7 @@ interface ViewedProfile {
      * Which sections this member shows others. A hidden one arrives empty, so
      * this separates "kept private" from "none yet".
      */
-    visibility: {badges: boolean; events: boolean};
+    visibility: {badges: boolean; events: boolean; passports: boolean};
 }
 
 /**
@@ -298,6 +303,11 @@ export const ProfilePage = () => {
                     eventStaffEvents: data.eventStaffEvents ?? [],
                     badges: data.badges ?? [],
                     badgeEarnedAt: earnedAt,
+                    passports: (data.passports ?? []).map(p => ({
+                        ...p,
+                        claimedAt: p.claimedAt ? new Date(p.claimedAt) : null,
+                    })),
+                    passportPageHidden: data.passportPageHidden ?? false,
                     group: normalizeGroup(data.group),
                     isMember: data.isMember ?? false,
                     title: data.title ?? '',
@@ -566,6 +576,9 @@ export const ProfilePage = () => {
     // Private sections arrive empty. Your own profile is never filtered.
     const showBadges = isOwnProfile || viewedProfile!.visibility.badges;
     const showEvents = isOwnProfile || viewedProfile!.visibility.events;
+    const showPassports = isOwnProfile || viewedProfile!.visibility.passports;
+    // Yours are read directly; someone else's come with their profile.
+    const shelf = isOwnProfile ? passports : viewedProfile!.passports;
     const staffedSet = new Set(dp.eventStaffEvents);
     const attendedSet = new Set([...dp.attendedEvents, ...dp.eventStaffEvents]);
     const attendedEvents = pastEvents
@@ -576,8 +589,7 @@ export const ProfilePage = () => {
         .sort((a, b) => (earnedDates[b.id]?.getTime() ?? 0) - (earnedDates[a.id]?.getTime() ?? 0));
 
     // A badge whose definition is gone counts for nothing, so badges are only
-    // known empty once definitions load. Someone else's profile has no
-    // passports.
+    // known empty once definitions load.
     const badgeState: SectionState = !showBadges ? 'private'
         : dp.badges.length === 0 ? 'empty'
             : badgeLoadError ? 'failed'
@@ -585,14 +597,14 @@ export const ProfilePage = () => {
                     : earnedBadges.length > 0 ? 'filled' : 'empty';
     const eventState: SectionState = !showEvents ? 'private'
         : attendedEvents.length > 0 ? 'filled' : 'empty';
-    const passportState: SectionState | null = !isOwnProfile ? null
+    const passportState: SectionState = !showPassports ? 'private'
         : passportsFailed ? 'failed'
-            : passports === null ? 'loading'
-                : passports.length > 0 ? 'filled' : 'empty';
+            : shelf === null ? 'loading'
+                : shelf.length > 0 ? 'filled' : 'empty';
     // Checked in with a ticket for an event still on, which joins the events
     // only once archived: the events prompt says so rather than to check in.
     const checkedIn = !!ticketEvents?.some(e => e.tickets.some(t => t.redeemed && !t.voided));
-    const states = [badgeState, passportState, eventState].filter((s): s is SectionState => s !== null);
+    const states = [badgeState, passportState, eventState];
     const anyFilled = states.includes('filled');
     const allEmpty = states.every(s => s === 'empty');
     // While a loading section could still leave the page empty, hold the
@@ -607,8 +619,8 @@ export const ProfilePage = () => {
         ...(showBadges
             ? [stat('badges', badgeDefs === null ? dp.badges.length : earnedBadges.length, 'Badge', 'Badges', '徽章')]
             : []),
-        ...(isOwnProfile && !passportsFailed
-            ? [stat('passports', passports?.length ?? null, 'Passport', 'Passports', '通行证')]
+        ...(showPassports && !passportsFailed
+            ? [stat('passports', shelf?.length ?? null, 'Passport', 'Passports', '通行证')]
             : []),
         ...(showEvents ? [stat('events', attendedEvents.length, 'Event', 'Events', '活动')] : []),
     ] : [];
@@ -952,16 +964,16 @@ export const ProfilePage = () => {
                         <ProfileCard compact>
                             <ProfileCardNote icon={FiStar} muted>
                                 {isEnglish
-                                    ? `${dp.name} hasn’t earned a badge or checked in at an event yet.`
-                                    : `${dp.name} 还没有获得徽章，也还没有参加过活动。`}
+                                    ? `${dp.name} hasn’t earned a badge, activated a passport or checked in at an event yet.`
+                                    : `${dp.name} 还没有获得徽章、激活通行证，也还没有参加过活动。`}
                             </ProfileCardNote>
                         </ProfileCard>
-                    ) : !isOwnProfile && badgeState === 'private' && eventState === 'private' ? (
+                    ) : !isOwnProfile && states.every(s => s === 'private') ? (
                         <ProfileCard compact>
                             <ProfileCardNote icon={FiLock} muted>
                                 {isEnglish
-                                    ? `${dp.name} keeps their badges and events private.`
-                                    : `${dp.name} 将徽章和参与活动设为私密。`}
+                                    ? `${dp.name} keeps their badges, passports and events private.`
+                                    : `${dp.name} 将徽章、通行证和参与活动设为私密。`}
                             </ProfileCardNote>
                         </ProfileCard>
                     ) : (
@@ -992,20 +1004,26 @@ export const ProfilePage = () => {
                                 </div>
                             </ProfileSection>
 
-                            {/* Passports are the owner's alone; getPublicProfile
-                                carries none. */}
-                            {passportState && (
-                                <ProfileSection
-                                    kind="passports"
-                                    title={isEnglish ? 'Passports' : '通行证'}
-                                    state={passportState}
-                                    own={isOwnProfile}
-                                    count={passports?.length ?? 0}
-                                    failed={isEnglish ? 'Failed to load your passports.' : '加载通行证失败。'}
-                                >
-                                    {passports && <PassportShelf passports={passports}/>}
-                                </ProfileSection>
-                            )}
+                            <ProfileSection
+                                kind="passports"
+                                title={isEnglish ? 'Passports' : '通行证'}
+                                state={passportState}
+                                own={isOwnProfile}
+                                count={shelf?.length ?? 0}
+                                icon={FiBookOpen}
+                                none={isEnglish ? 'No passports yet.' : '还没有通行证。'}
+                                hidden={isEnglish
+                                    ? `${dp.name} keeps their passports private.`
+                                    : `${dp.name} 将通行证设为私密。`}
+                                failed={isEnglish ? 'Failed to load your passports.' : '加载通行证失败。'}
+                            >
+                                {shelf && (
+                                    <PassportShelf
+                                        passports={shelf}
+                                        linked={isOwnProfile || !viewedProfile!.passportPageHidden}
+                                    />
+                                )}
+                            </ProfileSection>
 
                             <ProfileSection
                                 kind="events"

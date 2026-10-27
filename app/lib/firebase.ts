@@ -667,13 +667,16 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         attendedEvents: string[]; eventStaffEvents: string[];
         badges: string[];
         badgeEarnedAt: Record<string, string>;
+        passports: {id: string; designId: string; year: number; claimedAt: string | null}[];
+        /** Their passport page is private, so the shelf's cards don't link to it. */
+        passportPageHidden: boolean;
         group: string;
         isMember: boolean;
         title?: string;
         titleCn?: string;
         // Hidden sections arrive empty; these say which, so the page can tell
         // "kept private" from "none yet".
-        visibility: {badges: boolean; events: boolean};
+        visibility: {badges: boolean; events: boolean; passports: boolean};
     }>(getFunctions(), 'getPublicProfile')(data);
 
 // Callables carry JSON, so an uploaded file travels as bare base64.

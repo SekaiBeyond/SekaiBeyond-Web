@@ -36,6 +36,9 @@ export interface Passport {
     emailScheduled: boolean;
 }
 
+/** What a shelf card on /profile shows, all someone else's profile carries. */
+export type ShelfPassport = Pick<Passport, 'id' | 'designId' | 'year' | 'claimedAt'>;
+
 /**
  * What a passport is printed from: its name and cover art. A year can have
  * several designs, with distinct names in both languages.

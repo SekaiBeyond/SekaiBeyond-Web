@@ -4,7 +4,7 @@ import { HttpsError } from "firebase-functions/v2/https";
  * Profile sections a member can hide from others on /profile's Settings tab.
  * Mirrors PROFILE_SECTIONS in app/lib/privacy.ts.
  */
-const PROFILE_SECTIONS = ["badges", "events"] as const;
+const PROFILE_SECTIONS = ["badges", "events", "passports"] as const;
 
 type ProfileSection = (typeof PROFILE_SECTIONS)[number];
 
