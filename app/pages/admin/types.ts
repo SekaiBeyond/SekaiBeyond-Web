@@ -41,6 +41,8 @@ export interface UserRecord {
     title?: string;
     titleCn?: string;
     eventStaffEvents: string[];
+    /** Their passports' public page is off. One switch for all of them, theirs alone to flip. */
+    hidePassportPage: boolean;
 }
 
 export type Tab = 'users' | 'events' | 'locations' | 'badges' | 'passports' | 'records' | 'tools' | 'config' | 'con';

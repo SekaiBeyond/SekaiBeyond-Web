@@ -6124,6 +6124,27 @@ select.admin-tickets-tag:focus {
     color: #2f9e57;
 }
 
+/* The holder's passport page setting. */
+.admin-passport-badge--public {
+    background: rgba(108, 99, 255, 0.12);
+    color: var(--color-link);
+}
+
+.admin-passport-badge--private {
+    background: rgba(255, 142, 83, 0.16);
+    color: #d9692e;
+}
+
+.admin-passport-privacy {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
 .admin-passport-results {
     display: flex;
     flex-direction: column;
@@ -6535,7 +6556,23 @@ select.admin-tickets-tag:focus {
 .admin-passport-hero-badges {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
+}
+
+/* Sized as the tags beside it: the 1px border makes up the rest of their 4px
+   padding. */
+.admin-passport-hero-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 12px;
+    font-size: 12px;
+    text-decoration: none;
+}
+
+.admin-passport-hero-open svg {
+    font-size: 11px;
 }
 
 .admin-passport-stale {

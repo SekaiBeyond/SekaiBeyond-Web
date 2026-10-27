@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { FaExternalLinkAlt } from 'react-icons/fa';
 import { doc, getDoc } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -23,6 +24,7 @@ import type { UserRecord } from '../types';
 import { UserAvatar } from '../UserRow';
 import { docToUserRecord, type ShowToast } from '../utils';
 import { usePassportPngExport } from './passportExport';
+import { PassportPageTag } from './PassportSearch';
 
 const QR_SIZE = 200;
 const MASKED_KEY = '••••-••••-••••';
@@ -455,6 +457,18 @@ export const PassportDetail = ({
                     <span className={`admin-qr-badge admin-qr-badge-lg admin-passport-badge--${passport.status}`}>
                         {passportStatusLabel(passport.status, isEnglish)}
                     </span>
+                    {/* The holder's setting, so only once they've loaded. */}
+                    {!unclaimed && owner && <PassportPageTag hidden={owner.hidePassportPage}/>}
+                    {/* What a scan of the sticker opens, in a new tab. */}
+                    <a
+                        href={scanValue}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="admin-toggle-btn admin-toggle-edit admin-passport-hero-open"
+                    >
+                        <FaExternalLinkAlt aria-hidden="true"/>
+                        {isEnglish ? 'Open passport page' : '打开通行证页面'}
+                    </a>
                 </div>
             </header>
 

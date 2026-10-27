@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { fetchPassportsByDesign, type Passport, type PassportDesign, usePassportDesigns, } from '~/lib/passports';
 import { StatTile } from '../StatTile';
@@ -20,6 +20,11 @@ interface PassportsTabProps {
     readOnly: boolean;
 }
 
+export interface PassportsTabHandle {
+    /** Opens one passport's page, as a user's admin page does for theirs. */
+    openPassport: (id: string) => void;
+}
+
 /**
  * The Passports tab: one design's stock at a time, with the generator, stock
  * table and exports, a code/owner lookup, and the design editor. Nothing
@@ -27,7 +32,11 @@ interface PassportsTabProps {
  * narrowed by status. Queries are equality-only and sorting is local, so no
  * composite index is needed.
  */
-export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabProps) => {
+export const PassportsTab = forwardRef<PassportsTabHandle, PassportsTabProps>(({
+                                                                                   onLookupUser,
+                                                                                   showToast,
+                                                                                   readOnly,
+                                                                               }, ref) => {
     const {designs, loading: designsLoading, refresh: refreshDesigns} = usePassportDesigns();
 
     const [view, setView] = useState<View>('dashboard');
@@ -35,6 +44,13 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
     const [passports, setPassports] = useState<Passport[] | null>(null);
     const [loadError, setLoadError] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+
+    useImperativeHandle(ref, () => ({
+        openPassport: (id: string) => {
+            setSelectedId(id);
+            setView('detail');
+        },
+    }));
     // Held here because the table unmounts while a passport is open (see
     // StockView). Switching designs resets both.
     const [stockView, setStockView] = useState<StockView>(INITIAL_STOCK_VIEW);
@@ -176,7 +192,9 @@ export const PassportsTab = ({onLookupUser, showToast, readOnly}: PassportsTabPr
             readOnly={readOnly}
         />
     );
-};
+});
+
+PassportsTab.displayName = 'PassportsTab';
 
 interface DashboardProps {
     designs: PassportDesign[];

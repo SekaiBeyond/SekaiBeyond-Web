@@ -27,12 +27,15 @@ import {
     type UserProfile,
 } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { passportDateTime, usePassportDesigns } from '~/lib/passports';
 import type { PastEvent } from '~/lib/pastEvents';
 import { useUploadLimits } from '~/lib/uploadLimits';
+import { usePassportsByOwner } from '~/pages/PassportShelf';
 import type { BadgeDef, UserRecord } from './types';
 import { validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 import { MembershipSection } from './MembershipSection';
+import { PassportPageTag, PassportRow } from './passports/PassportSearch';
 import { UserAvatar } from './UserRow';
 
 interface UserDetailViewProps {
@@ -45,6 +48,7 @@ interface UserDetailViewProps {
     readOnly?: boolean;
     onBack: () => void;
     onUpdateUser: (uid: string, changes: Partial<UserRecord>) => void;
+    onOpenPassport: (passportId: string) => void;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
 }
 
@@ -58,10 +62,13 @@ export const UserDetailView = ({
                                    readOnly = false,
                                    onBack,
                                    onUpdateUser,
+                                   onOpenPassport,
                                    showToast,
                                }: UserDetailViewProps) => {
     const {isEnglish} = useLanguage();
     const {imageMb} = useUploadLimits();
+    const {designs: passportDesigns} = usePassportDesigns();
+    const {passports, failed: passportsFailed} = usePassportsByOwner(userRecord.uid);
 
     const [updating, setUpdating] = useState(false);
     const [pendingDeletionExpiresAt, setPendingDeletionExpiresAt] = useState<Date | null>(null);
@@ -572,6 +579,58 @@ export const UserDetailView = ({
                 onUpdated={onUpdateUser}
                 showToast={showToast}
             />
+
+            {/* Each opens on its own page in the Passports tab. */}
+            <div className="admin-group-section">
+                <h4 className="admin-badges-title">
+                    {isEnglish ? 'Passports' : '通行证'}
+                    {passports && passports.length > 0 && (
+                        <span className="admin-badges-count">{passports.length}</span>
+                    )}
+                </h4>
+                {passportsFailed ? (
+                    <p className="admin-group-label">
+                        {isEnglish ? 'Failed to load passports.' : '加载通行证失败。'}
+                    </p>
+                ) : passports === null ? (
+                    <div className="spinner spinner-centered"/>
+                ) : passports.length === 0 ? (
+                    <p className="admin-group-label">
+                        {isEnglish ? 'No passports activated.' : '尚未激活通行证。'}
+                    </p>
+                ) : (
+                    <>
+                        {/* One setting for all of them. */}
+                        <p className="admin-passport-privacy">
+                            <PassportPageTag hidden={userRecord.hidePassportPage}/>
+                            <span>
+                                {userRecord.hidePassportPage
+                                    ? (isEnglish
+                                        ? 'Scanners see a notice instead of their page. Only they can change this.'
+                                        : '扫描者只会看到提示，看不到其页面。仅本人可更改。')
+                                    : (isEnglish
+                                        ? 'Anyone who scans one of their passports sees their page. Only they can change this.'
+                                        : '任何人扫描其通行证都能看到其页面。仅本人可更改。')}
+                            </span>
+                        </p>
+                        <div className="admin-passport-results">
+                            {passports.map(passport => (
+                                <PassportRow
+                                    key={passport.id}
+                                    passport={passport}
+                                    designs={passportDesigns}
+                                    detail={passport.claimedAt
+                                        ? (isEnglish
+                                            ? `Activated ${passportDateTime(passport.claimedAt, true, '')}`
+                                            : `激活于 ${passportDateTime(passport.claimedAt, false, '')}`)
+                                        : ''}
+                                    onOpen={onOpenPassport}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
+            </div>
 
             {!readOnly && canManage && ['staff', 'core-staff'].includes(userRecord.group) && (
                 <div className="admin-group-section">

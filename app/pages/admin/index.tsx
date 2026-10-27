@@ -20,7 +20,7 @@ import { TagsTab } from './TagsTab';
 import { VenuesTab } from './VenuesTab';
 import { UwParkingStatus } from './UwParkingStatus';
 import { LocationsMap } from './LocationsMap';
-import { PassportsTab } from './passports/PassportsTab';
+import { PassportsTab, type PassportsTabHandle } from './passports/PassportsTab';
 import { RecordsTab } from './RecordsTab';
 import { ToolsTab } from './ToolsTab';
 import { SiteConfigTab } from './SiteConfigTab';
@@ -112,6 +112,7 @@ export const AdminPage = () => {
     const upcomingTabRef = useRef<UpcomingEventsTabHandle>(null);
     const badgesTabRef = useRef<BadgesTabHandle>(null);
     const venuesTabRef = useRef<LocationListHandle>(null);
+    const passportsTabRef = useRef<PassportsTabHandle>(null);
     // Cross-tab "jump to this card" requests, in state with a nonce so the effect
     // fires after the target tab mounts, and again when it's already active.
     const actionNonce = useRef(0);
@@ -183,6 +184,11 @@ export const AdminPage = () => {
         queueAction('lookupUser', uid);
     }, [queueAction]);
 
+    const handleOpenPassport = useCallback((passportId: string) => {
+        setActiveTab('passports');
+        queueAction('openPassport', passportId);
+    }, [queueAction]);
+
     const handleSelectBadge = useCallback((badgeId: string) => {
         setActiveTab('badges');
         queueAction('selectBadge', badgeId);
@@ -219,6 +225,9 @@ export const AdminPage = () => {
                 break;
             case 'selectBadge':
                 badgesTabRef.current?.selectBadgeById(action.id);
+                break;
+            case 'openPassport':
+                passportsTabRef.current?.openPassport(action.id);
                 break;
             case 'selectEvent':
                 eventsTabRef.current?.selectManagedEvent(action.id);
@@ -299,6 +308,7 @@ export const AdminPage = () => {
                         badgeDefsError={badgeDefsError}
                         user={user}
                         profile={profile}
+                        onOpenPassport={handleOpenPassport}
                         showToast={showToast}
                         readOnly={isStaffGroup}
                     />
@@ -431,6 +441,7 @@ export const AdminPage = () => {
 
                 {activeTab === 'passports' && (isCoreStaffOrAbove || isStaffGroup) && (
                     <PassportsTab
+                        ref={passportsTabRef}
                         onLookupUser={handleLookupUser}
                         showToast={showToast}
                         readOnly={isStaffGroup}

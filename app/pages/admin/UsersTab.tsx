@@ -33,6 +33,8 @@ interface UsersTabProps {
     badgeDefsError: boolean;
     user: User;
     profile: UserProfile;
+    /** Opens one of the user's passports in the Passports tab. */
+    onOpenPassport: (passportId: string) => void;
     showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
     readOnly?: boolean;
 }
@@ -47,6 +49,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                                        badgeDefsError,
                                                                        user,
                                                                        profile,
+                                                                       onOpenPassport,
                                                                        showToast,
                                                                        readOnly = false,
                                                                    }, ref) => {
@@ -293,6 +296,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     readOnly={readOnly}
                     onBack={() => setSelectedUser(null)}
                     onUpdateUser={applyUserUpdate}
+                    onOpenPassport={onOpenPassport}
                     showToast={showToast}
                 />
             )}

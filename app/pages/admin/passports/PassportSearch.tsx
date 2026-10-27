@@ -10,6 +10,7 @@ import {
     passportName,
     passportStatusLabel,
 } from '~/lib/passports';
+import { PRIVACY_ROWS } from '~/lib/privacy';
 import { searchUsers, type ShowToast } from '../utils';
 import type { UserRecord } from '../types';
 
@@ -85,28 +86,66 @@ export const PassportSearch = ({designs, onOpen, showToast}: PassportSearchProps
             ) : (
                 <div className="admin-passport-results">
                     {results.map(({passport, owner}) => (
-                        <button
+                        <PassportRow
                             key={passport.id}
-                            className="admin-qr-row"
-                            onClick={() => onOpen(passport.id)}
-                            type="button"
-                        >
-                            <span className="admin-qr-row-main">
-                                <span className="admin-qr-row-title">
-                                    {passport.id}
-                                    <span className={`admin-qr-badge admin-passport-badge--${passport.status}`}>
-                                        {passportStatusLabel(passport.status, isEnglish)}
-                                    </span>
-                                </span>
-                                <span className="admin-qr-row-sub">
-                                    {passport.year} · {passportName(designs.find(d => d.id === passport.designId), isEnglish)}
-                                    {owner ? ` · ${owner.displayName} (${owner.email})` : ''}
-                                </span>
-                            </span>
-                        </button>
+                            passport={passport}
+                            designs={designs}
+                            detail={owner ? `${owner.displayName} (${owner.email})` : ''}
+                            onOpen={onOpen}
+                        />
                     ))}
                 </div>
             ))}
         </div>
+    );
+};
+
+interface PassportRowProps {
+    passport: Passport;
+    designs: PassportDesign[];
+    /** Appended to the year and design name, when not blank. */
+    detail: string;
+    onOpen: (id: string) => void;
+}
+
+/**
+ * Whether scanning a holder's passports shows their page or a private notice,
+ * as they set it on their profile.
+ */
+export const PassportPageTag = ({hidden}: {hidden: boolean}) => {
+    const {isEnglish} = useLanguage();
+    // The member's own wording for the setting, from their Settings tab.
+    const row = PRIVACY_ROWS.find(r => r.key === 'passportPage');
+    const meaning = row && (hidden ? row.off : row.on);
+    return (
+        <span
+            className={`admin-qr-badge admin-qr-badge-lg admin-passport-badge--${hidden ? 'private' : 'public'}`}
+            title={meaning ? (isEnglish ? meaning.en : meaning.zh) : undefined}
+        >
+            {hidden
+                ? (isEnglish ? 'Private page' : '私密页面')
+                : (isEnglish ? 'Public page' : '公开页面')}
+        </span>
+    );
+};
+
+/** One passport as a clickable row, here and on a user's admin page. */
+export const PassportRow = ({passport, designs, detail, onOpen}: PassportRowProps) => {
+    const {isEnglish} = useLanguage();
+    return (
+        <button className="admin-qr-row" onClick={() => onOpen(passport.id)} type="button">
+            <span className="admin-qr-row-main">
+                <span className="admin-qr-row-title">
+                    {passport.id}
+                    <span className={`admin-qr-badge admin-passport-badge--${passport.status}`}>
+                        {passportStatusLabel(passport.status, isEnglish)}
+                    </span>
+                </span>
+                <span className="admin-qr-row-sub">
+                    {passport.year} · {passportName(designs.find(d => d.id === passport.designId), isEnglish)}
+                    {detail ? ` · ${detail}` : ''}
+                </span>
+            </span>
+        </button>
     );
 };

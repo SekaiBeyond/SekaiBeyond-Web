@@ -61,6 +61,7 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
         title: data.title ?? '',
         titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],
+        hidePassportPage: data.hidePassportPage === true,
     };
 };
 
