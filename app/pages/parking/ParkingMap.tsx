@@ -12,8 +12,8 @@ import {
 import type { ParkingWindow } from '~/lib/parkingStatus';
 import { uwLotGlyph, type VenueOutline } from '~/lib/uwParking';
 import { hasCoordinates, type Venue } from '~/lib/venues';
-import { localizedVenueName, lotSubtitle, type LotView } from './model';
-import { RatesLine, StatusPill, walkText } from './parts';
+import { accessibleStalls, localizedVenueName, lotSubtitle, type LotView } from './model';
+import { AccessibleBadge, RatesLine, StatusPill, walkText } from './parts';
 import type { ParkingText } from './text';
 
 const ATTRIBUTION = 'UW Transportation Services · UW Facilities GIS';
@@ -270,6 +270,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
     const hoveredView = hover?.kind === 'lot' ? views.find(v => v.lot.code === hover.code) : undefined;
     const hoveredVenue = hover?.kind === 'venue' ? venues.find(v => v.id === hover.id) : undefined;
     const hasPicks = views.some(v => v.suggested);
+    const hasAccessible = views.some(v => accessibleStalls(v.lot) > 0);
 
     return (
         <>
@@ -297,6 +298,10 @@ export const ParkingMap = (props: ParkingMapProps) => {
                     <div className="parking-map-legend-item is-optional"><span
                         className="parking-map-legend-dot is-pick">P</span>{tx.t('lg_pick')}</div>
                 )}
+                {hasAccessible && (
+                    <div className="parking-map-legend-item"><span
+                        className="parking-map-legend-ada">♿</span>{tx.t('lg_ada')}</div>
+                )}
                 {venue && (
                     <div className="parking-map-legend-item is-optional"><span
                         className="parking-map-legend-star">⭐</span>{tx.t('lg_venue')}</div>
@@ -313,12 +318,18 @@ export const ParkingMap = (props: ParkingMapProps) => {
                 if (!element) return null;
                 const {lot, status, suggested} = view;
                 const typeLabel = tx.lotType(lot.type);
+                const adaStalls = accessibleStalls(lot);
                 return createPortal(
                     <div className={`parking-pin-wrap${suggested ? ' is-pick' : ''}`}>
                         <button
                             type="button"
                             className={`parking-pin parking-k-${status.kind}${lot.code === selectedCode ? ' is-selected' : ''}${lot.code === hotCode ? ' is-hot' : ''}`}
-                            aria-label={[lot.code, tx.status(status), walkText(view, tx)].filter(Boolean).join(', ')}
+                            aria-label={[
+                                lot.code,
+                                tx.status(status),
+                                adaStalls > 0 && tx.accessibleStalls(adaStalls),
+                                walkText(view, tx),
+                            ].filter(Boolean).join(', ')}
                             onPointerDown={e => {
                                 lastPointer.current = e.pointerType;
                             }}
@@ -345,6 +356,7 @@ export const ParkingMap = (props: ParkingMapProps) => {
                             }}
                         >
                             {uwLotGlyph(lot.type)}
+                            <AccessibleBadge lot={lot} tx={tx}/>
                         </button>
                         <div className="parking-pin-label" aria-hidden="true">
                             {lot.code}

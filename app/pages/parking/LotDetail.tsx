@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { clockMinutes, DAY_MINUTES, daySchedule, type ParkingWindow, weeklyRates } from '~/lib/parkingStatus';
 import type { ClockRange } from '~/lib/uwParking';
 import { RatesLine, StatusPill, walkText } from './parts';
-import type { LotView } from './model';
+import { accessibleStalls, DISABILITY_ONLY_LOT, type LotView, UW_ACCESSIBLE_PARKING_URL } from './model';
 import type { ParkingText } from './text';
 
 interface LotDetailProps {
@@ -178,6 +178,16 @@ export const LotDetail = ({
                             </div>
                         ))}
                     </div>
+                    {accessibleStalls(lot) > 0 && (
+                        <div className="parking-note parking-ada-note">
+                            <b>♿ {tx.t('s_accessible')}</b>
+                            {lot.code === DISABILITY_ONLY_LOT && <>{tx.t('adaReserved')} </>}
+                            {tx.t('adaPay')}{' '}
+                            <a href={UW_ACCESSIBLE_PARKING_URL} target="_blank" rel="noopener noreferrer">
+                                {tx.t('adaSrc')} ↗
+                            </a>
+                        </div>
+                    )}
                 </section>
             )}
 

@@ -176,12 +176,22 @@ export function matchesFilters(view: LotView, query: string, filters: ReadonlySe
     const {lot} = view;
     if (q && !lot.code.toLowerCase().includes(q) && !lot.name.toLowerCase().includes(q)) return false;
     if (filters.has('free') && view.status.kind !== 'free') return false;
-    if (filters.has('ada') && !(lot.stalls.accessible && lot.stalls.accessible > 0)) return false;
+    if (filters.has('ada') && accessibleStalls(lot) === 0) return false;
     if (filters.has('ev') && !(lot.stalls.ev && lot.stalls.ev > 0)) return false;
     if (filters.has('moto') && !(lot.stalls.motorcycle && lot.stalls.motorcycle > 0)) return false;
     if (filters.has('garage') && !isGarage(lot)) return false;
     return true;
 }
+
+/** The accessible stalls UW lists at a lot; none listed counts as none. */
+export const accessibleStalls = (lot: UwLot): number => lot.stalls.accessible ?? 0;
+
+/**
+ * UW's accessible parking page, the source of the lot details' note on it: a placard doesn't
+ * make parking free, and this lot near the Quad is reserved for disability parking.
+ */
+export const UW_ACCESSIBLE_PARKING_URL = 'https://transportation.uw.edu/park/accessible';
+export const DISABILITY_ONLY_LOT = 'N22';
 
 /** A lot's name when it has one beyond its code (garages do), else its type. */
 export const lotSubtitle = (lot: UwLot, typeLabel: string) => lot.name !== lot.code ? lot.name : typeLabel;

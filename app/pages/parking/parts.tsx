@@ -1,13 +1,19 @@
 import type { LotStatus, Rate } from '~/lib/parkingStatus';
-import { walkMinutes } from '~/lib/uwParking';
+import { type UwLot, walkMinutes } from '~/lib/uwParking';
 import { siteDay } from '~/lib/siteTime';
 import { formatDistanceEstimate, PARKING_INFO_URL } from '~/lib/venues';
-import type { LotView } from './model';
+import { accessibleStalls, type LotView } from './model';
 import type { ParkingText } from './text';
 
 export const StatusPill = ({status, tx}: {status: LotStatus; tx: ParkingText}) => (
     <span className={`parking-status parking-s-${status.kind}`}>{tx.status(status)}</span>
 );
+
+/** A ♿ on the corner of a lot's icon when UW lists accessible stalls there, saying how many to screen readers. */
+export const AccessibleBadge = ({lot, tx}: {lot: UwLot; tx: ParkingText}) => {
+    const n = accessibleStalls(lot);
+    return n > 0 ? <span className="parking-ada-badge" role="img" aria-label={tx.accessibleStalls(n)}>♿</span> : null;
+};
 
 /**
  * "💲 $5/hr · $21/day", or "💲 During your event: $5/hr · $21/day" on an event's guide: what a

@@ -90,6 +90,11 @@ const EN = {
     directions: 'Directions',
     openMap: 'Open in Google Maps',
     note: 'Note from the organizers',
+    adaStall: '1 accessible stall',
+    adaStalls: '{n} accessible stalls',
+    adaPay: 'Display your disability placard or plate. It doesn’t make parking free: pay as usual during paid hours.',
+    adaReserved: 'Reserved for disability parking.',
+    adaSrc: 'UW accessible parking',
     clearance: '{ft} ({in} in)',
     whyPaid: '{day} paid hours: {w}.',
     whyHours: '{day} hours: {w}.',
@@ -106,6 +111,7 @@ const EN = {
     lg_permit: 'Permits only',
     lg_event: 'Event pricing',
     lg_pick: 'Suggested lot',
+    lg_ada: 'Has accessible stalls',
     lg_venue: 'Event venue',
     lg_other: 'Other venues (click to switch)',
     lg_venues: 'Venues (click to choose)',
@@ -220,6 +226,11 @@ const ZH: Record<TextKey, string> = {
     directions: '导航',
     openMap: '在 Google 地图中查看',
     note: '主办方提示',
+    adaStall: '1 个无障碍车位',
+    adaStalls: '{n} 个无障碍车位',
+    adaPay: '请出示残障停车证或车牌。持证并不免费：收费时段内仍需照常付费。',
+    adaReserved: '专供残障人士停车。',
+    adaSrc: 'UW 无障碍停车说明',
     clearance: '{m} 米（{in} 英寸）',
     whyPaid: '{day}收费时间：{w}。',
     whyHours: '{day}时间：{w}。',
@@ -236,6 +247,7 @@ const ZH: Record<TextKey, string> = {
     lg_permit: '仅限持证',
     lg_event: '活动停车价',
     lg_pick: '推荐停车场',
+    lg_ada: '设有无障碍车位',
     lg_venue: '活动场地',
     lg_other: '其他场地（点击切换）',
     lg_venues: '场地（点击选择）',
@@ -354,10 +366,28 @@ function makeText(isEnglish: boolean) {
             .join(isEnglish ? ', ' : '，');
     };
 
+    /** "12 accessible stalls". */
+    const accessibleStalls = (n: number) => n === 1 ? t('adaStall') : t('adaStalls', {n});
+
     const lotType = (type: string) => uwLotTypeLabel(type, isEnglish);
     const area = (name: string) => AREAS[name]?.[lang] ?? name;
 
-    return {isEnglish, t, time, range, date, money, pricingWhen, status, rates, rateWhen, hours, lotType, area};
+    return {
+        isEnglish,
+        t,
+        time,
+        range,
+        date,
+        money,
+        pricingWhen,
+        status,
+        rates,
+        rateWhen,
+        hours,
+        accessibleStalls,
+        lotType,
+        area
+    };
 }
 
 export function useParkingText(): ParkingText {

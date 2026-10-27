@@ -3,7 +3,7 @@ import { clockMinutes, type ParkingWindow } from '~/lib/parkingStatus';
 import { type UwEventPricing, uwLotGlyph } from '~/lib/uwParking';
 import type { Venue } from '~/lib/venues';
 import { type EventDay, type GuideEvent, type LotFilter, lotSubtitle, type LotView } from './model';
-import { RatesLine, StatusPill, walkText } from './parts';
+import { AccessibleBadge, RatesLine, StatusPill, walkText } from './parts';
 import type { ParkingText } from './text';
 
 const UW_EVENT_CALENDAR_URL = 'https://transportation.uw.edu/park/events/calendar';
@@ -213,8 +213,10 @@ export const LotList = (props: LotListProps) => {
                                 className={`parking-info-card parking-pick${hotCode === lot.code ? ' is-hot' : ''}`}
                                 {...hoverProps(lot.code)}
                             >
-                                <span
-                                    className="parking-info-icon parking-info-icon--pick">{uwLotGlyph(lot.type)}</span>
+                                <span className="parking-info-icon parking-info-icon--pick">
+                                    {uwLotGlyph(lot.type)}
+                                    <AccessibleBadge lot={lot} tx={tx}/>
+                                </span>
                                 <span className="parking-info-text parking-info-stack">
                                     <span className="parking-lot-name">
                                         {lot.code}{lot.name !== lot.code && ` · ${lot.name}`}
@@ -271,7 +273,10 @@ export const LotList = (props: LotListProps) => {
                             className={`parking-lot-row${hotCode === lot.code ? ' is-hot' : ''}`}
                             {...hoverProps(lot.code)}
                         >
-                            <span className={`parking-lot-badge parking-k-${status.kind}`}>{uwLotGlyph(lot.type)}</span>
+                            <span className={`parking-lot-badge parking-k-${status.kind}`}>
+                                {uwLotGlyph(lot.type)}
+                                <AccessibleBadge lot={lot} tx={tx}/>
+                            </span>
                             <span className="parking-lot-row-body">
                                 <span className="parking-lot-row-name">
                                     {lot.code}<span>{lotSubtitle(lot, tx.lotType(lot.type))}</span>

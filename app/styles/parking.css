@@ -17,6 +17,9 @@
     --parking-event: #e05555;
     --parking-event-ink: #c93a3a;
     --parking-event-soft: rgba(224, 85, 85, 0.12);
+    /* Accessible parking, in the blue of the wheelchair symbol. */
+    --parking-accessible: #1f6fd1;
+    --parking-accessible-soft: rgba(31, 111, 209, 0.1);
     --parking-badge-font: 'Fredoka', 'Quicksand', 'Noto Sans SC', sans-serif;
 }
 
@@ -413,6 +416,14 @@
     box-shadow: 0 0 0 2px var(--color-primary), 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
+.parking-map-legend-ada {
+    flex: 0 0 auto;
+    width: 18px;
+    text-align: center;
+    font-size: 15px;
+    line-height: 1;
+}
+
 .parking-map-legend-star {
     flex: 0 0 auto;
     width: 18px;
@@ -509,6 +520,7 @@
 }
 
 .parking-info-icon--pick {
+    position: relative;
     background: var(--gradient-primary);
     color: #fff;
     font-family: var(--parking-badge-font);
@@ -839,6 +851,7 @@
 }
 
 .parking-lot-badge {
+    position: relative;
     flex: none;
     width: 32px;
     height: 32px;
@@ -1145,7 +1158,16 @@
 }
 
 .parking-stall--accessible {
-    background: var(--color-success);
+    background: var(--parking-accessible);
+}
+
+/* The placard and payment note under the stalls of a lot with accessible ones. */
+.parking-ada-note {
+    background: var(--parking-accessible-soft);
+}
+
+.parking-ada-note b {
+    color: var(--parking-accessible);
 }
 
 .parking-stall--motorcycle {
@@ -1216,6 +1238,7 @@ button.parking-tag {
 }
 
 .parking-pin {
+    position: relative;
     width: 30px;
     height: 30px;
     padding: 0;
@@ -1241,6 +1264,24 @@ button.parking-tag {
 .parking-pin:focus-visible {
     outline: 3px solid var(--color-primary);
     outline-offset: 2px;
+}
+
+/* The ♿ on the corner of a lot's icon (pin, list badge or suggested card) when it has accessible stalls. */
+.parking-ada-badge {
+    position: absolute;
+    top: -8px;
+    right: -10px;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1;
+    filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+/* Tucked in on the list's badges, so it stays clear of the lot code beside them. */
+.parking-lot-badge .parking-ada-badge {
+    top: -6px;
+    right: -6px;
+    font-size: 13px;
 }
 
 .parking-pin-label {
