@@ -4,7 +4,7 @@ import { FiArrowLeft, FiMenu, FiX } from 'react-icons/fi';
 import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { CON_NAME, CON_NAV_LINKS, useConListing } from '~/lib/conContent';
 import { useT } from '~/pages/con/i18n';
-import { useActiveSection, useScrolledPast } from '~/pages/con/hooks';
+import { useActiveSection, useConEnded, useConNavLinks, useScrolledPast } from '~/pages/con/hooks';
 import { scrollToSection } from '~/pages/con/utils';
 
 const SECTION_IDS = CON_NAV_LINKS.map(link => link.id);
@@ -12,6 +12,10 @@ const SECTION_IDS = CON_NAV_LINKS.map(link => link.id);
 export const Navigation = () => {
     const t = useT();
     const {ticketUrl} = useConListing().listing;
+    const ended = useConEnded();
+    const links = useConNavLinks();
+    // No Get Tickets once the con is over.
+    const showTickets = !!ticketUrl && !ended;
     const [menuOpen, setMenuOpen] = useState(false);
 
     const solid = useScrolledPast(80);
@@ -58,7 +62,7 @@ export const Navigation = () => {
                 </div>
 
                 <ul className={`sbc-nav-links${menuOpen ? ' sbc-nav-links--open' : ''}`}>
-                    {CON_NAV_LINKS.map(link => (
+                    {links.map(link => (
                         <li key={link.id}>
                             <a
                                 className={`sbc-nav-link${activeSection === link.id ? ' sbc-nav-link--active' : ''}`}
@@ -74,7 +78,7 @@ export const Navigation = () => {
                             {t({en: 'Policy', zh: '政策'})}
                         </Link>
                     </li>
-                    {ticketUrl && (
+                    {showTickets && (
                         <li className="sbc-nav-links-cta">
                             <a
                                 className="btn btn-primary sbc-btn-compact"
@@ -97,7 +101,7 @@ export const Navigation = () => {
                     <div className="sbc-lang-slot">
                         <LanguageSwitcher/>
                     </div>
-                    {ticketUrl && (
+                    {showTickets && (
                         <a
                             className="btn btn-primary sbc-btn-compact sbc-nav-ticket-btn"
                             href={ticketUrl}

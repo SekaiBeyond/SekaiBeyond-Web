@@ -1,7 +1,8 @@
 import { Link } from 'react-router';
 import { SiBilibili, SiDiscord, SiInstagram, SiXiaohongshu } from 'react-icons/si';
-import { CON_NAME, CON_NAV_LINKS, useConVenue } from '~/lib/conContent';
+import { CON_NAME, useConVenue } from '~/lib/conContent';
 import { SOCIAL_LINK_NAMES, useSiteConfig } from '~/lib/siteConfig';
+import { useConNavLinks } from '~/pages/con/hooks';
 import { useT } from '~/pages/con/i18n';
 import { scrollToSection } from '~/pages/con/utils';
 import type { ParkingGuideState } from '~/pages/parking';
@@ -17,6 +18,7 @@ export const Footer = () => {
     const t = useT();
     const {config} = useSiteConfig();
     const venue = useConVenue();
+    const links = useConNavLinks();
 
     return (
         <footer className="sbc-footer">
@@ -30,7 +32,7 @@ export const Footer = () => {
                 </p>
 
                 <nav className="sbc-footer-nav" aria-label={t({en: 'Footer', zh: '页脚导航'})}>
-                    {CON_NAV_LINKS.map(link => (
+                    {links.map(link => (
                         <a
                             key={link.id}
                             className="sbc-footer-link"

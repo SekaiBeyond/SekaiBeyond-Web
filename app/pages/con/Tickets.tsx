@@ -1,6 +1,6 @@
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { useConContent, useConListing } from '~/lib/conContent';
-import { useNowAcross } from '~/pages/con/hooks';
+import { useConEnded, useNowAcross } from '~/pages/con/hooks';
 import { useT } from '~/pages/con/i18n';
 import { InPersonSales } from '~/pages/con/InPersonSales';
 import { SectionHeader } from '~/pages/con/SectionHeader';
@@ -12,6 +12,10 @@ export const Tickets = () => {
     const {content} = useConContent();
     const {ticketUrl} = useConListing().listing;
     const now = useNowAcross(content.tickets.flatMap(tier => tier.earlyBird ? [tier.earlyBird.endsAt] : []));
+    const ended = useConEnded();
+
+    // Nothing left to buy once the con is over; its nav links drop out with it.
+    if (ended) return null;
 
     return (
         <section id="tickets" className="sbc-section">

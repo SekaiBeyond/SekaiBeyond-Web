@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CON_NAV_LINKS, useConListing } from '~/lib/conContent';
 import { parseSiteTime } from '~/lib/siteTime';
 
 /**
@@ -109,6 +110,25 @@ export const useNowAcross = (isoDates: string[]) => {
     }, [key, now]);
 
     return now;
+};
+
+/**
+ * True once the con's event has ended, switching on a page left open as it
+ * does. False with no event linked or an unparseable end.
+ */
+export const useConEnded = () => {
+    const {endTime} = useConListing().listing;
+    const now = useNowAcross([endTime]);
+    const end = parseSiteTime(endTime).getTime();
+    // At, not only past: useNowAcross can wake exactly at the end and won't
+    // wake again for it.
+    return Number.isFinite(end) && now >= end;
+};
+
+/** The con's nav links, less Tickets once the con has ended and its section is gone. */
+export const useConNavLinks = () => {
+    const ended = useConEnded();
+    return ended ? CON_NAV_LINKS.filter(link => link.id !== 'tickets') : CON_NAV_LINKS;
 };
 
 /** True once the page has scrolled past `offset` — used to solidify the con navbar. */

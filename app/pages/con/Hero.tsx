@@ -4,7 +4,7 @@ import { LuArrowUpRight, LuCalendar, LuClock, LuMapPin, LuSquareParking } from '
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { CON_NAME, useConContent, useConListing, useConVenue } from '~/lib/conContent';
 import { useT } from '~/pages/con/i18n';
-import { useMediaQuery } from '~/pages/con/hooks';
+import { useConEnded, useMediaQuery } from '~/pages/con/hooks';
 import { formatEventDate, formatTimeRange, formatWeekday, scrollToSection } from '~/pages/con/utils';
 import { Countdown } from '~/pages/con/Countdown';
 import type { ParkingGuideState } from '~/pages/parking';
@@ -30,6 +30,7 @@ export const Hero = () => {
     const {content} = useConContent();
     const {listing} = useConListing();
     const venue = useConVenue();
+    const ended = useConEnded();
     const {event, heroVideo} = content;
     const sparks = useMemo(generateSparkStyles, []);
 
@@ -126,36 +127,44 @@ export const Hero = () => {
 
                 <Countdown/>
 
-                <div className="sbc-hero-buttons">
-                    {listing.ticketUrl && (
-                        <a
-                            className="btn btn-primary"
-                            href={listing.ticketUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            <span>{t({en: 'Get Tickets', zh: '获取门票'})}</span>
-                            <LuArrowUpRight aria-hidden="true"/>
-                        </a>
-                    )}
-                    {venue && (
-                        <Link
-                            className="btn sbc-btn-ghost"
-                            to={venue.parkingUrl}
-                            state={{from: 'con'} satisfies ParkingGuideState}
-                        >
-                            <span>{t({en: 'Parking Guide', zh: '停车指南'})}</span>
-                            <LuSquareParking aria-hidden="true"/>
-                        </Link>
-                    )}
-                </div>
+                {/* Tickets and parking are for coming to the con, so neither
+                    outlives it. */}
+                {!ended && (
+                    <div className="sbc-hero-buttons">
+                        {listing.ticketUrl && (
+                            <a
+                                className="btn btn-primary"
+                                href={listing.ticketUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <span>{t({en: 'Get Tickets', zh: '获取门票'})}</span>
+                                <LuArrowUpRight aria-hidden="true"/>
+                            </a>
+                        )}
+                        {venue && (
+                            <Link
+                                className="btn sbc-btn-ghost"
+                                to={venue.parkingUrl}
+                                state={{from: 'con'} satisfies ParkingGuideState}
+                            >
+                                <span>{t({en: 'Parking Guide', zh: '停车指南'})}</span>
+                                <LuSquareParking aria-hidden="true"/>
+                            </Link>
+                        )}
+                    </div>
+                )}
             </div>
 
+            {/* The Tickets section goes once the con is over, so the cue skips to
+                About. */}
             <a
                 className="sbc-hero-scroll-cue"
-                href="#tickets"
-                onClick={scrollToSection('tickets')}
-                aria-label={t({en: 'Scroll to tickets', zh: '滚动到门票'})}
+                href={ended ? '#about' : '#tickets'}
+                onClick={scrollToSection(ended ? 'about' : 'tickets')}
+                aria-label={ended
+                    ? t({en: 'Scroll to About', zh: '滚动到关于漫展'})
+                    : t({en: 'Scroll to tickets', zh: '滚动到门票'})}
             >
                 <span aria-hidden="true">↓</span>
             </a>
