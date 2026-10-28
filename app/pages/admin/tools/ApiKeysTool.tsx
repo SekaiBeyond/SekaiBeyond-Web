@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     API_SCOPES,
@@ -51,7 +51,6 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
     const {upcomingEvents} = useAllUpcomingEvents();
     // A key held to an event keeps it once the event is archived.
     const {pastEvents} = usePastEvents();
-    const paidEvents = useMemo(() => upcomingEvents.filter(e => e.paid), [upcomingEvents]);
 
     const [keys, setKeys] = useState<ApiKeySummary[] | null>(null);
     const [serverNow, setServerNow] = useState(() => Date.now());
@@ -261,20 +260,20 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                         <legend>{isEnglish ? 'Events' : '活动'}</legend>
                         <label className="admin-checkbox-label">
                             <input type="radio" name="api-key-events" checked={allEvents} onChange={() => setAllEvents(true)}/>
-                            <span>{isEnglish ? 'Every paid event' : '所有付费活动'}</span>
+                            <span>{isEnglish ? 'Every event' : '所有活动'}</span>
                         </label>
                         <label className="admin-checkbox-label">
                             <input type="radio" name="api-key-events" checked={!allEvents} onChange={() => setAllEvents(false)}/>
                             <span>{isEnglish ? 'Only these events' : '仅限以下活动'}</span>
                         </label>
                         {!allEvents && (
-                            paidEvents.length === 0 ? (
+                            upcomingEvents.length === 0 ? (
                                 <p className="admin-helper-text">
-                                    {isEnglish ? 'There are no paid upcoming events yet.' : '暂无付费的即将举行的活动。'}
+                                    {isEnglish ? 'There are no upcoming events yet.' : '暂无即将举行的活动。'}
                                 </p>
                             ) : (
                                 <div className="admin-api-key-events">
-                                    {paidEvents.map(e => (
+                                    {upcomingEvents.map(e => (
                                         <label key={e.id} className="admin-checkbox-label">
                                             <input type="checkbox" checked={eventIds.includes(e.id)} onChange={() => toggleEvent(e.id)}/>
                                             <span>{eventTitle(e.id)}</span>
@@ -358,7 +357,7 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                                 <div className="admin-api-key-meta">
                                     <span>
                                         {k.eventIds.length === 0
-                                            ? (isEnglish ? 'Every paid event' : '所有付费活动')
+                                            ? (isEnglish ? 'Every event' : '所有活动')
                                             : `${isEnglish ? 'Only' : '仅限'} ${k.eventIds.map(eventTitle).join(isEnglish ? ', ' : '、')}`}
                                     </span>
                                     <span>

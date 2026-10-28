@@ -1784,12 +1784,13 @@
     margin-bottom: 6px;
 }
 
-.admin-api-key-option {
+/* Both classes, to outrank .admin-checkbox-label's centring further down. */
+.admin-checkbox-label.admin-api-key-option {
     align-items: flex-start;
 }
 
-.admin-api-key-option input[type="checkbox"] {
-    margin-top: 2px;
+.admin-checkbox-label.admin-api-key-option input[type="checkbox"] {
+    margin-top: 1px;
     flex-shrink: 0;
 }
 

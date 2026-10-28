@@ -36,8 +36,8 @@ const TOOLS: ToolDef[] = [
         id: 'api-keys',
         title: 'API Keys',
         titleCn: 'API 密钥',
-        description: 'Create and revoke the keys another app\'s server uses to sell tickets for paid events through the ticket API.',
-        descriptionCn: '创建和吊销其他应用服务器通过门票 API 为付费活动售票时使用的密钥。',
+        description: 'Create and revoke keys giving a server admin-level access to the ticket API: reading every event and selling tickets for paid ones.',
+        descriptionCn: '创建和吊销门票 API 密钥：持有密钥的服务器可以管理员级别读取所有活动，并为付费活动售票。',
         adminOnly: true,
     },
 ];
