@@ -21,12 +21,13 @@ Core-staff and above create keys in the admin panel under **Tools > API Keys**. 
 ## Calling it
 
 ```
-https://sekaibeyond.com/api/v1/...
+https://api.sekaibeyond.com/v1/...  (works from mainland China; see Relay below)
+https://sekaibeyond.com/api/v1/...  (everywhere else)
 Authorization: Bearer sbk_…
 Content-Type: application/json      (POST only)
 ```
 
-The function also answers on its own URL with the same paths minus `/api`. A relay in front of it can do the same, such as a Cloudflare Worker on `api.sekaibeyond.com` for servers in mainland China, which can't reach Google's hosts.
+Both take the same paths and answer the same way. The function also answers on its own URL with the paths minus `/api`.
 
 | Endpoint | Scope | What it's for |
 |---|---|---|
@@ -122,6 +123,56 @@ There's no list of a buyer's orders. The seller's app already knows which orders
 | 422 | `event-not-on-sale`, `unknown-ticket-type` |
 | 429 | `rate-limited`, with a `Retry-After` header in seconds |
 | 500 | `internal`: try again |
+
+The relay adds three errors of its own, in the same shape:
+
+| Status | Codes |
+|---|---|
+| 413 | `payload-too-large`: a request body over 64 KiB |
+| 502 | `upstream-unavailable`: the API couldn't be reached |
+| 504 | `upstream-timeout`: the API took over 30 seconds |
+
+## Relay for mainland China
+
+`sekaibeyond.com` and the function's own URL both resolve to Google addresses, which mainland networks can't reach reliably. So a seller's server there calls `api.sekaibeyond.com` instead. That's a Cloudflare Worker, [`cloudflare/api-relay`](../cloudflare/api-relay), which passes each `/v1/*` request on to `https://sekaibeyond.com/api/v1/*`:
+
+- **Forwarded:** only `Authorization`, `Content-Type`, `Accept`, `User-Agent` and the body.
+- **Returned:** only the response's `Content-Type`, `Allow` and `Retry-After`, plus `Cache-Control: no-store`.
+- **Not cached,** and it checks nothing itself. The key, its scopes and its rate limit are all checked by the API.
+- **Not on `*.workers.dev`:** that's blocked in mainland China, so the relay is on its own hostname only.
+
+### Deploying it
+
+The Firebase deploy workflow doesn't touch it, so it's deployed by hand, by anyone with access to the `sekaibeyond.com` zone on Cloudflare:
+
+```bash
+cd cloudflare/api-relay
+npx -y wrangler@4 login     # once
+npx -y wrangler@4 deploy
+```
+
+The first deploy creates `api.sekaibeyond.com`'s DNS record and certificate. Deploy the Firebase side first: the relay calls the `/api/v1/**` Hosting route.
+
+To try it locally against the emulators, run `npm run dev` in one terminal, then in another:
+
+```bash
+cd cloudflare/api-relay
+npx -y wrangler@4 dev --var "UPSTREAM:http://127.0.0.1:5001/demo-sekaibeyond/us-central1/api"
+```
+
+That serves it on http://localhost:8787.
+
+### Checking it from the mainland
+
+No key is needed to see whether the relay is reachable:
+
+```bash
+curl -i https://api.sekaibeyond.com/v1/events
+```
+
+From anywhere it can reach, that answers `401` with `missing-api-key`, which comes from the API itself, so the whole path works. To check from mainland networks, run the same URL through a mainland testing service such as [ITDOG](https://www.itdog.cn/http/), then from the app's real server with its key.
+
+Cloudflare's plans below Enterprise serve mainland visitors from outside China, so calls can be slow at peak hours. If they're too slow, point `api.sekaibeyond.com` at a server in Hong Kong running the same pass-through instead. Nothing in the API or the seller's app changes.
 
 ## In the admin panel
 
