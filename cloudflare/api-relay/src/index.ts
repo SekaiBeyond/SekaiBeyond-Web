@@ -6,8 +6,10 @@
  *
  *   https://api.sekaibeyond.com/v1/events  ->  ${UPSTREAM}/v1/events
  *
- * A pass-through and nothing more: the key, its scopes and its rate limit are
- * all checked upstream, and nothing is cached.
+ * A pass-through: the key, its scopes and its rate limit are all checked
+ * upstream, and nothing is cached. It refuses only what would never reach the
+ * API, or reach it in a shape a caller can't handle: an oversized body, and a
+ * JSON body Google's servers would turn away.
  */
 
 interface Env {
@@ -26,6 +28,22 @@ const REQUEST_HEADERS = ["authorization", "content-type", "accept", "user-agent"
 
 /** What the API answers with that a caller needs. Google's own headers stay behind. */
 const RESPONSE_HEADERS = ["content-type", "allow", "retry-after"];
+
+/**
+ * False for a JSON body Google's servers would refuse before the API runs:
+ * anything but an object or an array, as their parser is strict. They answer
+ * that with a bare HTML 400, so it's refused here in the API's shape instead.
+ * A body of another type gets through to the API, which refuses it itself.
+ */
+function isJsonObjectOrArray(contentType: string | null, body: ArrayBuffer): boolean {
+    if (contentType?.split(";")[0].trim().toLowerCase() !== "application/json") return true;
+    try {
+        const parsed: unknown = JSON.parse(new TextDecoder().decode(body));
+        return typeof parsed === "object" && parsed !== null;
+    } catch {
+        return false;
+    }
+}
 
 /** In the API's own error shape, so a caller handles the relay's errors like any other. */
 function error(status: number, code: string, message: string): Response {
@@ -46,6 +64,9 @@ export default {
             body = await request.arrayBuffer();
             if (body.byteLength > MAX_BODY_BYTES) {
                 return error(413, "payload-too-large", "The request body is too large.");
+            }
+            if (body.byteLength > 0 && !isJsonObjectOrArray(request.headers.get("content-type"), body)) {
+                return error(400, "invalid-request", "Send a JSON object with Content-Type: application/json.");
             }
         }
 

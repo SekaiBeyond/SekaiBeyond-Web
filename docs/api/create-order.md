@@ -36,7 +36,7 @@ Issues the tickets for an order once the buyer has paid. They go on the event's 
 
 | Status | Code | When |
 |---|---|---|
-| 400 | `invalid-request` | A field is missing or malformed. The message names it. |
+| 400 | `invalid-request` | A field is missing or malformed, and the message names it. Or the body isn't a JSON object; sent straight to `sekaibeyond.com/api`, that gets a bare HTML 400 instead (see [Errors](../api.md#errors)). |
 | 403 | `event-not-allowed` | The key is held to other events. |
 | 404 | `event-not-found` | No event has this ID. |
 | 409 | `order-conflict` | This `orderId` is already taken by an order with different contents. |

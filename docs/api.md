@@ -59,11 +59,13 @@ Prices stay in the seller's app, since events don't store them.
 
 ## Errors
 
-Every error has the same shape:
+Errors come in one shape:
 
 ```json
 {"error": {"code": "event-ended", "message": "This event has ended."}}
 ```
+
+There's one exception, which only happens when calling `sekaibeyond.com/api` directly. A body sent as `application/json` that isn't a JSON object or array never reaches the API: Google's servers turn it away with a bare HTML `400`. That covers malformed JSON and bare strings, numbers or `null`. Through `api.sekaibeyond.com`, the relay catches it first and answers `400 invalid-request` in the usual shape.
 
 Branch on `code`. `message` is for people, and its wording may change. Each endpoint's page lists its own errors. Every endpoint can also return these:
 
@@ -79,10 +81,11 @@ Branch on `code`. `message` is for people, and its wording may change. Each endp
 | 429 | `rate-limited` | Over 120 calls a minute. `Retry-After` says how many seconds to wait. |
 | 500 | `internal` | Something went wrong on our side. Try again. |
 
-The relay adds three of its own, in the same shape:
+The relay adds these of its own, in the same shape:
 
 | Status | Code | When |
 |---|---|---|
+| 400 | `invalid-request` | A body sent as `application/json` isn't a JSON object or array. |
 | 413 | `payload-too-large` | The request body is over 64 KiB. |
 | 502 | `upstream-unavailable` | The API couldn't be reached. |
 | 504 | `upstream-timeout` | The API took over 30 seconds. |
@@ -93,7 +96,7 @@ The relay adds three of its own, in the same shape:
 
 - **Forwarded:** only `Authorization`, `Content-Type`, `Accept`, `User-Agent` and the body.
 - **Returned:** only the response's `Content-Type`, `Allow` and `Retry-After`, plus `Cache-Control: no-store`.
-- **Not cached,** and it checks nothing itself. The key, its scopes and its rate limit are all checked by the API.
+- **Not cached.** The key, its scopes and its rate limit are all checked by the API. The relay itself only refuses a body over 64 KiB, and a JSON body Google's servers would turn away (see [Errors](#errors)).
 - **Not on `*.workers.dev`:** that's blocked in mainland China, so the relay is on its own hostname only.
 
 ### Deploying it
