@@ -2,6 +2,8 @@
 
 Lets another app's server read our events and sell tickets for the paid ones. Tickets sold this way go on the event's attendee list, scan at the door like any other, and show in the buyer's **My Tickets** on the site when the order carries their email.
 
+**It's an admin-level API, not one for ordinary users.** A key sees events as core-staff do in the admin panel, unpublished ones included. So keys go only to our own systems and to partners' servers we trust.
+
 The API returns everything the site itself reads and leaves the filtering to the caller. Its events are both kinds the site has, unarchived and archived, each with the site's own fields.
 
 The code is [`functions/src/functions/api.ts`](../functions/src/functions/api.ts).
@@ -18,7 +20,7 @@ Core-staff and above create keys in the admin panel under **Tools > API Keys**. 
 - Each key may make **120 calls a minute**.
 - Creating a key, revoking one, and every order placed are logged in **Records**.
 
-**The key belongs on the seller's server only.** Never put it in a mobile app, mini-program or web page: anyone can pull it out of one and issue themselves tickets.
+**The key belongs on the seller's server only.** Never put it in a mobile app, mini-program or web page: anyone could pull it out, read everything it can, and issue themselves tickets.
 
 ## Calling it
 
@@ -48,7 +50,7 @@ The site has two kinds of event, and the API returns both, told apart by `archiv
 Every event is returned, free, unpublished and archived ones too. Filter on these:
 
 - `archived`
-- `published`: whether the site shows it. Don't show an unpublished event to buyers: it's a draft. An event is unpublished when it's archived, until staff publish it to the past-events page.
+- `published`: whether the public site shows it, as the admin panel shows every event. An unpublished event is a draft, or one just archived that staff haven't yet published to the past-events page.
 - `paid`: only paid events have tickets.
 - `onSale`: whether an order can be placed for it now. That's an unarchived event that's published, paid and not yet ended, the same test creating an order applies.
 - `deleteAt`: set while an event waits to be deleted.

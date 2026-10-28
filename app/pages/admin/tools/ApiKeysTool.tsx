@@ -187,8 +187,8 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
 
             <p className="admin-helper-text admin-section-mb">
                 {isEnglish
-                    ? 'A key lets another app\'s server read our events and sell tickets for paid ones through the ticket API: its tickets land on the event\'s list and scan at the door like any other. Give a key only to that server, never put it inside an app, and revoke it if it leaks.'
-                    : '密钥可让其他应用的服务器通过门票 API 读取我们的活动并为付费活动售票：所售门票会出现在活动名单中，并可像其他门票一样在现场扫描。密钥只能交给该服务器，切勿放进应用内；如有泄露请立即吊销。'}
+                    ? 'A key gives a server admin-level access to the ticket API: it reads every event, unpublished ones included, and sells tickets for paid ones, which land on the event\'s list and scan at the door like any other. Give keys only to our own systems and partners\' servers we trust, never put one inside an app, and revoke it if it leaks.'
+                    : '密钥可让服务器以管理员级别访问门票 API：可读取所有活动（包括未发布的活动），并为付费活动售票；所售门票会出现在活动名单中，并可像其他门票一样在现场扫描。密钥只能交给我们自己的系统和可信合作方的服务器，切勿放进应用内；如有泄露请立即吊销。'}
             </p>
 
             {created && (
