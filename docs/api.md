@@ -25,188 +25,67 @@ Core-staff and above create keys in the admin panel under **Tools > API Keys**. 
 ## Calling it
 
 ```
-https://api.sekaibeyond.com/v1/...  (works from mainland China; see Relay below)
-https://sekaibeyond.com/api/v1/...  (everywhere else)
+https://api.sekaibeyond.com     (works from mainland China; see Relay below)
+https://sekaibeyond.com/api     (everywhere else)
+```
+
+Both take the same paths and answer the same way. Every request carries the key:
+
+```
 Authorization: Bearer sbk_…
 Content-Type: application/json      (POST only)
 ```
 
-Both take the same paths and answer the same way. The function also answers on its own URL with the paths minus `/api`.
+- **JSON in and out,** in UTF-8.
+- **Timestamps** are ISO 8601 in UTC, such as `2026-11-14T18:00:00.000Z`, or `null` when not set.
+- **Text fields** are `""` when not set, never `null`. Each Chinese field (ending in `Cn`) may be `""`; the site then shows the English one.
+- **Fields may be added over time,** so ignore any you don't know.
 
-| Endpoint | Scope | What it's for |
+## Reference
+
+| Endpoint | Scope | What it does |
 |---|---|---|
-| `GET /api/v1/events` | `events:read` | Every event, archived ones included |
-| `GET /api/v1/events/{eventId}` | `events:read` | One event, such as to check it just before taking payment |
-| `POST /api/v1/events/{eventId}/orders` | `tickets:write` | Issue an order's tickets once it's paid |
-| `GET /api/v1/events/{eventId}/orders/{orderId}` | `tickets:read` | An order's tickets, and whether each has been used |
+| [`GET /v1/events`](api/list-events.md) | `events:read` | List every event, archived ones included |
+| [`GET /v1/events/{eventId}`](api/get-event.md) | `events:read` | Get one event, such as to check it just before taking payment |
+| [`POST /v1/events/{eventId}/orders`](api/create-order.md) | `tickets:write` | Issue an order's tickets once it's paid |
+| [`GET /v1/events/{eventId}/orders/{orderId}`](api/get-order.md) | `tickets:read` | Get an order, with whether each ticket has been used |
 
-### Events
+What they return:
 
-The site has two kinds of event, and the API returns both, told apart by `archived`:
-
-- **Unarchived** (`archived: false`): upcoming, on now, or ended but not yet archived. These are what tickets are sold for. Their fields are the site's upcoming-event fields.
-- **Archived** (`archived: true`): staff archive an event once it's over, and it moves to the site's past events. **It keeps its ID**, so its URL and its orders' URLs keep working. Its fields are the site's past-event fields, which differ: one `date` instead of `startAt` and `endAt`, plus tags and recap links. Its tickets are read-only.
-
-Every event is returned, free, unpublished and archived ones too. Filter on these:
-
-- `archived`
-- `published`: whether the public site shows it, as the admin panel shows every event. An unpublished event is a draft, or one just archived that staff haven't yet published to the past-events page.
-- `paid`: only paid events have tickets.
-- `onSale`: whether an order can be placed for it now. That's an unarchived event that's published, paid and not yet ended, the same test creating an order applies.
-- `deleteAt`: set while an event waits to be deleted.
-
-An unarchived event:
-
-```json
-{
-  "id": "…",
-  "archived": false,
-  "onSale": true,
-  "title": "Sekai Beyond Con",
-  "titleCn": "彼世界动漫游戏展",
-  "description": "…",
-  "descriptionCn": "…",
-  "location": "…",
-  "locationCn": "…",
-  "venueId": "…",
-  "startAt": "2026-11-14T18:00:00.000Z",
-  "endAt": "2026-11-15T02:00:00.000Z",
-  "poster": "https://…",
-  "posterCredit": "…",
-  "emailHeaderBg": "https://…",
-  "buyTicket": "https://…",
-  "learnMore": "https://…",
-  "customButtonText": "…",
-  "customButtonTextCn": "…",
-  "customButtonLink": "https://…",
-  "published": true,
-  "paid": true,
-  "deleteAt": null
-}
-```
-
-An archived one:
-
-```json
-{
-  "id": "…",
-  "archived": true,
-  "onSale": false,
-  "title": "…",
-  "titleCn": "…",
-  "description": "…",
-  "descriptionCn": "…",
-  "location": "…",
-  "locationCn": "…",
-  "venueId": "…",
-  "date": "2026-11-14",
-  "tagIds": ["…"],
-  "icon": "…",
-  "recapLink": "https://…",
-  "recapLinkCn": "https://…",
-  "published": true,
-  "paid": true,
-  "deleteAt": null
-}
-```
-
-Text fields the event doesn't have come back as `""`, and timestamps as `null`. `date` is the event's day in Pacific time, as `YYYY-MM-DD`. The list wraps the events as `{"events": [...]}`, in the site's order: unarchived ones soonest first, then archived ones latest first.
+- [The Event object](api/event.md): both kinds of event the site has, unarchived and archived, and their fields
+- [The Order object](api/order.md): an order and its tickets
 
 Prices stay in the seller's app, since events don't store them.
 
-### Create an order
-
-```json
-POST /api/v1/events/{eventId}/orders
-{
-  "orderId": "WX20261028123456",
-  "buyer": {"name": "李明", "email": "liming@qq.com"},
-  "tickets": [{"type": "normal", "count": 2}, {"type": "student", "count": 1}]
-}
-```
-
-- `orderId`: the seller's own order number, 1–64 letters, digits, `-` and `_`.
-- `buyer.name`: required, at most 100 characters, since the door staff see it.
-- `buyer.email`: optional. With it, the tickets also appear in that person's My Tickets on the site, and a scan credits their account.
-- `tickets`: one or more lines of `normal`, `early-bird`, `student`, `early-bird-student` or `vip`, 1–50 tickets in all. Comp, guest and vendor tickets are given out by staff and can't be sold.
-
-The event must be on sale (`onSale: true`). If it isn't, a **422** says why, checked in this order:
-
-- `event-archived`
-- `event-not-paid`
-- `event-not-published`
-- `event-ended`
-
-It returns **201** with the order:
-
-```json
-{
-  "orderId": "WX20261028123456",
-  "eventId": "…",
-  "createdAt": "2026-10-28T…Z",
-  "updatedAt": "2026-10-28T…Z",
-  "buyer": {"name": "李明", "email": "liming@qq.com"},
-  "ticketCount": 3,
-  "tickets": [
-    {
-      "ticketId": "…uuid…",
-      "type": "normal",
-      "qr": "https://sekaibeyond.com/claim?ticket=…&event=…",
-      "status": "valid",
-      "createdAt": "2026-10-28T…Z",
-      "redeemed": false,
-      "redeemedAt": null,
-      "voided": false
-    }
-  ]
-}
-```
-
-**Show each ticket's `qr` as a QR code, exactly as given.** It's what the door scanner reads.
-
-**Retries are safe.** Sending the same order again returns the tickets it already has, with a **200**, even after the event has ended or been archived. "The same" means the same buyer and the same count of each type; how the lines are split or ordered doesn't matter. The same `orderId` with anything else is a **409**. So after a timeout, send the order again rather than giving up or making a new order number.
-
-### View an order
-
-`GET /api/v1/events/{eventId}/orders/{orderId}` returns the same shape as creating it, whether the event is archived or not. Each ticket has:
-
-- `status`, which sums up the flags:
-  - `valid`
-  - `used`
-  - `voided`, by staff in the admin panel
-- the flags themselves:
-  - `redeemed`, with `redeemedAt`: scanned at the door
-  - `voided`
-
-A ticket scanned and then voided reads `voided`, with `redeemed` still `true`. `updatedAt` moves whenever anything about the order changes, whether a scan, a void or a staff edit, so it's what to compare when checking for changes.
-
-There's no list of a buyer's orders. The seller's app already knows which orders each of its users placed.
-
 ## Errors
+
+Every error has the same shape:
 
 ```json
 {"error": {"code": "event-ended", "message": "This event has ended."}}
 ```
 
-| Status | Codes |
-|---|---|
-| 400 | `invalid-request`: a missing or malformed field, which the message names |
-| 401 | `missing-api-key`, `invalid-api-key`, `api-key-revoked`, `api-key-expired` |
-| 403 | `missing-scope`, `event-not-allowed` |
-| 404 | `not-found` (no such endpoint), `event-not-found`, `order-not-found` |
-| 405 | `method-not-allowed`, with an `Allow` header |
-| 409 | `order-conflict` |
-| 422 | `event-archived`, `event-not-paid`, `event-not-published`, `event-ended`, `unknown-ticket-type` |
-| 429 | `rate-limited`, with a `Retry-After` header in seconds |
-| 500 | `internal`: try again |
+Branch on `code`. `message` is for people, and its wording may change. Each endpoint's page lists its own errors. Every endpoint can also return these:
 
-The relay adds three errors of its own, in the same shape:
+| Status | Code | When |
+|---|---|---|
+| 401 | `missing-api-key` | There's no `Authorization: Bearer` header. |
+| 401 | `invalid-api-key` | The key isn't one of ours. |
+| 401 | `api-key-revoked` | The key has been revoked. |
+| 401 | `api-key-expired` | The key has expired. |
+| 403 | `missing-scope` | The key lacks the scope the endpoint needs. |
+| 404 | `not-found` | No such endpoint. |
+| 405 | `method-not-allowed` | Wrong method. The `Allow` header names the right one. |
+| 429 | `rate-limited` | Over 120 calls a minute. `Retry-After` says how many seconds to wait. |
+| 500 | `internal` | Something went wrong on our side. Try again. |
 
-| Status | Codes |
-|---|---|
-| 413 | `payload-too-large`: a request body over 64 KiB |
-| 502 | `upstream-unavailable`: the API couldn't be reached |
-| 504 | `upstream-timeout`: the API took over 30 seconds |
+The relay adds three of its own, in the same shape:
+
+| Status | Code | When |
+|---|---|---|
+| 413 | `payload-too-large` | The request body is over 64 KiB. |
+| 502 | `upstream-unavailable` | The API couldn't be reached. |
+| 504 | `upstream-timeout` | The API took over 30 seconds. |
 
 ## Relay for mainland China
 

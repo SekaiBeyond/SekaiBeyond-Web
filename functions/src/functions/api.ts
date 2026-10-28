@@ -11,7 +11,8 @@ import { sanitizeDisplayText, validateEmail, validateStr } from "../utils/valida
 /**
  * The ticket API a seller's server calls with a key from the API Keys tool, so
  * tickets sold in another app (the Chinese app first) land on the same list,
- * and scan at the same door, as ours. Spec in docs/api.md.
+ * and scan at the same door, as ours. Overview in docs/api.md, and a page per
+ * endpoint and per object in docs/api/.
  *
  *   GET  /api/v1/events                            events:read
  *   GET  /api/v1/events/{eventId}                  events:read
