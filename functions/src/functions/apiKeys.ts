@@ -54,9 +54,15 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
 
     await adminTransaction(uid, async (txn, callerSnap) => {
         // A key held to an event that isn't there would be refused everywhere.
-        const eventSnaps = await Promise.all(
-            eventIds.map(id => txn.get(db.collection("upcomingEvents").doc(id))));
-        const missing = eventSnaps.find(s => !s.exists);
+        // Archived or not: archiving keeps the ID, so the hold carries over.
+        const found = await Promise.all(eventIds.map(async id => {
+            const [upcoming, past] = await Promise.all([
+                txn.get(db.collection("upcomingEvents").doc(id)),
+                txn.get(db.collection("pastEvents").doc(id)),
+            ]);
+            return {id, exists: upcoming.exists || past.exists};
+        }));
+        const missing = found.find(e => !e.exists);
         if (missing) throw new HttpsError("not-found", `Event ${missing.id} not found.`);
 
         const callerName: string = callerSnap.data()?.displayName ?? "";

@@ -18,6 +18,12 @@ import { sanitizeDisplayText, validateEmail, validateStr } from "../utils/valida
  *   POST /api/v1/events/{eventId}/orders           tickets:write
  *   GET  /api/v1/events/{eventId}/orders/{orderId} tickets:read
  *
+ * Events are both kinds the site has: unarchived (upcomingEvents) and archived
+ * (pastEvents), told apart by `archived`, each with the fields the site reads
+ * for it. Archiving keeps an event's ID and moves its attendees along, so an
+ * event's URLs, and its orders', outlive the archive. Every event is listed,
+ * free, unpublished and archived ones too: the seller filters.
+ *
  * Server to server, so no App Check and no CORS: the key is the credential,
  * and it must never ship inside an app.
  */
@@ -88,35 +94,103 @@ function requireEventAccess(key: ApiKey, eventId: string): void {
 }
 
 const iso = (t: unknown): string | null => t instanceof Timestamp ? t.toDate().toISOString() : null;
+const str = (v: unknown): string => typeof v === "string" ? v : "";
 
-/** Whether tickets can be bought for it: what My Tickets counts as live, too. */
-function isOnSale(data: FirebaseFirestore.DocumentData): boolean {
-    return data.published === true && data.paid === true
-        && data.endAt instanceof Timestamp && data.endAt.toMillis() > Date.now();
+/** An event's doc, from whichever collection holds it. */
+interface FoundEvent {
+    archived: boolean;
+    snap: FirebaseFirestore.DocumentSnapshot;
+}
+
+const upcomingRef = (eventId: string) => db.collection("upcomingEvents").doc(eventId);
+const pastRef = (eventId: string) => db.collection("pastEvents").doc(eventId);
+
+/**
+ * Unarchived first. Archiving refuses an ID a past event already has, so the
+ * two never both hold one.
+ */
+function pickEvent(
+    upcoming: FirebaseFirestore.DocumentSnapshot,
+    past: FirebaseFirestore.DocumentSnapshot,
+): FoundEvent {
+    if (upcoming.exists) return {archived: false, snap: upcoming};
+    if (past.exists) return {archived: true, snap: past};
+    throw new ApiError(404, "event-not-found", "Event not found.");
+}
+
+async function findEvent(eventId: string): Promise<FoundEvent> {
+    const [upcoming, past] = await Promise.all([upcomingRef(eventId).get(), pastRef(eventId).get()]);
+    return pickEvent(upcoming, past);
 }
 
 /**
- * An event as a seller sees it. An unpublished or free one isn't there at all:
- * a seller has nothing to sell for it.
+ * Why an order can't be placed for it now, if it can't: what `onSale` sums up.
+ * Archived tickets are read-only, as everywhere else.
  */
-function eventJson(snap: FirebaseFirestore.DocumentSnapshot) {
-    const data = snap.data();
-    if (!snap.exists || !data || data.published !== true || data.paid !== true) {
-        throw new ApiError(404, "event-not-found", "Event not found.");
+function whyNotOnSale(event: FoundEvent): ApiError | null {
+    const data = event.snap.data()!;
+    if (event.archived) return new ApiError(422, "event-archived", "This event has been archived.");
+    if (data.paid !== true) return new ApiError(422, "event-not-paid", "This event is free: it has no tickets.");
+    if (data.published !== true) return new ApiError(422, "event-not-published", "This event isn't published.");
+    if (!(data.endAt instanceof Timestamp) || data.endAt.toMillis() <= Date.now()) {
+        return new ApiError(422, "event-ended", "This event has ended.");
+    }
+    return null;
+}
+
+/**
+ * An event as the site reads it: the fields of app/lib/upcomingEvents.ts for
+ * an unarchived one, of app/lib/pastEvents.ts for an archived one, with the
+ * same defaults.
+ */
+function eventJson(event: FoundEvent) {
+    const {snap, archived} = event;
+    const data = snap.data()!;
+    const shared = {
+        id: snap.id,
+        archived,
+        onSale: whyNotOnSale(event) === null,
+        title: str(data.title),
+        titleCn: str(data.titleCn),
+        description: str(data.description),
+        descriptionCn: str(data.descriptionCn),
+        location: str(data.location),
+        locationCn: str(data.locationCn),
+        venueId: str(data.venueId),
+    };
+    if (archived) {
+        return {
+            ...shared,
+            date: str(data.date),
+            tagIds: Array.isArray(data.tagIds) ? data.tagIds.filter((t: unknown) => typeof t === "string") : [],
+            icon: str(data.icon),
+            recapLink: str(data.recapLink),
+            recapLinkCn: str(data.recapLinkCn),
+            // Past events from before the flag are published.
+            published: data.published !== false,
+            paid: data.paid === true,
+            deleteAt: iso(data.deleteAt),
+        };
     }
     return {
-        id: snap.id,
-        title: (data.title as string) ?? "",
-        titleCn: (data.titleCn as string) ?? "",
+        ...shared,
         startAt: iso(data.startAt),
         endAt: iso(data.endAt),
-        location: (data.location as string) ?? "",
-        locationCn: (data.locationCn as string) ?? "",
-        poster: (data.poster as string) ?? "",
-        onSale: isOnSale(data),
+        poster: str(data.poster),
+        posterCredit: str(data.posterCredit),
+        emailHeaderBg: str(data.emailHeaderBg),
+        buyTicket: str(data.buyTicket),
+        learnMore: str(data.learnMore),
+        customButtonText: str(data.customButtonText),
+        customButtonTextCn: str(data.customButtonTextCn),
+        customButtonLink: str(data.customButtonLink),
+        published: data.published === true,
+        paid: data.paid === true,
+        deleteAt: iso(data.deleteAt),
     };
 }
 
+/** Sums up the flags below it: a ticket redeemed and then voided reads voided. */
 function ticketStatus(ticket: Partial<NewTicket>): "valid" | "used" | "voided" {
     if (ticket.voided === true) return "voided";
     return ticket.redeemed === true ? "used" : "valid";
@@ -125,41 +199,49 @@ function ticketStatus(ticket: Partial<NewTicket>): "valid" | "used" | "voided" {
 function orderJson(eventId: string, data: FirebaseFirestore.DocumentData) {
     const tickets = (Array.isArray(data.tickets) ? data.tickets : []) as Partial<NewTicket>[];
     return {
-        orderId: (data.apiOrderId as string) ?? "",
+        orderId: str(data.apiOrderId),
         eventId,
         createdAt: iso(data.createdAt),
-        buyer: {name: (data.name as string) ?? "", email: (data.email as string) ?? ""},
-        tickets: tickets.map(t => {
-            const status = ticketStatus(t);
-            return {
-                ticketId: t.ticketId ?? "",
-                type: t.type ?? "normal",
-                qr: ticketClaimUrl(t.ticketId ?? "", eventId),
-                status,
-                usedAt: status === "used" ? iso(t.redeemedAt) : null,
-            };
-        }),
+        updatedAt: iso(data.updatedAt),
+        buyer: {name: str(data.name), email: str(data.email)},
+        ticketCount: tickets.length,
+        tickets: tickets.map(t => ({
+            ticketId: t.ticketId ?? "",
+            type: t.type ?? "normal",
+            qr: ticketClaimUrl(t.ticketId ?? "", eventId),
+            status: ticketStatus(t),
+            createdAt: iso(t.createdAt),
+            redeemed: t.redeemed === true,
+            redeemedAt: iso(t.redeemedAt),
+            voided: t.voided === true,
+        })),
     };
 }
 
+/**
+ * Every event, in the site's own order: unarchived soonest first, then
+ * archived latest first. Like the site's lists, an event missing its sort
+ * field isn't one.
+ */
 async function listEvents(key: ApiKey): Promise<ApiReply> {
     requireScope(key, "events:read");
-    // endAt alone stays on the automatic single-field index, as in getMyTickets.
-    const snap = await db.collection("upcomingEvents").where("endAt", ">", Timestamp.now()).get();
-    const events = snap.docs
-        .filter(doc => isOnSale(doc.data()))
-        .filter(doc => key.eventIds.length === 0 || key.eventIds.includes(doc.id))
-        .map(eventJson)
-        // ISO strings sort as dates do: soonest first.
-        .sort((a, b) => (a.startAt ?? "").localeCompare(b.startAt ?? ""));
+    const [upcoming, past] = await Promise.all([
+        db.collection("upcomingEvents").orderBy("startAt", "asc").get(),
+        db.collection("pastEvents").orderBy("date", "desc").get(),
+    ]);
+    const allowed = (doc: FirebaseFirestore.QueryDocumentSnapshot) =>
+        key.eventIds.length === 0 || key.eventIds.includes(doc.id);
+    const events = [
+        ...upcoming.docs.filter(allowed).map(snap => eventJson({archived: false, snap})),
+        ...past.docs.filter(allowed).map(snap => eventJson({archived: true, snap})),
+    ];
     return {status: 200, body: {events}};
 }
 
 async function getEvent(key: ApiKey, eventId: string): Promise<ApiReply> {
     requireScope(key, "events:read");
     requireEventAccess(key, eventId);
-    const snap = await db.collection("upcomingEvents").doc(eventId).get();
-    return {status: 200, body: eventJson(snap)};
+    return {status: 200, body: eventJson(await findEvent(eventId))};
 }
 
 interface OrderInput {
@@ -243,12 +325,16 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
     const fingerprint = orderFingerprint(order);
 
     return db.runTransaction(async (txn): Promise<ApiReply> => {
-        const eventRef = db.collection("upcomingEvents").doc(eventId);
-        const orderRef = eventRef.collection("attendees").doc(apiOrderAttendeeId(order.orderId));
-        const [eventSnap, orderSnap] = await Promise.all([txn.get(eventRef), txn.get(orderRef)]);
-        const event = eventJson(eventSnap);
+        const [upcomingSnap, pastSnap] = await Promise.all([
+            txn.get(upcomingRef(eventId)),
+            txn.get(pastRef(eventId)),
+        ]);
+        const event = pickEvent(upcomingSnap, pastSnap);
+        const orderRef = event.snap.ref.collection("attendees").doc(apiOrderAttendeeId(order.orderId));
+        const orderSnap = await txn.get(orderRef);
 
-        // Before the on-sale check, so a retry still gets its tickets after the event ends.
+        // Before the on-sale checks, so a retry still gets its tickets once the
+        // event has ended, or been archived along with them.
         if (orderSnap.exists) {
             const data = orderSnap.data()!;
             if (data.apiOrderFingerprint !== fingerprint) {
@@ -257,9 +343,8 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
             }
             return {status: 200, body: orderJson(eventId, data)};
         }
-        if (!event.onSale) {
-            throw new ApiError(422, "event-not-on-sale", "Tickets for this event aren't on sale.");
-        }
+        const refusal = whyNotOnSale(event);
+        if (refusal) throw refusal;
 
         const tickets: NewTicket[] = [];
         const ticketIds: string[] = [];
@@ -288,7 +373,7 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
         txn.create(orderRef, doc);
         txn.set(recordRef(), recordDoc("ticket-api-order", {
             eventId,
-            eventTitle: event.title || eventId,
+            eventTitle: str(event.snap.data()!.title) || eventId,
             targetEmail: order.email,
             targetName: order.name,
             ticketCount: order.total,
@@ -299,11 +384,12 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
     });
 }
 
+/** From whichever collection holds the event, so an order is still there once it's archived. */
 async function getOrder(key: ApiKey, eventId: string, orderId: string): Promise<ApiReply> {
     requireScope(key, "tickets:read");
     requireEventAccess(key, eventId);
-    const snap = await db.collection("upcomingEvents").doc(eventId)
-        .collection("attendees").doc(apiOrderAttendeeId(orderId)).get();
+    const event = await findEvent(eventId);
+    const snap = await event.snap.ref.collection("attendees").doc(apiOrderAttendeeId(orderId)).get();
     if (!snap.exists || !isApiOrder(snap.data())) {
         throw new ApiError(404, "order-not-found", "Order not found.");
     }

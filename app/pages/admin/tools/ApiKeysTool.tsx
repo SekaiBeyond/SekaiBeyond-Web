@@ -8,6 +8,7 @@ import {
     callListApiKeys,
     callRevokeApiKey,
 } from '~/lib/firebase';
+import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { CreateSection } from '../CrudShell';
 import type { ShowToast } from '../utils';
@@ -20,8 +21,8 @@ interface ApiKeysToolProps {
 const SCOPE_LABELS: Record<ApiScope, {en: string; zh: string; descEn: string; descZh: string}> = {
     'events:read': {
         en: 'Read events', zh: '读取活动',
-        descEn: 'List the paid events on sale and look one up.',
-        descZh: '列出正在售票的付费活动，并查询单个活动。',
+        descEn: 'List every event, archived ones included, and look one up.',
+        descZh: '列出所有活动（包括已归档的活动），并查询单个活动。',
     },
     'tickets:write': {
         en: 'Sell tickets', zh: '售票',
@@ -48,6 +49,8 @@ const keyStatus = (k: ApiKeySummary, now: number): KeyStatus =>
 export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
     const {isEnglish} = useLanguage();
     const {upcomingEvents} = useAllUpcomingEvents();
+    // A key held to an event keeps it once the event is archived.
+    const {pastEvents} = usePastEvents();
     const paidEvents = useMemo(() => upcomingEvents.filter(e => e.paid), [upcomingEvents]);
 
     const [keys, setKeys] = useState<ApiKeySummary[] | null>(null);
@@ -160,7 +163,7 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
         year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
     });
     const eventTitle = (eventId: string) => {
-        const event = upcomingEvents.find(e => e.id === eventId);
+        const event = upcomingEvents.find(e => e.id === eventId) ?? pastEvents.find(e => e.id === eventId);
         if (!event) return eventId;
         return (isEnglish ? event.title : event.titleCn) || event.title;
     };
@@ -184,8 +187,8 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
 
             <p className="admin-helper-text admin-section-mb">
                 {isEnglish
-                    ? 'A key lets another app\'s server sell tickets for paid events through the ticket API: its tickets land on the event\'s list and scan at the door like any other. Give a key only to that server, never put it inside an app, and revoke it if it leaks.'
-                    : '密钥可让其他应用的服务器通过门票 API 为付费活动售票：所售门票会出现在活动名单中，并可像其他门票一样在现场扫描。密钥只能交给该服务器，切勿放进应用内；如有泄露请立即吊销。'}
+                    ? 'A key lets another app\'s server read our events and sell tickets for paid ones through the ticket API: its tickets land on the event\'s list and scan at the door like any other. Give a key only to that server, never put it inside an app, and revoke it if it leaks.'
+                    : '密钥可让其他应用的服务器通过门票 API 读取我们的活动并为付费活动售票：所售门票会出现在活动名单中，并可像其他门票一样在现场扫描。密钥只能交给该服务器，切勿放进应用内；如有泄露请立即吊销。'}
             </p>
 
             {created && (
