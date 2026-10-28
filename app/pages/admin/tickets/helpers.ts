@@ -104,6 +104,9 @@ export const mapAttendeeDoc = (
         missingFromHometown: data.missingFromHometown === true,
         hometownSeenAt: tsToDate(data.hometownSeenAt),
         hometownOrderId: (data.hometownOrderId as string) ?? '',
+        apiOrder: data.source === 'api',
+        apiOrderId: (data.apiOrderId as string) ?? '',
+        apiKeyName: (data.apiKeyName as string) ?? '',
     };
 };
 

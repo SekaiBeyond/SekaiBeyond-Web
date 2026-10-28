@@ -1,4 +1,3 @@
-import * as crypto from "crypto";
 import sanitizeHtml from "sanitize-html";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -27,7 +26,17 @@ import {
     subjectLine,
 } from "../utils/emailTemplate";
 import { recordDoc, recordRef } from "../utils/records";
-import { hometownAttendeeId, isCheckedInWalkIn, isHometownTicketId, isScannedTicket } from "../utils/tickets";
+import {
+    buildFreshTickets,
+    freshTicket,
+    hometownAttendeeId,
+    isApiOrder,
+    isCheckedInWalkIn,
+    isHometownTicketId,
+    isScannedTicket,
+    type NewTicket,
+    ticketClaimUrl,
+} from "../utils/tickets";
 
 function validateTicketCount(value: unknown): number {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 50) {
@@ -59,47 +68,6 @@ const TICKET_NOTES_MAX = 500;
 /** A staff note on a ticket. Optional: empty for none. */
 function validateTicketNotes(value: unknown): string {
     return sanitizeDisplayText(validateStr(value, "notes", TICKET_NOTES_MAX));
-}
-
-interface NewTicket {
-    ticketId: string;
-    type: string;
-    createdAt: Timestamp;
-    redeemed: boolean;
-    redeemedAt: Timestamp | null;
-    redeemedBy: string;
-    redeemedByName: string;
-    checkedIn: boolean;
-    checkedInAt: Timestamp | null;
-    voided: boolean;
-    /** A staff comment, shown only to staff: in the admin panel and on the scanner. Absent until one is written. */
-    notes?: string;
-}
-
-function freshTicket(ticketId: string, type: string): NewTicket {
-    return {
-        ticketId,
-        type,
-        createdAt: Timestamp.now(),
-        redeemed: false,
-        redeemedAt: null,
-        redeemedBy: "",
-        redeemedByName: "",
-        checkedIn: false,
-        checkedInAt: null,
-        voided: false,
-    };
-}
-
-function buildFreshTickets(count: number, type = "normal", notes = ""): {tickets: NewTicket[]; ticketIds: string[]} {
-    const tickets: NewTicket[] = [];
-    const ticketIds: string[] = [];
-    for (let i = 0; i < count; i++) {
-        const ticketId = crypto.randomUUID();
-        ticketIds.push(ticketId);
-        tickets.push(notes ? {...freshTicket(ticketId, type), notes} : freshTicket(ticketId, type));
-    }
-    return {tickets, ticketIds};
 }
 
 function formatEventDateForEmail(startAt: Timestamp | undefined): string {
@@ -178,14 +146,13 @@ export const serveTicketQr = onRequest({maxInstances: 10, memory: "256MiB"}, asy
         return;
     }
 
-    const origin = PUBLIC_ORIGIN;
-    if (!origin) {
+    if (!PUBLIC_ORIGIN) {
         res.status(500).send("PUBLIC_ORIGIN is not configured");
         return;
     }
 
     try {
-        const url = `${origin}/claim?ticket=${encodeURIComponent(ticketId)}&event=${encodeURIComponent(eventId)}`;
+        const url = ticketClaimUrl(ticketId, eventId);
         const QRCode = (await import("qrcode")).default;
 
         // Twice the 300px the email shows, for high-density screens.
@@ -304,8 +271,9 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
         const chunk = emails.slice(i, i + 30);
         const snap = await attendeesCol.where("email", "in", chunk).get();
         for (const doc of snap.docs) {
-            // A HomeTown ticket is kept by its number, never re-issued by email.
-            if (doc.data().source === "hometown") continue;
+            // A HomeTown ticket is kept by its number and an API order by its
+            // order, neither re-issued by email.
+            if (doc.data().source === "hometown" || isApiOrder(doc.data())) continue;
             const email = doc.data().email;
             if (typeof email === "string") existingByEmail.set(email, doc);
         }
@@ -1626,6 +1594,11 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
             throw new HttpsError("failed-precondition", "HomeTown tickets can't be re-issued.",
                 {code: "hometown-ticket"});
         }
+        // Nor an API order: its buyer holds these IDs in the seller's app.
+        if (isApiOrder(data) && (countChanged || typeChanged)) {
+            throw new HttpsError("failed-precondition", "Tickets sold through the API can't be re-issued.",
+                {code: "api-order"});
+        }
 
         if (notesChanged) {
             txn.set(recordRef(), recordDoc("ticket-notes-edit", {
@@ -1821,6 +1794,12 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             throw new HttpsError("failed-precondition", "HomeTown tickets can't be removed; void them instead.",
                 {code: "hometown-ticket"});
         }
+        // Its doc is what makes a retried order find the tickets it already
+        // issued; without it, a retry would issue new ones.
+        if (isApiOrder(data)) {
+            throw new HttpsError("failed-precondition", "Tickets sold through the API can't be removed; void them instead.",
+                {code: "api-order"});
+        }
         const eventTitle: string = eventSnap.data()?.title ?? eventId;
         txn.delete(attendeeRef);
         txn.set(recordRef(), recordDoc("ticket-attendee-delete", {
@@ -1959,6 +1938,8 @@ export const sendTicketEmails = onCall(
             const data = target.data();
             // HomeTown emailed these itself; ours would be a second, different QR.
             if (data.source === "hometown") continue;
+            // The seller's app delivered these.
+            if (isApiOrder(data)) continue;
             // Already in at the door, so nothing is owed them. Left unsent rather
             // than marked, so a reset ticket brings them back; Resend Email still
             // sends to one on purpose.

@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { QrCodesTool } from './tools/QrCodesTool';
 import { EmailQuotaTool } from './tools/EmailQuotaTool';
+import { ApiKeysTool } from './tools/ApiKeysTool';
 
-type ToolId = 'qr-codes' | 'email-quota';
+type ToolId = 'qr-codes' | 'email-quota' | 'api-keys';
 
 interface ToolDef {
     id: ToolId;
@@ -31,6 +32,14 @@ const TOOLS: ToolDef[] = [
         descriptionCn: '查看外发邮件的剩余额度（超出后邮件将进入队列），以及当前排队数量。',
         adminOnly: true,
     },
+    {
+        id: 'api-keys',
+        title: 'API Keys',
+        titleCn: 'API 密钥',
+        description: 'Create and revoke the keys another app\'s server uses to sell tickets for paid events through the ticket API.',
+        descriptionCn: '创建和吊销其他应用服务器通过门票 API 为付费活动售票时使用的密钥。',
+        adminOnly: true,
+    },
 ];
 
 interface ToolsTabProps {
@@ -48,6 +57,10 @@ export const ToolsTab = ({showToast, readOnly = false}: ToolsTabProps) => {
 
     if (activeTool === 'email-quota') {
         return <EmailQuotaTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
+    }
+
+    if (activeTool === 'api-keys') {
+        return <ApiKeysTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
     }
 
     return (

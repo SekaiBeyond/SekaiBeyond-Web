@@ -261,9 +261,9 @@ export function AttendeesSection({
                 const isExpanded = expanded.has(a.id);
                 // undefined while asking; null for no account.
                 const account = accountLinks.get(a.email.toLowerCase());
-                // Nothing to send without an address, HomeTown sends its own, and a
-                // walk-in already in at the door is owed nothing.
-                const emailState = !a.email || a.hometown ? null
+                // Nothing to send without an address, HomeTown and the seller's app
+                // send their own, and a walk-in already in at the door is owed nothing.
+                const emailState = !a.email || a.hometown || a.apiOrder ? null
                     : a.emailScheduled ? 'queued'
                         : a.emailSent ? 'sent'
                             : checkedInWalkIn(a) ? null : 'unsent';
@@ -308,6 +308,11 @@ export function AttendeesSection({
                                 )}
                                 {a.hometown && (
                                     <span className="admin-tickets-tag admin-tickets-tag-hometown">HomeTown</span>
+                                )}
+                                {a.apiOrder && (
+                                    <span className="admin-tickets-tag admin-tickets-tag-api">
+                                        {a.apiKeyName || 'API'}
+                                    </span>
                                 )}
                                 {a.unlisted && (
                                     <span className="admin-tickets-tag admin-tickets-tag-unlisted">
@@ -383,6 +388,13 @@ export function AttendeesSection({
                                                 : `通过 HomeTown 购买${a.hometownOrderId ? `，订单号 ${a.hometownOrderId}` : ''}。门票由 HomeTown 发送，此处不发送邮件。`)}
                                     </p>
                                 )}
+                                {a.apiOrder && (
+                                    <p className="admin-helper-text">
+                                        {isEnglish
+                                            ? `Bought through ${a.apiKeyName || 'the ticket API'}${a.apiOrderId ? `, order #${a.apiOrderId}` : ''}. The buyer holds these tickets in that app, so they can't be re-issued or removed here, and no email is sent from here.`
+                                            : `通过 ${a.apiKeyName || '门票 API'} 购买${a.apiOrderId ? `，订单号 ${a.apiOrderId}` : ''}。购票者在该应用中持有这些门票，因此无法在此重新签发或移除，此处也不发送邮件。`}
+                                    </p>
+                                )}
                                 {a.missingFromHometown && (
                                     <p className="admin-helper-text admin-tickets-edit-warning">
                                         {isEnglish
@@ -431,7 +443,7 @@ export function AttendeesSection({
                                         )
                                         : (isEnglish ? 'their profile.' : '该用户主页。'))}
                                 </p>
-                                {a.email && !a.hometown && !a.emailSent && checkedInWalkIn(a) && (
+                                {a.email && !a.hometown && !a.apiOrder && !a.emailSent && checkedInWalkIn(a) && (
                                     <p className="admin-helper-text">
                                         {isEnglish
                                             ? 'Checked in at the door, so Send Unsent passes them by. Resend Email still sends their tickets.'
@@ -449,18 +461,21 @@ export function AttendeesSection({
                                         <button
                                             className="admin-toggle-btn admin-toggle-save"
                                             onClick={() => onResend(a)}
-                                            disabled={!a.email || a.hometown || a.tickets.every(t => t.voided)}
+                                            disabled={!a.email || a.hometown || a.apiOrder || a.tickets.every(t => t.voided)}
                                         >
                                             {isEnglish ? 'Resend Email' : '重发邮件'}
                                         </button>
                                         <button
                                             className="admin-toggle-btn admin-toggle-revoke"
                                             onClick={() => onDelete(a)}
-                                            // Its record is what stops the number getting in again.
-                                            disabled={a.hometown}
+                                            // Its record is what stops the number getting in again, or
+                                            // what a retried API order finds instead of issuing new tickets.
+                                            disabled={a.hometown || a.apiOrder}
                                             title={a.hometown
                                                 ? (isEnglish ? 'HomeTown tickets are voided, not removed.' : 'HomeTown 门票只能作废，不能移除。')
-                                                : undefined}
+                                                : a.apiOrder
+                                                    ? (isEnglish ? 'Tickets sold through the API are voided, not removed.' : '通过 API 售出的门票只能作废，不能移除。')
+                                                    : undefined}
                                         >
                                             {isEnglish ? 'Remove' : '移除'}
                                         </button>

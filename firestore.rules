@@ -93,6 +93,13 @@ service cloud.firestore {
             allow read, write: if false;
         }
 
+        // API keys, stored under their hashes. Server-only, no exceptions — core
+        // staff list and revoke them through listApiKeys and revokeApiKey, and
+        // the API reads them to check a caller's key.
+        match /apiKeys/{keyId} {
+            allow read, write: if false;
+        }
+
         // How many scans one client has already added to one QR code in the
         // current window, so a looped public scan endpoint can't run a counter up
         // forever. Server-only, and the ids are salted hashes — there is nothing

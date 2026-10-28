@@ -418,6 +418,40 @@ export const callGetEmailQuotaStatus = () =>
         serverNow: string;
     }>(getFunctions(), 'getEmailQuotaStatus')({});
 
+/** What an API key may do. Mirrors API_SCOPES in functions/src/utils/apiKeys.ts. */
+export const API_SCOPES = ['events:read', 'tickets:read', 'tickets:write'] as const;
+export type ApiScope = typeof API_SCOPES[number];
+
+export interface ApiKeySummary {
+    id: string;
+    name: string;
+    hint: string;
+    scopes: ApiScope[];
+    /** Empty for every event. */
+    eventIds: string[];
+    createdByName: string;
+    createdAt: string | null;
+    expiresAt: string | null;
+    revokedAt: string | null;
+    revokedByName: string;
+    lastUsedAt: string | null;
+}
+
+export const callCreateApiKey = (data: {
+    name: string;
+    scopes: ApiScope[];
+    eventIds: string[];
+    expiresInDays: number;
+}) => httpsCallable<typeof data, {id: string; key: string; hint: string; expiresAt: string}>(
+    getFunctions(), 'createApiKey')(data);
+
+export const callListApiKeys = () =>
+    httpsCallable<Record<string, never>, {keys: ApiKeySummary[]; serverNow: string}>(
+        getFunctions(), 'listApiKeys')({});
+
+export const callRevokeApiKey = (data: {keyId: string}) =>
+    httpsCallable<typeof data, {revoked: boolean}>(getFunctions(), 'revokeApiKey')(data);
+
 export const callUpdateEventEmailTemplate = (data: {
     eventId: string;
     subject: string;

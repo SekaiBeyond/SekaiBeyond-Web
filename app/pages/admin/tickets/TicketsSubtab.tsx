@@ -192,8 +192,8 @@ export function TicketsSubtab({
             if (a.unlisted) unlisted++;
             if (a.missingFromHometown) missingFromHometown++;
 
-            // Emailless walk-ins can't be sent to, and HomeTown sends its own.
-            if (activeInThisAttendee > 0 && a.email && !a.hometown) {
+            // Emailless walk-ins can't be sent to, and HomeTown and the seller's app send their own.
+            if (activeInThisAttendee > 0 && a.email && !a.hometown && !a.apiOrder) {
                 sendable++;
                 if (owed) unsentSendable++;
             }
@@ -369,9 +369,11 @@ export function TicketsSubtab({
         } catch (err) {
             showToast(functionsErrorCode(err) === 'hometown-ticket'
                     ? (isEnglish ? 'HomeTown tickets can\'t be removed. Void the ticket instead.' : 'HomeTown 门票不能移除，请改为作废。')
-                    : (isEnglish
-                        ? `Failed to remove attendee${errorSuffix(err, true)}.`
-                        : `移除失败${errorSuffix(err, false)}。`),
+                    : functionsErrorCode(err) === 'api-order'
+                        ? (isEnglish ? 'Tickets sold through the API can\'t be removed. Void the ticket instead.' : '通过 API 售出的门票不能移除，请改为作废。')
+                        : (isEnglish
+                            ? `Failed to remove attendee${errorSuffix(err, true)}.`
+                            : `移除失败${errorSuffix(err, false)}。`),
                 'error');
         }
     };
@@ -563,8 +565,8 @@ export function TicketsSubtab({
             {section === 'import' && (
                 <ImportSection
                     eventId={eventId}
-                    // HomeTown tickets aren't re-issued by email, so they're no duplicate.
-                    existingAttendees={attendees.filter(a => !a.hometown)}
+                    // HomeTown tickets and API orders aren't re-issued by email, so they're no duplicate.
+                    existingAttendees={attendees.filter(a => !a.hometown && !a.apiOrder)}
                     readOnly={readOnly}
                     showToast={showToast}
                     onImported={() => void loadAttendees()}

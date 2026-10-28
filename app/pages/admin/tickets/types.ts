@@ -66,6 +66,12 @@ export interface AttendeeData {
     missingFromHometown: boolean;
     hometownSeenAt: Date | null;
     hometownOrderId: string;
+    /** Sold in another app and issued through the ticket API: never re-issued or emailed from here. */
+    apiOrder: boolean;
+    /** The seller's own order number. */
+    apiOrderId: string;
+    /** The API key that placed it, named as it was then. */
+    apiKeyName: string;
 }
 
 export interface EmailTemplate {

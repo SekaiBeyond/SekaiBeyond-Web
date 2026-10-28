@@ -461,6 +461,23 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 ? <>queued {queued} ticket email{queued === 1 ? '' : 's'} for {event} past the daily cap</>
                 : <>为 {event} 将 {queued} 封门票邮件排入队列（已超出每日上限）</>;
         }
+        case 'ticket-api-order': {
+            const count = r.ticketCount ?? 0;
+            const via = r.apiKeyName || 'API';
+            return isEnglish
+                ? <>issued {count} ticket{count === 1 ? '' : 's'} to {attendee} at {event}, sold
+                    through {via}{r.apiOrderId && <> (order <span className="record-code">{r.apiOrderId}</span>)</>}</>
+                : <>为 {attendee} 签发了 {event} 的 {count} 张门票，通过 {via} 售出{r.apiOrderId
+                    && <>（订单 <span className="record-code">{r.apiOrderId}</span>）</>}</>;
+        }
+        case 'api-key-create':
+            return isEnglish
+                ? <>created API key {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>
+                : <>创建了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>;
+        case 'api-key-revoke':
+            return isEnglish
+                ? <>revoked API key {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>
+                : <>吊销了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>;
         case 'scheduled-mail-drain': {
             const sent = r.sentCount ?? 0;
             return isEnglish

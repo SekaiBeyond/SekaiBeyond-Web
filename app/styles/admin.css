@@ -1739,6 +1739,125 @@
     line-height: 1.4;
 }
 
+/* API Keys tool */
+.admin-api-key-created {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.admin-api-key-reveal {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.admin-api-key-reveal .admin-input {
+    flex: 1 1 260px;
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
+}
+
+.admin-api-key-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.admin-api-key-fieldset {
+    border: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.admin-api-key-fieldset legend {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text);
+    padding: 0;
+    margin-bottom: 6px;
+}
+
+.admin-api-key-option {
+    align-items: flex-start;
+}
+
+.admin-api-key-option input[type="checkbox"] {
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.admin-api-key-option-desc {
+    display: block;
+    margin-top: 2px;
+}
+
+.admin-api-key-events {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 26px;
+}
+
+.admin-api-key-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.admin-api-key-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    border: 2px solid rgba(255, 107, 157, 0.12);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.8);
+    min-width: 0;
+}
+
+.admin-api-key-card--inactive {
+    opacity: 0.65;
+}
+
+.admin-api-key-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.admin-api-key-name {
+    font-weight: 700;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+}
+
+.admin-api-key-revoke {
+    margin-left: auto;
+}
+
+.admin-api-key-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.admin-api-key-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
 .admin-tools-header {
     display: flex;
     align-items: center;
@@ -2078,6 +2197,11 @@
 .record-cat-email {
     background: rgba(175, 180, 43, 0.18);
     color: #827717;
+}
+
+.record-cat-api {
+    background: rgba(63, 81, 181, 0.12);
+    color: #303f9f;
 }
 
 /* Types that stand apart from their category: removals, account deletion,
@@ -2617,6 +2741,12 @@
 .admin-tickets-tag-hometown {
     background: rgba(75, 46, 131, 0.14);
     color: #4b2e83;
+}
+
+/* Sold in another app, through the ticket API. */
+.admin-tickets-tag-api {
+    background: rgba(0, 137, 123, 0.14);
+    color: #00695c;
 }
 
 /* Let in while missing from the imported HomeTown list. */

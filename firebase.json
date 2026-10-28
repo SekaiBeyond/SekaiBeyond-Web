@@ -76,6 +76,10 @@
         "function": "redirectQr"
       },
       {
+        "source": "/api/v1/**",
+        "function": "api"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

@@ -14,5 +14,7 @@ export * from "./functions/qrCodes";
 export * from "./functions/passports";
 export * from "./functions/passportEmails";
 export * from "./functions/socialPlatforms";
+export * from "./functions/apiKeys";
+export { api } from "./functions/api";
 export { scheduledMailDrain } from "./functions/scheduledMail";
 export { lookUpUwBuilding, syncUwParking, uwParkingNightlySync } from "./functions/parking";

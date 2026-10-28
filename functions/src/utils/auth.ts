@@ -29,8 +29,19 @@ async function checkRateLimit(uid: string, requested?: RateLimitBucket): Promise
         const group = normalizeGroup((await db.collection("users").doc(uid).get()).data()?.group);
         if (group === "user") bucket = undefined;
     }
-    const ref = db.collection("rateLimits").doc(bucket ? `${uid}_${bucket}` : uid);
-    const max = bucket ? RATE_LIMIT_BUCKETS[bucket] : RATE_LIMIT_MAX;
+    await consumeRateLimit(bucket ? `${uid}_${bucket}` : uid, bucket ? RATE_LIMIT_BUCKETS[bucket] : RATE_LIMIT_MAX);
+}
+
+/** Calls one API key may make a minute. A seller's server, not a person, so well above the shared budget. */
+const API_KEY_RATE_LIMIT_MAX = 120;
+
+/** Charges a call to an API key's own budget, named by its ID so it can't share a counter with an account. */
+export async function checkApiKeyRateLimit(keyId: string): Promise<void> {
+    await consumeRateLimit(`apiKey_${keyId}`, API_KEY_RATE_LIMIT_MAX);
+}
+
+async function consumeRateLimit(docId: string, max: number): Promise<void> {
+    const ref = db.collection("rateLimits").doc(docId);
     const now = Date.now();
     // expiresAt lets the TTL policy in firestore.indexes.json delete stale documents.
     const expiresAt = new Date(now + RATE_LIMIT_WINDOW_MS * 2);
