@@ -11,13 +11,14 @@ interface EmailsSectionProps {
     readOnly: boolean;
     showToast: ShowToast;
     onSent: () => void;
+    onTemplateSavedChange: (saved: boolean) => void;
 }
 
 /**
  * Ticket emails on one page: sending them, what you come back for, above the
  * template they're sent from.
  */
-export function EmailsSection({event, totals, readOnly, showToast, onSent}: EmailsSectionProps) {
+export function EmailsSection({event, totals, readOnly, showToast, onSent, onTemplateSavedChange}: EmailsSectionProps) {
     // Edits a send wouldn't carry, since sendTicketEmails reads the saved
     // template.
     const [templateUnsaved, setTemplateUnsaved] = useState(false);
@@ -37,6 +38,7 @@ export function EmailsSection({event, totals, readOnly, showToast, onSent}: Emai
                 readOnly={readOnly}
                 showToast={showToast}
                 onUnsavedChange={setTemplateUnsaved}
+                onSavedChange={onTemplateSavedChange}
             />
         </>
     );

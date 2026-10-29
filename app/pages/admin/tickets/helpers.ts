@@ -196,6 +196,15 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
         }),
     );
 
+/**
+ * Whether an event's emailTemplate doc holds a template to send. Mirrors
+ * savedTemplate in functions, which refuses a blank subject or body: no default
+ * stands in for it.
+ */
+export const isTemplateSaved = (data: {subject?: unknown; bodyHtml?: unknown} | undefined): boolean =>
+    typeof data?.subject === 'string' && data.subject.trim() !== ''
+    && typeof data.bodyHtml === 'string' && data.bodyHtml.trim() !== '';
+
 const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
 
 export const usesContactEmail = (template: Pick<EmailTemplate, 'subject' | 'bodyHtml'>): boolean =>

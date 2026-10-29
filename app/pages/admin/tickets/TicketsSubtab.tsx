@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, doc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -29,7 +29,14 @@ import { HometownSection } from './HometownSection';
 import { ImportSection } from './ImportSection';
 import { SettingsSection } from './SettingsSection';
 import { StatsSection } from './StatsSection';
-import { attendeeLabel, buildAttendeeCsv, checkedInWalkIn, mapAttendeeDoc, ticketsSentElsewhere } from './helpers';
+import {
+    attendeeLabel,
+    buildAttendeeCsv,
+    checkedInWalkIn,
+    isTemplateSaved,
+    mapAttendeeDoc,
+    ticketsSentElsewhere,
+} from './helpers';
 import { useAccountLinks } from './useAccountLinks';
 import { type AttendeeData, type StatusFilter, type TicketData, type TicketsSection, type TicketType } from './types';
 
@@ -86,6 +93,25 @@ export function TicketsSubtab({
     const [addingAttendee, setAddingAttendee] = useState(false);
 
     const [displayCount, setDisplayCount] = useState(10);
+
+    // Read up front, since without a saved template nothing is emailed: not
+    // from Emails, and not for a ticket API order that asks. Null until known,
+    // or when the read fails, which the Emails tab reports on its own.
+    const checksTemplate = !readOnly && collectionRoot === 'upcomingEvents';
+    const [templateSaved, setTemplateSaved] = useState<boolean | null>(null);
+    useEffect(() => {
+        setTemplateSaved(null);
+        if (!checksTemplate) return;
+        let cancelled = false;
+        getDoc(doc(getFirebaseDb(), 'upcomingEvents', eventId, 'emailTemplate', 'default'))
+            .then(snap => {
+                if (!cancelled) setTemplateSaved(isTemplateSaved(snap.data()));
+            })
+            .catch(err => console.error('[TicketsSubtab] template check', err));
+        return () => {
+            cancelled = true;
+        };
+    }, [checksTemplate, eventId]);
 
     // Load attendees lazily so a scanner-only session doesn't fetch the full list.
     const listKey = `${collectionRoot}/${eventId}`;
@@ -481,6 +507,20 @@ export function TicketsSubtab({
                 )}
             </div>
 
+            {templateSaved === false && section !== 'emails' && section !== 'scan' && (
+                <div className="admin-tickets-send-banner admin-tickets-send-banner-warning">
+                    <strong>{isEnglish ? 'No ticket email saved yet.' : '尚未保存门票邮件。'}</strong>
+                    <p>
+                        {isEnglish
+                            ? 'Until one is saved, no ticket email goes out for this event, and ticket API orders that ask for one are refused.'
+                            : '保存之前，此活动不会发出任何门票邮件，要求发送邮件的门票 API 订单也会被拒绝。'}
+                    </p>
+                    <button className="admin-toggle-btn admin-toggle-edit" onClick={() => setSection('emails')}>
+                        {isEnglish ? 'Set Up Ticket Email' : '设置门票邮件'}
+                    </button>
+                </div>
+            )}
+
             {section === 'scan' && scanOpen && (
                 <TicketScanner
                     eventId={eventId}
@@ -610,6 +650,7 @@ export function TicketsSubtab({
                     readOnly={readOnly}
                     showToast={showToast}
                     onSent={() => void loadAttendees()}
+                    onTemplateSavedChange={setTemplateSaved}
                 />
             )}
 

@@ -9,6 +9,7 @@ import type { ShowToast } from '../utils';
 import {
     DEFAULT_TEMPLATE_BODY_EN,
     DEFAULT_TEMPLATE_SUBJECT,
+    isTemplateSaved,
     renderSamplePreview,
     renderSampleSubject,
     tsToDate,
@@ -21,9 +22,11 @@ interface TemplateSectionProps {
     readOnly: boolean;
     showToast: ShowToast;
     onUnsavedChange: (unsaved: boolean) => void;
+    /** Whether a template is saved, once the stored one has been read. */
+    onSavedChange: (saved: boolean) => void;
 }
 
-export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: TemplateSectionProps) {
+export function TemplateSection({event, readOnly, showToast, onUnsavedChange, onSavedChange}: TemplateSectionProps) {
     const {isEnglish} = useLanguage();
     const {config} = useSiteConfig();
     const [template, setTemplate] = useState<EmailTemplate>({
@@ -95,6 +98,14 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: T
         onUnsavedChange(isDirty);
     }, [isDirty, onUnsavedChange]);
 
+    // What's stored, not what's in the fields: the default fills them when
+    // nothing is.
+    const saved = isTemplateSaved(initialTemplate);
+
+    useEffect(() => {
+        if (!loading && !loadFailed) onSavedChange(saved);
+    }, [loading, loadFailed, saved, onSavedChange]);
+
     const isAtDefault = template.subject === DEFAULT_TEMPLATE_SUBJECT
         && template.bodyHtml === DEFAULT_TEMPLATE_BODY_EN;
 
@@ -155,6 +166,25 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: T
     return (
         <div className="admin-tickets-template">
             <h3>{isEnglish ? 'Email template' : '邮件模板'}</h3>
+            {saved ? (
+                <p className="admin-helper-text">
+                    {isEnglish ? 'Saved' : '已保存'}
+                    {initialTemplate.updatedAt && (isEnglish ? ': ' : '：')}
+                    {initialTemplate.updatedAt?.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                    })}
+                </p>
+            ) : (
+                <div className="admin-tickets-send-banner admin-tickets-send-banner-warning">
+                    <strong>{isEnglish ? 'Not saved yet.' : '尚未保存。'}</strong>
+                    <p>
+                        {isEnglish
+                            ? 'The default is filled in below. Until a template is saved, no ticket email goes out for this event, and ticket API orders that ask for one are refused. Save it as it is, or edit it first.'
+                            : '下方已填入默认模板。保存模板之前，此活动不会发出任何门票邮件，要求发送邮件的门票 API 订单也会被拒绝。可直接保存，也可修改后保存。'}
+                    </p>
+                </div>
+            )}
             <p className="admin-helper-text">
                 {isEnglish
                     ? 'Supported placeholders: {{ attendeeName }}, {{ attendeeEmail }}, {{ eventTitle }}, {{ eventDate }}, {{ eventHeader }} (renders cropped header image as <img>), {{ ticketCount }}, {{ ticketIds[] }} (renders one QR per ticket), {{ contactEmail }} (the Contact Email in Site Config; also works in mailto: links).'
@@ -218,16 +248,6 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: T
                     {isEnglish ? 'Reset to Default' : '恢复默认'}
                 </button>
             </div>
-
-            {initialTemplate.updatedAt && (
-                <p className="admin-helper-text">
-                    {isEnglish ? 'Last saved: ' : '上次保存：'}
-                    {initialTemplate.updatedAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
-                        year: 'numeric', month: 'short', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                    })}
-                </p>
-            )}
 
             {showPreview && (
                 <ModalShell
