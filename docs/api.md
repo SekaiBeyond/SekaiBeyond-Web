@@ -92,12 +92,22 @@ The relay adds these of its own, in the same shape:
 
 ## Relay for mainland China
 
-`sekaibeyond.com` and the function's own URL both resolve to Google addresses, which mainland networks can't reach reliably. So a seller's server there calls `api.sekaibeyond.com` instead. That's a Cloudflare Worker, [`cloudflare/api-relay`](../cloudflare/api-relay), which passes each `/v1/*` request on to `https://sekaibeyond.com/api/v1/*`:
+The function's own URL is on Google's network, which mainland networks can't reach. A seller's server there calls `api.sekaibeyond.com` instead. That's a Cloudflare Worker, [`cloudflare/api-relay`](../cloudflare/api-relay), which passes each `/v1/*` request on to `https://sekaibeyond.com/api/v1/*`:
 
 - **Forwarded:** only `Authorization`, `Content-Type`, `Accept`, `User-Agent` and the body.
 - **Returned:** only the response's `Content-Type`, `Allow` and `Retry-After`, plus `Cache-Control: no-store`.
 - **Not cached.** The key, its scopes and its rate limit are all checked by the API. The relay itself only refuses a body over 64 KiB, and a JSON body Google's servers would turn away (see [Errors](#errors)).
 - **Not on `*.workers.dev`:** that's blocked in mainland China, so the relay is on its own hostname only.
+
+Tested on 2026-10-28 from 25 mainland probes (via [Globalping](https://globalping.io)): Alibaba, Tencent and Huawei Cloud, and China Telecom, Unicom and Mobile.
+
+| Target | Reached | Typical time |
+|---|---|---|
+| The relay, `api.sekaibeyond.com` | 24/25 | about 1 s; 3–4 s on two Unicom lines |
+| The function's own URL | 0/25 | every probe timed out connecting |
+| `sekaibeyond.com` (Firebase Hosting) | 25/25 | about 0.7 s |
+
+Firebase Hosting answered every probe, so `sekaibeyond.com/api/v1/*` may work from the mainland too once its route is deployed. Test it then before relying on it. The relay stays the supported way in.
 
 ### Deploying it
 
