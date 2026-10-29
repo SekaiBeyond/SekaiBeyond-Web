@@ -62,7 +62,7 @@ This repository contains the source code for the official **Sekai Beyond** websi
    npm run dev
    ```
 
-   It starts local Firebase emulators and runs the site against them, never the production database. See [Testing with the Emulators](docs/emulators.md) for signing in as an admin and what differs from production.
+   It starts local Firebase emulators and runs the site against them, never the production database. See [Testing with the Emulators](https://docs.sekaibeyond.com/en/website/emulators) for signing in as an admin and what differs from production.
 
 4. **Open your browser**
 
@@ -82,15 +82,7 @@ This repository contains the source code for the official **Sekai Beyond** websi
 
 ## Documentation
 
-| Doc                                                     | Covers                                                             |
-|---------------------------------------------------------|--------------------------------------------------------------------|
-| [Deployment](docs/deploy.md)                            | First-time Firebase setup, GitHub secrets, and the deploy workflow |
-| [Testing with the Emulators](docs/emulators.md)         | Running the site locally against Firebase emulators                |
-| [Ticket Email](docs/email.md)                           | Sending ticket emails through Resend                               |
-| [App Check](docs/app-check.md)                          | reCAPTCHA v3 protection for Firestore, Storage, and Functions      |
-| [Firestore Indexes and TTL Policies](docs/firestore.md) | The composite indexes and TTL policies the app needs               |
-| [User Groups](docs/user-groups.md)                      | Roles, admin access, the first president, and membership           |
-| [Ticket API](docs/api.md)                               | The admin-level ticket API: keys, reference, and the China relay   |
+All the docs, from setting up and deploying the site to the ticket API, are at **[docs.sekaibeyond.com](https://docs.sekaibeyond.com)**. They're written in the [SekaiBeyond-Docs](https://github.com/SekaiBeyond/SekaiBeyond-Docs) repo, so change them there.
 
 ## Contributing
 

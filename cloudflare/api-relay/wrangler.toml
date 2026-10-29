@@ -1,5 +1,5 @@
 # The ticket API's relay for servers in mainland China (see src/index.ts and
-# docs/api.md). Deployed by hand: npx -y wrangler@4 deploy, from this folder.
+# https://docs.sekaibeyond.com/en/website/api-relay). Deployed by hand: npx -y wrangler@4 deploy, from this folder.
 name = "sekaibeyond-api-relay"
 main = "src/index.ts"
 compatibility_date = "2025-10-01"

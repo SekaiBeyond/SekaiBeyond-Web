@@ -18,8 +18,9 @@ import { getScheduledMailQueueDepth } from "./scheduledMail";
 /**
  * The ticket API a seller's server calls with a key from the API Keys tool, so
  * tickets sold in another app (the Chinese app first) land on the same list,
- * and scan at the same door, as ours. Overview in docs/api.md, and a page per
- * endpoint and per object in docs/api/.
+ * and scan at the same door, as ours. Documented at
+ * https://docs.sekaibeyond.com/en/ticket-api, with a page per endpoint and per object under
+ * https://docs.sekaibeyond.com/en/api-reference.
  *
  *   GET  /api/v1/events                            events:read
  *   GET  /api/v1/events/{eventId}                  events:read

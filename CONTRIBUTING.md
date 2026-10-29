@@ -8,7 +8,7 @@ We welcome contributions from the community! Here's how you can help:
 4. **Push** to the branch (`git push origin feature/amazing-feature`)
 5. **Open** a Pull Request
 
-Test your changes with `npm run dev`, which runs the site against local Firebase emulators (see [Testing with the Emulators](docs/emulators.md)), and run `npm run typecheck` before opening the pull request: a type error stops the deploy.
+Test your changes with `npm run dev`, which runs the site against local Firebase emulators (see [Testing with the Emulators](https://docs.sekaibeyond.com/en/website/emulators)), and run `npm run typecheck` before opening the pull request: a type error stops the deploy.
 
 ## Dependencies
 

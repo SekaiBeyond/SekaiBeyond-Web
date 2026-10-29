@@ -4,8 +4,8 @@ on:
   push:
     branches: [ main ]
     paths-ignore:
-      - docs/**
-      # The API relay, deployed to Cloudflare by hand (see docs/api.md).
+      # The API relay, deployed to Cloudflare by hand (see
+      # https://docs.sekaibeyond.com/en/website/api-relay).
       - cloudflare/**
       - README.md
       - CONTRIBUTING.md

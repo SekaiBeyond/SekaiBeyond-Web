@@ -1,7 +1,8 @@
 /**
  * Relays the ticket API (functions/src/functions/api.ts) on api.sekaibeyond.com,
  * so a seller's server in mainland China can call it: the function's own
- * Google host can't be reached there, and Cloudflare can. See "Relay for mainland China" in docs/api.md.
+ * Google host can't be reached there, and Cloudflare can. See
+ * https://docs.sekaibeyond.com/en/ticket-api/mainland-china.
  *
  *   https://api.sekaibeyond.com/v1/events  ->  ${UPSTREAM}/v1/events
  *
