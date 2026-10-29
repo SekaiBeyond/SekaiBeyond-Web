@@ -12,7 +12,7 @@ import type { Venue } from '~/lib/venues';
 import { eventLocationDisplay } from '~/lib/venues';
 import type { UserRecord } from './types';
 import { formatSiteTime } from '~/lib/siteTime';
-import { fetchEventAttendees, fetchEventStaffCount, refreshAfterSave } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount, refreshAfterSave, type ShowToast } from './utils';
 import { ClaimCodeSection } from './ClaimCodeSection';
 import { EventAttendeesList } from './EventAttendeesList';
 import { EventStaffSection } from './EventStaffSection';
@@ -30,7 +30,7 @@ interface UpcomingEventDetailViewProps {
     venues: Venue[];
     tags: Tag[];
     readOnly?: boolean;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     refreshEvents: () => Promise<void>;
     refreshPastEvents: () => Promise<void>;
     onBack: () => void;

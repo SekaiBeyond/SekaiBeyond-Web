@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeleteSocialPlatform, callSaveSocialPlatform, callSeedSocialPlatforms } from '~/lib/firebase';
+import {
+    callDeleteSocialPlatform,
+    callSaveSocialPlatform,
+    callSeedSocialPlatforms,
+    errorMessage,
+} from '~/lib/firebase';
 import { type SocialPlatform, useSocialPlatforms } from '~/lib/socialPlatforms';
-import { refreshAfterSave } from '../../utils';
+import { refreshAfterSave, type ShowToast } from '../../utils';
 
 interface PlatformDraft {
     label: string;
@@ -20,7 +25,7 @@ function emptyDraft(order: number): PlatformDraft {
 
 interface SocialPlatformsManagerProps {
     onBack: () => void;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 
@@ -56,8 +61,8 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
             await callSeedSocialPlatforms();
             await refreshAfterSave(refresh, showToast, isEnglish);
             showToast(isEnglish ? 'Defaults loaded — you can now edit them.' : '已加载默认平台，现在可以编辑。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to load defaults.' : '加载默认平台失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to load defaults.' : '加载默认平台失败。'), 'error');
         } finally {
             setSeeding(false);
         }
@@ -75,8 +80,8 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
             setCreateDraft(emptyDraft(0));
             setShowCreate(false);
             showToast(isEnglish ? 'Platform added.' : '平台已添加。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to add platform.' : '添加平台失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to add platform.' : '添加平台失败。'), 'error');
         } finally {
             setSaving(false);
         }
@@ -99,8 +104,8 @@ export const SocialPlatformsManager = ({onBack, showToast, readOnly = false}: So
             await refreshAfterSave(refresh, showToast, isEnglish);
             setEditingId(null);
             showToast(isEnglish ? 'Platform updated.' : '平台已更新。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to save platform.' : '保存平台失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to save platform.' : '保存平台失败。'), 'error');
         } finally {
             setSaving(false);
         }

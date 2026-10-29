@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { accountEffectiveTitle, normalizeGroup, type UserGroup } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGetTeamRoster, callSaveTeamMembers, getFirebaseDb } from '~/lib/firebase';
+import { callGetTeamRoster, callSaveTeamMembers, errorMessage, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
 import { MemberEditModal } from './MemberEditModal';
-import { refreshAfterSave } from './utils';
+import { refreshAfterSave, type ShowToast } from './utils';
 
 interface LinkedAccount {
     title: string;
@@ -22,7 +22,7 @@ const memberFollows = (m: TeamMemberConfig) => ({
 
 interface TeamSectionProps {
     refreshConfig: () => Promise<void>;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 
@@ -103,8 +103,8 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
             // editor.
             await Promise.all([refreshAfterSave(refreshConfig, showToast, isEnglish), loadRoster()]);
             showToast(isEnglish ? 'Team updated.' : '团队已更新。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to update team.' : '更新团队失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to update team.' : '更新团队失败。'), 'error');
             // Revert state if saving failed
             setMembers(members);
         } finally {

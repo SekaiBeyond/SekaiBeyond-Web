@@ -6,7 +6,7 @@ export interface ConEdition {
     year: number;
     date: string;
     location: string;
-    locationCn?: string;
+    locationCn: string;
     description: string;
     descriptionCn: string;
     image: string;

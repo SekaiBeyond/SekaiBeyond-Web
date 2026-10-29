@@ -1,6 +1,6 @@
 import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSaveConContent } from '~/lib/firebase';
+import { callSaveConContent, errorMessage } from '~/lib/firebase';
 import { type ConContent, type ConContentSection, refreshConContent } from '~/lib/conContent';
 import type { Localized } from '~/pages/con/i18n';
 import type { ShowToast } from './utils';
@@ -87,9 +87,9 @@ export function useSectionEditor<K extends ConContentSection>(
         setSaving(true);
         try {
             await callSaveConContent({[section]: draft} as Partial<ConContent>);
-        } catch (e: any) {
+        } catch (e) {
             showToast(
-                e?.message ?? (isEnglish ? `Failed to save ${label.en}.` : `保存${label.zh}失败。`),
+                errorMessage(e, isEnglish ? `Failed to save ${label.en}.` : `保存${label.zh}失败。`),
                 'error',
             );
             setSaving(false);

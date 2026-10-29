@@ -69,9 +69,7 @@ export const scheduledMailDrain = onSchedule({
     // use for its key either.
     const checks = await Promise.all(snap.docs.map(async (doc) => {
         const data = doc.data();
-        // Ticket emails queued before targetPath name their attendee this way.
-        const targetPath = typeof data.targetPath === "string" ? data.targetPath
-            : typeof data.attendeePath === "string" ? data.attendeePath : null;
+        const targetPath = typeof data.targetPath === "string" ? data.targetPath : null;
         const check = {
             doc, data, targetPath,
             isPassport: data.type === "passport",

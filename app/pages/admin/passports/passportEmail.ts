@@ -1,13 +1,7 @@
 import { sanitizeEmailHtml } from '~/lib/emailSanitize';
 import type { PassportDesign } from '~/lib/passports';
 import { EMAIL_RE, escapeHtml } from '../tickets/helpers';
-
-/** The key email as saved: one for every design, told apart by its placeholders. */
-export interface PassportEmailTemplate {
-    subject: string;
-    bodyHtml: string;
-    updatedAt: Date | null;
-}
+import type { EmailTemplate } from '../tickets/types';
 
 export const DEFAULT_PASSPORT_EMAIL_SUBJECT = 'Your {{ designName }} passport is here';
 
@@ -68,12 +62,9 @@ const ACTIVATE_URL_PLACEHOLDER = /{{\s*activateUrl\s*}}/g;
 const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
 
 /** Mirrors carriesKey in functions/src/functions/passportEmails.ts, which refuses to send without it. */
-export const carriesKey = (template: Pick<PassportEmailTemplate, 'subject' | 'bodyHtml'>): boolean =>
+export const carriesKey = (template: Pick<EmailTemplate, 'subject' | 'bodyHtml'>): boolean =>
     [template.subject, template.bodyHtml].some(t =>
         t.search(ACTIVATION_CODE_PLACEHOLDER) !== -1 || t.search(ACTIVATE_URL_PLACEHOLDER) !== -1);
-
-export const usesContactEmail = (template: Pick<PassportEmailTemplate, 'subject' | 'bodyHtml'>): boolean =>
-    [template.subject, template.bodyHtml].some(t => t.search(CONTACT_EMAIL_PLACEHOLDER) !== -1);
 
 const SAMPLE_KEY = 'ABCD-EFGH-JKMN';
 
@@ -104,11 +95,11 @@ const fillSample = (
 };
 
 export const renderPassportSampleSubject = (
-    template: PassportEmailTemplate, design: PassportDesign | undefined, contactEmail: string, origin: string,
+    template: EmailTemplate, design: PassportDesign | undefined, contactEmail: string, origin: string,
 ): string => fillSample(template.subject, design, contactEmail, origin, false);
 
 export const renderPassportSamplePreview = (
-    template: PassportEmailTemplate, design: PassportDesign | undefined, contactEmail: string, origin: string,
+    template: EmailTemplate, design: PassportDesign | undefined, contactEmail: string, origin: string,
 ): string => sanitizeEmailHtml(fillSample(template.bodyHtml, design, contactEmail, origin, true));
 
 /**

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSyncUwParking } from '~/lib/firebase';
+import { callSyncUwParking, errorMessage } from '~/lib/firebase';
 import { formatSiteTime } from '~/lib/siteTime';
 import { useUwParking } from '~/lib/uwParking';
+import type { ShowToast } from './utils';
 
 interface UwParkingStatusProps {
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 
@@ -34,8 +35,8 @@ export const UwParkingStatus = ({showToast, readOnly = false}: UwParkingStatusPr
                     ? `Synced ${data.lotCount} visitor lots and ${data.pricingDayCount} event-parking days.`
                     : `已同步 ${data.lotCount} 个访客停车场和 ${data.pricingDayCount} 个活动停车日。`, 'success');
             }
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Sync failed.' : '同步失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Sync failed.' : '同步失败。'), 'error');
         } finally {
             setSyncing(false);
         }

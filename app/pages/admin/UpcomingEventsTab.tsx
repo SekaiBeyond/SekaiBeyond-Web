@@ -1,11 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSaveUpcomingEvent, callUploadAdminImage } from '~/lib/firebase';
+import { callSaveUpcomingEvent, callUploadAdminImage, errorMessage } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { useVenues } from '~/lib/venues';
 import { formatSiteTime, parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
-import { refreshAfterSave } from './utils';
+import { refreshAfterSave, type ShowToast } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { LocationFormField } from './LocationFormField';
 import { ImageUploadField } from './ImageUploadField';
@@ -17,7 +17,7 @@ interface UpcomingEventsTabProps {
     refreshEvents: () => Promise<void>;
     refreshPastEvents: () => Promise<void>;
     tags: Tag[];
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
     onDetailChange?: (inDetail: boolean) => void;
     onLookupUser?: (uid: string) => void;
@@ -188,8 +188,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             setShowForm(false);
             resetForm();
             setEditingEvent(null);
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to save event.' : '保存活动失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to save event.' : '保存活动失败。'), 'error');
         } finally {
             setSaving(false);
         }

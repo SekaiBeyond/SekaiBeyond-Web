@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeleteQrCode, callSaveQrCode } from '~/lib/firebase';
+import { callDeleteQrCode, callSaveQrCode, errorMessage } from '~/lib/firebase';
 import { fetchQrScans, type QrCode, qrHasSpot, qrIsActive, qrIsSocial, qrScanUrl } from '~/lib/qrCodes';
 import { formatSiteTime } from '~/lib/siteTime';
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
@@ -19,7 +19,7 @@ import {
 import { QrPreview, useQrDownload } from './qrExport';
 import { ScanTrendsSection } from '../../ScanTrends';
 import { QrSpotsMap } from './QrSpotsMap';
-import { refreshAfterSave } from '../../utils';
+import { refreshAfterSave, type ShowToast } from '../../utils';
 
 const QR_SIZE = 240;
 
@@ -32,7 +32,7 @@ interface QrCodeDetailProps {
     onBack: () => void;
     onChanged: () => Promise<void>;
     onManagePlatforms: () => void;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly: boolean;
 }
 
@@ -112,8 +112,8 @@ export const QrCodeDetail = ({
             await refreshAfterSave(onChanged, showToast, isEnglish);
             setEditing(null);
             showToast(isEnglish ? 'QR code updated.' : '二维码已更新。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to save.' : '保存失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to save.' : '保存失败。'), 'error');
         } finally {
             setSaving(false);
         }
@@ -129,8 +129,8 @@ export const QrCodeDetail = ({
             await refreshAfterSave(onChanged, showToast, isEnglish);
             showToast(isEnglish ? 'QR code deleted.' : '二维码已删除。', 'warning');
             onBack();
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to delete.' : '删除失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to delete.' : '删除失败。'), 'error');
             setDeleting(false);
         }
     };
@@ -428,7 +428,7 @@ interface PlatformQrCardProps {
     platformId: string;
     isEnglish: boolean;
     platforms: SocialPlatform[];
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
 }
 
 /** One platform's QR + link for a social code, with its own scan tally. */

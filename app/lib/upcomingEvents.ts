@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { doc, getDoc, orderBy, where } from 'firebase/firestore';
-import { createCollectionCache } from './collectionCache';
+import { doc, type DocumentData, getDoc, orderBy, where } from 'firebase/firestore';
+import { createCollectionCache, toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
 export interface UpcomingEvent {
@@ -27,38 +27,30 @@ export interface UpcomingEvent {
     deleteAt: Date | null;
 }
 
-interface FirestoreDocLike {
-    id: string;
-    data: () => Record<string, unknown>;
-}
-
-const mapDoc = (docSnap: FirestoreDocLike): UpcomingEvent => {
-    const data = docSnap.data() as Record<string, unknown>;
-    const startAtRaw = data.startAt as {toDate?: () => Date} | undefined;
-    const endAtRaw = data.endAt as {toDate?: () => Date} | undefined;
-    const deleteAtRaw = data.deleteAt as {toDate?: () => Date} | undefined;
+const mapDoc = (docSnap: {id: string; data: () => DocumentData}): UpcomingEvent => {
+    const data = docSnap.data();
     return {
         id: docSnap.id,
-        title: (data.title as string) ?? '',
-        titleCn: (data.titleCn as string) ?? '',
-        description: (data.description as string) ?? '',
-        descriptionCn: (data.descriptionCn as string) ?? '',
-        location: (data.location as string) ?? '',
-        locationCn: (data.locationCn as string) ?? '',
-        venueId: (data.venueId as string) ?? '',
-        startAt: startAtRaw?.toDate?.() ?? new Date(),
-        endAt: endAtRaw?.toDate?.() ?? new Date(),
-        poster: (data.poster as string) ?? '',
-        emailHeaderBg: (data.emailHeaderBg as string) ?? '',
-        posterCredit: (data.posterCredit as string) ?? '',
-        buyTicket: (data.buyTicket as string) ?? '',
-        learnMore: (data.learnMore as string) ?? '',
-        customButtonText: (data.customButtonText as string) ?? '',
-        customButtonTextCn: (data.customButtonTextCn as string) ?? '',
-        customButtonLink: (data.customButtonLink as string) ?? '',
-        published: (data.published as boolean) ?? false,
-        paid: (data.paid as boolean) ?? false,
-        deleteAt: deleteAtRaw?.toDate?.() ?? null,
+        title: data.title ?? '',
+        titleCn: data.titleCn ?? '',
+        description: data.description ?? '',
+        descriptionCn: data.descriptionCn ?? '',
+        location: data.location ?? '',
+        locationCn: data.locationCn ?? '',
+        venueId: data.venueId ?? '',
+        startAt: toDate(data.startAt) ?? new Date(),
+        endAt: toDate(data.endAt) ?? new Date(),
+        poster: data.poster ?? '',
+        emailHeaderBg: data.emailHeaderBg ?? '',
+        posterCredit: data.posterCredit ?? '',
+        buyTicket: data.buyTicket ?? '',
+        learnMore: data.learnMore ?? '',
+        customButtonText: data.customButtonText ?? '',
+        customButtonTextCn: data.customButtonTextCn ?? '',
+        customButtonLink: data.customButtonLink ?? '',
+        published: data.published === true,
+        paid: data.paid === true,
+        deleteAt: toDate(data.deleteAt),
     };
 };
 

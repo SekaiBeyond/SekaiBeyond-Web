@@ -139,12 +139,7 @@ export const ClaimPage = () => {
         const claimEvent = async () => {
             setState('claiming');
             const result = await callClaimEventCode({code: code!});
-            setEventInfo({
-                eventId: result.data.eventId,
-                eventTitle: result.data.eventTitle,
-                eventTitleCn: result.data.eventTitleCn,
-                eventPoster: result.data.eventPoster,
-            });
+            setEventInfo(result.data);
             setState('success');
             refreshProfile().catch(() => {
             });
@@ -153,15 +148,8 @@ export const ClaimPage = () => {
         claimEvent().catch((err) => {
             const errCode = functionsErrorCode(err);
             if (errCode === 'already-have') {
-                const details = functionsErrorDetails<EventInfo & {code: string}>(err);
-                if (details) {
-                    setEventInfo({
-                        eventId: details.eventId,
-                        eventTitle: details.eventTitle,
-                        eventTitleCn: details.eventTitleCn,
-                        eventPoster: details.eventPoster,
-                    });
-                }
+                const details = functionsErrorDetails<EventInfo>(err);
+                if (details) setEventInfo(details);
                 setState('already-have');
                 return;
             }
@@ -193,8 +181,33 @@ export const ClaimPage = () => {
         );
     }
 
-    const holder = ticketInfo && (ticketInfo.attendeeName || ticketInfo.attendeeEmail
-        || anonymousAttendeeName({hometown: ticketInfo.hometown, ticketIds: [ticketInfo.ticketId]}, isEnglish));
+    // What a door is told when the link reaches someone who can't redeem it.
+    const showAtDoor = (
+        <>
+            <h2>{isEnglish ? 'Show This at the Door' : '请在入场时出示此二维码'}</h2>
+            <p>{isEnglish
+                ? 'This ticket link is scanned by event staff at check-in. Keep this page (or the QR code from your email) handy when you arrive.'
+                : '此门票链接由活动工作人员在入场时扫描。请在到场时出示此页面或邮件中的二维码。'}</p>
+        </>
+    );
+
+    // The event and who the ticket is for, whichever way the scan went.
+    const ticketHolder = ticketInfo && (
+        <>
+            {ticketInfo.eventTitle && (
+                <p className="claim-event-title">{ticketInfo.eventTitle}</p>
+            )}
+            <p>
+                <strong>
+                    {ticketInfo.attendeeName || ticketInfo.attendeeEmail
+                        || anonymousAttendeeName({hometown: ticketInfo.hometown, ticketIds: [ticketInfo.ticketId]}, isEnglish)}
+                </strong>
+            </p>
+            {ticketInfo.attendeeName && ticketInfo.attendeeEmail && (
+                <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>
+            )}
+        </>
+    );
 
     return (
         <div className="profile-login-prompt">
@@ -234,27 +247,15 @@ export const ClaimPage = () => {
                     </>
                 )}
 
-                {state === 'not-logged-in' && (
+                {state === 'not-logged-in' && (isTicketFlow ? showAtDoor : (
                     <>
-                        <h2>
-                            {isTicketFlow
-                                ? (isEnglish ? 'Show This at the Door' : '请在入场时出示此二维码')
-                                : (isEnglish ? 'Sign In to Claim Event' : '登录以签到活动')}
-                        </h2>
-                        <p>
-                            {isTicketFlow
-                                ? (isEnglish
-                                    ? 'This ticket link is scanned by event staff at check-in. Keep this page (or the QR code from your email) handy when you arrive.'
-                                    : '此门票链接由活动工作人员在入场时扫描。请在到场时出示此页面或邮件中的二维码。')
-                                : (isEnglish ? 'You need to sign in first to check in for this event.' : '请先登录以签到此活动。')}
-                        </p>
-                        {!isTicketFlow && (
-                            <button onClick={signIn} className="profile-sign-in-btn">
-                                {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
-                            </button>
-                        )}
+                        <h2>{isEnglish ? 'Sign In to Claim Event' : '登录以签到活动'}</h2>
+                        <p>{isEnglish ? 'You need to sign in first to check in for this event.' : '请先登录以签到此活动。'}</p>
+                        <button onClick={signIn} className="profile-sign-in-btn">
+                            {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
+                        </button>
                     </>
-                )}
+                ))}
 
                 {state === 'claiming' && (
                     <>
@@ -300,15 +301,7 @@ export const ClaimPage = () => {
                                 ? (isEnglish ? '✓ Let In — Not on the HomeTown List' : '✓ 已放行 — 不在 HomeTown 名单中')
                                 : (isEnglish ? '✓ Ticket Redeemed' : '✓ 门票已验证')}
                         </h2>
-                        {ticketInfo.eventTitle && (
-                            <p className="claim-event-title">{ticketInfo.eventTitle}</p>
-                        )}
-                        <p>
-                            <strong>{holder}</strong>
-                        </p>
-                        {ticketInfo.attendeeName && ticketInfo.attendeeEmail && (
-                            <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>
-                        )}
+                        {ticketHolder}
                         {/* The scanner's warnings, for a code read with a phone's camera. */}
                         {ticketInfo.unlisted ? (
                             <p className="admin-helper-text admin-tickets-edit-warning">
@@ -335,15 +328,7 @@ export const ClaimPage = () => {
                 {state === 'ticket-already-redeemed' && ticketInfo && (
                     <>
                         <h2>{isEnglish ? '! Already Redeemed' : '! 此门票已验证'}</h2>
-                        {ticketInfo.eventTitle && (
-                            <p className="claim-event-title">{ticketInfo.eventTitle}</p>
-                        )}
-                        <p>
-                            <strong>{holder}</strong>
-                        </p>
-                        {ticketInfo.attendeeName && ticketInfo.attendeeEmail && (
-                            <p className="admin-user-email">{ticketInfo.attendeeEmail}</p>
-                        )}
+                        {ticketHolder}
                         <p className="admin-helper-text">
                             {isEnglish ? 'Redeemed by ' : '验证人：'}
                             {ticketInfo.redeemedBy || (isEnglish ? 'unknown' : '未知')}
@@ -391,14 +376,7 @@ export const ClaimPage = () => {
                     </>
                 )}
 
-                {state === 'ticket-not-authorized' && (
-                    <>
-                        <h2>{isEnglish ? 'Show This at the Door' : '请在入场时出示此二维码'}</h2>
-                        <p>{isEnglish
-                            ? 'This ticket link is scanned by event staff at check-in. Keep this page (or the QR code from your email) handy when you arrive.'
-                            : '此门票链接由活动工作人员在入场时扫描。请在到场时出示此页面或邮件中的二维码。'}</p>
-                    </>
-                )}
+                {state === 'ticket-not-authorized' && showAtDoor}
 
                 {state === 'ticket-event-missing' && (
                     <>

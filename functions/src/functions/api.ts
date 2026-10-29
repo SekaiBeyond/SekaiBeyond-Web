@@ -73,8 +73,8 @@ async function authenticate(header: string | undefined): Promise<ApiKey> {
     }
     const snap = await apiKeysCol().doc(hashApiKey(match[1])).get();
     const data = snap.data() as ApiKeyDoc | undefined;
-    // Revoking deletes a key; one revoked before that is refused the same way.
-    if (!data || data.revokedAt) throw new ApiError(401, "invalid-api-key", "API key not recognised.");
+    // Revoking deletes a key, so a revoked one isn't found.
+    if (!data) throw new ApiError(401, "invalid-api-key", "API key not recognised.");
     if (data.expiresAt.toMillis() <= Date.now()) {
         throw new ApiError(401, "api-key-expired", "This API key has expired.");
     }
@@ -174,8 +174,7 @@ function eventJson(event: FoundEvent) {
             icon: str(data.icon),
             recapLink: str(data.recapLink),
             recapLinkCn: str(data.recapLinkCn),
-            // Past events from before the flag are published.
-            published: data.published !== false,
+            published: data.published === true,
             paid: data.paid === true,
             deleteAt: iso(data.deleteAt),
         };

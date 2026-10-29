@@ -27,12 +27,14 @@ import {
     type UserProfile,
 } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { toDate } from '~/lib/collectionCache';
 import { passportDateTime, usePassportDesigns } from '~/lib/passports';
 import type { PastEvent } from '~/lib/pastEvents';
 import { useUploadLimits } from '~/lib/uploadLimits';
 import { usePassportsByOwner } from '~/pages/PassportShelf';
-import type { BadgeDef, UserRecord } from './types';
-import { validateImageFile } from './utils';
+import type { BadgeDef } from '~/lib/badges';
+import type { UserRecord } from './types';
+import { type ShowToast, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 import { MembershipSection } from './MembershipSection';
 import { PassportPageTag, PassportRow } from './passports/PassportSearch';
@@ -49,7 +51,7 @@ interface UserDetailViewProps {
     onBack: () => void;
     onUpdateUser: (uid: string, changes: Partial<UserRecord>) => void;
     onOpenPassport: (passportId: string) => void;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
 }
 
 export const UserDetailView = ({
@@ -97,11 +99,7 @@ export const UserDetailView = ({
         const db = getFirebaseDb();
         const unsubscribe = onSnapshot(
             doc(db, 'users', userRecord.uid),
-            (snap) => {
-                const data = snap.data();
-                const deleteAt = data?.deleteAt?.toDate?.();
-                setPendingDeletionExpiresAt(deleteAt instanceof Date ? deleteAt : null);
-            },
+            (snap) => setPendingDeletionExpiresAt(toDate(snap.data()?.deleteAt)),
             () => setPendingDeletionExpiresAt(null),
         );
         return () => unsubscribe();

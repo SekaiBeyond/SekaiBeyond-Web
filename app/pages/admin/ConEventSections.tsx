@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callUploadConVideo } from '~/lib/firebase';
+import { callUploadConVideo, errorMessage } from '~/lib/firebase';
 import { type ConContent, ROOM_ACCENTS, type RoomAccent, } from '~/lib/conContent';
 import { formatSiteTime } from '~/lib/siteTime';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
@@ -207,8 +207,8 @@ export const HeroVideoSection = ({content, loading, showToast, readOnly}: Sectio
             const url = await callUploadConVideo(file, `con/hero-${Date.now().toString(36)}.webm`);
             setDraft(prev => ({...prev, webm: url}));
             showToast(isEnglish ? 'Clip uploaded.' : '视频已上传。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Clip upload failed.' : '视频上传失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Clip upload failed.' : '视频上传失败。'), 'error');
         } finally {
             setBusy(false);
         }

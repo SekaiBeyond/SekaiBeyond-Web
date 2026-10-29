@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSetQrSpot } from '~/lib/firebase';
+import { callSetQrSpot, errorMessage } from '~/lib/firebase';
 import { type QrCode, qrHasSpot, qrIsSocial } from '~/lib/qrCodes';
 import { useQrScanner } from '~/lib/useQrScanner';
 import { QrScannerViewport } from '~/pages/admin/QrScannerViewport';
-import { refreshAfterSave } from '../../utils';
+import { refreshAfterSave, type ShowToast } from '../../utils';
 
 type LinkState = 'idle' | 'locating' | 'saving' | 'done' | 'error';
 
@@ -12,7 +12,7 @@ interface QrLinkScannerProps {
     codes: QrCode[];
     onBack: () => void;
     onLinked: () => Promise<void>;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
 }
 
 /** Pull a managed-code id out of a scanned `/qr?id=…` URL (or a bare id). */
@@ -99,9 +99,9 @@ export const QrLinkScanner = ({codes, onBack, onLinked, showToast}: QrLinkScanne
                     showToast(isEnglish
                         ? `Linked “${matched.label}” to your location.`
                         : `已将"${matched.label}"关联到你的位置。`, 'success');
-                } catch (e: any) {
+                } catch (e) {
                     setLinkState('error');
-                    setLinkError(e?.message ?? (isEnglish ? 'Failed to save location.' : '保存位置失败。'));
+                    setLinkError(errorMessage(e, isEnglish ? 'Failed to save location.' : '保存位置失败。'));
                 }
             },
             err => {

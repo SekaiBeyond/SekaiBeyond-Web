@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { fileStamp } from '~/lib/csv';
-import { callDeletePassports, callExportPassportKeys } from '~/lib/firebase';
+import { callDeletePassports, callExportPassportKeys, errorMessage } from '~/lib/firebase';
 import {
     MAX_PASSPORT_DELETE,
     MAX_PASSPORT_KEY_EXPORT,
@@ -223,8 +223,8 @@ export const PassportStock = ({
         let result;
         try {
             result = (await callDeletePassports({passportIds: selectedPassports.map(p => p.id)})).data;
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to delete passports.' : '删除通行证失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to delete passports.' : '删除通行证失败。'), 'error');
             setDeleting(false);
             return;
         }
@@ -259,8 +259,8 @@ export const PassportStock = ({
                 rows.push(...data.passports);
                 missing += data.missing.length;
             }
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to export the keys.' : '导出激活码失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to export the keys.' : '导出激活码失败。'), 'error');
             return;
         } finally {
             setExportingKeys(false);

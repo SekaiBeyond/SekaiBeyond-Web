@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase/firestore';
+import { toDate } from '~/lib/collectionCache';
 import { buildCsv } from '~/lib/csv';
 import { sanitizeEmailHtml } from '~/lib/emailSanitize';
 import { SITE_TIME_ZONE } from '~/lib/siteTime';
@@ -62,13 +62,6 @@ export const DEFAULT_TEMPLATE_BODY_EN = `<div style="font-family:-apple-system,B
     </div>
 </div>`;
 
-export const tsToDate = (t: unknown): Date | null => {
-    if (!t) return null;
-    if (t instanceof Timestamp) return t.toDate();
-    if (t instanceof Date) return t;
-    return null;
-};
-
 export const mapAttendeeDoc = (
     id: string,
     data: Record<string, unknown>,
@@ -79,9 +72,9 @@ export const mapAttendeeDoc = (
         return {
             ticketId: (tk.ticketId as string) ?? '',
             type: (tk.type as any) ?? 'normal',
-            createdAt: tsToDate(tk.createdAt),
+            createdAt: toDate(tk.createdAt),
             redeemed: (tk.redeemed as boolean) ?? false,
-            redeemedAt: tsToDate(tk.redeemedAt),
+            redeemedAt: toDate(tk.redeemedAt),
             redeemedByName: (tk.redeemedByName as string) ?? '',
             voided: (tk.voided as boolean) ?? false,
             notes: (tk.notes as string) ?? '',
@@ -94,15 +87,15 @@ export const mapAttendeeDoc = (
         ticketCount: (data.ticketCount as number) ?? 0,
         emailSent: (data.emailSent as boolean) ?? false,
         emailScheduled: (data.emailScheduled as boolean) ?? false,
-        emailSentAt: tsToDate(data.emailSentAt),
-        createdAt: tsToDate(data.createdAt) ?? new Date(),
+        emailSentAt: toDate(data.emailSentAt),
+        createdAt: toDate(data.createdAt) ?? new Date(),
         tickets,
         ticketIds: Array.isArray(data.ticketIds) ? (data.ticketIds as string[]) : [],
         walkIn: data.walkIn === true,
         hometown: data.source === 'hometown',
         unlisted: data.unlisted === true,
         missingFromHometown: data.missingFromHometown === true,
-        hometownSeenAt: tsToDate(data.hometownSeenAt),
+        hometownSeenAt: toDate(data.hometownSeenAt),
         hometownOrderId: (data.hometownOrderId as string) ?? '',
         apiOrder: data.source === 'api',
         apiSendEmail: data.apiSendEmail === true,

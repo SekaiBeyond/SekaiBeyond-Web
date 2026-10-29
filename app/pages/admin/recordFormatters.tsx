@@ -4,7 +4,8 @@ import type { PastEvent } from '~/lib/pastEvents';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Venue } from '~/lib/venues';
 import { ticketTypeLabel } from './tickets/types';
-import { type ActivityRecord, type BadgeDef, RECORD_CATEGORIES, type RecordCategory } from './types';
+import type { BadgeDef } from '~/lib/badges';
+import { type ActivityRecord, RECORD_CATEGORIES, type RecordCategory } from './types';
 
 export const CATEGORY_BY_TYPE = new Map<string, RecordCategory>();
 for (const [category, {types}] of Object.entries(RECORD_CATEGORIES)) {

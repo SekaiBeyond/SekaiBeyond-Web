@@ -11,11 +11,13 @@ import {
     where,
 } from 'firebase/firestore';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { toDate } from '~/lib/collectionCache';
 import { getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Venue } from '~/lib/venues';
-import { type ActivityRecord, type BadgeDef, RECORD_CATEGORIES, type RecordCategory } from './types';
+import type { BadgeDef } from '~/lib/badges';
+import { type ActivityRecord, RECORD_CATEGORIES, type RecordCategory } from './types';
 import { CATEGORY_BY_TYPE, formatRecordLabel, type RecordFormatContext } from './recordFormatters';
 
 const PAGE_SIZE = 20;
@@ -27,7 +29,7 @@ const parseRecordDocs = (snapshot: {docs: DocumentSnapshot[]}): ActivityRecord[]
             ...data,
             id: docSnap.id,
             performedByName: data.performedByName ?? '',
-            timestamp: data.timestamp?.toDate() ?? new Date(),
+            timestamp: toDate(data.timestamp) ?? new Date(),
         } as ActivityRecord;
     });
 

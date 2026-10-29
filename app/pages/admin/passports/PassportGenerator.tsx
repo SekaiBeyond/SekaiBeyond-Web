@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { fileStamp } from '~/lib/csv';
-import { callGeneratePassports } from '~/lib/firebase';
+import { callGeneratePassports, errorMessage } from '~/lib/firebase';
 import { MAX_PASSPORT_GENERATE, type PassportDesign, passportName, } from '~/lib/passports';
 import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
 import { downloadBlob } from '~/lib/zip';
@@ -83,8 +83,8 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                     ? 'Passports generated, but the keys CSV didn’t download. Use the button below before leaving.'
                     : '通行证已生成，但激活码 CSV 未能下载。请在离开前使用下方按钮下载。', 'warning');
             }
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to generate passports.' : '生成通行证失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to generate passports.' : '生成通行证失败。'), 'error');
         } finally {
             setBusy(false);
         }

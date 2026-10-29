@@ -5,7 +5,7 @@ import { callDeleteTag, callSaveTag } from '~/lib/firebase';
 import type { Tag } from '~/lib/tags';
 import { BilingualFormField } from './BilingualFormField';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
-import { refreshAfterSave } from './utils';
+import { refreshAfterSave, type ShowToast } from './utils';
 
 function isDuplicateError(err: unknown): boolean {
     return err instanceof FirebaseError && err.code === 'functions/already-exists';
@@ -14,7 +14,7 @@ function isDuplicateError(err: unknown): boolean {
 interface TagsTabProps {
     tags: Tag[];
     refreshTags: () => Promise<void>;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 

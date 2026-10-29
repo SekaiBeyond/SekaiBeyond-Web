@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { FaStar } from 'react-icons/fa';
 import {
     FiAlertCircle,
@@ -21,15 +20,15 @@ import {
     useAuth,
     type UserGroup,
 } from '~/components/AuthProvider';
-import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGetPublicProfile, getFirebaseDb, isStorageUrl } from '~/lib/firebase';
-import { LanguageSwitcher } from '~/components/LanguageSwitcher';
+import { type BadgeDef, toBadgeDef } from '~/lib/badges';
+import { getDocsByIds } from '~/lib/collectionCache';
+import { callGetPublicProfile, isStorageUrl } from '~/lib/firebase';
+import { PageNav } from '~/components/PageNav';
 import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import type { ShelfPassport } from '~/lib/passports';
 import { useTags } from '~/lib/tags';
 import { useNavigate, useSearchParams } from 'react-router';
-import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { formatSiteTime } from '~/lib/siteTime';
 import { useUploadLimits } from '~/lib/uploadLimits';
 import { isValidHttpUrl } from '~/lib/urls';
@@ -41,12 +40,6 @@ import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 import { validateImageFile } from "~/pages/admin/utils";
 import { useModalEffects } from '~/lib/useModalEffects';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
-
-interface BadgeDef extends BaseBadgeDef {
-    createdByUid?: string;
-    createdByName?: string;
-    createdByLink?: string;
-}
 
 interface ViewedProfile {
     displayName: string;
@@ -231,33 +224,7 @@ export const ProfilePage = () => {
         setBadgeDefs(null);
         const loadBadges = async () => {
             try {
-                const db = getFirebaseDb();
-                const col = collection(db, 'badges');
-                // Firestore 'in' queries support max 30 items per batch
-                const batches: string[][] = [];
-                for (let i = 0; i < badgeIds.length; i += 30) {
-                    batches.push(badgeIds.slice(i, i + 30));
-                }
-                const defs: BadgeDef[] = [];
-                await Promise.all(batches.map(async (batch) => {
-                    const q = query(col, where(documentId(), 'in', batch));
-                    const snapshot = await getDocs(q);
-                    snapshot.forEach(docSnap => {
-                        const data = docSnap.data();
-                        defs.push({
-                            id: docSnap.id,
-                            name: data.name ?? '',
-                            nameCn: data.nameCn ?? '',
-                            description: data.description ?? '',
-                            descriptionCn: data.descriptionCn ?? '',
-                            imageUrl: data.imageUrl ?? '',
-                            createdByUid: data.createdByUid ?? '',
-                            createdByName: data.createdByName ?? '',
-                            createdByLink: data.createdByLink ?? '',
-                            deleteAt: data.deleteAt?.toDate?.() ?? null,
-                        });
-                    });
-                }));
+                const defs = (await getDocsByIds('badges', badgeIds)).map(toBadgeDef);
                 if (stale) return;
                 setBadgeDefs(defs);
                 setBadgeLoadError(false);
@@ -290,29 +257,19 @@ export const ProfilePage = () => {
                 if (stale) return;
                 const data = result.data;
                 const earnedAt: Record<string, Date> = {};
-                for (const [k, v] of Object.entries(data.badgeEarnedAt ?? {})) {
+                for (const [k, v] of Object.entries(data.badgeEarnedAt)) {
                     const d = new Date(v);
                     if (!isNaN(d.getTime())) earnedAt[k] = d;
                 }
                 setViewedProfile({
-                    displayName: data.displayName ?? '',
-                    photoURL: data.photoURL ?? '',
-                    bannerURL: data.bannerURL ?? '',
-                    joinedAt: data.joinedAt ? new Date(data.joinedAt) : new Date(),
-                    attendedEvents: data.attendedEvents ?? [],
-                    eventStaffEvents: data.eventStaffEvents ?? [],
-                    badges: data.badges ?? [],
+                    ...data,
+                    joinedAt: new Date(data.joinedAt),
                     badgeEarnedAt: earnedAt,
-                    passports: (data.passports ?? []).map(p => ({
+                    passports: data.passports.map(p => ({
                         ...p,
                         claimedAt: p.claimedAt ? new Date(p.claimedAt) : null,
                     })),
-                    passportPageHidden: data.passportPageHidden ?? false,
                     group: normalizeGroup(data.group),
-                    isMember: data.isMember ?? false,
-                    title: data.title ?? '',
-                    titleCn: data.titleCn ?? '',
-                    visibility: data.visibility,
                 });
             } catch {
                 if (!stale) setViewedLoadError(true);
@@ -581,9 +538,7 @@ export const ProfilePage = () => {
     const shelf = isOwnProfile ? passports : viewedProfile!.passports;
     const staffedSet = new Set(dp.eventStaffEvents);
     const attendedSet = new Set([...dp.attendedEvents, ...dp.eventStaffEvents]);
-    const attendedEvents = pastEvents
-        .filter(e => attendedSet.has(e.id))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const attendedEvents = pastEvents.filter(e => attendedSet.has(e.id));
     const earnedBadges = (badgeDefs ?? [])
         .filter(b => dp.badges.includes(b.id))
         .sort((a, b) => (earnedDates[b.id]?.getTime() ?? 0) - (earnedDates[a.id]?.getTime() ?? 0));
@@ -662,15 +617,7 @@ export const ProfilePage = () => {
     return (
         <>
             <ToastContainer toasts={toasts}/>
-            <nav className="profile-nav">
-                <a href="/" className="profile-nav-home">
-                    {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
-                </a>
-                <div className="nav-actions">
-                    <LanguageSwitcher/>
-                    <LoginButton/>
-                </div>
-            </nav>
+            <PageNav/>
             <div className="profile-page">
 
                 <div className="profile-hero">

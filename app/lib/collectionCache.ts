@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { collection, getDocs, query, type QueryConstraint, type QueryDocumentSnapshot } from 'firebase/firestore';
+import {
+    collection,
+    documentId,
+    getDocs,
+    query,
+    type QueryConstraint,
+    type QueryDocumentSnapshot,
+    where,
+} from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 
 /**
@@ -9,6 +17,19 @@ export const toDate = (v: unknown): Date | null =>
     v && typeof (v as {toDate?: () => Date}).toDate === 'function'
         ? (v as {toDate: () => Date}).toDate()
         : null;
+
+/**
+ * The docs in `collectionName` with these ids, read in chunks for `in`'s 30-id
+ * limit. An id with no doc is left out.
+ */
+export async function getDocsByIds(collectionName: string, ids: string[]): Promise<QueryDocumentSnapshot[]> {
+    const unique = [...new Set(ids)];
+    const col = collection(getFirebaseDb(), collectionName);
+    const chunks: string[][] = [];
+    for (let i = 0; i < unique.length; i += 30) chunks.push(unique.slice(i, i + 30));
+    const snaps = await Promise.all(chunks.map(chunk => getDocs(query(col, where(documentId(), 'in', chunk)))));
+    return snaps.flatMap(snap => snap.docs);
+}
 
 /**
  * Module-level read-through cache shared across subscribers; `enabled: false`

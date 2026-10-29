@@ -4,7 +4,7 @@ import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callRedeemCode, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
 import { formatSiteTime } from '~/lib/siteTime';
-import type { BadgeDef } from '~/lib/types';
+import type { BadgeDef } from '~/lib/badges';
 import { useModalEffects } from '~/lib/useModalEffects';
 
 const OPEN_EVENT = 'open-redeem-modal';
@@ -26,6 +26,8 @@ interface EventInfo {
     eventPoster: string;
 }
 
+type ClaimedBadge = Pick<BadgeDef, 'name' | 'nameCn' | 'description' | 'descriptionCn' | 'imageUrl'>;
+
 interface PassportGrant {
     passportId: string;
     name: string;
@@ -44,7 +46,7 @@ export const RedeemModal = () => {
     const [state, setState] = useState<
         'idle' | 'claiming' | 'badge-success' | 'staff-success' | 'passport-success' | 'error'
     >('idle');
-    const [badge, setBadge] = useState<BadgeDef | null>(null);
+    const [badge, setBadge] = useState<ClaimedBadge | null>(null);
     const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
     const [passport, setPassport] = useState<PassportGrant | null>(null);
     const [error, setError] = useState('');
@@ -131,13 +133,11 @@ export const RedeemModal = () => {
                 window.dispatchEvent(new CustomEvent(PASSPORT_CLAIMED_EVENT, {detail: data.passportId}));
             } else if (data.kind === 'badge') {
                 setBadge({
-                    id: data.badgeId,
                     name: data.badgeName,
                     nameCn: data.badgeNameCn,
                     description: data.badgeDescription,
                     descriptionCn: data.badgeDescriptionCn,
                     imageUrl: data.badgeImageUrl || '/mika.webp',
-                    deleteAt: null,
                 });
                 setState('badge-success');
             } else {
@@ -346,15 +346,7 @@ export const RedeemModal = () => {
                         <p className="redeem-subtitle">{error}</p>
                         <button
                             className="admin-btn admin-btn--dashed redeem-submit-btn"
-                            onClick={() => {
-                                setState('idle');
-                                setInput('');
-                                setError('');
-                                setBadge(null);
-                                setEventInfo(null);
-                                setPassport(null);
-                                setTimeout(() => inputRef.current?.focus(), 50);
-                            }}
+                            onClick={() => open('')}
                         >
                             {isEnglish ? 'Try Again' : '重试'}
                         </button>

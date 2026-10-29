@@ -1,10 +1,10 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSavePastEvent, callUploadAdminImage } from '~/lib/firebase';
+import { callSavePastEvent, callUploadAdminImage, errorMessage } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
 import { useVenues } from '~/lib/venues';
-import { refreshAfterSave } from './utils';
+import { refreshAfterSave, type ShowToast } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { LocationFormField } from './LocationFormField';
 import { ImageUploadField } from './ImageUploadField';
@@ -15,7 +15,7 @@ interface EventsTabProps {
     pastEvents: PastEvent[];
     refreshEvents: () => Promise<void>;
     tags: Tag[];
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     onDetailChange?: (inDetail: boolean) => void;
     readOnly?: boolean;
     onLookupUser?: (uid: string) => void;
@@ -73,13 +73,9 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     };
 
     const openEditEvent = (event: PastEvent) => {
-        const parts = event.date.split('-');
-        const normalizedDate = parts.length === 3
-            ? `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
-            : event.date;
         setEventForm({
             title: event.title, titleCn: event.titleCn, tagIds: event.tagIds,
-            date: normalizedDate,
+            date: event.date,
             location: event.location, locationCn: event.locationCn, venueId: event.venueId,
             description: event.description, descriptionCn: event.descriptionCn, icon: event.icon,
             recapLink: event.recapLink, recapLinkCn: event.recapLinkCn,
@@ -126,8 +122,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             setShowCreateEvent(false);
             resetEventForm();
             setEditingEvent(null);
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to save event.' : '保存活动失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to save event.' : '保存活动失败。'), 'error');
         } finally {
             setSavingEvent(false);
         }

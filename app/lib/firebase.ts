@@ -115,7 +115,7 @@ export const callCreateUserProfile = () =>
     httpsCallable<Record<string, never>, {alreadyExists: boolean}>(getFunctions(), 'createUserProfile')({});
 
 export const callClaimEventCode = (data: {code: string}) =>
-    httpsCallable<{code: string}, {
+    httpsCallable<typeof data, {
         eventId: string;
         eventTitle: string;
         eventTitleCn: string;
@@ -144,7 +144,7 @@ type RedeemResult =
 };
 
 export const callRedeemCode = (data: {code: string}) =>
-    httpsCallable<{code: string}, RedeemResult>(getFunctions(), 'redeemCode')(data);
+    httpsCallable<typeof data, RedeemResult>(getFunctions(), 'redeemCode')(data);
 
 export const callGenerateBadgeActivationCode = (data: {
     badgeId: string;
@@ -162,37 +162,26 @@ export const callGenerateEventCode = (data: {eventId: string}) =>
     )(data);
 
 export const callRequestEventDeletion = (data: {eventId: string}) =>
-    httpsCallable<{eventId: string}, {deleteAt: string}>(getFunctions(), 'requestEventDeletion')(data);
+    httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestEventDeletion')(data);
 
 export const callCancelEventDeletion = (data: {eventId: string}) =>
-    httpsCallable<{eventId: string}, {cancelled: boolean}>(getFunctions(), 'cancelEventDeletion')(data);
+    httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelEventDeletion')(data);
 
 export const callRequestBadgeDeletion = (data: {badgeId: string}) =>
-    httpsCallable<{badgeId: string}, {deleteAt: string}>(getFunctions(), 'requestBadgeDeletion')(data);
+    httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestBadgeDeletion')(data);
 
 export const callCancelBadgeDeletion = (data: {badgeId: string}) =>
-    httpsCallable<{badgeId: string}, {cancelled: boolean}>(getFunctions(), 'cancelBadgeDeletion')(data);
+    httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelBadgeDeletion')(data);
 
 export const callChangeUserGroup = (data: {targetUid: string; newGroup: string; title?: string; titleCn?: string}) =>
-    httpsCallable<{targetUid: string; newGroup: string; title?: string; titleCn?: string}, {
-        oldGroup: string;
-        newGroup: string
-    }>(
-        getFunctions(), 'changeUserGroup'
-    )(data);
+    httpsCallable<typeof data, {oldGroup: string; newGroup: string}>(getFunctions(), 'changeUserGroup')(data);
 
 // Exactly one of expiresAt (ISO date, or null to revoke) and extendDays per call.
 export const callSetMembership = (data: {targetUid: string; expiresAt?: string | null; extendDays?: number}) =>
-    httpsCallable<{targetUid: string; expiresAt?: string | null; extendDays?: number}, {
-        membershipExpiresAt: string | null;
-    }>(
-        getFunctions(), 'setMembership'
-    )(data);
+    httpsCallable<typeof data, {membershipExpiresAt: string | null}>(getFunctions(), 'setMembership')(data);
 
 export const callSetUserTitle = (data: {targetUid: string; title?: string; titleCn?: string}) =>
-    httpsCallable<{targetUid: string; title?: string; titleCn?: string}, {success: boolean}>(
-        getFunctions(), 'setUserTitle'
-    )(data);
+    httpsCallable<typeof data, {success: boolean}>(getFunctions(), 'setUserTitle')(data);
 
 export const callSavePastEvent = (data: {
     eventId?: string;
@@ -216,10 +205,10 @@ export const callSaveUpcomingEvent = (data: {
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'saveUpcomingEvent')(data);
 
 export const callRequestUpcomingEventDeletion = (data: {eventId: string}) =>
-    httpsCallable<{eventId: string}, {deleteAt: string}>(getFunctions(), 'requestUpcomingEventDeletion')(data);
+    httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestUpcomingEventDeletion')(data);
 
 export const callCancelUpcomingEventDeletion = (data: {eventId: string}) =>
-    httpsCallable<{eventId: string}, {cancelled: boolean}>(getFunctions(), 'cancelUpcomingEventDeletion')(data);
+    httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelUpcomingEventDeletion')(data);
 
 export const callSetUpcomingEventPublished = (data: {eventId: string; published: boolean}) =>
     httpsCallable<typeof data, {published: boolean}>(getFunctions(), 'setUpcomingEventPublished')(data);
@@ -396,27 +385,30 @@ export const callGetTicketEmailQuota = () =>
         queueCap: number;
     }>(getFunctions(), 'getTicketEmailQuota')({});
 
+export interface EmailQuotaStatus {
+    provider: {
+        name: string;
+        windowKind: 'rolling24h' | 'calendarDay';
+        fromAddress: string;
+    };
+    providerReported: number | null;
+    readingSource: 'live' | 'cached' | 'unavailable';
+    // Stopped at the page budget, so providerReported is a floor.
+    usageTruncated: boolean;
+    sentToday: number;
+    dailyCap: number;
+    confirmed: number;
+    reserved: number;
+    observedAt: string | null;
+    queuedCount: number;
+    oldestQueuedAt: string | null;
+    queueCap: number;
+    drainIntervalMinutes: number;
+    serverNow: string;
+}
+
 export const callGetEmailQuotaStatus = () =>
-    httpsCallable<Record<string, never>, {
-        provider: {
-            name: string;
-            windowKind: 'rolling24h' | 'calendarDay';
-            fromAddress: string;
-        };
-        providerReported: number | null;
-        readingSource: 'live' | 'cached' | 'unavailable';
-        usageTruncated: boolean;
-        sentToday: number;
-        dailyCap: number;
-        confirmed: number;
-        reserved: number;
-        observedAt: string | null;
-        queuedCount: number;
-        oldestQueuedAt: string | null;
-        queueCap: number;
-        drainIntervalMinutes: number;
-        serverNow: string;
-    }>(getFunctions(), 'getEmailQuotaStatus')({});
+    httpsCallable<Record<string, never>, EmailQuotaStatus>(getFunctions(), 'getEmailQuotaStatus')({});
 
 /** What an API key may do. Mirrors API_SCOPES in functions/src/utils/apiKeys.ts. */
 export const API_SCOPES = ['events:read', 'tickets:read', 'tickets:write'] as const;
@@ -432,9 +424,6 @@ export interface ApiKeySummary {
     createdByName: string;
     createdAt: string | null;
     expiresAt: string | null;
-    /** Only on a key revoked before revoking deleted keys; it no longer works. */
-    revokedAt: string | null;
-    revokedByName: string;
     lastUsedAt: string | null;
 }
 
@@ -471,27 +460,24 @@ export const callSavePolicy = (data: {contentEn: string; contentCn: string}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'savePolicy')(data);
 
 export const callSaveSiteConfig = (data: {
-    contactEmail?: string,
-    socialLinks?: SocialLinks,
-    senderPrefix?: string,
-    conEdition?: ConEdition | null
+    contactEmail?: string;
+    socialLinks?: SocialLinks;
+    senderPrefix?: string;
+    conEdition?: ConEdition | null;
 }) =>
-    httpsCallable<typeof data, {saved: boolean, socialLinks?: SocialLinks}>(getFunctions(), 'saveSiteConfig')(data);
+    httpsCallable<typeof data, {saved: boolean; socialLinks?: SocialLinks}>(getFunctions(), 'saveSiteConfig')(data);
 
 export const callSaveConContent = (data: Partial<ConContent>) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveConContent')(data);
 
-export const callSaveTeamMembers = (data: {teamMembers: any[]}) =>
+export const callSaveTeamMembers = (data: {teamMembers: TeamMemberConfig[]}) =>
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'saveTeamMembers')(data);
 
 export const callGetPublicTeamMembers = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getPublicTeamMembers')({});
 
 export const callGetSenderSettings = () =>
-    httpsCallable<Record<string, never>, {
-        domain: string,
-        defaultPrefix: string
-    }>(getFunctions(), 'getSenderSettings')({});
+    httpsCallable<Record<string, never>, {domain: string; defaultPrefix: string}>(getFunctions(), 'getSenderSettings')({});
 
 export const callGetTeamRoster = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getTeamRoster')({});
@@ -697,7 +683,7 @@ export const callUpdatePassportEmailTemplate = (data: {subject: string; bodyHtml
     httpsCallable<typeof data, {saved: boolean}>(getFunctions(), 'updatePassportEmailTemplate')(data);
 
 export const callGetPublicProfile = (data: {uid: string}) =>
-    httpsCallable<{uid: string}, {
+    httpsCallable<typeof data, {
         displayName: string; photoURL: string; bannerURL: string; joinedAt: string;
         attendedEvents: string[]; eventStaffEvents: string[];
         badges: string[];
@@ -725,91 +711,58 @@ const readFileAsBase64 = (file: File) => new Promise<string>((resolve, reject) =
     reader.readAsDataURL(file);
 });
 
-export const callUploadAdminImage = async (file: File, storagePath: string): Promise<string> => {
-    const base64 = await readFileAsBase64(file);
-    const result = await httpsCallable<
-        {path: string; data: string; contentType: string},
-        {url: string}
-    >(getFunctions(), 'uploadAdminImage')({
-        path: storagePath,
-        data: base64,
+/** Sends `file` to an upload callable alongside `fields`, resolving to the stored file's URL. */
+const uploadFile = async (name: string, file: File, fields: Record<string, string | undefined> = {}) => {
+    const data = await readFileAsBase64(file);
+    const result = await httpsCallable<Record<string, string | undefined>, {url: string}>(getFunctions(), name)({
+        ...fields,
+        data,
         contentType: file.type,
     });
     return result.data.url;
 };
 
+export const callUploadAdminImage = (file: File, storagePath: string): Promise<string> =>
+    uploadFile('uploadAdminImage', file, {path: storagePath});
+
 /** The con hero's background loop. `storagePath` must sit under `con/`. */
-export const callUploadConVideo = async (file: File, storagePath: string): Promise<string> => {
-    const base64 = await readFileAsBase64(file);
-    const result = await httpsCallable<
-        {path: string; data: string; contentType: string},
-        {url: string}
-    >(getFunctions(), 'uploadConVideo')({
-        path: storagePath,
-        data: base64,
-        contentType: file.type,
-    });
-    return result.data.url;
-};
+export const callUploadConVideo = (file: File, storagePath: string): Promise<string> =>
+    uploadFile('uploadConVideo', file, {path: storagePath});
 
 export const callGetUploadLimits = () =>
     httpsCallable<Record<string, never>, UploadLimits>(getFunctions(), 'getUploadLimits')({});
 
 export const callUpdateDisplayName = (data: {displayName: string; targetUid?: string}) =>
-    httpsCallable<{displayName: string; targetUid?: string}, {displayName: string}>(
-        getFunctions(), 'updateDisplayName'
-    )(data);
+    httpsCallable<typeof data, {displayName: string}>(getFunctions(), 'updateDisplayName')(data);
 
 export const callDeleteAvatar = (data: {targetUid?: string} = {}) =>
-    httpsCallable<{targetUid?: string}, {photoURL: string}>(getFunctions(), 'deleteAvatar')(data);
+    httpsCallable<typeof data, {photoURL: string}>(getFunctions(), 'deleteAvatar')(data);
 
 export const callRequestAccountDeletion = (data: {targetUid?: string} = {}) =>
-    httpsCallable<{targetUid?: string}, {deleteAt: string}>(
-        getFunctions(), 'requestAccountDeletion'
-    )(data);
+    httpsCallable<typeof data, {deleteAt: string}>(getFunctions(), 'requestAccountDeletion')(data);
 
 export const callCancelAccountDeletion = (data: {targetUid?: string} = {}) =>
-    httpsCallable<{targetUid?: string}, {cancelled: boolean}>(
-        getFunctions(), 'cancelAccountDeletion'
-    )(data);
+    httpsCallable<typeof data, {cancelled: boolean}>(getFunctions(), 'cancelAccountDeletion')(data);
 
-export const callUploadAvatar = async (file: File, targetUid?: string): Promise<string> => {
-    const base64 = await readFileAsBase64(file);
-    const result = await httpsCallable<
-        {data: string; contentType: string; targetUid?: string},
-        {url: string}
-    >(getFunctions(), 'uploadAvatar')({
-        data: base64,
-        contentType: file.type,
-        targetUid,
-    });
-    return result.data.url;
-};
+export const callUploadAvatar = (file: File, targetUid?: string): Promise<string> =>
+    uploadFile('uploadAvatar', file, {targetUid});
 
 // Your own banner only — unlike the avatar, there is no admin path to set one.
-export const callUploadBanner = async (file: File): Promise<string> => {
-    const base64 = await readFileAsBase64(file);
-    const result = await httpsCallable<
-        {data: string; contentType: string},
-        {url: string}
-    >(getFunctions(), 'uploadBanner')({
-        data: base64,
-        contentType: file.type,
-    });
-    return result.data.url;
-};
+export const callUploadBanner = (file: File): Promise<string> => uploadFile('uploadBanner', file);
 
 // No targetUid removes your own; an admin passes one to take down someone else's.
 export const callDeleteBanner = (data: {targetUid?: string} = {}) =>
-    httpsCallable<{targetUid?: string}, {deleted: boolean}>(getFunctions(), 'deleteBanner')(data);
+    httpsCallable<typeof data, {deleted: boolean}>(getFunctions(), 'deleteBanner')(data);
 
-export const functionsErrorCode = (err: unknown): string | null => {
+export const functionsErrorDetails = <T = unknown>(err: unknown): T | null => {
     if (err instanceof FirebaseError && "details" in err) {
-        const d = (err as FunctionsError).details as {code?: string} | undefined;
-        return d?.code ?? null;
+        return ((err as FunctionsError).details as T | undefined) ?? null;
     }
     return null;
 };
+
+export const functionsErrorCode = (err: unknown): string | null =>
+    functionsErrorDetails<{code?: string}>(err)?.code ?? null;
 
 // The code to show in a message: the server's own when it sent one, else the
 // SDK's, such as "functions/internal" for a call that never reached the function
@@ -824,12 +777,9 @@ export const errorSuffix = (err: unknown, isEnglish: boolean): string => {
     return isEnglish ? ` (${code})` : `（${code}）`;
 };
 
-export const functionsErrorDetails = <T = unknown>(err: unknown): T | null => {
-    if (err instanceof FirebaseError && "details" in err) {
-        return ((err as FunctionsError).details as T | undefined) ?? null;
-    }
-    return null;
-};
+/** The error's own message when it has one, else `fallback`. */
+export const errorMessage = (err: unknown, fallback: string): string =>
+    err instanceof Error && err.message ? err.message : fallback;
 
 const googleProvider = new GoogleAuthProvider();
 // Always show the account chooser: signOut() doesn't end the browser's Google

@@ -1,20 +1,24 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
-import type { User } from 'firebase/auth';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveBadge, callUploadAdminImage } from '~/lib/firebase';
-import { isValidHttpUrl } from '~/lib/urls';
-import type { BadgeDef } from './types';
+import type { BadgeDef } from '~/lib/badges';
 import { AccountPicker } from './AccountPicker';
 import { BilingualFormField } from './BilingualFormField';
 import { ImageUploadField } from './ImageUploadField';
-import { BadgeDetailView, type BadgeForm, emptyBadgeForm } from './BadgeDetailView';
+import {
+    badgeCreatorLinkValid,
+    BadgeDetailView,
+    type BadgeForm,
+    badgeFormFields,
+    emptyBadgeForm,
+} from './BadgeDetailView';
+import type { ShowToast } from './utils';
 
 interface BadgesTabProps {
     badgeDefs: BadgeDef[];
     setBadgeDefs: React.Dispatch<React.SetStateAction<BadgeDef[]>>;
-    user: User;
     onLookupUser: (uid: string) => void;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 
@@ -25,7 +29,6 @@ export interface BadgesTabHandle {
 export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                                                                           badgeDefs,
                                                                           setBadgeDefs,
-                                                                          user,
                                                                           onLookupUser,
                                                                           showToast,
                                                                           readOnly = false,
@@ -47,8 +50,7 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
     }));
 
     const createBadgeDef = async () => {
-        const creatorLink = createForm.creatorUser ? '' : createForm.createdByLink.trim();
-        if (creatorLink && !isValidHttpUrl(creatorLink)) {
+        if (!badgeCreatorLinkValid(createForm)) {
             showToast(isEnglish ? 'Creator link must be a valid URL (http/https).' : '创建者链接必须是有效的网址（http/https）。', 'error');
             return;
         }
@@ -60,32 +62,9 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 imageUrl = await callUploadAdminImage(createForm.image, `badges/${imageId}.webp`);
             }
 
-            const creatorUid = createForm.creatorUser?.uid ?? '';
-            const creatorName = createForm.creatorUser?.displayName ?? createForm.createdByName.trim();
-
-            const result = await callSaveBadge({
-                name: createForm.name.trim(),
-                nameCn: createForm.nameCn.trim(),
-                description: createForm.description.trim(),
-                descriptionCn: createForm.descriptionCn.trim(),
-                imageUrl,
-                createdByUid: creatorUid,
-                createdByName: creatorName,
-                createdByLink: creatorLink,
-            });
-
-            setBadgeDefs(prev => [...prev, {
-                id: result.data.badgeId,
-                name: createForm.name.trim(),
-                nameCn: createForm.nameCn.trim(),
-                description: createForm.description.trim(),
-                descriptionCn: createForm.descriptionCn.trim(),
-                imageUrl,
-                createdByUid: creatorUid,
-                createdByName: creatorName,
-                createdByLink: creatorLink,
-                deleteAt: null,
-            }]);
+            const fields = badgeFormFields(createForm, imageUrl);
+            const result = await callSaveBadge(fields);
+            setBadgeDefs(prev => [...prev, {id: result.data.badgeId, ...fields, deleteAt: null}]);
 
             resetCreateForm();
             showToast(isEnglish ? 'Badge created.' : '徽章已创建。', 'success');
@@ -113,7 +92,6 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
                 badgeDef={selectedBadgeDef}
                 onBack={() => setSelectedBadgeDef(null)}
                 onUpdateBadgeDef={handleUpdateBadgeDef}
-                user={user}
                 onLookupUser={onLookupUser}
                 showToast={showToast}
                 readOnly={readOnly}

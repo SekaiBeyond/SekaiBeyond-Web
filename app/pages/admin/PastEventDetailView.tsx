@@ -7,7 +7,7 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Venue } from '~/lib/venues';
 import { eventLocationDisplay } from '~/lib/venues';
 import type { UserRecord } from './types';
-import { fetchEventAttendees, fetchEventStaffCount, pastEventHasTickets } from './utils';
+import { fetchEventAttendees, fetchEventStaffCount, type ShowToast } from './utils';
 import { ClaimCodeSection } from './ClaimCodeSection';
 import { EventStaffSection } from './EventStaffSection';
 import { PastEventAttendeesSection } from './PastEventAttendeesSection';
@@ -24,7 +24,7 @@ interface PastEventDetailViewProps {
     tags: Tag[];
     venues: Venue[];
     readOnly?: boolean;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     refreshEvents: () => Promise<void>;
     onBack: () => void;
     onEdit: (event: PastEvent) => void;
@@ -76,7 +76,6 @@ export const PastEventDetailView = ({
         event.paid ? 'tickets' : 'attendees',
     );
     const [staffCount, setStaffCount] = useState<number | null>(null);
-    const [isPaidEvent, setIsPaidEvent] = useState(event.paid === true);
 
     const {deletionBusyId, requestDeleteEvent, cancelDeleteEvent, togglePublish} = useEventLifecycle({
         requestDeletion: callRequestEventDeletion,
@@ -104,22 +103,7 @@ export const PastEventDetailView = ({
         let active = true;
 
         const init = async () => {
-            let paid = event.paid === true;
-            if (!paid) {
-                // No `paid` flag on the doc: probe for ticket attendees instead.
-                try {
-                    paid = await pastEventHasTickets(event.id);
-                    if (!active) return;
-                    if (paid) {
-                        setIsPaidEvent(true);
-                        setEventSubTab('tickets');
-                    }
-                } catch {
-                    /* Non-fatal — fall back to the free attendee view. */
-                }
-            }
-
-            if (!paid) {
+            if (!event.paid) {
                 setSearching(true);
                 try {
                     const attendees = await fetchEventAttendees(event.id);
@@ -197,7 +181,7 @@ export const PastEventDetailView = ({
             )}
             <PendingDeletionNote deleteAt={event.deleteAt}/>
             <div className="admin-sub-tabs">
-                {isPaidEvent ? (
+                {event.paid ? (
                     <button
                         className={`admin-sub-tab ${eventSubTab === 'tickets' ? 'admin-sub-tab-active' : ''}`}
                         onClick={() => setEventSubTab('tickets')}
@@ -226,7 +210,7 @@ export const PastEventDetailView = ({
                 </button>
             </div>
 
-            {isPaidEvent && eventSubTab === 'tickets' && (
+            {event.paid && eventSubTab === 'tickets' && (
                 // Read-only: copied under pastEvents on archive, and the event
                 // is over.
                 <TicketsSubtab
@@ -238,7 +222,7 @@ export const PastEventDetailView = ({
                 />
             )}
 
-            {!isPaidEvent && eventSubTab === 'attendees' && (
+            {!event.paid && eventSubTab === 'attendees' && (
                 <PastEventAttendeesSection
                     eventId={event.id}
                     attendees={eventAttendees}

@@ -39,12 +39,8 @@ const SCOPE_LABELS: Record<ApiScope, {en: string; zh: string; descEn: string; de
 const EXPIRY_OPTIONS = [30, 90, 365, 730];
 const DEFAULT_EXPIRY_DAYS = 365;
 
-type KeyStatus = 'active' | 'expired' | 'revoked';
-
-const keyStatus = (k: ApiKeySummary, now: number): KeyStatus =>
-    k.revokedAt ? 'revoked'
-        : k.expiresAt && Date.parse(k.expiresAt) <= now ? 'expired'
-            : 'active';
+const isExpired = (k: ApiKeySummary, now: number): boolean =>
+    !!k.expiresAt && Date.parse(k.expiresAt) <= now;
 
 export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
     const {isEnglish} = useLanguage();
@@ -137,8 +133,8 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
         }
     };
 
-    // Revoking deletes the key. One that no longer works (expired, or revoked
-    // before revoking deleted) is only deleted.
+    // Revoking deletes the key. An expired one, which no longer works, is only
+    // deleted.
     const revokeKey = async (k: ApiKeySummary, active: boolean) => {
         if (!confirm(active
             ? (isEnglish
@@ -329,28 +325,24 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
             {keys && keys.length > 0 && (
                 <div className="admin-api-key-list">
                     {keys.map(k => {
-                        const status = keyStatus(k, serverNow);
+                        const expired = isExpired(k, serverNow);
                         return (
-                            <div key={k.id} className={`admin-api-key-card${status === 'active' ? '' : ' admin-api-key-card--inactive'}`}>
+                            <div key={k.id} className={`admin-api-key-card${expired ? ' admin-api-key-card--inactive' : ''}`}>
                                 <div className="admin-api-key-head">
                                     <span className="admin-api-key-name">{k.name}</span>
                                     <code className="record-code">{k.hint}</code>
-                                    <span className={`admin-tickets-tag ${status === 'active'
-                                        ? 'admin-tickets-tag-fresh'
-                                        : status === 'revoked' ? 'admin-tickets-tag-voided' : 'admin-tickets-tag-unlinked'}`}>
-                                        {status === 'active'
-                                            ? (isEnglish ? 'Active' : '有效')
-                                            : status === 'revoked'
-                                                ? (isEnglish ? 'Revoked' : '已吊销')
-                                                : (isEnglish ? 'Expired' : '已过期')}
+                                    <span className={`admin-tickets-tag ${expired ? 'admin-tickets-tag-unlinked' : 'admin-tickets-tag-fresh'}`}>
+                                        {expired
+                                            ? (isEnglish ? 'Expired' : '已过期')
+                                            : (isEnglish ? 'Active' : '有效')}
                                     </span>
                                     <button
                                         className="admin-toggle-btn admin-toggle-revoke admin-btn-sm admin-api-key-revoke"
-                                        onClick={() => void revokeKey(k, status === 'active')}
+                                        onClick={() => void revokeKey(k, !expired)}
                                         disabled={revokingId === k.id}
                                         type="button"
                                     >
-                                        {status === 'active'
+                                        {!expired
                                             ? (revokingId === k.id
                                                 ? (isEnglish ? 'Revoking...' : '吊销中...')
                                                 : (isEnglish ? 'Revoke' : '吊销'))
@@ -377,19 +369,11 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                                             ? `Created ${fmtDate(k.createdAt)}${k.createdByName ? ` by ${k.createdByName}` : ''}`
                                             : `${k.createdByName ? `${k.createdByName} ` : ''}创建于 ${fmtDate(k.createdAt)}`}
                                     </span>
-                                    {status === 'revoked' ? (
-                                        <span>
-                                            {isEnglish
-                                                ? `Revoked ${fmtDate(k.revokedAt)}${k.revokedByName ? ` by ${k.revokedByName}` : ''}`
-                                                : `${k.revokedByName ? `${k.revokedByName} ` : ''}吊销于 ${fmtDate(k.revokedAt)}`}
-                                        </span>
-                                    ) : (
-                                        <span>
-                                            {status === 'expired'
-                                                ? (isEnglish ? `Expired ${fmtDate(k.expiresAt)}` : `已于 ${fmtDate(k.expiresAt)} 过期`)
-                                                : (isEnglish ? `Expires ${fmtDate(k.expiresAt)}` : `${fmtDate(k.expiresAt)} 过期`)}
-                                        </span>
-                                    )}
+                                    <span>
+                                        {expired
+                                            ? (isEnglish ? `Expired ${fmtDate(k.expiresAt)}` : `已于 ${fmtDate(k.expiresAt)} 过期`)
+                                            : (isEnglish ? `Expires ${fmtDate(k.expiresAt)}` : `${fmtDate(k.expiresAt)} 过期`)}
+                                    </span>
                                     <span>
                                         {k.lastUsedAt
                                             ? (isEnglish ? `Last used ${fmtDateTime(k.lastUsedAt)}` : `最近使用于 ${fmtDateTime(k.lastUsedAt)}`)

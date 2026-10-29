@@ -15,10 +15,10 @@ import { TeamSection } from './TeamSection';
 import { ConEditionSection } from './ConEditionSection';
 import { SectionNav } from './SectionNav';
 import { isXiaohongshuShareLink, socialLinkInputs, socialLinkPlaceholder, toSocialLink } from './socialLinkInput';
-import { refreshAfterSave } from './utils';
+import { refreshAfterSave, type ShowToast } from './utils';
 
 interface SiteConfigTabProps {
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 

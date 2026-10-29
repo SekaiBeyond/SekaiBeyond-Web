@@ -1,7 +1,6 @@
 import {
     collection,
     type DocumentData,
-    documentId,
     endAt,
     getDocs,
     limit,
@@ -14,8 +13,9 @@ import {
     Timestamp,
     where,
 } from 'firebase/firestore';
+import { getDocsByIds, toDate } from '~/lib/collectionCache';
 import { getFirebaseDb } from '~/lib/firebase';
-import { normalizeGroup, type UserGroup } from '~/components/AuthProvider';
+import { isMembershipActive, normalizeGroup, type UserGroup } from '~/components/AuthProvider';
 import type { UserRecord } from './types';
 import type { ShowToast } from '~/lib/useToasts';
 
@@ -53,11 +53,11 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
         email: data.email ?? '',
         photoURL: data.photoURL ?? '',
         bannerURL: data.bannerURL ?? '',
-        joinedAt: data.joinedAt?.toDate() ?? new Date(),
+        joinedAt: toDate(data.joinedAt) ?? new Date(),
         attendedEvents: data.attendedEvents ?? [],
         badges: data.badges ?? [],
         group: normalizeGroup(data.group),
-        membershipExpiresAt: data.membershipExpiresAt?.toDate() ?? null,
+        membershipExpiresAt: toDate(data.membershipExpiresAt),
         title: data.title ?? '',
         titleCn: data.titleCn ?? '',
         eventStaffEvents: data.eventStaffEvents ?? [],
@@ -70,17 +70,8 @@ export const docToUserRecord = (docSnap: {id: string; data: () => DocumentData})
  * 30-id limit. A uid with no document (a deleted account) is missing from the
  * result, which callers read as deleted.
  */
-export const fetchUsersByUids = async (uids: string[]): Promise<Map<string, UserRecord>> => {
-    const unique = [...new Set(uids)];
-    if (unique.length === 0) return new Map();
-    const users = collection(getFirebaseDb(), 'users');
-    const chunks: string[][] = [];
-    for (let i = 0; i < unique.length; i += 30) chunks.push(unique.slice(i, i + 30));
-    const snapshots = await Promise.all(
-        chunks.map(chunk => getDocs(query(users, where(documentId(), 'in', chunk)))),
-    );
-    return new Map(snapshots.flatMap(snap => snap.docs.map(d => [d.id, docToUserRecord(d)] as const)));
-};
+export const fetchUsersByUids = async (uids: string[]): Promise<Map<string, UserRecord>> =>
+    new Map((await getDocsByIds('users', uids)).map(d => [d.id, docToUserRecord(d)]));
 
 // The browsable user list, filtered by role and/or active membership. Members-only
 // orders by membershipExpiresAt, since Firestore's first orderBy must match the
@@ -148,7 +139,7 @@ export const searchUsers = async (
     snaps.forEach(s => s.docs.forEach(d => {
         const r = docToUserRecord(d);
         if (group && r.group !== group) return;
-        if (membersOnly && !(r.membershipExpiresAt && r.membershipExpiresAt.getTime() > Date.now())) return;
+        if (membersOnly && !isMembershipActive(r.membershipExpiresAt)) return;
         deduped.set(r.uid, r);
     }));
     return Array.from(deduped.values());
@@ -166,16 +157,6 @@ export const fetchEventStaffCount = async (eventId: string): Promise<number> => 
     const q = query(collection(db, 'users'), where('eventStaffEvents', 'array-contains', eventId));
     const snapshot = await getDocs(q);
     return snapshot.size;
-};
-
-// Whether an archived event has ticket attendees, which only paid events do; for
-// past-event docs that don't carry the `paid` flag.
-export const pastEventHasTickets = async (eventId: string): Promise<boolean> => {
-    const db = getFirebaseDb();
-    const snapshot = await getDocs(
-        query(collection(db, 'pastEvents', eventId, 'attendees'), limit(1)),
-    );
-    return !snapshot.empty;
 };
 
 export const getClaimUrl = (code: string): string => {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSaveQrCode } from '~/lib/firebase';
+import { callSaveQrCode, errorMessage } from '~/lib/firebase';
 import { useQrCodes } from '~/lib/qrCodes';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { QrDashboard } from './qr/QrDashboard';
@@ -10,11 +10,11 @@ import { QrScanner } from './qr/QrScanner';
 import { QuickQrGenerator } from './qr/QuickQrGenerator';
 import { SocialPlatformsManager } from './qr/SocialPlatformsManager';
 import { buildQrPayload, emptyDraft, QrCodeForm, type QrDraft, } from './qr/QrCodeForm';
-import { refreshAfterSave } from '../utils';
+import { refreshAfterSave, type ShowToast } from '../utils';
 
 interface QrCodesToolProps {
     onBack: () => void;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 
@@ -59,8 +59,8 @@ export const QrCodesTool = ({onBack, showToast, readOnly = false}: QrCodesToolPr
             setSelectedId(res.data.qrId);
             setView('detail');
             showToast(isEnglish ? 'QR code created.' : '二维码已创建。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to create QR code.' : '创建二维码失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to create QR code.' : '创建二维码失败。'), 'error');
         } finally {
             setSaving(false);
         }

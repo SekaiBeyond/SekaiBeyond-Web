@@ -1,16 +1,16 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
-import { createValueCache } from './collectionCache';
+import { createValueCache, toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
 interface Policy {
     contentEn: string;
     contentCn: string;
-    updatedAt?: Date;
+    updatedAt: Date | null;
 }
 
-const EMPTY_POLICY: Policy = {contentEn: '', contentCn: ''};
+const EMPTY_POLICY: Policy = {contentEn: '', contentCn: '', updatedAt: null};
 
 const cache = createValueCache<Policy>('policy', async () => {
     const db = getFirebaseDb();
@@ -19,7 +19,7 @@ const cache = createValueCache<Policy>('policy', async () => {
     return {
         contentEn: data?.contentEn ?? '',
         contentCn: data?.contentCn ?? '',
-        updatedAt: data?.updatedAt?.toDate?.(),
+        updatedAt: toDate(data?.updatedAt),
     };
 }, EMPTY_POLICY);
 

@@ -3,6 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { QrCodesTool } from './tools/QrCodesTool';
 import { EmailQuotaTool } from './tools/EmailQuotaTool';
 import { ApiKeysTool } from './tools/ApiKeysTool';
+import type { ShowToast } from './utils';
 
 type ToolId = 'qr-codes' | 'email-quota' | 'api-keys';
 
@@ -43,7 +44,7 @@ const TOOLS: ToolDef[] = [
 ];
 
 interface ToolsTabProps {
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 

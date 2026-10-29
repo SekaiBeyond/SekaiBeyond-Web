@@ -100,8 +100,6 @@ export const listApiKeys = onCall({maxInstances: 10}, async (request) => {
             createdByName: data.createdByName ?? "",
             createdAt: isoOrNull(data.createdAt),
             expiresAt: isoOrNull(data.expiresAt),
-            revokedAt: isoOrNull(data.revokedAt),
-            revokedByName: data.revokedByName ?? "",
             lastUsedAt: isoOrNull(data.lastUsedAt),
         };
     });
