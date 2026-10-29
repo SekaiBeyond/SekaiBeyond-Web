@@ -31,7 +31,6 @@ const TOOLS: ToolDef[] = [
         titleCn: '邮件额度',
         description: 'Check how much outbound email capacity is left before sends start queueing, and how deep the queue is.',
         descriptionCn: '查看外发邮件的剩余额度（超出后邮件将进入队列），以及当前排队数量。',
-        adminOnly: true,
     },
     {
         id: 'api-keys',

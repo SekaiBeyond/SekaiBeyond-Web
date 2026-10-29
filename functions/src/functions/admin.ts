@@ -1168,14 +1168,14 @@ export const getSenderSettings = onCall({maxInstances: 10}, async (request) => {
     return {domain: SENDER_DOMAIN, defaultPrefix: DEFAULT_SENDER_PREFIX};
 });
 
-// Outbound-email capacity for the Email Quota tool. Core-staff+, like the sends
-// it describes.
+// Outbound-email capacity for the Email Quota tool. Staff+: it only reads, though
+// the sends it describes are core-staff+.
 export const getEmailQuotaStatus = onCall({
     maxInstances: 5,
     secrets: [RESEND_API_KEY],
 }, async (request) => {
     const uid = await requireAuth(request, "staff");
-    await requireAdmin(uid);
+    await requireStaff(uid);
 
     const usage = await syncProviderUsage();
 
