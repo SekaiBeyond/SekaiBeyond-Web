@@ -14,7 +14,7 @@ Issues the tickets for an order once the buyer has paid. They go on the event's 
 
 | Name | Type | Description |
 |---|---|---|
-| `eventId` | string | The event's ID. It must be on sale (`onSale: true` on the [Event](event.md)). |
+| `eventId` | string | The event's ID. It must be on sale (`onSale: true` on the [Event](event.md)). An unpublished event can be, so a test event can take orders without showing on the site. |
 
 ## Body
 
@@ -23,7 +23,7 @@ Issues the tickets for an order once the buyer has paid. They go on the event's 
 | `orderId` | string | Yes | Your own order number, 1–64 letters, digits, `-` and `_`. It names the order from then on. |
 | `buyer` | object | Yes | Who bought the tickets: |
 | `buyer.name` | string | Yes | Their name, at most 100 characters. Door staff see it. |
-| `buyer.email` | string | No | Their email. With it, the tickets also show in that person's My Tickets on the site, and a scan credits their account. |
+| `buyer.email` | string | No | Their email. With it, the tickets also show in that person's My Tickets on the site once the event is published, and a scan credits their account. |
 | `tickets` | object[] | Yes | One or more lines, 1–50 tickets in all: |
 | `tickets[].type` | string | Yes | `normal`, `early-bird`, `student`, `early-bird-student` or `vip`. Comp, guest and vendor tickets are given out by staff and can't be sold. |
 | `tickets[].count` | number | Yes | How many of that type, at least 1. |
@@ -42,11 +42,10 @@ Issues the tickets for an order once the buyer has paid. They go on the event's 
 | 409 | `order-conflict` | This `orderId` is already taken by an order with different contents. |
 | 422 | `event-archived` | The event has been archived. |
 | 422 | `event-not-paid` | The event is free, so it has no tickets. |
-| 422 | `event-not-published` | The event isn't published. |
 | 422 | `event-ended` | The event has ended. |
 | 422 | `unknown-ticket-type` | A line's `type` isn't one that can be sold. |
 
-An event that fails more than one of the four event checks gets the first one listed. A malformed body is reported before anything about the event. Plus the ones every endpoint can return: see [Errors](../api.md#errors).
+An event that fails more than one of the three event checks gets the first one listed. A malformed body is reported before anything about the event. Plus the ones every endpoint can return: see [Errors](../api.md#errors).
 
 ## Example
 

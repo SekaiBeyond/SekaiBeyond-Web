@@ -15,7 +15,7 @@ The two kinds share some fields and differ in the rest, the same way the site st
 |---|---|---|
 | `id` | string | The event's ID. It doesn't change when the event is archived. |
 | `archived` | boolean | Whether the event has been archived. |
-| `onSale` | boolean | Whether an order can be placed for it now. True only for an unarchived event that's paid, published and not yet ended. |
+| `onSale` | boolean | Whether an order can be placed for it now. True only for an unarchived event that's paid and not yet ended. An unpublished event can be on sale, so check `published` too before offering it to the public. |
 | `title` | string | English title. |
 | `titleCn` | string | Chinese title. When it's `""`, the site shows `title` instead. |
 | `description` | string | English description, plain text. It may contain line breaks. |

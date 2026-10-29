@@ -126,13 +126,14 @@ async function findEvent(eventId: string): Promise<FoundEvent> {
 
 /**
  * Why an order can't be placed for it now, if it can't: what `onSale` sums up.
- * Archived tickets are read-only, as everywhere else.
+ * Archived tickets are read-only, as everywhere else. Unpublished events sell
+ * too, so a test event can take orders without showing on the site: the
+ * seller filters on `published`, as it does for the listing.
  */
 function whyNotOnSale(event: FoundEvent): ApiError | null {
     const data = event.snap.data()!;
     if (event.archived) return new ApiError(422, "event-archived", "This event has been archived.");
     if (data.paid !== true) return new ApiError(422, "event-not-paid", "This event is free: it has no tickets.");
-    if (data.published !== true) return new ApiError(422, "event-not-published", "This event isn't published.");
     if (!(data.endAt instanceof Timestamp) || data.endAt.toMillis() <= Date.now()) {
         return new ApiError(422, "event-ended", "This event has ended.");
     }
