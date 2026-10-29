@@ -2,7 +2,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "../utils/auth";
-import { deletionExpiresAt } from "../utils/config";
+import { cancelDeletion, type Deletable, requestDeletion } from "../utils/deletion";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
@@ -15,57 +15,17 @@ import {
     validateUrl
 } from "../utils/validation";
 
-export const requestBadgeDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request, "staff");
+const BADGE: Deletable = {
+    collection: "badges",
+    idField: "badgeId",
+    notFound: "Badge not found.",
+    requested: "badge-deletion-requested",
+    cancelled: "badge-deletion-cancelled",
+    describe: (badgeId, data) => ({badgeId, badgeName: data.name ?? badgeId}),
+};
 
-    const badgeId = validateDocId((request.data as {badgeId?: string})?.badgeId, "badgeId");
-    const deleteAt = deletionExpiresAt();
-
-    await adminTransaction(uid, async (txn, callerSnap) => {
-        const badgeSnap = await txn.get(db.collection("badges").doc(badgeId));
-        if (!badgeSnap.exists) throw new HttpsError("not-found", "Badge not found.");
-        const data = badgeSnap.data()!;
-
-        if (data.deleteAt && data.deleteAt.toMillis() > Date.now()) {
-            throw new HttpsError("already-exists", "deletion-already-pending");
-        }
-
-        txn.update(db.collection("badges").doc(badgeId), {deleteAt});
-        txn.set(recordRef(), recordDoc("badge-deletion-requested", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            badgeId,
-            badgeName: data.name ?? badgeId,
-        }));
-    });
-
-    return {deleteAt: deleteAt.toDate().toISOString()};
-});
-export const cancelBadgeDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request, "staff");
-
-    const badgeId = validateDocId((request.data as {badgeId?: string})?.badgeId, "badgeId");
-
-    await adminTransaction(uid, async (txn, callerSnap) => {
-        const badgeSnap = await txn.get(db.collection("badges").doc(badgeId));
-        if (!badgeSnap.exists) throw new HttpsError("not-found", "Badge not found.");
-        const data = badgeSnap.data()!;
-
-        if (!data.deleteAt || data.deleteAt.toMillis() <= Date.now()) {
-            throw new HttpsError("not-found", "No pending deletion.");
-        }
-
-        txn.update(db.collection("badges").doc(badgeId), {deleteAt: FieldValue.delete()});
-        txn.set(recordRef(), recordDoc("badge-deletion-cancelled", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            badgeId,
-            badgeName: data.name ?? badgeId,
-        }));
-    });
-
-    return {cancelled: true};
-});
+export const requestBadgeDeletion = onCall({maxInstances: 10}, request => requestDeletion(request, BADGE));
+export const cancelBadgeDeletion = onCall({maxInstances: 10}, request => cancelDeletion(request, BADGE));
 export const onBadgeDeleted = onDocumentDeleted(
     {document: "badges/{badgeId}", maxInstances: 10},
     async (event) => {

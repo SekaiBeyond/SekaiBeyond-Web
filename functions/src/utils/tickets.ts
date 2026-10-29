@@ -32,7 +32,10 @@ export function freshTicket(ticketId: string, type: string): NewTicket {
     };
 }
 
-export function buildFreshTickets(count: number, type = "normal", notes = ""): {tickets: NewTicket[]; ticketIds: string[]} {
+export function buildFreshTickets(count: number, type = "normal", notes = ""): {
+    tickets: NewTicket[];
+    ticketIds: string[]
+} {
     const tickets: NewTicket[] = [];
     const ticketIds: string[] = [];
     for (let i = 0; i < count; i++) {

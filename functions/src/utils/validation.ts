@@ -39,6 +39,12 @@ export function validateEmail(value: unknown, name: string): string {
     return normalized;
 }
 
+/** validateEmail for an address that may be left out: "" when missing or blank. */
+export function validateOptionalEmail(value: unknown, name: string): string {
+    if (value == null || (typeof value === "string" && value.trim() === "")) return "";
+    return validateEmail(value, name);
+}
+
 // The part before the @ on our own domain: letters, digits and single . _ + -
 // between them, narrower than RFC 5322 so every mail system accepts it.
 const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
@@ -62,6 +68,13 @@ export function validateCoordinate(value: unknown, name: string, min: number, ma
     }
     if (value < min || value > max) {
         throw new HttpsError("invalid-argument", `Invalid ${name}: out of range.`);
+    }
+    return value;
+}
+
+export function validateBoolean(value: unknown, name: string): boolean {
+    if (typeof value !== "boolean") {
+        throw new HttpsError("invalid-argument", `${name} must be a boolean.`);
     }
     return value;
 }

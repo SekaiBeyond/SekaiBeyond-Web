@@ -25,9 +25,8 @@ async function checkRateLimit(uid: string, requested?: RateLimitBucket): Promise
     // The staff budget is for staff and above only: anyone else trying a staff
     // call is charged the shared one, as for any other call.
     let bucket = requested;
-    if (bucket === "staff") {
-        const group = normalizeGroup((await db.collection("users").doc(uid).get()).data()?.group);
-        if (group === "user") bucket = undefined;
+    if (bucket === "staff" && !isStaffOrAbove((await db.collection("users").doc(uid).get()).data()?.group)) {
+        bucket = undefined;
     }
     await consumeRateLimit(bucket ? `${uid}_${bucket}` : uid, bucket ? RATE_LIMIT_BUCKETS[bucket] : RATE_LIMIT_MAX);
 }
@@ -87,6 +86,21 @@ export function isValidGroup(raw: unknown): raw is UserGroup {
     return typeof raw === "string" && (USER_GROUPS as readonly string[]).includes(raw);
 }
 
+/** Staff, core-staff or president: anyone above the base group. */
+export function isStaffOrAbove(rawGroup: unknown): boolean {
+    return normalizeGroup(rawGroup) !== "user";
+}
+
+/**
+ * Refuses unless a caller in `callerGroup` may act on a user in
+ * `targetGroup`: the president on anyone, core-staff on MANAGEABLE_GROUPS.
+ */
+export function requireCanManage(callerGroup: unknown, targetGroup: unknown): void {
+    if (callerGroup !== "president" && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetGroup))) {
+        throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
+    }
+}
+
 export async function requireAuth(request: CallableRequest<unknown>, bucket?: RateLimitBucket): Promise<string> {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -97,13 +111,16 @@ export async function requireAuth(request: CallableRequest<unknown>, bucket?: Ra
 }
 
 export async function requireAdmin(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {
-    return db.runTransaction(async (txn) => {
-        const snap = await txn.get(db.collection("users").doc(uid));
-        if (!ADMIN_GROUPS.includes(snap.data()?.group)) {
-            throw new HttpsError("permission-denied", "Insufficient permissions.");
-        }
-        return snap;
-    });
+    return adminTransaction(uid, async (_txn, callerSnap) => callerSnap);
+}
+
+/** The caller's user doc, refused unless they're staff or above. */
+export async function requireStaff(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {
+    const snap = await db.collection("users").doc(uid).get();
+    if (!isStaffOrAbove(snap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    return snap;
 }
 
 export async function adminTransaction<T>(

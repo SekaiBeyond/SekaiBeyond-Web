@@ -1,7 +1,6 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { getDownloadURL, getStorage } from "firebase-admin/storage";
 import { FieldValue } from "firebase-admin/firestore";
-import { adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
+import { adminTransaction, normalizeGroup, requireAdmin, requireAuth, requireStaff } from "../utils/auth";
 import { DEFAULT_SENDER_PREFIX, RESEND_QUEUE_CAP, SENDER_DOMAIN } from "../utils/config";
 import { db } from "../utils/firebase";
 import { EMAIL_PROVIDER, syncProviderUsage } from "../utils/emailProvider";
@@ -10,16 +9,16 @@ import { getSenderAddress, RESEND_API_KEY } from "../utils/resendClient";
 import { DRAIN_INTERVAL_MINUTES, getScheduledMailQueueStatus } from "./scheduledMail";
 import { recordDoc, recordRef } from "../utils/records";
 import {
+    decodeUpload,
     deleteStorageFile,
     detectImageMime,
     detectVideoMime,
     extractStoragePath,
     logStorageCleanupError,
-    MAX_UPLOAD_SIZE,
     MAX_UPLOAD_SIZE_MB,
-    MAX_VIDEO_UPLOAD_SIZE,
     MAX_VIDEO_UPLOAD_SIZE_MB,
     requireNewlyLinkedFilesExist,
+    saveUpload,
     validateStoragePath
 } from "../utils/storage";
 import {
@@ -40,43 +39,24 @@ export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
 
-    const input = request.data as {
+    const {path, data: dataBase64, contentType} = request.data as {
         path?: string;
         data?: string;
         contentType?: string;
     };
-
-    const path = input.path;
-    const dataBase64 = input.data;
-    const contentType = input.contentType;
 
     if (!path || !dataBase64 || !contentType) {
         throw new HttpsError("invalid-argument", "Missing path, data, or contentType.");
     }
     validateStoragePath(path);
 
-    if (contentType !== "image/webp") {
-        throw new HttpsError("invalid-argument", "Only image/webp is allowed.");
-    }
-
-    const buffer = Buffer.from(dataBase64, "base64");
-    if (buffer.length > MAX_UPLOAD_SIZE) {
-        throw new HttpsError("invalid-argument", `Image exceeds ${MAX_UPLOAD_SIZE_MB}MB limit.`);
-    }
-
-    const detectedMime = detectImageMime(buffer);
-    if (!detectedMime || detectedMime !== contentType) {
-        throw new HttpsError("invalid-argument", "File content does not match claimed content type.");
-    }
-
-    const bucket = getStorage().bucket();
-    const file = bucket.file(path);
-    await file.save(buffer, {
-        metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
+    const buffer = decodeUpload(dataBase64, contentType, {
+        types: ["image/webp"],
+        maxMb: MAX_UPLOAD_SIZE_MB,
+        kind: "Image",
+        detect: detectImageMime,
     });
-
-    const downloadUrl = await getDownloadURL(file);
-    return {url: downloadUrl};
+    return {url: await saveUpload(path, buffer, contentType)};
 });
 
 /**
@@ -88,15 +68,11 @@ export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async 
     const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
 
-    const input = request.data as {
+    const {path, data: dataBase64, contentType} = request.data as {
         path?: string;
         data?: string;
         contentType?: string;
     };
-
-    const path = input.path;
-    const dataBase64 = input.data;
-    const contentType = input.contentType;
 
     if (!path || !dataBase64 || !contentType) {
         throw new HttpsError("invalid-argument", "Missing path, data, or contentType.");
@@ -106,30 +82,15 @@ export const uploadConVideo = onCall({maxInstances: 5, memory: "512MiB"}, async 
         throw new HttpsError("invalid-argument", "Con videos must be stored under con/.");
     }
 
-    // WebM only: the hero lists a single WebM source, so an MP4 stored here
-    // would be refused by every browser.
-    if (contentType !== "video/webm") {
-        throw new HttpsError("invalid-argument", "Only video/webm is allowed.");
-    }
-
-    const buffer = Buffer.from(dataBase64, "base64");
-    if (buffer.length > MAX_VIDEO_UPLOAD_SIZE) {
-        throw new HttpsError("invalid-argument", `Video exceeds ${MAX_VIDEO_UPLOAD_SIZE_MB}MB limit.`);
-    }
-
-    const detectedMime = detectVideoMime(buffer);
-    if (!detectedMime || detectedMime !== contentType) {
-        throw new HttpsError("invalid-argument", "File content does not match claimed content type.");
-    }
-
-    const bucket = getStorage().bucket();
-    const file = bucket.file(path);
-    await file.save(buffer, {
-        metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
+    const buffer = decodeUpload(dataBase64, contentType, {
+        // WebM only: the hero lists a single WebM source, so an MP4 stored here
+        // would be refused by every browser.
+        types: ["video/webm"],
+        maxMb: MAX_VIDEO_UPLOAD_SIZE_MB,
+        kind: "Video",
+        detect: detectVideoMime,
     });
-
-    const downloadUrl = await getDownloadURL(file);
-    return {url: downloadUrl};
+    return {url: await saveUpload(path, buffer, contentType)};
 });
 
 // The upload caps, for the web app's early size check and "up to N MB" hints,
@@ -419,6 +380,13 @@ const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const CON_HALL_TABLES = ([["A", 14], ["B", 14], ["C", 14], ["D", 14], ["E", 3]] as const)
     .flatMap(([row, count]) => Array.from({length: count}, (_, i) => `${row}${i + 1}`));
 
+/** A request's nested object, or {} for anything that isn't one. */
+const asRecord = (raw: unknown): Record<string, unknown> =>
+    raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+
+/** Whether an optional field was filled in. */
+const isFilled = (value: unknown): boolean => value !== undefined && value !== null && value !== "";
+
 interface LocalizedText {
     en: string;
     zh: string;
@@ -429,7 +397,7 @@ interface LocalizedText {
  * than `field`/`fieldCn` columns.
  */
 function validateLocalized(raw: unknown, name: string, maxLen: number, required = false): LocalizedText {
-    const value = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const value = asRecord(raw);
     return {
         en: sanitizeDisplayText(validateStr(value.en, `${name} (English)`, maxLen, required)),
         zh: sanitizeDisplayText(validateStr(value.zh, `${name} (Chinese)`, maxLen, required)),
@@ -443,7 +411,7 @@ function validateConArray(raw: unknown, name: string, maxItems: number): Record<
     if (raw.length > maxItems) {
         throw new HttpsError("invalid-argument", `${name} has too many items (max ${maxItems}).`);
     }
-    return raw.map(item => (item && typeof item === "object" ? item as Record<string, unknown> : {}));
+    return raw.map(asRecord);
 }
 
 function validateConTime(raw: unknown, name: string): string {
@@ -489,7 +457,7 @@ function validateConLink(raw: unknown, name: string): string {
  * value would republish the page.
  */
 function buildConSettings(raw: unknown) {
-    const s = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const s = asRecord(raw);
     if (typeof s.published !== "boolean") {
         throw new HttpsError("invalid-argument", "published must be true or false.");
     }
@@ -497,7 +465,7 @@ function buildConSettings(raw: unknown) {
 }
 
 function buildConEvent(raw: unknown) {
-    const e = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const e = asRecord(raw);
 
     // The con's year, hours, venue and ticket link are its upcoming event's. That
     // the event exists is checked inside saveConContent's transaction.
@@ -517,7 +485,7 @@ function buildConEvent(raw: unknown) {
  * silently drops the source.
  */
 function buildConHeroVideo(raw: unknown) {
-    const v = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const v = asRecord(raw);
     const webm = validateConAsset(v.webm, "hero webm");
     if (webm && !/\.webm(\?|$)/i.test(webm)) {
         throw new HttpsError("invalid-argument", "The clip must be a .webm file.");
@@ -571,8 +539,8 @@ function buildConRooms(raw: unknown) {
 function buildConSchedule(raw: unknown) {
     return validateConArray(raw, "schedule", CON_LIMITS.scheduleItems).map(item => {
         // Both times absent means TBA; exactly one is a half-filled form.
-        const hasStart = item.start !== undefined && item.start !== null && item.start !== "";
-        const hasEnd = item.end !== undefined && item.end !== null && item.end !== "";
+        const hasStart = isFilled(item.start);
+        const hasEnd = isFilled(item.end);
         if (hasStart !== hasEnd) {
             throw new HttpsError(
                 "invalid-argument",
@@ -613,9 +581,9 @@ function buildConSchedule(raw: unknown) {
  * poster is optional.
  */
 function buildConCafe(raw: unknown) {
-    const c = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-    const hasStart = c.start !== undefined && c.start !== null && c.start !== "";
-    const hasEnd = c.end !== undefined && c.end !== null && c.end !== "";
+    const c = asRecord(raw);
+    const hasStart = isFilled(c.start);
+    const hasEnd = isFilled(c.end);
     if (hasStart !== hasEnd) {
         throw new HttpsError("invalid-argument", "The café needs both an opening and a closing time, or neither.");
     }
@@ -641,8 +609,8 @@ function buildConCafe(raw: unknown) {
 }
 
 function buildConVendors(raw: unknown) {
-    const v = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-    const cta = v.cta && typeof v.cta === "object" ? v.cta as Record<string, unknown> : {};
+    const v = asRecord(raw);
+    const cta = asRecord(v.cta);
     const seen = new Set<string>();
     const tables = validateConArray(v.tables, "vendor tables", CON_HALL_TABLES.length).map(vendor => {
         const table = typeof vendor.table === "string" ? vendor.table : "";
@@ -691,7 +659,7 @@ function buildConTickets(raw: unknown) {
         const price = validateConPrice(tier.price, `${name.en} price`);
         let earlyBird: {price: number; endsAt: string} | undefined;
         if (hasEarlyBird) {
-            const e = typeof tier.earlyBird === "object" ? tier.earlyBird as Record<string, unknown> : {};
+            const e = asRecord(tier.earlyBird);
             earlyBird = {
                 price: validateConPrice(e.price, `${name.en} early bird price`),
                 endsAt: requireISODate(e.endsAt, `${name.en} early bird end`),
@@ -720,7 +688,7 @@ function buildConTickets(raw: unknown) {
 }
 
 function buildConTicketFee(raw: unknown) {
-    const f = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const f = asRecord(raw);
     const percent = f.percent;
     if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 100) {
         throw new HttpsError("invalid-argument", "Invalid fee percent: must be from 0 to 100.");
@@ -743,7 +711,7 @@ function validateConDay(raw: unknown, name: string): string {
 }
 
 function buildConInPersonSales(raw: unknown) {
-    const s = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const s = asRecord(raw);
     const sessions = validateConArray(s.sessions, "in-person sessions", CON_LIMITS.inPersonSessions)
         .map(session => {
             const date = validateConDay(session.date, "in-person sale date");
@@ -1185,11 +1153,7 @@ export const getPublicTeamMembers = onCall({maxInstances: 20}, async () => {
 // Staff+, matching who can view Site Config; saveTeamMembers stays core-staff+.
 export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
-    const callerSnap = await db.collection("users").doc(uid).get();
-    const group = callerSnap.data()?.group;
-    if (!["staff", "core-staff", "president"].includes(group)) {
-        throw new HttpsError("permission-denied", "Insufficient permissions.");
-    }
+    await requireStaff(uid);
 
     const rosterSnap = await db.collection("teamRoster").doc("main").get();
     return {teamMembers: rosterSnap.data()?.teamMembers ?? []};
@@ -1200,10 +1164,7 @@ export const getTeamRoster = onCall({maxInstances: 10}, async (request) => {
 // getTeamRoster.
 export const getSenderSettings = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
-    const callerSnap = await db.collection("users").doc(uid).get();
-    if (!["staff", "core-staff", "president"].includes(callerSnap.data()?.group)) {
-        throw new HttpsError("permission-denied", "Insufficient permissions.");
-    }
+    await requireStaff(uid);
     return {domain: SENDER_DOMAIN, defaultPrefix: DEFAULT_SENDER_PREFIX};
 });
 

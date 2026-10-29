@@ -16,7 +16,13 @@ import {
     PASSPORT_TERM_DAYS,
     readMintingDesign,
 } from "../utils/passports";
-import { sanitizeDisplayText, validateDocId, validateStorageImageUrl, validateStr } from "../utils/validation";
+import {
+    sanitizeDisplayText,
+    validateBoolean,
+    validateDocId,
+    validateStorageImageUrl,
+    validateStr
+} from "../utils/validation";
 import { recordDoc, recordRef } from "../utils/records";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 
@@ -385,7 +391,7 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
 
     // One transaction: the days come back on the strength of a claim this same
     // commit erases, and a passport can't be deleted twice.
-    const outcome = await adminTransaction(uid, async (txn, callerSnap) => {
+    return adminTransaction(uid, async (txn, callerSnap) => {
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "Passport not found.");
 
@@ -447,18 +453,13 @@ export const deleteClaimedPassport = onCall({maxInstances: 10}, async (request) 
             nothingToSubtract: subtractDays && !reduced,
         };
     });
-
-    return outcome;
 });
 
 /** Hide or show the caller's own passport page. Self only, no admin path. */
 export const setPassportPrivacy = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request);
 
-    const hide = (request.data as {hide?: unknown})?.hide;
-    if (typeof hide !== "boolean") {
-        throw new HttpsError("invalid-argument", "hide must be a boolean.");
-    }
+    const hide = validateBoolean((request.data as {hide?: unknown})?.hide, "hide");
 
     await db.collection("users").doc(uid).update({hidePassportPage: hide});
     return {hidePassportPage: hide};

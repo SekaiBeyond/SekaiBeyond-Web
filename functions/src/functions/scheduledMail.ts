@@ -130,10 +130,9 @@ export const scheduledMailDrain = onSchedule({
             : parsed;
         if (!envelope) {
             console.error("scheduledMailDrain: deleting malformed doc", check.doc.id);
-            try {
-                await check.doc.ref.delete();
-            } catch { /* ignore */
-            }
+            await check.doc.ref.delete().catch(() => {
+                // The next run tries again.
+            });
             droppedMalformed++;
             continue;
         }
@@ -173,24 +172,21 @@ export const scheduledMailDrain = onSchedule({
 
     // Delete drained docs and clear emailScheduled on their attendees and
     // passports, one commit each so a bad one doesn't strand the rest.
-    if (drained > 0) {
-        for (let i = 0; i < drained; i++) {
-            const {doc, targetPath, isPassport} = candidates[i];
-            const batch = db.batch();
-            batch.delete(doc.ref);
-            if (targetPath) {
-                batch.update(db.doc(targetPath), {
-                    emailScheduled: false,
-                    emailSentAt: FieldValue.serverTimestamp(),
-                    // Passports keep no updatedAt.
-                    ...(isPassport ? {} : {updatedAt: FieldValue.serverTimestamp()}),
-                });
-            }
-            try {
-                await batch.commit();
-            } catch (err) {
-                console.error("scheduledMailDrain: failed to clean up doc", doc.id, err);
-            }
+    for (const {doc, targetPath, isPassport} of candidates.slice(0, drained)) {
+        const batch = db.batch();
+        batch.delete(doc.ref);
+        if (targetPath) {
+            batch.update(db.doc(targetPath), {
+                emailScheduled: false,
+                emailSentAt: FieldValue.serverTimestamp(),
+                // Passports keep no updatedAt.
+                ...(isPassport ? {} : {updatedAt: FieldValue.serverTimestamp()}),
+            });
+        }
+        try {
+            await batch.commit();
+        } catch (err) {
+            console.error("scheduledMailDrain: failed to clean up doc", doc.id, err);
         }
     }
 
@@ -207,16 +203,11 @@ export const scheduledMailDrain = onSchedule({
         `probe=${probing} sendError=${sendError ? "yes" : "no"}`);
 });
 
-// Convert a queue doc into a ResendEnvelope. Returns null for malformed entries.
+// A queue doc's envelope, dropping optional fields of the wrong type. Null for
+// a malformed entry.
 function extractEnvelope(data: FirebaseFirestore.DocumentData): ResendEnvelope | null {
-    if (data.envelope && typeof data.envelope === "object") {
-        return parseEnvelopeShape(data.envelope as Record<string, unknown>);
-    }
-    return null;
-}
-
-// A raw object as a ResendEnvelope, dropping optional fields of the wrong type.
-function parseEnvelopeShape(e: Record<string, unknown>): ResendEnvelope | null {
+    if (!data.envelope || typeof data.envelope !== "object") return null;
+    const e = data.envelope as Record<string, unknown>;
     if (typeof e.subject !== "string" || typeof e.html !== "string") return null;
     if (typeof e.to !== "string" && !Array.isArray(e.to)) return null;
     const out: ResendEnvelope = {
@@ -242,13 +233,13 @@ export async function getScheduledMailQueueStatus(): Promise<{
     queuedCount: number;
     oldestQueuedAt: string | null;
 }> {
-    const [countSnap, oldestSnap] = await Promise.all([
-        db.collection("scheduledMail").count().get(),
+    const [queuedCount, oldestSnap] = await Promise.all([
+        getScheduledMailQueueDepth(),
         db.collection("scheduledMail").orderBy("queuedAt", "asc").limit(1).get(),
     ]);
     const queuedAt = oldestSnap.docs[0]?.data()?.queuedAt;
     return {
-        queuedCount: countSnap.data().count,
+        queuedCount,
         oldestQueuedAt: queuedAt?.toDate?.()?.toISOString?.() ?? null,
     };
 }

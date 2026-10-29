@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
-import { db } from "../utils/firebase";
+import { getEventInTxn } from "../utils/events";
 import { recordDoc, recordRef } from "../utils/records";
 import { sanitizeDisplayText, validateDocId, validateStr, validateStringArray } from "../utils/validation";
 import { API_SCOPES, type ApiKeyDoc, apiKeysCol, generateApiKey, isApiScope } from "../utils/apiKeys";
@@ -55,15 +55,9 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
     await adminTransaction(uid, async (txn, callerSnap) => {
         // A key held to an event that isn't there would be refused everywhere.
         // Archived or not: archiving keeps the ID, so the hold carries over.
-        const found = await Promise.all(eventIds.map(async id => {
-            const [upcoming, past] = await Promise.all([
-                txn.get(db.collection("upcomingEvents").doc(id)),
-                txn.get(db.collection("pastEvents").doc(id)),
-            ]);
-            return {id, exists: upcoming.exists || past.exists};
-        }));
-        const missing = found.find(e => !e.exists);
-        if (missing) throw new HttpsError("not-found", `Event ${missing.id} not found.`);
+        const found = await Promise.all(eventIds.map(id => getEventInTxn(txn, id)));
+        const missing = eventIds.find((_, i) => !found[i].snap.exists);
+        if (missing) throw new HttpsError("not-found", `Event ${missing} not found.`);
 
         const callerName: string = callerSnap.data()?.displayName ?? "";
         const doc: ApiKeyDoc = {

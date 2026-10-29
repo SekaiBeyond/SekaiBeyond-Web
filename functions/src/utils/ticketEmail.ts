@@ -1,4 +1,4 @@
-import { Timestamp } from "firebase-admin/firestore";
+import type { Timestamp } from "firebase-admin/firestore";
 import { PUBLIC_ORIGIN } from "./config";
 import { CONTACT_EMAIL_PLACEHOLDER, type EmailTemplateDoc, escapeHtml, subjectLine } from "./emailTemplate";
 import { type ResendEnvelope } from "./resendClient";
@@ -31,14 +31,12 @@ function formatEventDateForEmail(startAt: Timestamp | undefined): string {
 
 function renderTicketQrBlock(tickets: any[], eventId: string): string {
     // One <div> per ticket. Images reference the serverless QR generation endpoint.
-    const origin = PUBLIC_ORIGIN;
     return tickets.map((ticket, i) => {
         const id = typeof ticket === "string" ? ticket : (ticket.ticketId ?? "");
         const typeRaw = typeof ticket === "string" ? "normal" : (ticket.type ?? "normal");
 
         let typeLabel = "General Admission";
         let bgColor = "#ff6b9d"; // brand pink
-        let textColor = "#ffffff";
 
         if (typeRaw === "early-bird-student" || typeRaw === "earlybirdstudent") {
             typeLabel = "Early Bird Student";
@@ -63,10 +61,10 @@ function renderTicketQrBlock(tickets: any[], eventId: string): string {
             bgColor = "#d35400"; // burnt orange
         }
 
-        const qrUrl = `${origin}/api/ticket-qr?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
+        const qrUrl = `${PUBLIC_ORIGIN}/api/ticket-qr?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
         // A wide gap so framing one code doesn't also catch its neighbour.
         return `<div style="margin:${i === 0 ? 16 : 72}px 0 16px;text-align:center;">` +
-            `<div style="display:inline-block;background-color:${bgColor};color:${textColor};font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">${typeLabel}</div><br/>` +
+            `<div style="display:inline-block;background-color:${bgColor};color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">${typeLabel}</div><br/>` +
             `<img src="${qrUrl}" alt="Ticket ${id}" width="300" height="300" style="width:300px;max-width:100%;height:auto;display:inline-block;"/>` +
             `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
             `</div>`;

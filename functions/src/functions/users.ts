@@ -1,22 +1,25 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
-import { getDownloadURL, getStorage } from "firebase-admin/storage";
+import { getStorage } from "firebase-admin/storage";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     ADMIN_GROUPS,
     adminTransaction,
+    isStaffOrAbove,
     isValidGroup,
     MANAGEABLE_GROUPS,
     normalizeGroup,
     requireAuth,
+    requireCanManage,
 } from "../utils/auth";
 import { deletionExpiresAt } from "../utils/config";
+import { deletionPending } from "../utils/deletion";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
 import { db } from "../utils/firebase";
 import { pastEventIds, shelfPassports, toStringIds } from "../utils/publicProfile";
-import { detectImageMime, MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, STORAGE_HOST } from "../utils/storage";
-import { sanitizeDisplayText, validateDocId, validateInstant } from "../utils/validation";
+import { decodeUpload, detectImageMime, MAX_UPLOAD_SIZE_MB, saveUpload, STORAGE_HOST } from "../utils/storage";
+import { sanitizeDisplayText, validateBoolean, validateDocId, validateInstant } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
 import { isScannedTicket } from "../utils/tickets";
@@ -190,6 +193,15 @@ export const setProfileVisibility = onCall({maxInstances: 10}, async (request) =
     return {visibility: merged};
 });
 
+/** Refuses unless the caller is core staff or above, with rights over the target's group. */
+function requireAdminOver(callerSnap: FirebaseFirestore.DocumentSnapshot, targetData: FirebaseFirestore.DocumentData): void {
+    const callerGroup = callerSnap.data()?.group;
+    if (!ADMIN_GROUPS.includes(callerGroup)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    requireCanManage(callerGroup, targetData.group);
+}
+
 interface ProfileTarget {
     targetUid: string;
     isSelf: boolean;
@@ -211,16 +223,7 @@ async function resolveProfileTarget(callerUid: string, rawTargetUid: unknown): P
         throw new HttpsError("not-found", "User not found.");
     }
 
-    if (!isSelf) {
-        const callerGroup = callerSnap.data()?.group;
-        if (!ADMIN_GROUPS.includes(callerGroup)) {
-            throw new HttpsError("permission-denied", "Insufficient permissions.");
-        }
-        if (callerGroup !== "president"
-            && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetSnap.data()!.group))) {
-            throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
-        }
-    }
+    if (!isSelf) requireAdminOver(callerSnap, targetSnap.data()!);
 
     return {
         targetUid,
@@ -233,7 +236,7 @@ async function resolveProfileTarget(callerUid: string, rawTargetUid: unknown): P
 // Uploading your own avatar or banner is a membership perk that staff+ keep
 // without one; only plain users with no active membership are blocked.
 function canSetOwnImages(userData: FirebaseFirestore.DocumentData): boolean {
-    return isMembershipActive(userData) || normalizeGroup(userData.group) !== "user";
+    return isMembershipActive(userData) || isStaffOrAbove(userData.group);
 }
 
 // Checks every profile image upload makes before touching Storage: allowed
@@ -245,30 +248,18 @@ function decodeProfileImage(input: {data?: string; contentType?: string}): {buff
         throw new HttpsError("invalid-argument", "Missing data or contentType.");
     }
 
-    if (!["image/webp", "image/jpeg", "image/png"].includes(contentType)) {
-        throw new HttpsError("invalid-argument", "Only image/webp, image/jpeg, or image/png are allowed.");
-    }
-
-    const buffer = Buffer.from(dataBase64, "base64");
-    if (buffer.length > MAX_UPLOAD_SIZE) {
-        throw new HttpsError("invalid-argument", `Image exceeds ${MAX_UPLOAD_SIZE_MB}MB limit.`);
-    }
-
-    const detectedMime = detectImageMime(buffer);
-    if (!detectedMime || detectedMime !== contentType) {
-        throw new HttpsError("invalid-argument", "File content does not match claimed content type.");
-    }
-
+    const buffer = decodeUpload(dataBase64, contentType, {
+        types: ["image/webp", "image/jpeg", "image/png"],
+        maxMb: MAX_UPLOAD_SIZE_MB,
+        kind: "Image",
+        detect: detectImageMime,
+    });
     return {buffer, contentType};
 }
 
 // Each upload overwrites the same path, so the URL busts the year-long cache.
 async function saveProfileImage(path: string, buffer: Buffer, contentType: string): Promise<string> {
-    const file = getStorage().bucket().file(path);
-    await file.save(buffer, {
-        metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
-    });
-    return `${await getDownloadURL(file)}&t=${Date.now()}`;
+    return `${await saveUpload(path, buffer, contentType)}&t=${Date.now()}`;
 }
 
 // The photo a user reverts to without an uploaded avatar, from their auth
@@ -358,12 +349,7 @@ export const deleteAvatar = onCall({maxInstances: 10}, async (request) => {
         throw new HttpsError("permission-denied", "An active membership is required to delete an avatar.");
     }
 
-    const bucket = getStorage().bucket();
-    const file = bucket.file(`avatars/${targetUid}`);
-    const [exists] = await file.exists();
-    if (exists) {
-        await file.delete();
-    }
+    await getStorage().bucket().file(`avatars/${targetUid}`).delete({ignoreNotFound: true});
 
     const googlePhoto = isSelf
         ? (request.auth!.token.picture ?? "")
@@ -428,10 +414,23 @@ export const deleteBanner = onCall({maxInstances: 10}, async (request) => {
 
     return {deleted: true};
 });
+
+/**
+ * A staff title from a request: "" when left out, refused when not a string or
+ * over 100 characters once cleaned.
+ */
+function readTitle(raw: unknown): string {
+    if (raw === undefined || raw === null) return "";
+    if (typeof raw !== "string") throw new HttpsError("invalid-argument", "Invalid title.");
+    const title = sanitizeDisplayText(raw);
+    if (title.length > 100) throw new HttpsError("invalid-argument", "Invalid title.");
+    return title;
+}
+
 export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
-    const input = request.data as {targetUid?: string; newGroup?: string; title?: string; titleCn?: string};
+    const input = request.data as {targetUid?: string; newGroup?: string; title?: unknown; titleCn?: unknown};
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const newGroup = input.newGroup;
 
@@ -444,84 +443,50 @@ export const changeUserGroup = onCall({maxInstances: 10}, async (request) => {
     }
 
     // Titles can only be set when assigning staff or core-staff
-    const title = typeof input.title === "string" ? sanitizeDisplayText(input.title) : input.title;
-    const titleCn = typeof input.titleCn === "string" ? sanitizeDisplayText(input.titleCn) : input.titleCn;
-    if (title || titleCn) {
-        if ((title?.length ?? 0) > 100 || (titleCn?.length ?? 0) > 100) {
-            throw new HttpsError("invalid-argument", "Invalid title.");
-        }
-        if (!["staff", "core-staff"].includes(newGroup)) {
-            throw new HttpsError("invalid-argument", "Title can only be set for staff or core-staff.");
-        }
+    const shouldHaveTitle = ["staff", "core-staff"].includes(newGroup);
+    const title = readTitle(input.title);
+    const titleCn = readTitle(input.titleCn);
+    if ((title || titleCn) && !shouldHaveTitle) {
+        throw new HttpsError("invalid-argument", "Title can only be set for staff or core-staff.");
     }
 
-    let oldGroup: string = "";
-    let oldTitle: string = "";
-    let oldTitleCn: string = "";
-
-    await db.runTransaction(async (txn) => {
-        const [callerSnap, targetSnap] = await Promise.all([
-            txn.get(db.collection("users").doc(uid)),
-            txn.get(db.collection("users").doc(targetUid)),
-        ]);
-
-        if (!callerSnap.exists) throw new HttpsError("not-found", "Caller not found.");
+    const oldGroup = await adminTransaction(uid, async (txn, callerSnap) => {
+        const targetSnap = await txn.get(db.collection("users").doc(targetUid));
         if (!targetSnap.exists) throw new HttpsError("not-found", "Target user not found.");
+        const targetData = targetSnap.data()!;
 
         const callerGroup = callerSnap.data()!.group;
-        if (!ADMIN_GROUPS.includes(callerGroup)) {
-            throw new HttpsError("permission-denied", "Insufficient permissions.");
+        const oldGroup = normalizeGroup(targetData.group);
+        requireCanManage(callerGroup, oldGroup);
+        if (callerGroup !== "president" && !MANAGEABLE_GROUPS.includes(newGroup)) {
+            throw new HttpsError("permission-denied", "Cannot assign this group.");
         }
 
-        oldGroup = normalizeGroup(targetSnap.data()!.group);
-        oldTitle = targetSnap.data()!.title ?? "";
-        oldTitleCn = targetSnap.data()!.titleCn ?? "";
-
-        if (callerGroup !== "president") {
-            if (!MANAGEABLE_GROUPS.includes(oldGroup)) {
-                throw new HttpsError("permission-denied",
-                    "Cannot manage users at or above your level.");
-            }
-            if (!MANAGEABLE_GROUPS.includes(newGroup)) {
-                throw new HttpsError("permission-denied",
-                    "Cannot assign this group.");
-            }
-        }
-
-        const shouldHaveTitle = ["staff", "core-staff"].includes(newGroup);
-        const newTitle = shouldHaveTitle ? (title ?? "") : "";
-        const newTitleCn = shouldHaveTitle ? (titleCn ?? "") : "";
-        const updateData: Record<string, unknown> = {group: newGroup};
-        if (shouldHaveTitle) {
-            updateData.title = newTitle;
-            updateData.titleCn = newTitleCn;
-        } else {
-            updateData.title = FieldValue.delete();
-            updateData.titleCn = FieldValue.delete();
-        }
-
-        txn.update(db.collection("users").doc(targetUid), updateData);
-        txn.set(recordRef(), recordDoc("group-assign", {
+        txn.update(db.collection("users").doc(targetUid), {
+            group: newGroup,
+            title: shouldHaveTitle ? title : FieldValue.delete(),
+            titleCn: shouldHaveTitle ? titleCn : FieldValue.delete(),
+        });
+        const fields = {
             performedBy: uid,
             performedByName: callerSnap.data()!.displayName ?? "",
             targetUid,
-            targetName: targetSnap.data()!.displayName ?? "",
-            oldGroup,
-            newGroup,
-        }));
+            targetName: targetData.displayName ?? "",
+        };
+        txn.set(recordRef(), recordDoc("group-assign", {...fields, oldGroup, newGroup}));
 
-        if (oldTitle !== newTitle || oldTitleCn !== newTitleCn) {
+        const oldTitle: string = targetData.title ?? "";
+        const oldTitleCn: string = targetData.titleCn ?? "";
+        if (oldTitle !== title || oldTitleCn !== titleCn) {
             txn.set(recordRef(), recordDoc("title-set", {
-                performedBy: uid,
-                performedByName: callerSnap.data()!.displayName ?? "",
-                targetUid,
-                targetName: targetSnap.data()!.displayName ?? "",
+                ...fields,
                 oldTitle,
-                newTitle,
+                newTitle: title,
                 oldTitleCn,
-                newTitleCn,
+                newTitleCn: titleCn,
             }));
         }
+        return oldGroup;
     });
 
     return {oldGroup, newGroup};
@@ -558,26 +523,12 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
         }
     }
 
-    return db.runTransaction(async (txn) => {
-        const [callerSnap, targetSnap] = await Promise.all([
-            txn.get(db.collection("users").doc(uid)),
-            txn.get(db.collection("users").doc(targetUid)),
-        ]);
-
-        if (!callerSnap.exists) throw new HttpsError("not-found", "Caller not found.");
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const targetSnap = await txn.get(db.collection("users").doc(targetUid));
         if (!targetSnap.exists) throw new HttpsError("not-found", "Target user not found.");
 
-        const callerGroup = normalizeGroup(callerSnap.data()!.group);
-        if (!ADMIN_GROUPS.includes(callerGroup)) {
-            throw new HttpsError("permission-denied", "Insufficient permissions.");
-        }
-
         const targetData = targetSnap.data()!;
-        // changeUserGroup's guard: core-staff act on users and staff, the
-        // president on anyone.
-        if (callerGroup !== "president" && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetData.group))) {
-            throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
-        }
+        requireCanManage(callerSnap.data()!.group, targetData.group);
 
         const oldExpiry: Timestamp | null = targetData.membershipExpiresAt ?? null;
         const newExpiry = hasExtendDays
@@ -608,30 +559,17 @@ export const setMembership = onCall({maxInstances: 10}, async (request) => {
 });
 export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
-    const input = request.data as {targetUid?: string; title?: string; titleCn?: string};
+    const input = request.data as {targetUid?: string; title?: unknown; titleCn?: unknown};
     const targetUid = validateDocId(input.targetUid, "targetUid");
-    const title = typeof input.title === "string" ? sanitizeDisplayText(input.title) : input.title;
-    const titleCn = typeof input.titleCn === "string" ? sanitizeDisplayText(input.titleCn) : input.titleCn;
+    const title = readTitle(input.title);
+    const titleCn = readTitle(input.titleCn);
 
-    if ((title != null && title.length > 100) || (titleCn != null && titleCn.length > 100)) {
-        throw new HttpsError("invalid-argument", "Invalid title.");
-    }
-
-    await db.runTransaction(async (txn) => {
-        const [callerSnap, targetSnap] = await Promise.all([
-            txn.get(db.collection("users").doc(uid)),
-            txn.get(db.collection("users").doc(targetUid)),
-        ]);
-
-        if (!callerSnap.exists) throw new HttpsError("not-found", "Caller not found.");
+    await adminTransaction(uid, async (txn, callerSnap) => {
+        const targetSnap = await txn.get(db.collection("users").doc(targetUid));
         if (!targetSnap.exists) throw new HttpsError("not-found", "Target user not found.");
 
         const callerGroup = callerSnap.data()!.group;
         const targetGroup = targetSnap.data()!.group;
-
-        if (!ADMIN_GROUPS.includes(callerGroup)) {
-            throw new HttpsError("permission-denied", "Insufficient permissions.");
-        }
 
         if (!["staff", "core-staff"].includes(targetGroup)) {
             throw new HttpsError("invalid-argument", "Title can only be set for staff or core-staff.");
@@ -643,20 +581,19 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
                 "Only the president can set the title of a core-staff member.");
         }
 
-        const updateData: Record<string, unknown> = {};
-        updateData.title = title ? title : FieldValue.delete();
-        updateData.titleCn = titleCn ? titleCn : FieldValue.delete();
-
-        txn.update(db.collection("users").doc(targetUid), updateData);
+        txn.update(db.collection("users").doc(targetUid), {
+            title: title || FieldValue.delete(),
+            titleCn: titleCn || FieldValue.delete(),
+        });
         txn.set(recordRef(), recordDoc("title-set", {
             performedBy: uid,
             performedByName: callerSnap.data()!.displayName ?? "",
             targetUid,
             targetName: targetSnap.data()!.displayName ?? "",
             oldTitle: targetSnap.data()!.title ?? "",
-            newTitle: title ?? "",
+            newTitle: title,
             oldTitleCn: targetSnap.data()!.titleCn ?? "",
-            newTitleCn: titleCn ?? "",
+            newTitleCn: titleCn,
         }));
     });
 
@@ -665,22 +602,15 @@ export const setUserTitle = onCall({maxInstances: 10}, async (request) => {
 export const toggleUserBadge = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
-    const input = request.data as {targetUid?: string; badgeId?: string; grant?: boolean};
+    const input = request.data as {targetUid?: string; badgeId?: string; grant?: unknown};
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const badgeId = validateDocId(input.badgeId, "badgeId");
-    if (typeof input.grant !== "boolean") {
-        throw new HttpsError("invalid-argument", "grant must be a boolean.");
-    }
-    const grant = input.grant;
+    const grant = validateBoolean(input.grant, "grant");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const callerGroup = callerSnap.data()!.group;
         const targetSnap = await txn.get(db.collection("users").doc(targetUid));
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
-        if (callerGroup !== "president"
-            && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetSnap.data()!.group))) {
-            throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
-        }
+        requireCanManage(callerSnap.data()!.group, targetSnap.data()!.group);
 
         const badgeSnap = await txn.get(db.collection("badges").doc(badgeId));
         if (!badgeSnap.exists) throw new HttpsError("not-found", "Badge not found.");
@@ -720,21 +650,9 @@ export const requestAccountDeletion = onCall({maxInstances: 10}, async (request)
 
         // Anyone may delete their own account; someone else's needs admin rights
         // over them.
-        if (callerUid !== targetUid) {
-            if (!callerSnap.exists) {
-                throw new HttpsError("permission-denied", "Insufficient permissions.");
-            }
-            const callerGroup = callerSnap.data()!.group;
-            if (!ADMIN_GROUPS.includes(callerGroup)) {
-                throw new HttpsError("permission-denied", "Insufficient permissions.");
-            }
-            if (callerGroup !== "president"
-                && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetData.group))) {
-                throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
-            }
-        }
+        if (callerUid !== targetUid) requireAdminOver(callerSnap, targetData);
 
-        if (targetData.deleteAt && targetData.deleteAt.toMillis() > Date.now()) {
+        if (deletionPending(targetData)) {
             throw new HttpsError("already-exists", "deletion-already-pending");
         }
 
@@ -768,20 +686,11 @@ export const cancelAccountDeletion = onCall({maxInstances: 10}, async (request) 
             throw new HttpsError("not-found", "User not found.");
         }
         const targetData = targetSnap.data()!;
-        if (!targetData.deleteAt || targetData.deleteAt.toMillis() <= Date.now()) {
+        if (!deletionPending(targetData)) {
             throw new HttpsError("not-found", "No pending deletion.");
         }
 
-        if (callerUid !== targetUid) {
-            if (!callerSnap.exists || !ADMIN_GROUPS.includes(callerSnap.data()!.group)) {
-                throw new HttpsError("permission-denied", "Insufficient permissions.");
-            }
-            const callerGroup = callerSnap.data()!.group;
-            if (callerGroup !== "president"
-                && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetData.group))) {
-                throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
-            }
-        }
+        if (callerUid !== targetUid) requireAdminOver(callerSnap, targetData);
 
         const callerName = callerSnap.exists
             ? (callerSnap.data()!.displayName ?? "")

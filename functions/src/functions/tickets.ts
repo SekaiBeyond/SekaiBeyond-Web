@@ -1,7 +1,14 @@
 import sanitizeHtml from "sanitize-html";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
-import { ADMIN_GROUPS, adminTransaction, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
+import {
+    ADMIN_GROUPS,
+    adminTransaction,
+    isStaffOrAbove,
+    normalizeGroup,
+    requireAdmin,
+    requireAuth
+} from "../utils/auth";
 import { IMPORT_MAX_ROWS, PUBLIC_ORIGIN, RESEND_QUEUE_CAP, SEND_CHUNK_SIZE } from "../utils/config";
 import { db } from "../utils/firebase";
 import { syncProviderUsage } from "../utils/emailProvider";
@@ -15,10 +22,18 @@ import {
 } from "../utils/quota";
 import { RESEND_API_KEY, type ResendEnvelope, ResendSendError, sendEmails } from "../utils/resendClient";
 import { getScheduledMailQueueDepth } from "./scheduledMail";
-import { EMAIL_RE, sanitizeDisplayText, validateDocId, validateEmail, validateStr } from "../utils/validation";
+import {
+    EMAIL_RE,
+    sanitizeDisplayText,
+    validateBoolean,
+    validateDocId,
+    validateEmail,
+    validateOptionalEmail,
+    validateStr,
+} from "../utils/validation";
 import { contactEmailFor, EMAIL_HTML_SANITIZE_OPTIONS, readSavedTemplate } from "../utils/emailTemplate";
 import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
-import { recordDoc, recordRef } from "../utils/records";
+import { recordDoc, type RecordFields, recordRef, type RecordType } from "../utils/records";
 import {
     buildFreshTickets,
     freshTicket,
@@ -63,13 +78,64 @@ function validateTicketNotes(value: unknown): string {
     return sanitizeDisplayText(validateStr(value, "notes", TICKET_NOTES_MAX));
 }
 
+/** Staff anywhere, or the event's own staff: who may work its door and read its list. */
+function worksEvent(caller: FirebaseFirestore.DocumentData, eventId: string): boolean {
+    const eventStaff: string[] = caller.eventStaffEvents ?? [];
+    return isStaffOrAbove(caller.group) || eventStaff.includes(eventId);
+}
+
+/**
+ * Credits the account registered to `email`, if any, with attending
+ * `eventId`, as a scan does. Reads before it writes, so it goes before the
+ * caller's own writes. Whether there was an account.
+ */
+async function creditAccountAttendance(
+    txn: FirebaseFirestore.Transaction,
+    email: string,
+    eventId: string,
+): Promise<boolean> {
+    if (!email) return false;
+    const users = await txn.get(db.collection("users").where("email", "==", email).limit(1));
+    if (users.empty) return false;
+    const account = users.docs[0];
+    const attended: string[] = account.data().attendedEvents ?? [];
+    if (!attended.includes(eventId)) {
+        txn.update(account.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
+    }
+    return true;
+}
+
+/** A ticket let in at the door at `now` by `by`, and checked in to an account or not. */
+function admitted(ticket: NewTicket, by: {uid: string; name: string}, now: Timestamp, checkedIn: boolean): NewTicket {
+    return {
+        ...ticket,
+        redeemed: true,
+        redeemedAt: now,
+        redeemedBy: by.uid,
+        redeemedByName: by.name,
+        checkedIn,
+        checkedInAt: checkedIn ? now : null,
+    };
+}
+
+/**
+ * The title of the upcoming event an import is for, once the caller is
+ * confirmed as core staff or above, and the caller's name for its record.
+ */
+async function importTarget(uid: string, eventId: string): Promise<{eventTitle: string; callerName: string}> {
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        return {eventTitle: eventSnap.data()?.title ?? eventId, callerName: callerSnap.data()?.displayName ?? ""};
+    });
+}
+
 // Ticket ids are UUIDs and event ids are doc ids, so both fit. The endpoint is
 // public, so off-shape params are refused before any QR is generated for them.
 const QR_PARAM_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 export const serveTicketQr = onRequest({maxInstances: 10, memory: "256MiB"}, async (req, res) => {
-    const ticketId = req.query.ticket as string;
-    const eventId = req.query.event as string;
+    const {ticket: ticketId, event: eventId} = req.query;
     if (!ticketId || !eventId) {
         res.status(400).send("Missing ticket or event parameter");
         return;
@@ -110,10 +176,9 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
     if (!Array.isArray(input.attendees) || input.attendees.length === 0) {
         throw new HttpsError("invalid-argument", "attendees must be a non-empty array.");
     }
-    const importMax = IMPORT_MAX_ROWS;
-    if (input.attendees.length > importMax) {
+    if (input.attendees.length > IMPORT_MAX_ROWS) {
         throw new HttpsError("invalid-argument",
-            `Too many attendees in a single import (max ${importMax}).`);
+            `Too many attendees in a single import (max ${IMPORT_MAX_ROWS}).`);
     }
 
     // Validate + normalize + dedupe (later row wins)
@@ -149,11 +214,7 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
 
     // Only the admin and event checks are transactional; the import itself is
     // too big for the 500-op limit, so it runs as batched commits below.
-    const eventTitle = await adminTransaction(uid, async (txn) => {
-        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        return (eventSnap.data()?.title ?? eventId) as string;
-    });
+    const {eventTitle, callerName} = await importTarget(uid, eventId);
 
     const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
 
@@ -171,9 +232,6 @@ export const importEventAttendees = onCall({maxInstances: 10}, async (request) =
             if (typeof email === "string") existingByEmail.set(email, doc);
         }
     }
-
-    const callerSnap = await db.collection("users").doc(uid).get();
-    const callerName = callerSnap.data()?.displayName ?? "";
 
     let addedCount = 0;
     let replacedCount = 0;
@@ -264,9 +322,7 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
         checkIn?: unknown;
     };
     const eventId = validateDocId(input.eventId, "eventId");
-    const email = input.email == null || (typeof input.email === "string" && input.email.trim() === "")
-        ? ""
-        : validateEmail(input.email, "email");
+    const email = validateOptionalEmail(input.email, "email");
     const name = sanitizeDisplayText(validateStr(input.name, "name", 100));
     const ticketCount = validateTicketCount(input.ticketCount);
     const type = validateTicketType(input.type);
@@ -276,11 +332,8 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
     return db.runTransaction(async (txn) => {
         // Whoever works the door, as redeemTicket lets scan: core staff, the
         // staff group and the event's own staff, all on the event's days only.
-        const callerSnap = await txn.get(db.collection("users").doc(uid));
-        const callerData = callerSnap.data() ?? {};
-        const group = normalizeGroup(callerData.group);
-        const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
-        if (!ADMIN_GROUPS.includes(group) && group !== "staff" && !callerEventStaff.includes(eventId)) {
+        const callerData = (await txn.get(db.collection("users").doc(uid))).data() ?? {};
+        if (!worksEvent(callerData, eventId)) {
             throw new HttpsError("permission-denied", "Not authorized to add walk-ins for this event.",
                 {code: "not-authorized"});
         }
@@ -298,39 +351,20 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
         }
 
         // Every read before the first write.
-        let account: FirebaseFirestore.QueryDocumentSnapshot | null = null;
         if (email) {
             const existing = await txn.get(attendeesCol.where("email", "==", email).limit(1));
             if (!existing.empty) {
                 throw new HttpsError("already-exists", "An attendee with this email already exists.",
                     {code: "attendee-exists"});
             }
-            if (checkIn) {
-                const users = await txn.get(db.collection("users").where("email", "==", email).limit(1));
-                if (!users.empty) account = users.docs[0];
-            }
         }
+        const userCheckedIn = checkIn && await creditAccountAttendance(txn, email, eventId);
 
         const callerName: string = callerData.displayName ?? "";
         const {tickets, ticketIds} = buildFreshTickets(ticketCount, type, notes);
         const issued = checkIn
-            ? tickets.map(t => ({
-                ...t,
-                redeemed: true,
-                redeemedAt: now,
-                redeemedBy: uid,
-                redeemedByName: callerName,
-                checkedIn: account !== null,
-                checkedInAt: account ? now : null,
-            }))
+            ? tickets.map(t => admitted(t, {uid, name: callerName}, now, userCheckedIn))
             : tickets;
-
-        if (account) {
-            const attended: string[] = account.data().attendedEvents ?? [];
-            if (!attended.includes(eventId)) {
-                txn.update(account.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
-            }
-        }
 
         const attendeeRef = attendeesCol.doc();
         txn.set(attendeeRef, {
@@ -358,7 +392,7 @@ export const addWalkInAttendee = onCall({maxInstances: 10}, async (request) => {
             checkedIn: checkIn,
         }));
 
-        return {attendeeId: attendeeRef.id, checkedIn: checkIn, userCheckedIn: account !== null};
+        return {attendeeId: attendeeRef.id, checkedIn: checkIn, userCheckedIn};
     });
 });
 
@@ -441,9 +475,7 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
             throw new HttpsError("invalid-argument", `Not a HomeTown ticket number: ${ticketId}`);
         }
         // A box office sale may have no email; the ticket still gets in.
-        const email = r.email == null || (typeof r.email === "string" && r.email.trim() === "")
-            ? ""
-            : validateEmail(r.email, "email");
+        const email = validateOptionalEmail(r.email, "email");
         const name = sanitizeDisplayText(validateStr(r.name, "name", 100));
         const type = validateTicketType(r.type);
         const orderId = sanitizeDisplayText(validateStr(r.orderId, "orderId", 32));
@@ -466,11 +498,7 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
         }
     }
 
-    const eventTitle = await adminTransaction(uid, async (txn) => {
-        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        return (eventSnap.data()?.title ?? eventId) as string;
-    });
+    const {eventTitle, callerName} = await importTarget(uid, eventId);
 
     const eventRef = db.collection("upcomingEvents").doc(eventId);
     const attendeesCol = eventRef.collection("attendees");
@@ -509,15 +537,8 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
         prevEmail: string,
         tickets: NewTicket[],
     ): Promise<boolean> => {
-        if (!email || email === prevEmail || !tickets.some(isScannedTicket)) return false;
-        const users = await txn.get(db.collection("users").where("email", "==", email).limit(1));
-        if (users.empty) return false;
-        const account = users.docs[0];
-        const attended: string[] = account.data().attendedEvents ?? [];
-        if (!attended.includes(eventId)) {
-            txn.update(account.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
-        }
-        return true;
+        if (email === prevEmail || !tickets.some(isScannedTicket)) return false;
+        return creditAccountAttendance(txn, email, eventId);
     };
 
     // Copies a row's buyer and type onto a ticket on file, along with `fields`.
@@ -624,11 +645,10 @@ export const importHometownTickets = onCall({maxInstances: 10, timeoutSeconds: 3
 
     // Each chunk adds its counts to the file's record, and the one carrying the
     // whole file's numbers sets how many it left out.
-    const callerSnap = await db.collection("users").doc(uid).get();
     await recordRef(importId ? `hometown-import-${importId}` : undefined).set({
         ...recordDoc("hometown-import", {
             performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            performedByName: callerName,
             eventId,
             eventTitle,
         }),
@@ -694,11 +714,7 @@ export const syncHometownOrderTimes = onCall({maxInstances: 10, timeoutSeconds: 
         times.set(orderId, Timestamp.fromMillis(ms));
     }
 
-    const eventTitle = await adminTransaction(uid, async (txn) => {
-        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        return (eventSnap.data()?.title ?? eventId) as string;
-    });
+    const {eventTitle, callerName} = await importTarget(uid, eventId);
 
     const eventRef = db.collection("upcomingEvents").doc(eventId);
     const attendeesCol = eventRef.collection("attendees");
@@ -743,11 +759,10 @@ export const syncHometownOrderTimes = onCall({maxInstances: 10, timeoutSeconds: 
         synced += results.filter(Boolean).length;
     }
 
-    const callerSnap = await db.collection("users").doc(uid).get();
     await recordRef(syncId ? `hometown-order-times-${syncId}` : undefined).set({
         ...recordDoc("hometown-order-times", {
             performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
+            performedByName: callerName,
             eventId,
             eventTitle,
         }),
@@ -775,10 +790,7 @@ export const setHometownAdmitUnlisted = onCall({maxInstances: 10}, async (reques
 
     const input = request.data as {eventId?: string; enabled?: unknown};
     const eventId = validateDocId(input.eventId, "eventId");
-    if (typeof input.enabled !== "boolean") {
-        throw new HttpsError("invalid-argument", "enabled must be a boolean.");
-    }
-    const enabled = input.enabled;
+    const enabled = validateBoolean(input.enabled, "enabled");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
         const eventRef = db.collection("upcomingEvents").doc(eventId);
@@ -932,13 +944,11 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
 
     // The same gate as reading the attendees: staff anywhere, event staff on
     // their own event.
-    const callerSnap = await db.collection("users").doc(uid).get();
-    const callerData = callerSnap.data() ?? {};
-    const isStaffOrAbove = ["staff", ...ADMIN_GROUPS].includes(normalizeGroup(callerData.group));
-    const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
-    if (!isStaffOrAbove && !callerEventStaff.includes(eventId)) {
+    const callerData = (await db.collection("users").doc(uid).get()).data() ?? {};
+    if (!worksEvent(callerData, eventId)) {
         throw new HttpsError("permission-denied", "Not authorized to read this event's attendees.");
     }
+    const namesAccounts = isStaffOrAbove(callerData.group);
 
     // A malformed address is dropped rather than failing the whole lookup; it
     // matches no account anyway.
@@ -964,7 +974,7 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
             const data = doc.data();
             if (typeof data.email !== "string") continue;
             const email = data.email.trim().toLowerCase();
-            accounts.push(isStaffOrAbove
+            accounts.push(namesAccounts
                 ? {email, uid: doc.id, displayName: data.displayName ?? ""}
                 : {email});
         }
@@ -989,14 +999,9 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
     const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
 
     return db.runTransaction(async (txn) => {
-        const callerSnap = await txn.get(db.collection("users").doc(uid));
-        const callerData = callerSnap.data() ?? {};
-        const group = normalizeGroup(callerData.group);
-        const callerEventStaff: string[] = callerData.eventStaffEvents ?? [];
-        const isCoreStaffOrAbove = ADMIN_GROUPS.includes(group);
-        const isStaffGroup = group === "staff";
-        const isEventStaff = callerEventStaff.includes(eventId);
-        if (!isCoreStaffOrAbove && !isStaffGroup && !isEventStaff) {
+        const callerData = (await txn.get(db.collection("users").doc(uid))).data() ?? {};
+        const isCoreStaffOrAbove = ADMIN_GROUPS.includes(normalizeGroup(callerData.group));
+        if (!worksEvent(callerData, eventId)) {
             throw new HttpsError("permission-denied", "Not authorized to scan tickets for this event.",
                 {code: "not-authorized"});
         }
@@ -1064,13 +1069,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
                 email: "",
                 name: "",
                 ticketCount: 1,
-                tickets: [{
-                    ...freshTicket(ticketId, "normal"),
-                    redeemed: true,
-                    redeemedAt: now,
-                    redeemedBy: uid,
-                    redeemedByName: callerName,
-                }],
+                tickets: [admitted(freshTicket(ticketId, "normal"), {uid, name: callerName}, now, false)],
                 ticketIds: [ticketId],
                 source: "hometown",
                 hometownOrderId: "",
@@ -1099,9 +1098,7 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
             throw new HttpsError("not-found", "Ticket not found.", {code: "invalid"});
         }
         const attendeeData = attendeeDoc.data() ?? {};
-        const tickets: NewTicket[] = (attendeeData.tickets ?? []).map(
-            (t: Record<string, unknown>) => t as unknown as NewTicket
-        );
+        const tickets = [...(attendeeData.tickets ?? [])] as NewTicket[];
         const idx = tickets.findIndex(t => t.ticketId === ticketId);
         if (idx < 0) {
             throw new HttpsError("not-found", "Ticket not found.", {code: "invalid"});
@@ -1165,30 +1162,8 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         if (source.unlisted) await refuseUnlisted();
 
         // Try to link to a registered user by email; a walk-in may have none.
-        let userCheckedIn = false;
-        if (attendeeEmail) {
-            const matchingUserSnap = await txn.get(
-                db.collection("users").where("email", "==", attendeeEmail).limit(1)
-            );
-            if (!matchingUserSnap.empty) {
-                const userDoc = matchingUserSnap.docs[0];
-                const attended: string[] = userDoc.data().attendedEvents ?? [];
-                if (!attended.includes(eventId)) {
-                    txn.update(userDoc.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
-                }
-                userCheckedIn = true;
-            }
-        }
-
-        tickets[idx] = {
-            ...ticket,
-            redeemed: true,
-            redeemedAt: now,
-            redeemedBy: uid,
-            redeemedByName: callerName,
-            checkedIn: userCheckedIn,
-            checkedInAt: userCheckedIn ? now : null,
-        };
+        const userCheckedIn = await creditAccountAttendance(txn, attendeeEmail, eventId);
+        tickets[idx] = admitted(ticket, {uid, name: callerName}, now, userCheckedIn);
 
         txn.update(attendeeDoc.ref, {
             tickets,
@@ -1217,227 +1192,130 @@ function attendeeRecordName(data: FirebaseFirestore.DocumentData): string {
     return "";
 }
 
-export const voidTicket = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request, "staff");
+/** An attendee under an upcoming event, read in `txn`, with the event's title for records. */
+async function readAttendee(txn: FirebaseFirestore.Transaction, eventId: string, attendeeId: string) {
+    const eventRef = db.collection("upcomingEvents").doc(eventId);
+    const ref = eventRef.collection("attendees").doc(attendeeId);
+    const [eventSnap, snap] = await Promise.all([txn.get(eventRef), txn.get(ref)]);
+    // An archived event's tickets are read-only; see archiveUpcomingEvent.
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+    if (!snap.exists) throw new HttpsError("not-found", "Attendee not found.");
+    return {ref, data: snap.data()!, eventTitle: (eventSnap.data()?.title ?? eventId) as string};
+}
 
-    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
-    const eventId = validateDocId(input.eventId, "eventId");
-    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
-    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+/** Which ticket an edit from the admin panel is for. */
+interface TicketTarget {
+    eventId: string;
+    attendeeId: string;
+    ticketId: string;
+}
 
+function ticketTarget(raw: unknown): TicketTarget {
+    const input = raw as {eventId?: string; attendeeId?: string; ticketId?: string};
+    return {
+        eventId: validateDocId(input.eventId, "eventId"),
+        attendeeId: validateDocId(input.attendeeId, "attendeeId"),
+        ticketId: validateStr(input.ticketId, "ticketId", 128, true),
+    };
+}
+
+/**
+ * What an edit makes of one ticket: the ticket as it now stands and anything
+ * its record adds, or just a reply when nothing changes.
+ */
+interface TicketEdit<R> {
+    reply: R;
+    ticket?: NewTicket;
+    record?: RecordFields;
+}
+
+/**
+ * Changes one ticket from the admin panel, as core staff and above: reads the
+ * attendee holding it, applies `edit`, and records the change as
+ * `recordType`. An edit that gives back no ticket writes nothing.
+ */
+async function editTicket<R>(
+    uid: string,
+    {eventId, attendeeId, ticketId}: TicketTarget,
+    recordType: RecordType,
+    edit: (ticket: NewTicket, attendee: {
+        txn: FirebaseFirestore.Transaction;
+        data: FirebaseFirestore.DocumentData;
+        callerName: string;
+    }) => TicketEdit<R> | Promise<TicketEdit<R>>,
+): Promise<R> {
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const eventRef = db.collection("upcomingEvents").doc(eventId);
-        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
-        const [eventSnap, attendeeSnap] = await Promise.all([
-            txn.get(eventRef),
-            txn.get(attendeeRef),
-        ]);
-        // An archived event's tickets are read-only; see archiveUpcomingEvent.
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        if (!attendeeSnap.exists) {
-            throw new HttpsError("not-found", "Attendee not found.");
-        }
-        const data = attendeeSnap.data()!;
-        const tickets: NewTicket[] = (data.tickets ?? []).map(
-            (t: Record<string, unknown>) => t as unknown as NewTicket
-        );
+        const {ref, data, eventTitle} = await readAttendee(txn, eventId, attendeeId);
+        const tickets = [...(data.tickets ?? [])] as NewTicket[];
         const idx = tickets.findIndex(t => t.ticketId === ticketId);
         if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
 
-        tickets[idx] = {...tickets[idx], voided: true};
-
-        const eventTitle: string = eventSnap.data()?.title ?? eventId;
-
-        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(recordRef(), recordDoc("ticket-void", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            eventId,
-            eventTitle,
-            targetEmail: data.email ?? "",
-            targetName: attendeeRecordName(data),
-        }));
-
-        return {voided: true};
-    });
-});
-export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request, "staff");
-
-    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
-    const eventId = validateDocId(input.eventId, "eventId");
-    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
-    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
-
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        const eventRef = db.collection("upcomingEvents").doc(eventId);
-        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
-        const [eventSnap, attendeeSnap] = await Promise.all([
-            txn.get(eventRef),
-            txn.get(attendeeRef),
-        ]);
-        // An archived event's tickets are read-only; see archiveUpcomingEvent.
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        if (!attendeeSnap.exists) {
-            throw new HttpsError("not-found", "Attendee not found.");
-        }
-        const data = attendeeSnap.data()!;
-        const tickets: NewTicket[] = (data.tickets ?? []).map(
-            (t: Record<string, unknown>) => t as unknown as NewTicket
-        );
-        const idx = tickets.findIndex(t => t.ticketId === ticketId);
-        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
-
-        tickets[idx] = {...tickets[idx], voided: false};
-
-        const eventTitle: string = eventSnap.data()?.title ?? eventId;
-
-        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(recordRef(), recordDoc("ticket-unvoid", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            eventId,
-            eventTitle,
-            targetEmail: data.email ?? "",
-            targetName: attendeeRecordName(data),
-        }));
-
-        return {unvoided: true};
-    });
-});
-export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request, "staff");
-
-    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
-    const eventId = validateDocId(input.eventId, "eventId");
-    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
-    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
-
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        const eventRef = db.collection("upcomingEvents").doc(eventId);
-        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
-        const [eventSnap, attendeeSnap] = await Promise.all([
-            txn.get(eventRef),
-            txn.get(attendeeRef),
-        ]);
-        // An archived event's tickets are read-only; see archiveUpcomingEvent.
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        if (!attendeeSnap.exists) {
-            throw new HttpsError("not-found", "Attendee not found.");
-        }
-        const data = attendeeSnap.data()!;
-        const tickets: NewTicket[] = (data.tickets ?? []).map(
-            (t: Record<string, unknown>) => t as unknown as NewTicket
-        );
-        const idx = tickets.findIndex(t => t.ticketId === ticketId);
-        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
-        if (tickets[idx].voided) {
-            throw new HttpsError("failed-precondition", "This ticket has been voided.", {code: "voided"});
-        }
-        // Idempotent, so a double-click can't overwrite the original redeemer
-        // and time.
-        if (tickets[idx].redeemed) {
-            return {redeemed: false, alreadyRedeemed: true};
-        }
-
-        // A check-in by hand credits the account exactly as the scanner does
-        // (see redeemTicket).
-        const attendeeEmail: string = data.email ?? "";
-        let userCheckedIn = false;
-        if (attendeeEmail) {
-            const matchingUserSnap = await txn.get(
-                db.collection("users").where("email", "==", attendeeEmail).limit(1)
-            );
-            if (!matchingUserSnap.empty) {
-                const userDoc = matchingUserSnap.docs[0];
-                const attended: string[] = userDoc.data().attendedEvents ?? [];
-                if (!attended.includes(eventId)) {
-                    txn.update(userDoc.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
-                }
-                userCheckedIn = true;
-            }
-        }
-
-        const now = Timestamp.now();
         const callerName: string = callerSnap.data()?.displayName ?? "";
-        tickets[idx] = {
-            ...tickets[idx],
-            redeemed: true,
-            redeemedAt: now,
-            redeemedBy: uid,
-            redeemedByName: callerName,
-            checkedIn: userCheckedIn,
-            checkedInAt: userCheckedIn ? now : null,
-        };
+        const {reply, ticket, record} = await edit(tickets[idx], {txn, data, callerName});
+        if (!ticket) return reply;
 
-        const eventTitle: string = eventSnap.data()?.title ?? eventId;
-
-        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(recordRef(), recordDoc("ticket-redeem", {
+        tickets[idx] = ticket;
+        txn.update(ref, {tickets, updatedAt: FieldValue.serverTimestamp()});
+        txn.set(recordRef(), recordDoc(recordType, {
             performedBy: uid,
             performedByName: callerName,
             eventId,
             eventTitle,
             targetEmail: data.email ?? "",
             targetName: attendeeRecordName(data),
+            ...record,
         }));
-
-        return {redeemed: true};
+        return reply;
     });
+}
+
+export const voidTicket = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    return editTicket(uid, ticketTarget(request.data), "ticket-void",
+        ticket => ({ticket: {...ticket, voided: true}, reply: {voided: true}}));
+});
+export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    return editTicket(uid, ticketTarget(request.data), "ticket-unvoid",
+        ticket => ({ticket: {...ticket, voided: false}, reply: {unvoided: true}}));
+});
+export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    const target = ticketTarget(request.data);
+    return editTicket<{redeemed: boolean; alreadyRedeemed?: boolean}>(uid, target, "ticket-redeem",
+        async (ticket, {txn, data, callerName}) => {
+            if (ticket.voided) {
+                throw new HttpsError("failed-precondition", "This ticket has been voided.", {code: "voided"});
+            }
+            // Idempotent, so a double-click can't overwrite the original redeemer
+            // and time.
+            if (ticket.redeemed) return {reply: {redeemed: false, alreadyRedeemed: true}};
+
+            // A check-in by hand credits the account exactly as the scanner does
+            // (see redeemTicket).
+            const userCheckedIn = await creditAccountAttendance(txn, data.email ?? "", target.eventId);
+            return {
+                ticket: admitted(ticket, {uid, name: callerName}, Timestamp.now(), userCheckedIn),
+                reply: {redeemed: true},
+            };
+        });
 });
 export const resetTicket = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
-
-    const input = request.data as {eventId?: string; attendeeId?: string; ticketId?: string};
-    const eventId = validateDocId(input.eventId, "eventId");
-    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
-    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
-
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        const eventRef = db.collection("upcomingEvents").doc(eventId);
-        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
-        const [eventSnap, attendeeSnap] = await Promise.all([
-            txn.get(eventRef),
-            txn.get(attendeeRef),
-        ]);
-        // An archived event's tickets are read-only; see archiveUpcomingEvent.
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        if (!attendeeSnap.exists) {
-            throw new HttpsError("not-found", "Attendee not found.");
-        }
-        const data = attendeeSnap.data()!;
-        const tickets: NewTicket[] = (data.tickets ?? []).map(
-            (t: Record<string, unknown>) => t as unknown as NewTicket
-        );
-        const idx = tickets.findIndex(t => t.ticketId === ticketId);
-        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
-
-        // Only the redemption state. attendedEvents stays: the holder may have
-        // attended on another ticket.
-        tickets[idx] = {
-            ...tickets[idx],
+    // Only the redemption state. attendedEvents stays: the holder may have
+    // attended on another ticket.
+    return editTicket(uid, ticketTarget(request.data), "ticket-reset", ticket => ({
+        ticket: {
+            ...ticket,
             redeemed: false,
             redeemedAt: null,
             redeemedBy: "",
             redeemedByName: "",
             checkedIn: false,
             checkedInAt: null,
-        };
-
-        const eventTitle: string = eventSnap.data()?.title ?? eventId;
-
-        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(recordRef(), recordDoc("ticket-reset", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            eventId,
-            eventTitle,
-            targetEmail: data.email ?? "",
-            targetName: attendeeRecordName(data),
-        }));
-
-        return {reset: true};
-    });
+        },
+        reply: {reset: true},
+    }));
 });
 export const updateEventAttendee = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -1459,23 +1337,11 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
     const notes = input.notes === undefined ? undefined : validateTicketNotes(input.notes);
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const eventRef = db.collection("upcomingEvents").doc(eventId);
-        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
-        const [eventSnap, attendeeSnap] = await Promise.all([
-            txn.get(eventRef),
-            txn.get(attendeeRef),
-        ]);
-        // An archived event's tickets are read-only; see archiveUpcomingEvent.
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        if (!attendeeSnap.exists) {
-            throw new HttpsError("not-found", "Attendee not found.");
-        }
-        const data = attendeeSnap.data()!;
+        const {ref: attendeeRef, data, eventTitle} = await readAttendee(txn, eventId, attendeeId);
         const prevTicketCount: number = data.ticketCount ?? 0;
         const prevTickets: NewTicket[] = (data.tickets ?? []) as NewTicket[];
         const prevType = prevTickets[0]?.type ?? "normal";
 
-        const eventTitle: string = eventSnap.data()?.title ?? eventId;
         const callerName: string = callerSnap.data()?.displayName ?? "";
 
         const countChanged = ticketCount !== prevTicketCount;
@@ -1555,110 +1421,24 @@ export const updateEventAttendee = onCall({maxInstances: 10}, async (request) =>
 });
 export const updateTicketType = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
+    const target = ticketTarget(request.data);
+    const type = validateTicketType((request.data as {type?: unknown}).type);
 
-    const input = request.data as {
-        eventId?: string;
-        attendeeId?: string;
-        ticketId?: string;
-        type?: unknown;
-    };
-    const eventId = validateDocId(input.eventId, "eventId");
-    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
-    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
-    const type = validateTicketType(input.type);
-
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        const eventRef = db.collection("upcomingEvents").doc(eventId);
-        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
-        const [eventSnap, attendeeSnap] = await Promise.all([
-            txn.get(eventRef),
-            txn.get(attendeeRef),
-        ]);
-        // An archived event's tickets are read-only; see archiveUpcomingEvent.
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        if (!attendeeSnap.exists) {
-            throw new HttpsError("not-found", "Attendee not found.");
-        }
-        const data = attendeeSnap.data()!;
-        const tickets: NewTicket[] = (data.tickets ?? []).map(
-            (t: Record<string, unknown>) => t as unknown as NewTicket
-        );
-        const idx = tickets.findIndex(t => t.ticketId === ticketId);
-        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
-
-        const oldType = tickets[idx].type || "normal";
-        if (oldType === type) return {updated: false};
-
-        tickets[idx] = {...tickets[idx], type};
-
-        const eventTitle: string = eventSnap.data()?.title ?? eventId;
-
-        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(recordRef(), recordDoc("ticket-type-edit", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            eventId,
-            eventTitle,
-            targetEmail: data.email ?? "",
-            targetName: attendeeRecordName(data),
-            oldType,
-            newType: type,
-        }));
-
-        return {updated: true};
+    return editTicket(uid, target, "ticket-type-edit", ticket => {
+        const oldType = ticket.type || "normal";
+        if (oldType === type) return {reply: {updated: false}};
+        return {ticket: {...ticket, type}, record: {oldType, newType: type}, reply: {updated: true}};
     });
 });
 export const updateTicketNotes = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
-
-    const input = request.data as {
-        eventId?: string;
-        attendeeId?: string;
-        ticketId?: string;
-        notes?: unknown;
-    };
-    const eventId = validateDocId(input.eventId, "eventId");
-    const attendeeId = validateDocId(input.attendeeId, "attendeeId");
-    const ticketId = validateStr(input.ticketId, "ticketId", 128, true);
+    const target = ticketTarget(request.data);
     // An empty note clears it.
-    const notes = validateTicketNotes(input.notes);
+    const notes = validateTicketNotes((request.data as {notes?: unknown}).notes);
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        const eventRef = db.collection("upcomingEvents").doc(eventId);
-        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
-        const [eventSnap, attendeeSnap] = await Promise.all([
-            txn.get(eventRef),
-            txn.get(attendeeRef),
-        ]);
-        // An archived event's tickets are read-only; see archiveUpcomingEvent.
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        if (!attendeeSnap.exists) {
-            throw new HttpsError("not-found", "Attendee not found.");
-        }
-        const data = attendeeSnap.data()!;
-        const tickets: NewTicket[] = (data.tickets ?? []).map(
-            (t: Record<string, unknown>) => t as unknown as NewTicket
-        );
-        const idx = tickets.findIndex(t => t.ticketId === ticketId);
-        if (idx < 0) throw new HttpsError("not-found", "Ticket not found.");
-
-        if ((tickets[idx].notes ?? "") === notes) return {updated: false, notes};
-
-        tickets[idx] = {...tickets[idx], notes};
-
-        const eventTitle: string = eventSnap.data()?.title ?? eventId;
-
-        txn.update(attendeeRef, {tickets, updatedAt: FieldValue.serverTimestamp()});
-        txn.set(recordRef(), recordDoc("ticket-notes-edit", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            eventId,
-            eventTitle,
-            targetEmail: data.email ?? "",
-            targetName: attendeeRecordName(data),
-        }));
-
-        return {updated: true, notes};
+    return editTicket(uid, target, "ticket-notes-edit", ticket => {
+        if ((ticket.notes ?? "") === notes) return {reply: {updated: false, notes}};
+        return {ticket: {...ticket, notes}, reply: {updated: true, notes}};
     });
 });
 export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) => {
@@ -1669,18 +1449,7 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
     const attendeeId = validateDocId(input.attendeeId, "attendeeId");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const eventRef = db.collection("upcomingEvents").doc(eventId);
-        const attendeeRef = eventRef.collection("attendees").doc(attendeeId);
-        const [eventSnap, attendeeSnap] = await Promise.all([
-            txn.get(eventRef),
-            txn.get(attendeeRef),
-        ]);
-        // An archived event's tickets are read-only; see archiveUpcomingEvent.
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        if (!attendeeSnap.exists) {
-            throw new HttpsError("not-found", "Attendee not found.");
-        }
-        const data = attendeeSnap.data()!;
+        const {ref: attendeeRef, data, eventTitle} = await readAttendee(txn, eventId, attendeeId);
         // Its doc is what keeps the number from getting in again, unlisted or
         // by the next import, so it's voided instead.
         if (data.source === "hometown") {
@@ -1693,7 +1462,6 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             throw new HttpsError("failed-precondition", "Tickets sold through the API can't be removed; void them instead.",
                 {code: "api-order"});
         }
-        const eventTitle: string = eventSnap.data()?.title ?? eventId;
         txn.delete(attendeeRef);
         txn.set(recordRef(), recordDoc("ticket-attendee-delete", {
             performedBy: uid,
@@ -1718,7 +1486,7 @@ export const sendTicketEmails = onCall(
     {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB", secrets: [RESEND_API_KEY]},
     async (request) => {
         const uid = await requireAuth(request, "staff");
-        await requireAdmin(uid);
+        const callerSnap = await requireAdmin(uid);
 
         const input = request.data as {
             eventId?: string;
@@ -1728,13 +1496,12 @@ export const sendTicketEmails = onCall(
         };
         const eventId = validateDocId(input.eventId, "eventId");
         const mode = input.mode === "all" ? "all" : "unsent";
-        const chunkSize = SEND_CHUNK_SIZE;
         let attendeeIds: string[] | null = null;
         if (Array.isArray(input.attendeeIds)) {
             attendeeIds = input.attendeeIds.map(id => validateDocId(id, "attendeeId"));
-            if (attendeeIds.length > chunkSize) {
+            if (attendeeIds.length > SEND_CHUNK_SIZE) {
                 throw new HttpsError("invalid-argument",
-                    `Too many attendee ids in a single send (max ${chunkSize}).`);
+                    `Too many attendee ids in a single send (max ${SEND_CHUNK_SIZE}).`);
             }
         }
         const cursor = typeof input.cursor === "string" && input.cursor.length > 0
@@ -1748,8 +1515,8 @@ export const sendTicketEmails = onCall(
         const template = await readSavedTemplate(ticketTemplateRef(eventSnap.ref));
         const contactEmail = await contactEmailFor(template);
 
-        // Target attendees — capped at chunkSize.
-        const attendeesCol = db.collection("upcomingEvents").doc(eventId).collection("attendees");
+        // Target attendees — capped at SEND_CHUNK_SIZE.
+        const attendeesCol = eventSnap.ref.collection("attendees");
         let targets: FirebaseFirestore.QueryDocumentSnapshot[];
         let queriedCount: number;
         if (attendeeIds && attendeeIds.length > 0) {
@@ -1758,7 +1525,7 @@ export const sendTicketEmails = onCall(
             if (mode === "unsent") {
                 filtered = filtered.filter(s => s.data()?.emailSent !== true);
             }
-            targets = filtered.slice(0, chunkSize);
+            targets = filtered.slice(0, SEND_CHUNK_SIZE);
             queriedCount = filtered.length;
         } else if (mode === "unsent") {
             // A drain: processed attendees leave the result set. createdAt order keeps
@@ -1768,7 +1535,7 @@ export const sendTicketEmails = onCall(
             let q = attendeesCol
                 .where("emailSent", "==", false)
                 .orderBy("createdAt", "asc")
-                .limit(chunkSize);
+                .limit(SEND_CHUNK_SIZE);
             if (cursor) {
                 const after = await attendeesCol.doc(cursor).get();
                 if (after.exists) q = q.startAfter(after);
@@ -1779,7 +1546,7 @@ export const sendTicketEmails = onCall(
         } else {
             // Resend-all: cursor by doc id for stable chunked iteration.
             let q = attendeesCol.orderBy(FieldPath.documentId())
-                .limit(chunkSize);
+                .limit(SEND_CHUNK_SIZE);
             if (cursor) q = q.startAfter(cursor);
             const snap = await q.get();
             targets = snap.docs;
@@ -1871,7 +1638,6 @@ export const sendTicketEmails = onCall(
         // both spend the same slots: optimistic concurrency on
         // system/resendQuota retries the second. The reservation is released
         // once the send settles.
-        const callerSnap = await db.collection("users").doc(uid).get();
         const performedByName = callerSnap.data()?.displayName ?? "";
         const {sendAuditRef, queueAuditRef, expectedSentCount, expectedQueuedCount} =
             await db.runTransaction(async (txn) => {
@@ -1988,7 +1754,7 @@ export const sendTicketEmails = onCall(
             }
         }
 
-        // Queue the overflow. attendeePath lets the drain clear emailScheduled
+        // Queue the overflow. targetPath lets the drain clear emailScheduled
         // once the mail ships, turning "Queued" into "Sent" in the admin UI.
         let queuedCount = 0;
         for (const {target, envelope} of queueItems) {
@@ -2001,7 +1767,7 @@ export const sendTicketEmails = onCall(
                 queuedBy: uid,
                 queuedAt: FieldValue.serverTimestamp(),
                 recipientCount: 1,
-                attendeePath: target.ref.path,
+                targetPath: target.ref.path,
             });
             // emailSent keeps the 'unsent' drain off it; emailScheduled makes
             // the admin UI say "Queued" until the drain ships it.
@@ -2044,7 +1810,7 @@ export const sendTicketEmails = onCall(
 
         // A full chunk came back, or this call stopped short of it. With
         // attendeeIds the client does the chunking.
-        const hasMore = !attendeeIds && (queriedCount >= chunkSize || handled < targets.length);
+        const hasMore = !attendeeIds && (queriedCount >= SEND_CHUNK_SIZE || handled < targets.length);
         const resumeAfter = handled > 0 ? targets[handled - 1].id : cursor;
         const nextCursor = hasMore && resumeAfter ? resumeAfter : undefined;
 
@@ -2091,9 +1857,7 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
     return adminTransaction(uid, async (txn, callerSnap) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        const templateRef = db.collection("upcomingEvents").doc(eventId)
-            .collection("emailTemplate").doc("default");
-        txn.set(templateRef, {
+        txn.set(ticketTemplateRef(eventSnap.ref), {
             subject, bodyHtml,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: uid,

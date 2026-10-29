@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import { type FunctionsErrorCode, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { checkApiKeyRateLimit } from "../utils/auth";
-import { type ApiKeyDoc, type ApiScope, apiKeysCol, hashApiKey } from "../utils/apiKeys";
+import { type ApiKeyDoc, apiKeysCol, type ApiScope, hashApiKey } from "../utils/apiKeys";
 import { RESEND_QUEUE_CAP } from "../utils/config";
 import { contactEmailFor, type EmailTemplateDoc, savedTemplate } from "../utils/emailTemplate";
 import { db } from "../utils/firebase";
@@ -11,7 +11,7 @@ import { recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, ResendSendError, sendEmails } from "../utils/resendClient";
 import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
 import { apiOrderAttendeeId, buildFreshTickets, isApiOrder, type NewTicket, ticketClaimUrl } from "../utils/tickets";
-import { sanitizeDisplayText, validateEmail, validateStr } from "../utils/validation";
+import { sanitizeDisplayText, validateOptionalEmail, validateStr } from "../utils/validation";
 import { getScheduledMailQueueDepth } from "./scheduledMail";
 
 /**
@@ -295,9 +295,7 @@ function parseOrder(body: unknown): OrderInput {
     // The door sees it, so it's required where a staff-added attendee's isn't.
     const name = sanitizeDisplayText(validateStr(buyer.name, "buyer.name", 100, true));
     if (!name) throw new ApiError(400, "invalid-request", "buyer.name is required.");
-    const email = buyer.email == null || (typeof buyer.email === "string" && buyer.email.trim() === "")
-        ? ""
-        : validateEmail(buyer.email, "buyer.email");
+    const email = validateOptionalEmail(buyer.email, "buyer.email");
 
     if (!Array.isArray(input.tickets) || input.tickets.length === 0) {
         throw new ApiError(400, "invalid-request", "tickets must be a non-empty array.");
