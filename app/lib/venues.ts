@@ -1,4 +1,5 @@
 import { createCollectionCache } from './collectionCache';
+import { localized } from './localized';
 
 /** A UW lot the organizers suggest for a venue, by UW facility code, with an optional note. */
 export interface SuggestedLot {
@@ -65,14 +66,15 @@ export function formatDistanceEstimate(miles: number, isEnglish: boolean): strin
 
 const cache = createCollectionCache<Venue>('venues', docSnap => {
     const data = docSnap.data();
-    const rawSuggested = Array.isArray(data.suggestedLots) ? data.suggestedLots : [];
+    const rawSuggested: (Partial<Record<keyof SuggestedLot, unknown>> | null)[] =
+        Array.isArray(data.suggestedLots) ? data.suggestedLots : [];
     const suggestedLots: SuggestedLot[] = rawSuggested
-        .map((s: any) => ({
+        .map(s => ({
             code: typeof s?.code === 'string' ? s.code : '',
             noteEn: typeof s?.noteEn === 'string' ? s.noteEn : '',
             noteCn: typeof s?.noteCn === 'string' ? s.noteCn : '',
         }))
-        .filter((s: SuggestedLot) => s.code.length > 0);
+        .filter(s => s.code.length > 0);
     return {
         id: docSnap.id,
         nameEn: data.nameEn ?? '',
@@ -88,6 +90,10 @@ export function useVenues(): {venues: Venue[]; loading: boolean; refresh: () => 
     const {items, loading, refresh} = cache.useItems();
     return {venues: items, loading, refresh};
 }
+
+/** A venue's name in the reader's language. */
+export const localizedVenueName = (venue: Venue, isEnglish: boolean): string =>
+    localized(isEnglish, venue.nameEn, venue.nameCn);
 
 /** An event's `venueId` as its {@link Venue}, or null if unset or unknown. */
 export function resolveVenueById(venueId: string | undefined, venues: Venue[]): Venue | null {
@@ -105,9 +111,8 @@ export function eventLocationDisplay(
     venues: Venue[],
     isEnglish: boolean,
 ): string {
-    const text = isEnglish ? (location ?? '') : (locationCn || location || '');
+    const text = localized(isEnglish, location ?? '', locationCn);
     if (text.trim()) return text;
     const venue = resolveVenueById(venueId, venues);
-    if (!venue) return '';
-    return isEnglish ? venue.nameEn : (venue.nameCn || venue.nameEn);
+    return venue ? localizedVenueName(venue, isEnglish) : '';
 }

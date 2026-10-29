@@ -6,6 +6,7 @@ import { callRedeemCode, functionsErrorCode, functionsErrorDetails } from '~/lib
 import { formatSiteTime } from '~/lib/siteTime';
 import type { BadgeDef } from '~/lib/badges';
 import { useModalEffects } from '~/lib/useModalEffects';
+import { localized } from '~/lib/localized';
 
 const OPEN_EVENT = 'open-redeem-modal';
 const PASSPORT_CLAIMED_EVENT = 'passport-claimed';
@@ -124,7 +125,7 @@ export const RedeemModal = () => {
             if (data.kind === 'passport-claim') {
                 setPassport({
                     passportId: data.passportId,
-                    name: isEnglish ? data.designName : (data.designNameCn || data.designName),
+                    name: localized(isEnglish, data.designName, data.designNameCn),
                     coverImageUrl: data.coverImageUrl,
                     daysGranted: data.daysGranted,
                     membershipExpiresAt: data.membershipExpiresAt,
@@ -251,7 +252,7 @@ export const RedeemModal = () => {
                     <>
                         {badge && (
                             <div className="claim-badge-icon">
-                                <img src={badge.imageUrl} alt={isEnglish ? badge.name : (badge.nameCn || badge.name)}/>
+                                <img src={badge.imageUrl} alt={localized(isEnglish, badge.name, badge.nameCn)}/>
                             </div>
                         )}
                         <h2 className="redeem-heading">
@@ -260,10 +261,10 @@ export const RedeemModal = () => {
                         {badge && (
                             <>
                                 <p className="claim-event-title redeem-centered-text">
-                                    {isEnglish ? badge.name : (badge.nameCn || badge.name)}
+                                    {localized(isEnglish, badge.name, badge.nameCn)}
                                 </p>
                                 <p className="claim-event-category redeem-centered-text">
-                                    {isEnglish ? badge.description : (badge.descriptionCn || badge.description)}
+                                    {localized(isEnglish, badge.description, badge.descriptionCn)}
                                 </p>
                             </>
                         )}
@@ -278,7 +279,7 @@ export const RedeemModal = () => {
                         {eventInfo?.eventPoster && (
                             <div className="claim-badge-icon">
                                 <img src={eventInfo.eventPoster}
-                                     alt={isEnglish ? eventInfo.eventTitle : (eventInfo.eventTitleCn || eventInfo.eventTitle)}/>
+                                     alt={localized(isEnglish, eventInfo.eventTitle, eventInfo.eventTitleCn)}/>
                             </div>
                         )}
                         <h2 className="redeem-heading">

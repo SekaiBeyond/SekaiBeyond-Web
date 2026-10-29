@@ -1,5 +1,6 @@
 import { type QueryDocumentSnapshot } from 'firebase/firestore';
 import { createCollectionCache } from './collectionCache';
+import { localized } from './localized';
 
 export interface SocialPlatform {
     id: string;
@@ -55,5 +56,5 @@ export function socialPlatformName(
 ): string {
     const p = platforms.find(item => item.id === id);
     if (!p) return id;
-    return isEnglish ? p.label : (p.labelCn ?? p.label);
+    return localized(isEnglish, p.label, p.labelCn);
 }

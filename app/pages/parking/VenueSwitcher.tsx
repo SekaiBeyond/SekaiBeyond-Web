@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { walkMinutes } from '~/lib/uwParking';
-import type { Venue } from '~/lib/venues';
-import { localizedVenueName } from './model';
+import { localizedVenueName, type Venue } from '~/lib/venues';
 import type { ParkingText } from './text';
 
 interface VenueSwitcherProps {

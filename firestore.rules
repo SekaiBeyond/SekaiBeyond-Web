@@ -75,7 +75,7 @@ service cloud.firestore {
         match /pastEvents/{eventId} {
             allow read: if true;
 
-            // Paid event subcollections (migrated from upcomingEvents on archive).
+            // Paid event subcollections, moved here from upcomingEvents on archive.
             // Staff+ read every event's attendees (staff read-only in the panel);
             // event-staff read only their own events'.
             match /attendees/{attendeeId} {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { useVenues } from '~/lib/venues';
+import { localizedVenueName, useVenues } from '~/lib/venues';
 import { BilingualFormField } from './BilingualFormField';
 
 interface LocationFormFieldProps {
@@ -75,7 +75,7 @@ export const LocationFormField = ({
                     </option>
                     {venues.map(v => (
                         <option key={v.id} value={v.id}>
-                            {isEnglish ? v.nameEn : (v.nameCn || v.nameEn)}
+                            {localizedVenueName(v, isEnglish)}
                         </option>
                     ))}
                 </select>

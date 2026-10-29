@@ -4,6 +4,7 @@ import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { confirmExit } from '~/lib/useExitGuard';
+import { NoticeCard } from '~/components/NoticeCard';
 import { PageNav } from '~/components/PageNav';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents, useUpcomingEventsByIds } from '~/lib/upcomingEvents';
@@ -240,15 +241,10 @@ export const AdminPage = () => {
 
     if (!user || !profile || (!isStaffOrAbove && !isEventStaffOnly)) {
         return (
-            <div className="profile-login-prompt">
-                <div className="profile-login-card">
-                    <h2>{isEnglish ? 'Access Denied' : '无权访问'}</h2>
-                    <p>{isEnglish ? 'This page is for staff members only.' : '此页面仅限工作人员访问。'}</p>
-                    <a href="/" className="profile-back-link">
-                        {isEnglish ? 'Back to Home' : '返回首页'}
-                    </a>
-                </div>
-            </div>
+            <NoticeCard
+                title={isEnglish ? 'Access Denied' : '无权访问'}
+                text={isEnglish ? 'This page is for staff members only.' : '此页面仅限工作人员访问。'}
+            />
         );
     }
 

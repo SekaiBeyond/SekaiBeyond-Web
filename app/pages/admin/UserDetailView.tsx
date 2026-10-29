@@ -33,12 +33,58 @@ import type { PastEvent } from '~/lib/pastEvents';
 import { useUploadLimits } from '~/lib/uploadLimits';
 import { usePassportsByOwner } from '~/pages/PassportShelf';
 import type { BadgeDef } from '~/lib/badges';
+import { localized } from '~/lib/localized';
 import type { UserRecord } from './types';
 import { type ShowToast, validateImageFile } from './utils';
 import { ImageCropModal } from './ImageCropModal';
 import { MembershipSection } from './MembershipSection';
 import { PassportPageTag, PassportRow } from './passports/PassportSearch';
 import { UserAvatar } from './UserRow';
+
+/**
+ * A badge or past event the user has or hasn't: a Grant or Revoke button, or for
+ * read-only staff a tag saying which.
+ */
+const GrantRow = ({image, name, detail, has, hasLabel, lacksLabel, readOnly, disabled, title, onToggle}: {
+    image: string;
+    name: string;
+    detail: string;
+    has: boolean;
+    hasLabel: string;
+    lacksLabel: string;
+    readOnly: boolean;
+    disabled: boolean;
+    title?: string;
+    onToggle: () => void;
+}) => {
+    const {isEnglish} = useLanguage();
+    return (
+        <div className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
+            {/* An empty tile for an event archived without a poster, keeping the rows aligned. */}
+            {image
+                ? <img src={image} alt="" className="admin-badge-img"/>
+                : <span className="admin-badge-img admin-no-poster" aria-hidden="true"/>}
+            <div className="admin-badge-info">
+                <span className="admin-badge-name">{name}</span>
+                <span className="admin-badge-date">{detail}</span>
+            </div>
+            {readOnly ? (
+                <span className="admin-user-group-tag" style={{opacity: has ? 1 : 0.35}}>
+                    {has ? hasLabel : lacksLabel}
+                </span>
+            ) : (
+                <button
+                    className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
+                    onClick={onToggle}
+                    disabled={disabled}
+                    title={title}
+                >
+                    {has ? (isEnglish ? 'Revoke' : '撤销') : (isEnglish ? 'Grant' : '授予')}
+                </button>
+            )}
+        </div>
+    );
+};
 
 interface UserDetailViewProps {
     userRecord: UserRecord;
@@ -743,44 +789,21 @@ export const UserDetailView = ({
                     </h4>
 
                     <div className="admin-badge-list">
-                        {badgeDefs.map((bd) => {
-                            const has = userRecord.badges.includes(bd.id);
-                            return (
-                                <div
-                                    key={bd.id}
-                                    className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}
-                                >
-                                    <img src={bd.imageUrl} alt="" className="admin-badge-img"/>
-                                    <div className="admin-badge-info">
-                                        <span className="admin-badge-name">
-                                            {isEnglish ? bd.name : (bd.nameCn || bd.name)}
-                                        </span>
-                                        <span className="admin-badge-date">
-                                            {isEnglish ? bd.description : (bd.descriptionCn || bd.description)}
-                                        </span>
-                                    </div>
-                                    {readOnly ? (
-                                        <span
-                                            className="admin-user-group-tag"
-                                            style={{opacity: has ? 1 : 0.35}}
-                                        >
-                                            {has ? (isEnglish ? 'Has badge' : '已持有') : (isEnglish ? 'No badge' : '未持有')}
-                                        </span>
-                                    ) : (
-                                        <button
-                                            className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                            onClick={() => toggleUserBadge(bd.id)}
-                                            disabled={updating || !canManage}
-                                            title={manageTooltip}
-                                        >
-                                            {has
-                                                ? (isEnglish ? 'Revoke' : '撤销')
-                                                : (isEnglish ? 'Grant' : '授予')}
-                                        </button>
-                                    )}
-                                </div>
-                            );
-                        })}
+                        {badgeDefs.map((bd) => (
+                            <GrantRow
+                                key={bd.id}
+                                image={bd.imageUrl}
+                                name={localized(isEnglish, bd.name, bd.nameCn)}
+                                detail={localized(isEnglish, bd.description, bd.descriptionCn)}
+                                has={userRecord.badges.includes(bd.id)}
+                                hasLabel={isEnglish ? 'Has badge' : '已持有'}
+                                lacksLabel={isEnglish ? 'No badge' : '未持有'}
+                                readOnly={readOnly}
+                                disabled={updating || !canManage}
+                                title={manageTooltip}
+                                onToggle={() => toggleUserBadge(bd.id)}
+                            />
+                        ))}
                     </div>
                 </>
             )}
@@ -794,42 +817,21 @@ export const UserDetailView = ({
             </h4>
 
             <div className="admin-badge-list">
-                {pastEvents.map((event) => {
-                    const has = userRecord.attendedEvents.includes(event.id);
-                    return (
-                        <div key={event.id} className={`admin-badge-row ${has ? 'admin-badge-has' : ''}`}>
-                            {/* An empty tile for one archived without a poster, keeping the rows aligned. */}
-                            {event.icon
-                                ? <img src={event.icon} alt="" className="admin-badge-img"/>
-                                : <span className="admin-badge-img admin-no-poster" aria-hidden="true"/>}
-                            <div className="admin-badge-info">
-                                <span className="admin-badge-name">
-                                    {isEnglish ? event.title : (event.titleCn || event.title)}
-                                </span>
-                                <span className="admin-badge-date">{event.date}</span>
-                            </div>
-                            {readOnly ? (
-                                <span
-                                    className="admin-user-group-tag"
-                                    style={{opacity: has ? 1 : 0.35}}
-                                >
-                                    {has ? (isEnglish ? 'Attended' : '已参加') : (isEnglish ? 'Not attended' : '未参加')}
-                                </span>
-                            ) : (
-                                <button
-                                    className={`admin-toggle-btn ${has ? 'admin-toggle-revoke' : 'admin-toggle-grant'}`}
-                                    onClick={() => toggleAttendance(event.id)}
-                                    disabled={updating || !canManage}
-                                    title={manageTooltip}
-                                >
-                                    {has
-                                        ? (isEnglish ? 'Revoke' : '撤销')
-                                        : (isEnglish ? 'Grant' : '授予')}
-                                </button>
-                            )}
-                        </div>
-                    );
-                })}
+                {pastEvents.map((event) => (
+                    <GrantRow
+                        key={event.id}
+                        image={event.icon}
+                        name={localized(isEnglish, event.title, event.titleCn)}
+                        detail={event.date}
+                        has={userRecord.attendedEvents.includes(event.id)}
+                        hasLabel={isEnglish ? 'Attended' : '已参加'}
+                        lacksLabel={isEnglish ? 'Not attended' : '未参加'}
+                        readOnly={readOnly}
+                        disabled={updating || !canManage}
+                        title={manageTooltip}
+                        onToggle={() => toggleAttendance(event.id)}
+                    />
+                ))}
             </div>
 
             {pendingPhoto && (

@@ -6,6 +6,7 @@ import { formatSiteTime } from '~/lib/siteTime';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { useUploadLimits } from '~/lib/uploadLimits';
 import { useVenues } from '~/lib/venues';
+import { localized } from '~/lib/localized';
 import type { Localized } from '~/pages/con/i18n';
 import { validateVideoFile } from './utils';
 import {
@@ -42,7 +43,7 @@ export const EventSection = ({content, loading, showToast, readOnly}: SectionPro
         if (!id) return none;
         const venue = venues.find(v => v.id === id);
         if (!venue) return isEnglish ? '(Deleted venue)' : '（已删除的场地）';
-        return isEnglish ? venue.nameEn : (venue.nameCn || venue.nameEn);
+        return localized(isEnglish, venue.nameEn, venue.nameCn);
     };
 
     return (
@@ -88,7 +89,7 @@ export const EventSection = ({content, loading, showToast, readOnly}: SectionPro
                         )}
                         {upcomingEvents.map(e => (
                             <option key={e.id} value={e.id}>
-                                {`${isEnglish ? e.title : (e.titleCn || e.title)} · ${formatSiteTime(e.startAt, isEnglish, {
+                                {`${localized(isEnglish, e.title, e.titleCn)} · ${formatSiteTime(e.startAt, isEnglish, {
                                     year: 'numeric', month: 'short', day: 'numeric',
                                 })}${e.published ? '' : (isEnglish ? ' (unpublished)' : '（未发布）')}`}
                             </option>

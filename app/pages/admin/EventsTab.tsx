@@ -4,8 +4,10 @@ import { callSavePastEvent, callUploadAdminImage, errorMessage } from '~/lib/fir
 import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
 import { useVenues } from '~/lib/venues';
+import { localized } from '~/lib/localized';
 import { refreshAfterSave, type ShowToast } from './utils';
 import { BilingualFormField } from './BilingualFormField';
+import { ListCard } from './CrudShell';
 import { LocationFormField } from './LocationFormField';
 import { ImageUploadField } from './ImageUploadField';
 import { TagMultiSelect } from './TagMultiSelect';
@@ -234,35 +236,17 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                     ) : null}
                     <div className="admin-event-grid">
                         {pastEvents.map((event) => (
-                            <button
+                            <ListCard
                                 key={event.id}
-                                className="admin-event-card"
+                                image={event.icon}
+                                title={localized(isEnglish, event.title, event.titleCn)}
+                                subtitle={event.date}
+                                tags={[
+                                    !event.published && (isEnglish ? 'Unpublished' : '未发布'),
+                                    !!event.deleteAt && (isEnglish ? 'Pending deletion' : '待删除'),
+                                ]}
                                 onClick={() => setManagedEvent(event.id)}
-                            >
-                                {/* One archived without a poster has no image. */}
-                                {event.icon ? (
-                                    <img src={event.icon} alt="" className="admin-event-card-img"/>
-                                ) : (
-                                    <div className="admin-event-card-img admin-no-poster">
-                                        {isEnglish ? 'No poster' : '无海报'}
-                                    </div>
-                                )}
-                                <div className="admin-event-card-info">
-                                    <span
-                                        className="admin-event-card-title">{isEnglish ? event.title : (event.titleCn || event.title)}</span>
-                                    <span className="admin-event-card-date">{event.date}</span>
-                                    {!event.published && (
-                                        <span className="admin-ended-tag">
-                                            {isEnglish ? 'Unpublished' : '未发布'}
-                                        </span>
-                                    )}
-                                    {event.deleteAt && (
-                                        <span className="admin-ended-tag">
-                                            {isEnglish ? 'Pending deletion' : '待删除'}
-                                        </span>
-                                    )}
-                                </div>
-                            </button>
+                            />
                         ))}
                     </div>
                 </>

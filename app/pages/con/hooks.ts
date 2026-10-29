@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CON_NAV_LINKS, useConListing } from '~/lib/conContent';
+import { type Duration, splitDuration } from '~/lib/countdown';
 import { parseSiteTime } from '~/lib/siteTime';
 
 /**
@@ -21,11 +22,7 @@ export const useMediaQuery = (query: string) => {
     return matches;
 };
 
-interface CountdownState {
-    days: number;
-    hours: number;
-    minutes: number;
-    seconds: number;
+interface CountdownState extends Duration {
     /** True once the start time has passed. */
     started: boolean;
     /** True once the end time has passed. */
@@ -38,21 +35,7 @@ const remainingFrom = (target: number, end: number): CountdownState => {
     const diff = target - now;
     // An unparseable date reads as not started, with zeroed digits rather than
     // NaN.
-    if (!Number.isFinite(diff)) {
-        return {days: 0, hours: 0, minutes: 0, seconds: 0, started: false, ended};
-    }
-    if (diff <= 0) {
-        return {days: 0, hours: 0, minutes: 0, seconds: 0, started: true, ended};
-    }
-    const seconds = Math.floor(diff / 1000);
-    return {
-        days: Math.floor(seconds / 86400),
-        hours: Math.floor((seconds % 86400) / 3600),
-        minutes: Math.floor((seconds % 3600) / 60),
-        seconds: seconds % 60,
-        started: false,
-        ended,
-    };
+    return {...splitDuration(diff), started: Number.isFinite(diff) && diff <= 0, ended};
 };
 
 /**

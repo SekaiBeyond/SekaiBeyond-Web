@@ -145,19 +145,13 @@ export const searchUsers = async (
     return Array.from(deduped.values());
 };
 
-export const fetchEventAttendees = async (eventId: string): Promise<UserRecord[]> => {
-    const db = getFirebaseDb();
-    const q = query(collection(db, 'users'), where('attendedEvents', 'array-contains', eventId));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(docToUserRecord);
-};
+const usersListing = async (field: 'attendedEvents' | 'eventStaffEvents', eventId: string): Promise<UserRecord[]> =>
+    (await getDocs(query(collection(getFirebaseDb(), 'users'), where(field, 'array-contains', eventId))))
+        .docs.map(docToUserRecord);
 
-export const fetchEventStaffCount = async (eventId: string): Promise<number> => {
-    const db = getFirebaseDb();
-    const q = query(collection(db, 'users'), where('eventStaffEvents', 'array-contains', eventId));
-    const snapshot = await getDocs(q);
-    return snapshot.size;
-};
+export const fetchEventAttendees = (eventId: string) => usersListing('attendedEvents', eventId);
+
+export const fetchEventStaff = (eventId: string) => usersListing('eventStaffEvents', eventId);
 
 export const getClaimUrl = (code: string): string => {
     return `${window.location.origin}/claim?code=${code}`;

@@ -35,6 +35,7 @@ import {
     checkedInWalkIn,
     isTemplateSaved,
     mapAttendeeDoc,
+    sendRefusal,
     ticketsSentElsewhere,
 } from './helpers';
 import { useAccountLinks } from './useAccountLinks';
@@ -428,29 +429,24 @@ export function TicketsSubtab({
                 (sent > 0 || queued > 0) ? 'success' : 'warning',
             );
         } catch (err) {
-            const code = functionsErrorCode(err);
-            if (code === 'no-template') {
-                showToast(
-                    isEnglish
-                        ? 'Save the email template before sending.'
-                        : '请先保存邮件模板再发送。',
-                    'warning',
-                );
-            } else if (code === 'no-contact-email') {
-                showToast(
-                    isEnglish
-                        ? 'The template uses {{ contactEmail }}. Set a Contact Email in Site Config before sending.'
-                        : '模板使用了 {{ contactEmail }}，请先在网站设置中填写联系邮箱再发送。',
-                    'warning',
-                );
-            } else {
-                showToast(isEnglish
-                        ? `Failed to send email${errorSuffix(err, true)}.`
-                        : `发送邮件失败${errorSuffix(err, false)}。`,
-                    'error');
-            }
+            const refusal = sendRefusal(err, isEnglish);
+            showToast(
+                refusal ?? (isEnglish
+                    ? `Failed to send email${errorSuffix(err, true)}.`
+                    : `发送邮件失败${errorSuffix(err, false)}。`),
+                refusal ? 'warning' : 'error',
+            );
         }
     };
+
+    const sectionTabs: {id: TicketsSection; en: string; zh: string; shown: boolean}[] = [
+        {id: 'scan', en: 'Scan', zh: '扫码', shown: canScan},
+        {id: 'attendees', en: 'Attendees', zh: '参加者', shown: true},
+        {id: 'stats', en: 'Stats', zh: '统计', shown: true},
+        {id: 'import', en: 'Import', zh: '导入', shown: !readOnly},
+        {id: 'emails', en: 'Emails', zh: '邮件', shown: !readOnly},
+        {id: 'settings', en: 'Settings', zh: '设置', shown: !readOnly && collectionRoot === 'upcomingEvents'},
+    ];
 
     const attendeesError = attendeesFailed
         ? (isEnglish
@@ -461,50 +457,15 @@ export function TicketsSubtab({
     return (
         <div className="admin-tickets-section">
             <div className="admin-tickets-inner-tabs">
-                {canScan && (
+                {sectionTabs.filter(tab => tab.shown).map(tab => (
                     <button
-                        className={`admin-sub-tab ${section === 'scan' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('scan')}
+                        key={tab.id}
+                        className={`admin-sub-tab ${section === tab.id ? 'admin-sub-tab-active' : ''}`}
+                        onClick={() => setSection(tab.id)}
                     >
-                        {isEnglish ? 'Scan' : '扫码'}
+                        {isEnglish ? tab.en : tab.zh}
                     </button>
-                )}
-                <button
-                    className={`admin-sub-tab ${section === 'attendees' ? 'admin-sub-tab-active' : ''}`}
-                    onClick={() => setSection('attendees')}
-                >
-                    {isEnglish ? 'Attendees' : '参加者'}
-                </button>
-                <button
-                    className={`admin-sub-tab ${section === 'stats' ? 'admin-sub-tab-active' : ''}`}
-                    onClick={() => setSection('stats')}
-                >
-                    {isEnglish ? 'Stats' : '统计'}
-                </button>
-                {!readOnly && (
-                    <button
-                        className={`admin-sub-tab ${section === 'import' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('import')}
-                    >
-                        {isEnglish ? 'Import' : '导入'}
-                    </button>
-                )}
-                {!readOnly && (
-                    <button
-                        className={`admin-sub-tab ${section === 'emails' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('emails')}
-                    >
-                        {isEnglish ? 'Emails' : '邮件'}
-                    </button>
-                )}
-                {!readOnly && collectionRoot === 'upcomingEvents' && (
-                    <button
-                        className={`admin-sub-tab ${section === 'settings' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('settings')}
-                    >
-                        {isEnglish ? 'Settings' : '设置'}
-                    </button>
-                )}
+                ))}
             </div>
 
             {templateSaved === false && section !== 'emails' && section !== 'scan' && (

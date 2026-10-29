@@ -5,6 +5,7 @@ import { fetchQrScans, type QrCode, qrHasSpot, qrIsActive, qrIsSocial, qrScanUrl
 import { formatSiteTime } from '~/lib/siteTime';
 import { type SocialPlatform, socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
+import { localized } from '~/lib/localized';
 import {
     buildQrPayload,
     type QrDraft,
@@ -180,7 +181,7 @@ export const QrCodeDetail = ({
             ? (isEnglish ? 'When the linked event ends' : '关联活动结束时')
             : (isEnglish ? 'Never expires' : '永不过期');
 
-    const title = !isEnglish && code.labelCn ? code.labelCn : code.label;
+    const title = localized(isEnglish, code.label, code.labelCn);
     const subtitle = code.labelCn && code.labelCn !== code.label
         ? (title === code.label ? code.labelCn : code.label)
         : null;
@@ -296,7 +297,7 @@ export const QrCodeDetail = ({
                                 ) : (
                                     code.eventId
                                         ? (linkedEvent
-                                            ? (isEnglish ? linkedEvent.title : (linkedEvent.titleCn || linkedEvent.title))
+                                            ? localized(isEnglish, linkedEvent.title, linkedEvent.titleCn)
                                             : (isEnglish ? 'Linked event (archived)' : '关联活动（已归档）'))
                                         : (isEnglish ? 'None' : '无')
                                 )}
@@ -387,7 +388,7 @@ export const QrCodeDetail = ({
                             <QrSpotsMap codes={[code]} height={260}/>
                             {code.spotLabel && (
                                 <p className="admin-helper-text admin-field-hint">
-                                    {isEnglish ? code.spotLabel : (code.spotLabelCn || code.spotLabel)}
+                                    {localized(isEnglish, code.spotLabel, code.spotLabelCn)}
                                 </p>
                             )}
                         </>

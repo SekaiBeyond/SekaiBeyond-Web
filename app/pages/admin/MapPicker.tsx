@@ -135,7 +135,11 @@ const PlaceSearch = ({onPick}: {onPick: (p: {lat: number; lng: number}) => void}
             const res = await fetch(`${NOMINATIM_URL}?${params}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const raw: unknown = await res.json();
-            const found = (Array.isArray(raw) ? raw : []).flatMap((r: any) => {
+            const found = (Array.isArray(raw) ? raw : []).flatMap((r: {
+                lat?: unknown;
+                lon?: unknown;
+                display_name?: unknown
+            } | null) => {
                 const lat = Number(r?.lat), lng = Number(r?.lon);
                 return typeof r?.display_name === 'string' && Number.isFinite(lat) && Number.isFinite(lng)
                     ? [{name: r.display_name, lat, lng}] : [];

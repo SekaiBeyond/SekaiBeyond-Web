@@ -6,6 +6,7 @@ import { callGetMyTickets, type HeldTicket, type HeldTicketEvent } from '~/lib/f
 import { formatSiteTime } from '~/lib/siteTime';
 import { useModalEffects } from '~/lib/useModalEffects';
 import { eventLocationDisplay, useVenues } from '~/lib/venues';
+import { localized } from '~/lib/localized';
 import { ticketTypeLabel } from '~/pages/admin/tickets/types';
 
 /**
@@ -27,7 +28,7 @@ export function useHeldTickets(uid: string | null): {ticketEvents: HeldTicketEve
         let stale = false;
         callGetMyTickets()
             .then(result => {
-                if (!stale) setTicketEvents(result.data.events ?? []);
+                if (!stale) setTicketEvents(result.data.events);
             })
             .catch(() => {
                 if (!stale) setFailed(true);
@@ -235,7 +236,7 @@ export const ProfileTickets = ({ticketEvents}: {ticketEvents: HeldTicketEvent[]}
 
             <div className="profile-ticket-events">
                 {ticketEvents.map(event => {
-                    const title = isEnglish ? event.title : (event.titleCn || event.title);
+                    const title = localized(isEnglish, event.title, event.titleCn);
                     const where = eventLocationDisplay(
                         event.location, event.locationCn, event.venueId, venues, isEnglish,
                     );

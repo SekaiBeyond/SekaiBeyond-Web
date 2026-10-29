@@ -9,6 +9,7 @@ import {
     type StatusFilter,
     TICKET_TYPES,
     type TicketType,
+    ticketTypeClass,
     ticketTypeLabel,
 } from './types';
 import type { AccountLink } from './useAccountLinks';
@@ -329,7 +330,7 @@ export function AttendeesSection({
                                 {!a.unlisted && ticketTypeCounts(a).map(([type]) => (
                                     <span
                                         key={type}
-                                        className={`admin-tickets-tag admin-tickets-tag-type-${type.toLowerCase().replace(/\s+/g, '-')}`}>
+                                        className={`admin-tickets-tag ${ticketTypeClass(type)}`}>
                                         {ticketTypeLabel(type, isEnglish)}
                                     </span>
                                 ))}
@@ -526,12 +527,12 @@ export function AttendeesSection({
                                                 <td className="admin-tickets-cell-type">
                                                     {a.unlisted ? '—' : readOnly ? (
                                                         <span
-                                                            className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}>
+                                                            className={`admin-tickets-tag ${ticketTypeClass(t.type)}`}>
                                                             {ticketTypeLabel(t.type || 'normal', isEnglish)}
                                                         </span>
                                                     ) : (
                                                         <select
-                                                            className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}
+                                                            className={`admin-tickets-tag ${ticketTypeClass(t.type)}`}
                                                             value={t.type || 'normal'}
                                                             onChange={(e) => onUpdateTicketType(a, t.ticketId, e.target.value as TicketType)}
                                                             style={{

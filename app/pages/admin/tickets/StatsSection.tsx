@@ -284,81 +284,70 @@ export function StatsSection({loading, error, attendees, onRefresh}: StatsSectio
             </div>
 
             <div className="admin-stats-charts">
-                <ChartCard title={isEnglish ? 'Tickets by Type' : '按类型分布'}>
-                    {stats.typeData.length > 0 ? (
-                        <ChartPie data={stats.typeData}/>
-                    ) : (
-                        <p className="admin-no-results">
-                            {isEnglish ? 'No data.' : '暂无数据。'}
-                        </p>
-                    )}
+                <ChartCard title={isEnglish ? 'Tickets by Type' : '按类型分布'} empty={stats.typeData.length === 0}>
+                    <ChartPie data={stats.typeData}/>
                 </ChartCard>
 
-                <ChartCard title={isEnglish ? 'Ticket Status' : '门票状态'}>
-                    {stats.statusData.length > 0 ? (
-                        <ChartPie data={stats.statusData} donut/>
-                    ) : (
-                        <p className="admin-no-results">
-                            {isEnglish ? 'No data.' : '暂无数据。'}
-                        </p>
-                    )}
+                <ChartCard title={isEnglish ? 'Ticket Status' : '门票状态'} empty={stats.statusData.length === 0}>
+                    <ChartPie data={stats.statusData} donut/>
                 </ChartCard>
             </div>
 
             <div className="admin-stats-charts">
                 <ChartCard
                     title={isEnglish ? 'Redeemed vs Not Redeemed by Type' : '各类型验证情况'}
+                    empty={stats.typeStatusData.length === 0}
                 >
-                    {stats.typeStatusData.length > 0 ? (
-                        <ChartTypeStatus data={stats.typeStatusData} isEnglish={isEnglish}/>
-                    ) : (
-                        <p className="admin-no-results">
-                            {isEnglish ? 'No data.' : '暂无数据。'}
-                        </p>
-                    )}
+                    <ChartTypeStatus data={stats.typeStatusData} isEnglish={isEnglish}/>
                 </ChartCard>
             </div>
 
             <div className="admin-stats-charts">
-                <ChartCard title={isEnglish ? 'Tickets Created Over Time' : '出票时间趋势'}>
-                    {stats.timeline.data.length > 0 ? (
-                        <ChartTimeline
-                            data={stats.timeline.data}
-                            types={stats.timeline.types}
-                            isEnglish={isEnglish}
-                        />
-                    ) : (
-                        <p className="admin-no-results">
-                            {isEnglish ? 'No data.' : '暂无数据。'}
-                        </p>
-                    )}
+                <ChartCard
+                    title={isEnglish ? 'Tickets Created Over Time' : '出票时间趋势'}
+                    empty={stats.timeline.data.length === 0}
+                >
+                    <ChartTimeline
+                        data={stats.timeline.data}
+                        types={stats.timeline.types}
+                        isEnglish={isEnglish}
+                    />
                 </ChartCard>
             </div>
 
             <div className="admin-stats-charts">
-                <ChartCard title={isEnglish ? 'Redemptions Over Time' : '验证时间趋势'}>
-                    {stats.redemptionTimeline.data.length > 0 ? (
-                        <ChartTimeline
-                            data={stats.redemptionTimeline.data}
-                            types={stats.redemptionTimeline.types}
-                            isEnglish={isEnglish}
-                        />
-                    ) : (
-                        <p className="admin-no-results">
-                            {isEnglish ? 'No tickets redeemed yet.' : '暂无验证记录。'}
-                        </p>
-                    )}
+                <ChartCard
+                    title={isEnglish ? 'Redemptions Over Time' : '验证时间趋势'}
+                    empty={stats.redemptionTimeline.data.length === 0}
+                    emptyText={isEnglish ? 'No tickets redeemed yet.' : '暂无验证记录。'}
+                >
+                    <ChartTimeline
+                        data={stats.redemptionTimeline.data}
+                        types={stats.redemptionTimeline.types}
+                        isEnglish={isEnglish}
+                    />
                 </ChartCard>
             </div>
         </div>
     );
 }
 
-function ChartCard({title, children}: {title: string; children: ReactNode}) {
+/** A chart under its title, or `emptyText` ("No data.") in its place when there's nothing to plot. */
+function ChartCard({title, empty, emptyText, children}: {
+    title: string;
+    empty: boolean;
+    emptyText?: string;
+    children: ReactNode;
+}) {
+    const {isEnglish} = useLanguage();
     return (
         <div className="admin-stats-card">
             <div className="admin-stats-card-title">{title}</div>
-            <div className="admin-stats-card-body">{children}</div>
+            <div className="admin-stats-card-body">
+                {empty
+                    ? <p className="admin-no-results">{emptyText ?? (isEnglish ? 'No data.' : '暂无数据。')}</p>
+                    : children}
+            </div>
         </div>
     );
 }

@@ -4,10 +4,10 @@ import { callCancelEventDeletion, callRequestEventDeletion, callSetPastEventPubl
 import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
-import type { Venue } from '~/lib/venues';
-import { eventLocationDisplay } from '~/lib/venues';
+import { eventLocationDisplay, type Venue } from '~/lib/venues';
+import { localized } from '~/lib/localized';
 import type { UserRecord } from './types';
-import { fetchEventAttendees, fetchEventStaffCount, type ShowToast } from './utils';
+import { fetchEventAttendees, fetchEventStaff, type ShowToast } from './utils';
 import { ClaimCodeSection } from './ClaimCodeSection';
 import { EventStaffSection } from './EventStaffSection';
 import { PastEventAttendeesSection } from './PastEventAttendeesSection';
@@ -119,9 +119,9 @@ export const PastEventDetailView = ({
             }
 
             try {
-                const count = await fetchEventStaffCount(event.id);
+                const staff = await fetchEventStaff(event.id);
                 if (!active) return;
-                setStaffCount(count);
+                setStaffCount(staff.length);
             } catch {
                 /* Non-fatal — count badge just won't appear. */
             }
@@ -146,12 +146,12 @@ export const PastEventDetailView = ({
                     <img src={event.icon} alt="" className="admin-event-detail-img"/>
                 )}
                 <div>
-                    <h3>{isEnglish ? event.title : (event.titleCn || event.title)}</h3>
+                    <h3>{localized(isEnglish, event.title, event.titleCn)}</h3>
                     <p className="admin-event-detail-meta">
                         <span>{event.tagIds
                             .map(id => tags.find(t => t.id === id))
                             .filter((t): t is Tag => !!t)
-                            .map(t => isEnglish ? t.name : (t.nameCn || t.name))
+                            .map(t => localized(isEnglish, t.name, t.nameCn))
                             .join(', ')}</span>
                         <span>{event.date}</span>
                         <span>{eventLocationDisplay(event.location, event.locationCn, event.venueId, venues, isEnglish)}</span>

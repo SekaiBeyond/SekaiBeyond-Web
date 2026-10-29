@@ -24,6 +24,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { type BadgeDef, toBadgeDef } from '~/lib/badges';
 import { getDocsByIds } from '~/lib/collectionCache';
 import { callGetPublicProfile, isStorageUrl } from '~/lib/firebase';
+import { NoticeCard } from '~/components/NoticeCard';
 import { PageNav } from '~/components/PageNav';
 import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import type { ShelfPassport } from '~/lib/passports';
@@ -40,6 +41,7 @@ import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 import { validateImageFile } from "~/pages/admin/utils";
 import { useModalEffects } from '~/lib/useModalEffects';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
+import { localized } from '~/lib/localized';
 
 interface ViewedProfile {
     displayName: string;
@@ -86,11 +88,11 @@ const BadgeCard = ({badge, earnedDate, isEnglish, onOpen}: {
         <span className="badge-icon-wrapper">
             <img src={badge.imageUrl} alt="" className="badge-icon"/>
         </span>
-        <span className="badge-label">{isEnglish ? badge.name : (badge.nameCn || badge.name)}</span>
+        <span className="badge-label">{localized(isEnglish, badge.name, badge.nameCn)}</span>
         <span className="badge-tooltip" aria-hidden="true">
-            <span className="badge-tooltip-name">{isEnglish ? badge.name : (badge.nameCn || badge.name)}</span>
+            <span className="badge-tooltip-name">{localized(isEnglish, badge.name, badge.nameCn)}</span>
             <span
-                className="badge-tooltip-desc">{isEnglish ? badge.description : (badge.descriptionCn || badge.description)}</span>
+                className="badge-tooltip-desc">{localized(isEnglish, badge.description, badge.descriptionCn)}</span>
             {earnedDate && (
                 <span className="badge-tooltip-date">
                     {isEnglish ? 'Earned ' : '获得于 '}
@@ -112,7 +114,7 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
     tagLabels?: string[];
     wasStaff?: boolean;
 }) => {
-    const title = isEnglish ? event.title : (event.titleCn || event.title);
+    const title = localized(isEnglish, event.title, event.titleCn);
     return (
         <div className="profile-event-card">
             <div className="profile-event-icon-wrapper">
@@ -450,54 +452,33 @@ export const ProfilePage = () => {
     // the usual way here signed out.
     if (isViewingOther && !user) {
         return (
-            <div className="profile-login-prompt">
-                <div className="profile-login-card">
-                    <h2>{isEnglish ? 'Sign in to view this profile' : '登录以查看此个人主页'}</h2>
-                    <p>{isEnglish
-                        ? 'Member profiles are only shown to signed-in visitors.'
-                        : '成员个人主页仅对已登录的访客显示。'}</p>
-                    <button onClick={signIn} className="profile-sign-in-btn">
-                        {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
-                    </button>
-                    <a href="/" className="profile-back-link">
-                        {isEnglish ? 'Back to Home' : '返回首页'}
-                    </a>
-                </div>
-            </div>
+            <NoticeCard
+                title={isEnglish ? 'Sign in to view this profile' : '登录以查看此个人主页'}
+                text={isEnglish
+                    ? 'Member profiles are only shown to signed-in visitors.'
+                    : '成员个人主页仅对已登录的访客显示。'}
+                onSignIn={signIn}
+            />
         );
     }
 
     if (isViewingOther && !viewedProfile) {
         return (
-            <div className="profile-login-prompt">
-                <div className="profile-login-card">
-                    <h2>{viewedLoadError
-                        ? (isEnglish ? 'Failed to load profile' : '加载用户信息失败')
-                        : (isEnglish ? 'User not found' : '未找到用户')}</h2>
-                    <a href="/" className="profile-back-link">
-                        {isEnglish ? 'Back to Home' : '返回首页'}
-                    </a>
-                </div>
-            </div>
+            <NoticeCard
+                title={viewedLoadError
+                    ? (isEnglish ? 'Failed to load profile' : '加载用户信息失败')
+                    : (isEnglish ? 'User not found' : '未找到用户')}
+            />
         );
     }
 
     if (!isViewingOther && (!user || !profile)) {
         return (
-            <div className="profile-login-prompt">
-                <div className="profile-login-card">
-                    <h2>{isEnglish ? 'Sign in to view your profile' : '登录以查看你的个人主页'}</h2>
-                    <p>{isEnglish
-                        ? 'Track your event attendance and earn badges!'
-                        : '记录你的活动参与、收集徽章！'}</p>
-                    <button onClick={signIn} className="profile-sign-in-btn">
-                        {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
-                    </button>
-                    <a href="/" className="profile-back-link">
-                        {isEnglish ? 'Back to Home' : '返回首页'}
-                    </a>
-                </div>
-            </div>
+            <NoticeCard
+                title={isEnglish ? 'Sign in to view your profile' : '登录以查看你的个人主页'}
+                text={isEnglish ? 'Track your event attendance and earn badges!' : '记录你的活动参与、收集徽章！'}
+                onSignIn={signIn}
+            />
         );
     }
 
@@ -996,7 +977,7 @@ export const ProfilePage = () => {
                                             tagLabels={event.tagIds
                                                 .map(id => tagMap.get(id))
                                                 .filter((t): t is NonNullable<typeof t> => !!t)
-                                                .map(t => isEnglish ? t.name : (t.nameCn || t.name))}
+                                                .map(t => localized(isEnglish, t.name, t.nameCn))}
                                         />
                                     ))}
                                 </div>
@@ -1013,11 +994,11 @@ export const ProfilePage = () => {
                         </button>
                         <div className="badge-modal-header">
                             <img src={selectedBadge.imageUrl}
-                                 alt={isEnglish ? selectedBadge.name : (selectedBadge.nameCn || selectedBadge.name)}
+                                 alt={localized(isEnglish, selectedBadge.name, selectedBadge.nameCn)}
                                  className="badge-modal-icon"/>
-                            <h3 className="badge-modal-title">{isEnglish ? selectedBadge.name : (selectedBadge.nameCn || selectedBadge.name)}</h3>
+                            <h3 className="badge-modal-title">{localized(isEnglish, selectedBadge.name, selectedBadge.nameCn)}</h3>
                         </div>
-                        <p className="badge-modal-desc">{isEnglish ? selectedBadge.description : (selectedBadge.descriptionCn || selectedBadge.description)}</p>
+                        <p className="badge-modal-desc">{localized(isEnglish, selectedBadge.description, selectedBadge.descriptionCn)}</p>
                         <div className="badge-modal-meta">
                             {earnedDates[selectedBadge.id] && (
                                 <p className="badge-modal-date">

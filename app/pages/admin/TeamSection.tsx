@@ -4,6 +4,7 @@ import { accountEffectiveTitle, normalizeGroup, type UserGroup } from '~/compone
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callGetTeamRoster, callSaveTeamMembers, errorMessage, getFirebaseDb } from '~/lib/firebase';
 import type { TeamMemberConfig } from '~/lib/siteConfig';
+import { localized } from '~/lib/localized';
 import { MemberEditModal } from './MemberEditModal';
 import { refreshAfterSave, type ShowToast } from './utils';
 
@@ -194,10 +195,10 @@ export const TeamSection = ({refreshConfig, showToast, readOnly}: TeamSectionPro
                          }}/>
                     <div className="admin-event-card-info">
                         <span className="admin-event-card-title">
-                            {isEnglish ? displayName : (member.nameCn || displayName)}
+                            {localized(isEnglish, displayName, member.nameCn)}
                         </span>
                         <span
-                            className="admin-event-card-date">{isEnglish ? displayRole : (displayRoleCn || displayRole)}</span>
+                            className="admin-event-card-date">{localized(isEnglish, displayRole, displayRoleCn)}</span>
                     </div>
                 </div>
                 {!readOnly && (

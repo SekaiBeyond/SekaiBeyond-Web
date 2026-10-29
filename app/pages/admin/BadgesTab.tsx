@@ -2,8 +2,10 @@ import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSaveBadge, callUploadAdminImage } from '~/lib/firebase';
 import type { BadgeDef } from '~/lib/badges';
+import { localized } from '~/lib/localized';
 import { AccountPicker } from './AccountPicker';
 import { BilingualFormField } from './BilingualFormField';
+import { ListCard } from './CrudShell';
 import { ImageUploadField } from './ImageUploadField';
 import {
     badgeCreatorLinkValid,
@@ -170,22 +172,14 @@ export const BadgesTab = forwardRef<BadgesTabHandle, BadgesTabProps>(({
             {badgeDefs.length > 0 && (
                 <div className="admin-event-grid">
                     {badgeDefs.map(bd => (
-                        <button key={bd.id} className="admin-event-card" onClick={() => setSelectedBadgeDef(bd)}>
-                            <img src={bd.imageUrl} alt="" className="admin-event-card-img"/>
-                            <div className="admin-event-card-info">
-                                <span className="admin-event-card-title">
-                                    {isEnglish ? bd.name : (bd.nameCn || bd.name)}
-                                </span>
-                                <span className="admin-event-card-date">
-                                    {isEnglish ? bd.description : (bd.descriptionCn || bd.description)}
-                                </span>
-                                {bd.deleteAt && (
-                                    <span className="admin-ended-tag">
-                                        {isEnglish ? 'Pending deletion' : '待删除'}
-                                    </span>
-                                )}
-                            </div>
-                        </button>
+                        <ListCard
+                            key={bd.id}
+                            image={bd.imageUrl}
+                            title={localized(isEnglish, bd.name, bd.nameCn)}
+                            subtitle={localized(isEnglish, bd.description, bd.descriptionCn)}
+                            tags={[!!bd.deleteAt && (isEnglish ? 'Pending deletion' : '待删除')]}
+                            onClick={() => setSelectedBadgeDef(bd)}
+                        />
                     ))}
                 </div>
             )}

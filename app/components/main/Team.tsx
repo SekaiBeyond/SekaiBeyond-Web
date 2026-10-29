@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { callGetPublicTeamMembers } from "~/lib/firebase";
 import { type TeamMemberConfig, useSiteConfig } from "~/lib/siteConfig";
+import { localized } from "~/lib/localized";
 
 export const Team = () => {
     const {isEnglish} = useLanguage();
@@ -22,7 +23,7 @@ export const Team = () => {
         };
     }, []);
 
-    const teamData = resolvedMembers ?? config.teamMembers ?? [];
+    const teamData = resolvedMembers ?? config.teamMembers;
 
     if (!loading && teamData.length === 0) {
         return null;
@@ -33,8 +34,8 @@ export const Team = () => {
     const renderCard = (member: TeamMemberConfig, honorary: boolean) => (
         <div key={member.id} className={honorary ? "team-card team-card--honorary" : "team-card"}>
             <img className="team-avatar" src={member.imageUrl || "/mika.webp"} alt={member.name}/>
-            <h3 className="team-name">{!isEnglish && member.nameCn ? member.nameCn : member.name}</h3>
-            <p className="team-role">{!isEnglish && member.roleCn ? member.roleCn : member.role}</p>
+            <h3 className="team-name">{localized(isEnglish, member.name, member.nameCn)}</h3>
+            <p className="team-role">{localized(isEnglish, member.role, member.roleCn)}</p>
         </div>
     );
 

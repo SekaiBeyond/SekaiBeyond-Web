@@ -25,6 +25,10 @@ export const ticketTypeLabel = (type: TicketType | string, isEnglish: boolean): 
     return isEnglish ? tt.labelEn : tt.labelCn;
 };
 
+/** The tag class colouring a type, as "admin-tickets-tag-type-comp-ticket". */
+export const ticketTypeClass = (type: TicketType | string): string =>
+    `admin-tickets-tag-type-${(type || 'normal').toLowerCase().replace(/\s+/g, '-')}`;
+
 /**
  * Who a nameless, emailless attendee is: a HomeTown ticket by its number. Kept
  * here, not in helpers, so the claim page can use it without the admin's

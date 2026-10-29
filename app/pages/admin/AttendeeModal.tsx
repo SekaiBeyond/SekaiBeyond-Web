@@ -217,8 +217,8 @@ export function AttendeeModal({
             } else {
                 onSaved?.({
                     name: trimmedName,
-                    // Null too: an older server sent a kept note as null.
-                    ...(savedNotes != null
+                    // Left out when each ticket kept its own.
+                    ...(savedNotes !== undefined
                         ? {tickets: existing.tickets.map(t => ({...t, notes: savedNotes}))}
                         : {}),
                 });

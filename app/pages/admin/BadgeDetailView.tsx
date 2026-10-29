@@ -29,6 +29,7 @@ import { formatCode } from '~/lib/codes';
 import { formatSiteTime, parseSiteTime } from '~/lib/siteTime';
 import { isValidHttpUrl } from '~/lib/urls';
 import type { BadgeDef } from '~/lib/badges';
+import { localized } from '~/lib/localized';
 import type { BadgeActivationCode, UserRecord } from './types';
 import { docToUserRecord, type ShowToast } from './utils';
 import { AccountPicker } from './AccountPicker';
@@ -342,9 +343,9 @@ export const BadgeDetailView = ({
                 <div className="admin-event-detail-header">
                     <img src={badgeDef.imageUrl} alt="" className="admin-event-detail-img"/>
                     <div>
-                        <h3>{isEnglish ? badgeDef.name : (badgeDef.nameCn || badgeDef.name)}</h3>
+                        <h3>{localized(isEnglish, badgeDef.name, badgeDef.nameCn)}</h3>
                         <p className="admin-event-detail-meta">
-                            {isEnglish ? badgeDef.description : (badgeDef.descriptionCn || badgeDef.description)}
+                            {localized(isEnglish, badgeDef.description, badgeDef.descriptionCn)}
                         </p>
                         {badgeDef.createdByName && (
                             <p className="admin-event-detail-meta admin-mt-4">

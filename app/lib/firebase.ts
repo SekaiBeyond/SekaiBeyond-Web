@@ -70,7 +70,7 @@ function getFirebaseApp() {
             // 'true' generates a debug token in the console; anything else is
             // used as the token.
             if (import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN) {
-                (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN =
+                (self as {FIREBASE_APPCHECK_DEBUG_TOKEN?: string | boolean}).FIREBASE_APPCHECK_DEBUG_TOKEN =
                     import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN === 'true'
                         ? true
                         : import.meta.env.VITE_APP_CHECK_DEBUG_TOKEN;
@@ -376,14 +376,16 @@ export const callSendTicketEmails = (data: {
     nextCursor?: string;
 }>(getFunctions(), 'sendTicketEmails')(data);
 
+export interface TicketEmailQuota {
+    sentToday: number;
+    dailyCap: number;
+    chunkSize: number;
+    queuedCount: number;
+    queueCap: number;
+}
+
 export const callGetTicketEmailQuota = () =>
-    httpsCallable<Record<string, never>, {
-        sentToday: number;
-        dailyCap: number;
-        chunkSize: number;
-        queuedCount: number;
-        queueCap: number;
-    }>(getFunctions(), 'getTicketEmailQuota')({});
+    httpsCallable<Record<string, never>, TicketEmailQuota>(getFunctions(), 'getTicketEmailQuota')({});
 
 export interface EmailQuotaStatus {
     provider: {
@@ -477,7 +479,10 @@ export const callGetPublicTeamMembers = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getPublicTeamMembers')({});
 
 export const callGetSenderSettings = () =>
-    httpsCallable<Record<string, never>, {domain: string; defaultPrefix: string}>(getFunctions(), 'getSenderSettings')({});
+    httpsCallable<Record<string, never>, {
+        domain: string;
+        defaultPrefix: string
+    }>(getFunctions(), 'getSenderSettings')({});
 
 export const callGetTeamRoster = () =>
     httpsCallable<Record<string, never>, {teamMembers: TeamMemberConfig[]}>(getFunctions(), 'getTeamRoster')({});

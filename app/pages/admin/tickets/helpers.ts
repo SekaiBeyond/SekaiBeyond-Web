@@ -1,5 +1,6 @@
 import { toDate } from '~/lib/collectionCache';
 import { buildCsv } from '~/lib/csv';
+import { functionsErrorCode } from '~/lib/firebase';
 import { sanitizeEmailHtml } from '~/lib/emailSanitize';
 import { SITE_TIME_ZONE } from '~/lib/siteTime';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
@@ -71,7 +72,7 @@ export const mapAttendeeDoc = (
         const tk = t as Record<string, unknown>;
         return {
             ticketId: (tk.ticketId as string) ?? '',
-            type: (tk.type as any) ?? 'normal',
+            type: (tk.type as TicketType | undefined) ?? 'normal',
             createdAt: toDate(tk.createdAt),
             redeemed: (tk.redeemed as boolean) ?? false,
             redeemedAt: toDate(tk.redeemedAt),
@@ -102,6 +103,25 @@ export const mapAttendeeDoc = (
         apiOrderId: (data.apiOrderId as string) ?? '',
         apiKeyName: (data.apiKeyName as string) ?? '',
     };
+};
+
+/**
+ * Why the server refused to send ticket emails, as a warning to show, or null
+ * for any other failure.
+ */
+export const sendRefusal = (err: unknown, isEnglish: boolean): string | null => {
+    switch (functionsErrorCode(err)) {
+        case 'no-template':
+            return isEnglish ? 'Save the email template before sending.' : '请先保存邮件模板再发送。';
+        case 'no-contact-email':
+            return isEnglish
+                ? 'The template uses {{ contactEmail }}. Set a Contact Email in Site Config before sending.'
+                : '模板使用了 {{ contactEmail }}，请先在网站设置中填写联系邮箱再发送。';
+        case 'quota-exceeded':
+            return isEnglish ? 'Daily cap reached and the overflow queue is full.' : '已达到每日上限，且排队已满。';
+        default:
+            return null;
+    }
 };
 
 const hometownStatus = (a: Pick<AttendeeData, 'hometown' | 'unlisted' | 'missingFromHometown'>) =>

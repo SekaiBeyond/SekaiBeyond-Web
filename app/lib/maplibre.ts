@@ -73,6 +73,26 @@ function tidyStyle(style: StyleSpecification): StyleSpecification {
     return {...style, layers};
 }
 
+// Lot codes appear beside the plain pins from this zoom (`.is-zoomed-in` on the
+// container); suggested lots always show theirs.
+const LABEL_ZOOM = 17.4;
+
+/** Marks the container `.is-zoomed-in` while the map is zoomed in far enough for pin labels. */
+export function trackLabelZoom(map: MapLibreMap, container: HTMLElement): void {
+    const update = () => container.classList.toggle('is-zoomed-in', map.getZoom() >= LABEL_ZOOM);
+    map.on('zoom', update);
+    update();
+}
+
+/** Calls `handler` on a click on the map itself, not on a marker or a popup. */
+export function onBackgroundClick(map: MapLibreMap, handler: () => void): void {
+    map.on('click', e => {
+        const target = e.originalEvent.target;
+        if (target instanceof Element && target.closest('.maplibregl-marker, .maplibregl-popup')) return;
+        handler();
+    });
+}
+
 /** First symbol layer above building polygons, used to insert overlays beneath labels. */
 export function firstLabelAboveBuildings(map: MapLibreMap): string | undefined {
     const layers = map.getStyle().layers;

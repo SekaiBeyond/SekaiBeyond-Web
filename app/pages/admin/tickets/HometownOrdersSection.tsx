@@ -2,13 +2,12 @@ import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSyncHometownOrderTimes, errorSuffix } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
+import { ImportIssues } from './ImportIssues';
 import { type HometownOrderRow, parseHometownOrderFile, retryRateLimited } from './hometown';
 import type { AttendeeData, ParseError } from './types';
 
 /** Orders per sync call, well under the server's row cap. */
 const SYNC_CHUNK = 500;
-/** Issues listed before the rest are summed up. */
-const MAX_ISSUES = 20;
 /** Order numbers with no ticket here named before the rest are summed up. */
 const MAX_UNMATCHED = 20;
 
@@ -172,30 +171,7 @@ export function HometownOrdersSection({
                 />
             </div>
 
-            {issues.length > 0 && (
-                <div className="admin-tickets-import-errors">
-                    <strong>{isEnglish ? 'Issues' : '问题'}</strong>
-                    <ul>
-                        {issues.slice(0, MAX_ISSUES).map((e, i) => (
-                            <li key={i}>
-                                {e.row > 0 && (
-                                    <span className="admin-tickets-import-rownum">
-                                        {isEnglish ? `Row ${e.row}:` : `第 ${e.row} 行：`}
-                                    </span>
-                                )}{' '}
-                                {e.message}
-                            </li>
-                        ))}
-                        {issues.length > MAX_ISSUES && (
-                            <li>
-                                {isEnglish
-                                    ? `…and ${issues.length - MAX_ISSUES} more.`
-                                    : `…还有 ${issues.length - MAX_ISSUES} 条。`}
-                            </li>
-                        )}
-                    </ul>
-                </div>
-            )}
+            <ImportIssues issues={issues}/>
 
             {orders.length > 0 && (
                 <>

@@ -4,6 +4,7 @@ import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
 import { useSiteConfig } from "~/lib/siteConfig";
 import { useConContent } from "~/lib/conContent";
+import { localized } from "~/lib/localized";
 
 export const SekaiBeyondCon = () => {
     const {isEnglish} = useLanguage();
@@ -29,7 +30,7 @@ export const SekaiBeyondCon = () => {
             </div>
 
             <div className="con-editions">
-                <div key={edition.year} className="convention-banner">
+                <div className="convention-banner">
                     <div className="con-decorations">
                         <span className="con-deco">🌸</span>
                         <span className="con-deco">🎨</span>
@@ -55,7 +56,7 @@ export const SekaiBeyondCon = () => {
                                 timeZone: 'UTC'
                             })}
                             <span> • 📍 </span>
-                            {edition.locationCn && !isEnglish ? edition.locationCn : edition.location}
+                            {localized(isEnglish, edition.location, edition.locationCn)}
                         </p>
 
                         <div className="convention-poster">

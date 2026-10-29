@@ -31,6 +31,38 @@ interface GeneratedRun {
 export const designLabel = (design: PassportDesign, isEnglish: boolean): string =>
     `${design.year} · ${passportName(design, isEnglish)}`;
 
+/** A picker over every design, each by its year and name. */
+export const DesignSelect = ({designs, value, onChange, disabled}: {
+    designs: PassportDesign[];
+    value: string;
+    onChange: (designId: string) => void;
+    disabled?: boolean;
+}) => {
+    const {isEnglish} = useLanguage();
+    return (
+        <select className="admin-input" value={value} onChange={e => onChange(e.target.value)} disabled={disabled}>
+            {designs.map(design => (
+                <option key={design.id} value={design.id}>
+                    {designLabel(design, isEnglish)}
+                </option>
+            ))}
+        </select>
+    );
+};
+
+/** What each passport of the picked design grants, under its picker. */
+export const DesignTermHint = ({design}: {design: PassportDesign | undefined}) => {
+    const {isEnglish} = useLanguage();
+    if (!design) return null;
+    return (
+        <small className="admin-title-hint">
+            {isEnglish
+                ? `Each passport grants ${design.termDays} days of membership.`
+                : `每本通行证授予 ${design.termDays} 天会员资格。`}
+        </small>
+    );
+};
+
 /**
  * Mint passports and hand over the print files. Nothing ties a run together
  * afterwards, so leaving without exporting means picking them out of the stock
@@ -119,24 +151,8 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                                 <span className="admin-passport-run-label">
                                     {isEnglish ? 'Design' : '设计'}
                                 </span>
-                                <select
-                                    className="admin-input"
-                                    value={designId}
-                                    onChange={e => setDesignId(e.target.value)}
-                                >
-                                    {designs.map(design => (
-                                        <option key={design.id} value={design.id}>
-                                            {designLabel(design, isEnglish)}
-                                        </option>
-                                    ))}
-                                </select>
-                                {selectedDesign && (
-                                    <small className="admin-title-hint">
-                                        {isEnglish
-                                            ? `Each passport grants ${selectedDesign.termDays} days of membership.`
-                                            : `每本通行证授予 ${selectedDesign.termDays} 天会员资格。`}
-                                    </small>
-                                )}
+                                <DesignSelect designs={designs} value={designId} onChange={setDesignId}/>
+                                <DesignTermHint design={selectedDesign}/>
                             </label>
 
                             <div className="admin-passport-run-field">

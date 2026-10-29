@@ -91,6 +91,13 @@ export const parseFile = async (file: File) => {
     return {fields, records};
 };
 
+/** Which of an existing attendee's fields a row would change. All false for a new one. */
+export const rowChanges = (r: ParsedRow) => ({
+    name: r.existingName !== undefined && r.existingName !== r.name,
+    count: r.existingTicketCount !== undefined && r.existingTicketCount !== r.ticketCount,
+    type: r.existingType !== undefined && r.existingType !== r.type,
+});
+
 export interface ColumnMapping {
     email: string;
     name: string;
@@ -206,11 +213,8 @@ export const validateRows = (
     // unchanged ones.
     const rank = (r: ParsedRow): number => {
         if (r.action === 'add') return 1;
-        const hasDiff =
-            (r.existingName !== undefined && r.existingName !== r.name) ||
-            (r.existingTicketCount !== undefined && r.existingTicketCount !== r.ticketCount) ||
-            (r.existingType !== undefined && r.existingType !== r.type);
-        return hasDiff ? 0 : 2;
+        const changes = rowChanges(r);
+        return changes.name || changes.count || changes.type ? 0 : 2;
     };
     const finalRows = Array.from(deduped.values()).sort((a, b) => rank(a) - rank(b));
 

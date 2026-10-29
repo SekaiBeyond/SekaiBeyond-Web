@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { createMap, type MapLibreMap, prefersReducedMotion, useMarkerElements, usePopup } from '~/lib/maplibre';
+import {
+    createMap,
+    type MapLibreMap,
+    onBackgroundClick,
+    prefersReducedMotion,
+    trackLabelZoom,
+    useMarkerElements,
+    usePopup,
+} from '~/lib/maplibre';
 import { isGarage, useUwParking, type UwLot, uwLotGlyph, uwLotTypeLabel } from '~/lib/uwParking';
-import { DEFAULT_ZOOM, hasCoordinates, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
+import { DEFAULT_ZOOM, hasCoordinates, localizedVenueName, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
 
 /** Which marker's popup is currently open on the overview map: a venue by ID, a lot by UW code. */
 type MapSelection = {kind: 'venue' | 'lot'; id: string};
@@ -124,8 +132,6 @@ const LocationSearch = ({items, onPick, isEnglish}: LocationSearchProps) => {
 };
 
 
-// Lot codes appear beside every pin from this zoom; the selected venue's suggested lots always show theirs.
-const LABEL_ZOOM = 17.4;
 // Picking a location from the search zooms to at least this.
 const FOCUS_ZOOM = 16.5;
 
@@ -174,7 +180,7 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
         [selectedVenue],
     );
 
-    const venueName = (v: Venue) => isEnglish ? v.nameEn : (v.nameCn || v.nameEn);
+    const venueName = (v: Venue) => localizedVenueName(v, isEnglish);
     const lotTitle = (lot: UwLot) => lot.name !== lot.code ? `${lot.code} · ${lot.name}` : lot.code;
 
     useEffect(() => {
@@ -192,15 +198,9 @@ export const LocationsMap = ({venues, onShowVenue, onEditVenue, readOnly = false
         created.on('movestart', e => {
             if ('originalEvent' in e && e.originalEvent) userMoved.current = true;
         });
-        // A click on the map itself closes the open popup; one on a marker or the popup doesn't.
-        created.on('click', e => {
-            const target = e.originalEvent.target;
-            if (target instanceof Element && target.closest('.maplibregl-marker, .maplibregl-popup')) return;
-            setSelected(null);
-        });
-        const zoomClass = () => container.classList.toggle('is-zoomed-in', created.getZoom() >= LABEL_ZOOM);
-        created.on('zoom', zoomClass);
-        zoomClass();
+        // A click on the map itself closes the open popup.
+        onBackgroundClick(created, () => setSelected(null));
+        trackLabelZoom(created, container);
         setMap(created);
         return () => {
             created.remove();

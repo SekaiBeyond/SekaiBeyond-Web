@@ -11,7 +11,7 @@ preview_urls = false
 
 # Cloudflare creates the DNS record and certificate for it on deploy.
 routes = [
-  { pattern = "api.sekaibeyond.com", custom_domain = true },
+    { pattern = "api.sekaibeyond.com", custom_domain = true },
 ]
 
 [vars]

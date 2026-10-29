@@ -5,6 +5,7 @@ import type { ShowToast } from '../utils';
 import type { AttendeeData, ParsedRow, ParseError } from './types';
 import { useAccountLinks } from './useAccountLinks';
 import { type ColumnMapping, parseFile, validateRows } from './importValidation';
+import { ImportIssues } from './ImportIssues';
 import { ImportPreviewTable, MAX_PREVIEW } from './ImportPreviewTable';
 
 const MAPPING_LABEL_STYLE = {
@@ -26,6 +27,33 @@ const MAPPING_SELECT_STYLE = {
     border: '1px solid #ccc',
     width: '100%',
     textOverflow: 'ellipsis',
+};
+
+const NO_MAPPING: ColumnMapping = {email: '', name: '', count: '', type: '', timestamp: ''};
+
+/** Each column to pick, with the headers it's matched to on its own, lowercased. */
+const MAPPING_FIELDS: {key: keyof ColumnMapping; en: string; zh: string; headers: string[]}[] = [
+    {key: 'email', en: 'Email Column:', zh: '邮箱列：', headers: ['email', 'e-mail']},
+    {key: 'name', en: 'Name Column:', zh: '姓名列：', headers: ['name', 'full name', 'display name']},
+    {
+        key: 'count', en: 'Tickets Column:', zh: '门票数量列：',
+        headers: ['ticketcount', 'ticket count', 'ticket_count', 'tickets', 'quantity', 'count'],
+    },
+    {key: 'type', en: 'Type Column:', zh: '门票类型列：', headers: ['type', 'ticket type', 'ticket_type', 'category']},
+    {
+        key: 'timestamp', en: 'Timestamp Column:', zh: '时间戳列：',
+        headers: ['timestamp', 'date', 'createdat', 'created at', 'created_at', 'time'],
+    },
+];
+
+/** The first of `fields` to match one of `headers`, in the order they're listed. */
+const guessColumn = (fields: string[], headers: string[]): string => {
+    const lower = fields.map(f => f.toLowerCase().trim());
+    for (const header of headers) {
+        const idx = lower.indexOf(header);
+        if (idx >= 0) return fields[idx];
+    }
+    return '';
 };
 
 interface ImportSectionProps {
@@ -52,11 +80,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
 
     const [rawFields, setRawFields] = useState<string[]>([]);
     const [rawRecords, setRawRecords] = useState<Record<string, string>[]>([]);
-    const [emailCol, setEmailCol] = useState<string>('');
-    const [nameCol, setNameCol] = useState<string>('');
-    const [countCol, setCountCol] = useState<string>('');
-    const [typeCol, setTypeCol] = useState<string>('');
-    const [timestampCol, setTimestampCol] = useState<string>('');
+    const [mapping, setMapping] = useState<ColumnMapping>(NO_MAPPING);
     const [rowActions, setRowActions] = useState<Record<string, 'skip' | 'override' | 'add'>>({});
 
     const clearForm = () => {
@@ -64,82 +88,24 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         setErrors([]);
         setRawFields([]);
         setRawRecords([]);
-        setEmailCol('');
-        setNameCol('');
-        setCountCol('');
-        setTypeCol('');
-        setTimestampCol('');
+        setMapping(NO_MAPPING);
         setRowActions({});
         if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const applyMapping = (next: ColumnMapping, records: Record<string, string>[]) => {
+        setMapping(next);
+        const {rows: finalRows, errors: errs} = validateRows(next, records, existingAttendees, isEnglish);
+        setRows(finalRows);
+        setErrors(errs);
     };
 
     const processFile = (fields: string[], records: Record<string, string>[]) => {
         setRawFields(fields);
         setRawRecords(records);
-
-        const fieldName = (keys: string[], ...candidates: string[]) => {
-            const lower = keys.map(k => k.toLowerCase().trim());
-            for (const c of candidates) {
-                const idx = lower.indexOf(c);
-                if (idx >= 0) return keys[idx];
-            }
-            return '';
-        };
-
-        const eCol = fieldName(fields, 'email', 'e-mail');
-        const nCol = fieldName(fields, 'name', 'full name', 'display name');
-        const cCol = fieldName(fields, 'ticketcount', 'ticket count',
-            'ticket_count', 'tickets', 'quantity', 'count');
-        const tCol = fieldName(fields, 'type', 'ticket type', 'ticket_type', 'category');
-        const tsCol = fieldName(fields, 'timestamp', 'date', 'createdat', 'created at', 'created_at', 'time');
-
-        setEmailCol(eCol);
-        setNameCol(nCol);
-        setCountCol(cCol);
-        setTypeCol(tCol);
-        setTimestampCol(tsCol);
-
-        const {rows: finalRows, errors: errs} = validateRows(
-            {email: eCol, name: nCol, count: cCol, type: tCol, timestamp: tsCol},
-            records, existingAttendees, isEnglish,
-        );
-        setRows(finalRows);
-        setErrors(errs);
-    };
-
-    const handleMappingChange = (type: keyof ColumnMapping, val: string) => {
-        let e = emailCol;
-        let n = nameCol;
-        let c = countCol;
-        let t = typeCol;
-        let ts = timestampCol;
-        if (type === 'email') {
-            setEmailCol(val);
-            e = val;
-        }
-        if (type === 'name') {
-            setNameCol(val);
-            n = val;
-        }
-        if (type === 'count') {
-            setCountCol(val);
-            c = val;
-        }
-        if (type === 'type') {
-            setTypeCol(val);
-            t = val;
-        }
-        if (type === 'timestamp') {
-            setTimestampCol(val);
-            ts = val;
-        }
-
-        const {rows: finalRows, errors: errs} = validateRows(
-            {email: e, name: n, count: c, type: t, timestamp: ts},
-            rawRecords, existingAttendees, isEnglish,
-        );
-        setRows(finalRows);
-        setErrors(errs);
+        const guessed = {...NO_MAPPING};
+        for (const field of MAPPING_FIELDS) guessed[field.key] = guessColumn(fields, field.headers);
+        applyMapping(guessed, records);
     };
 
     const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -220,7 +186,7 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
         }
     };
 
-    const canImport = !readOnly && !importing && rows.length > 0 && errors.filter(e => e.row === 0).length === 0 && !!emailCol;
+    const canImport = !readOnly && !importing && rows.length > 0 && !errors.some(e => e.row === 0) && !!mapping.email;
 
     return (
         <div className="admin-tickets-import">
@@ -243,101 +209,36 @@ export function ImportSection({eventId, existingAttendees, readOnly, showToast, 
                 <div style={{marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem'}}>
                     <div className="admin-tickets-import-mapping"
                          style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
-                        <label style={MAPPING_LABEL_STYLE}>
-                            <span style={MAPPING_SPAN_STYLE}>{isEnglish ? 'Email Column:' : '邮箱列：'}</span>
-                            <select
-                                value={emailCol}
-                                onChange={e => handleMappingChange('email', e.target.value)}
-                                disabled={readOnly || busy}
-                                style={MAPPING_SELECT_STYLE}
-                            >
-                                <option value="">-- {isEnglish ? 'Select' : '选择'} --</option>
-                                {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                        </label>
-                        <label style={MAPPING_LABEL_STYLE}>
-                            <span style={MAPPING_SPAN_STYLE}>{isEnglish ? 'Name Column:' : '姓名列：'}</span>
-                            <select
-                                value={nameCol}
-                                onChange={e => handleMappingChange('name', e.target.value)}
-                                disabled={readOnly || busy}
-                                style={MAPPING_SELECT_STYLE}
-                            >
-                                <option value="">-- {isEnglish ? 'Select (Optional)' : '选择（可选）'} --</option>
-                                {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                        </label>
-                        <label style={MAPPING_LABEL_STYLE}>
-                            <span style={MAPPING_SPAN_STYLE}>{isEnglish ? 'Tickets Column:' : '门票数量列：'}</span>
-                            <select
-                                value={countCol}
-                                onChange={e => handleMappingChange('count', e.target.value)}
-                                disabled={readOnly || busy}
-                                style={MAPPING_SELECT_STYLE}
-                            >
-                                <option value="">-- {isEnglish ? 'Select (Optional)' : '选择（可选）'} --</option>
-                                {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                        </label>
-                        <label style={MAPPING_LABEL_STYLE}>
-                            <span style={MAPPING_SPAN_STYLE}>{isEnglish ? 'Type Column:' : '门票类型列：'}</span>
-                            <select
-                                value={typeCol}
-                                onChange={e => handleMappingChange('type', e.target.value)}
-                                disabled={readOnly || busy}
-                                style={MAPPING_SELECT_STYLE}
-                            >
-                                <option value="">-- {isEnglish ? 'Select (Optional)' : '选择（可选）'} --</option>
-                                {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                        </label>
-                        <label style={MAPPING_LABEL_STYLE}>
-                            <span style={MAPPING_SPAN_STYLE}>{isEnglish ? 'Timestamp Column:' : '时间戳列：'}</span>
-                            <select
-                                value={timestampCol}
-                                onChange={e => handleMappingChange('timestamp', e.target.value)}
-                                disabled={readOnly || busy}
-                                style={MAPPING_SELECT_STYLE}
-                            >
-                                <option value="">-- {isEnglish ? 'Select (Optional)' : '选择（可选）'} --</option>
-                                {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                        </label>
+                        {MAPPING_FIELDS.map(field => (
+                            <label key={field.key} style={MAPPING_LABEL_STYLE}>
+                                <span style={MAPPING_SPAN_STYLE}>{isEnglish ? field.en : field.zh}</span>
+                                <select
+                                    value={mapping[field.key]}
+                                    onChange={e => applyMapping({...mapping, [field.key]: e.target.value}, rawRecords)}
+                                    disabled={readOnly || busy}
+                                    style={MAPPING_SELECT_STYLE}
+                                >
+                                    <option value="">
+                                        -- {field.key === 'email'
+                                        ? (isEnglish ? 'Select' : '选择')
+                                        : (isEnglish ? 'Select (Optional)' : '选择（可选）')} --
+                                    </option>
+                                    {rawFields.map(f => <option key={f} value={f}>{f}</option>)}
+                                </select>
+                            </label>
+                        ))}
                     </div>
                 </div>
             )}
 
-            {errors.length > 0 && (
-                <div className="admin-tickets-import-errors" style={{marginTop: '1rem'}}>
-                    <strong>{isEnglish ? 'Issues' : '问题'}</strong>
-                    <ul>
-                        {errors.slice(0, 20).map((e, i) => (
-                            <li key={i}>
-                                {e.row > 0 && (
-                                    <span className="admin-tickets-import-rownum">
-                                        {isEnglish ? `Row ${e.row}:` : `第 ${e.row} 行：`}
-                                    </span>
-                                )}{' '}
-                                {e.message}
-                            </li>
-                        ))}
-                        {errors.length > 20 && (
-                            <li>
-                                {isEnglish
-                                    ? `…and ${errors.length - 20} more.`
-                                    : `…还有 ${errors.length - 20} 条。`}
-                            </li>
-                        )}
-                    </ul>
-                </div>
-            )}
+            <ImportIssues issues={errors}/>
 
             {rows.length > 0 && (
                 <div style={{marginTop: '1rem'}}>
                     <ImportPreviewTable
                         rows={rows}
                         accountLinks={accountLinks}
-                        timestampCol={timestampCol}
+                        timestampCol={mapping.timestamp}
                         rowActions={rowActions}
                         onRowActionChange={(email, act) => setRowActions(prev => ({...prev, [email]: act}))}
                         readOnly={readOnly}

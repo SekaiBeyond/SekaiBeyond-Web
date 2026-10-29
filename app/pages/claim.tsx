@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router';
 import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callClaimEventCode, callRedeemTicket, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
+import { localized } from '~/lib/localized';
 import { anonymousAttendeeName } from './admin/tickets/types';
 
 type ClaimState =
@@ -200,7 +201,10 @@ export const ClaimPage = () => {
             <p>
                 <strong>
                     {ticketInfo.attendeeName || ticketInfo.attendeeEmail
-                        || anonymousAttendeeName({hometown: ticketInfo.hometown, ticketIds: [ticketInfo.ticketId]}, isEnglish)}
+                        || anonymousAttendeeName({
+                            hometown: ticketInfo.hometown,
+                            ticketIds: [ticketInfo.ticketId]
+                        }, isEnglish)}
                 </strong>
             </p>
             {ticketInfo.attendeeName && ticketInfo.attendeeEmail && (
@@ -276,7 +280,7 @@ export const ClaimPage = () => {
                         {eventInfo?.eventPoster && (
                             <div className="claim-badge-icon">
                                 <img src={eventInfo.eventPoster}
-                                     alt={isEnglish ? eventInfo.eventTitle : (eventInfo.eventTitleCn || eventInfo.eventTitle)}/>
+                                     alt={localized(isEnglish, eventInfo.eventTitle, eventInfo.eventTitleCn)}/>
                             </div>
                         )}
                         <h2>

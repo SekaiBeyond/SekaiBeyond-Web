@@ -141,7 +141,8 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                 ? `Revoke "${k.name}"? Anything using it stops working at once, and the key is deleted. This can't be undone.`
                 : `吊销"${k.name}"？所有使用此密钥的服务将立即失效，密钥也将被删除，且无法撤销。`)
             : (isEnglish
-                ? `Delete "${k.name}"? It no longer works, and it will be removed from this list.`
+                ? `Delete
+                        "${k.name}"? It no longer works, and it will be removed from this list.`
                 : `删除"${k.name}"？此密钥已失效，删除后将从列表中移除。`)
         )) return;
         setRevokingId(k.id);
@@ -162,7 +163,11 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
     };
 
     const fmtDate = (iso: string | null) => iso
-        ? new Date(iso).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {year: 'numeric', month: 'short', day: 'numeric'})
+        ? new Date(iso).toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        })
         : '';
     const fmtDateTime = (iso: string) => new Date(iso).toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
         year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -200,7 +205,8 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                 <div className="admin-tickets-send-banner admin-tickets-send-banner-warning admin-api-key-created">
                     <p>
                         {isEnglish
-                            ? <>Here's the key for <strong>{created.name}</strong>. Copy it now: this is the only time it's shown.</>
+                            ? <>Here's the key for <strong>{created.name}</strong>. Copy it now: this is the only time
+                                it's shown.</>
                             : <><strong>{created.name}</strong> 的密钥如下。请立即复制：此后将不再显示。</>}
                     </p>
                     <div className="admin-api-key-reveal">
@@ -211,10 +217,12 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                             onFocus={e => e.target.select()}
                             aria-label={isEnglish ? 'New API key' : '新 API 密钥'}
                         />
-                        <button className="admin-toggle-btn admin-toggle-edit" onClick={() => void copyKey()} type="button">
+                        <button className="admin-toggle-btn admin-toggle-edit" onClick={() => void copyKey()}
+                                type="button">
                             {isEnglish ? 'Copy' : '复制'}
                         </button>
-                        <button className="admin-toggle-btn admin-toggle-cancel" onClick={() => setCreated(null)} type="button">
+                        <button className="admin-toggle-btn admin-toggle-cancel" onClick={() => setCreated(null)}
+                                type="button">
                             {isEnglish ? 'Done' : '完成'}
                         </button>
                     </div>
@@ -250,7 +258,8 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                         <legend>{isEnglish ? 'What it may do' : '权限'}</legend>
                         {API_SCOPES.map(scope => (
                             <label key={scope} className="admin-checkbox-label admin-api-key-option">
-                                <input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggleScope(scope)}/>
+                                <input type="checkbox" checked={scopes.includes(scope)}
+                                       onChange={() => toggleScope(scope)}/>
                                 <span>
                                     <strong>{isEnglish ? SCOPE_LABELS[scope].en : SCOPE_LABELS[scope].zh}</strong>
                                     {' '}<code className="record-code">{scope}</code>
@@ -265,11 +274,13 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                     <fieldset className="admin-api-key-fieldset" disabled={creating}>
                         <legend>{isEnglish ? 'Events' : '活动'}</legend>
                         <label className="admin-checkbox-label">
-                            <input type="radio" name="api-key-events" checked={allEvents} onChange={() => setAllEvents(true)}/>
+                            <input type="radio" name="api-key-events" checked={allEvents}
+                                   onChange={() => setAllEvents(true)}/>
                             <span>{isEnglish ? 'Every event' : '所有活动'}</span>
                         </label>
                         <label className="admin-checkbox-label">
-                            <input type="radio" name="api-key-events" checked={!allEvents} onChange={() => setAllEvents(false)}/>
+                            <input type="radio" name="api-key-events" checked={!allEvents}
+                                   onChange={() => setAllEvents(false)}/>
                             <span>{isEnglish ? 'Only these events' : '仅限以下活动'}</span>
                         </label>
                         {!allEvents && (
@@ -281,7 +292,8 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                                 <div className="admin-api-key-events">
                                     {upcomingEvents.map(e => (
                                         <label key={e.id} className="admin-checkbox-label">
-                                            <input type="checkbox" checked={eventIds.includes(e.id)} onChange={() => toggleEvent(e.id)}/>
+                                            <input type="checkbox" checked={eventIds.includes(e.id)}
+                                                   onChange={() => toggleEvent(e.id)}/>
                                             <span>{eventTitle(e.id)}</span>
                                         </label>
                                     ))}
@@ -327,11 +339,13 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                     {keys.map(k => {
                         const expired = isExpired(k, serverNow);
                         return (
-                            <div key={k.id} className={`admin-api-key-card${expired ? ' admin-api-key-card--inactive' : ''}`}>
+                            <div key={k.id}
+                                 className={`admin-api-key-card${expired ? ' admin-api-key-card--inactive' : ''}`}>
                                 <div className="admin-api-key-head">
                                     <span className="admin-api-key-name">{k.name}</span>
                                     <code className="record-code">{k.hint}</code>
-                                    <span className={`admin-tickets-tag ${expired ? 'admin-tickets-tag-unlinked' : 'admin-tickets-tag-fresh'}`}>
+                                    <span
+                                        className={`admin-tickets-tag ${expired ? 'admin-tickets-tag-unlinked' : 'admin-tickets-tag-fresh'}`}>
                                         {expired
                                             ? (isEnglish ? 'Expired' : '已过期')
                                             : (isEnglish ? 'Active' : '有效')}

@@ -465,7 +465,8 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         case 'ticket-email-queue': {
             const queued = r.sentCount ?? 0;
             return isEnglish
-                ? <>queued {queued} ticket email{queued === 1 ? '' : 's'} for {event} past the daily cap{apiOrderNote}</>
+                ? <>queued {queued} ticket email{queued === 1 ? '' : 's'} for {event} past the daily
+                    cap{apiOrderNote}</>
                 : <>为 {event} 将 {queued} 封门票邮件排入队列（已超出每日上限）{apiOrderNote}</>;
         }
         case 'ticket-api-order': {
@@ -479,12 +480,16 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         }
         case 'api-key-create':
             return isEnglish
-                ? <>created API key {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>
-                : <>创建了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>;
+                ? <>created API key {r.apiKeyName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>}</>
+                : <>创建了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>}</>;
         case 'api-key-revoke':
             return isEnglish
-                ? <>revoked and deleted API key {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>
-                : <>吊销并删除了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>;
+                ? <>revoked and deleted API key {r.apiKeyName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>}</>
+                : <>吊销并删除了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>}</>;
         case 'scheduled-mail-drain': {
             const sent = r.sentCount ?? 0;
             return isEnglish

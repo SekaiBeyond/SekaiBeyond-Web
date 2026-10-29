@@ -6,7 +6,7 @@ import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
 import { parseFile } from '../tickets/importValidation';
 import type { ShowToast } from '../utils';
 import { PassportEmailTemplateSection } from './PassportEmailTemplateSection';
-import { designLabel } from './PassportGenerator';
+import { designLabel, DesignSelect, DesignTermHint } from './PassportGenerator';
 import { countAddresses, parseEmailList } from './passportEmail';
 
 interface PassportEmailerProps {
@@ -285,25 +285,8 @@ export const PassportEmailer = ({designs, defaultDesignId, onBack, showToast}: P
 
                 <label className="admin-tickets-template-field">
                     <span>{isEnglish ? 'Design' : '设计'}</span>
-                    <select
-                        className="admin-input"
-                        value={designId}
-                        onChange={e => setDesignId(e.target.value)}
-                        disabled={sending}
-                    >
-                        {designs.map(design => (
-                            <option key={design.id} value={design.id}>
-                                {designLabel(design, isEnglish)}
-                            </option>
-                        ))}
-                    </select>
-                    {selectedDesign && (
-                        <small className="admin-title-hint">
-                            {isEnglish
-                                ? `Each passport grants ${selectedDesign.termDays} days of membership.`
-                                : `每本通行证授予 ${selectedDesign.termDays} 天会员资格。`}
-                        </small>
-                    )}
+                    <DesignSelect designs={designs} value={designId} onChange={setDesignId} disabled={sending}/>
+                    <DesignTermHint design={selectedDesign}/>
                 </label>
 
                 <label className="admin-tickets-template-field">

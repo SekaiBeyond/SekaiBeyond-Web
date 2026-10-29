@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGetTicketEmailQuota, callSendTicketEmails, errorSuffix, functionsErrorCode, } from '~/lib/firebase';
+import { callGetTicketEmailQuota, callSendTicketEmails, errorSuffix, type TicketEmailQuota } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
+import { sendRefusal } from './helpers';
 import type { AttendeeTotals } from './types';
 
 // Only for the confirm text before quota loads; the server's quota.chunkSize is
@@ -24,21 +25,13 @@ interface SendProgress {
     target: number;
 }
 
-interface QuotaState {
-    sentToday: number;
-    dailyCap: number;
-    chunkSize: number;
-    queuedCount: number;
-    queueCap: number;
-}
-
 export function SendSection({
                                 eventId, totals, readOnly, showToast, onSent, templateUnsaved,
                             }: SendSectionProps) {
     const {isEnglish} = useLanguage();
     const [sending, setSending] = useState(false);
     const [progress, setProgress] = useState<SendProgress | null>(null);
-    const [quota, setQuota] = useState<QuotaState | null>(null);
+    const [quota, setQuota] = useState<TicketEmailQuota | null>(null);
     const [quotaError, setQuotaError] = useState(false);
     const cancelRef = useRef(false);
     const [cancelling, setCancelling] = useState(false);
@@ -162,36 +155,11 @@ export function SendSection({
             }
             onSent();
         } catch (err) {
-            const code = functionsErrorCode(err);
-            if (code === 'no-template') {
-                showToast(
-                    isEnglish
-                        ? 'Save the email template before sending.'
-                        : '请先保存邮件模板再发送。',
-                    'warning',
-                );
-            } else if (code === 'no-contact-email') {
-                showToast(
-                    isEnglish
-                        ? 'The template uses {{ contactEmail }}. Set a Contact Email in Site Config before sending.'
-                        : '模板使用了 {{ contactEmail }}，请先在网站设置中填写联系邮箱再发送。',
-                    'warning',
-                );
-            } else if (code === 'quota-exceeded') {
-                showToast(
-                    isEnglish
-                        ? 'Daily cap reached and the overflow queue is full.'
-                        : '已达到每日上限，且排队已满。',
-                    'warning',
-                );
-            } else {
-                showToast(
-                    isEnglish
-                        ? `Send failed${errorSuffix(err, true)}.`
-                        : `发送失败${errorSuffix(err, false)}。`,
-                    'error',
-                );
-            }
+            const refusal = sendRefusal(err, isEnglish);
+            showToast(
+                refusal ?? (isEnglish ? `Send failed${errorSuffix(err, true)}.` : `发送失败${errorSuffix(err, false)}。`),
+                refusal ? 'warning' : 'error',
+            );
         } finally {
             setSending(false);
             setProgress(null);

@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { callToggleAttendance, functionsErrorCode, getFirebaseDb } from '~/lib/firebase';
+import { callToggleAttendance, functionsErrorCode } from '~/lib/firebase';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { EventAttendeesList } from './EventAttendeesList';
 import { UserSearchAdd } from './UserSearchAdd';
-import type { ShowToast } from './utils';
+import { fetchEventStaff, type ShowToast } from './utils';
 import type { UserRecord } from './types';
 
 interface PastEventAttendeesSectionProps {
@@ -34,13 +33,9 @@ export function PastEventAttendeesSection({
         let stale = false;
         const load = async () => {
             try {
-                const db = getFirebaseDb();
-                const snap = await getDocs(query(
-                    collection(db, 'users'),
-                    where('eventStaffEvents', 'array-contains', eventId),
-                ));
+                const staff = await fetchEventStaff(eventId);
                 if (stale) return;
-                setStaffUids(new Set(snap.docs.map(d => d.id)));
+                setStaffUids(new Set(staff.map(u => u.uid)));
             } catch {
                 // Non-fatal — backend still rejects has-staff with a clear toast.
             }

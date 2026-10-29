@@ -3,6 +3,7 @@ import { useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { MapPicker } from '../../MapPicker';
 import { parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
+import { localized } from '~/lib/localized';
 
 /**
  * A tracked code's kind, fixed at creation since its links differ by kind.
@@ -194,7 +195,7 @@ export const QrEventSelect = ({draft, setDraft, isEnglish, events}: QrFieldProps
             <option value="">{isEnglish ? '— None —' : '— 无 —'}</option>
             {events.map(ev => (
                 <option key={ev.id} value={ev.id}>
-                    {isEnglish ? ev.title : (ev.titleCn || ev.title)}
+                    {localized(isEnglish, ev.title, ev.titleCn)}
                 </option>
             ))}
         </select>
@@ -270,7 +271,7 @@ export const QrPlatformPicker = (
                             checked={draft.platforms.includes(p.id)}
                             onChange={() => togglePlatform(p.id)}
                         />
-                        <span>{isEnglish ? p.label : (p.labelCn ?? p.label)}</span>
+                        <span>{localized(isEnglish, p.label, p.labelCn)}</span>
                     </label>
                 ))}
                 {orphanTags.map(id => (

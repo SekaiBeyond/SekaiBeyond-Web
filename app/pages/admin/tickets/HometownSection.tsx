@@ -2,13 +2,12 @@ import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callImportHometownTickets, errorSuffix } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
+import { ImportIssues } from './ImportIssues';
 import { hometownAttendeeId, type HometownTicketRow, parseHometownFile, retryRateLimited } from './hometown';
-import { type AttendeeData, type ParseError, TICKET_TYPES, ticketTypeLabel } from './types';
+import { type AttendeeData, type ParseError, TICKET_TYPES, ticketTypeClass, ticketTypeLabel } from './types';
 
 /** Tickets per import call, well under the server's row cap. */
 const IMPORT_CHUNK = 500;
-/** Issues listed before the rest are summed up. */
-const MAX_ISSUES = 20;
 
 const importChunk = (data: Parameters<typeof callImportHometownTickets>[0]) =>
     retryRateLimited(async () => (await callImportHometownTickets(data)).data);
@@ -219,30 +218,7 @@ export function HometownSection({
                     : '以此文件为 HomeTown 的最新数据，适用于活动结束后的最终导入：已有门票的姓名、邮箱、类型和订单号若有变化将被更新（覆盖在此所做的修改），签到和作废状态不受影响。文件中没有的已有门票将被标记为"不在最新导出中"，供你核查并作废，因此请使用完整的 Export Guest List。'}
             </p>
 
-            {issues.length > 0 && (
-                <div className="admin-tickets-import-errors">
-                    <strong>{isEnglish ? 'Issues' : '问题'}</strong>
-                    <ul>
-                        {issues.slice(0, MAX_ISSUES).map((e, i) => (
-                            <li key={i}>
-                                {e.row > 0 && (
-                                    <span className="admin-tickets-import-rownum">
-                                        {isEnglish ? `Row ${e.row}:` : `第 ${e.row} 行：`}
-                                    </span>
-                                )}{' '}
-                                {e.message}
-                            </li>
-                        ))}
-                        {issues.length > MAX_ISSUES && (
-                            <li>
-                                {isEnglish
-                                    ? `…and ${issues.length - MAX_ISSUES} more.`
-                                    : `…还有 ${issues.length - MAX_ISSUES} 条。`}
-                            </li>
-                        )}
-                    </ul>
-                </div>
-            )}
+            <ImportIssues issues={issues}/>
 
             {tickets.length > 0 && (
                 <>
@@ -287,7 +263,7 @@ export function HometownSection({
                         {preview.types.map(([type, count]) => (
                             <span
                                 key={type}
-                                className={`admin-tickets-tag admin-tickets-tag-type-${type.toLowerCase().replace(/\s+/g, '-')}`}
+                                className={`admin-tickets-tag ${ticketTypeClass(type)}`}
                             >
                                 {ticketTypeLabel(type, isEnglish)} × {count}
                             </span>

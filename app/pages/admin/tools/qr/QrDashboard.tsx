@@ -3,6 +3,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { type QrCode, qrHasSpot, qrIsActive } from '~/lib/qrCodes';
 import { socialPlatformName, useSocialPlatforms } from '~/lib/socialPlatforms';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
+import { localized } from '~/lib/localized';
 import { StatTile } from '../../StatTile';
 import { heatColor } from './heat';
 import { QrSpotsMap } from './QrSpotsMap';
@@ -46,7 +47,7 @@ export const QrDashboard = ({
     const eventTitle = (id: string): string => {
         const e = events.find(ev => ev.id === id);
         if (!e) return isEnglish ? 'Archived event' : '已归档活动';
-        return isEnglish ? e.title : (e.titleCn || e.title);
+        return localized(isEnglish, e.title, e.titleCn);
     };
 
     // Only events some code links to.

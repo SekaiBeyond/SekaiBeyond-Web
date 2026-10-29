@@ -5,8 +5,10 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { useVenues } from '~/lib/venues';
 import { formatSiteTime, parseSiteTime, toDatetimeLocal } from '~/lib/siteTime';
+import { localized } from '~/lib/localized';
 import { refreshAfterSave, type ShowToast } from './utils';
 import { BilingualFormField } from './BilingualFormField';
+import { ListCard } from './CrudShell';
 import { LocationFormField } from './LocationFormField';
 import { ImageUploadField } from './ImageUploadField';
 import { ImageCropModal } from './ImageCropModal';
@@ -407,43 +409,20 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                     ) : null}
                     <div className="admin-event-grid">
                         {upcomingEvents.map((event) => (
-                            <button
+                            <ListCard
                                 key={event.id}
-                                className="admin-event-card"
+                                image={event.poster}
+                                title={localized(isEnglish, event.title, event.titleCn)}
+                                subtitle={formatSiteTime(event.startAt, isEnglish, {
+                                    year: 'numeric', month: 'short', day: 'numeric',
+                                })}
+                                tags={[
+                                    !event.published && (isEnglish ? 'Unpublished' : '未发布'),
+                                    event.endAt < new Date() && (isEnglish ? 'Ended' : '已结束'),
+                                    !!event.deleteAt && (isEnglish ? 'Pending deletion' : '待删除'),
+                                ]}
                                 onClick={() => setSelectedEvent(event.id)}
-                            >
-                                {event.poster ? (
-                                    <img src={event.poster} alt="" className="admin-event-card-img"/>
-                                ) : (
-                                    <div className="admin-event-card-img admin-no-poster">
-                                        {isEnglish ? 'No poster' : '无海报'}
-                                    </div>
-                                )}
-                                <div className="admin-event-card-info">
-                                    <span
-                                        className="admin-event-card-title">{isEnglish ? event.title : (event.titleCn || event.title)}</span>
-                                    <span className="admin-event-card-date">
-                                        {formatSiteTime(event.startAt, isEnglish, {
-                                            year: 'numeric', month: 'short', day: 'numeric',
-                                        })}
-                                    </span>
-                                    {!event.published && (
-                                        <span className="admin-ended-tag">
-                                            {isEnglish ? 'Unpublished' : '未发布'}
-                                        </span>
-                                    )}
-                                    {event.endAt < new Date() && (
-                                        <span className="admin-ended-tag">
-                                            {isEnglish ? 'Ended' : '已结束'}
-                                        </span>
-                                    )}
-                                    {event.deleteAt && (
-                                        <span className="admin-ended-tag">
-                                            {isEnglish ? 'Pending deletion' : '待删除'}
-                                        </span>
-                                    )}
-                                </div>
-                            </button>
+                            />
                         ))}
                     </div>
                 </>

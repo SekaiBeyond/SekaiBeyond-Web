@@ -16,8 +16,7 @@ import {
     type UwParkingData,
     walkMinutes
 } from '~/lib/uwParking';
-import type { SuggestedLot, Venue } from '~/lib/venues';
-import { haversineMiles, UW_CAMPUS_CENTER } from '~/lib/venues';
+import { haversineMiles, type SuggestedLot, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
 import { BilingualFormField } from './BilingualFormField';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
 import { MapPicker } from './MapPicker';

@@ -8,11 +8,11 @@ import {
 } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
-import type { Venue } from '~/lib/venues';
-import { eventLocationDisplay } from '~/lib/venues';
+import { eventLocationDisplay, type Venue } from '~/lib/venues';
 import type { UserRecord } from './types';
 import { formatSiteTime } from '~/lib/siteTime';
-import { fetchEventAttendees, fetchEventStaffCount, refreshAfterSave, type ShowToast } from './utils';
+import { localized } from '~/lib/localized';
+import { fetchEventAttendees, fetchEventStaff, refreshAfterSave, type ShowToast } from './utils';
 import { ClaimCodeSection } from './ClaimCodeSection';
 import { EventAttendeesList } from './EventAttendeesList';
 import { EventStaffSection } from './EventStaffSection';
@@ -72,9 +72,9 @@ export const UpcomingEventDetailView = ({
     // The view is keyed on the event's id, so this runs once per event.
     useEffect(() => {
         let active = true;
-        void fetchEventStaffCount(event.id)
-            .then(count => {
-                if (active) setStaffCount(count);
+        void fetchEventStaff(event.id)
+            .then(staff => {
+                if (active) setStaffCount(staff.length);
             })
             .catch(() => {
                 /* Non-fatal — count badge just won't appear. */
@@ -130,7 +130,7 @@ export const UpcomingEventDetailView = ({
                     <img src={event.poster} alt="" className="admin-event-detail-img"/>
                 )}
                 <div>
-                    <h3>{isEnglish ? event.title : (event.titleCn || event.title)}</h3>
+                    <h3>{localized(isEnglish, event.title, event.titleCn)}</h3>
                     <p className="admin-event-detail-meta">
                         <span>
                             {formatSiteTime(event.startAt, isEnglish, {
@@ -141,7 +141,7 @@ export const UpcomingEventDetailView = ({
                         <span>{eventLocationDisplay(event.location, event.locationCn, event.venueId, venues, isEnglish)}</span>
                     </p>
                     <p className="admin-description-text">
-                        {isEnglish ? event.description : (event.descriptionCn || event.description)}
+                        {localized(isEnglish, event.description, event.descriptionCn)}
                     </p>
                 </div>
             </div>

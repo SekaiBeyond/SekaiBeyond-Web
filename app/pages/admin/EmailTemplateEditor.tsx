@@ -23,7 +23,7 @@ interface UseEmailTemplateOptions {
     onUnsavedChange: (unsaved: boolean) => void;
 }
 
-export type EmailTemplateState = ReturnType<typeof useEmailTemplate>;
+type EmailTemplateState = ReturnType<typeof useEmailTemplate>;
 
 /** A stored email template being edited: read once, then saved through `write`. */
 export function useEmailTemplate({
