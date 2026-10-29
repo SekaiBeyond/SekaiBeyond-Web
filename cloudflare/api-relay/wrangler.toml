@@ -1,0 +1,24 @@
+# The ticket API's relay for servers in mainland China (see src/index.ts and
+# docs/api.md). Deployed by hand: npx -y wrangler@4 deploy, from this folder.
+name = "sekaibeyond-api-relay"
+main = "src/index.ts"
+compatibility_date = "2025-10-01"
+
+# Served on its own hostname only. *.workers.dev is blocked in mainland China,
+# so it would only be a second, unmonitored way in.
+workers_dev = false
+preview_urls = false
+
+# Cloudflare creates the DNS record and certificate for it on deploy.
+routes = [
+    { pattern = "api.sekaibeyond.com", custom_domain = true },
+]
+
+[vars]
+# The Hosting route in firebase.json (/api/v1/** -> api), so no project ID or
+# region lives here. The function's own URL works too, one hop shorter:
+# https://<region>-<project>.cloudfunctions.net/api
+UPSTREAM = "https://sekaibeyond.com/api"
+
+[observability]
+enabled = true

@@ -169,7 +169,7 @@ export function ClaimCodeSection({eventId, variant, showToast, readOnly = false,
                     return {
                         id: docSnap.id,
                         code: data.code,
-                        active: data.active ?? true,
+                        active: data.active === true,
                         activeFrom: storedBound(data.activeFrom),
                         activeUntil: storedBound(data.activeUntil),
                         maxUses: data.maxUses ?? 0,

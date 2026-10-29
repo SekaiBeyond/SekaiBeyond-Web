@@ -2,9 +2,8 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { FiGlobe, FiLock } from 'react-icons/fi';
 import { Link, useParams } from 'react-router';
 import { formatGroupWithTitle, normalizeGroup, useAuth } from '~/components/AuthProvider';
-import { LanguageSwitcher } from '~/components/LanguageSwitcher';
-import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
+import { PageNav } from '~/components/PageNav';
 import { onPassportClaimed, openRedeemModal } from '~/components/RedeemModal';
 import { callGetPassportPublicProfile, callSetPassportPrivacy } from '~/lib/firebase';
 import {
@@ -100,23 +99,12 @@ export const PassportPage = () => {
  * Nav and page frame, as on the profile and admin pages. `wide` lets the open
  * passport fill the screen.
  */
-const PassportShell = ({children, wide = false}: {children: ReactNode; wide?: boolean}) => {
-    const {isEnglish} = useLanguage();
-    return (
-        <>
-            <nav className="profile-nav">
-                <a href="/" className="profile-nav-home">
-                    {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
-                </a>
-                <div className="nav-actions">
-                    <LanguageSwitcher/>
-                    <LoginButton/>
-                </div>
-            </nav>
-            <div className={`passport-page${wide ? ' passport-page--wide' : ''}`}>{children}</div>
-        </>
-    );
-};
+const PassportShell = ({children, wide = false}: {children: ReactNode; wide?: boolean}) => (
+    <>
+        <PageNav/>
+        <div className={`passport-page${wide ? ' passport-page--wide' : ''}`}>{children}</div>
+    </>
+);
 
 /**
  * The one spinner, while the sticker resolves and again while the cover art

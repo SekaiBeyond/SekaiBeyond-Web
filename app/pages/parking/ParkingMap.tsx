@@ -5,20 +5,20 @@ import {
     createMap,
     firstLabelAboveBuildings,
     type MapLibreMap,
+    onBackgroundClick,
     prefersReducedMotion,
+    trackLabelZoom,
     useMarkerElements,
     usePopup,
 } from '~/lib/maplibre';
 import type { ParkingWindow } from '~/lib/parkingStatus';
 import { uwLotGlyph, type VenueOutline } from '~/lib/uwParking';
-import { hasCoordinates, type Venue } from '~/lib/venues';
-import { accessibleStalls, localizedVenueName, lotSubtitle, type LotView } from './model';
+import { hasCoordinates, localizedVenueName, type Venue } from '~/lib/venues';
+import { accessibleStalls, lotSubtitle, type LotView } from './model';
 import { AccessibleBadge, RatesLine, StatusPill, walkText } from './parts';
 import type { ParkingText } from './text';
 
 const ATTRIBUTION = 'UW Transportation Services · UW Facilities GIS';
-// Lot codes appear beside the plain pins from this zoom; suggested lots always show theirs.
-const LABEL_ZOOM = 17.4;
 // Clicking a lot zooms to at least this.
 const LOT_ZOOM = 17;
 
@@ -187,14 +187,8 @@ export const ParkingMap = (props: ParkingMapProps) => {
         });
 
         // A click on the map itself lets go of a card a tap pinned open.
-        created.on('click', e => {
-            const target = e.originalEvent.target;
-            if (target instanceof Element && target.closest('.maplibregl-marker, .maplibregl-popup')) return;
-            latest.current.setHover(h => h?.kind === 'lot' && h.pinned ? null : h);
-        });
-        const zoomClass = () => container.classList.toggle('is-zoomed-in', created.getZoom() >= LABEL_ZOOM);
-        created.on('zoom', zoomClass);
-        zoomClass();
+        onBackgroundClick(created, () => latest.current.setHover(h => h?.kind === 'lot' && h.pinned ? null : h));
+        trackLabelZoom(created, container);
 
         setMap(created);
         return () => {

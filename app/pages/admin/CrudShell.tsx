@@ -2,9 +2,9 @@ import type { ReactNode } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 
 /**
- * Shared chrome for the admin card-list tabs (tags, venues): the "+ New X"
- * button that opens a create form, and the per-card actions. Each tab keeps its
- * own state and fields.
+ * Shared chrome for the admin card-list tabs (tags, venues, events, badges): the
+ * "+ New X" button that opens a create form, the cards, and the per-card
+ * actions. Each tab keeps its own state and fields.
  */
 
 interface CreateSectionProps {
@@ -71,6 +71,35 @@ export function CreateSection({
                 </button>
             </div>
         </div>
+    );
+}
+
+/** A card in an event or badge grid, opening its item: image, title, a line under it, and tags. */
+export function ListCard({image, title, subtitle, tags = [], onClick}: {
+    image: string;
+    title: string;
+    subtitle: string;
+    /** Shown in turn; a false one is left out. */
+    tags?: (string | false)[];
+    onClick: () => void;
+}) {
+    const {isEnglish} = useLanguage();
+    return (
+        <button className="admin-event-card" onClick={onClick}>
+            {/* An event archived without a poster has no image. */}
+            {image ? (
+                <img src={image} alt="" className="admin-event-card-img"/>
+            ) : (
+                <div className="admin-event-card-img admin-no-poster">
+                    {isEnglish ? 'No poster' : '无海报'}
+                </div>
+            )}
+            <div className="admin-event-card-info">
+                <span className="admin-event-card-title">{title}</span>
+                <span className="admin-event-card-date">{subtitle}</span>
+                {tags.map(tag => tag && <span key={tag} className="admin-ended-tag">{tag}</span>)}
+            </div>
+        </button>
     );
 }
 

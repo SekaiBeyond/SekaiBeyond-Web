@@ -13,6 +13,20 @@ export function validateISODate(value: unknown, name: string): string | null {
 }
 
 /**
+ * A day as YYYY-MM-DD, as a date input gives it, that's on the calendar. The
+ * padding is what lets past events sort as strings.
+ */
+export function validateDay(value: unknown, name: string): string {
+    const day = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+    // Date.parse rolls 2024-02-30 over into March, so the round trip catches it.
+    const parsed = day ? new Date(`${day}T00:00:00Z`) : null;
+    if (!parsed || isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== day) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must be a date as YYYY-MM-DD.`);
+    }
+    return day;
+}
+
+/**
  * An ISO date-time that names its zone (Z or an offset). A zoneless one is
  * refused rather than read as UTC, which is never the clock it was typed on.
  * Null when absent.
@@ -39,6 +53,12 @@ export function validateEmail(value: unknown, name: string): string {
     return normalized;
 }
 
+/** validateEmail for an address that may be left out: "" when missing or blank. */
+export function validateOptionalEmail(value: unknown, name: string): string {
+    if (value == null || (typeof value === "string" && value.trim() === "")) return "";
+    return validateEmail(value, name);
+}
+
 // The part before the @ on our own domain: letters, digits and single . _ + -
 // between them, narrower than RFC 5322 so every mail system accepts it.
 const SENDER_PREFIX_RE = /^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/;
@@ -62,6 +82,13 @@ export function validateCoordinate(value: unknown, name: string, min: number, ma
     }
     if (value < min || value > max) {
         throw new HttpsError("invalid-argument", `Invalid ${name}: out of range.`);
+    }
+    return value;
+}
+
+export function validateBoolean(value: unknown, name: string): boolean {
+    if (typeof value !== "boolean") {
+        throw new HttpsError("invalid-argument", `${name} must be a boolean.`);
     }
     return value;
 }

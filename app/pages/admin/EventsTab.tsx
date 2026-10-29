@@ -1,11 +1,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSavePastEvent, callUploadAdminImage } from '~/lib/firebase';
+import { callSavePastEvent, callUploadAdminImage, errorMessage } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
 import type { Tag } from '~/lib/tags';
 import { useVenues } from '~/lib/venues';
-import { refreshAfterSave } from './utils';
+import { localized } from '~/lib/localized';
+import { refreshAfterSave, type ShowToast } from './utils';
 import { BilingualFormField } from './BilingualFormField';
+import { ListCard } from './CrudShell';
 import { LocationFormField } from './LocationFormField';
 import { ImageUploadField } from './ImageUploadField';
 import { TagMultiSelect } from './TagMultiSelect';
@@ -15,7 +17,7 @@ interface EventsTabProps {
     pastEvents: PastEvent[];
     refreshEvents: () => Promise<void>;
     tags: Tag[];
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     onDetailChange?: (inDetail: boolean) => void;
     readOnly?: boolean;
     onLookupUser?: (uid: string) => void;
@@ -73,13 +75,9 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
     };
 
     const openEditEvent = (event: PastEvent) => {
-        const parts = event.date.split('-');
-        const normalizedDate = parts.length === 3
-            ? `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
-            : event.date;
         setEventForm({
             title: event.title, titleCn: event.titleCn, tagIds: event.tagIds,
-            date: normalizedDate,
+            date: event.date,
             location: event.location, locationCn: event.locationCn, venueId: event.venueId,
             description: event.description, descriptionCn: event.descriptionCn, icon: event.icon,
             recapLink: event.recapLink, recapLinkCn: event.recapLinkCn,
@@ -126,8 +124,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
             setShowCreateEvent(false);
             resetEventForm();
             setEditingEvent(null);
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to save event.' : '保存活动失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to save event.' : '保存活动失败。'), 'error');
         } finally {
             setSavingEvent(false);
         }
@@ -238,35 +236,17 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                     ) : null}
                     <div className="admin-event-grid">
                         {pastEvents.map((event) => (
-                            <button
+                            <ListCard
                                 key={event.id}
-                                className="admin-event-card"
+                                image={event.icon}
+                                title={localized(isEnglish, event.title, event.titleCn)}
+                                subtitle={event.date}
+                                tags={[
+                                    !event.published && (isEnglish ? 'Unpublished' : '未发布'),
+                                    !!event.deleteAt && (isEnglish ? 'Pending deletion' : '待删除'),
+                                ]}
                                 onClick={() => setManagedEvent(event.id)}
-                            >
-                                {/* One archived without a poster has no image. */}
-                                {event.icon ? (
-                                    <img src={event.icon} alt="" className="admin-event-card-img"/>
-                                ) : (
-                                    <div className="admin-event-card-img admin-no-poster">
-                                        {isEnglish ? 'No poster' : '无海报'}
-                                    </div>
-                                )}
-                                <div className="admin-event-card-info">
-                                    <span
-                                        className="admin-event-card-title">{isEnglish ? event.title : (event.titleCn || event.title)}</span>
-                                    <span className="admin-event-card-date">{event.date}</span>
-                                    {!event.published && (
-                                        <span className="admin-ended-tag">
-                                            {isEnglish ? 'Unpublished' : '未发布'}
-                                        </span>
-                                    )}
-                                    {event.deleteAt && (
-                                        <span className="admin-ended-tag">
-                                            {isEnglish ? 'Pending deletion' : '待删除'}
-                                        </span>
-                                    )}
-                                </div>
-                            </button>
+                            />
                         ))}
                     </div>
                 </>

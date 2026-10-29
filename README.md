@@ -90,6 +90,7 @@ This repository contains the source code for the official **Sekai Beyond** websi
 | [App Check](docs/app-check.md)                          | reCAPTCHA v3 protection for Firestore, Storage, and Functions      |
 | [Firestore Indexes and TTL Policies](docs/firestore.md) | The composite indexes and TTL policies the app needs               |
 | [User Groups](docs/user-groups.md)                      | Roles, admin access, the first president, and membership           |
+| [Ticket API](docs/api.md)                               | The admin-level ticket API: keys, reference, and the China relay   |
 
 ## Contributing
 

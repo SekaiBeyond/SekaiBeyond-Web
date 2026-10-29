@@ -6,7 +6,7 @@ import type { ShowToast } from '../utils';
 import { PassportDesignsSection } from './PassportDesignsSection';
 import { PassportDetail } from './PassportDetail';
 import { PassportEmailer } from './PassportEmailer';
-import { designLabel, PassportGenerator } from './PassportGenerator';
+import { DesignSelect, PassportGenerator } from './PassportGenerator';
 import { PassportSearch } from './PassportSearch';
 import { INITIAL_STOCK_VIEW, PassportStock, type StockView } from './PassportStock';
 
@@ -302,17 +302,7 @@ const Dashboard = ({
                     <div className="admin-form-grid admin-section-mb">
                         <label>
                             <span>{isEnglish ? 'Design' : '设计'}</span>
-                            <select
-                                className="admin-input"
-                                value={designId ?? ''}
-                                onChange={e => setDesignId(e.target.value)}
-                            >
-                                {designs.map(design => (
-                                    <option key={design.id} value={design.id}>
-                                        {designLabel(design, isEnglish)}
-                                    </option>
-                                ))}
-                            </select>
+                            <DesignSelect designs={designs} value={designId ?? ''} onChange={setDesignId}/>
                         </label>
                     </div>
 

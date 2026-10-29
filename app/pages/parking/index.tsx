@@ -4,14 +4,13 @@ import { LanguageSwitcher } from '~/components/LanguageSwitcher';
 import { prefersReducedMotion } from '~/lib/maplibre';
 import { useUpcomingEvents } from '~/lib/upcomingEvents';
 import { useUwParking } from '~/lib/uwParking';
-import { PARKING_INFO_URL, resolveVenueById, useVenues, type Venue } from '~/lib/venues';
+import { localizedVenueName, PARKING_INFO_URL, resolveVenueById, useVenues, type Venue } from '~/lib/venues';
 import { LotDetail } from './LotDetail';
 import { LotList } from './LotList';
 import {
     eventDays,
     fromUpcoming,
     type GuideEvent,
-    localizedVenueName,
     type LotFilter,
     lotViews,
     matchesFilters,

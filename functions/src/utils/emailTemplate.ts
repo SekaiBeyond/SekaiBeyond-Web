@@ -58,7 +58,12 @@ export const subjectLine = (s: string): string => s.replace(/[\x00-\x1F\x7F]+/g,
  * default: what goes out is what an admin saved and previewed.
  */
 export async function readSavedTemplate(ref: FirebaseFirestore.DocumentReference): Promise<EmailTemplateDoc> {
-    const data = (await ref.get()).data() ?? {};
+    return savedTemplate((await ref.get()).data());
+}
+
+/** readSavedTemplate for a doc already read, in a transaction say. */
+export function savedTemplate(raw: FirebaseFirestore.DocumentData | undefined): EmailTemplateDoc {
+    const data = raw ?? {};
     const template: EmailTemplateDoc = {
         subject: typeof data.subject === "string" ? data.subject : "",
         bodyHtml: typeof data.bodyHtml === "string" ? data.bodyHtml : "",

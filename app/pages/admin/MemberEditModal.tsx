@@ -229,11 +229,10 @@ export const MemberEditModal = ({member, onClose, onSave, showToast}: MemberEdit
                     <AccountPicker
                         label={isEnglish ? 'Linked Account (optional)' : '关联账户（可选）'}
                         selected={formData.uid ? {
-                            uid: formData.uid,
                             displayName: formData.name,
                             email: '',
-                            photoURL: formData.imageUrl
-                        } as any : null}
+                            photoURL: formData.imageUrl,
+                        } : null}
                         onSelect={handleUserSelect}
                     />
                     {accountEdited && (

@@ -195,6 +195,3 @@ export const DISABILITY_ONLY_LOT = 'N22';
 
 /** A lot's name when it has one beyond its code (garages do), else its type. */
 export const lotSubtitle = (lot: UwLot, typeLabel: string) => lot.name !== lot.code ? lot.name : typeLabel;
-
-export const localizedVenueName = (venue: Venue, isEnglish: boolean) =>
-    isEnglish ? venue.nameEn : (venue.nameCn || venue.nameEn);

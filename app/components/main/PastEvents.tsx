@@ -4,6 +4,7 @@ import { EventImageModal } from "~/components/EventImageModal";
 import { usePastEvents } from "~/lib/pastEvents";
 import { useTags } from "~/lib/tags";
 import { eventLocationDisplay, useVenues } from "~/lib/venues";
+import { localized } from "~/lib/localized";
 
 export const PastEvents = () => {
     const {isEnglish} = useLanguage();
@@ -52,7 +53,7 @@ export const PastEvents = () => {
                                     <img
                                         className="event-image"
                                         src={event.icon}
-                                        alt={isEnglish ? event.title : (event.titleCn || event.title)}
+                                        alt={localized(isEnglish, event.title, event.titleCn)}
                                     />
                                 </button>
                                 <div className="event-content">
@@ -64,13 +65,13 @@ export const PastEvents = () => {
                                             <div className="event-labels">
                                                 {eventTags.map(tag => (
                                                     <span key={tag.id} className="event-label">
-                                                        {isEnglish ? tag.name : (tag.nameCn || tag.name)}
+                                                        {localized(isEnglish, tag.name, tag.nameCn)}
                                                     </span>
                                                 ))}
                                             </div>
                                         ) : null;
                                     })()}
-                                    <h3 className="event-title">{isEnglish ? event.title : (event.titleCn || event.title)}</h3>
+                                    <h3 className="event-title">{localized(isEnglish, event.title, event.titleCn)}</h3>
                                     <div className="event-date">
                                         <span>📅</span>
                                         <span>{new Date(event.date).toLocaleDateString(isEnglish ? 'en-US' : "zh-CN", {
@@ -90,7 +91,7 @@ export const PastEvents = () => {
                                         ) : null;
                                     })()}
                                     <p className="event-description">
-                                        {isEnglish ? event.description : (event.descriptionCn || event.description)}
+                                        {localized(isEnglish, event.description, event.descriptionCn)}
                                     </p>
                                     {(() => {
                                         const recapHref = isEnglish

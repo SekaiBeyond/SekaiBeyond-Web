@@ -4,7 +4,8 @@ import type { PastEvent } from '~/lib/pastEvents';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Venue } from '~/lib/venues';
 import { ticketTypeLabel } from './tickets/types';
-import { type ActivityRecord, type BadgeDef, RECORD_CATEGORIES, type RecordCategory } from './types';
+import type { BadgeDef } from '~/lib/badges';
+import { type ActivityRecord, RECORD_CATEGORIES, type RecordCategory } from './types';
 
 export const CATEGORY_BY_TYPE = new Map<string, RecordCategory>();
 for (const [category, {types}] of Object.entries(RECORD_CATEGORIES)) {
@@ -104,6 +105,12 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
     // walk-in may have neither.
     const attendee = r.targetName || r.targetEmail || (isEnglish ? 'a walk-in guest' : '一位现场来宾');
     const code = r.code ? <> <span className="record-code">{r.code}</span></> : null;
+    // A ticket email an API order asked for.
+    const apiOrderNote = r.apiOrderId
+        ? isEnglish
+            ? <>, for order <span className="record-code">{r.apiOrderId}</span> sold through {r.apiKeyName || 'API'}</>
+            : <>（通过 {r.apiKeyName || 'API'} 售出的订单 <span className="record-code">{r.apiOrderId}</span>）</>
+        : null;
 
     switch (r.type) {
         case 'group-assign':
@@ -452,15 +459,37 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         case 'ticket-email-send': {
             const sent = r.sentCount ?? 0;
             return isEnglish
-                ? <>sent {sent} ticket email{sent === 1 ? '' : 's'} for {event}</>
-                : <>为 {event} 发送了 {sent} 封门票邮件</>;
+                ? <>sent {sent} ticket email{sent === 1 ? '' : 's'} for {event}{apiOrderNote}</>
+                : <>为 {event} 发送了 {sent} 封门票邮件{apiOrderNote}</>;
         }
         case 'ticket-email-queue': {
             const queued = r.sentCount ?? 0;
             return isEnglish
-                ? <>queued {queued} ticket email{queued === 1 ? '' : 's'} for {event} past the daily cap</>
-                : <>为 {event} 将 {queued} 封门票邮件排入队列（已超出每日上限）</>;
+                ? <>queued {queued} ticket email{queued === 1 ? '' : 's'} for {event} past the daily
+                    cap{apiOrderNote}</>
+                : <>为 {event} 将 {queued} 封门票邮件排入队列（已超出每日上限）{apiOrderNote}</>;
         }
+        case 'ticket-api-order': {
+            const count = r.ticketCount ?? 0;
+            const via = r.apiKeyName || 'API';
+            return isEnglish
+                ? <>issued {count} ticket{count === 1 ? '' : 's'} to {attendee} at {event}, sold
+                    through {via}{r.apiOrderId && <> (order <span className="record-code">{r.apiOrderId}</span>)</>}</>
+                : <>为 {attendee} 签发了 {event} 的 {count} 张门票，通过 {via} 售出{r.apiOrderId
+                    && <>（订单 <span className="record-code">{r.apiOrderId}</span>）</>}</>;
+        }
+        case 'api-key-create':
+            return isEnglish
+                ? <>created API key {r.apiKeyName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>}</>
+                : <>创建了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>}</>;
+        case 'api-key-revoke':
+            return isEnglish
+                ? <>revoked and deleted API key {r.apiKeyName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>}</>
+                : <>吊销并删除了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>}</>;
         case 'scheduled-mail-drain': {
             const sent = r.sentCount ?? 0;
             return isEnglish

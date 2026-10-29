@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { callAssignEventStaff, callRemoveEventStaff, functionsErrorCode, getFirebaseDb, } from '~/lib/firebase';
+import { callAssignEventStaff, callRemoveEventStaff, functionsErrorCode } from '~/lib/firebase';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { UserRow } from './UserRow';
 import { UserSearchAdd } from './UserSearchAdd';
-import { docToUserRecord, type ShowToast } from './utils';
+import { fetchEventStaff, type ShowToast } from './utils';
 import type { UserRecord } from './types';
 
 interface EventStaffSectionProps {
@@ -47,14 +46,9 @@ export function EventStaffSection({
             setLoading(true);
             setLoaded(false);
             try {
-                const db = getFirebaseDb();
-                const q = query(
-                    collection(db, 'users'),
-                    where('eventStaffEvents', 'array-contains', eventId),
-                );
-                const snap = await getDocs(q);
+                const staff = await fetchEventStaff(eventId);
                 if (stale) return;
-                setStaffList(snap.docs.map(docToUserRecord));
+                setStaffList(staff);
                 setLoaded(true);
             } catch {
                 if (!stale) {

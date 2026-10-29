@@ -2,19 +2,104 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
-import { codeKind, issueCode, normalizeCode } from "../utils/codes";
+import { type CodeKind, codeKind, issueCode, normalizeCode } from "../utils/codes";
+import { getEventDoc } from "../utils/events";
 import { validateCodeInTransaction } from "../utils/helpers";
 import { claimPassportWithKey, findPassportByKey, normalizeActivationKey } from "../utils/passports";
-import { validateDocId, validateInstant, validateMaxUses } from "../utils/validation";
+import { validateBoolean, validateDocId, validateInstant, validateMaxUses } from "../utils/validation";
 import { recordDoc, type RecordFields, recordRef } from "../utils/records";
 
 const INVALID = "Invalid or deactivated code.";
 
+/** The "invalid" every path reports for a code that matches nothing usable. */
+const invalidCode = (status: "not-found" | "invalid-argument" | "failed-precondition" = "not-found") =>
+    new HttpsError(status, INVALID, {code: "invalid"});
+
 /** The code off a request, canonical, or the same "invalid" every path reports. */
 function requireCode(request: {data: unknown}): string {
     const code = normalizeCode((request.data as {code?: unknown})?.code);
-    if (!code) throw new HttpsError("invalid-argument", INVALID, {code: "invalid"});
+    if (!code) throw invalidCode("invalid-argument");
     return code;
+}
+
+/** A new code's active window: each bound only when set, with the TTL's expiresAt at its end. */
+function windowFields(activeFrom: string | null, activeUntil: string | null) {
+    return {
+        ...(activeFrom ? {activeFrom} : {}),
+        ...(activeUntil ? {activeUntil, expiresAt: Timestamp.fromDate(new Date(activeUntil))} : {}),
+    };
+}
+
+/** An existing code's active window, replaced whole: a bound left out is cleared. */
+function clearedWindow(activeFrom: string | null, activeUntil: string | null) {
+    return {
+        activeFrom,
+        activeUntil,
+        expiresAt: activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null,
+    };
+}
+
+/**
+ * Issues a code of `kind` into `collection` through `write`, in an admin
+ * transaction. A fresh code that clashes with one already issued is drawn
+ * again.
+ */
+async function issueUniqueCode(
+    uid: string,
+    kind: CodeKind,
+    collection: string,
+    write: (
+        txn: FirebaseFirestore.Transaction,
+        callerSnap: FirebaseFirestore.DocumentSnapshot,
+        code: string,
+        codeRef: FirebaseFirestore.DocumentReference,
+    ) => Promise<void>,
+): Promise<{id: string; code: string}> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const code = issueCode(kind);
+        const codeRef = db.collection(collection).doc(code);
+        const issued = await adminTransaction(uid, async (txn, callerSnap) => {
+            if ((await txn.get(codeRef)).exists) return false;
+            await write(txn, callerSnap, code, codeRef);
+            return true;
+        });
+        if (issued) return {id: code, code};
+    }
+    throw new HttpsError("internal", "code-generation-failed");
+}
+
+/** A code doc read in `txn`, for the calls that change one. */
+async function readCode(txn: FirebaseFirestore.Transaction, collection: string, codeId: string) {
+    const ref = db.collection(collection).doc(codeId);
+    const snap = await txn.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "Code not found.");
+    return {ref, data: snap.data()!};
+}
+
+/**
+ * The event a code's records name. Check-in codes are only for upcoming
+ * events; staff codes can be for past ones too.
+ */
+async function codeEventFields(
+    txn: FirebaseFirestore.Transaction,
+    data: FirebaseFirestore.DocumentData,
+    {pastToo}: {pastToo: boolean},
+): Promise<{eventTitle: string; eventId: string}> {
+    const eventId: string = data.eventId ?? "";
+    const snap = !eventId ? null
+        : pastToo ? (await getEventDoc(eventId, txn)).snap
+            : await txn.get(db.collection("upcomingEvents").doc(eventId));
+    return {eventTitle: snap?.data()?.title ?? eventId, eventId};
+}
+
+/** The badge a badge code's records name. */
+async function codeBadgeFields(
+    txn: FirebaseFirestore.Transaction,
+    data: FirebaseFirestore.DocumentData,
+): Promise<{badgeId: string; badgeName: string}> {
+    const badgeId: string = data.badgeId ?? "";
+    const snap = badgeId ? await txn.get(db.collection("badges").doc(badgeId)) : null;
+    return {badgeId, badgeName: snap?.data()?.name ?? badgeId};
 }
 
 /**
@@ -85,7 +170,7 @@ export const redeemCode = onCall({maxInstances: 20}, async (request) => {
         if (claimed) return {kind: "passport-claim" as const, ...claimed};
     }
 
-    throw new HttpsError("not-found", INVALID, {code: "invalid"});
+    throw invalidCode();
 });
 
 export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
@@ -97,26 +182,24 @@ export const claimEventCode = onCall({maxInstances: 20}, async (request) => {
 
     return db.runTransaction(async (txn) => {
         const freshCode = await txn.get(codeRef);
-        if (!freshCode.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        if (!freshCode.exists) throw invalidCode();
         const data = freshCode.data()!;
         validateCodeInTransaction(data);
 
         const eventId: string = data.eventId;
-        if (!eventId) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        if (!eventId) throw invalidCode();
 
         const [eventSnap, userSnap] = await Promise.all([
             txn.get(db.collection("upcomingEvents").doc(eventId)),
             txn.get(userRef),
         ]);
         // Forces retry if the event is concurrently deleted mid-claim
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
-        if (!userSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        if (!eventSnap.exists) throw invalidCode();
+        if (!userSnap.exists) throw invalidCode();
 
         const eventData = eventSnap.data()!;
         // Paid events use tickets — reject stale code URLs from before a paid toggle.
-        if (eventData.paid === true) {
-            throw new HttpsError("failed-precondition", "Invalid or deactivated code.", {code: "invalid"});
-        }
+        if (eventData.paid === true) throw invalidCode("failed-precondition");
         const eventTitle: string = eventData.title ?? "";
         const eventTitleCn: string = eventData.titleCn ?? "";
         const eventPoster: string = eventData.poster ?? "";
@@ -152,19 +235,19 @@ async function redeemBadgeCode(uid: string, code: string) {
 
     return db.runTransaction(async (txn) => {
         const freshCode = await txn.get(codeRef);
-        if (!freshCode.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        if (!freshCode.exists) throw invalidCode();
         const data = freshCode.data()!;
         validateCodeInTransaction(data);
 
         const badgeId: string = data.badgeId;
-        if (!badgeId) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        if (!badgeId) throw invalidCode();
 
         const [badgeSnap, userSnap] = await Promise.all([
             txn.get(db.collection("badges").doc(badgeId)),
             txn.get(userRef),
         ]);
-        if (!badgeSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
-        if (!userSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        if (!badgeSnap.exists) throw invalidCode();
+        if (!userSnap.exists) throw invalidCode();
         const badgeData = badgeSnap.data()!;
 
         const userBadges: string[] = userSnap.data()!.badges ?? [];
@@ -211,50 +294,30 @@ export const generateBadgeActivationCode = onCall({maxInstances: 10}, async (req
     const maxUses = validateMaxUses(input.maxUses);
     const activeFrom = validateInstant(input.activeFrom, "activeFrom");
     const activeUntil = validateInstant(input.activeUntil, "activeUntil");
-    const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
-    for (let attempt = 0; attempt < 5; attempt++) {
-        const code = issueCode("badge");
-        const codeRef = db.collection("badgeActivationCodes").doc(code);
-
-        try {
-            await adminTransaction(uid, async (txn, callerSnap) => {
-                const badgeSnap = await txn.get(db.collection("badges").doc(badgeId));
-                if (!badgeSnap.exists) {
-                    throw new HttpsError("not-found", "Badge not found.");
-                }
-
-                const existing = await txn.get(codeRef);
-                if (existing.exists) {
-                    throw new Error("duplicate");
-                }
-                txn.set(codeRef, {
-                    code,
-                    badgeId,
-                    createdBy: uid,
-                    createdAt: FieldValue.serverTimestamp(),
-                    active: true,
-                    maxUses,
-                    usedCount: 0,
-                    ...(activeFrom ? {activeFrom} : {}),
-                    ...(activeUntil ? {activeUntil} : {}),
-                    ...(expiresAt ? {expiresAt} : {}),
-                });
-                txn.set(recordRef(), recordDoc("code-create", {
-                    performedBy: uid,
-                    performedByName: callerSnap.data()?.displayName ?? "",
-                    badgeId,
-                    badgeName: badgeSnap.data()!.name ?? badgeId,
-                }));
-            });
-            return {id: codeRef.id, code};
-        } catch (err) {
-            if (err instanceof Error && err.message === "duplicate") continue;
-            throw err;
+    return issueUniqueCode(uid, "badge", "badgeActivationCodes", async (txn, callerSnap, code, codeRef) => {
+        const badgeSnap = await txn.get(db.collection("badges").doc(badgeId));
+        if (!badgeSnap.exists) {
+            throw new HttpsError("not-found", "Badge not found.");
         }
-    }
 
-    throw new HttpsError("internal", "code-generation-failed");
+        txn.set(codeRef, {
+            code,
+            badgeId,
+            createdBy: uid,
+            createdAt: FieldValue.serverTimestamp(),
+            active: true,
+            maxUses,
+            usedCount: 0,
+            ...windowFields(activeFrom, activeUntil),
+        });
+        txn.set(recordRef(), recordDoc("code-create", {
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            badgeId,
+            badgeName: badgeSnap.data()!.name ?? badgeId,
+        }));
+    });
 });
 export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -267,99 +330,66 @@ export const generateEventCode = onCall({maxInstances: 10}, async (request) => {
     const eventId = validateDocId(input.eventId, "eventId");
     const activeFrom = validateInstant(input.activeFrom, "activeFrom");
     const activeUntil = validateInstant(input.activeUntil, "activeUntil");
-    const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
-    for (let attempt = 0; attempt < 5; attempt++) {
-        const code = issueCode("event");
-        const codeRef = db.collection("claimCodes").doc(code);
-
-        try {
-            await adminTransaction(uid, async (txn, callerSnap) => {
-                const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
-                if (!eventSnap.exists) {
-                    throw new HttpsError("not-found", "Event not found.");
-                }
-                if (eventSnap.data()?.paid === true) {
-                    throw new HttpsError("failed-precondition",
-                        "Paid events use tickets, not check-in codes.");
-                }
-
-                const [existing, existingCodes] = await Promise.all([
-                    txn.get(codeRef),
-                    txn.get(
-                        db.collection("claimCodes")
-                            .where("eventId", "==", eventId)
-                            .where("active", "==", true)
-                    ),
-                ]);
-                if (existing.exists) {
-                    throw new Error("duplicate");
-                }
-                for (const oldDoc of existingCodes.docs) {
-                    txn.update(oldDoc.ref, {active: false});
-                    txn.set(recordRef(), recordDoc("event-code-deactivate", {
-                        performedBy: uid,
-                        performedByName: callerSnap.data()?.displayName ?? "",
-                        eventTitle: eventSnap.data()?.title ?? eventId,
-                        eventId,
-                        code: oldDoc.data().code ?? oldDoc.id,
-                    }));
-                }
-                txn.set(codeRef, {
-                    code,
-                    eventId,
-                    createdBy: uid,
-                    createdAt: FieldValue.serverTimestamp(),
-                    active: true,
-                    usedCount: 0,
-                    ...(activeFrom ? {activeFrom} : {}),
-                    ...(activeUntil ? {activeUntil} : {}),
-                    ...(expiresAt ? {expiresAt} : {}),
-                });
-                txn.set(recordRef(), recordDoc("code-create", {
-                    performedBy: uid,
-                    performedByName: callerSnap.data()?.displayName ?? "",
-                    eventTitle: eventSnap.data()?.title ?? eventId,
-                    eventId,
-                    code,
-                }));
-            });
-            return {id: codeRef.id, code};
-        } catch (err) {
-            if (err instanceof Error && err.message === "duplicate") continue;
-            throw err;
+    return issueUniqueCode(uid, "event", "claimCodes", async (txn, callerSnap, code, codeRef) => {
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) {
+            throw new HttpsError("not-found", "Event not found.");
         }
-    }
+        if (eventSnap.data()?.paid === true) {
+            throw new HttpsError("failed-precondition",
+                "Paid events use tickets, not check-in codes.");
+        }
 
-    throw new HttpsError("internal", "code-generation-failed");
+        const existingCodes = await txn.get(
+            db.collection("claimCodes")
+                .where("eventId", "==", eventId)
+                .where("active", "==", true)
+        );
+        const fields = {
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventTitle: eventSnap.data()?.title ?? eventId,
+            eventId,
+        };
+        for (const oldDoc of existingCodes.docs) {
+            txn.update(oldDoc.ref, {active: false});
+            txn.set(recordRef(), recordDoc("event-code-deactivate", {
+                ...fields,
+                code: oldDoc.data().code ?? oldDoc.id,
+            }));
+        }
+        txn.set(codeRef, {
+            code,
+            eventId,
+            createdBy: uid,
+            createdAt: FieldValue.serverTimestamp(),
+            active: true,
+            usedCount: 0,
+            ...windowFields(activeFrom, activeUntil),
+        });
+        txn.set(recordRef(), recordDoc("code-create", {...fields, code}));
+    });
 });
 export const toggleClaimCodeActive = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
-    const input = request.data as {codeId?: string; active?: boolean};
+    const input = request.data as {codeId?: string; active?: unknown};
     const codeId = validateDocId(input.codeId, "codeId");
-    if (typeof input.active !== "boolean") {
-        throw new HttpsError("invalid-argument", "active must be a boolean.");
-    }
+    const active = validateBoolean(input.active, "active");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const codeSnap = await txn.get(db.collection("claimCodes").doc(codeId));
-        if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
-        const codeData = codeSnap.data()!;
+        const {ref, data} = await readCode(txn, "claimCodes", codeId);
+        const event = await codeEventFields(txn, data, {pastToo: false});
 
-        const eventSnap = codeData.eventId
-            ? await txn.get(db.collection("upcomingEvents").doc(codeData.eventId))
-            : null;
-
-        txn.update(db.collection("claimCodes").doc(codeId), {active: input.active});
-        txn.set(recordRef(), recordDoc(input.active ? "event-code-activate" : "event-code-deactivate", {
+        txn.update(ref, {active});
+        txn.set(recordRef(), recordDoc(active ? "event-code-activate" : "event-code-deactivate", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
-            eventId: codeData.eventId ?? "",
-            code: codeData.code ?? "",
+            ...event,
+            code: data.code ?? "",
         }));
-        return {active: input.active};
+        return {active};
     });
 });
 export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request) => {
@@ -371,25 +401,15 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
     const activeUntil = validateInstant(input.activeUntil, "activeUntil");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const codeSnap = await txn.get(db.collection("claimCodes").doc(codeId));
-        if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
-        const codeData = codeSnap.data()!;
+        const {ref, data} = await readCode(txn, "claimCodes", codeId);
+        const event = await codeEventFields(txn, data, {pastToo: false});
 
-        const eventSnap = codeData.eventId
-            ? await txn.get(db.collection("upcomingEvents").doc(codeData.eventId))
-            : null;
-
-        txn.update(db.collection("claimCodes").doc(codeId), {
-            activeFrom: activeFrom ?? null,
-            activeUntil: activeUntil ?? null,
-            expiresAt: activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null,
-        });
+        txn.update(ref, clearedWindow(activeFrom, activeUntil));
         txn.set(recordRef(), recordDoc("event-code-time-window", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
-            eventId: codeData.eventId ?? "",
-            code: codeData.code ?? "",
+            ...event,
+            code: data.code ?? "",
         }));
         return {saved: true};
     });
@@ -397,29 +417,21 @@ export const saveClaimCodeTimeWindow = onCall({maxInstances: 10}, async (request
 export const toggleBadgeCodeActive = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
-    const input = request.data as {codeId?: string; active?: boolean};
+    const input = request.data as {codeId?: string; active?: unknown};
     const codeId = validateDocId(input.codeId, "codeId");
-    if (typeof input.active !== "boolean") {
-        throw new HttpsError("invalid-argument", "active must be a boolean.");
-    }
+    const active = validateBoolean(input.active, "active");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const codeSnap = await txn.get(db.collection("badgeActivationCodes").doc(codeId));
-        if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
-        const codeData = codeSnap.data()!;
+        const {ref, data} = await readCode(txn, "badgeActivationCodes", codeId);
+        const badge = await codeBadgeFields(txn, data);
 
-        const badgeSnap = codeData.badgeId
-            ? await txn.get(db.collection("badges").doc(codeData.badgeId))
-            : null;
-
-        txn.update(db.collection("badgeActivationCodes").doc(codeId), {active: input.active});
-        txn.set(recordRef(), recordDoc(input.active ? "badge-code-activate" : "badge-code-deactivate", {
+        txn.update(ref, {active});
+        txn.set(recordRef(), recordDoc(active ? "badge-code-activate" : "badge-code-deactivate", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            badgeId: codeData.badgeId ?? "",
-            badgeName: badgeSnap?.data()?.name ?? codeData.badgeId ?? "",
+            ...badge,
         }));
-        return {active: input.active};
+        return {active};
     });
 });
 export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (request) => {
@@ -428,20 +440,14 @@ export const deleteBadgeActivationCode = onCall({maxInstances: 10}, async (reque
     const codeId = validateDocId((request.data as {codeId?: string})?.codeId, "codeId");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const codeSnap = await txn.get(db.collection("badgeActivationCodes").doc(codeId));
-        if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
-        const codeData = codeSnap.data()!;
+        const {ref, data} = await readCode(txn, "badgeActivationCodes", codeId);
+        const badge = await codeBadgeFields(txn, data);
 
-        const badgeSnap = codeData.badgeId
-            ? await txn.get(db.collection("badges").doc(codeData.badgeId))
-            : null;
-
-        txn.delete(db.collection("badgeActivationCodes").doc(codeId));
+        txn.delete(ref);
         txn.set(recordRef(), recordDoc("code-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            badgeId: codeData.badgeId ?? "",
-            badgeName: badgeSnap?.data()?.name ?? codeData.badgeId ?? "",
+            ...badge,
         }));
         return {deleted: true};
     });
@@ -454,67 +460,39 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
     const activeFrom = validateInstant(input.activeFrom, "activeFrom");
     const activeUntil = validateInstant(input.activeUntil, "activeUntil");
     const maxUses = validateMaxUses(input.maxUses);
-    const expiresAt = activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null;
 
-    for (let attempt = 0; attempt < 5; attempt++) {
-        const code = issueCode("staff");
-        const codeRef = db.collection("staffClaimCodes").doc(code);
+    return issueUniqueCode(uid, "staff", "staffClaimCodes", async (txn, callerSnap, code, codeRef) => {
+        // Staff codes also work for past events, to credit staff after the
+        // fact.
+        const {snap: eventSnap} = await getEventDoc(eventId, txn);
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
 
-        try {
-            await adminTransaction(uid, async (txn, callerSnap) => {
-                // Staff codes also work for past events, to credit staff after the
-                // fact.
-                const [upcomingSnap, pastSnap] = await Promise.all([
-                    txn.get(db.collection("upcomingEvents").doc(eventId)),
-                    txn.get(db.collection("pastEvents").doc(eventId)),
-                ]);
-                const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
-                if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        const existingCodes = await txn.get(db.collection("staffClaimCodes").where("eventId", "==", eventId));
+        const fields = {
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventTitle: eventSnap.data()?.title ?? eventId,
+            eventId,
+        };
 
-                const [existing, existingCodes] = await Promise.all([
-                    txn.get(codeRef),
-                    txn.get(db.collection("staffClaimCodes").where("eventId", "==", eventId)),
-                ]);
-                if (existing.exists) throw new Error("duplicate");
-
-                // Replaces every code the event had, enabled or not. Staff they
-                // admitted stay staff; that lives on their user records.
-                for (const oldDoc of existingCodes.docs) {
-                    txn.delete(oldDoc.ref);
-                    txn.set(recordRef(), recordDoc("staff-code-delete", {
-                        performedBy: uid,
-                        performedByName: callerSnap.data()?.displayName ?? "",
-                        eventTitle: eventSnap.data()?.title ?? eventId,
-                        eventId,
-                    }));
-                }
-                txn.set(codeRef, {
-                    code,
-                    eventId,
-                    createdBy: uid,
-                    createdAt: FieldValue.serverTimestamp(),
-                    active: true,
-                    usedCount: 0,
-                    maxUses,
-                    ...(activeFrom ? {activeFrom} : {}),
-                    ...(activeUntil ? {activeUntil} : {}),
-                    ...(expiresAt ? {expiresAt} : {}),
-                });
-                txn.set(recordRef(), recordDoc("staff-code-create", {
-                    performedBy: uid,
-                    performedByName: callerSnap.data()?.displayName ?? "",
-                    eventTitle: eventSnap.data()?.title ?? eventId,
-                    eventId,
-                }));
-            });
-            return {id: code, code};
-        } catch (err) {
-            if (err instanceof Error && err.message === "duplicate") continue;
-            throw err;
+        // Replaces every code the event had, enabled or not. Staff they
+        // admitted stay staff; that lives on their user records.
+        for (const oldDoc of existingCodes.docs) {
+            txn.delete(oldDoc.ref);
+            txn.set(recordRef(), recordDoc("staff-code-delete", fields));
         }
-    }
-
-    throw new HttpsError("internal", "code-generation-failed");
+        txn.set(codeRef, {
+            code,
+            eventId,
+            createdBy: uid,
+            createdAt: FieldValue.serverTimestamp(),
+            active: true,
+            usedCount: 0,
+            maxUses,
+            ...windowFields(activeFrom, activeUntil),
+        });
+        txn.set(recordRef(), recordDoc("staff-code-create", fields));
+    });
 });
 
 /** Makes `uid` staff for the event behind `code`. `code` is already canonical. */
@@ -524,22 +502,19 @@ async function redeemStaffCode(uid: string, code: string) {
 
     return db.runTransaction(async (txn) => {
         const freshCode = await txn.get(codeRef);
-        if (!freshCode.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        if (!freshCode.exists) throw invalidCode();
         const data = freshCode.data()!;
         validateCodeInTransaction(data);
 
         const eventId: string = data.eventId;
-        if (!eventId) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
+        if (!eventId) throw invalidCode();
 
-        const [upcomingSnap, pastSnap, userSnap] = await Promise.all([
-            txn.get(db.collection("upcomingEvents").doc(eventId)),
-            txn.get(db.collection("pastEvents").doc(eventId)),
+        const [{snap: eventSnap, archived: isPastEvent}, userSnap] = await Promise.all([
+            getEventDoc(eventId, txn),
             txn.get(userRef),
         ]);
-        const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
-        if (!userSnap.exists) throw new HttpsError("not-found", "Invalid or deactivated code.", {code: "invalid"});
-        const isPastEvent = !upcomingSnap.exists;
+        if (!eventSnap.exists) throw invalidCode();
+        if (!userSnap.exists) throw invalidCode();
 
         const eventData = eventSnap.data()!;
         const eventTitle: string = eventData.title ?? "";
@@ -592,29 +567,21 @@ async function redeemStaffCode(uid: string, code: string) {
 export const toggleStaffCodeActive = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
-    const input = request.data as {codeId?: string; active?: boolean};
+    const input = request.data as {codeId?: string; active?: unknown};
     const codeId = validateDocId(input.codeId, "codeId");
-    if (typeof input.active !== "boolean") {
-        throw new HttpsError("invalid-argument", "active must be a boolean.");
-    }
+    const active = validateBoolean(input.active, "active");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const codeSnap = await txn.get(db.collection("staffClaimCodes").doc(codeId));
-        if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
-        const codeData = codeSnap.data()!;
+        const {ref, data} = await readCode(txn, "staffClaimCodes", codeId);
+        const event = await codeEventFields(txn, data, {pastToo: true});
 
-        const eventSnap = codeData.eventId
-            ? await txn.get(db.collection("upcomingEvents").doc(codeData.eventId))
-            : null;
-
-        txn.update(db.collection("staffClaimCodes").doc(codeId), {active: input.active});
-        txn.set(recordRef(), recordDoc(input.active ? "staff-code-activate" : "staff-code-deactivate", {
+        txn.update(ref, {active});
+        txn.set(recordRef(), recordDoc(active ? "staff-code-activate" : "staff-code-deactivate", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
-            eventId: codeData.eventId ?? "",
+            ...event,
         }));
-        return {active: input.active};
+        return {active};
     });
 });
 export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request) => {
@@ -627,28 +594,17 @@ export const saveStaffCodeTimeWindow = onCall({maxInstances: 10}, async (request
     const maxUses = validateMaxUses(input.maxUses);
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const codeSnap = await txn.get(db.collection("staffClaimCodes").doc(codeId));
-        if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
-        const codeData = codeSnap.data()!;
+        const {ref, data} = await readCode(txn, "staffClaimCodes", codeId);
+        const event = await codeEventFields(txn, data, {pastToo: true});
 
-        const eventSnap = codeData.eventId
-            ? await txn.get(db.collection("upcomingEvents").doc(codeData.eventId))
-            : null;
-
-        const updates: Record<string, unknown> = {
-            activeFrom: activeFrom ?? null,
-            activeUntil: activeUntil ?? null,
-            expiresAt: activeUntil ? Timestamp.fromDate(new Date(activeUntil)) : null,
-        };
-        if (input.maxUses !== undefined) {
-            updates.maxUses = maxUses;
-        }
-        txn.update(db.collection("staffClaimCodes").doc(codeId), updates);
+        txn.update(ref, {
+            ...clearedWindow(activeFrom, activeUntil),
+            ...(input.maxUses !== undefined ? {maxUses} : {}),
+        });
         txn.set(recordRef(), recordDoc("staff-code-time-window", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
-            eventId: codeData.eventId ?? "",
+            ...event,
         }));
         return {saved: true};
     });
@@ -663,29 +619,17 @@ export const deleteStaffCode = onCall({maxInstances: 10}, async (request) => {
     const codeId = validateDocId((request.data as {codeId?: string})?.codeId, "codeId");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const codeRef = db.collection("staffClaimCodes").doc(codeId);
-        const codeSnap = await txn.get(codeRef);
-        if (!codeSnap.exists) throw new HttpsError("not-found", "Code not found.");
-        const codeData = codeSnap.data()!;
-        if (codeData.active !== false) {
+        const {ref, data} = await readCode(txn, "staffClaimCodes", codeId);
+        if (data.active !== false) {
             throw new HttpsError("failed-precondition", "Disable the code before deleting it.", {code: "active"});
         }
+        const event = await codeEventFields(txn, data, {pastToo: true});
 
-        // Staff codes can belong to a past event as well as an upcoming one.
-        const [upcomingSnap, pastSnap] = codeData.eventId
-            ? await Promise.all([
-                txn.get(db.collection("upcomingEvents").doc(codeData.eventId)),
-                txn.get(db.collection("pastEvents").doc(codeData.eventId)),
-            ])
-            : [null, null];
-        const eventSnap = upcomingSnap?.exists ? upcomingSnap : pastSnap;
-
-        txn.delete(codeRef);
+        txn.delete(ref);
         txn.set(recordRef(), recordDoc("staff-code-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: eventSnap?.data()?.title ?? codeData.eventId ?? "",
-            eventId: codeData.eventId ?? "",
+            ...event,
         }));
         return {deleted: true};
     });

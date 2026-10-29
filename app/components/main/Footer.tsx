@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { Link } from "react-router";
-import { FOOTER_LINKS, type NavLink, resolveNavHref } from "~/components/main/navLinks";
+import { FOOTER_LINKS, type NavLink, navLinkLabel, resolveNavHref } from "~/components/main/navLinks";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
 import { useSiteConfig } from "~/lib/siteConfig";
@@ -19,10 +19,7 @@ export const Footer = () => {
         return resolveNavHref(link, conPublished);
     };
 
-    const labelFor = (link: NavLink) =>
-        link.id === 'upcoming' && singleUpcoming && isEnglish
-            ? 'Upcoming Event'
-            : (isEnglish ? link.labelEn : link.labelCn);
+    const labelFor = (link: NavLink) => navLinkLabel(link, isEnglish, singleUpcoming);
 
     return (
         <footer>

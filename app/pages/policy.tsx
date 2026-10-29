@@ -1,27 +1,20 @@
 import { useMemo } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { LanguageSwitcher } from '~/components/LanguageSwitcher';
+import { PageNav } from '~/components/PageNav';
 import { GoToTop } from '~/components/GoToTop';
 import { renderPolicyMarkdown, usePolicy } from '~/lib/policy';
+import { localized } from '~/lib/localized';
 
 export const PolicyPage = () => {
     const {isEnglish} = useLanguage();
     const {policy, loading} = usePolicy();
 
-    const content = isEnglish ? policy.contentEn : (policy.contentCn || policy.contentEn);
+    const content = localized(isEnglish, policy.contentEn, policy.contentCn);
     const contentHtml = useMemo(() => renderPolicyMarkdown(content), [content]);
 
     return (
         <>
-            <nav className="profile-nav">
-                <a href="/" className="profile-nav-home">
-                    {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
-                </a>
-                <span className="admin-nav-title">{isEnglish ? 'Policy' : '政策'}</span>
-                <div className="nav-actions">
-                    <LanguageSwitcher/>
-                </div>
-            </nav>
+            <PageNav title={isEnglish ? 'Policy' : '政策'} account={false}/>
             <div className="policy-page">
                 <div className="policy-container">
                     <h1 className="policy-title">

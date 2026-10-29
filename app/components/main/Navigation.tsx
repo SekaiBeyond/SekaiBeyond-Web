@@ -5,7 +5,7 @@ import { LanguageSwitcher } from "~/components/LanguageSwitcher";
 import { LoginButton } from "~/components/LoginButton";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { hasFollowLinks } from "~/components/main/Contact";
-import { NAVIGATION_LINKS, type NavLink, resolveNavHref } from "~/components/main/navLinks";
+import { NAVIGATION_LINKS, type NavLink, navLinkLabel, resolveNavHref } from "~/components/main/navLinks";
 import { useConContent } from "~/lib/conContent";
 import { useSiteConfig } from "~/lib/siteConfig";
 import { useUpcomingEvents } from "~/lib/upcomingEvents";
@@ -36,9 +36,7 @@ export const Navigation = () => {
                     {NAVIGATION_LINKS.map((link: NavLink) => {
                         if ((link.id === 'upcoming' && !hasActive) || (link.id === 'contact' && followHidden)) return null;
                         const href = resolveNavHref(link, conPublished);
-                        const label = link.id === 'upcoming' && singleUpcoming && isEnglish
-                            ? 'Upcoming Event'
-                            : (isEnglish ? link.labelEn : link.labelCn);
+                        const label = navLinkLabel(link, isEnglish, singleUpcoming);
                         return (
                             <li key={link.id}>
                                 {href.startsWith("/") ? (

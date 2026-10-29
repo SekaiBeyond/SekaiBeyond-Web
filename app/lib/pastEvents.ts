@@ -1,5 +1,5 @@
 import { orderBy } from 'firebase/firestore';
-import { createCollectionCache } from './collectionCache';
+import { createCollectionCache, toDate } from './collectionCache';
 
 export interface PastEvent {
     id: string;
@@ -36,9 +36,9 @@ const cache = createCollectionCache<PastEvent>('pastEvents', docSnap => {
         icon: data.icon ?? '',
         recapLink: data.recapLink ?? '',
         recapLinkCn: data.recapLinkCn ?? '',
-        published: data.published ?? true,
-        paid: data.paid ?? false,
-        deleteAt: data.deleteAt?.toDate?.() ?? null,
+        published: data.published === true,
+        paid: data.paid === true,
+        deleteAt: toDate(data.deleteAt),
     };
 }, orderBy('date', 'desc'));
 

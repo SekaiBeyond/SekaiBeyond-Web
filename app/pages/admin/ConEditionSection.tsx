@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSaveSiteConfig, callUploadAdminImage } from '~/lib/firebase';
+import { callSaveSiteConfig, callUploadAdminImage, errorMessage } from '~/lib/firebase';
 import type { ConEdition } from '~/lib/siteConfig';
 import { siteDay } from '~/lib/siteTime';
 import { ImageUploadField } from './ImageUploadField';
-import { refreshAfterSave } from './utils';
+import { refreshAfterSave, type ShowToast } from './utils';
 
 interface ConEditionSectionProps {
     conEdition: ConEdition | null;
     refreshConfig: () => Promise<void>;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 
@@ -85,8 +85,8 @@ export const ConEditionSection = ({conEdition, refreshConfig, showToast, readOnl
             await callSaveSiteConfig({conEdition: formData});
             await refreshAfterSave(refreshConfig, showToast, isEnglish);
             showToast(isEnglish ? 'Convention edition saved.' : '漫展年度已保存。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to save convention edition.' : '保存漫展年度失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to save convention edition.' : '保存漫展年度失败。'), 'error');
         } finally {
             setSaving(false);
         }

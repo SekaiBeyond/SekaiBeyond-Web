@@ -1,14 +1,17 @@
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminTransaction, MANAGEABLE_GROUPS, normalizeGroup, requireAdmin, requireAuth } from "../utils/auth";
-import { deletionExpiresAt } from "../utils/config";
+import { adminTransaction, requireAdmin, requireAuth, requireCanManage } from "../utils/auth";
+import { cancelDeletion, type Deletable, requestDeletion } from "../utils/deletion";
+import { getEventDoc } from "../utils/events";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
-import { recordDoc, recordRef } from "../utils/records";
+import { recordDoc, recordRef, type RecordType } from "../utils/records";
 import { siteDay } from "../utils/siteTime";
 import {
+    validateBoolean,
+    validateDay,
     validateDocId,
     validateInstant,
     validateStorageImageUrl,
@@ -17,57 +20,24 @@ import {
     validateUrl
 } from "../utils/validation";
 
-export const requestEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request, "staff");
+const PAST_EVENT: Deletable = {
+    collection: "pastEvents",
+    idField: "eventId",
+    notFound: "Event not found.",
+    requested: "event-deletion-requested",
+    cancelled: "event-deletion-cancelled",
+    describe: (eventId, data) => ({eventTitle: data.title ?? eventId, eventId}),
+};
 
-    const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
-    const deleteAt = deletionExpiresAt();
+const UPCOMING_EVENT: Deletable = {
+    ...PAST_EVENT,
+    collection: "upcomingEvents",
+    requested: "upcoming-event-deletion-requested",
+    cancelled: "upcoming-event-deletion-cancelled",
+};
 
-    await adminTransaction(uid, async (txn, callerSnap) => {
-        const eventSnap = await txn.get(db.collection("pastEvents").doc(eventId));
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        const data = eventSnap.data()!;
-
-        if (data.deleteAt && data.deleteAt.toMillis() > Date.now()) {
-            throw new HttpsError("already-exists", "deletion-already-pending");
-        }
-
-        txn.update(db.collection("pastEvents").doc(eventId), {deleteAt});
-        txn.set(recordRef(), recordDoc("event-deletion-requested", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: data.title ?? eventId,
-            eventId,
-        }));
-    });
-
-    return {deleteAt: deleteAt.toDate().toISOString()};
-});
-export const cancelEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request, "staff");
-
-    const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
-
-    await adminTransaction(uid, async (txn, callerSnap) => {
-        const eventSnap = await txn.get(db.collection("pastEvents").doc(eventId));
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        const data = eventSnap.data()!;
-
-        if (!data.deleteAt || data.deleteAt.toMillis() <= Date.now()) {
-            throw new HttpsError("not-found", "No pending deletion.");
-        }
-
-        txn.update(db.collection("pastEvents").doc(eventId), {deleteAt: FieldValue.delete()});
-        txn.set(recordRef(), recordDoc("event-deletion-cancelled", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: data.title ?? eventId,
-            eventId,
-        }));
-    });
-
-    return {cancelled: true};
-});
+export const requestEventDeletion = onCall({maxInstances: 10}, request => requestDeletion(request, PAST_EVENT));
+export const cancelEventDeletion = onCall({maxInstances: 10}, request => cancelDeletion(request, PAST_EVENT));
 
 /**
  * Deletes an event's attendees, email template and settings, which Firestore
@@ -137,7 +107,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const title = validateStr(input.title, "title", 200, true);
     const titleCn = validateStr(input.titleCn, "titleCn", 200);
     const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128);
-    const date = validateStr(input.date, "date", 50, true);
+    const date = validateDay(input.date, "date");
     const location = validateStr(input.location, "location", 200);
     const locationCn = validateStr(input.locationCn, "locationCn", 200);
     const venueId = validateStr(input.venueId, "venueId", 128);
@@ -186,29 +156,36 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
 
     return result;
 });
-export const setPastEventPublished = onCall({maxInstances: 10}, async (request) => {
+
+/** Shows or hides an event on the site. */
+async function setEventPublished(
+    request: CallableRequest,
+    collection: "pastEvents" | "upcomingEvents",
+    recordTypes: {publish: RecordType; unpublish: RecordType},
+): Promise<{published: boolean}> {
     const uid = await requireAuth(request, "staff");
 
-    const input = request.data as {eventId?: string; published?: boolean};
+    const input = request.data as {eventId?: string; published?: unknown};
     const eventId = validateDocId(input.eventId, "eventId");
-    if (typeof input.published !== "boolean") {
-        throw new HttpsError("invalid-argument", "published must be a boolean.");
-    }
+    const published = validateBoolean(input.published, "published");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const ref = db.collection("pastEvents").doc(eventId);
+        const ref = db.collection(collection).doc(eventId);
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "Event not found.");
-        txn.update(ref, {published: input.published});
-        txn.set(recordRef(), recordDoc(input.published ? "past-event-publish" : "past-event-unpublish", {
+        txn.update(ref, {published});
+        txn.set(recordRef(), recordDoc(published ? recordTypes.publish : recordTypes.unpublish, {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventTitle: snap.data()?.title ?? eventId,
             eventId,
         }));
-        return {published: input.published};
+        return {published};
     });
-});
+}
+
+export const setPastEventPublished = onCall({maxInstances: 10}, request =>
+    setEventPublished(request, "pastEvents", {publish: "past-event-publish", unpublish: "past-event-unpublish"}));
 export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
@@ -315,80 +292,15 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
 
     return result;
 });
-export const setUpcomingEventPublished = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request, "staff");
-
-    const input = request.data as {eventId?: string; published?: boolean};
-    const eventId = validateDocId(input.eventId, "eventId");
-    if (typeof input.published !== "boolean") {
-        throw new HttpsError("invalid-argument", "published must be a boolean.");
-    }
-
-    return adminTransaction(uid, async (txn, callerSnap) => {
-        const ref = db.collection("upcomingEvents").doc(eventId);
-        const snap = await txn.get(ref);
-        if (!snap.exists) throw new HttpsError("not-found", "Event not found.");
-        txn.update(ref, {published: input.published});
-        txn.set(recordRef(), recordDoc(input.published ? "upcoming-event-publish" : "upcoming-event-unpublish", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: snap.data()?.title ?? eventId,
-            eventId,
-        }));
-        return {published: input.published};
-    });
-});
-export const requestUpcomingEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request, "staff");
-
-    const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
-    const deleteAt = deletionExpiresAt();
-
-    await adminTransaction(uid, async (txn, callerSnap) => {
-        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        const data = eventSnap.data()!;
-
-        if (data.deleteAt && data.deleteAt.toMillis() > Date.now()) {
-            throw new HttpsError("already-exists", "deletion-already-pending");
-        }
-
-        txn.update(db.collection("upcomingEvents").doc(eventId), {deleteAt});
-        txn.set(recordRef(), recordDoc("upcoming-event-deletion-requested", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: data.title ?? eventId,
-            eventId,
-        }));
-    });
-
-    return {deleteAt: deleteAt.toDate().toISOString()};
-});
-export const cancelUpcomingEventDeletion = onCall({maxInstances: 10}, async (request) => {
-    const uid = await requireAuth(request, "staff");
-
-    const eventId = validateDocId((request.data as {eventId?: string})?.eventId, "eventId");
-
-    await adminTransaction(uid, async (txn, callerSnap) => {
-        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
-        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        const data = eventSnap.data()!;
-
-        if (!data.deleteAt || data.deleteAt.toMillis() <= Date.now()) {
-            throw new HttpsError("not-found", "No pending deletion.");
-        }
-
-        txn.update(db.collection("upcomingEvents").doc(eventId), {deleteAt: FieldValue.delete()});
-        txn.set(recordRef(), recordDoc("upcoming-event-deletion-cancelled", {
-            performedBy: uid,
-            performedByName: callerSnap.data()?.displayName ?? "",
-            eventTitle: data.title ?? eventId,
-            eventId,
-        }));
-    });
-
-    return {cancelled: true};
-});
+export const setUpcomingEventPublished = onCall({maxInstances: 10}, request =>
+    setEventPublished(request, "upcomingEvents", {
+        publish: "upcoming-event-publish",
+        unpublish: "upcoming-event-unpublish",
+    }));
+export const requestUpcomingEventDeletion = onCall({maxInstances: 10},
+    request => requestDeletion(request, UPCOMING_EVENT));
+export const cancelUpcomingEventDeletion = onCall({maxInstances: 10},
+    request => cancelDeletion(request, UPCOMING_EVENT));
 export const onUpcomingEventDeleted = onDocumentDeleted(
     {document: "upcomingEvents/{eventId}", maxInstances: 10},
     async (event) => {
@@ -597,46 +509,28 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
 export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
-    const input = request.data as {targetUid?: string; eventId?: string; grant?: boolean};
+    const input = request.data as {targetUid?: string; eventId?: string; grant?: unknown};
     const targetUid = validateDocId(input.targetUid, "targetUid");
     const eventId = validateDocId(input.eventId, "eventId");
-    if (typeof input.grant !== "boolean") {
-        throw new HttpsError("invalid-argument", "grant must be a boolean.");
-    }
-    const grant = input.grant;
+    const grant = validateBoolean(input.grant, "grant");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const callerGroup = callerSnap.data()!.group;
-        const [targetSnap, upcomingSnap, pastSnap] = await Promise.all([
+        const [targetSnap, {snap: eventSnap, archived}] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
-            txn.get(db.collection("upcomingEvents").doc(eventId)),
-            txn.get(db.collection("pastEvents").doc(eventId)),
+            getEventDoc(eventId, txn),
         ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         const targetData = targetSnap.data()!;
         // Self-edits are exempt from the hierarchy check.
-        if (
-            targetUid !== uid
-            && callerGroup !== "president"
-            && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetData.group))
-        ) {
-            throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
-        }
+        if (targetUid !== uid) requireCanManage(callerSnap.data()!.group, targetData.group);
 
-        let eventSnap;
-        if (upcomingSnap.exists) {
-            if (upcomingSnap.data()!.paid === true) {
-                throw new HttpsError(
-                    "failed-precondition",
-                    "Paid events use tickets — manage attendance via the Tickets tab.",
-                    {code: "paid-event"},
-                );
-            }
-            eventSnap = upcomingSnap;
-        } else if (pastSnap.exists) {
-            eventSnap = pastSnap;
-        } else {
-            throw new HttpsError("not-found", "Event not found.");
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        if (!archived && eventSnap.data()!.paid === true) {
+            throw new HttpsError(
+                "failed-precondition",
+                "Paid events use tickets — manage attendance via the Tickets tab.",
+                {code: "paid-event"},
+            );
         }
 
         if (grant) {
@@ -672,23 +566,17 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
     const eventId = validateDocId(input.eventId, "eventId");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const [targetSnap, upcomingSnap, pastSnap] = await Promise.all([
+        const [targetSnap, {snap: eventSnap, archived: isPastEvent}] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
-            txn.get(db.collection("upcomingEvents").doc(eventId)),
-            txn.get(db.collection("pastEvents").doc(eventId)),
+            getEventDoc(eventId, txn),
         ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
-        const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
-        const isPastEvent = !upcomingSnap.exists;
 
         const targetData = targetSnap.data()!;
         const existing: string[] = targetData.eventStaffEvents ?? [];
         const alreadyStaff = existing.includes(eventId);
 
-        const eventTitle: string = eventSnap.data()?.title ?? eventId;
-        const callerName: string = callerSnap.data()?.displayName ?? "";
-        const targetName: string = targetData.displayName ?? "";
         const attendedEvents: string[] = targetData.attendedEvents ?? [];
         const alreadyAttended = attendedEvents.includes(eventId);
 
@@ -702,45 +590,27 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
             return {added: false, attendeeRemoved: false};
         }
 
-        const userUpdates: Record<string, unknown> = {};
-        if (!alreadyStaff) userUpdates.eventStaffEvents = FieldValue.arrayUnion(eventId);
-        if (attendanceAction === "add") {
-            userUpdates.attendedEvents = FieldValue.arrayUnion(eventId);
-        } else if (attendanceAction === "remove") {
-            userUpdates.attendedEvents = FieldValue.arrayRemove(eventId);
-        }
-        if (Object.keys(userUpdates).length > 0) {
-            txn.update(db.collection("users").doc(targetUid), userUpdates);
-        }
+        // Past the early return, at least one of these changes.
+        txn.update(db.collection("users").doc(targetUid), {
+            ...(alreadyStaff ? {} : {eventStaffEvents: FieldValue.arrayUnion(eventId)}),
+            ...(attendanceAction === "add" ? {attendedEvents: FieldValue.arrayUnion(eventId)} : {}),
+            ...(attendanceAction === "remove" ? {attendedEvents: FieldValue.arrayRemove(eventId)} : {}),
+        });
 
+        const fields = {
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            targetUid,
+            targetName: targetData.displayName ?? "",
+            eventId,
+            eventTitle: eventSnap.data()?.title ?? eventId,
+        };
         if (!alreadyStaff) {
-            txn.set(recordRef(), recordDoc("event-staff-assign", {
-                performedBy: uid,
-                performedByName: callerName,
-                targetUid,
-                targetName,
-                eventId,
-                eventTitle,
-            }));
+            txn.set(recordRef(), recordDoc("event-staff-assign", fields));
         }
-        if (attendanceAction === "add") {
-            txn.set(recordRef(), recordDoc("event-attend", {
-                performedBy: uid,
-                performedByName: callerName,
-                targetUid,
-                targetName,
-                eventId,
-                eventTitle,
-                reason: "staff-assignment",
-            }));
-        } else if (attendanceAction === "remove") {
-            txn.set(recordRef(), recordDoc("event-unattend", {
-                performedBy: uid,
-                performedByName: callerName,
-                targetUid,
-                targetName,
-                eventId,
-                eventTitle,
+        if (attendanceAction !== "none") {
+            txn.set(recordRef(), recordDoc(attendanceAction === "add" ? "event-attend" : "event-unattend", {
+                ...fields,
                 reason: "staff-assignment",
             }));
         }
@@ -758,10 +628,9 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
     const eventId = validateDocId(input.eventId, "eventId");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const [targetSnap, upcomingSnap, pastSnap] = await Promise.all([
+        const [targetSnap, {snap: eventSnap}] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
-            txn.get(db.collection("upcomingEvents").doc(eventId)),
-            txn.get(db.collection("pastEvents").doc(eventId)),
+            getEventDoc(eventId, txn),
         ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         const targetData = targetSnap.data()!;
@@ -770,10 +639,8 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
             return {removed: false};
         }
 
-        const eventSnap = upcomingSnap.exists ? upcomingSnap : pastSnap;
-        const eventTitle: string = eventSnap.exists
-            ? (eventSnap.data()?.title ?? eventId)
-            : eventId;
+        // An event deleted since keeps its ID in the record.
+        const eventTitle: string = eventSnap.data()?.title ?? eventId;
 
         txn.update(db.collection("users").doc(targetUid), {
             eventStaffEvents: FieldValue.arrayRemove(eventId),

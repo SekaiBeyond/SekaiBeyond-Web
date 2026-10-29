@@ -31,8 +31,8 @@ function parseQuotaDoc(
 }
 
 export async function computeEmailQuota(): Promise<{sentToday: number; dailyCap: number}> {
-    const {confirmed, reserved} = parseQuotaDoc((await QUOTA_DOC.get()).data());
-    return {sentToday: confirmed + reserved, dailyCap: RESEND_DAILY_CAP};
+    const {sentToday, dailyCap} = await computeEmailQuotaDetail();
+    return {sentToday, dailyCap};
 }
 
 // computeEmailQuota plus the raw counters and the cache's age, for the admin

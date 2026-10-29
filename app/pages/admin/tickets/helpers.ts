@@ -1,5 +1,6 @@
-import { Timestamp } from 'firebase/firestore';
+import { toDate } from '~/lib/collectionCache';
 import { buildCsv } from '~/lib/csv';
+import { functionsErrorCode } from '~/lib/firebase';
 import { sanitizeEmailHtml } from '~/lib/emailSanitize';
 import { SITE_TIME_ZONE } from '~/lib/siteTime';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
@@ -62,13 +63,6 @@ export const DEFAULT_TEMPLATE_BODY_EN = `<div style="font-family:-apple-system,B
     </div>
 </div>`;
 
-export const tsToDate = (t: unknown): Date | null => {
-    if (!t) return null;
-    if (t instanceof Timestamp) return t.toDate();
-    if (t instanceof Date) return t;
-    return null;
-};
-
 export const mapAttendeeDoc = (
     id: string,
     data: Record<string, unknown>,
@@ -78,10 +72,10 @@ export const mapAttendeeDoc = (
         const tk = t as Record<string, unknown>;
         return {
             ticketId: (tk.ticketId as string) ?? '',
-            type: (tk.type as any) ?? 'normal',
-            createdAt: tsToDate(tk.createdAt),
+            type: (tk.type as TicketType | undefined) ?? 'normal',
+            createdAt: toDate(tk.createdAt),
             redeemed: (tk.redeemed as boolean) ?? false,
-            redeemedAt: tsToDate(tk.redeemedAt),
+            redeemedAt: toDate(tk.redeemedAt),
             redeemedByName: (tk.redeemedByName as string) ?? '',
             voided: (tk.voided as boolean) ?? false,
             notes: (tk.notes as string) ?? '',
@@ -94,17 +88,41 @@ export const mapAttendeeDoc = (
         ticketCount: (data.ticketCount as number) ?? 0,
         emailSent: (data.emailSent as boolean) ?? false,
         emailScheduled: (data.emailScheduled as boolean) ?? false,
-        emailSentAt: tsToDate(data.emailSentAt),
-        createdAt: tsToDate(data.createdAt) ?? new Date(),
+        emailSending: data.emailSending === true,
+        emailSentAt: toDate(data.emailSentAt),
+        createdAt: toDate(data.createdAt) ?? new Date(),
         tickets,
         ticketIds: Array.isArray(data.ticketIds) ? (data.ticketIds as string[]) : [],
         walkIn: data.walkIn === true,
         hometown: data.source === 'hometown',
         unlisted: data.unlisted === true,
         missingFromHometown: data.missingFromHometown === true,
-        hometownSeenAt: tsToDate(data.hometownSeenAt),
+        hometownSeenAt: toDate(data.hometownSeenAt),
         hometownOrderId: (data.hometownOrderId as string) ?? '',
+        apiOrder: data.source === 'api',
+        apiSendEmail: data.apiSendEmail === true,
+        apiOrderId: (data.apiOrderId as string) ?? '',
+        apiKeyName: (data.apiKeyName as string) ?? '',
     };
+};
+
+/**
+ * Why the server refused to send ticket emails, as a warning to show, or null
+ * for any other failure.
+ */
+export const sendRefusal = (err: unknown, isEnglish: boolean): string | null => {
+    switch (functionsErrorCode(err)) {
+        case 'no-template':
+            return isEnglish ? 'Save the email template before sending.' : '请先保存邮件模板再发送。';
+        case 'no-contact-email':
+            return isEnglish
+                ? 'The template uses {{ contactEmail }}. Set a Contact Email in Site Config before sending.'
+                : '模板使用了 {{ contactEmail }}，请先在网站设置中填写联系邮箱再发送。';
+        case 'quota-exceeded':
+            return isEnglish ? 'Daily cap reached and the overflow queue is full.' : '已达到每日上限，且排队已满。';
+        default:
+            return null;
+    }
 };
 
 const hometownStatus = (a: Pick<AttendeeData, 'hometown' | 'unlisted' | 'missingFromHometown'>) =>
@@ -125,6 +143,13 @@ export const checkedInWalkIn = (a: Pick<AttendeeData, 'walkIn' | 'tickets'>): bo
     const live = a.tickets.filter(t => !t.voided);
     return a.walkIn && live.length > 0 && live.every(t => t.redeemed);
 };
+
+/**
+ * HomeTown and the seller's app deliver their own tickets, so no email goes
+ * from here, unless an API order asked for one.
+ */
+export const ticketsSentElsewhere = (a: Pick<AttendeeData, 'hometown' | 'apiOrder' | 'apiSendEmail'>): boolean =>
+    a.hometown || (a.apiOrder && !a.apiSendEmail);
 
 /**
  * Each type the attendee's tickets hold, with how many, in ticket order: one
@@ -170,7 +195,7 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
                         : types.map(([type, n]) => `${ticketTypeLabel(type, true)} ×${n}`).join('; '),
                 String(used),
                 String(voided),
-                a.email && !a.hometown ? (a.emailSent ? 'yes' : 'no') : '',
+                a.email && !ticketsSentElsewhere(a) ? (a.emailSending ? 'unconfirmed' : a.emailSent ? 'yes' : 'no') : '',
                 csvDateTime(a.emailSentAt),
                 csvDateTime(a.createdAt),
                 a.walkIn ? 'yes' : 'no',
@@ -184,6 +209,15 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
             ];
         }),
     );
+
+/**
+ * Whether an event's emailTemplate doc holds a template to send. Mirrors
+ * savedTemplate in functions, which refuses a blank subject or body: no default
+ * stands in for it.
+ */
+export const isTemplateSaved = (data: {subject?: unknown; bodyHtml?: unknown} | undefined): boolean =>
+    typeof data?.subject === 'string' && data.subject.trim() !== ''
+    && typeof data.bodyHtml === 'string' && data.bodyHtml.trim() !== '';
 
 const CONTACT_EMAIL_PLACEHOLDER = /{{\s*contactEmail\s*}}/g;
 

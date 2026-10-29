@@ -13,6 +13,7 @@ import {
     signInWithGoogle as firebaseSignIn,
     signOut as firebaseSignOut
 } from '~/lib/firebase';
+import { toDate } from '~/lib/collectionCache';
 import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
 
 // `group` is a role ladder only; membership lives in membershipExpiresAt.
@@ -39,7 +40,7 @@ export function normalizeGroup(raw: unknown): UserGroup {
     return raw === 'staff' || raw === 'core-staff' || raw === 'president' ? raw : 'user';
 }
 
-function isMembershipActive(expiresAt: Date | null | undefined): boolean {
+export function isMembershipActive(expiresAt: Date | null | undefined): boolean {
     return expiresAt instanceof Date && expiresAt.getTime() > Date.now();
 }
 
@@ -118,13 +119,13 @@ function toUserProfile(data: DocumentData, email: string): UserProfile {
         email,
         photoURL: data.photoURL,
         bannerURL: data.bannerURL ?? '',
-        joinedAt: data.joinedAt?.toDate() ?? new Date(),
+        joinedAt: toDate(data.joinedAt) ?? new Date(),
         attendedEvents: data.attendedEvents ?? [],
         badges: data.badges ?? [],
         badgeEarnedAt: parseBadgeEarnedAt(data.badgeEarnedAt),
         group: normalizeGroup(data.group),
-        membershipExpiresAt: data.membershipExpiresAt?.toDate() ?? null,
-        membershipStartedAt: data.membershipStartedAt?.toDate() ?? null,
+        membershipExpiresAt: toDate(data.membershipExpiresAt),
+        membershipStartedAt: toDate(data.membershipStartedAt),
         hidePassportPage: data.hidePassportPage === true,
         profileVisibility: readVisibility(data.profileVisibility),
         title: data.title ?? '',

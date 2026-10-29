@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ShowToast } from '../utils';
-import { checkedInWalkIn, ticketStatusCounts, ticketTypeCounts } from './helpers';
+import { checkedInWalkIn, ticketsSentElsewhere, ticketStatusCounts, ticketTypeCounts } from './helpers';
 import {
     anonymousAttendeeName,
     type AttendeeData,
@@ -9,6 +9,7 @@ import {
     type StatusFilter,
     TICKET_TYPES,
     type TicketType,
+    ticketTypeClass,
     ticketTypeLabel,
 } from './types';
 import type { AccountLink } from './useAccountLinks';
@@ -261,12 +262,13 @@ export function AttendeesSection({
                 const isExpanded = expanded.has(a.id);
                 // undefined while asking; null for no account.
                 const account = accountLinks.get(a.email.toLowerCase());
-                // Nothing to send without an address, HomeTown sends its own, and a
-                // walk-in already in at the door is owed nothing.
-                const emailState = !a.email || a.hometown ? null
-                    : a.emailScheduled ? 'queued'
-                        : a.emailSent ? 'sent'
-                            : checkedInWalkIn(a) ? null : 'unsent';
+                // Nothing to send without an address, HomeTown and the seller's app
+                // send their own, and a walk-in already in at the door is owed nothing.
+                const emailState = !a.email || ticketsSentElsewhere(a) ? null
+                    : a.emailSending ? 'unconfirmed'
+                        : a.emailScheduled ? 'queued'
+                            : a.emailSent ? 'sent'
+                                : checkedInWalkIn(a) ? null : 'unsent';
                 // A buyer with several HomeTown tickets has a row for each, told
                 // apart by number; a nameless, emailless one already leads with it.
                 const hometownNumber = a.hometown && (a.name || a.email) ? a.ticketIds[0] : '';
@@ -309,6 +311,11 @@ export function AttendeesSection({
                                 {a.hometown && (
                                     <span className="admin-tickets-tag admin-tickets-tag-hometown">HomeTown</span>
                                 )}
+                                {a.apiOrder && (
+                                    <span className="admin-tickets-tag admin-tickets-tag-api">
+                                        {a.apiKeyName || 'API'}
+                                    </span>
+                                )}
                                 {a.unlisted && (
                                     <span className="admin-tickets-tag admin-tickets-tag-unlisted">
                                         {isEnglish ? 'Not on list' : '不在名单中'}
@@ -324,7 +331,7 @@ export function AttendeesSection({
                                 {!a.unlisted && ticketTypeCounts(a).map(([type]) => (
                                     <span
                                         key={type}
-                                        className={`admin-tickets-tag admin-tickets-tag-type-${type.toLowerCase().replace(/\s+/g, '-')}`}>
+                                        className={`admin-tickets-tag ${ticketTypeClass(type)}`}>
                                         {ticketTypeLabel(type, isEnglish)}
                                     </span>
                                 ))}
@@ -347,12 +354,21 @@ export function AttendeesSection({
                                     </span>
                                 )}
                                 {emailState && (
-                                    <span className={`admin-tickets-tag admin-tickets-tag-${emailState}`}>
-                                        {emailState === 'queued'
-                                            ? (isEnglish ? 'Queued' : '待发送')
-                                            : emailState === 'sent'
-                                                ? (isEnglish ? 'Sent' : '已发送')
-                                                : (isEnglish ? 'Unsent' : '未发送')}
+                                    <span
+                                        className={`admin-tickets-tag admin-tickets-tag-${emailState}`}
+                                        title={emailState === 'unconfirmed'
+                                            ? (isEnglish
+                                                ? 'The ticket API was sending this email and never heard whether it went. Check with the buyer before sending it again with Resend Email.'
+                                                : '门票 API 发送此邮件时未收到是否送达的回复。请先向购票者确认，再决定是否用"重发邮件"再发一次。')
+                                            : undefined}
+                                    >
+                                        {emailState === 'unconfirmed'
+                                            ? (isEnglish ? 'Unconfirmed' : '未确认')
+                                            : emailState === 'queued'
+                                                ? (isEnglish ? 'Queued' : '待发送')
+                                                : emailState === 'sent'
+                                                    ? (isEnglish ? 'Sent' : '已发送')
+                                                    : (isEnglish ? 'Unsent' : '未发送')}
                                     </span>
                                 )}
                                 {account !== undefined && (
@@ -381,6 +397,13 @@ export function AttendeesSection({
                                             : (isEnglish
                                                 ? `Bought through HomeTown${a.hometownOrderId ? `, order #${a.hometownOrderId}` : ''}. HomeTown sent the ticket, so no email is sent from here.`
                                                 : `通过 HomeTown 购买${a.hometownOrderId ? `，订单号 ${a.hometownOrderId}` : ''}。门票由 HomeTown 发送，此处不发送邮件。`)}
+                                    </p>
+                                )}
+                                {a.apiOrder && (
+                                    <p className="admin-helper-text">
+                                        {isEnglish
+                                            ? `Bought through ${a.apiKeyName || 'the ticket API'}${a.apiOrderId ? `, order #${a.apiOrderId}` : ''}. The buyer holds these tickets in that app, so they can't be re-issued or removed here${a.apiSendEmail ? '. The order asked for them to be emailed from here as well.' : ', and no email is sent from here.'}`
+                                            : `通过 ${a.apiKeyName || '门票 API'} 购买${a.apiOrderId ? `，订单号 ${a.apiOrderId}` : ''}。购票者在该应用中持有这些门票，因此无法在此重新签发或移除${a.apiSendEmail ? '。该订单要求同时从此处通过邮件发送门票。' : '，此处也不发送邮件。'}`}
                                     </p>
                                 )}
                                 {a.missingFromHometown && (
@@ -431,7 +454,7 @@ export function AttendeesSection({
                                         )
                                         : (isEnglish ? 'their profile.' : '该用户主页。'))}
                                 </p>
-                                {a.email && !a.hometown && !a.emailSent && checkedInWalkIn(a) && (
+                                {a.email && !a.hometown && !a.apiOrder && !a.emailSent && checkedInWalkIn(a) && (
                                     <p className="admin-helper-text">
                                         {isEnglish
                                             ? 'Checked in at the door, so Send Unsent passes them by. Resend Email still sends their tickets.'
@@ -449,18 +472,21 @@ export function AttendeesSection({
                                         <button
                                             className="admin-toggle-btn admin-toggle-save"
                                             onClick={() => onResend(a)}
-                                            disabled={!a.email || a.hometown || a.tickets.every(t => t.voided)}
+                                            disabled={!a.email || ticketsSentElsewhere(a) || a.tickets.every(t => t.voided)}
                                         >
                                             {isEnglish ? 'Resend Email' : '重发邮件'}
                                         </button>
                                         <button
                                             className="admin-toggle-btn admin-toggle-revoke"
                                             onClick={() => onDelete(a)}
-                                            // Its record is what stops the number getting in again.
-                                            disabled={a.hometown}
+                                            // Its record is what stops the number getting in again, or
+                                            // what a retried API order finds instead of issuing new tickets.
+                                            disabled={a.hometown || a.apiOrder}
                                             title={a.hometown
                                                 ? (isEnglish ? 'HomeTown tickets are voided, not removed.' : 'HomeTown 门票只能作废，不能移除。')
-                                                : undefined}
+                                                : a.apiOrder
+                                                    ? (isEnglish ? 'Tickets sold through the API are voided, not removed.' : '通过 API 售出的门票只能作废，不能移除。')
+                                                    : undefined}
                                         >
                                             {isEnglish ? 'Remove' : '移除'}
                                         </button>
@@ -511,12 +537,12 @@ export function AttendeesSection({
                                                 <td className="admin-tickets-cell-type">
                                                     {a.unlisted ? '—' : readOnly ? (
                                                         <span
-                                                            className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}>
+                                                            className={`admin-tickets-tag ${ticketTypeClass(t.type)}`}>
                                                             {ticketTypeLabel(t.type || 'normal', isEnglish)}
                                                         </span>
                                                     ) : (
                                                         <select
-                                                            className={`admin-tickets-tag admin-tickets-tag-type-${(t.type || 'normal').toLowerCase().replace(/\s+/g, '-')}`}
+                                                            className={`admin-tickets-tag ${ticketTypeClass(t.type)}`}
                                                             value={t.type || 'normal'}
                                                             onChange={(e) => onUpdateTicketType(a, t.ticketId, e.target.value as TicketType)}
                                                             style={{

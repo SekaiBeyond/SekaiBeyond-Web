@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeletePassportDesign, callSavePassportDesign, callUploadAdminImage } from '~/lib/firebase';
+import { callDeletePassportDesign, callSavePassportDesign, callUploadAdminImage, errorMessage } from '~/lib/firebase';
 import {
     DEFAULT_PASSPORT_TERM_DAYS,
     MAX_PASSPORT_TERM_DAYS,
@@ -74,8 +74,8 @@ export const PassportDesignsSection = ({
             await callDeletePassportDesign({designId: design.id});
             await refreshAfterSave(onChanged, showToast, isEnglish);
             showToast(isEnglish ? 'Design deleted.' : '设计已删除。', 'warning');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to delete design.' : '删除设计失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to delete design.' : '删除设计失败。'), 'error');
         } finally {
             setDeletingId(null);
         }
@@ -263,8 +263,8 @@ const DesignEditor = ({initial, designs, onSaved, onCancel, showToast}: DesignEd
                 termDays,
             });
             showToast(isEnglish ? 'Design saved.' : '设计已保存。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to save design.' : '保存设计失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to save design.' : '保存设计失败。'), 'error');
             setSaving(false);
             return;
         }

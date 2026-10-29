@@ -5,7 +5,8 @@ import { UserAvatar, UserRow } from './UserRow';
 import { searchUsers } from './utils';
 
 interface AccountPickerProps {
-    selected: UserRecord | null;
+    /** The picked account, as much of it as is shown. */
+    selected: Pick<UserRecord, 'displayName' | 'email' | 'photoURL'> | null;
     onSelect: (user: UserRecord | null) => void;
     manualName?: string;
     onManualNameChange?: (name: string) => void;

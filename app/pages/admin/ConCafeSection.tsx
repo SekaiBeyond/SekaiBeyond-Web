@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callUploadAdminImage } from '~/lib/firebase';
+import { callUploadAdminImage, errorMessage } from '~/lib/firebase';
 import type { Maid } from '~/lib/conContent';
 import { ImageUploadField } from './ImageUploadField';
 import {
@@ -50,9 +50,9 @@ export const CafeSection = ({content, loading, showToast, readOnly}: SectionProp
                 ? {...prev, poster: url}
                 : {...prev, maids: replaceAt(prev.maids, target, {...prev.maids[target], poster: url})}));
             showToast(isEnglish ? 'Poster uploaded.' : '海报已上传。', 'success');
-        } catch (e: any) {
+        } catch (e) {
             // Nothing to roll back — the draft never held the preview.
-            showToast(e?.message ?? (isEnglish ? 'Poster upload failed.' : '海报上传失败。'), 'error');
+            showToast(errorMessage(e, isEnglish ? 'Poster upload failed.' : '海报上传失败。'), 'error');
         } finally {
             // Safe now: the <img> swaps to the stored URL in the same commit.
             URL.revokeObjectURL(previewUrl);

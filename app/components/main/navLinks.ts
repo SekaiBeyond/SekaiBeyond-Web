@@ -10,6 +10,12 @@ export interface NavLink {
 export const resolveNavHref = (link: NavLink, published: boolean): string =>
     published && link.publishedRoute ? link.publishedRoute : link.href;
 
+/** A link's label, in the singular for Upcoming Events when there's only one. */
+export const navLinkLabel = (link: NavLink, isEnglish: boolean, singleUpcoming: boolean): string =>
+    link.id === 'upcoming' && singleUpcoming && isEnglish
+        ? 'Upcoming Event'
+        : (isEnglish ? link.labelEn : link.labelCn);
+
 const SHARED_LINKS: NavLink[] = [
     {
         id: 'about',
@@ -42,7 +48,7 @@ const SHARED_LINKS: NavLink[] = [
         labelEn: 'Team',
         labelCn: '幕后团队',
     },
-]
+];
 
 export const FOOTER_LINKS: NavLink[] = [
     ...SHARED_LINKS,

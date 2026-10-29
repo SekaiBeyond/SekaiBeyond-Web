@@ -182,6 +182,54 @@ export const deleteQrCode = onCall({maxInstances: 10}, async (request) => {
     return {deleted: true};
 });
 
+// Linked-event end times, cached per instance so repeated scans during an event
+// skip the read. The short TTL lets reschedules and archives correct themselves
+// within a minute, which is simpler than copying endAt onto every QR doc.
+const EVENT_END_TTL_MS = 60_000;
+const eventEndCache = new Map<string, {endAtMs: number | null; fetchedAt: number}>();
+
+async function getEventEndAtMs(eventId: string): Promise<number | null> {
+    const cached = eventEndCache.get(eventId);
+    if (cached && Date.now() - cached.fetchedAt < EVENT_END_TTL_MS) {
+        return cached.endAtMs;
+    }
+    const ev = await db.collection("upcomingEvents").doc(eventId).get();
+    const endAtMs = ev.exists ? (ev.data()?.endAt?.toMillis?.() ?? null) : null;
+    eventEndCache.set(eventId, {endAtMs, fetchedAt: Date.now()});
+    return endAtMs;
+}
+
+/**
+ * Whether a code still sends scanners on to its target, and if not, why, for
+ * the logs: past its date, past its linked event's end, or with no target.
+ */
+async function qrCodeStatus(
+    qrId: string,
+    data: FirebaseFirestore.DocumentData,
+    now: number,
+): Promise<{active: boolean; reason: string; eventEndAt: number | null}> {
+    let reason = "ok";
+    let eventEndAt: number | null = null;
+    if (data.expirationMode === "date") {
+        const exp = data.expiresAt?.toMillis?.() ?? null;
+        if ((exp ?? 0) <= now) reason = exp === null ? "date-missing" : "date-passed";
+    } else if (data.expirationMode === "event") {
+        if (!data.eventId) {
+            reason = "event-unlinked";
+        } else {
+            try {
+                eventEndAt = await getEventEndAtMs(data.eventId);
+                if ((eventEndAt ?? 0) <= now) reason = eventEndAt === null ? "event-missing" : "event-ended";
+            } catch (err) {
+                reason = "event-read-failed";
+                console.error(`qrCodeStatus: failed to read event ${data.eventId} for ${qrId}`, err);
+            }
+        }
+    }
+    if (reason === "ok" && !data.targetUrl) reason = "no-target";
+    return {active: reason === "ok", reason, eventEndAt};
+}
+
 /**
  * Public endpoint the `/qr?id=` page calls on every scan: resolves the target
  * and expiry, and for active codes bumps the counter and logs a scan for the
@@ -204,39 +252,9 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
     const data = snap.data()!;
 
     const now = Date.now();
-    let active = true;
     // Logged on failure, so "expired/invalid" reports can be diagnosed from Cloud
     // Logging.
-    let reason = "ok";
-    let eventEndAt: number | null = null;
-    if (data.expirationMode === "date") {
-        const exp = data.expiresAt?.toMillis?.() ?? null;
-        active = (exp ?? 0) > now;
-        if (!active) reason = exp === null ? "date-missing" : "date-passed";
-    } else if (data.expirationMode === "event") {
-        active = false;
-        reason = data.eventId ? "event-ended" : "event-unlinked";
-        if (data.eventId) {
-            try {
-                const ev = await db.collection("upcomingEvents").doc(data.eventId).get();
-                if (!ev.exists) {
-                    reason = "event-missing";
-                } else {
-                    eventEndAt = ev.data()?.endAt?.toMillis?.() ?? null;
-                    active = (eventEndAt ?? 0) > now;
-                    reason = active ? "ok" : "event-ended";
-                }
-            } catch (err) {
-                active = false;
-                reason = "event-read-failed";
-                console.error(`recordQrScan: failed to read event ${data.eventId} for ${qrId}`, err);
-            }
-        }
-    }
-    if (active && !data.targetUrl) {
-        active = false;
-        reason = "no-target";
-    }
+    const {active, reason, eventEndAt} = await qrCodeStatus(qrId, data, now);
 
     // Filter the logs by `recordQrScan: inactive` to see why codes fail.
     if (!active) {
@@ -260,23 +278,6 @@ export const recordQrScan = onCall({maxInstances: 20}, async (request) => {
 
     return {active, targetUrl: data.targetUrl ?? ""};
 });
-
-// Linked-event end times, cached per instance so repeated scans during an event
-// skip the read. The short TTL lets reschedules and archives correct themselves
-// within a minute, which is simpler than copying endAt onto every QR doc.
-const EVENT_END_TTL_MS = 60_000;
-const eventEndCache = new Map<string, {endAtMs: number | null; fetchedAt: number}>();
-
-async function getEventEndAtMs(eventId: string): Promise<number | null> {
-    const cached = eventEndCache.get(eventId);
-    if (cached && Date.now() - cached.fetchedAt < EVENT_END_TTL_MS) {
-        return cached.endAtMs;
-    }
-    const ev = await db.collection("upcomingEvents").doc(eventId).get();
-    const endAtMs = ev.exists ? (ev.data()?.endAt?.toMillis?.() ?? null) : null;
-    eventEndCache.set(eventId, {endAtMs, fetchedAt: Date.now()});
-    return endAtMs;
-}
 
 /**
  * Public HTTP endpoint behind the `/qr` hosting rewrite: resolves a managed code
@@ -327,34 +328,7 @@ export const redirectQr = onRequest({maxInstances: 20, memory: "256MiB"}, async 
     }
 
     const data = snap.data()!;
-    const now = Date.now();
-    let active = true;
-    let reason = "ok";
-    if (data.expirationMode === "date") {
-        const exp = data.expiresAt?.toMillis?.() ?? null;
-        active = (exp ?? 0) > now;
-        if (!active) reason = exp === null ? "date-missing" : "date-passed";
-    } else if (data.expirationMode === "event") {
-        if (!data.eventId) {
-            active = false;
-            reason = "event-unlinked";
-        } else {
-            try {
-                const endAtMs = await getEventEndAtMs(data.eventId);
-                active = (endAtMs ?? 0) > now;
-                reason = active ? "ok" : (endAtMs === null ? "event-missing" : "event-ended");
-            } catch (err) {
-                active = false;
-                reason = "event-read-failed";
-                console.error(`redirectQr: failed to read event ${data.eventId} for ${id}`, err);
-            }
-        }
-    }
-    if (active && !data.targetUrl) {
-        active = false;
-        reason = "no-target";
-    }
-
+    const {active, reason} = await qrCodeStatus(id, data, Date.now());
     if (!active) {
         console.log(
             `redirectQr: inactive qrId=${id} reason=${reason} ` +

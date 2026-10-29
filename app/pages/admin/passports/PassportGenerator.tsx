@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { fileStamp } from '~/lib/csv';
-import { callGeneratePassports } from '~/lib/firebase';
+import { callGeneratePassports, errorMessage } from '~/lib/firebase';
 import { MAX_PASSPORT_GENERATE, type PassportDesign, passportName, } from '~/lib/passports';
 import { confirmExit, useExitGuard } from '~/lib/useExitGuard';
 import { downloadBlob } from '~/lib/zip';
@@ -30,6 +30,38 @@ interface GeneratedRun {
 /** How the admin screens tell designs apart: a year can have several. */
 export const designLabel = (design: PassportDesign, isEnglish: boolean): string =>
     `${design.year} · ${passportName(design, isEnglish)}`;
+
+/** A picker over every design, each by its year and name. */
+export const DesignSelect = ({designs, value, onChange, disabled}: {
+    designs: PassportDesign[];
+    value: string;
+    onChange: (designId: string) => void;
+    disabled?: boolean;
+}) => {
+    const {isEnglish} = useLanguage();
+    return (
+        <select className="admin-input" value={value} onChange={e => onChange(e.target.value)} disabled={disabled}>
+            {designs.map(design => (
+                <option key={design.id} value={design.id}>
+                    {designLabel(design, isEnglish)}
+                </option>
+            ))}
+        </select>
+    );
+};
+
+/** What each passport of the picked design grants, under its picker. */
+export const DesignTermHint = ({design}: {design: PassportDesign | undefined}) => {
+    const {isEnglish} = useLanguage();
+    if (!design) return null;
+    return (
+        <small className="admin-title-hint">
+            {isEnglish
+                ? `Each passport grants ${design.termDays} days of membership.`
+                : `每本通行证授予 ${design.termDays} 天会员资格。`}
+        </small>
+    );
+};
 
 /**
  * Mint passports and hand over the print files. Nothing ties a run together
@@ -83,8 +115,8 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                     ? 'Passports generated, but the keys CSV didn’t download. Use the button below before leaving.'
                     : '通行证已生成，但激活码 CSV 未能下载。请在离开前使用下方按钮下载。', 'warning');
             }
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to generate passports.' : '生成通行证失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to generate passports.' : '生成通行证失败。'), 'error');
         } finally {
             setBusy(false);
         }
@@ -119,24 +151,8 @@ export const PassportGenerator = ({designs, defaultDesignId, onBack, showToast}:
                                 <span className="admin-passport-run-label">
                                     {isEnglish ? 'Design' : '设计'}
                                 </span>
-                                <select
-                                    className="admin-input"
-                                    value={designId}
-                                    onChange={e => setDesignId(e.target.value)}
-                                >
-                                    {designs.map(design => (
-                                        <option key={design.id} value={design.id}>
-                                            {designLabel(design, isEnglish)}
-                                        </option>
-                                    ))}
-                                </select>
-                                {selectedDesign && (
-                                    <small className="admin-title-hint">
-                                        {isEnglish
-                                            ? `Each passport grants ${selectedDesign.termDays} days of membership.`
-                                            : `每本通行证授予 ${selectedDesign.termDays} 天会员资格。`}
-                                    </small>
-                                )}
+                                <DesignSelect designs={designs} value={designId} onChange={setDesignId}/>
+                                <DesignTermHint design={selectedDesign}/>
                             </label>
 
                             <div className="admin-passport-run-field">

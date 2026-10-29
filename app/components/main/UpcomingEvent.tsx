@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { type UpcomingEvent as UpcomingEventType, useUpcomingEvents } from "~/lib/upcomingEvents";
 import { useLanguage } from "~/components/LanguageContextProvider";
 import { EventImageModal } from "~/components/EventImageModal";
+import { shownCountdownSegments, splitDuration, ZERO_DURATION } from "~/lib/countdown";
 import { formatSiteTime } from "~/lib/siteTime";
 import { isValidHttpUrl } from "~/lib/urls";
 import { eventLocationDisplay, resolveVenueById, useVenues } from "~/lib/venues";
+import { localized } from "~/lib/localized";
 
 interface EventCardProps {
     event: UpcomingEventType;
@@ -15,34 +17,18 @@ interface EventCardProps {
 const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
     const {venues} = useVenues();
     const parkingVenue = resolveVenueById(event.venueId, venues);
-    const [timeLeft, setTimeLeft] = useState({
-        days: 0,
-        hours: 0,
-        minutes: 0,
-        seconds: 0
-    });
+    const [timeLeft, setTimeLeft] = useState(ZERO_DURATION);
     const [isInProgress, setIsInProgress] = useState(false);
 
     useEffect(() => {
+        // To the start, then while it's on, to the end.
         const calculateTimeLeft = () => {
-            const now = new Date().getTime();
+            const now = Date.now();
             const startTime = event.startAt.getTime();
             const endTime = event.endAt.getTime();
-
-            if (now < endTime) {
-                const inProgress = now >= startTime;
-                const difference = (inProgress ? endTime : startTime) - now;
-                setIsInProgress(inProgress);
-                setTimeLeft({
-                    days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-                    hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-                    minutes: Math.floor((difference / 1000 / 60) % 60),
-                    seconds: Math.floor((difference / 1000) % 60)
-                });
-            } else {
-                setIsInProgress(false);
-                setTimeLeft({days: 0, hours: 0, minutes: 0, seconds: 0});
-            }
+            const inProgress = now >= startTime && now < endTime;
+            setIsInProgress(inProgress);
+            setTimeLeft(splitDuration((inProgress ? endTime : startTime) - now));
         };
 
         calculateTimeLeft();
@@ -57,10 +43,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
         {value: timeLeft.minutes, label: isEnglish ? 'Minutes' : '分'},
         {value: timeLeft.seconds, label: isEnglish ? 'Seconds' : '秒'}
     ];
-    // Leading units at 0 drop out (no "00 Days" a day out), down to seconds.
-    // A 0 after a larger unit stays, so 2 days 0 hours keeps its Hours box.
-    const firstShown = countdownSegments.findIndex(segment => segment.value > 0);
-    const shownSegments = countdownSegments.slice(firstShown === -1 ? countdownSegments.length - 1 : firstShown);
+    const shownSegments = shownCountdownSegments(countdownSegments);
 
     return (
         <div className="convention-banner">
@@ -70,7 +53,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                         ? (isEnglish ? "Happening Now" : "进行中")
                         : (isEnglish ? "Coming Soon" : "即将开始")}
                 </span>
-                <h2 className="convention-title">{isEnglish ? event.title : (event.titleCn || event.title)}</h2>
+                <h2 className="convention-title">{localized(isEnglish, event.title, event.titleCn)}</h2>
                 <p className="event-date-text">{formatSiteTime(event.startAt, isEnglish, {
                     year: 'numeric',
                     month: 'long',
@@ -82,7 +65,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     {eventLocationDisplay(event.location, event.locationCn, event.venueId, venues, isEnglish)}
                 </div>
                 <p className="event-description-text">
-                    {isEnglish ? event.description : (event.descriptionCn || event.description)}
+                    {localized(isEnglish, event.description, event.descriptionCn)}
                 </p>
                 {event.poster && (
                     <div className="convention-poster convention-poster--spaced">

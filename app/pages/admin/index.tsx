@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
-import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import { confirmExit } from '~/lib/useExitGuard';
-import { LanguageSwitcher } from '~/components/LanguageSwitcher';
+import { NoticeCard } from '~/components/NoticeCard';
+import { PageNav } from '~/components/PageNav';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents, useUpcomingEventsByIds } from '~/lib/upcomingEvents';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTags } from '~/lib/tags';
 import { useVenues } from '~/lib/venues';
-import type { BadgeDef, Tab } from './types';
+import { type BadgeDef, toBadgeDef } from '~/lib/badges';
+import type { Tab } from './types';
 import { UsersTab, type UsersTabHandle } from './UsersTab';
 import { EventsTab, type EventsTabHandle } from './EventsTab';
 import { UpcomingEventsTab, type UpcomingEventsTabHandle } from './UpcomingEventsTab';
@@ -47,7 +48,7 @@ const ADMIN_TABS: {id: Tab; en: string; zh: string; generalStaffOnly?: boolean}[
 export const AdminPage = () => {
     const {user, profile, loading} = useAuth();
     const {isEnglish} = useLanguage();
-    const {pastEvents: rawPastEvents, refresh: refreshEvents} = usePastEvents();
+    const {pastEvents, refresh: refreshEvents} = usePastEvents();
     // Only staff and above may read the whole collection; for anyone else the
     // read is refused, so it isn't made.
     const {upcomingEvents: allUpcomingEvents, refresh: refreshAllUpcoming} = useAllUpcomingEvents(
@@ -60,22 +61,20 @@ export const AdminPage = () => {
         loading: staffEventsLoading,
         refresh: refreshStaffUpcoming
     } = useUpcomingEventsByIds(staffEventIds);
-    const pastEvents = useMemo(() => [...rawPastEvents].sort((a, b) => b.date.localeCompare(a.date)), [rawPastEvents]);
 
     const isCoreStaffOrAbove = !!profile && hasPermission(profile.group, 'core-staff');
+    // Every tab, read-only below core-staff. Event staff get only their events.
+    const isStaffOrAbove = !!profile && hasPermission(profile.group, 'staff');
     // Staff group: view-only admin access + Tools. Superset of event-staff access.
-    const isStaffGroup = !!profile && hasPermission(profile.group, 'staff') && !isCoreStaffOrAbove;
+    const isStaffGroup = isStaffOrAbove && !isCoreStaffOrAbove;
     // Event staff is a per-event tag, independent of the group: staff for an
     // upcoming event get scanner and admin access to it. Gated on upcoming events
     // because eventStaffEvents keeps past ones, so access lapses on archive.
-    const isEventStaffOnly = !!profile
-        && !isCoreStaffOrAbove
-        && !isStaffGroup
-        && staffUpcomingEvents.length > 0;
+    const isEventStaffOnly = !!profile && !isStaffOrAbove && staffUpcomingEvents.length > 0;
 
     // Core-staff and staff group see all events; event-staff only sees their assigned ones.
-    const upcomingEvents = (isCoreStaffOrAbove || isStaffGroup) ? allUpcomingEvents : staffUpcomingEvents;
-    const refreshUpcoming = (isCoreStaffOrAbove || isStaffGroup) ? refreshAllUpcoming : refreshStaffUpcoming;
+    const upcomingEvents = isStaffOrAbove ? allUpcomingEvents : staffUpcomingEvents;
+    const refreshUpcoming = isStaffOrAbove ? refreshAllUpcoming : refreshStaffUpcoming;
 
     const [activeTab, selectTab] = useState<Tab>('users');
     // Switching tabs unmounts the tab, so it goes through the exit guard (the
@@ -123,19 +122,19 @@ export const AdminPage = () => {
 
     useEffect(() => {
         if (loading) return;
-        if (user && profile && (isCoreStaffOrAbove || isStaffGroup || isEventStaffOnly)) {
+        if (user && profile && (isStaffOrAbove || isEventStaffOnly)) {
             wasAuthorized.current = true;
             return;
         }
         if (wasAuthorized.current && !user) {
             navigate('/', {replace: true});
         }
-    }, [loading, user, profile, isCoreStaffOrAbove, isStaffGroup, isEventStaffOnly, navigate]);
+    }, [loading, user, profile, isStaffOrAbove, isEventStaffOnly, navigate]);
 
     useEffect(() => {
         if (urlParamsHandled.current) return;
         if (loading || !user || !profile) return;
-        if (!isCoreStaffOrAbove && !isStaffGroup && !isEventStaffOnly) return;
+        if (!isStaffOrAbove && !isEventStaffOnly) return;
         const tab = searchParams.get('tab');
         const event = searchParams.get('event');
         // Queued: the tab only mounts once setActiveTab lands.
@@ -150,34 +149,18 @@ export const AdminPage = () => {
             if (tab === 'events' && event) queueAction('selectEvent', event);
         }
         urlParamsHandled.current = true;
-    }, [loading, user, profile, searchParams, isCoreStaffOrAbove, isStaffGroup, isEventStaffOnly, staffUpcomingEvents, queueAction]);
+    }, [loading, user, profile, searchParams, isStaffOrAbove, isEventStaffOnly, staffUpcomingEvents, queueAction]);
 
     useEffect(() => {
-        if (loading || !user || !profile || (!isCoreStaffOrAbove && !isStaffGroup)) return;
+        if (loading || !user || !profile || !isStaffOrAbove) return;
         const loadBadgeDefinitions = async () => {
-            const db = getFirebaseDb();
-            const snapshot = await getDocs(collection(db, 'badges'));
-            const defs: BadgeDef[] = snapshot.docs.map(docSnap => {
-                const data = docSnap.data();
-                return {
-                    id: docSnap.id,
-                    name: data.name ?? '',
-                    nameCn: data.nameCn ?? '',
-                    description: data.description ?? '',
-                    descriptionCn: data.descriptionCn ?? '',
-                    imageUrl: data.imageUrl ?? '',
-                    createdByUid: data.createdByUid ?? '',
-                    createdByName: data.createdByName ?? '',
-                    createdByLink: data.createdByLink ?? '',
-                    deleteAt: data.deleteAt?.toDate?.() ?? null,
-                };
-            });
-            setBadgeDefs(defs);
+            const snapshot = await getDocs(collection(getFirebaseDb(), 'badges'));
+            setBadgeDefs(snapshot.docs.map(toBadgeDef));
         };
         loadBadgeDefinitions().catch(() => {
             setBadgeDefsError(true);
         });
-    }, [loading, user, profile, isCoreStaffOrAbove, isStaffGroup]);
+    }, [loading, user, profile, isStaffOrAbove]);
 
     const handleLookupUser = useCallback((uid: string) => {
         setActiveTab('users');
@@ -246,7 +229,7 @@ export const AdminPage = () => {
 
     // Possible event staff can't be classified until we know which of their events
     // are upcoming; hold the spinner rather than flash "Access Denied".
-    const resolvingEventStaff = !!profile && !isCoreStaffOrAbove && !isStaffGroup
+    const resolvingEventStaff = !!profile && !isStaffOrAbove
         && staffEventIds.length > 0 && staffEventsLoading;
     if (loading || resolvingEventStaff) {
         return (
@@ -256,37 +239,23 @@ export const AdminPage = () => {
         );
     }
 
-    if (!user || !profile || (!isCoreStaffOrAbove && !isStaffGroup && !isEventStaffOnly)) {
+    if (!user || !profile || (!isStaffOrAbove && !isEventStaffOnly)) {
         return (
-            <div className="profile-login-prompt">
-                <div className="profile-login-card">
-                    <h2>{isEnglish ? 'Access Denied' : '无权访问'}</h2>
-                    <p>{isEnglish ? 'This page is for staff members only.' : '此页面仅限工作人员访问。'}</p>
-                    <a href="/" className="profile-back-link">
-                        {isEnglish ? 'Back to Home' : '返回首页'}
-                    </a>
-                </div>
-            </div>
+            <NoticeCard
+                title={isEnglish ? 'Access Denied' : '无权访问'}
+                text={isEnglish ? 'This page is for staff members only.' : '此页面仅限工作人员访问。'}
+            />
         );
     }
 
     return (
         <>
             <ToastContainer toasts={toasts}/>
-            <nav className="profile-nav">
-                <a href="/" className="profile-nav-home">
-                    {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
-                </a>
-                <span className="admin-nav-title">{isEnglish ? 'Admin Panel' : '管理面板'}</span>
-                <div className="nav-actions">
-                    <LanguageSwitcher/>
-                    <LoginButton/>
-                </div>
-            </nav>
+            <PageNav title={isEnglish ? 'Admin Panel' : '管理面板'}/>
             <div className="profile-page admin-page">
                 <div className="admin-tabs">
                     {ADMIN_TABS.map(tab => {
-                        if (tab.generalStaffOnly && !isCoreStaffOrAbove && !isStaffGroup) return null;
+                        if (tab.generalStaffOnly && !isStaffOrAbove) return null;
                         return (
                             <button
                                 key={tab.id}
@@ -300,7 +269,7 @@ export const AdminPage = () => {
                     })}
                 </div>
 
-                {activeTab === 'users' && (isCoreStaffOrAbove || isStaffGroup) && (
+                {activeTab === 'users' && isStaffOrAbove && (
                     <UsersTab
                         ref={usersTabRef}
                         pastEvents={pastEvents}
@@ -332,10 +301,10 @@ export const AdminPage = () => {
                                 readOnly={!isCoreStaffOrAbove}
                                 onDetailChange={setUpcomingInDetail}
                                 // Event staff have no Users tab to open.
-                                onLookupUser={isCoreStaffOrAbove || isStaffGroup ? handleLookupUser : undefined}
+                                onLookupUser={isStaffOrAbove ? handleLookupUser : undefined}
                             />
                         </div>
-                        {(isCoreStaffOrAbove || isStaffGroup) && (
+                        {isStaffOrAbove && (
                             <div id="admin-sec-past" style={upcomingInDetail ? {display: 'none'} : undefined}>
                                 {!eventsInDetail && (
                                     <h2 className="admin-section-header admin-section-mt">
@@ -354,7 +323,7 @@ export const AdminPage = () => {
                                 />
                             </div>
                         )}
-                        {(isCoreStaffOrAbove || isStaffGroup) && !upcomingInDetail && !eventsInDetail && (
+                        {isStaffOrAbove && !upcomingInDetail && !eventsInDetail && (
                             <div id="admin-sec-tags">
                                 <h2 className="admin-section-header admin-section-mt">
                                     {isEnglish ? 'Tags' : '标签'}
@@ -368,7 +337,7 @@ export const AdminPage = () => {
                             <SectionNav
                                 sections={[
                                     {id: 'admin-sec-upcoming', label: isEnglish ? 'Upcoming Events' : '活动预告'},
-                                    ...(isCoreStaffOrAbove || isStaffGroup ? [
+                                    ...(isStaffOrAbove ? [
                                         {id: 'admin-sec-past', label: isEnglish ? 'Past Events' : '往期活动'},
                                         {id: 'admin-sec-tags', label: isEnglish ? 'Tags' : '标签'},
                                     ] : []),
@@ -378,7 +347,7 @@ export const AdminPage = () => {
                     </>
                 )}
 
-                {activeTab === 'locations' && (isCoreStaffOrAbove || isStaffGroup) && (
+                {activeTab === 'locations' && isStaffOrAbove && (
                     <>
                         <div id="admin-sec-map">
                             <h2 className="admin-section-header">
@@ -419,7 +388,7 @@ export const AdminPage = () => {
                     </>
                 )}
 
-                {activeTab === 'badges' && (isCoreStaffOrAbove || isStaffGroup) && (
+                {activeTab === 'badges' && isStaffOrAbove && (
                     badgeDefsError ? (
                         <div className="admin-section">
                             <p className="admin-no-results">
@@ -431,7 +400,6 @@ export const AdminPage = () => {
                             ref={badgesTabRef}
                             badgeDefs={badgeDefs}
                             setBadgeDefs={setBadgeDefs}
-                            user={user}
                             onLookupUser={handleLookupUser}
                             showToast={showToast}
                             readOnly={isStaffGroup}
@@ -439,7 +407,7 @@ export const AdminPage = () => {
                     )
                 )}
 
-                {activeTab === 'passports' && (isCoreStaffOrAbove || isStaffGroup) && (
+                {activeTab === 'passports' && isStaffOrAbove && (
                     <PassportsTab
                         ref={passportsTabRef}
                         onLookupUser={handleLookupUser}
@@ -448,7 +416,7 @@ export const AdminPage = () => {
                     />
                 )}
 
-                {activeTab === 'records' && (isCoreStaffOrAbove || isStaffGroup) && (
+                {activeTab === 'records' && isStaffOrAbove && (
                     <RecordsTab
                         pastEvents={pastEvents}
                         upcomingEvents={upcomingEvents}
@@ -462,15 +430,15 @@ export const AdminPage = () => {
                     />
                 )}
 
-                {activeTab === 'tools' && (isCoreStaffOrAbove || isStaffGroup) && (
+                {activeTab === 'tools' && isStaffOrAbove && (
                     <ToolsTab showToast={showToast} readOnly={isStaffGroup}/>
                 )}
 
-                {activeTab === 'con' && (isCoreStaffOrAbove || isStaffGroup) && (
+                {activeTab === 'con' && isStaffOrAbove && (
                     <ConContentTab showToast={showToast} readOnly={isStaffGroup}/>
                 )}
 
-                {activeTab === 'config' && (isCoreStaffOrAbove || isStaffGroup) && (
+                {activeTab === 'config' && isStaffOrAbove && (
                     <SiteConfigTab showToast={showToast} readOnly={isStaffGroup}/>
                 )}
             </div>

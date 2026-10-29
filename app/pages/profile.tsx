@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { FaStar } from 'react-icons/fa';
 import {
     FiAlertCircle,
@@ -21,15 +20,16 @@ import {
     useAuth,
     type UserGroup,
 } from '~/components/AuthProvider';
-import { LoginButton } from '~/components/LoginButton';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGetPublicProfile, getFirebaseDb, isStorageUrl } from '~/lib/firebase';
-import { LanguageSwitcher } from '~/components/LanguageSwitcher';
+import { type BadgeDef, toBadgeDef } from '~/lib/badges';
+import { getDocsByIds } from '~/lib/collectionCache';
+import { callGetPublicProfile, isStorageUrl } from '~/lib/firebase';
+import { NoticeCard } from '~/components/NoticeCard';
+import { PageNav } from '~/components/PageNav';
 import { type PastEvent, usePastEvents } from '~/lib/pastEvents';
 import type { ShelfPassport } from '~/lib/passports';
 import { useTags } from '~/lib/tags';
 import { useNavigate, useSearchParams } from 'react-router';
-import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 import { formatSiteTime } from '~/lib/siteTime';
 import { useUploadLimits } from '~/lib/uploadLimits';
 import { isValidHttpUrl } from '~/lib/urls';
@@ -41,12 +41,7 @@ import { ImageCropModal } from '~/pages/admin/ImageCropModal';
 import { validateImageFile } from "~/pages/admin/utils";
 import { useModalEffects } from '~/lib/useModalEffects';
 import { ToastContainer, useToasts } from '~/lib/useToasts';
-
-interface BadgeDef extends BaseBadgeDef {
-    createdByUid?: string;
-    createdByName?: string;
-    createdByLink?: string;
-}
+import { localized } from '~/lib/localized';
 
 interface ViewedProfile {
     displayName: string;
@@ -93,11 +88,11 @@ const BadgeCard = ({badge, earnedDate, isEnglish, onOpen}: {
         <span className="badge-icon-wrapper">
             <img src={badge.imageUrl} alt="" className="badge-icon"/>
         </span>
-        <span className="badge-label">{isEnglish ? badge.name : (badge.nameCn || badge.name)}</span>
+        <span className="badge-label">{localized(isEnglish, badge.name, badge.nameCn)}</span>
         <span className="badge-tooltip" aria-hidden="true">
-            <span className="badge-tooltip-name">{isEnglish ? badge.name : (badge.nameCn || badge.name)}</span>
+            <span className="badge-tooltip-name">{localized(isEnglish, badge.name, badge.nameCn)}</span>
             <span
-                className="badge-tooltip-desc">{isEnglish ? badge.description : (badge.descriptionCn || badge.description)}</span>
+                className="badge-tooltip-desc">{localized(isEnglish, badge.description, badge.descriptionCn)}</span>
             {earnedDate && (
                 <span className="badge-tooltip-date">
                     {isEnglish ? 'Earned ' : '获得于 '}
@@ -119,7 +114,7 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
     tagLabels?: string[];
     wasStaff?: boolean;
 }) => {
-    const title = isEnglish ? event.title : (event.titleCn || event.title);
+    const title = localized(isEnglish, event.title, event.titleCn);
     return (
         <div className="profile-event-card">
             <div className="profile-event-icon-wrapper">
@@ -231,33 +226,7 @@ export const ProfilePage = () => {
         setBadgeDefs(null);
         const loadBadges = async () => {
             try {
-                const db = getFirebaseDb();
-                const col = collection(db, 'badges');
-                // Firestore 'in' queries support max 30 items per batch
-                const batches: string[][] = [];
-                for (let i = 0; i < badgeIds.length; i += 30) {
-                    batches.push(badgeIds.slice(i, i + 30));
-                }
-                const defs: BadgeDef[] = [];
-                await Promise.all(batches.map(async (batch) => {
-                    const q = query(col, where(documentId(), 'in', batch));
-                    const snapshot = await getDocs(q);
-                    snapshot.forEach(docSnap => {
-                        const data = docSnap.data();
-                        defs.push({
-                            id: docSnap.id,
-                            name: data.name ?? '',
-                            nameCn: data.nameCn ?? '',
-                            description: data.description ?? '',
-                            descriptionCn: data.descriptionCn ?? '',
-                            imageUrl: data.imageUrl ?? '',
-                            createdByUid: data.createdByUid ?? '',
-                            createdByName: data.createdByName ?? '',
-                            createdByLink: data.createdByLink ?? '',
-                            deleteAt: data.deleteAt?.toDate?.() ?? null,
-                        });
-                    });
-                }));
+                const defs = (await getDocsByIds('badges', badgeIds)).map(toBadgeDef);
                 if (stale) return;
                 setBadgeDefs(defs);
                 setBadgeLoadError(false);
@@ -290,29 +259,19 @@ export const ProfilePage = () => {
                 if (stale) return;
                 const data = result.data;
                 const earnedAt: Record<string, Date> = {};
-                for (const [k, v] of Object.entries(data.badgeEarnedAt ?? {})) {
+                for (const [k, v] of Object.entries(data.badgeEarnedAt)) {
                     const d = new Date(v);
                     if (!isNaN(d.getTime())) earnedAt[k] = d;
                 }
                 setViewedProfile({
-                    displayName: data.displayName ?? '',
-                    photoURL: data.photoURL ?? '',
-                    bannerURL: data.bannerURL ?? '',
-                    joinedAt: data.joinedAt ? new Date(data.joinedAt) : new Date(),
-                    attendedEvents: data.attendedEvents ?? [],
-                    eventStaffEvents: data.eventStaffEvents ?? [],
-                    badges: data.badges ?? [],
+                    ...data,
+                    joinedAt: new Date(data.joinedAt),
                     badgeEarnedAt: earnedAt,
-                    passports: (data.passports ?? []).map(p => ({
+                    passports: data.passports.map(p => ({
                         ...p,
                         claimedAt: p.claimedAt ? new Date(p.claimedAt) : null,
                     })),
-                    passportPageHidden: data.passportPageHidden ?? false,
                     group: normalizeGroup(data.group),
-                    isMember: data.isMember ?? false,
-                    title: data.title ?? '',
-                    titleCn: data.titleCn ?? '',
-                    visibility: data.visibility,
                 });
             } catch {
                 if (!stale) setViewedLoadError(true);
@@ -493,54 +452,33 @@ export const ProfilePage = () => {
     // the usual way here signed out.
     if (isViewingOther && !user) {
         return (
-            <div className="profile-login-prompt">
-                <div className="profile-login-card">
-                    <h2>{isEnglish ? 'Sign in to view this profile' : '登录以查看此个人主页'}</h2>
-                    <p>{isEnglish
-                        ? 'Member profiles are only shown to signed-in visitors.'
-                        : '成员个人主页仅对已登录的访客显示。'}</p>
-                    <button onClick={signIn} className="profile-sign-in-btn">
-                        {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
-                    </button>
-                    <a href="/" className="profile-back-link">
-                        {isEnglish ? 'Back to Home' : '返回首页'}
-                    </a>
-                </div>
-            </div>
+            <NoticeCard
+                title={isEnglish ? 'Sign in to view this profile' : '登录以查看此个人主页'}
+                text={isEnglish
+                    ? 'Member profiles are only shown to signed-in visitors.'
+                    : '成员个人主页仅对已登录的访客显示。'}
+                onSignIn={signIn}
+            />
         );
     }
 
     if (isViewingOther && !viewedProfile) {
         return (
-            <div className="profile-login-prompt">
-                <div className="profile-login-card">
-                    <h2>{viewedLoadError
-                        ? (isEnglish ? 'Failed to load profile' : '加载用户信息失败')
-                        : (isEnglish ? 'User not found' : '未找到用户')}</h2>
-                    <a href="/" className="profile-back-link">
-                        {isEnglish ? 'Back to Home' : '返回首页'}
-                    </a>
-                </div>
-            </div>
+            <NoticeCard
+                title={viewedLoadError
+                    ? (isEnglish ? 'Failed to load profile' : '加载用户信息失败')
+                    : (isEnglish ? 'User not found' : '未找到用户')}
+            />
         );
     }
 
     if (!isViewingOther && (!user || !profile)) {
         return (
-            <div className="profile-login-prompt">
-                <div className="profile-login-card">
-                    <h2>{isEnglish ? 'Sign in to view your profile' : '登录以查看你的个人主页'}</h2>
-                    <p>{isEnglish
-                        ? 'Track your event attendance and earn badges!'
-                        : '记录你的活动参与、收集徽章！'}</p>
-                    <button onClick={signIn} className="profile-sign-in-btn">
-                        {isEnglish ? 'Sign in with Google' : '使用 Google 登录'}
-                    </button>
-                    <a href="/" className="profile-back-link">
-                        {isEnglish ? 'Back to Home' : '返回首页'}
-                    </a>
-                </div>
-            </div>
+            <NoticeCard
+                title={isEnglish ? 'Sign in to view your profile' : '登录以查看你的个人主页'}
+                text={isEnglish ? 'Track your event attendance and earn badges!' : '记录你的活动参与、收集徽章！'}
+                onSignIn={signIn}
+            />
         );
     }
 
@@ -581,9 +519,7 @@ export const ProfilePage = () => {
     const shelf = isOwnProfile ? passports : viewedProfile!.passports;
     const staffedSet = new Set(dp.eventStaffEvents);
     const attendedSet = new Set([...dp.attendedEvents, ...dp.eventStaffEvents]);
-    const attendedEvents = pastEvents
-        .filter(e => attendedSet.has(e.id))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const attendedEvents = pastEvents.filter(e => attendedSet.has(e.id));
     const earnedBadges = (badgeDefs ?? [])
         .filter(b => dp.badges.includes(b.id))
         .sort((a, b) => (earnedDates[b.id]?.getTime() ?? 0) - (earnedDates[a.id]?.getTime() ?? 0));
@@ -662,15 +598,7 @@ export const ProfilePage = () => {
     return (
         <>
             <ToastContainer toasts={toasts}/>
-            <nav className="profile-nav">
-                <a href="/" className="profile-nav-home">
-                    {isEnglish ? 'SEKAI BEYOND' : '彼世界动漫社'}
-                </a>
-                <div className="nav-actions">
-                    <LanguageSwitcher/>
-                    <LoginButton/>
-                </div>
-            </nav>
+            <PageNav/>
             <div className="profile-page">
 
                 <div className="profile-hero">
@@ -1049,7 +977,7 @@ export const ProfilePage = () => {
                                             tagLabels={event.tagIds
                                                 .map(id => tagMap.get(id))
                                                 .filter((t): t is NonNullable<typeof t> => !!t)
-                                                .map(t => isEnglish ? t.name : (t.nameCn || t.name))}
+                                                .map(t => localized(isEnglish, t.name, t.nameCn))}
                                         />
                                     ))}
                                 </div>
@@ -1066,11 +994,11 @@ export const ProfilePage = () => {
                         </button>
                         <div className="badge-modal-header">
                             <img src={selectedBadge.imageUrl}
-                                 alt={isEnglish ? selectedBadge.name : (selectedBadge.nameCn || selectedBadge.name)}
+                                 alt={localized(isEnglish, selectedBadge.name, selectedBadge.nameCn)}
                                  className="badge-modal-icon"/>
-                            <h3 className="badge-modal-title">{isEnglish ? selectedBadge.name : (selectedBadge.nameCn || selectedBadge.name)}</h3>
+                            <h3 className="badge-modal-title">{localized(isEnglish, selectedBadge.name, selectedBadge.nameCn)}</h3>
                         </div>
-                        <p className="badge-modal-desc">{isEnglish ? selectedBadge.description : (selectedBadge.descriptionCn || selectedBadge.description)}</p>
+                        <p className="badge-modal-desc">{localized(isEnglish, selectedBadge.description, selectedBadge.descriptionCn)}</p>
                         <div className="badge-modal-meta">
                             {earnedDates[selectedBadge.id] && (
                                 <p className="badge-modal-date">

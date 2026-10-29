@@ -1,9 +1,8 @@
 import { HttpsError } from "firebase-functions/v2/https";
-import { getStorage } from "firebase-admin/storage";
+import { getDownloadURL, getStorage } from "firebase-admin/storage";
 
 const ALLOWED_UPLOAD_PREFIXES = ["events/", "upcoming-events/", "badges/", "team/", "config/", "passports/", "con/"];
 export const MAX_UPLOAD_SIZE_MB = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
-export const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
 /**
  * Videos get a larger cap: the hero loop is a few MB where every image is a
@@ -11,7 +10,6 @@ export const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
  * of video a ~27MB request.
  */
 export const MAX_VIDEO_UPLOAD_SIZE_MB = Number(process.env.MAX_VIDEO_UPLOAD_SIZE_MB ?? 20);
-export const MAX_VIDEO_UPLOAD_SIZE = MAX_VIDEO_UPLOAD_SIZE_MB * 1024 * 1024;
 
 export function validateStoragePath(path: string): void {
     if (path.includes("..") || path.includes("\0") || path.includes("//")) {
@@ -56,6 +54,39 @@ export function detectImageMime(buffer: Buffer): string | null {
     const match = IMAGE_SIGNATURES.find(sig => buffer.length >= sig.magic.length &&
         buffer.subarray(0, sig.magic.length).equals(sig.magic));
     return match?.mime ?? null;
+}
+
+/**
+ * An upload's base64 bytes, refused unless `contentType` is one of `types`,
+ * the file is within `maxMb`, and its bytes are what `contentType` claims.
+ */
+export function decodeUpload(
+    dataBase64: string,
+    contentType: string,
+    rules: {types: string[]; maxMb: number; kind: "Image" | "Video"; detect: (buffer: Buffer) => string | null},
+): Buffer {
+    const {types, maxMb, kind, detect} = rules;
+    if (!types.includes(contentType)) {
+        const allowed = types.length === 1 ? `${types[0]} is` : `${types.slice(0, -1).join(", ")}, or ${types.at(-1)} are`;
+        throw new HttpsError("invalid-argument", `Only ${allowed} allowed.`);
+    }
+    const buffer = Buffer.from(dataBase64, "base64");
+    if (buffer.length > maxMb * 1024 * 1024) {
+        throw new HttpsError("invalid-argument", `${kind} exceeds ${maxMb}MB limit.`);
+    }
+    if (detect(buffer) !== contentType) {
+        throw new HttpsError("invalid-argument", "File content does not match claimed content type.");
+    }
+    return buffer;
+}
+
+/** Stores an upload at `path`, cached for a year, and returns its download URL. */
+export async function saveUpload(path: string, buffer: Buffer, contentType: string): Promise<string> {
+    const file = getStorage().bucket().file(path);
+    await file.save(buffer, {
+        metadata: {contentType, cacheControl: "public, max-age=31536000, immutable"},
+    });
+    return getDownloadURL(file);
 }
 
 // Download URLs are Firebase Storage's, or under the emulators the Storage

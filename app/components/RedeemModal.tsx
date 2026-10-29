@@ -4,8 +4,9 @@ import { useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { callRedeemCode, functionsErrorCode, functionsErrorDetails } from '~/lib/firebase';
 import { formatSiteTime } from '~/lib/siteTime';
-import type { BadgeDef } from '~/lib/types';
+import type { BadgeDef } from '~/lib/badges';
 import { useModalEffects } from '~/lib/useModalEffects';
+import { localized } from '~/lib/localized';
 
 const OPEN_EVENT = 'open-redeem-modal';
 const PASSPORT_CLAIMED_EVENT = 'passport-claimed';
@@ -26,6 +27,8 @@ interface EventInfo {
     eventPoster: string;
 }
 
+type ClaimedBadge = Pick<BadgeDef, 'name' | 'nameCn' | 'description' | 'descriptionCn' | 'imageUrl'>;
+
 interface PassportGrant {
     passportId: string;
     name: string;
@@ -44,7 +47,7 @@ export const RedeemModal = () => {
     const [state, setState] = useState<
         'idle' | 'claiming' | 'badge-success' | 'staff-success' | 'passport-success' | 'error'
     >('idle');
-    const [badge, setBadge] = useState<BadgeDef | null>(null);
+    const [badge, setBadge] = useState<ClaimedBadge | null>(null);
     const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
     const [passport, setPassport] = useState<PassportGrant | null>(null);
     const [error, setError] = useState('');
@@ -122,7 +125,7 @@ export const RedeemModal = () => {
             if (data.kind === 'passport-claim') {
                 setPassport({
                     passportId: data.passportId,
-                    name: isEnglish ? data.designName : (data.designNameCn || data.designName),
+                    name: localized(isEnglish, data.designName, data.designNameCn),
                     coverImageUrl: data.coverImageUrl,
                     daysGranted: data.daysGranted,
                     membershipExpiresAt: data.membershipExpiresAt,
@@ -131,13 +134,11 @@ export const RedeemModal = () => {
                 window.dispatchEvent(new CustomEvent(PASSPORT_CLAIMED_EVENT, {detail: data.passportId}));
             } else if (data.kind === 'badge') {
                 setBadge({
-                    id: data.badgeId,
                     name: data.badgeName,
                     nameCn: data.badgeNameCn,
                     description: data.badgeDescription,
                     descriptionCn: data.badgeDescriptionCn,
                     imageUrl: data.badgeImageUrl || '/mika.webp',
-                    deleteAt: null,
                 });
                 setState('badge-success');
             } else {
@@ -251,7 +252,7 @@ export const RedeemModal = () => {
                     <>
                         {badge && (
                             <div className="claim-badge-icon">
-                                <img src={badge.imageUrl} alt={isEnglish ? badge.name : (badge.nameCn || badge.name)}/>
+                                <img src={badge.imageUrl} alt={localized(isEnglish, badge.name, badge.nameCn)}/>
                             </div>
                         )}
                         <h2 className="redeem-heading">
@@ -260,10 +261,10 @@ export const RedeemModal = () => {
                         {badge && (
                             <>
                                 <p className="claim-event-title redeem-centered-text">
-                                    {isEnglish ? badge.name : (badge.nameCn || badge.name)}
+                                    {localized(isEnglish, badge.name, badge.nameCn)}
                                 </p>
                                 <p className="claim-event-category redeem-centered-text">
-                                    {isEnglish ? badge.description : (badge.descriptionCn || badge.description)}
+                                    {localized(isEnglish, badge.description, badge.descriptionCn)}
                                 </p>
                             </>
                         )}
@@ -278,7 +279,7 @@ export const RedeemModal = () => {
                         {eventInfo?.eventPoster && (
                             <div className="claim-badge-icon">
                                 <img src={eventInfo.eventPoster}
-                                     alt={isEnglish ? eventInfo.eventTitle : (eventInfo.eventTitleCn || eventInfo.eventTitle)}/>
+                                     alt={localized(isEnglish, eventInfo.eventTitle, eventInfo.eventTitleCn)}/>
                             </div>
                         )}
                         <h2 className="redeem-heading">
@@ -346,15 +347,7 @@ export const RedeemModal = () => {
                         <p className="redeem-subtitle">{error}</p>
                         <button
                             className="admin-btn admin-btn--dashed redeem-submit-btn"
-                            onClick={() => {
-                                setState('idle');
-                                setInput('');
-                                setError('');
-                                setBadge(null);
-                                setEventInfo(null);
-                                setPassport(null);
-                                setTimeout(() => inputRef.current?.focus(), 50);
-                            }}
+                            onClick={() => open('')}
                         >
                             {isEnglish ? 'Try Again' : '重试'}
                         </button>

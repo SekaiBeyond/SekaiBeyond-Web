@@ -25,35 +25,43 @@ async function checkRateLimit(uid: string, requested?: RateLimitBucket): Promise
     // The staff budget is for staff and above only: anyone else trying a staff
     // call is charged the shared one, as for any other call.
     let bucket = requested;
-    if (bucket === "staff") {
-        const group = normalizeGroup((await db.collection("users").doc(uid).get()).data()?.group);
-        if (group === "user") bucket = undefined;
+    if (bucket === "staff" && !isStaffOrAbove((await db.collection("users").doc(uid).get()).data()?.group)) {
+        bucket = undefined;
     }
-    const ref = db.collection("rateLimits").doc(bucket ? `${uid}_${bucket}` : uid);
-    const max = bucket ? RATE_LIMIT_BUCKETS[bucket] : RATE_LIMIT_MAX;
+    await consumeRateLimit(bucket ? `${uid}_${bucket}` : uid, bucket ? RATE_LIMIT_BUCKETS[bucket] : RATE_LIMIT_MAX);
+}
+
+/** Calls one API key may make a minute. A seller's server, not a person, so well above the shared budget. */
+const API_KEY_RATE_LIMIT_MAX = 120;
+
+/** Charges a call to an API key's own budget, named by its ID so it can't share a counter with an account. */
+export async function checkApiKeyRateLimit(keyId: string): Promise<void> {
+    await consumeRateLimit(`apiKey_${keyId}`, API_KEY_RATE_LIMIT_MAX);
+}
+
+/**
+ * Counts a call against a budget of `max` a minute, one doc per budget per
+ * minute. An increment and then a read rather than a transaction: calls made
+ * at once on one budget would fight over a transaction's lock, and the losers
+ * fail with ABORTED instead of a rate limit. A refused call still counts,
+ * which only holds until the minute is up.
+ */
+async function consumeRateLimit(docId: string, max: number): Promise<void> {
     const now = Date.now();
+    const windowStart = now - now % RATE_LIMIT_WINDOW_MS;
+    const ref = db.collection("rateLimits").doc(`${docId}_${windowStart}`);
     // expiresAt lets the TTL policy in firestore.indexes.json delete stale documents.
-    const expiresAt = new Date(now + RATE_LIMIT_WINDOW_MS * 2);
+    const expiresAt = new Date(windowStart + RATE_LIMIT_WINDOW_MS * 2);
 
-    await db.runTransaction(async (txn) => {
-        const snap = await txn.get(ref);
-        const data = snap.data() as {count: number; windowStart: number} | undefined;
-
-        if (!data || now - data.windowStart > RATE_LIMIT_WINDOW_MS) {
-            txn.set(ref, {count: 1, windowStart: now, expiresAt});
-            return;
-        }
-
-        if (data.count >= max) {
-            // retryAfterMs: until the window reopens, so a caller can say how long to wait.
-            throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {
-                code: "rate-limited",
-                retryAfterMs: data.windowStart + RATE_LIMIT_WINDOW_MS - now,
-            });
-        }
-
-        txn.update(ref, {count: FieldValue.increment(1)});
-    });
+    await ref.set({count: FieldValue.increment(1), expiresAt}, {merge: true});
+    const count = (await ref.get()).get("count");
+    if (typeof count === "number" && count > max) {
+        // retryAfterMs: until the window reopens, so a caller can say how long to wait.
+        throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {
+            code: "rate-limited",
+            retryAfterMs: windowStart + RATE_LIMIT_WINDOW_MS - now,
+        });
+    }
 }
 
 export const ADMIN_GROUPS = ["core-staff", "president"];
@@ -76,6 +84,21 @@ export function isValidGroup(raw: unknown): raw is UserGroup {
     return typeof raw === "string" && (USER_GROUPS as readonly string[]).includes(raw);
 }
 
+/** Staff, core-staff or president: anyone above the base group. */
+export function isStaffOrAbove(rawGroup: unknown): boolean {
+    return normalizeGroup(rawGroup) !== "user";
+}
+
+/**
+ * Refuses unless a caller in `callerGroup` may act on a user in
+ * `targetGroup`: the president on anyone, core-staff on MANAGEABLE_GROUPS.
+ */
+export function requireCanManage(callerGroup: unknown, targetGroup: unknown): void {
+    if (callerGroup !== "president" && !MANAGEABLE_GROUPS.includes(normalizeGroup(targetGroup))) {
+        throw new HttpsError("permission-denied", "Cannot manage users at or above your level.");
+    }
+}
+
 export async function requireAuth(request: CallableRequest<unknown>, bucket?: RateLimitBucket): Promise<string> {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -86,13 +109,16 @@ export async function requireAuth(request: CallableRequest<unknown>, bucket?: Ra
 }
 
 export async function requireAdmin(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {
-    return db.runTransaction(async (txn) => {
-        const snap = await txn.get(db.collection("users").doc(uid));
-        if (!ADMIN_GROUPS.includes(snap.data()?.group)) {
-            throw new HttpsError("permission-denied", "Insufficient permissions.");
-        }
-        return snap;
-    });
+    return adminTransaction(uid, async (_txn, callerSnap) => callerSnap);
+}
+
+/** The caller's user doc, refused unless they're staff or above. */
+export async function requireStaff(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {
+    const snap = await db.collection("users").doc(uid).get();
+    if (!isStaffOrAbove(snap.data()?.group)) {
+        throw new HttpsError("permission-denied", "Insufficient permissions.");
+    }
+    return snap;
 }
 
 export async function adminTransaction<T>(

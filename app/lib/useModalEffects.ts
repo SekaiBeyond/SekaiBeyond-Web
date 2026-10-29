@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 /**
  * A modal's accessibility: traps Tab focus inside, locks body scroll, and closes on
  * Escape when `onClose` is given (guard inside it to stay open, e.g. while saving). A
@@ -30,9 +32,7 @@ export function useModalEffects(
 
         const focusFirst = () => {
             if (!container) return;
-            const focusable = container.querySelectorAll<HTMLElement>(
-                'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            );
+            const focusable = container.querySelectorAll<HTMLElement>(FOCUSABLE);
             if (focusable.length > 0) focusable[0].focus();
         };
 
@@ -46,9 +46,7 @@ export function useModalEffects(
             }
             if (e.key !== 'Tab' || !container) return;
 
-            const focusable = container.querySelectorAll<HTMLElement>(
-                'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            );
+            const focusable = container.querySelectorAll<HTMLElement>(FOCUSABLE);
             if (focusable.length === 0) return;
 
             const first = focusable[0];

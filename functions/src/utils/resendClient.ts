@@ -39,14 +39,16 @@ export function countRecipients(envelopes: ResendEnvelope[]): number {
 // Carries the quota header, if one came back, so callers can settle their
 // pre-charge: null means it's still in place and must be rolled back; non-null
 // means resendClient already folded it in, and rolling back would release it
-// twice.
+// twice. `status` is Resend's error status, null when it never answered.
 export class ResendSendError extends Error {
     dailyConsumed: number | null;
+    status: number | null;
 
-    constructor(message: string, dailyConsumed: number | null) {
+    constructor(message: string, dailyConsumed: number | null, status: number | null = null) {
         super(message);
         this.name = "ResendSendError";
         this.dailyConsumed = dailyConsumed;
+        this.status = status;
     }
 }
 
@@ -84,7 +86,10 @@ function toPayload(e: ResendEnvelope, from: string): Record<string, unknown> {
 // All or nothing: the batch endpoint has no per-email errors, so one bad
 // envelope fails the call. The cache is updated from any quota header before
 // returning or throwing.
-export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResult> {
+//
+// With `timeoutMs`, a Resend that hasn't answered by then counts as a network
+// error, though the email may still go.
+export async function sendEmails(envelopes: ResendEnvelope[], timeoutMs?: number): Promise<SendResult> {
     if (envelopes.length === 0) {
         return {sentCount: 0, ids: [], dailyConsumed: null};
     }
@@ -139,6 +144,7 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(body),
+            signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
         });
     } catch (err) {
         // Resend never answered, so no header: dailyConsumed=null tells the
@@ -170,31 +176,24 @@ export async function sendEmails(envelopes: ResendEnvelope[]): Promise<SendResul
         throw new ResendSendError(
             `Resend send failed: ${resp.status} ${text}`,
             dailyConsumed,
+            resp.status,
         );
     }
 
-    // Single endpoint returns {id}; batch returns {data:[{id}]}.
-    let ids: string[];
-    let json: any;
-    try {
-        json = await resp.json();
-    } catch (parseErr) {
-        throw new ResendSendError(
-            `Resend response parse failed: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
-            dailyConsumed
-        );
-    }
-
-    if (single) {
-        const singleJson = json as {id?: string};
-        ids = singleJson.id ? [singleJson.id] : [];
-    } else {
-        const batchJson = json as {data?: Array<{id: string}>};
-        ids = (batchJson.data ?? []).map(d => d.id);
-    }
+    // A 2xx is Resend taking every email, all or nothing, so they count as
+    // sent even when the body can't be read, such as when `timeoutMs` runs out
+    // mid-read: calling it a failure would see them sent again. Single endpoint
+    // returns {id}; batch returns {data:[{id}]}.
+    const json: any = await resp.json().catch(err => {
+        console.error("sendEmails: sent, but the response couldn't be read", err);
+        return null;
+    });
+    const ids: string[] = single
+        ? (json?.id ? [json.id] : [])
+        : (Array.isArray(json?.data) ? json.data.map((d: {id: string}) => d.id) : []);
     // Sent, but no header (e.g. a paid plan): release the pre-charge. Last,
     // because if anything above throws the caller releases it, and doing it
     // here too would double it.
     if (dailyConsumed === null) await rollbackQuotaReservation(totalRecipients);
-    return {sentCount: ids.length, ids, dailyConsumed};
+    return {sentCount: envelopes.length, ids, dailyConsumed};
 }

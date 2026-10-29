@@ -13,6 +13,7 @@ import type { User } from 'firebase/auth';
 import {
     formatGroupWithTitle,
     GROUP_LABELS,
+    isMembershipActive,
     USER_GROUPS,
     type UserGroup,
     type UserProfile,
@@ -20,9 +21,10 @@ import {
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { getFirebaseDb } from '~/lib/firebase';
 import type { PastEvent } from '~/lib/pastEvents';
-import type { BadgeDef, UserRecord } from './types';
+import type { BadgeDef } from '~/lib/badges';
+import type { UserRecord } from './types';
 import { UserRow } from './UserRow';
-import { buildUserListQuery, docToUserRecord, searchUsers } from './utils';
+import { buildUserListQuery, docToUserRecord, searchUsers, type ShowToast } from './utils';
 import { UserDetailView } from './UserDetailView';
 
 const PAGE_SIZE = 10;
@@ -35,13 +37,35 @@ interface UsersTabProps {
     profile: UserProfile;
     /** Opens one of the user's passports in the Passports tab. */
     onOpenPassport: (passportId: string) => void;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 
 export interface UsersTabHandle {
     lookupUserByUid: (uid: string) => Promise<void>;
 }
+
+/** A row's tags, the same in search results and the recent list. */
+const UserTags = ({user, pendingDeletion}: {user: UserRecord; pendingDeletion: boolean}) => {
+    const {isEnglish} = useLanguage();
+    return (
+        <>
+            {pendingDeletion && (
+                <span className="admin-user-deletion-flag">
+                    {isEnglish ? 'Pending deletion' : '待删除'}
+                </span>
+            )}
+            <span className="admin-user-group-tag" data-group={user.group}>
+                {formatGroupWithTitle(user.group, user.title, user.titleCn, isEnglish)}
+            </span>
+            {isMembershipActive(user.membershipExpiresAt) && (
+                <span className="admin-user-member-tag">
+                    {isEnglish ? 'Member' : '会员'}
+                </span>
+            )}
+        </>
+    );
+};
 
 export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                                                                        pastEvents,
@@ -128,8 +152,8 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 if (recentGenRef.current === gen) setLoadingRecent(false);
             }
         };
-        loadRecentUsers().catch(err => {
-            void err;
+        loadRecentUsers().catch(() => {
+            // The list stays as it was; Load More or a filter change tries again.
         });
     }, [selectedGroup, membersOnly]);
 
@@ -222,19 +246,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                 <div className="admin-results">
                     {searchResults.map((u) => (
                         <UserRow key={u.uid} user={u} onClick={() => setSelectedUser(u)}>
-                            {pendingDeletionUids.has(u.uid) && (
-                                <span className="admin-user-deletion-flag">
-                                    {isEnglish ? 'Pending deletion' : '待删除'}
-                                </span>
-                            )}
-                            <span className="admin-user-group-tag" data-group={u.group}>
-                                {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
-                            </span>
-                            {u.membershipExpiresAt && u.membershipExpiresAt.getTime() > Date.now() && (
-                                <span className="admin-user-member-tag">
-                                    {isEnglish ? 'Member' : '会员'}
-                                </span>
-                            )}
+                            <UserTags user={u} pendingDeletion={pendingDeletionUids.has(u.uid)}/>
                             <span className="admin-user-badge-count">
                                 {u.attendedEvents.length} {isEnglish ? 'events' : '活动'}
                             </span>
@@ -256,19 +268,7 @@ export const UsersTab = forwardRef<UsersTabHandle, UsersTabProps>(({
                     </h4>
                     {recentUsers.map((u) => (
                         <UserRow key={u.uid} user={u} onClick={() => setSelectedUser(u)}>
-                            {pendingDeletionUids.has(u.uid) && (
-                                <span className="admin-user-deletion-flag">
-                                    {isEnglish ? 'Pending deletion' : '待删除'}
-                                </span>
-                            )}
-                            <span className="admin-user-group-tag" data-group={u.group}>
-                                {formatGroupWithTitle(u.group, u.title, u.titleCn, isEnglish)}
-                            </span>
-                            {u.membershipExpiresAt && u.membershipExpiresAt.getTime() > Date.now() && (
-                                <span className="admin-user-member-tag">
-                                    {isEnglish ? 'Member' : '会员'}
-                                </span>
-                            )}
+                            <UserTags user={u} pendingDeletion={pendingDeletionUids.has(u.uid)}/>
                             <span className="admin-detail-joined">
                                 {u.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
                                     year: 'numeric', month: 'short', day: 'numeric',

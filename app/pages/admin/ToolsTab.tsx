@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { QrCodesTool } from './tools/QrCodesTool';
 import { EmailQuotaTool } from './tools/EmailQuotaTool';
+import { ApiKeysTool } from './tools/ApiKeysTool';
+import type { ShowToast } from './utils';
 
-type ToolId = 'qr-codes' | 'email-quota';
+type ToolId = 'qr-codes' | 'email-quota' | 'api-keys';
 
 interface ToolDef {
     id: ToolId;
@@ -31,10 +33,18 @@ const TOOLS: ToolDef[] = [
         descriptionCn: '查看外发邮件的剩余额度（超出后邮件将进入队列），以及当前排队数量。',
         adminOnly: true,
     },
+    {
+        id: 'api-keys',
+        title: 'API Keys',
+        titleCn: 'API 密钥',
+        description: 'Create and revoke keys giving a server admin-level access to the ticket API: reading every event and selling tickets for paid ones.',
+        descriptionCn: '创建和吊销门票 API 密钥：持有密钥的服务器可以管理员级别读取所有活动，并为付费活动售票。',
+        adminOnly: true,
+    },
 ];
 
 interface ToolsTabProps {
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 
@@ -48,6 +58,10 @@ export const ToolsTab = ({showToast, readOnly = false}: ToolsTabProps) => {
 
     if (activeTool === 'email-quota') {
         return <EmailQuotaTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
+    }
+
+    if (activeTool === 'api-keys') {
+        return <ApiKeysTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
     }
 
     return (

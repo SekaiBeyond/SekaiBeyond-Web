@@ -67,6 +67,7 @@ export type RecordType =
     | "ticket-regenerate"
     | "ticket-email-send"
     | "ticket-email-queue"
+    | "ticket-api-order"
     | "hometown-import"
     | "hometown-order-times"
     | "hometown-admit-unlisted"
@@ -106,6 +107,8 @@ export type RecordType =
     | "policy-update"
     | "config-update"
     | "con-content-update"
+    | "api-key-create"
+    | "api-key-revoke"
     | "scheduled-mail-drain";
 
 /** What a record says besides its type. Mirrors ActivityRecord in app/pages/admin/types.ts. */
@@ -174,6 +177,14 @@ export interface RecordFields {
     unmatchedCount?: number;
     /** Whether unlisted HomeTown tickets are now admitted. */
     enabled?: boolean;
+    /**
+     * The API key a key record is about, or that placed an order: its name and
+     * the hint of it the API Keys tool shows. Never the key.
+     */
+    apiKeyName?: string;
+    apiKeyHint?: string;
+    /** The seller's own number for an order placed through the API. */
+    apiOrderId?: string;
 }
 
 /** Where a new record goes. A fixed `id` makes a retried write land on the same record. */

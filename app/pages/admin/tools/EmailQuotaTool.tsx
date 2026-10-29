@@ -1,33 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGetEmailQuotaStatus } from '~/lib/firebase';
+import { callGetEmailQuotaStatus, type EmailQuotaStatus } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
 
 interface EmailQuotaToolProps {
     onBack: () => void;
     showToast: ShowToast;
-}
-
-interface QuotaStatus {
-    provider: {
-        name: string;
-        windowKind: 'rolling24h' | 'calendarDay';
-        fromAddress: string;
-    };
-    providerReported: number | null;
-    readingSource: 'live' | 'cached' | 'unavailable';
-    // Stopped at the page budget, so providerReported is a floor.
-    usageTruncated: boolean;
-    sentToday: number;
-    dailyCap: number;
-    confirmed: number;
-    reserved: number;
-    observedAt: string | null;
-    queuedCount: number;
-    oldestQueuedAt: string | null;
-    queueCap: number;
-    drainIntervalMinutes: number;
-    serverNow: string;
 }
 
 // At or below this, headroom is "running low", flagged before a send spills
@@ -63,7 +41,7 @@ const formatAge = (
 
 export const EmailQuotaTool = ({onBack, showToast}: EmailQuotaToolProps) => {
     const {isEnglish} = useLanguage();
-    const [status, setStatus] = useState<QuotaStatus | null>(null);
+    const [status, setStatus] = useState<EmailQuotaStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
 

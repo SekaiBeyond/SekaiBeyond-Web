@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, doc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { hasPermission, useAuth } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -29,7 +29,15 @@ import { HometownSection } from './HometownSection';
 import { ImportSection } from './ImportSection';
 import { SettingsSection } from './SettingsSection';
 import { StatsSection } from './StatsSection';
-import { attendeeLabel, buildAttendeeCsv, checkedInWalkIn, mapAttendeeDoc } from './helpers';
+import {
+    attendeeLabel,
+    buildAttendeeCsv,
+    checkedInWalkIn,
+    isTemplateSaved,
+    mapAttendeeDoc,
+    sendRefusal,
+    ticketsSentElsewhere,
+} from './helpers';
 import { useAccountLinks } from './useAccountLinks';
 import { type AttendeeData, type StatusFilter, type TicketData, type TicketsSection, type TicketType } from './types';
 
@@ -86,6 +94,25 @@ export function TicketsSubtab({
     const [addingAttendee, setAddingAttendee] = useState(false);
 
     const [displayCount, setDisplayCount] = useState(10);
+
+    // Read up front, since without a saved template nothing is emailed: not
+    // from Emails, and not for a ticket API order that asks. Null until known,
+    // or when the read fails, which the Emails tab reports on its own.
+    const checksTemplate = !readOnly && collectionRoot === 'upcomingEvents';
+    const [templateSaved, setTemplateSaved] = useState<boolean | null>(null);
+    useEffect(() => {
+        setTemplateSaved(null);
+        if (!checksTemplate) return;
+        let cancelled = false;
+        getDoc(doc(getFirebaseDb(), 'upcomingEvents', eventId, 'emailTemplate', 'default'))
+            .then(snap => {
+                if (!cancelled) setTemplateSaved(isTemplateSaved(snap.data()));
+            })
+            .catch(err => console.error('[TicketsSubtab] template check', err));
+        return () => {
+            cancelled = true;
+        };
+    }, [checksTemplate, eventId]);
 
     // Load attendees lazily so a scanner-only session doesn't fetch the full list.
     const listKey = `${collectionRoot}/${eventId}`;
@@ -192,8 +219,8 @@ export function TicketsSubtab({
             if (a.unlisted) unlisted++;
             if (a.missingFromHometown) missingFromHometown++;
 
-            // Emailless walk-ins can't be sent to, and HomeTown sends its own.
-            if (activeInThisAttendee > 0 && a.email && !a.hometown) {
+            // Emailless walk-ins can't be sent to, and HomeTown and the seller's app send their own.
+            if (activeInThisAttendee > 0 && a.email && !ticketsSentElsewhere(a)) {
                 sendable++;
                 if (owed) unsentSendable++;
             }
@@ -369,9 +396,11 @@ export function TicketsSubtab({
         } catch (err) {
             showToast(functionsErrorCode(err) === 'hometown-ticket'
                     ? (isEnglish ? 'HomeTown tickets can\'t be removed. Void the ticket instead.' : 'HomeTown 门票不能移除，请改为作废。')
-                    : (isEnglish
-                        ? `Failed to remove attendee${errorSuffix(err, true)}.`
-                        : `移除失败${errorSuffix(err, false)}。`),
+                    : functionsErrorCode(err) === 'api-order'
+                        ? (isEnglish ? 'Tickets sold through the API can\'t be removed. Void the ticket instead.' : '通过 API 售出的门票不能移除，请改为作废。')
+                        : (isEnglish
+                            ? `Failed to remove attendee${errorSuffix(err, true)}.`
+                            : `移除失败${errorSuffix(err, false)}。`),
                 'error');
         }
     };
@@ -385,9 +414,14 @@ export function TicketsSubtab({
             const sent = result.data.sentCount;
             const queued = result.data.queuedCount;
             if (sent > 0) {
-                updateAttendee(a.id, {emailSent: true, emailScheduled: false, emailSentAt: new Date()});
+                updateAttendee(a.id, {
+                    emailSent: true,
+                    emailScheduled: false,
+                    emailSending: false,
+                    emailSentAt: new Date()
+                });
             } else if (queued > 0) {
-                updateAttendee(a.id, {emailSent: true, emailScheduled: true});
+                updateAttendee(a.id, {emailSent: true, emailScheduled: true, emailSending: false});
             }
             showToast(
                 sent > 0
@@ -400,29 +434,24 @@ export function TicketsSubtab({
                 (sent > 0 || queued > 0) ? 'success' : 'warning',
             );
         } catch (err) {
-            const code = functionsErrorCode(err);
-            if (code === 'no-template') {
-                showToast(
-                    isEnglish
-                        ? 'Save the email template before sending.'
-                        : '请先保存邮件模板再发送。',
-                    'warning',
-                );
-            } else if (code === 'no-contact-email') {
-                showToast(
-                    isEnglish
-                        ? 'The template uses {{ contactEmail }}. Set a Contact Email in Site Config before sending.'
-                        : '模板使用了 {{ contactEmail }}，请先在网站设置中填写联系邮箱再发送。',
-                    'warning',
-                );
-            } else {
-                showToast(isEnglish
-                        ? `Failed to send email${errorSuffix(err, true)}.`
-                        : `发送邮件失败${errorSuffix(err, false)}。`,
-                    'error');
-            }
+            const refusal = sendRefusal(err, isEnglish);
+            showToast(
+                refusal ?? (isEnglish
+                    ? `Failed to send email${errorSuffix(err, true)}.`
+                    : `发送邮件失败${errorSuffix(err, false)}。`),
+                refusal ? 'warning' : 'error',
+            );
         }
     };
+
+    const sectionTabs: {id: TicketsSection; en: string; zh: string; shown: boolean}[] = [
+        {id: 'scan', en: 'Scan', zh: '扫码', shown: canScan},
+        {id: 'attendees', en: 'Attendees', zh: '参加者', shown: true},
+        {id: 'stats', en: 'Stats', zh: '统计', shown: true},
+        {id: 'import', en: 'Import', zh: '导入', shown: !readOnly},
+        {id: 'emails', en: 'Emails', zh: '邮件', shown: !readOnly},
+        {id: 'settings', en: 'Settings', zh: '设置', shown: !readOnly && collectionRoot === 'upcomingEvents'},
+    ];
 
     const attendeesError = attendeesFailed
         ? (isEnglish
@@ -433,51 +462,30 @@ export function TicketsSubtab({
     return (
         <div className="admin-tickets-section">
             <div className="admin-tickets-inner-tabs">
-                {canScan && (
+                {sectionTabs.filter(tab => tab.shown).map(tab => (
                     <button
-                        className={`admin-sub-tab ${section === 'scan' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('scan')}
+                        key={tab.id}
+                        className={`admin-sub-tab ${section === tab.id ? 'admin-sub-tab-active' : ''}`}
+                        onClick={() => setSection(tab.id)}
                     >
-                        {isEnglish ? 'Scan' : '扫码'}
+                        {isEnglish ? tab.en : tab.zh}
                     </button>
-                )}
-                <button
-                    className={`admin-sub-tab ${section === 'attendees' ? 'admin-sub-tab-active' : ''}`}
-                    onClick={() => setSection('attendees')}
-                >
-                    {isEnglish ? 'Attendees' : '参加者'}
-                </button>
-                <button
-                    className={`admin-sub-tab ${section === 'stats' ? 'admin-sub-tab-active' : ''}`}
-                    onClick={() => setSection('stats')}
-                >
-                    {isEnglish ? 'Stats' : '统计'}
-                </button>
-                {!readOnly && (
-                    <button
-                        className={`admin-sub-tab ${section === 'import' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('import')}
-                    >
-                        {isEnglish ? 'Import' : '导入'}
-                    </button>
-                )}
-                {!readOnly && (
-                    <button
-                        className={`admin-sub-tab ${section === 'emails' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('emails')}
-                    >
-                        {isEnglish ? 'Emails' : '邮件'}
-                    </button>
-                )}
-                {!readOnly && collectionRoot === 'upcomingEvents' && (
-                    <button
-                        className={`admin-sub-tab ${section === 'settings' ? 'admin-sub-tab-active' : ''}`}
-                        onClick={() => setSection('settings')}
-                    >
-                        {isEnglish ? 'Settings' : '设置'}
-                    </button>
-                )}
+                ))}
             </div>
+
+            {templateSaved === false && section !== 'emails' && section !== 'scan' && (
+                <div className="admin-tickets-send-banner admin-tickets-send-banner-warning">
+                    <strong>{isEnglish ? 'No ticket email saved yet.' : '尚未保存门票邮件。'}</strong>
+                    <p>
+                        {isEnglish
+                            ? 'Until one is saved, no ticket email goes out for this event, and ticket API orders that ask for one are refused.'
+                            : '保存之前，此活动不会发出任何门票邮件，要求发送邮件的门票 API 订单也会被拒绝。'}
+                    </p>
+                    <button className="admin-toggle-btn admin-toggle-edit" onClick={() => setSection('emails')}>
+                        {isEnglish ? 'Set Up Ticket Email' : '设置门票邮件'}
+                    </button>
+                </div>
+            )}
 
             {section === 'scan' && scanOpen && (
                 <TicketScanner
@@ -563,8 +571,8 @@ export function TicketsSubtab({
             {section === 'import' && (
                 <ImportSection
                     eventId={eventId}
-                    // HomeTown tickets aren't re-issued by email, so they're no duplicate.
-                    existingAttendees={attendees.filter(a => !a.hometown)}
+                    // HomeTown tickets and API orders aren't re-issued by email, so they're no duplicate.
+                    existingAttendees={attendees.filter(a => !a.hometown && !a.apiOrder)}
                     readOnly={readOnly}
                     showToast={showToast}
                     onImported={() => void loadAttendees()}
@@ -608,6 +616,7 @@ export function TicketsSubtab({
                     readOnly={readOnly}
                     showToast={showToast}
                     onSent={() => void loadAttendees()}
+                    onTemplateSavedChange={setTemplateSaved}
                 />
             )}
 

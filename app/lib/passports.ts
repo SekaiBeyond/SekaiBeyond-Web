@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { createCollectionCache, toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
+import { localized } from './localized';
 
 export type PassportStatus = 'unclaimed' | 'claimed';
 
@@ -147,7 +148,7 @@ export const passportStatusLabel = (status: PassportStatus, isEnglish: boolean):
 
 /** A passport's name, its design's. Blank while designs load. */
 export const passportName = (design: PassportDesign | undefined, isEnglish: boolean): string =>
-    !design ? '' : isEnglish ? design.name : (design.nameCn || design.name);
+    !design ? '' : localized(isEnglish, design.name, design.nameCn);
 
 /** Date and time as the admin passport screens show it, with the caller's blank. */
 export const passportDateTime = (date: Date | null, isEnglish: boolean, blank: string): string =>

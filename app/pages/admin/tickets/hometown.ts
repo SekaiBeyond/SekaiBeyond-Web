@@ -166,7 +166,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
  * ISO form. One without a zone is read on the site's clock. Null for anything
  * else, a zone it doesn't know included.
  */
-export const parseHometownOrderTime = (raw: string): string | null => {
+const parseHometownOrderTime = (raw: string): string | null => {
     const match = ORDER_TIME_RE.exec(raw.trim());
     if (!match) return null;
     const [, monthRaw, dayRaw, yearRaw, hourRaw, minuteRaw, secondRaw, meridiem, zone] = match;

@@ -6,7 +6,7 @@ import { useQrScanner } from '~/lib/useQrScanner';
 import { type ScanOutcome, useScanSound, useScanVibration } from '~/lib/useScanFeedback';
 import { QrScannerViewport } from './QrScannerViewport';
 import { isHometownTicketId } from './tickets/hometown';
-import { anonymousAttendeeName, ticketTypeLabel } from './tickets/types';
+import { anonymousAttendeeName, ticketTypeClass, ticketTypeLabel } from './tickets/types';
 
 /** Who a ticket belongs to, as a result shows it. */
 interface ScannedTicket {
@@ -534,7 +534,7 @@ function TicketTags({ticket, isEnglish}: {ticket: ScannedTicket; isEnglish: bool
         <>
             {!ticket.unlisted && (
                 <span
-                    className={`admin-tickets-tag admin-tickets-tag-type-${ticket.ticketType.toLowerCase().replace(/\s+/g, '-')}`}>{ticketTypeLabel(ticket.ticketType, isEnglish)}</span>
+                    className={`admin-tickets-tag ${ticketTypeClass(ticket.ticketType)}`}>{ticketTypeLabel(ticket.ticketType, isEnglish)}</span>
             )}
             {ticket.hometown && <span className="admin-tickets-tag admin-tickets-tag-hometown">HomeTown</span>}
         </>

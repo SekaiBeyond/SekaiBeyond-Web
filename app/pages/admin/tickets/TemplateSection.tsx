@@ -1,141 +1,48 @@
-import { useEffect, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { useEffect } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callUpdateEventEmailTemplate, errorSuffix, getFirebaseDb } from '~/lib/firebase';
+import { callUpdateEventEmailTemplate } from '~/lib/firebase';
 import { useSiteConfig } from '~/lib/siteConfig';
-import { ModalShell } from '../ModalShell';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
+import { EmailTemplateFields, formatSavedAt, useEmailTemplate } from '../EmailTemplateEditor';
 import type { ShowToast } from '../utils';
 import {
     DEFAULT_TEMPLATE_BODY_EN,
     DEFAULT_TEMPLATE_SUBJECT,
+    isTemplateSaved,
     renderSamplePreview,
     renderSampleSubject,
-    tsToDate,
     usesContactEmail,
 } from './helpers';
-import type { EmailTemplate } from './types';
 
 interface TemplateSectionProps {
     event: UpcomingEvent;
     readOnly: boolean;
     showToast: ShowToast;
     onUnsavedChange: (unsaved: boolean) => void;
+    /** Whether a template is saved, once the stored one has been read. */
+    onSavedChange: (saved: boolean) => void;
 }
 
-export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: TemplateSectionProps) {
+export function TemplateSection({event, readOnly, showToast, onUnsavedChange, onSavedChange}: TemplateSectionProps) {
     const {isEnglish} = useLanguage();
     const {config} = useSiteConfig();
-    const [template, setTemplate] = useState<EmailTemplate>({
-        subject: '', bodyHtml: '', updatedAt: null,
+    const editor = useEmailTemplate({
+        path: `upcomingEvents/${event.id}/emailTemplate/default`,
+        defaultSubject: DEFAULT_TEMPLATE_SUBJECT,
+        defaultBody: DEFAULT_TEMPLATE_BODY_EN,
+        write: template => callUpdateEventEmailTemplate({eventId: event.id, ...template}),
+        showToast,
+        onUnsavedChange,
     });
-    const [initialTemplate, setInitialTemplate] = useState<EmailTemplate>({
-        subject: '', bodyHtml: '', updatedAt: null,
-    });
-    const [loading, setLoading] = useState(true);
-    const [loadFailed, setLoadFailed] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [showPreview, setShowPreview] = useState(false);
+    const {template, loading, loadFailed} = editor;
+
+    // What's stored, not what's in the fields: the default fills them when
+    // nothing is.
+    const saved = isTemplateSaved(editor.saved);
 
     useEffect(() => {
-        let cancelled = false;
-        const load = async () => {
-            setLoading(true);
-            setLoadFailed(false);
-            try {
-                const db = getFirebaseDb();
-                const snap = await getDoc(
-                    doc(db, 'upcomingEvents', event.id, 'emailTemplate', 'default'),
-                );
-                if (cancelled) return;
-                if (snap.exists()) {
-                    const data = snap.data();
-                    const t: EmailTemplate = {
-                        subject: (data.subject as string) ?? '',
-                        bodyHtml: (data.bodyHtml as string) ?? '',
-                        updatedAt: tsToDate(data.updatedAt),
-                    };
-                    setTemplate(t);
-                    setInitialTemplate(t);
-                } else {
-                    // Pre-fill defaults while keeping initialTemplate empty so Save stays enabled.
-                    setTemplate({
-                        subject: DEFAULT_TEMPLATE_SUBJECT,
-                        bodyHtml: DEFAULT_TEMPLATE_BODY_EN,
-                        updatedAt: null,
-                    });
-                    setInitialTemplate({
-                        subject: '', bodyHtml: '', updatedAt: null,
-                    });
-                }
-            } catch (err) {
-                console.error('[template] load', err);
-                if (!cancelled) setLoadFailed(true);
-                showToast(
-                    isEnglish
-                        ? `Failed to load template${errorSuffix(err, true)}.`
-                        : `加载模板失败${errorSuffix(err, false)}。`,
-                    'error',
-                );
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-        void load();
-        return () => {
-            cancelled = true;
-        };
-        // Not keyed on isEnglish: a toggle would reload over unsaved edits.
-    }, [event.id, showToast]);
-
-    const isDirty = template.subject !== initialTemplate.subject
-        || template.bodyHtml !== initialTemplate.bodyHtml;
-
-    useEffect(() => {
-        onUnsavedChange(isDirty);
-    }, [isDirty, onUnsavedChange]);
-
-    const isAtDefault = template.subject === DEFAULT_TEMPLATE_SUBJECT
-        && template.bodyHtml === DEFAULT_TEMPLATE_BODY_EN;
-
-    const resetToDefault = () => {
-        if (readOnly) return;
-        if (isAtDefault) return;
-        const ok = window.confirm(isEnglish
-            ? 'Reset the template fields to the default content? Unsaved changes will be lost. (You still need to click Save to persist.)'
-            : '将模板内容恢复为默认值？未保存的修改将丢失。（仍需点击保存才会生效。）');
-        if (!ok) return;
-        setTemplate(t => ({
-            ...t,
-            subject: DEFAULT_TEMPLATE_SUBJECT,
-            bodyHtml: DEFAULT_TEMPLATE_BODY_EN,
-        }));
-    };
-
-    const save = async () => {
-        if (readOnly || !isDirty) return;
-        if (!template.subject.trim()) {
-            showToast(isEnglish ? 'Subject is required.' : '邮件主题必填。', 'error');
-            return;
-        }
-        setSaving(true);
-        try {
-            await callUpdateEventEmailTemplate({
-                eventId: event.id,
-                subject: template.subject,
-                bodyHtml: template.bodyHtml,
-            });
-            setInitialTemplate({...template, updatedAt: new Date()});
-            showToast(isEnglish ? 'Template saved.' : '模板已保存。', 'success');
-        } catch (err) {
-            showToast(isEnglish
-                    ? `Failed to save template${errorSuffix(err, true)}.`
-                    : `保存模板失败${errorSuffix(err, false)}。`,
-                'error');
-        } finally {
-            setSaving(false);
-        }
-    };
+        if (!loading && !loadFailed) onSavedChange(saved);
+    }, [loading, loadFailed, saved, onSavedChange]);
 
     if (loading) {
         return <div className="spinner spinner-centered"/>;
@@ -155,6 +62,21 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: T
     return (
         <div className="admin-tickets-template">
             <h3>{isEnglish ? 'Email template' : '邮件模板'}</h3>
+            {saved ? (
+                <p className="admin-helper-text">
+                    {isEnglish ? 'Saved' : '已保存'}
+                    {editor.saved.updatedAt && `${isEnglish ? ': ' : '：'}${formatSavedAt(editor.saved.updatedAt, isEnglish)}`}
+                </p>
+            ) : (
+                <div className="admin-tickets-send-banner admin-tickets-send-banner-warning">
+                    <strong>{isEnglish ? 'Not saved yet.' : '尚未保存。'}</strong>
+                    <p>
+                        {isEnglish
+                            ? 'The default is filled in below. Until a template is saved, no ticket email goes out for this event, and ticket API orders that ask for one are refused. Save it as it is, or edit it first.'
+                            : '下方已填入默认模板。保存模板之前，此活动不会发出任何门票邮件，要求发送邮件的门票 API 订单也会被拒绝。可直接保存，也可修改后保存。'}
+                    </p>
+                </div>
+            )}
             <p className="admin-helper-text">
                 {isEnglish
                     ? 'Supported placeholders: {{ attendeeName }}, {{ attendeeEmail }}, {{ eventTitle }}, {{ eventDate }}, {{ eventHeader }} (renders cropped header image as <img>), {{ ticketCount }}, {{ ticketIds[] }} (renders one QR per ticket), {{ contactEmail }} (the Contact Email in Site Config; also works in mailto: links).'
@@ -169,81 +91,14 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange}: T
                 </p>
             )}
 
-            <label className="admin-tickets-template-field">
-                <span>{isEnglish ? 'Subject' : '邮件主题'}</span>
-                <input
-                    type="text"
-                    className="admin-input"
-                    value={template.subject}
-                    onChange={(e) => setTemplate(t => ({...t, subject: e.target.value}))}
-                    maxLength={500}
-                    readOnly={readOnly}
-                />
-            </label>
-
-            <label className="admin-tickets-template-field">
-                <span>{isEnglish ? 'Body (HTML)' : '正文（HTML）'}</span>
-                <textarea
-                    className="admin-tickets-template-textarea"
-                    value={template.bodyHtml}
-                    onChange={(e) => setTemplate(t => ({...t, bodyHtml: e.target.value}))}
-                    maxLength={20000}
-                    readOnly={readOnly}
-                    rows={10}
-                />
-            </label>
-
-            <div className="admin-btn-row">
-                <button
-                    className="admin-toggle-btn admin-toggle-save"
-                    onClick={save}
-                    disabled={readOnly || saving || !isDirty}
-                >
-                    {saving
-                        ? (isEnglish ? 'Saving...' : '保存中...')
-                        : (isEnglish ? 'Save Template' : '保存模板')}
-                </button>
-                <button
-                    className="admin-toggle-btn admin-toggle-edit"
-                    onClick={() => setShowPreview(true)}
-                >
-                    {isEnglish ? 'Preview' : '预览'}
-                </button>
-                <button
-                    className="admin-toggle-btn admin-toggle-cancel"
-                    onClick={resetToDefault}
-                    disabled={readOnly || saving || isAtDefault}
-                    title={isEnglish ? 'Restore the default template content' : '恢复默认模板内容'}
-                >
-                    {isEnglish ? 'Reset to Default' : '恢复默认'}
-                </button>
-            </div>
-
-            {initialTemplate.updatedAt && (
-                <p className="admin-helper-text">
-                    {isEnglish ? 'Last saved: ' : '上次保存：'}
-                    {initialTemplate.updatedAt.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', {
-                        year: 'numeric', month: 'short', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                    })}
-                </p>
-            )}
-
-            {showPreview && (
-                <ModalShell
-                    title={isEnglish ? 'Preview' : '预览'}
-                    onClose={() => setShowPreview(false)}
-                >
-                    <div className="admin-tickets-preview-subject">
-                        <strong>{isEnglish ? 'Subject: ' : '主题：'}</strong>
-                        {renderSampleSubject(template, event, config.contactEmail)}
-                    </div>
-                    <div
-                        className="admin-tickets-preview-body"
-                        dangerouslySetInnerHTML={{__html: renderSamplePreview(template, event, config.contactEmail)}}
-                    />
-                </ModalShell>
-            )}
+            <EmailTemplateFields
+                editor={editor}
+                readOnly={readOnly}
+                renderPreview={t => ({
+                    subject: renderSampleSubject(t, event, config.contactEmail),
+                    html: renderSamplePreview(t, event, config.contactEmail),
+                })}
+            />
         </div>
     );
 }

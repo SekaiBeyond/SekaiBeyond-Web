@@ -83,10 +83,11 @@ export function AttendeeModal({
     const account = lookupEmail ? accountLinks.get(lookupEmail) : undefined;
     const checkingAccount = !!lookupEmail && account === undefined && !accountLookupFailed;
 
-    // HomeTown tickets aren't re-issued by email, so only warn about HomeTown matches for walk-ins.
+    // HomeTown tickets and API orders aren't re-issued by email, so only warn about those matches for walk-ins.
     const duplicate = useMemo(() => {
         if (attendee || !emailValid) return null;
-        const matches = existingAttendees.filter(a => a.email.toLowerCase() === trimmedEmail && (walkIn || !a.hometown));
+        const matches = existingAttendees.filter(a => a.email.toLowerCase() === trimmedEmail
+            && (walkIn || (!a.hometown && !a.apiOrder)));
         if (matches.length === 0) return null;
         return {
             name: matches.find(a => a.name)?.name ?? '',
@@ -95,6 +96,8 @@ export function AttendeeModal({
     }, [attendee, existingAttendees, trimmedEmail, emailValid, walkIn]);
 
     const hometownLocked = !!attendee?.hometown;
+    // The buyer holds these exact tickets in the seller's app.
+    const apiLocked = !!attendee?.apiOrder;
 
     const canSave = !saving && nameValid && countValid && (attendee
         ? (nameChanged || countChanged || typeChanged || notesChanged)
@@ -214,8 +217,8 @@ export function AttendeeModal({
             } else {
                 onSaved?.({
                     name: trimmedName,
-                    // Null too: an older server sent a kept note as null.
-                    ...(savedNotes != null
+                    // Left out when each ticket kept its own.
+                    ...(savedNotes !== undefined
                         ? {tickets: existing.tickets.map(t => ({...t, notes: savedNotes}))}
                         : {}),
                 });
@@ -343,7 +346,7 @@ export function AttendeeModal({
                         onChange={(e) => setTicketCount(e.target.value)}
                         min={1}
                         max={50}
-                        disabled={saving || hometownLocked}
+                        disabled={saving || hometownLocked || apiLocked}
                     />
                 </label>
 
@@ -354,7 +357,7 @@ export function AttendeeModal({
                             className="admin-input"
                             value={type}
                             onChange={(e) => setType(e.target.value as TicketType)}
-                            disabled={saving || hometownLocked}
+                            disabled={saving || hometownLocked || apiLocked}
                         >
                             {TICKET_TYPES.map(t => (
                                 <option key={t.value} value={t.value}>
@@ -432,6 +435,14 @@ export function AttendeeModal({
                             : (isEnglish
                                 ? 'A HomeTown ticket keeps its HomeTown number, so it can\'t be re-issued. Change its type from the ticket list.'
                                 : 'HomeTown 门票沿用其 HomeTown 门票号，无法重新签发。可在门票列表中修改类型。')}
+                    </p>
+                )}
+
+                {apiLocked && (
+                    <p className="admin-helper-text">
+                        {isEnglish
+                            ? `Sold through ${attendee?.apiKeyName || 'the ticket API'}: the buyer holds these tickets in that app, so they can't be re-issued. Change a ticket's type from the ticket list.`
+                            : `通过 ${attendee?.apiKeyName || '门票 API'} 售出：购票者在该应用中持有这些门票，因此无法重新签发。可在门票列表中修改单张门票的类型。`}
                     </p>
                 )}
 

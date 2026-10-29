@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callGetTicketEmailQuota, callSendTicketEmails, errorSuffix, functionsErrorCode, } from '~/lib/firebase';
+import { callGetTicketEmailQuota, callSendTicketEmails, errorSuffix, type TicketEmailQuota } from '~/lib/firebase';
 import type { ShowToast } from '../utils';
+import { sendRefusal } from './helpers';
 import type { AttendeeTotals } from './types';
 
 // Only for the confirm text before quota loads; the server's quota.chunkSize is
@@ -24,21 +25,13 @@ interface SendProgress {
     target: number;
 }
 
-interface QuotaState {
-    sentToday: number;
-    dailyCap: number;
-    chunkSize: number;
-    queuedCount: number;
-    queueCap: number;
-}
-
 export function SendSection({
                                 eventId, totals, readOnly, showToast, onSent, templateUnsaved,
                             }: SendSectionProps) {
     const {isEnglish} = useLanguage();
     const [sending, setSending] = useState(false);
     const [progress, setProgress] = useState<SendProgress | null>(null);
-    const [quota, setQuota] = useState<QuotaState | null>(null);
+    const [quota, setQuota] = useState<TicketEmailQuota | null>(null);
     const [quotaError, setQuotaError] = useState(false);
     const cancelRef = useRef(false);
     const [cancelling, setCancelling] = useState(false);
@@ -162,36 +155,11 @@ export function SendSection({
             }
             onSent();
         } catch (err) {
-            const code = functionsErrorCode(err);
-            if (code === 'no-template') {
-                showToast(
-                    isEnglish
-                        ? 'Save the email template before sending.'
-                        : '请先保存邮件模板再发送。',
-                    'warning',
-                );
-            } else if (code === 'no-contact-email') {
-                showToast(
-                    isEnglish
-                        ? 'The template uses {{ contactEmail }}. Set a Contact Email in Site Config before sending.'
-                        : '模板使用了 {{ contactEmail }}，请先在网站设置中填写联系邮箱再发送。',
-                    'warning',
-                );
-            } else if (code === 'quota-exceeded') {
-                showToast(
-                    isEnglish
-                        ? 'Daily cap reached and the overflow queue is full.'
-                        : '已达到每日上限，且排队已满。',
-                    'warning',
-                );
-            } else {
-                showToast(
-                    isEnglish
-                        ? `Send failed${errorSuffix(err, true)}.`
-                        : `发送失败${errorSuffix(err, false)}。`,
-                    'error',
-                );
-            }
+            const refusal = sendRefusal(err, isEnglish);
+            showToast(
+                refusal ?? (isEnglish ? `Send failed${errorSuffix(err, true)}.` : `发送失败${errorSuffix(err, false)}。`),
+                refusal ? 'warning' : 'error',
+            );
         } finally {
             setSending(false);
             setProgress(null);
@@ -268,8 +236,8 @@ export function SendSection({
                 </p>
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? 'HomeTown buyers get theirs from HomeTown, and walk-ins without an email can\'t be sent any. Send Unsent also passes by walk-ins already checked in at the door.'
-                        : 'HomeTown 购票者的门票由 HomeTown 发送，未填写邮箱的现场登记者无法接收邮件。"发送未发送"也会跳过已在现场签到的现场登记者。'}
+                        ? 'HomeTown buyers get theirs from HomeTown, buyers in another app get theirs in that app unless the order asked us to email them, and walk-ins without an email can\'t be sent any. Send Unsent also passes by walk-ins already checked in at the door, and other apps\' orders marked Unconfirmed, whose email may already have gone.'
+                        : 'HomeTown 购票者的门票由 HomeTown 发送，在其他应用购票者的门票由该应用提供（订单要求由我们发邮件的除外），未填写邮箱的现场登记者无法接收邮件。"发送未发送"也会跳过已在现场签到的现场登记者，以及标为"未确认"的其他应用订单（其邮件可能已发出）。'}
                 </p>
             </div>
 

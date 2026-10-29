@@ -1,5 +1,4 @@
 import type { UserGroup } from '~/components/AuthProvider';
-import type { BadgeDef as BaseBadgeDef } from '~/lib/types';
 
 export interface BadgeCode {
     id: string;
@@ -19,12 +18,6 @@ export interface BadgeActivationCode {
     activeUntil: string | null;
     maxUses: number;
     usedCount: number;
-}
-
-export interface BadgeDef extends BaseBadgeDef {
-    createdByUid: string;
-    createdByName: string;
-    createdByLink: string;
 }
 
 export interface UserRecord {
@@ -92,8 +85,8 @@ export const RECORD_CATEGORIES = {
         en: 'Ticket', zh: '门票',
         types: ['ticket-import', 'ticket-walk-in', 'ticket-redeem', 'ticket-void', 'ticket-unvoid', 'ticket-reset',
             'ticket-type-edit', 'ticket-notes-edit', 'ticket-attendee-delete', 'ticket-attendee-edit', 'ticket-regenerate',
-            'ticket-email-send', 'ticket-email-queue', 'hometown-import', 'hometown-order-times',
-            'hometown-admit-unlisted'],
+            'ticket-email-send', 'ticket-email-queue', 'ticket-api-order', 'hometown-import',
+            'hometown-order-times', 'hometown-admit-unlisted'],
     },
     tag: {
         en: 'Tag', zh: '标签',
@@ -126,6 +119,10 @@ export const RECORD_CATEGORIES = {
     email: {
         en: 'Email', zh: '邮件',
         types: ['scheduled-mail-drain'],
+    },
+    api: {
+        en: 'API', zh: 'API',
+        types: ['api-key-create', 'api-key-revoke'],
     },
 } as const satisfies Record<string, {en: string; zh: string; types: readonly string[]}>;
 
@@ -205,5 +202,10 @@ export interface ActivityRecord {
     unmatchedCount?: number;
     /** Whether unlisted HomeTown tickets are now admitted. */
     enabled?: boolean;
+    /** The API key a key record is about, or that placed an order: its name and hint, never the key. */
+    apiKeyName?: string;
+    apiKeyHint?: string;
+    /** The seller's own number for an order placed through the API. */
+    apiOrderId?: string;
     timestamp: Date;
 }

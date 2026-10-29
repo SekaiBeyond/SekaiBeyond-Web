@@ -12,7 +12,6 @@ import {
     startAfter,
     where,
 } from 'firebase/firestore';
-import type { User } from 'firebase/auth';
 import { formatGroupWithTitle } from '~/components/AuthProvider';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
@@ -23,13 +22,16 @@ import {
     callSaveBadge,
     callToggleBadgeCodeActive,
     callUploadAdminImage,
+    errorMessage,
     getFirebaseDb,
 } from '~/lib/firebase';
 import { formatCode } from '~/lib/codes';
 import { formatSiteTime, parseSiteTime } from '~/lib/siteTime';
 import { isValidHttpUrl } from '~/lib/urls';
-import type { BadgeActivationCode, BadgeDef, UserRecord } from './types';
-import { docToUserRecord } from './utils';
+import type { BadgeDef } from '~/lib/badges';
+import { localized } from '~/lib/localized';
+import type { BadgeActivationCode, UserRecord } from './types';
+import { docToUserRecord, type ShowToast } from './utils';
 import { AccountPicker } from './AccountPicker';
 import { UserRow } from './UserRow';
 import { BilingualFormField } from './BilingualFormField';
@@ -57,13 +59,28 @@ export const emptyBadgeForm: BadgeForm = {
     creatorUser: null, createdByName: '', createdByLink: '',
 };
 
+/** A typed creator link must be a web address; a picked account needs none. */
+export const badgeCreatorLinkValid = (form: BadgeForm): boolean =>
+    !!form.creatorUser || !form.createdByLink.trim() || isValidHttpUrl(form.createdByLink.trim());
+
+/** What a form saves, with the creator taken from the picked account if there is one. */
+export const badgeFormFields = (form: BadgeForm, imageUrl: string) => ({
+    name: form.name.trim(),
+    nameCn: form.nameCn.trim(),
+    description: form.description.trim(),
+    descriptionCn: form.descriptionCn.trim(),
+    imageUrl,
+    createdByUid: form.creatorUser?.uid ?? '',
+    createdByName: form.creatorUser?.displayName ?? form.createdByName.trim(),
+    createdByLink: form.creatorUser ? '' : form.createdByLink.trim(),
+});
+
 interface BadgeDetailViewProps {
     badgeDef: BadgeDef;
     onBack: () => void;
     onUpdateBadgeDef: (updated: BadgeDef) => void;
-    user: User;
     onLookupUser: (uid: string) => void;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 
@@ -71,7 +88,6 @@ export const BadgeDetailView = ({
                                     badgeDef,
                                     onBack,
                                     onUpdateBadgeDef,
-                                    user,
                                     onLookupUser,
                                     showToast,
                                     readOnly = false,
@@ -139,7 +155,7 @@ export const BadgeDetailView = ({
                 return {
                     id: docSnap.id,
                     code: data.code,
-                    active: data.active ?? true,
+                    active: data.active === true,
                     activeFrom: data.activeFrom ?? null,
                     activeUntil: data.activeUntil ?? null,
                     maxUses: data.maxUses ?? 0,
@@ -188,52 +204,27 @@ export const BadgeDetailView = ({
     };
 
     const updateBadgeDef = async () => {
-        const creatorLink = editForm.creatorUser ? '' : editForm.createdByLink.trim();
-        if (creatorLink && !isValidHttpUrl(creatorLink)) {
+        if (!badgeCreatorLinkValid(editForm)) {
             showToast(isEnglish ? 'Creator link must be a valid URL (http/https).' : '创建者链接必须是有效的网址（http/https）。', 'error');
             return;
         }
         setSavingBadgeDef(true);
         try {
-            const creatorUid = editForm.creatorUser?.uid ?? '';
-            const creatorName = editForm.creatorUser?.displayName ?? editForm.createdByName.trim();
-
             let imageUrl = badgeDef.imageUrl;
             if (editForm.image) {
                 const imageId = crypto.randomUUID();
                 imageUrl = await callUploadAdminImage(editForm.image, `badges/${imageId}.webp`);
             }
 
-            await callSaveBadge({
-                badgeId: badgeDef.id,
-                name: editForm.name.trim(),
-                nameCn: editForm.nameCn.trim(),
-                description: editForm.description.trim(),
-                descriptionCn: editForm.descriptionCn.trim(),
-                imageUrl,
-                createdByUid: creatorUid,
-                createdByName: creatorName,
-                createdByLink: creatorLink,
-            });
-
-            const updated: BadgeDef = {
-                ...badgeDef,
-                name: editForm.name.trim(),
-                nameCn: editForm.nameCn.trim(),
-                description: editForm.description.trim(),
-                descriptionCn: editForm.descriptionCn.trim(),
-                imageUrl,
-                createdByUid: creatorUid,
-                createdByName: creatorName,
-                createdByLink: creatorLink,
-            };
-            onUpdateBadgeDef(updated);
+            const fields = badgeFormFields(editForm, imageUrl);
+            await callSaveBadge({badgeId: badgeDef.id, ...fields});
+            onUpdateBadgeDef({...badgeDef, ...fields});
             setEditingBadgeDef(false);
             if (editForm.imagePreview?.startsWith('blob:')) URL.revokeObjectURL(editForm.imagePreview);
             setEditForm(emptyBadgeForm);
             showToast(isEnglish ? 'Badge updated.' : '徽章已更新。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to save badge.' : '保存徽章失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to save badge.' : '保存徽章失败。'), 'error');
         } finally {
             setSavingBadgeDef(false);
         }
@@ -352,9 +343,9 @@ export const BadgeDetailView = ({
                 <div className="admin-event-detail-header">
                     <img src={badgeDef.imageUrl} alt="" className="admin-event-detail-img"/>
                     <div>
-                        <h3>{isEnglish ? badgeDef.name : (badgeDef.nameCn || badgeDef.name)}</h3>
+                        <h3>{localized(isEnglish, badgeDef.name, badgeDef.nameCn)}</h3>
                         <p className="admin-event-detail-meta">
-                            {isEnglish ? badgeDef.description : (badgeDef.descriptionCn || badgeDef.description)}
+                            {localized(isEnglish, badgeDef.description, badgeDef.descriptionCn)}
                         </p>
                         {badgeDef.createdByName && (
                             <p className="admin-event-detail-meta admin-mt-4">

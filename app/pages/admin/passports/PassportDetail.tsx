@@ -7,6 +7,7 @@ import {
     callDeletePassports,
     callReissuePassportKey,
     callRevealPassportKey,
+    errorMessage,
     getFirebaseDb,
 } from '~/lib/firebase';
 import {
@@ -178,8 +179,8 @@ export const PassportDetail = ({
         let result;
         try {
             result = (await callDeletePassports({passportIds: [passportId]})).data;
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to delete passport.' : '删除通行证失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to delete passport.' : '删除通行证失败。'), 'error');
             setBusy(false);
             return;
         }
@@ -216,8 +217,8 @@ export const PassportDetail = ({
         let result;
         try {
             result = (await callDeleteClaimedPassport({passportId, subtractDays})).data;
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to delete passport.' : '删除通行证失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to delete passport.' : '删除通行证失败。'), 'error');
             setBusy(false);
             return;
         }
@@ -248,8 +249,8 @@ export const PassportDetail = ({
             const res = await callRevealPassportKey({passportId});
             setKey(res.data.activationCode);
             setKeyShown(true);
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to load the key.' : '加载激活码失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to load the key.' : '加载激活码失败。'), 'error');
             setBusy(false);
             return;
         }
@@ -266,8 +267,8 @@ export const PassportDetail = ({
             // Shown straight away: the admin asked for it in order to print it.
             setKey(res.data.activationCode);
             setKeyShown(true);
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to reissue the key.' : '重新签发激活码失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to reissue the key.' : '重新签发激活码失败。'), 'error');
             setBusy(false);
             return;
         }

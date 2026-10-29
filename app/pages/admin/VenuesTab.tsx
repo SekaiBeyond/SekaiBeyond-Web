@@ -1,6 +1,12 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callDeleteVenue, callLookUpUwBuilding, callSaveVenue, type UwBuildingLookup } from '~/lib/firebase';
+import {
+    callDeleteVenue,
+    callLookUpUwBuilding,
+    callSaveVenue,
+    errorMessage,
+    type UwBuildingLookup,
+} from '~/lib/firebase';
 import {
     isGarage,
     useUwParking,
@@ -10,13 +16,12 @@ import {
     type UwParkingData,
     walkMinutes
 } from '~/lib/uwParking';
-import type { SuggestedLot, Venue } from '~/lib/venues';
-import { haversineMiles, UW_CAMPUS_CENTER } from '~/lib/venues';
+import { haversineMiles, type SuggestedLot, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
 import { BilingualFormField } from './BilingualFormField';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
 import { MapPicker } from './MapPicker';
 import { type LocationListHandle, useCardHighlight } from './useCardHighlight';
-import { refreshAfterSave } from './utils';
+import { refreshAfterSave, type ShowToast } from './utils';
 
 /** The server's cap on suggested lots per venue. */
 const MAX_SUGGESTED_LOTS = 10;
@@ -72,7 +77,7 @@ const metersBetween = (a: {lat: number; lng: number}, b: {lat: number; lng: numb
 interface VenuesTabProps {
     venues: Venue[];
     refreshVenues: () => Promise<void>;
-    showToast: (message: string, type: 'success' | 'warning' | 'error') => void;
+    showToast: ShowToast;
     readOnly?: boolean;
 }
 
@@ -116,8 +121,8 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
             setCreateDraft(emptyDraft());
             setShowCreate(false);
             showToast(isEnglish ? 'Venue created.' : '场地已创建。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to create venue.' : '创建场地失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to create venue.' : '创建场地失败。'), 'error');
         } finally {
             setSaving(false);
         }
@@ -151,8 +156,8 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
             await afterSave();
             setEditingId(null);
             showToast(isEnglish ? 'Venue updated.' : '场地已更新。', 'success');
-        } catch (e: any) {
-            showToast(e?.message ?? (isEnglish ? 'Failed to save venue.' : '保存场地失败。'), 'error');
+        } catch (e) {
+            showToast(errorMessage(e, isEnglish ? 'Failed to save venue.' : '保存场地失败。'), 'error');
         } finally {
             setSaving(false);
         }
@@ -337,9 +342,9 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
                     ? prev.suggestedLots
                     : prefill.map(c => ({code: c, noteEn: '', noteCn: ''})),
             }));
-        } catch (e: any) {
+        } catch (e) {
             setLookup(null);
-            setLookupError(e?.message ?? (isEnglish ? 'Lookup failed.' : '查询失败。'));
+            setLookupError(errorMessage(e, isEnglish ? 'Lookup failed.' : '查询失败。'));
         } finally {
             setLookingUp(false);
         }
