@@ -2732,6 +2732,12 @@
     color: #a15c00;
 }
 
+/* An API order's email that may or may not have gone. */
+.admin-tickets-tag-unconfirmed {
+    background: rgba(224, 85, 85, 0.12);
+    color: #b23b3b;
+}
+
 /* Added at the door rather than ahead of the event. */
 .admin-tickets-tag-walk-in {
     background: rgba(92, 107, 192, 0.15);

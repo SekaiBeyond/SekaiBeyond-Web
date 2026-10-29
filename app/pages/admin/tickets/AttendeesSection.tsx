@@ -265,9 +265,10 @@ export function AttendeesSection({
                 // Nothing to send without an address, HomeTown and the seller's app
                 // send their own, and a walk-in already in at the door is owed nothing.
                 const emailState = !a.email || ticketsSentElsewhere(a) ? null
-                    : a.emailScheduled ? 'queued'
-                        : a.emailSent ? 'sent'
-                            : checkedInWalkIn(a) ? null : 'unsent';
+                    : a.emailSending ? 'unconfirmed'
+                        : a.emailScheduled ? 'queued'
+                            : a.emailSent ? 'sent'
+                                : checkedInWalkIn(a) ? null : 'unsent';
                 // A buyer with several HomeTown tickets has a row for each, told
                 // apart by number; a nameless, emailless one already leads with it.
                 const hometownNumber = a.hometown && (a.name || a.email) ? a.ticketIds[0] : '';
@@ -353,12 +354,21 @@ export function AttendeesSection({
                                     </span>
                                 )}
                                 {emailState && (
-                                    <span className={`admin-tickets-tag admin-tickets-tag-${emailState}`}>
-                                        {emailState === 'queued'
-                                            ? (isEnglish ? 'Queued' : '待发送')
-                                            : emailState === 'sent'
-                                                ? (isEnglish ? 'Sent' : '已发送')
-                                                : (isEnglish ? 'Unsent' : '未发送')}
+                                    <span
+                                        className={`admin-tickets-tag admin-tickets-tag-${emailState}`}
+                                        title={emailState === 'unconfirmed'
+                                            ? (isEnglish
+                                                ? 'The ticket API was sending this email and never heard whether it went. Check with the buyer before sending it again with Resend Email.'
+                                                : '门票 API 发送此邮件时未收到是否送达的回复。请先向购票者确认，再决定是否用"重发邮件"再发一次。')
+                                            : undefined}
+                                    >
+                                        {emailState === 'unconfirmed'
+                                            ? (isEnglish ? 'Unconfirmed' : '未确认')
+                                            : emailState === 'queued'
+                                                ? (isEnglish ? 'Queued' : '待发送')
+                                                : emailState === 'sent'
+                                                    ? (isEnglish ? 'Sent' : '已发送')
+                                                    : (isEnglish ? 'Unsent' : '未发送')}
                                     </span>
                                 )}
                                 {account !== undefined && (

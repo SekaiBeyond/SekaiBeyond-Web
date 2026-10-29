@@ -15,7 +15,7 @@ There's no list of a buyer's orders. The seller's app already knows which orders
 | Name | Type | Description |
 |---|---|---|
 | `eventId` | string | The event the order is for. |
-| `orderId` | string | Your order number, as sent to [Create an order](create-order.md). |
+| `orderId` | string | Your order number, as sent to [Create an order](create-order.md) with a key of the same seller ID. |
 
 ## Returns
 
@@ -27,7 +27,7 @@ There's no list of a buyer's orders. The seller's app already knows which orders
 |---|---|---|
 | 403 | `event-not-allowed` | The key is held to other events. |
 | 404 | `event-not-found` | No event has this ID. |
-| 404 | `order-not-found` | The event has no order placed through the API with this number. |
+| 404 | `order-not-found` | The event has no order placed through the API with this number by your seller ID. |
 
 Plus the ones every endpoint can return: see [Errors](../api.md#errors).
 

@@ -180,28 +180,20 @@ export async function sendEmails(envelopes: ResendEnvelope[], timeoutMs?: number
         );
     }
 
-    // Single endpoint returns {id}; batch returns {data:[{id}]}.
-    let ids: string[];
-    let json: any;
-    try {
-        json = await resp.json();
-    } catch (parseErr) {
-        throw new ResendSendError(
-            `Resend response parse failed: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
-            dailyConsumed
-        );
-    }
-
-    if (single) {
-        const singleJson = json as {id?: string};
-        ids = singleJson.id ? [singleJson.id] : [];
-    } else {
-        const batchJson = json as {data?: Array<{id: string}>};
-        ids = (batchJson.data ?? []).map(d => d.id);
-    }
+    // A 2xx is Resend taking every email, all or nothing, so they count as
+    // sent even when the body can't be read, such as when `timeoutMs` runs out
+    // mid-read: calling it a failure would see them sent again. Single endpoint
+    // returns {id}; batch returns {data:[{id}]}.
+    const json: any = await resp.json().catch(err => {
+        console.error("sendEmails: sent, but the response couldn't be read", err);
+        return null;
+    });
+    const ids: string[] = single
+        ? (json?.id ? [json.id] : [])
+        : (Array.isArray(json?.data) ? json.data.map((d: {id: string}) => d.id) : []);
     // Sent, but no header (e.g. a paid plan): release the pre-charge. Last,
     // because if anything above throws the caller releases it, and doing it
     // here too would double it.
     if (dailyConsumed === null) await rollbackQuotaReservation(totalRecipients);
-    return {sentCount: ids.length, ids, dailyConsumed};
+    return {sentCount: envelopes.length, ids, dailyConsumed};
 }

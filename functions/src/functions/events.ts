@@ -3,7 +3,7 @@ import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth, requireCanManage } from "../utils/auth";
 import { cancelDeletion, type Deletable, requestDeletion } from "../utils/deletion";
-import { getEventInTxn } from "../utils/events";
+import { getEventDoc } from "../utils/events";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
@@ -11,6 +11,7 @@ import { recordDoc, recordRef, type RecordType } from "../utils/records";
 import { siteDay } from "../utils/siteTime";
 import {
     validateBoolean,
+    validateDay,
     validateDocId,
     validateInstant,
     validateStorageImageUrl,
@@ -106,7 +107,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const title = validateStr(input.title, "title", 200, true);
     const titleCn = validateStr(input.titleCn, "titleCn", 200);
     const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128);
-    const date = validateStr(input.date, "date", 50, true);
+    const date = validateDay(input.date, "date");
     const location = validateStr(input.location, "location", 200);
     const locationCn = validateStr(input.locationCn, "locationCn", 200);
     const venueId = validateStr(input.venueId, "venueId", 128);
@@ -516,7 +517,7 @@ export const toggleAttendance = onCall({maxInstances: 10}, async (request) => {
     return adminTransaction(uid, async (txn, callerSnap) => {
         const [targetSnap, {snap: eventSnap, archived}] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
-            getEventInTxn(txn, eventId),
+            getEventDoc(eventId, txn),
         ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         const targetData = targetSnap.data()!;
@@ -567,7 +568,7 @@ export const assignEventStaff = onCall({maxInstances: 10}, async (request) => {
     return adminTransaction(uid, async (txn, callerSnap) => {
         const [targetSnap, {snap: eventSnap, archived: isPastEvent}] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
-            getEventInTxn(txn, eventId),
+            getEventDoc(eventId, txn),
         ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
@@ -629,7 +630,7 @@ export const removeEventStaff = onCall({maxInstances: 10}, async (request) => {
     return adminTransaction(uid, async (txn, callerSnap) => {
         const [targetSnap, {snap: eventSnap}] = await Promise.all([
             txn.get(db.collection("users").doc(targetUid)),
-            getEventInTxn(txn, eventId),
+            getEventDoc(eventId, txn),
         ]);
         if (!targetSnap.exists) throw new HttpsError("not-found", "User not found.");
         const targetData = targetSnap.data()!;

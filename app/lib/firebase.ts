@@ -416,6 +416,9 @@ export const callGetEmailQuotaStatus = () =>
 export const API_SCOPES = ['events:read', 'tickets:read', 'tickets:write'] as const;
 export type ApiScope = typeof API_SCOPES[number];
 
+/** A seller ID. Mirrors SELLER_ID_RE in functions/src/utils/apiKeys.ts. */
+export const SELLER_ID_RE = /^[a-z0-9-]{1,32}$/;
+
 export interface ApiKeySummary {
     id: string;
     name: string;
@@ -423,6 +426,8 @@ export interface ApiKeySummary {
     scopes: ApiScope[];
     /** Empty for every event. */
     eventIds: string[];
+    /** The seller whose orders it places and reads; empty on a key made before seller IDs. */
+    seller: string;
     createdByName: string;
     createdAt: string | null;
     expiresAt: string | null;
@@ -431,6 +436,7 @@ export interface ApiKeySummary {
 
 export const callCreateApiKey = (data: {
     name: string;
+    seller: string;
     scopes: ApiScope[];
     eventIds: string[];
     expiresInDays: number;

@@ -236,8 +236,8 @@ export function SendSection({
                 </p>
                 <p className="admin-helper-text">
                     {isEnglish
-                        ? 'HomeTown buyers get theirs from HomeTown, buyers in another app get theirs in that app unless the order asked us to email them, and walk-ins without an email can\'t be sent any. Send Unsent also passes by walk-ins already checked in at the door.'
-                        : 'HomeTown 购票者的门票由 HomeTown 发送，在其他应用购票者的门票由该应用提供（订单要求由我们发邮件的除外），未填写邮箱的现场登记者无法接收邮件。"发送未发送"也会跳过已在现场签到的现场登记者。'}
+                        ? 'HomeTown buyers get theirs from HomeTown, buyers in another app get theirs in that app unless the order asked us to email them, and walk-ins without an email can\'t be sent any. Send Unsent also passes by walk-ins already checked in at the door, and other apps\' orders marked Unconfirmed, whose email may already have gone.'
+                        : 'HomeTown 购票者的门票由 HomeTown 发送，在其他应用购票者的门票由该应用提供（订单要求由我们发邮件的除外），未填写邮箱的现场登记者无法接收邮件。"发送未发送"也会跳过已在现场签到的现场登记者，以及标为"未确认"的其他应用订单（其邮件可能已发出）。'}
                 </p>
             </div>
 

@@ -414,9 +414,14 @@ export function TicketsSubtab({
             const sent = result.data.sentCount;
             const queued = result.data.queuedCount;
             if (sent > 0) {
-                updateAttendee(a.id, {emailSent: true, emailScheduled: false, emailSentAt: new Date()});
+                updateAttendee(a.id, {
+                    emailSent: true,
+                    emailScheduled: false,
+                    emailSending: false,
+                    emailSentAt: new Date()
+                });
             } else if (queued > 0) {
-                updateAttendee(a.id, {emailSent: true, emailScheduled: true});
+                updateAttendee(a.id, {emailSent: true, emailScheduled: true, emailSending: false});
             }
             showToast(
                 sent > 0

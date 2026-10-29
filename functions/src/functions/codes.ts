@@ -3,7 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
 import { type CodeKind, codeKind, issueCode, normalizeCode } from "../utils/codes";
-import { getEventInTxn } from "../utils/events";
+import { getEventDoc } from "../utils/events";
 import { validateCodeInTransaction } from "../utils/helpers";
 import { claimPassportWithKey, findPassportByKey, normalizeActivationKey } from "../utils/passports";
 import { validateBoolean, validateDocId, validateInstant, validateMaxUses } from "../utils/validation";
@@ -87,7 +87,7 @@ async function codeEventFields(
 ): Promise<{eventTitle: string; eventId: string}> {
     const eventId: string = data.eventId ?? "";
     const snap = !eventId ? null
-        : pastToo ? (await getEventInTxn(txn, eventId)).snap
+        : pastToo ? (await getEventDoc(eventId, txn)).snap
             : await txn.get(db.collection("upcomingEvents").doc(eventId));
     return {eventTitle: snap?.data()?.title ?? eventId, eventId};
 }
@@ -464,7 +464,7 @@ export const generateStaffCode = onCall({maxInstances: 10}, async (request) => {
     return issueUniqueCode(uid, "staff", "staffClaimCodes", async (txn, callerSnap, code, codeRef) => {
         // Staff codes also work for past events, to credit staff after the
         // fact.
-        const {snap: eventSnap} = await getEventInTxn(txn, eventId);
+        const {snap: eventSnap} = await getEventDoc(eventId, txn);
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
 
         const existingCodes = await txn.get(db.collection("staffClaimCodes").where("eventId", "==", eventId));
@@ -510,7 +510,7 @@ async function redeemStaffCode(uid: string, code: string) {
         if (!eventId) throw invalidCode();
 
         const [{snap: eventSnap, archived: isPastEvent}, userSnap] = await Promise.all([
-            getEventInTxn(txn, eventId),
+            getEventDoc(eventId, txn),
             txn.get(userRef),
         ]);
         if (!eventSnap.exists) throw invalidCode();

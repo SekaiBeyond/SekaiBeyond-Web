@@ -98,11 +98,13 @@ export function hometownAttendeeId(ticketId: string): string {
 
 /**
  * The attendee doc holding one order placed through the API. Named for the
- * seller's order number, so a retried call finds the order it already placed
- * instead of issuing a second set of tickets.
+ * seller and its order number, so a retried call finds the order it already
+ * placed instead of issuing a second set of tickets, and another seller's
+ * order with the same number is another doc. `seller` is empty for a key made
+ * before seller IDs, whose orders are named for the number alone.
  */
-export function apiOrderAttendeeId(orderId: string): string {
-    return `api-${orderId}`;
+export function apiOrderAttendeeId(seller: string, orderId: string): string {
+    return seller ? `api_${seller}_${orderId}` : `api-${orderId}`;
 }
 
 /**

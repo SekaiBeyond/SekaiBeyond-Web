@@ -58,6 +58,11 @@ export interface AttendeeData {
     ticketCount: number;
     emailSent: boolean;
     emailScheduled: boolean;
+    /**
+     * An API order whose own email was being sent and never settled: it may
+     * have gone, so Send Unsent passes it by.
+     */
+    emailSending: boolean;
     emailSentAt: Date | null;
     createdAt: Date;
     tickets: TicketData[];

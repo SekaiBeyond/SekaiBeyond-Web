@@ -39,31 +39,29 @@ export async function checkApiKeyRateLimit(keyId: string): Promise<void> {
     await consumeRateLimit(`apiKey_${keyId}`, API_KEY_RATE_LIMIT_MAX);
 }
 
+/**
+ * Counts a call against a budget of `max` a minute, one doc per budget per
+ * minute. An increment and then a read rather than a transaction: calls made
+ * at once on one budget would fight over a transaction's lock, and the losers
+ * fail with ABORTED instead of a rate limit. A refused call still counts,
+ * which only holds until the minute is up.
+ */
 async function consumeRateLimit(docId: string, max: number): Promise<void> {
-    const ref = db.collection("rateLimits").doc(docId);
     const now = Date.now();
+    const windowStart = now - now % RATE_LIMIT_WINDOW_MS;
+    const ref = db.collection("rateLimits").doc(`${docId}_${windowStart}`);
     // expiresAt lets the TTL policy in firestore.indexes.json delete stale documents.
-    const expiresAt = new Date(now + RATE_LIMIT_WINDOW_MS * 2);
+    const expiresAt = new Date(windowStart + RATE_LIMIT_WINDOW_MS * 2);
 
-    await db.runTransaction(async (txn) => {
-        const snap = await txn.get(ref);
-        const data = snap.data() as {count: number; windowStart: number} | undefined;
-
-        if (!data || now - data.windowStart > RATE_LIMIT_WINDOW_MS) {
-            txn.set(ref, {count: 1, windowStart: now, expiresAt});
-            return;
-        }
-
-        if (data.count >= max) {
-            // retryAfterMs: until the window reopens, so a caller can say how long to wait.
-            throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {
-                code: "rate-limited",
-                retryAfterMs: data.windowStart + RATE_LIMIT_WINDOW_MS - now,
-            });
-        }
-
-        txn.update(ref, {count: FieldValue.increment(1)});
-    });
+    await ref.set({count: FieldValue.increment(1), expiresAt}, {merge: true});
+    const count = (await ref.get()).get("count");
+    if (typeof count === "number" && count > max) {
+        // retryAfterMs: until the window reopens, so a caller can say how long to wait.
+        throw new HttpsError("resource-exhausted", "Too many requests. Please wait a moment.", {
+            code: "rate-limited",
+            retryAfterMs: windowStart + RATE_LIMIT_WINDOW_MS - now,
+        });
+    }
 }
 
 export const ADMIN_GROUPS = ["core-staff", "president"];

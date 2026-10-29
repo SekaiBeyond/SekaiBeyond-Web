@@ -16,6 +16,7 @@ Core-staff and above create keys in the admin panel under **Tools > API Keys**. 
 - **Revoking a key deletes it.** It stops working at once and leaves the list, and Records keep its name and its first and last few characters. An expired key gets a Delete button to clear it from the list the same way.
 - Each key has **scopes**: `events:read`, `tickets:write`, `tickets:read`.
 - A key can be held to **specific events**, archived or not. By default it can use every event.
+- Each key has a **seller ID**, such as `cn-app`. Order numbers are kept per seller ID, so two apps can each have an order `1001`, and a key only places and reads its own seller's orders. Give each app its own ID, and a key that replaces another the same one, or it won't find the orders placed before.
 - Every key **expires**, after one year by default and two years at most.
 - Keys belong to the club, not to whoever made them. A key keeps working after its maker steps down, and any core-staff can revoke it.
 - Each key may make **120 calls a minute**.
@@ -144,6 +145,6 @@ Cloudflare's plans below Enterprise serve mainland visitors from outside China, 
 
 ## In the admin panel
 
-An order is one attendee, tagged with the key's name. It works like a HomeTown ticket: the buyer holds these exact tickets in the seller's app, so staff can rename it, change one ticket's type, void or scan its tickets, but not re-issue or remove it. It isn't emailed from here unless the order asked for that with `sendEmail`; one that did shows as sent, queued or unsent like any other attendee, and Send Unsent and Resend Email work on it. An attendee import with the same email doesn't replace it. Archiving the event moves its orders along with every other attendee, and the API finds them there.
+An order is one attendee, tagged with the key's name. It works like a HomeTown ticket: the buyer holds these exact tickets in the seller's app, so staff can rename it, change one ticket's type, void or scan its tickets, but not re-issue or remove it. It isn't emailed from here unless the order asked for that with `sendEmail`; one that did shows as sent, queued or unsent like any other attendee, and Send Unsent and Resend Email work on it. It can also show as **Unconfirmed**: the API was sending it when our email provider stopped answering, so it may or may not have gone. Send Unsent passes those by; staff check with the buyer, then send it with Resend Email if it didn't arrive. An attendee import with the same email doesn't replace it. Archiving the event moves its orders along with every other attendee, and the API finds them there.
 
 Refunds aren't part of the API yet. Until they are, staff void a refunded ticket in the admin panel, and the order then shows it as `voided`.

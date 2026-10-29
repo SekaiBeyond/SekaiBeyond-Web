@@ -224,12 +224,6 @@ export const emailPassports = onCall(
                 if (!headerArrived) await rollbackQuotaReservation(sendCount);
             }
         }
-        if (sentCount > outgoing.length) {
-            console.error("emailPassports: Resend returned more ids than envelopes sent",
-                sentCount, outgoing.length);
-            sentCount = outgoing.length;
-        }
-
         // A passport whose email didn't go is deleted, key and all: no one has
         // seen its key, and its address is free to be sent one again.
         const unsent = outgoing.slice(sentCount);

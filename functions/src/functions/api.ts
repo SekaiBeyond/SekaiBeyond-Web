@@ -2,9 +2,10 @@ import * as crypto from "crypto";
 import { type FunctionsErrorCode, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { checkApiKeyRateLimit } from "../utils/auth";
-import { type ApiKeyDoc, apiKeysCol, type ApiScope, hashApiKey } from "../utils/apiKeys";
+import { type ApiKeyDoc, apiKeysCol, type ApiScope, hashApiKey, isApiKeyShaped } from "../utils/apiKeys";
 import { RESEND_QUEUE_CAP } from "../utils/config";
 import { contactEmailFor, type EmailTemplateDoc, savedTemplate } from "../utils/emailTemplate";
+import { getEventDoc } from "../utils/events";
 import { db } from "../utils/firebase";
 import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "../utils/quota";
 import { recordDoc, recordRef } from "../utils/records";
@@ -42,11 +43,16 @@ const SELLABLE_TICKET_TYPES = ["normal", "early-bird", "student", "early-bird-st
 const ORDER_TICKETS_MAX = 50;
 
 const EVENT_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+/** Firestore keeps IDs like __x__ for itself and refuses to read one, so no event has one (see findEvent). */
+const RESERVED_ID_RE = /^__.*__$/;
 /** It names the order's doc (see apiOrderAttendeeId), so nothing a path can't hold. */
 const ORDER_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** lastUsedAt is for spotting a key nobody uses, so it's written at most this often. */
 const LAST_USED_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+
+/** How old the list of key IDs (see isKnownKeyId) may be before a key missing from it has it listed again. */
+const KNOWN_KEYS_MAX_AGE_MS = 5_000;
 
 class ApiError extends Error {
     constructor(readonly status: number, readonly code: string, message: string) {
@@ -57,6 +63,8 @@ class ApiError extends Error {
 interface ApiKey {
     id: string;
     name: string;
+    /** Empty for a key made before seller IDs (see apiOrderAttendeeId). */
+    seller: string;
     scopes: ApiScope[];
     eventIds: string[];
 }
@@ -66,15 +74,55 @@ interface ApiReply {
     body: unknown;
 }
 
+interface KeyListing {
+    at: number;
+    ids: Promise<Set<string>>;
+}
+
+/** This instance's last list of key IDs, null until one is made or after one fails. */
+let knownKeys: KeyListing | null = null;
+
+function listKeyIds(): KeyListing {
+    const listing: KeyListing = {
+        at: Date.now(),
+        ids: apiKeysCol().select().get().then(snap => new Set(snap.docs.map(doc => doc.id))),
+    };
+    // Listed again on the next call rather than kept.
+    listing.ids.catch(() => {
+        if (knownKeys === listing) knownKeys = null;
+    });
+    return listing;
+}
+
+/**
+ * Whether a key with this ID may exist, from a list of every key's ID that's
+ * made again only when a key isn't on it, and at most every
+ * KNOWN_KEYS_MAX_AGE_MS. A key's own rate limit starts only once it's found,
+ * so this is what keeps made-up keys from costing a read each; a new key is
+ * on the list within seconds.
+ */
+async function isKnownKeyId(keyId: string): Promise<boolean> {
+    const last = knownKeys;
+    if (last && (await last.ids).has(keyId)) return true;
+    if (last && Date.now() - last.at <= KNOWN_KEYS_MAX_AGE_MS) return false;
+    // Unless another call has listed them meanwhile.
+    if (!knownKeys || knownKeys === last) knownKeys = listKeyIds();
+    return (await knownKeys.ids).has(keyId);
+}
+
 async function authenticate(header: string | undefined): Promise<ApiKey> {
     const match = /^Bearer\s+(\S{1,128})$/i.exec(header ?? "");
     if (!match) {
         throw new ApiError(401, "missing-api-key", "Send the key as \"Authorization: Bearer <key>\".");
     }
-    const snap = await apiKeysCol().doc(hashApiKey(match[1])).get();
+    const keyId = hashApiKey(match[1]);
+    if (!isApiKeyShaped(match[1]) || !(await isKnownKeyId(keyId))) {
+        throw new ApiError(401, "invalid-api-key", "API key not recognised.");
+    }
+    const snap = await apiKeysCol().doc(keyId).get();
     const data = snap.data() as ApiKeyDoc | undefined;
-    // Revoking deletes a key, so a revoked one isn't found.
-    if (!data) throw new ApiError(401, "invalid-api-key", "API key not recognised.");
+    // Revoking deletes a key; one revoked before that is refused the same way.
+    if (!data || data.revokedAt) throw new ApiError(401, "invalid-api-key", "API key not recognised.");
     if (data.expiresAt.toMillis() <= Date.now()) {
         throw new ApiError(401, "api-key-expired", "This API key has expired.");
     }
@@ -85,7 +133,13 @@ async function authenticate(header: string | undefined): Promise<ApiKey> {
         await snap.ref.update({lastUsedAt: Timestamp.now()})
             .catch(err => console.error(`[api] lastUsedAt update failed for ${data.name}`, err));
     }
-    return {id: snap.id, name: data.name, scopes: data.scopes ?? [], eventIds: data.eventIds ?? []};
+    return {
+        id: snap.id,
+        name: data.name,
+        seller: data.seller ?? "",
+        scopes: data.scopes ?? [],
+        eventIds: data.eventIds ?? [],
+    };
 }
 
 function requireScope(key: ApiKey, scope: ApiScope): void {
@@ -104,37 +158,22 @@ const iso = (t: unknown): string | null => t instanceof Timestamp ? t.toDate().t
 const str = (v: unknown): string => typeof v === "string" ? v : "";
 
 /** An event's doc, from whichever collection holds it. */
-interface FoundEvent {
-    archived: boolean;
-    snap: FirebaseFirestore.DocumentSnapshot;
-}
+type FoundEvent = Awaited<ReturnType<typeof getEventDoc>>;
 
-const upcomingRef = (eventId: string) => db.collection("upcomingEvents").doc(eventId);
-const pastRef = (eventId: string) => db.collection("pastEvents").doc(eventId);
-
-/**
- * Unarchived first. Archiving refuses an ID a past event already has, so the
- * two never both hold one.
- */
-function pickEvent(
-    upcoming: FirebaseFirestore.DocumentSnapshot,
-    past: FirebaseFirestore.DocumentSnapshot,
-): FoundEvent {
-    if (upcoming.exists) return {archived: false, snap: upcoming};
-    if (past.exists) return {archived: true, snap: past};
-    throw new ApiError(404, "event-not-found", "Event not found.");
-}
-
-async function findEvent(eventId: string): Promise<FoundEvent> {
-    const [upcoming, past] = await Promise.all([upcomingRef(eventId).get(), pastRef(eventId).get()]);
-    return pickEvent(upcoming, past);
+async function findEvent(eventId: string, txn?: FirebaseFirestore.Transaction): Promise<FoundEvent> {
+    const notFound = new ApiError(404, "event-not-found", "Event not found.");
+    if (RESERVED_ID_RE.test(eventId)) throw notFound;
+    const event = await getEventDoc(eventId, txn);
+    if (!event.snap.exists) throw notFound;
+    return event;
 }
 
 /**
  * Why an order can't be placed for it now, if it can't: what `onSale` sums up.
  * Archived tickets are read-only, as everywhere else. Unpublished events sell
  * too, so a test event can take orders without showing on the site: the
- * seller filters on `published`, as it does for the listing.
+ * seller filters on `published`, as it does for the listing. Deleting an
+ * event deletes its orders with it, so none is taken once that's asked for.
  */
 function whyNotOnSale(event: FoundEvent): ApiError | null {
     const data = event.snap.data()!;
@@ -143,6 +182,7 @@ function whyNotOnSale(event: FoundEvent): ApiError | null {
     if (!(data.endAt instanceof Timestamp) || data.endAt.toMillis() <= Date.now()) {
         return new ApiError(422, "event-ended", "This event has ended.");
     }
+    if (data.deleteAt) return new ApiError(422, "event-pending-deletion", "This event is due to be deleted.");
     return null;
 }
 
@@ -203,15 +243,18 @@ function ticketStatus(ticket: Partial<NewTicket>): "valid" | "used" | "voided" {
     return ticket.redeemed === true ? "used" : "valid";
 }
 
-type EmailStatus = "not-requested" | "sent" | "queued" | "unsent";
+type EmailStatus = "not-requested" | "sent" | "queued" | "unconfirmed" | "unsent";
 
 /**
  * What became of the email an order asked us to send. Queued is past the daily
  * cap, until scheduledMailDrain ships it; unsent is not yet sent, which staff
- * can do from the admin panel.
+ * can do from the admin panel. Unconfirmed is still being sent by the request
+ * that placed the order, or was and Resend never said whether it went (see
+ * emailOrder), which staff check before sending it again.
  */
 function emailStatus(data: FirebaseFirestore.DocumentData): EmailStatus {
     if (data.apiSendEmail !== true) return "not-requested";
+    if (data.emailSending === true) return "unconfirmed";
     if (data.emailScheduled === true) return "queued";
     return data.emailSent === true ? "sent" : "unsent";
 }
@@ -239,6 +282,30 @@ function orderJson(eventId: string, data: FirebaseFirestore.DocumentData) {
     };
 }
 
+type Snapshot = FirebaseFirestore.DocumentSnapshot;
+
+/** Firestore's order for doc IDs, which breaks a tie in a query's sort field. */
+const byId = (a: Snapshot, b: Snapshot) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+
+/**
+ * The events a key is held to, read by ID rather than listing every event,
+ * and sorted as listEvents' queries would.
+ */
+async function heldEvents(eventIds: string[]): Promise<[Snapshot[], Snapshot[]]> {
+    const [upcoming, past] = await Promise.all([
+        db.getAll(...eventIds.map(id => db.collection("upcomingEvents").doc(id))),
+        db.getAll(...eventIds.map(id => db.collection("pastEvents").doc(id))),
+    ]);
+    const startMs = (s: Snapshot) => (s.get("startAt") as Timestamp).toMillis();
+    const date = (s: Snapshot) => s.get("date") as string;
+    return [
+        upcoming.filter(s => s.get("startAt") instanceof Timestamp)
+            .sort((a, b) => startMs(a) - startMs(b) || byId(a, b)),
+        past.filter(s => typeof s.get("date") === "string")
+            .sort((a, b) => (date(a) < date(b) ? 1 : date(a) > date(b) ? -1 : 0) || byId(b, a)),
+    ];
+}
+
 /**
  * Every event, in the site's own order: unarchived soonest first, then
  * archived latest first. Like the site's lists, an event missing its sort
@@ -246,15 +313,15 @@ function orderJson(eventId: string, data: FirebaseFirestore.DocumentData) {
  */
 async function listEvents(key: ApiKey): Promise<ApiReply> {
     requireScope(key, "events:read");
-    const [upcoming, past] = await Promise.all([
-        db.collection("upcomingEvents").orderBy("startAt", "asc").get(),
-        db.collection("pastEvents").orderBy("date", "desc").get(),
-    ]);
-    const allowed = (doc: FirebaseFirestore.QueryDocumentSnapshot) =>
-        key.eventIds.length === 0 || key.eventIds.includes(doc.id);
+    const [upcoming, past] = key.eventIds.length > 0
+        ? await heldEvents(key.eventIds)
+        : await Promise.all([
+            db.collection("upcomingEvents").orderBy("startAt", "asc").get().then(snap => snap.docs),
+            db.collection("pastEvents").orderBy("date", "desc").get().then(snap => snap.docs),
+        ]);
     const events = [
-        ...upcoming.docs.filter(allowed).map(snap => eventJson({archived: false, snap})),
-        ...past.docs.filter(allowed).map(snap => eventJson({archived: true, snap})),
+        ...upcoming.map(snap => eventJson({archived: false, snap})),
+        ...past.map(snap => eventJson({archived: true, snap})),
     ];
     return {status: 200, body: {events}};
 }
@@ -348,9 +415,10 @@ interface PendingEmail {
 }
 
 /**
- * Issues an order's tickets, once. The doc is named for the order, so a retry
- * after a timeout gets the tickets it already has (200), and the same order
- * number with different contents is refused (409) rather than overwritten.
+ * Issues an order's tickets, once. The doc is named for the seller and the
+ * order, so a retry after a timeout gets the tickets it already has (200), the
+ * same order number with different contents is refused (409) rather than
+ * overwritten, and another seller's order number is another order.
  *
  * Marked sent, as HomeTown's are, when the seller's app delivers the tickets.
  * With sendEmail they're emailed from here once the order is in, and the
@@ -364,12 +432,9 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
     const fingerprint = orderFingerprint(order);
 
     const placed = await db.runTransaction(async (txn): Promise<{reply: ApiReply; email?: PendingEmail}> => {
-        const [upcomingSnap, pastSnap] = await Promise.all([
-            txn.get(upcomingRef(eventId)),
-            txn.get(pastRef(eventId)),
-        ]);
-        const event = pickEvent(upcomingSnap, pastSnap);
-        const orderRef = event.snap.ref.collection("attendees").doc(apiOrderAttendeeId(order.orderId));
+        const event = await findEvent(eventId, txn);
+        const orderRef = event.snap.ref.collection("attendees")
+            .doc(apiOrderAttendeeId(key.seller, order.orderId));
         const orderSnap = await txn.get(orderRef);
 
         // Before the on-sale checks, so a retry still gets its tickets once the
@@ -412,9 +477,11 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
             apiKeyId: key.id,
             apiKeyName: key.name,
             apiSendEmail: order.sendEmail,
-            // Unsent until emailOrder sends or queues it, so Send Unsent picks
-            // it up if that never happens.
-            emailSent: !order.sendEmail,
+            // An email to send is this request's until emailOrder settles it:
+            // emailSent keeps Send Unsent off it, and emailSending makes it
+            // read unconfirmed meanwhile, and after if it never settles.
+            emailSent: true,
+            ...(order.sendEmail ? {emailSending: true} : {}),
             emailSentAt: null,
             createdAt: now,
             updatedAt: now,
@@ -451,8 +518,13 @@ const ORDER_EMAIL_TIMEOUT_MS = 10_000;
  * Emails a new order's tickets as sendTicketEmails would one attendee's: now
  * while the daily cap has room, else onto /scheduledMail for
  * scheduledMailDrain, else not at all. The order stands either way, since the
- * buyer has paid; one left unsent is Send Unsent's to pick up. Returns the
- * fields it changed on the order.
+ * buyer has paid. Returns the fields it changed on the order.
+ *
+ * The order comes in claimed (emailSending, see createOrder), and this settles
+ * it: sent, queued, or handed back to Send Unsent once it's known not to have
+ * gone. One Resend never answered may have gone, so it stays claimed, reading
+ * unconfirmed for staff to check rather than for Send Unsent to send twice. So
+ * does one whose settling write fails, or whose request dies first.
  *
  * Without the provider re-sync sendTicketEmails starts with, which would add a
  * round trip to every order: the drain re-syncs every half hour, and a send
@@ -471,13 +543,26 @@ async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
     };
     const now = Timestamp.now();
 
+    // The order with these fields, unless they can't be written, which leaves
+    // it unconfirmed.
+    const settle = async (fields: Record<string, unknown>, what: string) => {
+        try {
+            await ref.update(fields);
+            return fields;
+        } catch (err) {
+            console.error(`[api] order ${doc.apiOrderId}: ${what}, but failed to mark it so`, err);
+            return {};
+        }
+    };
+    // Known not to have gone, so it's Send Unsent's.
+    const release = () => settle({emailSent: false, emailSending: false, updatedAt: now}, "unsent");
+
     // Unless the queue is full too, which leaves it unsent.
     const queue = async () => {
         try {
-            if (await getScheduledMailQueueDepth() >= RESEND_QUEUE_CAP) return {};
-            // emailSent keeps Send Unsent off it; emailScheduled makes it read
-            // queued until the drain ships it.
-            const queued = {emailSent: true, emailScheduled: true, updatedAt: now};
+            if (await getScheduledMailQueueDepth() >= RESEND_QUEUE_CAP) return release();
+            // emailScheduled makes it read queued until the drain ships it.
+            const queued = {emailScheduled: true, emailSending: false, updatedAt: now};
             const batch = db.batch();
             batch.set(db.collection("scheduledMail").doc(), {
                 type: "ticket",
@@ -493,7 +578,7 @@ async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
             return queued;
         } catch (err) {
             console.error(`[api] order ${doc.apiOrderId}: email neither sent nor queued`, err);
-            return {};
+            return release();
         }
     };
 
@@ -509,7 +594,7 @@ async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
         });
     } catch (err) {
         console.error(`[api] order ${doc.apiOrderId}: email neither sent nor queued`, err);
-        return {};
+        return release();
     }
     if (sendRecord === null) return queue();
 
@@ -517,27 +602,31 @@ async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
         await sendEmails([envelope], ORDER_EMAIL_TIMEOUT_MS);
     } catch (err) {
         console.error(`[api] order ${doc.apiOrderId}: email send failed`, err);
-        // Unless a quota header came back, which resendClient has already recorded.
+        // Unless a quota header came back, which resendClient has already
+        // recorded. Released even when the email may have gone: the provider
+        // re-sync counts it then.
         if (!(err instanceof ResendSendError && err.dailyConsumed !== null)) await rollbackQuotaReservation(1);
+        // No answer, a timeout included, so it may have gone: left claimed,
+        // and its record kept.
+        if (err instanceof ResendSendError && err.status === null) return {};
         await sendRecord.delete()
             .catch(e => console.error(`[api] order ${doc.apiOrderId}: failed to drop send record`, e));
-        // Over Resend's cap or rate limit, so nothing went and the drain can
-        // try again. Any other failure, a timeout included, may have sent it.
-        return err instanceof ResendSendError && err.status === 429 ? queue() : {};
+        // Resend turned it away, or it never got that far. Over Resend's cap
+        // or rate limit, the drain can try again.
+        return err instanceof ResendSendError && err.status === 429 ? queue() : release();
     }
-    // The email has gone, so a failed mark would see Send Unsent send it again.
-    const sent = {emailSent: true, emailSentAt: now, updatedAt: now};
-    await ref.update(sent)
-        .catch(err => console.error(`[api] order ${doc.apiOrderId}: SENT but failed to mark`, err));
-    return sent;
+    return settle({emailSending: false, emailSentAt: now, updatedAt: now}, "sent");
 }
 
-/** From whichever collection holds the event, so an order is still there once it's archived. */
+/**
+ * From whichever collection holds the event, so an order is still there once
+ * it's archived. Only the key's own seller's orders.
+ */
 async function getOrder(key: ApiKey, eventId: string, orderId: string): Promise<ApiReply> {
     requireScope(key, "tickets:read");
     requireEventAccess(key, eventId);
     const event = await findEvent(eventId);
-    const snap = await event.snap.ref.collection("attendees").doc(apiOrderAttendeeId(orderId)).get();
+    const snap = await event.snap.ref.collection("attendees").doc(apiOrderAttendeeId(key.seller, orderId)).get();
     if (!snap.exists || !isApiOrder(snap.data())) {
         throw new ApiError(404, "order-not-found", "Order not found.");
     }

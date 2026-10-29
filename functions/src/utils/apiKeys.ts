@@ -13,6 +13,22 @@ export function isApiScope(raw: unknown): raw is ApiScope {
 /** Marks a key as ours wherever it turns up, in a config file or a leaked paste. */
 const API_KEY_PREFIX = "sbk_";
 
+/** What generateApiKey makes: the prefix and 32 random bytes in base64url. */
+const API_KEY_RE = /^sbk_[A-Za-z0-9_-]{43}$/;
+
+/** Whether `key` could be one of ours, so anything else is turned away without a read. */
+export function isApiKeyShaped(key: string): boolean {
+    return API_KEY_RE.test(key);
+}
+
+/**
+ * A seller's ID: the namespace its order numbers live in. Keys with the same
+ * one share orders, so a key that replaces another finds the orders it
+ * placed, and two sellers' order numbers never meet. No `_`, which separates
+ * it from the order number in the order's doc ID (see apiOrderAttendeeId).
+ */
+export const SELLER_ID_RE = /^[a-z0-9-]{1,32}$/;
+
 /**
  * An `apiKeys` doc, stored under the key's SHA-256: the key itself is never
  * kept, so a lost one is revoked and replaced rather than looked up. Server
@@ -25,11 +41,21 @@ export interface ApiKeyDoc {
     scopes: ApiScope[];
     /** The only events the key may touch; empty for all of them. */
     eventIds: string[];
+    /**
+     * Its seller's ID (see SELLER_ID_RE). Absent on a key made before seller
+     * IDs, whose orders keep their first doc IDs.
+     */
+    seller?: string;
     createdBy: string;
     createdByName: string;
     createdAt: Timestamp;
     expiresAt: Timestamp;
     lastUsedAt: Timestamp | null;
+    /**
+     * Only on a key revoked before revoking deleted keys, which no longer
+     * works. Drop once none is left.
+     */
+    revokedAt?: Timestamp;
 }
 
 export const apiKeysCol = () => db.collection("apiKeys");

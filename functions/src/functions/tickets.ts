@@ -1475,13 +1475,6 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
     });
 });
 
-/**
- * How long Send Unsent leaves a new API order to the API's own email (see
- * emailOrder in api.ts), which is over by the api function's 60-second
- * timeout. Sending it meanwhile would email the buyer twice.
- */
-const API_ORDER_EMAIL_GRACE_MS = 2 * 60_000;
-
 export const sendTicketEmails = onCall(
     {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB", secrets: [RESEND_API_KEY]},
     async (request) => {
@@ -1603,10 +1596,6 @@ export const sendTicketEmails = onCall(
             if (data.source === "hometown") continue;
             // The seller's app delivered these, unless the order asked us to.
             if (isApiOrder(data) && data.apiSendEmail !== true) continue;
-            // A new API order may still be getting its own email. Passed by, not
-            // marked, so a later Send Unsent picks it up if that one failed.
-            if (mode === "unsent" && isApiOrder(data)
-                && Date.now() - (data.createdAt?.toMillis?.() ?? 0) < API_ORDER_EMAIL_GRACE_MS) continue;
             // Already in at the door, so nothing is owed them. Left unsent rather
             // than marked, so a reset ticket brings them back; Resend Email still
             // sends to one on purpose.
@@ -1628,6 +1617,7 @@ export const sendTicketEmails = onCall(
         for (const target of ticketlessTargets) {
             ops.push(b => b.update(target.ref, {
                 emailSent: true,
+                emailSending: FieldValue.delete(),
                 emailSentAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             }));
@@ -1732,19 +1722,15 @@ export const sendTicketEmails = onCall(
         // One commit per attendee, so one bad write (say, an attendee deleted
         // mid-call) doesn't strand the rest. The email has gone, so a failed
         // mark would be re-sent by the next 'unsent' drain; it is logged loudly
-        // for an admin to flag. sentCount is Resend's id count, so the loop is
-        // clamped to the targets held: overrunning would throw outside the
-        // per-attendee catch.
-        if (sentCount > sendCommitTargets.length) {
-            console.error("sendTicketEmails: Resend returned more ids than envelopes sent",
-                sentCount, sendCommitTargets.length);
-        }
-        const markCount = Math.min(sentCount, sendCommitTargets.length);
-        for (let i = 0; i < markCount; i++) {
-            const {target} = sendCommitTargets[i];
+        // for an admin to flag. sentCount is all of the send slice or none.
+        //
+        // emailSending is an API order's own send that never settled (see
+        // emailOrder in api.ts); deleting it is a no-op on anyone else.
+        for (const {target} of sendCommitTargets.slice(0, sentCount)) {
             try {
                 await target.ref.update({
                     emailSent: true,
+                    emailSending: FieldValue.delete(),
                     emailSentAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
@@ -1774,6 +1760,7 @@ export const sendTicketEmails = onCall(
             batch.update(target.ref, {
                 emailSent: true,
                 emailScheduled: true,
+                emailSending: FieldValue.delete(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
             try {

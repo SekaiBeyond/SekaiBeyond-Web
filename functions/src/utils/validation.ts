@@ -13,6 +13,20 @@ export function validateISODate(value: unknown, name: string): string | null {
 }
 
 /**
+ * A day as YYYY-MM-DD, as a date input gives it, that's on the calendar. The
+ * padding is what lets past events sort as strings.
+ */
+export function validateDay(value: unknown, name: string): string {
+    const day = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+    // Date.parse rolls 2024-02-30 over into March, so the round trip catches it.
+    const parsed = day ? new Date(`${day}T00:00:00Z`) : null;
+    if (!parsed || isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== day) {
+        throw new HttpsError("invalid-argument", `Invalid ${name}: must be a date as YYYY-MM-DD.`);
+    }
+    return day;
+}
+
+/**
  * An ISO date-time that names its zone (Z or an offset). A zoneless one is
  * refused rather than read as UTC, which is never the clock it was typed on.
  * Null when absent.

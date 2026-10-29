@@ -1,10 +1,10 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth } from "../utils/auth";
-import { getEventInTxn } from "../utils/events";
+import { getEventDoc } from "../utils/events";
 import { recordDoc, recordRef } from "../utils/records";
 import { sanitizeDisplayText, validateDocId, validateStr, validateStringArray } from "../utils/validation";
-import { API_SCOPES, type ApiKeyDoc, apiKeysCol, generateApiKey, isApiScope } from "../utils/apiKeys";
+import { API_SCOPES, type ApiKeyDoc, apiKeysCol, generateApiKey, isApiScope, SELLER_ID_RE } from "../utils/apiKeys";
 
 const API_KEY_NAME_MAX = 60;
 /** Events one key may be held to; past this, it may as well have all of them. */
@@ -36,9 +36,20 @@ const isoOrNull = (t: unknown) => t instanceof Timestamp ? t.toDate().toISOStrin
 export const createApiKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
-    const input = request.data as {name?: unknown; scopes?: unknown; eventIds?: unknown; expiresInDays?: unknown};
+    const input = request.data as {
+        name?: unknown;
+        seller?: unknown;
+        scopes?: unknown;
+        eventIds?: unknown;
+        expiresInDays?: unknown;
+    };
     const name = sanitizeDisplayText(validateStr(input.name, "name", API_KEY_NAME_MAX, true));
     if (!name) throw new HttpsError("invalid-argument", "name is required.");
+    if (typeof input.seller !== "string" || !SELLER_ID_RE.test(input.seller)) {
+        throw new HttpsError("invalid-argument",
+            "seller must be 1–32 lowercase letters, digits and -.");
+    }
+    const seller = input.seller;
     if (!Array.isArray(input.scopes) || input.scopes.length === 0 || !input.scopes.every(isApiScope)) {
         throw new HttpsError("invalid-argument", `scopes must name at least one of: ${API_SCOPES.join(", ")}.`);
     }
@@ -55,7 +66,7 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
     await adminTransaction(uid, async (txn, callerSnap) => {
         // A key held to an event that isn't there would be refused everywhere.
         // Archived or not: archiving keeps the ID, so the hold carries over.
-        const found = await Promise.all(eventIds.map(id => getEventInTxn(txn, id)));
+        const found = await Promise.all(eventIds.map(id => getEventDoc(id, txn)));
         const missing = eventIds.find((_, i) => !found[i].snap.exists);
         if (missing) throw new HttpsError("not-found", `Event ${missing} not found.`);
 
@@ -65,6 +76,7 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
             hint,
             scopes,
             eventIds,
+            seller,
             createdBy: uid,
             createdByName: callerName,
             createdAt: Timestamp.now(),
@@ -91,15 +103,20 @@ export const listApiKeys = onCall({maxInstances: 10}, async (request) => {
     const snap = await apiKeysCol().orderBy("createdAt", "desc").get();
     const keys = snap.docs.map(doc => {
         const data = doc.data() as ApiKeyDoc;
+        // One revoked before revoking deleted keys stopped working then, so it
+        // lists as expired from that day, with a Delete button.
+        const endsAt = data.revokedAt && data.revokedAt.toMillis() < data.expiresAt.toMillis()
+            ? data.revokedAt : data.expiresAt;
         return {
             id: doc.id,
             name: data.name ?? "",
             hint: data.hint ?? "",
             scopes: data.scopes ?? [],
             eventIds: data.eventIds ?? [],
+            seller: data.seller ?? "",
             createdByName: data.createdByName ?? "",
             createdAt: isoOrNull(data.createdAt),
-            expiresAt: isoOrNull(data.expiresAt),
+            expiresAt: isoOrNull(endsAt),
             lastUsedAt: isoOrNull(data.lastUsedAt),
         };
     });

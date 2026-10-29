@@ -8,7 +8,7 @@ Scope: `tickets:write` · [← Ticket API](../api.md)
 
 Issues the tickets for an order once the buyer has paid. They go on the event's attendee list, scan at the door like any other, and show in the buyer's **My Tickets** on the site when the order carries their email. The order can also ask for them to be emailed to the buyer: see [Emailing the tickets](#emailing-the-tickets).
 
-**Retrying is safe.** Sending the same order again returns the tickets it already has, with a 200, even after the event has ended or been archived. "The same" means the same `orderId`, buyer and count of each type; how the lines are split or ordered doesn't matter, and nor does `sendEmail`: the first request's choice stands, and a retry never sends the email again. So after a timeout, send the order again rather than giving up or making a new order number.
+**Retrying is safe.** Sending the same order again returns the tickets it already has, with a 200, even after the event has ended or been archived. "The same" means the same `orderId` from the same seller (see [Keys](../api.md#keys)), buyer and count of each type; how the lines are split or ordered doesn't matter, and nor does `sendEmail`: the first request's choice stands, and a retry never sends the email again. So after a timeout, send the order again rather than giving up or making a new order number.
 
 ## Path parameters
 
@@ -20,7 +20,7 @@ Issues the tickets for an order once the buyer has paid. They go on the event's 
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `orderId` | string | Yes | Your own order number, 1–64 letters, digits, `-` and `_`. It names the order from then on. |
+| `orderId` | string | Yes | Your own order number, 1–64 letters, digits, `-` and `_`. It names the order from then on. Order numbers are per seller ID, so another app's order with the same number is a different order. |
 | `buyer` | object | Yes | Who bought the tickets: |
 | `buyer.name` | string | Yes | Their name, at most 100 characters. Door staff see it. |
 | `buyer.email` | string | No | Their email. With it, the tickets also show in that person's My Tickets on the site once the event is published, and a scan credits their account. |
@@ -40,15 +40,16 @@ Issues the tickets for an order once the buyer has paid. They go on the event's 
 | 400 | `invalid-request` | A field is missing or malformed, and the message names it, or `sendEmail` is `true` without `buyer.email`. Or the body isn't a JSON object; sent straight to `sekaibeyond.com/api`, that gets a bare HTML 400 instead (see [Errors](../api.md#errors)). |
 | 403 | `event-not-allowed` | The key is held to other events. |
 | 404 | `event-not-found` | No event has this ID. |
-| 409 | `order-conflict` | This `orderId` is already taken by an order with different contents. |
+| 409 | `order-conflict` | You already have an order with this `orderId`, with different contents. |
 | 422 | `event-archived` | The event has been archived. |
 | 422 | `event-not-paid` | The event is free, so it has no tickets. |
 | 422 | `event-ended` | The event has ended. |
+| 422 | `event-pending-deletion` | Staff have asked to delete the event (its `deleteAt` is set). Deleting it would delete its orders too. |
 | 422 | `unknown-ticket-type` | A line's `type` isn't one that can be sold. |
 | 422 | `no-template` | `sendEmail` is `true`, but staff haven't saved this event's ticket email yet. |
 | 422 | `no-contact-email` | `sendEmail` is `true`, and the event's ticket email shows the club's contact email, which isn't set. |
 
-An event that fails more than one of the three event checks gets the first one listed. A malformed body is reported before anything about the event, and the two email checks after it. None of these issue any tickets. Plus the ones every endpoint can return: see [Errors](../api.md#errors).
+An event that fails more than one of the four event checks gets the first one listed. A malformed body is reported before anything about the event, and the two email checks after it. None of these issue any tickets. Plus the ones every endpoint can return: see [Errors](../api.md#errors).
 
 ## Example
 
@@ -104,7 +105,8 @@ curl https://api.sekaibeyond.com/v1/events/k3Xq9VbLm2PzR8TaYw4N/orders \
 
 With `sendEmail: true`, we email the buyer their tickets: the event's ticket email, the same one staff send from the admin panel, with a QR code for each ticket. The codes are the same tickets as each `qr` in the reply, so the buyer can use either, and your app can still show them too.
 
-- **It's sent before the reply comes back,** and the Order's `emailStatus` says what happened: `sent`, `queued` or `unsent`.
+- **It's sent before the reply comes back,** and the Order's `emailStatus` says what happened: `sent`, `queued`, `unsent` or `unconfirmed`.
 - **We send at most 100 emails a day,** shared with staff sends. Past that, or when our email provider asks us to slow down, the email is `queued`, and goes out as room opens, checked every 30 minutes.
-- **`unsent` means it didn't go,** because the send failed or timed out, or the queue was full as well. Staff can send it from the admin panel. [Get the order](get-order.md) later to see whether it has gone. A retry made while the first request is still sending reads `unsent` too, so give it a minute.
+- **`unsent` means it didn't go,** because our email provider refused it, or the queue was full as well. Staff can send it from the admin panel. [Get the order](get-order.md) later to see whether it has gone.
+- **`unconfirmed` means we don't know yet.** Either the first request is still sending it, which is what a retry made meanwhile reads, or our email provider didn't answer within 10 seconds, so it may or may not have gone. Staff check with the buyer and send it if it didn't arrive, rather than risk sending it twice.
 - **The order is placed either way,** since the buyer has paid. Don't place it again to retry the email: a retry returns the same order and never sends.

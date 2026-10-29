@@ -7,7 +7,9 @@ import {
     callCreateApiKey,
     callListApiKeys,
     callRevokeApiKey,
+    SELLER_ID_RE,
 } from '~/lib/firebase';
+import { localized } from '~/lib/localized';
 import { usePastEvents } from '~/lib/pastEvents';
 import { useAllUpcomingEvents } from '~/lib/upcomingEvents';
 import { CreateSection } from '../CrudShell';
@@ -56,6 +58,7 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
 
     const [showCreate, setShowCreate] = useState(false);
     const [name, setName] = useState('');
+    const [seller, setSeller] = useState('');
     const [scopes, setScopes] = useState<ApiScope[]>([...API_SCOPES]);
     const [allEvents, setAllEvents] = useState(true);
     const [eventIds, setEventIds] = useState<string[]>([]);
@@ -88,6 +91,7 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
 
     const resetForm = () => {
         setName('');
+        setSeller('');
         setScopes([...API_SCOPES]);
         setAllEvents(true);
         setEventIds([]);
@@ -100,12 +104,16 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
     const toggleEvent = (eventId: string) =>
         setEventIds(prev => prev.includes(eventId) ? prev.filter(id => id !== eventId) : [...prev, eventId]);
 
+    const canCreate = !!name.trim() && SELLER_ID_RE.test(seller) && scopes.length > 0
+        && (allEvents || eventIds.length > 0);
+
     const createKey = async () => {
-        if (!name.trim() || scopes.length === 0 || (!allEvents && eventIds.length === 0)) return;
+        if (!canCreate) return;
         setCreating(true);
         try {
             const res = await callCreateApiKey({
                 name: name.trim(),
+                seller,
                 scopes,
                 eventIds: allEvents ? [] : eventIds,
                 expiresInDays,
@@ -141,8 +149,7 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                 ? `Revoke "${k.name}"? Anything using it stops working at once, and the key is deleted. This can't be undone.`
                 : `吊销"${k.name}"？所有使用此密钥的服务将立即失效，密钥也将被删除，且无法撤销。`)
             : (isEnglish
-                ? `Delete
-                        "${k.name}"? It no longer works, and it will be removed from this list.`
+                ? `Delete "${k.name}"? It no longer works, and it will be removed from this list.`
                 : `删除"${k.name}"？此密钥已失效，删除后将从列表中移除。`)
         )) return;
         setRevokingId(k.id);
@@ -174,8 +181,7 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
     });
     const eventTitle = (eventId: string) => {
         const event = upcomingEvents.find(e => e.id === eventId) ?? pastEvents.find(e => e.id === eventId);
-        if (!event) return eventId;
-        return (isEnglish ? event.title : event.titleCn) || event.title;
+        return event ? localized(isEnglish, event.title, event.titleCn) : eventId;
     };
 
     return (
@@ -237,7 +243,7 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                 ctaLabel={isEnglish ? 'Create Key' : '创建密钥'}
                 ctaBusyLabel={isEnglish ? 'Creating...' : '创建中...'}
                 busy={creating}
-                ctaDisabled={!name.trim() || scopes.length === 0 || (!allEvents && eventIds.length === 0)}
+                ctaDisabled={!canCreate}
                 onCreate={() => void createKey()}
                 onCancel={resetForm}
             >
@@ -252,6 +258,28 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                             maxLength={60}
                             disabled={creating}
                         />
+                    </label>
+
+                    <label className="admin-tickets-template-field">
+                        <span>{isEnglish ? 'Seller ID' : '卖家 ID'}</span>
+                        <input
+                            className="admin-input"
+                            value={seller}
+                            onChange={e => setSeller(e.target.value.trim().toLowerCase())}
+                            placeholder={isEnglish ? 'e.g. cn-app' : '例如：cn-app'}
+                            maxLength={32}
+                            list="api-key-sellers"
+                            disabled={creating}
+                        />
+                        <datalist id="api-key-sellers">
+                            {[...new Set(keys?.map(k => k.seller).filter(Boolean))].map(s => <option key={s}
+                                                                                                     value={s}/>)}
+                        </datalist>
+                        <span className="admin-helper-text">
+                            {isEnglish
+                                ? 'Order numbers are kept per seller, so two apps can both have an order 1001. Give each app its own ID, and a key that replaces another the same one, or it won\'t find the orders placed before. Lowercase letters, digits and -.'
+                                : '订单号按卖家区分，因此两个应用可以各有一个 1001 号订单。每个应用使用各自的 ID；替换旧密钥的新密钥须使用相同 ID，否则查不到此前的订单。仅限小写字母、数字和 -。'}
+                        </span>
                     </label>
 
                     <fieldset className="admin-api-key-fieldset" disabled={creating}>
@@ -373,6 +401,12 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                                     ))}
                                 </div>
                                 <div className="admin-api-key-meta">
+                                    {k.seller && (
+                                        <span>
+                                            {isEnglish ? 'Seller ' : '卖家 '}<code
+                                            className="record-code">{k.seller}</code>
+                                        </span>
+                                    )}
                                     <span>
                                         {k.eventIds.length === 0
                                             ? (isEnglish ? 'Every event' : '所有活动')
