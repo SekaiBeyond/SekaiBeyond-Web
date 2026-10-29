@@ -13,6 +13,7 @@ The code is [`functions/src/functions/api.ts`](../functions/src/functions/api.ts
 Core-staff and above create keys in the admin panel under **Tools > API Keys**. The staff group can't see that tool, and the functions behind it (`createApiKey`, `listApiKeys`, `revokeApiKey`) refuse anyone below core-staff.
 
 - A key is shown once, when it's made. Only its SHA-256 is stored, in `apiKeys`, which no client can read (see [`firestore.rules`](../firestore.rules)). A lost key can't be recovered: revoke it and make a new one.
+- **A new key works within a few seconds of being made,** not at once. Until then it answers `invalid-api-key`, so a first call made straight away may need a retry.
 - **Revoking a key deletes it.** It stops working at once and leaves the list, and Records keep its name and its first and last few characters. An expired key gets a Delete button to clear it from the list the same way.
 - Each key has **scopes**: `events:read`, `tickets:write`, `tickets:read`.
 - A key can be held to **specific events**, archived or not. By default it can use every event.
