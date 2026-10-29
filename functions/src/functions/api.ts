@@ -444,6 +444,13 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
 }
 
 /**
+ * How long an order waits on Resend before leaving its email unsent, well
+ * inside the relay's 30 seconds, so the seller gets the reply rather than a
+ * 504 and the order isn't cut off mid-send.
+ */
+const ORDER_EMAIL_TIMEOUT_MS = 10_000;
+
+/**
  * Emails a new order's tickets as sendTicketEmails would one attendee's: now
  * while the daily cap has room, else onto /scheduledMail for
  * scheduledMailDrain, else not at all. The order stands either way, since the
@@ -451,7 +458,8 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
  * fields it changed on the order.
  *
  * Without the provider re-sync sendTicketEmails starts with, which would add a
- * round trip to every order: the drain re-syncs every half hour.
+ * round trip to every order: the drain re-syncs every half hour, and a send
+ * Resend turns away for being over its cap is queued for it.
  */
 async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
     const {ref, doc, eventData, template, contactEmail} = pending;
@@ -466,21 +474,15 @@ async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
     };
     const now = Timestamp.now();
 
-    let sendRecord: FirebaseFirestore.DocumentReference | "queued" | null;
-    try {
-        const queueDepth = await getScheduledMailQueueDepth();
-        sendRecord = await db.runTransaction(async (txn) => {
-            const {sentToday, dailyCap, reserved} = await computeEmailQuotaInTxn(txn);
-            const record = recordRef();
-            if (sentToday < dailyCap) {
-                reserveQuotaInTxn(txn, 1, reserved);
-                txn.set(record, recordDoc("ticket-email-send", recordFields));
-                return record;
-            }
-            if (queueDepth >= RESEND_QUEUE_CAP) return null;
+    // Unless the queue is full too, which leaves it unsent.
+    const queue = async () => {
+        try {
+            if (await getScheduledMailQueueDepth() >= RESEND_QUEUE_CAP) return {};
             // emailSent keeps Send Unsent off it; emailScheduled makes it read
             // queued until the drain ships it.
-            txn.set(db.collection("scheduledMail").doc(), {
+            const queued = {emailSent: true, emailScheduled: true, updatedAt: now};
+            const batch = db.batch();
+            batch.set(db.collection("scheduledMail").doc(), {
                 type: "ticket",
                 envelope,
                 eventId,
@@ -488,26 +490,43 @@ async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
                 recipientCount: 1,
                 targetPath: ref.path,
             });
-            txn.update(ref, {emailSent: true, emailScheduled: true, updatedAt: now});
-            txn.set(record, recordDoc("ticket-email-queue", recordFields));
-            return "queued";
+            batch.update(ref, queued);
+            batch.set(recordRef(), recordDoc("ticket-email-queue", recordFields));
+            await batch.commit();
+            return queued;
+        } catch (err) {
+            console.error(`[api] order ${doc.apiOrderId}: email neither sent nor queued`, err);
+            return {};
+        }
+    };
+
+    let sendRecord: FirebaseFirestore.DocumentReference | null;
+    try {
+        sendRecord = await db.runTransaction(async (txn) => {
+            const {sentToday, dailyCap, reserved} = await computeEmailQuotaInTxn(txn);
+            if (sentToday >= dailyCap) return null;
+            reserveQuotaInTxn(txn, 1, reserved);
+            const record = recordRef();
+            txn.set(record, recordDoc("ticket-email-send", recordFields));
+            return record;
         });
     } catch (err) {
         console.error(`[api] order ${doc.apiOrderId}: email neither sent nor queued`, err);
         return {};
     }
-    if (sendRecord === null) return {};
-    if (sendRecord === "queued") return {emailSent: true, emailScheduled: true, updatedAt: now};
+    if (sendRecord === null) return queue();
 
     try {
-        await sendEmails([envelope]);
+        await sendEmails([envelope], ORDER_EMAIL_TIMEOUT_MS);
     } catch (err) {
         console.error(`[api] order ${doc.apiOrderId}: email send failed`, err);
         // Unless a quota header came back, which resendClient has already recorded.
         if (!(err instanceof ResendSendError && err.dailyConsumed !== null)) await rollbackQuotaReservation(1);
         await sendRecord.delete()
             .catch(e => console.error(`[api] order ${doc.apiOrderId}: failed to drop send record`, e));
-        return {};
+        // Over Resend's cap or rate limit, so nothing went and the drain can
+        // try again. Any other failure, a timeout included, may have sent it.
+        return err instanceof ResendSendError && err.status === 429 ? queue() : {};
     }
     // The email has gone, so a failed mark would see Send Unsent send it again.
     const sent = {emailSent: true, emailSentAt: now, updatedAt: now};

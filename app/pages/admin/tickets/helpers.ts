@@ -181,7 +181,7 @@ export const buildAttendeeCsv = (attendees: AttendeeData[]): Blob =>
                         : types.map(([type, n]) => `${ticketTypeLabel(type, true)} ×${n}`).join('; '),
                 String(used),
                 String(voided),
-                a.email && !a.hometown ? (a.emailSent ? 'yes' : 'no') : '',
+                a.email && !ticketsSentElsewhere(a) ? (a.emailSent ? 'yes' : 'no') : '',
                 csvDateTime(a.emailSentAt),
                 csvDateTime(a.createdAt),
                 a.walkIn ? 'yes' : 'no',

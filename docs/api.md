@@ -19,7 +19,7 @@ Core-staff and above create keys in the admin panel under **Tools > API Keys**. 
 - Every key **expires**, after one year by default and two years at most.
 - Keys belong to the club, not to whoever made them. A key keeps working after its maker steps down, and any core-staff can revoke it.
 - Each key may make **120 calls a minute**.
-- Creating a key, revoking one, every order placed and every email an order asks for are logged in **Records**.
+- Creating a key, revoking one, every order placed and every email sent or queued for one are logged in **Records**.
 
 **The key belongs on the seller's server only.** Never put it in a mobile app, mini-program or web page: anyone could pull it out, read everything it can, and issue themselves tickets.
 

@@ -1707,6 +1707,13 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
     });
 });
 
+/**
+ * How long Send Unsent leaves a new API order to the API's own email (see
+ * emailOrder in api.ts), which is over by the api function's 60-second
+ * timeout. Sending it meanwhile would email the buyer twice.
+ */
+const API_ORDER_EMAIL_GRACE_MS = 2 * 60_000;
+
 export const sendTicketEmails = onCall(
     {maxInstances: 5, timeoutSeconds: 300, memory: "512MiB", secrets: [RESEND_API_KEY]},
     async (request) => {
@@ -1829,6 +1836,10 @@ export const sendTicketEmails = onCall(
             if (data.source === "hometown") continue;
             // The seller's app delivered these, unless the order asked us to.
             if (isApiOrder(data) && data.apiSendEmail !== true) continue;
+            // A new API order may still be getting its own email. Passed by, not
+            // marked, so a later Send Unsent picks it up if that one failed.
+            if (mode === "unsent" && isApiOrder(data)
+                && Date.now() - (data.createdAt?.toMillis?.() ?? 0) < API_ORDER_EMAIL_GRACE_MS) continue;
             // Already in at the door, so nothing is owed them. Left unsent rather
             // than marked, so a reset ticket brings them back; Resend Email still
             // sends to one on purpose.

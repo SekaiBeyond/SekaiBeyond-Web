@@ -69,7 +69,7 @@ curl https://api.sekaibeyond.com/v1/events/k3Xq9VbLm2PzR8TaYw4N/orders \
   "orderId": "WX20261028123456",
   "eventId": "k3Xq9VbLm2PzR8TaYw4N",
   "createdAt": "2026-10-28T09:12:44.311Z",
-  "updatedAt": "2026-10-28T09:12:44.311Z",
+  "updatedAt": "2026-10-28T09:12:44.402Z",
   "buyer": {"name": "李明", "email": "liming@qq.com"},
   "emailStatus": "sent",
   "ticketCount": 2,
@@ -105,6 +105,6 @@ curl https://api.sekaibeyond.com/v1/events/k3Xq9VbLm2PzR8TaYw4N/orders \
 With `sendEmail: true`, we email the buyer their tickets: the event's ticket email, the same one staff send from the admin panel, with a QR code for each ticket. The codes are the same tickets as each `qr` in the reply, so the buyer can use either, and your app can still show them too.
 
 - **It's sent before the reply comes back,** and the Order's `emailStatus` says what happened: `sent`, `queued` or `unsent`.
-- **We send at most 100 emails a day,** shared with staff sends. Past that the email is `queued`, and goes out as room opens, checked every 30 minutes.
-- **`unsent` means it didn't go,** because the send failed or the queue was full as well. Staff can send it from the admin panel. [Get the order](get-order.md) later to see whether it has gone.
+- **We send at most 100 emails a day,** shared with staff sends. Past that, or when our email provider asks us to slow down, the email is `queued`, and goes out as room opens, checked every 30 minutes.
+- **`unsent` means it didn't go,** because the send failed or timed out, or the queue was full as well. Staff can send it from the admin panel. [Get the order](get-order.md) later to see whether it has gone. A retry made while the first request is still sending reads `unsent` too, so give it a minute.
 - **The order is placed either way,** since the buyer has paid. Don't place it again to retry the email: a retry returns the same order and never sends.
