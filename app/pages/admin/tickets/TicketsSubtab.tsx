@@ -29,7 +29,7 @@ import { HometownSection } from './HometownSection';
 import { ImportSection } from './ImportSection';
 import { SettingsSection } from './SettingsSection';
 import { StatsSection } from './StatsSection';
-import { attendeeLabel, buildAttendeeCsv, checkedInWalkIn, mapAttendeeDoc } from './helpers';
+import { attendeeLabel, buildAttendeeCsv, checkedInWalkIn, mapAttendeeDoc, ticketsSentElsewhere } from './helpers';
 import { useAccountLinks } from './useAccountLinks';
 import { type AttendeeData, type StatusFilter, type TicketData, type TicketsSection, type TicketType } from './types';
 
@@ -193,7 +193,7 @@ export function TicketsSubtab({
             if (a.missingFromHometown) missingFromHometown++;
 
             // Emailless walk-ins can't be sent to, and HomeTown and the seller's app send their own.
-            if (activeInThisAttendee > 0 && a.email && !a.hometown && !a.apiOrder) {
+            if (activeInThisAttendee > 0 && a.email && !ticketsSentElsewhere(a)) {
                 sendable++;
                 if (owed) unsentSendable++;
             }

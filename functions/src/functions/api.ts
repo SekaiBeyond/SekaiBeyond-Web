@@ -1,12 +1,18 @@
 import * as crypto from "crypto";
 import { type FunctionsErrorCode, HttpsError, onRequest } from "firebase-functions/v2/https";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { checkApiKeyRateLimit } from "../utils/auth";
 import { type ApiKeyDoc, type ApiScope, apiKeysCol, hashApiKey } from "../utils/apiKeys";
+import { RESEND_QUEUE_CAP } from "../utils/config";
+import { contactEmailFor, type EmailTemplateDoc, savedTemplate } from "../utils/emailTemplate";
 import { db } from "../utils/firebase";
+import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "../utils/quota";
 import { recordDoc, recordRef } from "../utils/records";
+import { RESEND_API_KEY, ResendSendError, sendEmails } from "../utils/resendClient";
+import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
 import { apiOrderAttendeeId, buildFreshTickets, isApiOrder, type NewTicket, ticketClaimUrl } from "../utils/tickets";
 import { sanitizeDisplayText, validateEmail, validateStr } from "../utils/validation";
+import { getScheduledMailQueueDepth } from "./scheduledMail";
 
 /**
  * The ticket API a seller's server calls with a key from the API Keys tool, so
@@ -198,6 +204,19 @@ function ticketStatus(ticket: Partial<NewTicket>): "valid" | "used" | "voided" {
     return ticket.redeemed === true ? "used" : "valid";
 }
 
+type EmailStatus = "not-requested" | "sent" | "queued" | "unsent";
+
+/**
+ * What became of the email an order asked us to send. Queued is past the daily
+ * cap, until scheduledMailDrain ships it; unsent is not yet sent, which staff
+ * can do from the admin panel.
+ */
+function emailStatus(data: FirebaseFirestore.DocumentData): EmailStatus {
+    if (data.apiSendEmail !== true) return "not-requested";
+    if (data.emailScheduled === true) return "queued";
+    return data.emailSent === true ? "sent" : "unsent";
+}
+
 function orderJson(eventId: string, data: FirebaseFirestore.DocumentData) {
     const tickets = (Array.isArray(data.tickets) ? data.tickets : []) as Partial<NewTicket>[];
     return {
@@ -206,6 +225,7 @@ function orderJson(eventId: string, data: FirebaseFirestore.DocumentData) {
         createdAt: iso(data.createdAt),
         updatedAt: iso(data.updatedAt),
         buyer: {name: str(data.name), email: str(data.email)},
+        emailStatus: emailStatus(data),
         ticketCount: tickets.length,
         tickets: tickets.map(t => ({
             ticketId: t.ticketId ?? "",
@@ -253,6 +273,8 @@ interface OrderInput {
     /** Count per type, in SELLABLE_TICKET_TYPES order, each type once. */
     counts: [string, number][];
     total: number;
+    /** Whether to email the buyer their tickets from here. */
+    sendEmail: boolean;
 }
 
 /** Any malformed field is a 400; validateStr and validateEmail say which one. */
@@ -260,7 +282,7 @@ function parseOrder(body: unknown): OrderInput {
     if (!body || typeof body !== "object" || Array.isArray(body)) {
         throw new ApiError(400, "invalid-request", "Send a JSON object with Content-Type: application/json.");
     }
-    const input = body as {orderId?: unknown; buyer?: unknown; tickets?: unknown};
+    const input = body as {orderId?: unknown; buyer?: unknown; tickets?: unknown; sendEmail?: unknown};
 
     if (typeof input.orderId !== "string" || !ORDER_ID_RE.test(input.orderId)) {
         throw new ApiError(400, "invalid-request",
@@ -299,12 +321,19 @@ function parseOrder(body: unknown): OrderInput {
     if (total > ORDER_TICKETS_MAX) {
         throw new ApiError(400, "invalid-request", `An order holds at most ${ORDER_TICKETS_MAX} tickets.`);
     }
-    return {orderId: input.orderId, name, email, counts, total};
+
+    if (input.sendEmail != null && typeof input.sendEmail !== "boolean") {
+        throw new ApiError(400, "invalid-request", "sendEmail must be true or false.");
+    }
+    const sendEmail = input.sendEmail === true;
+    if (sendEmail && !email) throw new ApiError(400, "invalid-request", "sendEmail needs buyer.email.");
+    return {orderId: input.orderId, name, email, counts, total, sendEmail};
 }
 
 /**
  * What a retry has to match to count as the same order. Over the normalised
- * order, so lines split or reordered differently still match.
+ * order, so lines split or reordered differently still match. Not sendEmail:
+ * the first request's choice stands, and a retry never sends again.
  */
 function orderFingerprint(order: OrderInput): string {
     return crypto.createHash("sha256")
@@ -312,13 +341,24 @@ function orderFingerprint(order: OrderInput): string {
         .digest("hex");
 }
 
+/** A new order whose tickets are to be emailed, and what the email needs. */
+interface PendingEmail {
+    ref: FirebaseFirestore.DocumentReference;
+    doc: FirebaseFirestore.DocumentData;
+    eventData: FirebaseFirestore.DocumentData;
+    template: EmailTemplateDoc;
+    contactEmail: string;
+}
+
 /**
  * Issues an order's tickets, once. The doc is named for the order, so a retry
  * after a timeout gets the tickets it already has (200), and the same order
  * number with different contents is refused (409) rather than overwritten.
  *
- * Marked sent, as HomeTown's are: the seller's app delivers the tickets. With
- * an email, they're in that account's My Tickets too.
+ * Marked sent, as HomeTown's are, when the seller's app delivers the tickets.
+ * With sendEmail they're emailed from here once the order is in, and the
+ * event's template is checked first, so such an order never goes through
+ * without one. With an email, they're in that account's My Tickets too.
  */
 async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise<ApiReply> {
     requireScope(key, "tickets:write");
@@ -326,7 +366,7 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
     const order = parseOrder(body);
     const fingerprint = orderFingerprint(order);
 
-    return db.runTransaction(async (txn): Promise<ApiReply> => {
+    const placed = await db.runTransaction(async (txn): Promise<{reply: ApiReply; email?: PendingEmail}> => {
         const [upcomingSnap, pastSnap] = await Promise.all([
             txn.get(upcomingRef(eventId)),
             txn.get(pastRef(eventId)),
@@ -343,10 +383,17 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
                 throw new ApiError(409, "order-conflict",
                     "An order with this orderId already exists with different contents.");
             }
-            return {status: 200, body: orderJson(eventId, data)};
+            return {reply: {status: 200, body: orderJson(eventId, data)}};
         }
         const refusal = whyNotOnSale(event);
         if (refusal) throw refusal;
+        const eventData = event.snap.data()!;
+        // Each refuses with a 422 of its own: no-template, no-contact-email.
+        let email: Omit<PendingEmail, "ref" | "doc" | "eventData"> | null = null;
+        if (order.sendEmail) {
+            const template = savedTemplate((await txn.get(ticketTemplateRef(event.snap.ref))).data());
+            email = {template, contactEmail: await contactEmailFor(template)};
+        }
 
         const tickets: NewTicket[] = [];
         const ticketIds: string[] = [];
@@ -367,7 +414,10 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
             apiOrderFingerprint: fingerprint,
             apiKeyId: key.id,
             apiKeyName: key.name,
-            emailSent: true,
+            apiSendEmail: order.sendEmail,
+            // Unsent until emailOrder sends or queues it, so Send Unsent picks
+            // it up if that never happens.
+            emailSent: !order.sendEmail,
             emailSentAt: null,
             createdAt: now,
             updatedAt: now,
@@ -375,15 +425,95 @@ async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise
         txn.create(orderRef, doc);
         txn.set(recordRef(), recordDoc("ticket-api-order", {
             eventId,
-            eventTitle: str(event.snap.data()!.title) || eventId,
+            eventTitle: str(eventData.title) || eventId,
             targetEmail: order.email,
             targetName: order.name,
             ticketCount: order.total,
             apiKeyName: key.name,
             apiOrderId: order.orderId,
         }));
-        return {status: 201, body: orderJson(eventId, doc)};
+        return {
+            reply: {status: 201, body: orderJson(eventId, doc)},
+            ...(email ? {email: {...email, ref: orderRef, doc, eventData}} : {}),
+        };
     });
+
+    if (!placed.email) return placed.reply;
+    const changes = await emailOrder(key, eventId, placed.email);
+    return {status: 201, body: orderJson(eventId, {...placed.email.doc, ...changes})};
+}
+
+/**
+ * Emails a new order's tickets as sendTicketEmails would one attendee's: now
+ * while the daily cap has room, else onto /scheduledMail for
+ * scheduledMailDrain, else not at all. The order stands either way, since the
+ * buyer has paid; one left unsent is Send Unsent's to pick up. Returns the
+ * fields it changed on the order.
+ *
+ * Without the provider re-sync sendTicketEmails starts with, which would add a
+ * round trip to every order: the drain re-syncs every half hour.
+ */
+async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
+    const {ref, doc, eventData, template, contactEmail} = pending;
+    const envelope = renderTicketEmail(template, contactEmail, {id: eventId, data: eventData},
+        {name: doc.name, email: doc.email}, doc.tickets);
+    const recordFields = {
+        eventId,
+        eventTitle: str(eventData.title) || eventId,
+        sentCount: 1,
+        apiKeyName: key.name,
+        apiOrderId: doc.apiOrderId,
+    };
+    const now = Timestamp.now();
+
+    let sendRecord: FirebaseFirestore.DocumentReference | "queued" | null;
+    try {
+        const queueDepth = await getScheduledMailQueueDepth();
+        sendRecord = await db.runTransaction(async (txn) => {
+            const {sentToday, dailyCap, reserved} = await computeEmailQuotaInTxn(txn);
+            const record = recordRef();
+            if (sentToday < dailyCap) {
+                reserveQuotaInTxn(txn, 1, reserved);
+                txn.set(record, recordDoc("ticket-email-send", recordFields));
+                return record;
+            }
+            if (queueDepth >= RESEND_QUEUE_CAP) return null;
+            // emailSent keeps Send Unsent off it; emailScheduled makes it read
+            // queued until the drain ships it.
+            txn.set(db.collection("scheduledMail").doc(), {
+                type: "ticket",
+                envelope,
+                eventId,
+                queuedAt: FieldValue.serverTimestamp(),
+                recipientCount: 1,
+                targetPath: ref.path,
+            });
+            txn.update(ref, {emailSent: true, emailScheduled: true, updatedAt: now});
+            txn.set(record, recordDoc("ticket-email-queue", recordFields));
+            return "queued";
+        });
+    } catch (err) {
+        console.error(`[api] order ${doc.apiOrderId}: email neither sent nor queued`, err);
+        return {};
+    }
+    if (sendRecord === null) return {};
+    if (sendRecord === "queued") return {emailSent: true, emailScheduled: true, updatedAt: now};
+
+    try {
+        await sendEmails([envelope]);
+    } catch (err) {
+        console.error(`[api] order ${doc.apiOrderId}: email send failed`, err);
+        // Unless a quota header came back, which resendClient has already recorded.
+        if (!(err instanceof ResendSendError && err.dailyConsumed !== null)) await rollbackQuotaReservation(1);
+        await sendRecord.delete()
+            .catch(e => console.error(`[api] order ${doc.apiOrderId}: failed to drop send record`, e));
+        return {};
+    }
+    // The email has gone, so a failed mark would see Send Unsent send it again.
+    const sent = {emailSent: true, emailSentAt: now, updatedAt: now};
+    await ref.update(sent)
+        .catch(err => console.error(`[api] order ${doc.apiOrderId}: SENT but failed to mark`, err));
+    return sent;
 }
 
 /** From whichever collection holds the event, so an order is still there once it's archived. */
@@ -438,7 +568,7 @@ const HTTPS_ERROR_STATUS: Partial<Record<FunctionsErrorCode, number>> = {
     "resource-exhausted": 429,
 };
 
-export const api = onRequest({maxInstances: 20, memory: "256MiB"}, async (req, res) => {
+export const api = onRequest({maxInstances: 20, memory: "256MiB", secrets: [RESEND_API_KEY]}, async (req, res) => {
     res.set("Cache-Control", "no-store");
     const fail = (status: number, code: string, message: string) =>
         res.status(status).json({error: {code, message}});

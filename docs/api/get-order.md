@@ -45,6 +45,7 @@ curl https://api.sekaibeyond.com/v1/events/k3Xq9VbLm2PzR8TaYw4N/orders/WX2026102
   "createdAt": "2026-10-28T09:12:44.311Z",
   "updatedAt": "2026-11-14T18:31:02.907Z",
   "buyer": {"name": "李明", "email": "liming@qq.com"},
+  "emailStatus": "not-requested",
   "ticketCount": 2,
   "tickets": [
     {

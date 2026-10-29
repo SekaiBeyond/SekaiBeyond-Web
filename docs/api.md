@@ -1,6 +1,6 @@
 # Ticket API
 
-Lets another app's server read our events and sell tickets for the paid ones. Tickets sold this way go on the event's attendee list, scan at the door like any other, and show in the buyer's **My Tickets** on the site when the order carries their email.
+Lets another app's server read our events and sell tickets for the paid ones. Tickets sold this way go on the event's attendee list, scan at the door like any other, and show in the buyer's **My Tickets** on the site when the order carries their email. An order can also ask us to email the buyer their tickets.
 
 **It's an admin-level API, not one for ordinary users.** A key sees events as core-staff do in the admin panel, unpublished ones included. So keys go only to our own systems and to partners' servers we trust.
 
@@ -19,7 +19,7 @@ Core-staff and above create keys in the admin panel under **Tools > API Keys**. 
 - Every key **expires**, after one year by default and two years at most.
 - Keys belong to the club, not to whoever made them. A key keeps working after its maker steps down, and any core-staff can revoke it.
 - Each key may make **120 calls a minute**.
-- Creating a key, revoking one, and every order placed are logged in **Records**.
+- Creating a key, revoking one, every order placed and every email an order asks for are logged in **Records**.
 
 **The key belongs on the seller's server only.** Never put it in a mobile app, mini-program or web page: anyone could pull it out, read everything it can, and issue themselves tickets.
 
@@ -144,6 +144,6 @@ Cloudflare's plans below Enterprise serve mainland visitors from outside China, 
 
 ## In the admin panel
 
-An order is one attendee, tagged with the key's name. It works like a HomeTown ticket: the buyer holds these exact tickets in the seller's app, so staff can rename it, change one ticket's type, void or scan its tickets, but not re-issue or remove it. It's never emailed from here, and an attendee import with the same email doesn't replace it. Archiving the event moves its orders along with every other attendee, and the API finds them there.
+An order is one attendee, tagged with the key's name. It works like a HomeTown ticket: the buyer holds these exact tickets in the seller's app, so staff can rename it, change one ticket's type, void or scan its tickets, but not re-issue or remove it. It isn't emailed from here unless the order asked for that with `sendEmail`; one that did shows as sent, queued or unsent like any other attendee, and Send Unsent and Resend Email work on it. An attendee import with the same email doesn't replace it. Archiving the event moves its orders along with every other attendee, and the API finds them there.
 
 Refunds aren't part of the API yet. Until they are, staff void a refunded ticket in the admin panel, and the order then shows it as `voided`.

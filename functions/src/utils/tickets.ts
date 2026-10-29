@@ -105,7 +105,8 @@ export function apiOrderAttendeeId(orderId: string): string {
 /**
  * An order a seller placed through the API. Its buyer holds these exact ticket
  * IDs in the seller's app, so like a HomeTown ticket it's never re-issued,
- * replaced by an import, removed or emailed from here.
+ * replaced by an import or removed, nor emailed from here unless the order
+ * asked for that (apiSendEmail).
  */
 export function isApiOrder(data: {source?: unknown} | undefined): boolean {
     return data?.source === "api";

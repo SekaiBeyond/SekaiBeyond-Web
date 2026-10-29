@@ -104,6 +104,12 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
     // walk-in may have neither.
     const attendee = r.targetName || r.targetEmail || (isEnglish ? 'a walk-in guest' : '一位现场来宾');
     const code = r.code ? <> <span className="record-code">{r.code}</span></> : null;
+    // A ticket email an API order asked for.
+    const apiOrderNote = r.apiOrderId
+        ? isEnglish
+            ? <>, for order <span className="record-code">{r.apiOrderId}</span> sold through {r.apiKeyName || 'API'}</>
+            : <>（通过 {r.apiKeyName || 'API'} 售出的订单 <span className="record-code">{r.apiOrderId}</span>）</>
+        : null;
 
     switch (r.type) {
         case 'group-assign':
@@ -452,14 +458,14 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
         case 'ticket-email-send': {
             const sent = r.sentCount ?? 0;
             return isEnglish
-                ? <>sent {sent} ticket email{sent === 1 ? '' : 's'} for {event}</>
-                : <>为 {event} 发送了 {sent} 封门票邮件</>;
+                ? <>sent {sent} ticket email{sent === 1 ? '' : 's'} for {event}{apiOrderNote}</>
+                : <>为 {event} 发送了 {sent} 封门票邮件{apiOrderNote}</>;
         }
         case 'ticket-email-queue': {
             const queued = r.sentCount ?? 0;
             return isEnglish
-                ? <>queued {queued} ticket email{queued === 1 ? '' : 's'} for {event} past the daily cap</>
-                : <>为 {event} 将 {queued} 封门票邮件排入队列（已超出每日上限）</>;
+                ? <>queued {queued} ticket email{queued === 1 ? '' : 's'} for {event} past the daily cap{apiOrderNote}</>
+                : <>为 {event} 将 {queued} 封门票邮件排入队列（已超出每日上限）{apiOrderNote}</>;
         }
         case 'ticket-api-order': {
             const count = r.ticketCount ?? 0;

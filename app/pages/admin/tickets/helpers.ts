@@ -105,6 +105,7 @@ export const mapAttendeeDoc = (
         hometownSeenAt: tsToDate(data.hometownSeenAt),
         hometownOrderId: (data.hometownOrderId as string) ?? '',
         apiOrder: data.source === 'api',
+        apiSendEmail: data.apiSendEmail === true,
         apiOrderId: (data.apiOrderId as string) ?? '',
         apiKeyName: (data.apiKeyName as string) ?? '',
     };
@@ -128,6 +129,13 @@ export const checkedInWalkIn = (a: Pick<AttendeeData, 'walkIn' | 'tickets'>): bo
     const live = a.tickets.filter(t => !t.voided);
     return a.walkIn && live.length > 0 && live.every(t => t.redeemed);
 };
+
+/**
+ * HomeTown and the seller's app deliver their own tickets, so no email goes
+ * from here, unless an API order asked for one.
+ */
+export const ticketsSentElsewhere = (a: Pick<AttendeeData, 'hometown' | 'apiOrder' | 'apiSendEmail'>): boolean =>
+    a.hometown || (a.apiOrder && !a.apiSendEmail);
 
 /**
  * Each type the attendee's tickets hold, with how many, in ticket order: one

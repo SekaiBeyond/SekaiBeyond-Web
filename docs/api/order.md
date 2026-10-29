@@ -11,10 +11,11 @@ An order is one buyer's tickets for one event, placed with the seller's own orde
 | `orderId` | string | The seller's order number, as sent when the order was created. |
 | `eventId` | string | The event the tickets are for. |
 | `createdAt` | string | When the order was placed. |
-| `updatedAt` | string | When anything about the order last changed: a scan, a void or a staff edit. Compare it to tell whether to look again. |
+| `updatedAt` | string | When anything about the order last changed: a scan, a void, a staff edit or its email going out. Compare it to tell whether to look again. |
 | `buyer` | object | Who bought the tickets: |
 | `buyer.name` | string | Their name, as sent, unless staff have since changed it. |
 | `buyer.email` | string | Their email, lowercased, or `""` if none was sent. |
+| `emailStatus` | string | Whether we've emailed the buyer their tickets. `not-requested` when the order didn't ask (no `sendEmail: true`); otherwise `sent`, `queued` (past the daily cap, going out as room opens) or `unsent` (not sent: staff can send it from the admin panel). See [Emailing the tickets](create-order.md#emailing-the-tickets). |
 | `ticketCount` | number | How many tickets the order holds, voided ones included. |
 | `tickets` | Ticket[] | The tickets, grouped by type in this order: `normal`, `early-bird`, `student`, `early-bird-student`, `vip`. |
 
@@ -40,6 +41,7 @@ An order is one buyer's tickets for one event, placed with the seller's own orde
   "createdAt": "2026-10-28T09:12:44.311Z",
   "updatedAt": "2026-11-14T18:31:02.907Z",
   "buyer": {"name": "李明", "email": "liming@qq.com"},
+  "emailStatus": "not-requested",
   "ticketCount": 2,
   "tickets": [
     {

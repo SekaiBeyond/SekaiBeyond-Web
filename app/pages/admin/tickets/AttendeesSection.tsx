@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import type { ShowToast } from '../utils';
-import { checkedInWalkIn, ticketStatusCounts, ticketTypeCounts } from './helpers';
+import { checkedInWalkIn, ticketsSentElsewhere, ticketStatusCounts, ticketTypeCounts } from './helpers';
 import {
     anonymousAttendeeName,
     type AttendeeData,
@@ -263,7 +263,7 @@ export function AttendeesSection({
                 const account = accountLinks.get(a.email.toLowerCase());
                 // Nothing to send without an address, HomeTown and the seller's app
                 // send their own, and a walk-in already in at the door is owed nothing.
-                const emailState = !a.email || a.hometown || a.apiOrder ? null
+                const emailState = !a.email || ticketsSentElsewhere(a) ? null
                     : a.emailScheduled ? 'queued'
                         : a.emailSent ? 'sent'
                             : checkedInWalkIn(a) ? null : 'unsent';
@@ -391,8 +391,8 @@ export function AttendeesSection({
                                 {a.apiOrder && (
                                     <p className="admin-helper-text">
                                         {isEnglish
-                                            ? `Bought through ${a.apiKeyName || 'the ticket API'}${a.apiOrderId ? `, order #${a.apiOrderId}` : ''}. The buyer holds these tickets in that app, so they can't be re-issued or removed here, and no email is sent from here.`
-                                            : `通过 ${a.apiKeyName || '门票 API'} 购买${a.apiOrderId ? `，订单号 ${a.apiOrderId}` : ''}。购票者在该应用中持有这些门票，因此无法在此重新签发或移除，此处也不发送邮件。`}
+                                            ? `Bought through ${a.apiKeyName || 'the ticket API'}${a.apiOrderId ? `, order #${a.apiOrderId}` : ''}. The buyer holds these tickets in that app, so they can't be re-issued or removed here${a.apiSendEmail ? '. The order asked for them to be emailed from here as well.' : ', and no email is sent from here.'}`
+                                            : `通过 ${a.apiKeyName || '门票 API'} 购买${a.apiOrderId ? `，订单号 ${a.apiOrderId}` : ''}。购票者在该应用中持有这些门票，因此无法在此重新签发或移除${a.apiSendEmail ? '。该订单要求同时从此处通过邮件发送门票。' : '，此处也不发送邮件。'}`}
                                     </p>
                                 )}
                                 {a.missingFromHometown && (
@@ -461,7 +461,7 @@ export function AttendeesSection({
                                         <button
                                             className="admin-toggle-btn admin-toggle-save"
                                             onClick={() => onResend(a)}
-                                            disabled={!a.email || a.hometown || a.apiOrder || a.tickets.every(t => t.voided)}
+                                            disabled={!a.email || ticketsSentElsewhere(a) || a.tickets.every(t => t.voided)}
                                         >
                                             {isEnglish ? 'Resend Email' : '重发邮件'}
                                         </button>
