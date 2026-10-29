@@ -75,7 +75,6 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
             createdByName: callerName,
             createdAt: Timestamp.now(),
             expiresAt,
-            revokedAt: null,
             lastUsedAt: null,
         };
         txn.create(apiKeysCol().doc(keyId), doc);
@@ -90,7 +89,7 @@ export const createApiKey = onCall({maxInstances: 10}, async (request) => {
     return {id: keyId, key, hint, expiresAt: expiresAt.toDate().toISOString()};
 });
 
-/** Every key, revoked ones too, newest first. Never the key itself, which isn't kept. */
+/** Every key, expired ones too, newest first. Never the key itself, which isn't kept. */
 export const listApiKeys = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     await requireAdmin(uid);
@@ -115,7 +114,10 @@ export const listApiKeys = onCall({maxInstances: 10}, async (request) => {
     return {keys, serverNow: new Date().toISOString()};
 });
 
-/** Stops a key working at once. There's no undoing it: make a new key instead. */
+/**
+ * Stops a key working at once and deletes it, so it leaves the list. Records
+ * keep its name and hint. Expired keys go the same way.
+ */
 export const revokeApiKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
     const input = request.data as {keyId?: unknown};
@@ -126,10 +128,9 @@ export const revokeApiKey = onCall({maxInstances: 10}, async (request) => {
         const snap = await txn.get(ref);
         if (!snap.exists) throw new HttpsError("not-found", "API key not found.");
         const data = snap.data() as ApiKeyDoc;
-        if (data.revokedAt) return {revoked: true};
 
         const callerName: string = callerSnap.data()?.displayName ?? "";
-        txn.update(ref, {revokedAt: Timestamp.now(), revokedBy: uid, revokedByName: callerName});
+        txn.delete(ref);
         txn.set(recordRef(), recordDoc("api-key-revoke", {
             performedBy: uid,
             performedByName: callerName,

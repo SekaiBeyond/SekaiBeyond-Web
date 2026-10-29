@@ -476,8 +476,8 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                 : <>创建了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>;
         case 'api-key-revoke':
             return isEnglish
-                ? <>revoked API key {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>
-                : <>吊销了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>;
+                ? <>revoked and deleted API key {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>
+                : <>吊销并删除了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span className="record-code">{r.apiKeyHint}</span></>}</>;
         case 'scheduled-mail-drain': {
             const sent = r.sentCount ?? 0;
             return isEnglish

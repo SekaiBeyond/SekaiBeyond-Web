@@ -29,7 +29,11 @@ export interface ApiKeyDoc {
     createdByName: string;
     createdAt: Timestamp;
     expiresAt: Timestamp;
-    revokedAt: Timestamp | null;
+    /**
+     * Revoking deletes a key, so these are only on keys revoked before it did.
+     * Such a key is refused like a deleted one, and listed until deleted.
+     */
+    revokedAt?: Timestamp | null;
     revokedBy?: string;
     revokedByName?: string;
     lastUsedAt: Timestamp | null;

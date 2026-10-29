@@ -13,6 +13,7 @@ The code is [`functions/src/functions/api.ts`](../functions/src/functions/api.ts
 Core-staff and above create keys in the admin panel under **Tools > API Keys**. The staff group can't see that tool, and the functions behind it (`createApiKey`, `listApiKeys`, `revokeApiKey`) refuse anyone below core-staff.
 
 - A key is shown once, when it's made. Only its SHA-256 is stored, in `apiKeys`, which no client can read (see [`firestore.rules`](../firestore.rules)). A lost key can't be recovered: revoke it and make a new one.
+- **Revoking a key deletes it.** It stops working at once and leaves the list, and Records keep its name and its first and last few characters. An expired key gets a Delete button to clear it from the list the same way.
 - Each key has **scopes**: `events:read`, `tickets:write`, `tickets:read`.
 - A key can be held to **specific events**, archived or not. By default it can use every event.
 - Every key **expires**, after one year by default and two years at most.
@@ -72,8 +73,7 @@ Branch on `code`. `message` is for people, and its wording may change. Each endp
 | Status | Code | When |
 |---|---|---|
 | 401 | `missing-api-key` | There's no `Authorization: Bearer` header. |
-| 401 | `invalid-api-key` | The key isn't one of ours. |
-| 401 | `api-key-revoked` | The key has been revoked. |
+| 401 | `invalid-api-key` | The key isn't one of ours, or has been revoked. |
 | 401 | `api-key-expired` | The key has expired. |
 | 403 | `missing-scope` | The key lacks the scope the endpoint needs. |
 | 404 | `not-found` | No such endpoint. |

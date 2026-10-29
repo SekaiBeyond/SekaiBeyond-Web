@@ -432,6 +432,7 @@ export interface ApiKeySummary {
     createdByName: string;
     createdAt: string | null;
     expiresAt: string | null;
+    /** Only on a key revoked before revoking deleted keys; it no longer works. */
     revokedAt: string | null;
     revokedByName: string;
     lastUsedAt: string | null;

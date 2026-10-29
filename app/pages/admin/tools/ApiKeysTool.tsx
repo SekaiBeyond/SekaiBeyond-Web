@@ -137,19 +137,29 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
         }
     };
 
-    const revokeKey = async (k: ApiKeySummary) => {
-        if (!confirm(isEnglish
-            ? `Revoke "${k.name}"? Anything using it stops working at once. This can't be undone.`
-            : `吊销"${k.name}"？所有使用此密钥的服务将立即失效，且无法撤销。`
+    // Revoking deletes the key. One that no longer works (expired, or revoked
+    // before revoking deleted) is only deleted.
+    const revokeKey = async (k: ApiKeySummary, active: boolean) => {
+        if (!confirm(active
+            ? (isEnglish
+                ? `Revoke "${k.name}"? Anything using it stops working at once, and the key is deleted. This can't be undone.`
+                : `吊销"${k.name}"？所有使用此密钥的服务将立即失效，密钥也将被删除，且无法撤销。`)
+            : (isEnglish
+                ? `Delete "${k.name}"? It no longer works, and it will be removed from this list.`
+                : `删除"${k.name}"？此密钥已失效，删除后将从列表中移除。`)
         )) return;
         setRevokingId(k.id);
         try {
             await callRevokeApiKey({keyId: k.id});
-            showToast(isEnglish ? 'API key revoked.' : 'API 密钥已吊销。', 'warning');
+            showToast(active
+                ? (isEnglish ? 'API key revoked and deleted.' : 'API 密钥已吊销并删除。')
+                : (isEnglish ? 'API key deleted.' : 'API 密钥已删除。'), 'warning');
             await load(false);
         } catch (err) {
             console.error('[ApiKeysTool] revoke', err);
-            showToast(isEnglish ? 'Failed to revoke API key.' : '吊销 API 密钥失败。', 'error');
+            showToast(active
+                ? (isEnglish ? 'Failed to revoke API key.' : '吊销 API 密钥失败。')
+                : (isEnglish ? 'Failed to delete API key.' : '删除 API 密钥失败。'), 'error');
         } finally {
             setRevokingId(null);
         }
@@ -334,18 +344,20 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                                                 ? (isEnglish ? 'Revoked' : '已吊销')
                                                 : (isEnglish ? 'Expired' : '已过期')}
                                     </span>
-                                    {status === 'active' && (
-                                        <button
-                                            className="admin-toggle-btn admin-toggle-revoke admin-btn-sm admin-api-key-revoke"
-                                            onClick={() => void revokeKey(k)}
-                                            disabled={revokingId === k.id}
-                                            type="button"
-                                        >
-                                            {revokingId === k.id
+                                    <button
+                                        className="admin-toggle-btn admin-toggle-revoke admin-btn-sm admin-api-key-revoke"
+                                        onClick={() => void revokeKey(k, status === 'active')}
+                                        disabled={revokingId === k.id}
+                                        type="button"
+                                    >
+                                        {status === 'active'
+                                            ? (revokingId === k.id
                                                 ? (isEnglish ? 'Revoking...' : '吊销中...')
-                                                : (isEnglish ? 'Revoke' : '吊销')}
-                                        </button>
-                                    )}
+                                                : (isEnglish ? 'Revoke' : '吊销'))
+                                            : (revokingId === k.id
+                                                ? (isEnglish ? 'Deleting...' : '删除中...')
+                                                : (isEnglish ? 'Delete' : '删除'))}
+                                    </button>
                                 </div>
                                 <div className="admin-api-key-tags">
                                     {k.scopes.map(scope => (

@@ -66,9 +66,9 @@ async function authenticate(header: string | undefined): Promise<ApiKey> {
         throw new ApiError(401, "missing-api-key", "Send the key as \"Authorization: Bearer <key>\".");
     }
     const snap = await apiKeysCol().doc(hashApiKey(match[1])).get();
-    if (!snap.exists) throw new ApiError(401, "invalid-api-key", "API key not recognised.");
-    const data = snap.data() as ApiKeyDoc;
-    if (data.revokedAt) throw new ApiError(401, "api-key-revoked", "This API key has been revoked.");
+    const data = snap.data() as ApiKeyDoc | undefined;
+    // Revoking deletes a key; one revoked before that is refused the same way.
+    if (!data || data.revokedAt) throw new ApiError(401, "invalid-api-key", "API key not recognised.");
     if (data.expiresAt.toMillis() <= Date.now()) {
         throw new ApiError(401, "api-key-expired", "This API key has expired.");
     }
