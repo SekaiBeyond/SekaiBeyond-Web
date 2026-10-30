@@ -484,6 +484,12 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
                     className="record-code">{r.apiKeyHint}</span></>}</>
                 : <>创建了 API 密钥 {r.apiKeyName}{r.apiKeyHint && <> <span
                     className="record-code">{r.apiKeyHint}</span></>}</>;
+        case 'api-key-rename':
+            return isEnglish
+                ? <>renamed API key {r.oldName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>} to {r.newName}</>
+                : <>将 API 密钥 {r.oldName}{r.apiKeyHint && <> <span
+                    className="record-code">{r.apiKeyHint}</span></>} 重命名为 {r.newName}</>;
         case 'api-key-revoke':
             return isEnglish
                 ? <>revoked and deleted API key {r.apiKeyName}{r.apiKeyHint && <> <span

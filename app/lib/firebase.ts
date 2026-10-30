@@ -447,6 +447,9 @@ export const callListApiKeys = () =>
     httpsCallable<Record<string, never>, {keys: ApiKeySummary[]; serverNow: string}>(
         getFunctions(), 'listApiKeys')({});
 
+export const callRenameApiKey = (data: {keyId: string; name: string}) =>
+    httpsCallable<typeof data, {name: string}>(getFunctions(), 'renameApiKey')(data);
+
 export const callRevokeApiKey = (data: {keyId: string}) =>
     httpsCallable<typeof data, {revoked: boolean}>(getFunctions(), 'revokeApiKey')(data);
 

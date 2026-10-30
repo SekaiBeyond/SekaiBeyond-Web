@@ -6,6 +6,7 @@ import {
     type ApiScope,
     callCreateApiKey,
     callListApiKeys,
+    callRenameApiKey,
     callRevokeApiKey,
     SELLER_ID_RE,
 } from '~/lib/firebase';
@@ -55,6 +56,10 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const [revokingId, setRevokingId] = useState<string | null>(null);
+    // One key renamed at a time, in place of its name.
+    const [renamingId, setRenamingId] = useState<string | null>(null);
+    const [renameDraft, setRenameDraft] = useState('');
+    const [savingRename, setSavingRename] = useState(false);
 
     const [showCreate, setShowCreate] = useState(false);
     const [name, setName] = useState('');
@@ -138,6 +143,32 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
         } catch {
             showToast(isEnglish ? 'Couldn\'t copy. Select the key and copy it by hand.' : '复制失败，请手动选择并复制密钥。',
                 'error');
+        }
+    };
+
+    const startRename = (k: ApiKeySummary) => {
+        setRenamingId(k.id);
+        setRenameDraft(k.name);
+    };
+
+    const saveRename = async (k: ApiKeySummary) => {
+        const newName = renameDraft.trim();
+        if (!newName) return;
+        if (newName === k.name) {
+            setRenamingId(null);
+            return;
+        }
+        setSavingRename(true);
+        try {
+            const res = await callRenameApiKey({keyId: k.id, name: newName});
+            setKeys(prev => prev?.map(p => p.id === k.id ? {...p, name: res.data.name} : p) ?? prev);
+            setRenamingId(null);
+            showToast(isEnglish ? 'API key renamed.' : 'API 密钥已重命名。', 'success');
+        } catch (err) {
+            console.error('[ApiKeysTool] rename', err);
+            showToast(isEnglish ? 'Failed to rename API key.' : '重命名 API 密钥失败。', 'error');
+        } finally {
+            setSavingRename(false);
         }
     };
 
@@ -366,11 +397,52 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                 <div className="admin-api-key-list">
                     {keys.map(k => {
                         const expired = isExpired(k, serverNow);
+                        const renaming = renamingId === k.id;
                         return (
                             <div key={k.id}
                                  className={`admin-api-key-card${expired ? ' admin-api-key-card--inactive' : ''}`}>
                                 <div className="admin-api-key-head">
-                                    <span className="admin-api-key-name">{k.name}</span>
+                                    {renaming ? (
+                                        <form
+                                            className="admin-api-key-rename"
+                                            onSubmit={e => {
+                                                e.preventDefault();
+                                                void saveRename(k);
+                                            }}
+                                        >
+                                            <input
+                                                className="admin-input admin-input--sm"
+                                                value={renameDraft}
+                                                onChange={e => setRenameDraft(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Escape' && !savingRename) setRenamingId(null);
+                                                }}
+                                                maxLength={60}
+                                                disabled={savingRename}
+                                                autoFocus
+                                                aria-label={isEnglish ? 'Key name' : '密钥名称'}
+                                            />
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-save admin-btn-sm"
+                                                disabled={savingRename || !renameDraft.trim()}
+                                                type="submit"
+                                            >
+                                                {savingRename
+                                                    ? (isEnglish ? 'Saving...' : '保存中...')
+                                                    : (isEnglish ? 'Save' : '保存')}
+                                            </button>
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-cancel admin-btn-sm"
+                                                onClick={() => setRenamingId(null)}
+                                                disabled={savingRename}
+                                                type="button"
+                                            >
+                                                {isEnglish ? 'Cancel' : '取消'}
+                                            </button>
+                                        </form>
+                                    ) : (
+                                        <span className="admin-api-key-name">{k.name}</span>
+                                    )}
                                     <code className="record-code">{k.hint}</code>
                                     <span
                                         className={`admin-tickets-tag ${expired ? 'admin-tickets-tag-unlinked' : 'admin-tickets-tag-fresh'}`}>
@@ -378,20 +450,32 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                                             ? (isEnglish ? 'Expired' : '已过期')
                                             : (isEnglish ? 'Active' : '有效')}
                                     </span>
-                                    <button
-                                        className="admin-toggle-btn admin-toggle-revoke admin-btn-sm admin-api-key-revoke"
-                                        onClick={() => void revokeKey(k, !expired)}
-                                        disabled={revokingId === k.id}
-                                        type="button"
-                                    >
-                                        {!expired
-                                            ? (revokingId === k.id
-                                                ? (isEnglish ? 'Revoking...' : '吊销中...')
-                                                : (isEnglish ? 'Revoke' : '吊销'))
-                                            : (revokingId === k.id
-                                                ? (isEnglish ? 'Deleting...' : '删除中...')
-                                                : (isEnglish ? 'Delete' : '删除'))}
-                                    </button>
+                                    {!renaming && (
+                                        <div className="admin-api-key-actions">
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-edit admin-btn-sm"
+                                                onClick={() => startRename(k)}
+                                                disabled={revokingId === k.id}
+                                                type="button"
+                                            >
+                                                {isEnglish ? 'Rename' : '重命名'}
+                                            </button>
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
+                                                onClick={() => void revokeKey(k, !expired)}
+                                                disabled={revokingId === k.id}
+                                                type="button"
+                                            >
+                                                {!expired
+                                                    ? (revokingId === k.id
+                                                        ? (isEnglish ? 'Revoking...' : '吊销中...')
+                                                        : (isEnglish ? 'Revoke' : '吊销'))
+                                                    : (revokingId === k.id
+                                                        ? (isEnglish ? 'Deleting...' : '删除中...')
+                                                        : (isEnglish ? 'Delete' : '删除'))}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="admin-api-key-tags">
                                     {k.scopes.map(scope => (

@@ -108,6 +108,7 @@ export type RecordType =
     | "config-update"
     | "con-content-update"
     | "api-key-create"
+    | "api-key-rename"
     | "api-key-revoke"
     | "scheduled-mail-drain";
 

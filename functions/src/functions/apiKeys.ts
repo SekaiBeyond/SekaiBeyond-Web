@@ -31,7 +31,7 @@ const isoOrNull = (t: unknown) => t instanceof Timestamp ? t.toDate().toISOStrin
  * only. The key is in the reply and nowhere else.
  *
  * Keys belong to the club, not to whoever made them, so one keeps working when
- * its maker steps down, and any core-staff can revoke it.
+ * its maker steps down, and any core-staff can rename or revoke it.
  */
 export const createApiKey = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -121,6 +121,39 @@ export const listApiKeys = onCall({maxInstances: 10}, async (request) => {
         };
     });
     return {keys, serverNow: new Date().toISOString()};
+});
+
+/**
+ * Renames a key. Any core-staff may rename any key, as with revoking. Orders
+ * and records already made keep the name they were made under.
+ */
+export const renameApiKey = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    const input = request.data as {keyId?: unknown; name?: unknown};
+    const keyId = validateDocId(input.keyId, "keyId");
+    const name = sanitizeDisplayText(validateStr(input.name, "name", API_KEY_NAME_MAX, true));
+    if (!name) throw new HttpsError("invalid-argument", "name is required.");
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const ref = apiKeysCol().doc(keyId);
+        const snap = await txn.get(ref);
+        if (!snap.exists) throw new HttpsError("not-found", "API key not found.");
+        const data = snap.data() as ApiKeyDoc;
+        const oldName = data.name ?? "";
+        if (oldName === name) return {name};
+
+        const callerName: string = callerSnap.data()?.displayName ?? "";
+        txn.update(ref, {name});
+        txn.set(recordRef(), recordDoc("api-key-rename", {
+            performedBy: uid,
+            performedByName: callerName,
+            apiKeyName: name,
+            apiKeyHint: data.hint ?? "",
+            oldName,
+            newName: name,
+        }));
+        return {name};
+    });
 });
 
 /**

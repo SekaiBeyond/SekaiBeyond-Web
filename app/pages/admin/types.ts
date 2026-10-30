@@ -122,7 +122,7 @@ export const RECORD_CATEGORIES = {
     },
     api: {
         en: 'API', zh: 'API',
-        types: ['api-key-create', 'api-key-revoke'],
+        types: ['api-key-create', 'api-key-rename', 'api-key-revoke'],
     },
 } as const satisfies Record<string, {en: string; zh: string; types: readonly string[]}>;
 

@@ -1841,8 +1841,23 @@
     overflow-wrap: anywhere;
 }
 
-.admin-api-key-revoke {
+.admin-api-key-actions {
+    display: flex;
+    gap: 6px;
     margin-left: auto;
+}
+
+/* In place of the name, taking the row's room so the name has space. */
+.admin-api-key-rename {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 260px;
+    min-width: 0;
+}
+
+.admin-api-key-rename .admin-input {
+    min-width: 0;
 }
 
 .admin-api-key-tags {
