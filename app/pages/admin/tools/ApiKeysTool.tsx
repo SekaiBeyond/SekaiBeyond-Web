@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FirebaseError } from 'firebase/app';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import {
     API_SCOPES,
@@ -42,8 +43,17 @@ const SCOPE_LABELS: Record<ApiScope, {en: string; zh: string; descEn: string; de
 const EXPIRY_OPTIONS = [30, 90, 365, 730];
 const DEFAULT_EXPIRY_DAYS = 365;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 const isExpired = (k: ApiKeySummary, now: number): boolean =>
     !!k.expiresAt && Date.parse(k.expiresAt) <= now;
+
+/** The expiry option a key was made with, or the default when it matches none. */
+const lifetimeOption = (k: ApiKeySummary): number => {
+    if (!k.createdAt || !k.expiresAt) return DEFAULT_EXPIRY_DAYS;
+    const days = Math.round((Date.parse(k.expiresAt) - Date.parse(k.createdAt)) / DAY_MS);
+    return EXPIRY_OPTIONS.includes(days) ? days : DEFAULT_EXPIRY_DAYS;
+};
 
 export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
     const {isEnglish} = useLanguage();
@@ -69,6 +79,9 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
     const [eventIds, setEventIds] = useState<string[]>([]);
     const [expiresInDays, setExpiresInDays] = useState(DEFAULT_EXPIRY_DAYS);
     const [creating, setCreating] = useState(false);
+    // The key the form was filled from by Re-create, if any.
+    const [recreating, setRecreating] = useState<ApiKeySummary | null>(null);
+    const formRef = useRef<HTMLDivElement>(null);
     // The new key, shown this once: only its hash is kept.
     const [created, setCreated] = useState<{name: string; key: string} | null>(null);
 
@@ -94,6 +107,11 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
         void load(false);
     }, []);
 
+    // The form sits above the list, so Re-create on a card further down brings it into view.
+    useEffect(() => {
+        if (recreating) formRef.current?.scrollIntoView({block: 'start', behavior: 'smooth'});
+    }, [recreating]);
+
     const resetForm = () => {
         setName('');
         setSeller('');
@@ -101,6 +119,20 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
         setAllEvents(true);
         setEventIds([]);
         setExpiresInDays(DEFAULT_EXPIRY_DAYS);
+        setRecreating(null);
+    };
+
+    // A key itself isn't kept, so re-creating one makes a new key with its
+    // settings. The same seller ID lets the new key find the old one's orders.
+    const startRecreate = (k: ApiKeySummary) => {
+        setName(k.name);
+        setSeller(k.seller);
+        setScopes(API_SCOPES.filter(s => k.scopes.includes(s)));
+        setAllEvents(k.eventIds.length === 0);
+        setEventIds(k.eventIds);
+        setExpiresInDays(lifetimeOption(k));
+        setRecreating(k);
+        setShowCreate(true);
     };
 
     const toggleScope = (scope: ApiScope) =>
@@ -129,7 +161,11 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
             void load(false);
         } catch (err) {
             console.error('[ApiKeysTool] create', err);
-            showToast(isEnglish ? 'Failed to create API key.' : '创建 API 密钥失败。', 'error');
+            // Only an event that's gone answers not-found, most likely one a re-created key held.
+            const missingEvent = err instanceof FirebaseError && err.code === 'functions/not-found';
+            showToast(missingEvent
+                ? (isEnglish ? 'One of the events no longer exists. Untick it and try again.' : '其中一个活动已不存在，请取消勾选后重试。')
+                : (isEnglish ? 'Failed to create API key.' : '创建 API 密钥失败。'), 'error');
         } finally {
             setCreating(false);
         }
@@ -214,6 +250,12 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
         const event = upcomingEvents.find(e => e.id === eventId) ?? pastEvents.find(e => e.id === eventId);
         return event ? localized(isEnglish, event.title, event.titleCn) : eventId;
     };
+    // Upcoming events, then any a re-created key was held to that aren't
+    // (archived since, or deleted), so they show and can be unticked.
+    const pickableEventIds = [
+        ...upcomingEvents.map(e => e.id),
+        ...(recreating?.eventIds ?? []).filter(id => !upcomingEvents.some(e => e.id === id)),
+    ];
 
     return (
         <div className="admin-section">
@@ -266,11 +308,14 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                 </div>
             )}
 
+            <div ref={formRef}/>
             <CreateSection
                 show={showCreate}
                 setShow={setShowCreate}
                 newLabel={isEnglish ? '+ New API Key' : '+ 新建 API 密钥'}
-                title={isEnglish ? 'Create API Key' : '创建 API 密钥'}
+                title={recreating
+                    ? (isEnglish ? 'Re-create API Key' : '重新创建 API 密钥')
+                    : (isEnglish ? 'Create API Key' : '创建 API 密钥')}
                 ctaLabel={isEnglish ? 'Create Key' : '创建密钥'}
                 ctaBusyLabel={isEnglish ? 'Creating...' : '创建中...'}
                 busy={creating}
@@ -279,6 +324,25 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                 onCancel={resetForm}
             >
                 <div className="admin-api-key-form">
+                    {recreating && (
+                        <p className="admin-helper-text">
+                            {isEnglish
+                                ? <>Filled in from <strong>{recreating.name}</strong>{' '}
+                                    <code className="record-code">{recreating.hint}</code>. A key can't be shown
+                                    again, so this makes a new one.{' '}
+                                    {isExpired(recreating, serverNow)
+                                        ? 'Delete the expired one once the new key is in place.'
+                                        : 'The old one keeps working until you revoke it, so swap the new key in first.'}
+                                    {!recreating.seller && ' The old key has no seller ID, so the new one won\'t find orders it placed.'}</>
+                                : <>已从 <strong>{recreating.name}</strong>{' '}
+                                    <code className="record-code">{recreating.hint}</code> 填入设置。密钥无法再次显示，因此将创建一个新密钥。
+                                    {isExpired(recreating, serverNow)
+                                        ? '新密钥启用后，可删除已过期的旧密钥。'
+                                        : '旧密钥在吊销前仍然有效，请先换上新密钥。'}
+                                    {!recreating.seller && '旧密钥没有卖家 ID，新密钥将查不到它此前的订单。'}</>}
+                        </p>
+                    )}
+
                     <label className="admin-tickets-template-field">
                         <span>{isEnglish ? 'Name' : '名称'}</span>
                         <input
@@ -343,17 +407,17 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                             <span>{isEnglish ? 'Only these events' : '仅限以下活动'}</span>
                         </label>
                         {!allEvents && (
-                            upcomingEvents.length === 0 ? (
+                            pickableEventIds.length === 0 ? (
                                 <p className="admin-helper-text">
                                     {isEnglish ? 'There are no upcoming events yet.' : '暂无即将举行的活动。'}
                                 </p>
                             ) : (
                                 <div className="admin-api-key-events">
-                                    {upcomingEvents.map(e => (
-                                        <label key={e.id} className="admin-checkbox-label">
-                                            <input type="checkbox" checked={eventIds.includes(e.id)}
-                                                   onChange={() => toggleEvent(e.id)}/>
-                                            <span>{eventTitle(e.id)}</span>
+                                    {pickableEventIds.map(id => (
+                                        <label key={id} className="admin-checkbox-label">
+                                            <input type="checkbox" checked={eventIds.includes(id)}
+                                                   onChange={() => toggleEvent(id)}/>
+                                            <span>{eventTitle(id)}</span>
                                         </label>
                                     ))}
                                 </div>
@@ -459,6 +523,14 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                                                 type="button"
                                             >
                                                 {isEnglish ? 'Rename' : '重命名'}
+                                            </button>
+                                            <button
+                                                className="admin-toggle-btn admin-toggle-grant admin-btn-sm"
+                                                onClick={() => startRecreate(k)}
+                                                disabled={revokingId === k.id || creating}
+                                                type="button"
+                                            >
+                                                {isEnglish ? 'Re-create' : '重新创建'}
                                             </button>
                                             <button
                                                 className="admin-toggle-btn admin-toggle-revoke admin-btn-sm"
