@@ -1,5 +1,6 @@
 import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { claimAccountEmail, verifiedEmail } from "../utils/accountEmail";
 import { requireAuth } from "../utils/auth";
 import { db } from "../utils/firebase";
 import { describeUserAgent, SESSION_ID_RE, sessionIdOf, sessionRef, sessionsRef } from "../utils/sessions";
@@ -18,11 +19,16 @@ async function requireSession(request: CallableRequest): Promise<{uid: string; s
  * has loaded and every so often while open. Nothing is written for an account
  * whose user doc is gone, so a deleted account's last token can't leave a
  * session behind.
+ *
+ * Also brings the account's email up to date when its Google account's has
+ * changed, taking the address off any other account (see
+ * utils/accountEmail.ts).
  */
 export const touchSession = onCall({maxInstances: 20}, async (request) => {
     const {uid, sessionId} = await requireSession(request);
     const device = describeUserAgent(request.rawRequest?.headers?.["user-agent"]);
     const ref = sessionRef(uid, sessionId);
+    const email = verifiedEmail(request.auth!.token);
 
     const registered = await db.runTransaction(async (txn) => {
         const [userSnap, snap] = await Promise.all([
@@ -33,6 +39,11 @@ export const touchSession = onCall({maxInstances: 20}, async (request) => {
         // Signed out between requireAuth and here: endedAt must not be undone.
         if (snap.data()?.endedAt) {
             throw new HttpsError("unauthenticated", "This device has been signed out.", {code: "session-ended"});
+        }
+        if (email && userSnap.get("email") !== email) {
+            const releaseOthers = await claimAccountEmail(txn, uid, email);
+            releaseOthers(userSnap.get("displayName") ?? "");
+            txn.update(userSnap.ref, {email});
         }
         txn.set(ref, {
             ...device,

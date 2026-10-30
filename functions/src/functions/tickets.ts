@@ -31,11 +31,13 @@ import {
     validateOptionalEmail,
     validateStr,
 } from "../utils/validation";
+import { accountByEmail, verifiedEmail } from "../utils/accountEmail";
 import { contactEmailFor, EMAIL_HTML_SANITIZE_OPTIONS, readSavedTemplate } from "../utils/emailTemplate";
 import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
 import { recordDoc, type RecordFields, recordRef, type RecordType } from "../utils/records";
 import {
     buildFreshTickets,
+    creditedEmail,
     freshTicket,
     hometownAttendeeId,
     isApiOrder,
@@ -85,7 +87,7 @@ function worksEvent(caller: FirebaseFirestore.DocumentData, eventId: string): bo
 }
 
 /**
- * Credits the account registered to `email`, if any, with attending
+ * Credits the one account registered to `email`, if any, with attending
  * `eventId`, as a scan does. Reads before it writes, so it goes before the
  * caller's own writes. Whether there was an account.
  */
@@ -94,10 +96,8 @@ async function creditAccountAttendance(
     email: string,
     eventId: string,
 ): Promise<boolean> {
-    if (!email) return false;
-    const users = await txn.get(db.collection("users").where("email", "==", email).limit(1));
-    if (users.empty) return false;
-    const account = users.docs[0];
+    const account = await accountByEmail(email, txn);
+    if (!account) return false;
     const attended: string[] = account.data().attendedEvents ?? [];
     if (!attended.includes(eventId)) {
         txn.update(account.ref, {attendedEvents: FieldValue.arrayUnion(eventId)});
@@ -824,7 +824,9 @@ interface HeldTicket {
 }
 
 /**
- * Every ticket the caller holds for an event that hasn't ended yet.
+ * Every ticket the caller holds for an event that hasn't ended yet. Not an
+ * order bought in a seller's app, which its buyer holds there whatever email
+ * it went to (see creditedEmail).
  *
  * Attendee docs are keyed by purchase email and closed to everyone but staff, so
  * this is the only way holders reach their tickets. The email comes from the ID
@@ -840,8 +842,8 @@ interface HeldTicket {
  */
 export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
-    const email = (request.auth?.token.email ?? "").trim().toLowerCase();
-    if (!email || request.auth?.token.email_verified !== true) return {events: []};
+    const email = verifiedEmail(request.auth!.token);
+    if (!email) return {events: []};
 
     // endAt alone stays on the automatic single-field index; there are only a
     // handful of live events to filter in memory.
@@ -860,6 +862,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
         // One doc per HomeTown ticket, or per imported email.
         const tickets: HeldTicket[] = [];
         for (const doc of attendeeSnap.docs) {
+            if (isApiOrder(doc.data())) continue;
             const rawTickets: unknown[] = Array.isArray(doc.data().tickets) ? doc.data().tickets : [];
             for (const raw of rawTickets) {
                 const ticket = raw as Partial<NewTicket>;
@@ -923,8 +926,9 @@ const ACCOUNT_LOOKUP_MAX = 500;
  * Which of these ticket emails belong to a registered account, for staff adding
  * an attendee or reading the list.
  *
- * It uses the scanner's exact query, a match on the lowercased address (see
- * redeemTicket), so staff see what check-in will actually find.
+ * It matches as the scanner does, on the lowercased address, and leaves out an
+ * address more than one account holds, which check-in credits to neither (see
+ * utils/accountEmail.ts), so staff see what check-in will actually find.
  *
  * Staff and above get who the account is; event staff only get whether there is
  * one.
@@ -968,16 +972,19 @@ export const getAttendeeAccounts = onCall({maxInstances: 10}, async (request) =>
         db.collection("users").where("email", "in", chunk).get()
     ));
 
+    const holders = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
+    for (const doc of snaps.flatMap(snap => snap.docs)) {
+        const email = doc.get("email");
+        if (typeof email !== "string") continue;
+        holders.set(email, [...holders.get(email) ?? [], doc]);
+    }
+
     const accounts: {email: string; uid?: string; displayName?: string}[] = [];
-    for (const snap of snaps) {
-        for (const doc of snap.docs) {
-            const data = doc.data();
-            if (typeof data.email !== "string") continue;
-            const email = data.email.trim().toLowerCase();
-            accounts.push(namesAccounts
-                ? {email, uid: doc.id, displayName: data.displayName ?? ""}
-                : {email});
-        }
+    for (const [email, docs] of holders) {
+        if (docs.length !== 1) continue;
+        accounts.push(namesAccounts
+            ? {email, uid: docs[0].id, displayName: docs[0].get("displayName") ?? ""}
+            : {email});
     }
 
     return {accounts};
@@ -1161,8 +1168,9 @@ export const redeemTicket = onCall({maxInstances: 20}, async (request) => {
         // ticket reset or unvoided after it went off has still never been listed.
         if (source.unlisted) await refuseUnlisted();
 
-        // Try to link to a registered user by email; a walk-in may have none.
-        const userCheckedIn = await creditAccountAttendance(txn, attendeeEmail, eventId);
+        // Try to link to a registered user by email; a walk-in may have none,
+        // and an app order never does (see creditedEmail).
+        const userCheckedIn = await creditAccountAttendance(txn, creditedEmail(attendeeData), eventId);
         tickets[idx] = admitted(ticket, {uid, name: callerName}, now, userCheckedIn);
 
         txn.update(attendeeDoc.ref, {
@@ -1293,7 +1301,7 @@ export const adminRedeemTicket = onCall({maxInstances: 10}, async (request) => {
 
             // A check-in by hand credits the account exactly as the scanner does
             // (see redeemTicket).
-            const userCheckedIn = await creditAccountAttendance(txn, data.email ?? "", target.eventId);
+            const userCheckedIn = await creditAccountAttendance(txn, creditedEmail(data), target.eventId);
             return {
                 ticket: admitted(ticket, {uid, name: callerName}, Timestamp.now(), userCheckedIn),
                 reply: {redeemed: true},

@@ -177,6 +177,11 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>removed {target}'s profile banner</>
                 : <>删除了 {target} 的主页横幅</>;
+        case 'account-email-release':
+            return isEnglish
+                ? <>signed in with {r.targetEmail}, taking it off {target}'s account, whose Google account no longer
+                    uses it</>
+                : <>以 {r.targetEmail} 登录，该邮箱已从 {target} 的账号中移除（其 Google 账号已不再使用此邮箱）</>;
         case 'code-create':
             if (r.eventId) {
                 return isEnglish

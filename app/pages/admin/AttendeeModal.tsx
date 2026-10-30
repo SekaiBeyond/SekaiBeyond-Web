@@ -67,7 +67,9 @@ export function AttendeeModal({
     // Left blank over differing notes, each ticket keeps its own.
     const notesChanged = !!attendee && (originalNotes === null ? trimmedNotes !== '' : trimmedNotes !== originalNotes);
 
-    const [lookupEmail, setLookupEmail] = useState(attendee?.email.trim().toLowerCase() ?? '');
+    // An app order is never credited to an account (see apiLocked), so it isn't looked up.
+    const [lookupEmail, setLookupEmail] = useState(
+        attendee && !attendee.apiOrder ? attendee.email.trim().toLowerCase() : '');
     useEffect(() => {
         if (attendee) return;
         if (!emailValid) {
@@ -285,7 +287,7 @@ export function AttendeeModal({
                                 : '不填写邮箱则不会发送门票，也不会计入任何账户。'}
                         </span>
                     )}
-                    {emailValid && (
+                    {emailValid && !apiLocked && (
                         <span className={`admin-helper-text admin-tickets-account-note${
                             account ? ' admin-tickets-account-note--linked' : ''}`}>
                             {accountLookupFailed
@@ -441,8 +443,8 @@ export function AttendeeModal({
                 {apiLocked && (
                     <p className="admin-helper-text">
                         {isEnglish
-                            ? `Sold through ${attendee?.apiKeyName || 'the ticket API'}: the buyer holds these tickets in that app, so they can't be re-issued. Change a ticket's type from the ticket list.`
-                            : `通过 ${attendee?.apiKeyName || '门票 API'} 售出：购票者在该应用中持有这些门票，因此无法重新签发。可在门票列表中修改单张门票的类型。`}
+                            ? `Sold through ${attendee?.apiKeyName || 'the ticket API'}: the buyer holds these tickets in that app, so they can't be re-issued, and no account is credited with them whatever the email. Change a ticket's type from the ticket list.`
+                            : `通过 ${attendee?.apiKeyName || '门票 API'} 售出：购票者在该应用中持有这些门票，因此无法重新签发，且无论邮箱是什么都不会计入任何账户。可在门票列表中修改单张门票的类型。`}
                     </p>
                 )}
 
