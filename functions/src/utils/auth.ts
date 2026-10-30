@@ -1,6 +1,8 @@
 import { type CallableRequest, HttpsError } from "firebase-functions/v2/https";
+import type { DecodedIdToken } from "firebase-admin/auth";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "./firebase";
+import { sessionIdOf, sessionRef } from "./sessions";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
@@ -104,8 +106,22 @@ export async function requireAuth(request: CallableRequest<unknown>, bucket?: Ra
         throw new HttpsError("unauthenticated", "Must be signed in.");
     }
     const uid = request.auth.uid;
-    await checkRateLimit(uid, bucket);
+    await Promise.all([checkRateLimit(uid, bucket), requireLiveSession(uid, request.auth.token)]);
     return uid;
+}
+
+/**
+ * Refuses a call from a device signed out from the device list, whose token
+ * still works with Firebase Auth. A sign-in with no session doc yet passes:
+ * the device registers itself once it has loaded (touchSession).
+ */
+async function requireLiveSession(uid: string, token: DecodedIdToken): Promise<void> {
+    const sessionId = sessionIdOf(token);
+    if (!sessionId) return;
+    const snap = await sessionRef(uid, sessionId).get();
+    if (snap.data()?.endedAt) {
+        throw new HttpsError("unauthenticated", "This device has been signed out.", {code: "session-ended"});
+    }
 }
 
 export async function requireAdmin(uid: string): Promise<FirebaseFirestore.DocumentSnapshot> {

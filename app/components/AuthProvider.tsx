@@ -1,10 +1,11 @@
-import { createContext, type FC, type ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, type FC, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, type DocumentData, getDoc, Timestamp } from 'firebase/firestore';
 import {
     callCreateUserProfile,
     callDeleteAvatar,
     callDeleteBanner,
+    callEndOwnSession,
     callUpdateDisplayName,
     callUploadAvatar,
     callUploadBanner,
@@ -15,6 +16,7 @@ import {
 } from '~/lib/firebase';
 import { toDate } from '~/lib/collectionCache';
 import { type ProfileVisibility, readVisibility } from '~/lib/privacy';
+import { currentSessionId, watchOwnSession } from '~/lib/sessions';
 
 // `group` is a role ladder only; membership lives in membershipExpiresAt.
 export type UserGroup = 'user' | 'staff' | 'core-staff' | 'president';
@@ -142,6 +144,8 @@ interface AuthContextType {
     /** True once Firebase Auth resolves, before the Firestore profile finishes loading. */
     authReady: boolean;
     cachedPhotoURL: string;
+    /** This device's row in the device list, once known. */
+    sessionId: string | null;
     signIn: () => Promise<void>;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
@@ -200,6 +204,8 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
     const [loading, setLoading] = useState(true);
     const [authReady, setAuthReady] = useState(false);
     const [cachedPhotoURL, setCachedPhotoURL] = useState('');
+    const [sessionId, setSessionId] = useState<string | null>(null);
+    const stopWatchingSession = useRef<(() => void) | null>(null);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(getFirebaseAuth(), async (firebaseUser) => {
@@ -239,11 +245,38 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         return () => unsubscribe();
     }, []);
 
+    // Waits for the profile, so a new account's user doc is there for
+    // touchSession to find.
+    const hasProfile = !!profile;
+    useEffect(() => {
+        if (!user || !hasProfile) {
+            setSessionId(null);
+            return;
+        }
+        let stale = false;
+        void currentSessionId(user).then(id => {
+            if (stale || !id) return;
+            setSessionId(id);
+            stopWatchingSession.current = watchOwnSession(user.uid, id, () => void firebaseSignOut());
+        });
+        return () => {
+            stale = true;
+            stopWatchingSession.current?.();
+            stopWatchingSession.current = null;
+        };
+    }, [user, hasProfile]);
+
     const signIn = async () => {
         await firebaseSignIn();
     };
 
     const signOut = async () => {
+        // Stops watching first, or the removed row would be put back. Signing
+        // out goes ahead if the call fails, leaving the row to sign out from
+        // another device.
+        stopWatchingSession.current?.();
+        await callEndOwnSession().catch(() => {
+        });
         await firebaseSignOut();
         setProfile(null);
     };
@@ -299,6 +332,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({children}) => {
         loading,
         authReady,
         cachedPhotoURL,
+        sessionId,
         signIn,
         signOut,
         refreshProfile,

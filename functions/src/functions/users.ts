@@ -22,6 +22,7 @@ import { decodeUpload, detectImageMime, MAX_UPLOAD_SIZE_MB, saveUpload, STORAGE_
 import { sanitizeDisplayText, validateBoolean, validateDocId, validateInstant } from "../utils/validation";
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
+import { sessionsRef } from "../utils/sessions";
 import { isScannedTicket } from "../utils/tickets";
 
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
@@ -738,6 +739,12 @@ export const onUserDeleted = onDocumentDeleted(
             } catch (err) {
                 console.error(`onUserDeleted: ${path} delete failed`, err);
             }
+        }
+
+        try {
+            await db.recursiveDelete(sessionsRef(uid));
+        } catch (err) {
+            console.error(`onUserDeleted: sessions delete failed for ${uid}`, err);
         }
 
         try {

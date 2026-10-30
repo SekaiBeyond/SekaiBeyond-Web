@@ -4,6 +4,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { callSetPassportPrivacy, callSetProfileVisibility } from '~/lib/firebase';
 import { PRIVACY_ROWS, type PrivacyKey, privacyRow, privacyStateLabel, readVisibility, } from '~/lib/privacy';
 import type { ShowToast } from '~/lib/useToasts';
+import { ProfileDevicesSection } from '~/pages/ProfileDevicesSection';
 
 /**
  * Every privacy switch, saved one at a time so a second open tab can't undo a
@@ -74,12 +75,19 @@ const PrivacySwitch = ({checked, busy, label, onChange}: {
 );
 
 /**
- * /profile's Settings tab: what other people are shown. Every switch is enforced
- * server-side (getPublicProfile leaves hidden sections out;
- * getPassportPublicProfile refuses a private passport page). Only the card; the
- * profile page owns the nav, sign-in wall and toasts.
+ * /profile's Settings tab: what other people are shown, then the devices signed
+ * in. Every switch is enforced server-side (getPublicProfile leaves hidden
+ * sections out; getPassportPublicProfile refuses a private passport page). Only
+ * the cards; the profile page owns the nav, sign-in wall and toasts.
  */
-export const ProfileSettingsTab = ({showToast}: {showToast: ShowToast}) => {
+export const ProfileSettingsTab = ({showToast}: {showToast: ShowToast}) => (
+    <>
+        <PrivacySection showToast={showToast}/>
+        <ProfileDevicesSection showToast={showToast}/>
+    </>
+);
+
+const PrivacySection = ({showToast}: {showToast: ShowToast}) => {
     const {isEnglish} = useLanguage();
     const {values, saving, setVisible} = usePrivacySettings(showToast);
 

@@ -35,6 +35,14 @@ service cloud.firestore {
 
             // All user mutations (displayName, photoURL, bannerURL, badges, attendedEvents, group,
             // membershipExpiresAt, membershipStartedAt) via Cloud Functions
+
+            // The devices signed in to this account. Only the owner reads them:
+            // the Settings tab lists them, and each device watches its own so it
+            // signs out when ended from another. Writes via Cloud Functions
+            // (touchSession, endSession, endOtherSessions) only.
+            match /sessions/{sessionId} {
+                allow read: if request.auth != null && request.auth.uid == userId;
+            }
         }
 
         // Activity records — staff+ can read only; all writes via Cloud Functions

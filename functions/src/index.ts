@@ -5,6 +5,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 setGlobalOptions({enforceAppCheck: process.env.FUNCTIONS_EMULATOR !== "true"});
 
 export * from "./functions/users";
+export * from "./functions/sessions";
 export * from "./functions/events";
 export * from "./functions/badges";
 export * from "./functions/codes";

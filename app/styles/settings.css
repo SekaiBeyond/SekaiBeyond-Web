@@ -115,6 +115,25 @@
     transform: translateX(22px);
 }
 
+/* A signed-in device: its icon, what it is, and a sign-out button. */
+.settings-row--device {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.settings-device-signout:disabled {
+    cursor: progress;
+    opacity: 0.6;
+    transform: none;
+}
+
+.settings-devices-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 107, 157, 0.12);
+}
+
 @media (max-width: 640px) {
     .settings-section {
         padding: 22px 18px;
@@ -123,6 +142,22 @@
 
     .settings-row {
         gap: 12px;
+    }
+}
+
+@media (max-width: 600px) {
+    /* The button drops under the words, lined up with them. */
+    .settings-row--device {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .settings-row--device .settings-device-signout {
+        grid-column: 2;
+        justify-self: start;
+    }
+
+    .settings-devices-footer {
+        justify-content: flex-start;
     }
 }
 

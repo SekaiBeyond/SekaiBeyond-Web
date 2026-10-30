@@ -114,6 +114,27 @@ function getFunctions() {
 export const callCreateUserProfile = () =>
     httpsCallable<Record<string, never>, {alreadyExists: boolean}>(getFunctions(), 'createUserProfile')({});
 
+export const callTouchSession = () =>
+    httpsCallable<Record<string, never>, {registered: boolean}>(getFunctions(), 'touchSession')({});
+
+export const callEndSession = (data: {sessionId: string}) =>
+    httpsCallable<typeof data, {ended: boolean}>(getFunctions(), 'endSession')(data);
+
+/**
+ * How long signing out waits to take this device off the device list. A call
+ * that runs out still lands, as the request has already gone.
+ */
+const END_OWN_SESSION_TIMEOUT_MS = 4_000;
+
+/** Takes this device off the device list, as signing out does. */
+export const callEndOwnSession = () =>
+    httpsCallable<Record<string, never>, {ended: boolean}>(getFunctions(), 'endSession', {
+        timeout: END_OWN_SESSION_TIMEOUT_MS,
+    })({});
+
+export const callEndOtherSessions = () =>
+    httpsCallable<Record<string, never>, {ended: number}>(getFunctions(), 'endOtherSessions')({});
+
 export const callClaimEventCode = (data: {code: string}) =>
     httpsCallable<typeof data, {
         eventId: string;
