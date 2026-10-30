@@ -104,6 +104,7 @@ export type RecordType =
     | "avatar-set"
     | "avatar-remove"
     | "banner-remove"
+    | "account-email-release"
     | "policy-update"
     | "config-update"
     | "con-content-update"

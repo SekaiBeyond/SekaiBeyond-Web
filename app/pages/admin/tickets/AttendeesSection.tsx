@@ -260,8 +260,9 @@ export function AttendeesSection({
             {attendees.map((a) => {
                 const {used, voided, remaining} = ticketStatusCounts(a);
                 const isExpanded = expanded.has(a.id);
-                // undefined while asking; null for no account.
-                const account = accountLinks.get(a.email.toLowerCase());
+                // undefined while asking; null for no account, as an app order
+                // always has whatever its email.
+                const account = a.apiOrder ? null : accountLinks.get(a.email.toLowerCase());
                 // Nothing to send without an address, HomeTown and the seller's app
                 // send their own, and a walk-in already in at the door is owed nothing.
                 const emailState = !a.email || ticketsSentElsewhere(a) ? null
@@ -371,7 +372,7 @@ export function AttendeesSection({
                                                     : (isEnglish ? 'Unsent' : '未发送')}
                                     </span>
                                 )}
-                                {account !== undefined && (
+                                {account !== undefined && !a.apiOrder && (
                                     <span className={account
                                         ? 'admin-tickets-tag admin-tickets-tag-linked'
                                         : 'admin-tickets-tag admin-tickets-tag-unlinked'}>
@@ -424,23 +425,27 @@ export function AttendeesSection({
                                     </p>
                                 )}
                                 <p className="admin-helper-text admin-tickets-attendee-account">
-                                    {!a.email
-                                        ? a.hometown
-                                            ? (isEnglish
-                                                ? 'No email, so no account is credited.'
-                                                : '未填写邮箱，因此不会计入任何账户。')
-                                            : (isEnglish
-                                                ? 'No email, so no tickets can be sent and no account is credited.'
-                                                : '未填写邮箱，因此无法发送门票，也不会计入任何账户。')
-                                        : account === undefined
-                                            ? (isEnglish ? 'Checking for an account…' : '正在查询账户…')
-                                            : account
+                                    {a.apiOrder
+                                        ? (isEnglish
+                                            ? `Sold through ${a.apiKeyName || 'the ticket API'}: the buyer holds these tickets in that app, so no account is credited, whatever the email.`
+                                            : `通过 ${a.apiKeyName || '门票 API'} 售出：购票者在该应用中持有这些门票，因此无论邮箱是什么，都不会计入任何账户。`)
+                                        : !a.email
+                                            ? a.hometown
                                                 ? (isEnglish
-                                                    ? 'Scanning a ticket will mark this event attended on '
-                                                    : '扫描门票时，将在以下账户标记参加本活动：')
+                                                    ? 'No email, so no account is credited.'
+                                                    : '未填写邮箱，因此不会计入任何账户。')
                                                 : (isEnglish
-                                                    ? 'No account uses this email yet. Tickets still work — attendance is credited if they sign up with it later.'
-                                                    : '暂无账户使用该邮箱。门票照常可用 — 若其日后以该邮箱注册，参加记录会被补上。')}
+                                                    ? 'No email, so no tickets can be sent and no account is credited.'
+                                                    : '未填写邮箱，因此无法发送门票，也不会计入任何账户。')
+                                            : account === undefined
+                                                ? (isEnglish ? 'Checking for an account…' : '正在查询账户…')
+                                                : account
+                                                    ? (isEnglish
+                                                        ? 'Scanning a ticket will mark this event attended on '
+                                                        : '扫描门票时，将在以下账户标记参加本活动：')
+                                                    : (isEnglish
+                                                        ? 'No account uses this email yet. Tickets still work — attendance is credited if they sign up with it later.'
+                                                        : '暂无账户使用该邮箱。门票照常可用 — 若其日后以该邮箱注册，参加记录会被补上。')}
                                     {account && (account.uid
                                         ? (
                                             <a

@@ -111,8 +111,17 @@ export function apiOrderAttendeeId(seller: string, orderId: string): string {
  * An order a seller placed through the API. Its buyer holds these exact ticket
  * IDs in the seller's app, so like a HomeTown ticket it's never re-issued,
  * replaced by an import or removed, nor emailed from here unless the order
- * asked for that (apiSendEmail).
+ * asked for that (apiSendEmail), nor credited to an account (creditedEmail).
  */
 export function isApiOrder(data: {source?: unknown} | undefined): boolean {
     return data?.source === "api";
+}
+
+/**
+ * The address that finds the account an attendee's tickets count toward, at
+ * check-in, in My Tickets and at sign-up. None for an API order: its buyer is
+ * the seller's app user, and its email only says where the tickets were sent.
+ */
+export function creditedEmail(data: {source?: unknown; email?: unknown} | undefined): string {
+    return !isApiOrder(data) && typeof data?.email === "string" ? data.email : "";
 }

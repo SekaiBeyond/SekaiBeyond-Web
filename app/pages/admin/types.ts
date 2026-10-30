@@ -110,7 +110,7 @@ export const RECORD_CATEGORIES = {
     account: {
         en: 'Account', zh: '账号',
         types: ['account-deletion-requested', 'account-deletion-cancelled', 'account-deleted',
-            'name-set', 'avatar-set', 'avatar-remove', 'banner-remove'],
+            'name-set', 'avatar-set', 'avatar-remove', 'banner-remove', 'account-email-release'],
     },
     config: {
         en: 'Config', zh: '配置',

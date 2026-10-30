@@ -242,7 +242,8 @@ export function TicketsSubtab({
         return filteredAttendees.slice(0, displayCount);
     }, [filteredAttendees, displayCount]);
 
-    const attendeeEmails = useMemo(() => attendees.map(a => a.email), [attendees]);
+    // An app order is never credited to an account, so there's none to look up.
+    const attendeeEmails = useMemo(() => attendees.filter(a => !a.apiOrder).map(a => a.email), [attendees]);
     const {links: accountLinks} = useAccountLinks(eventId, attendeeEmails);
 
     const updateAttendee = (attendeeId: string, changes: Partial<AttendeeData>) => {

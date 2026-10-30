@@ -13,6 +13,7 @@ import {
     requireAuth,
     requireCanManage,
 } from "../utils/auth";
+import { claimAccountEmail, normalizeEmail, verifiedEmail } from "../utils/accountEmail";
 import { deletionExpiresAt } from "../utils/config";
 import { deletionPending } from "../utils/deletion";
 import { extendedExpiry, isMembershipActive, MAX_GRANT_DAYS, startedAtAfter } from "../utils/membership";
@@ -23,7 +24,7 @@ import { sanitizeDisplayText, validateBoolean, validateDocId, validateInstant } 
 import { parseVisibilityInput, readVisibility } from "../utils/visibility";
 import { recordDoc, recordRef } from "../utils/records";
 import { sessionsRef } from "../utils/sessions";
-import { isScannedTicket } from "../utils/tickets";
+import { isApiOrder, isScannedTicket } from "../utils/tickets";
 
 export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     const uid = await requireAuth(request);
@@ -43,7 +44,8 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
     const userRef = db.collection("users").doc(uid);
 
     const rawName = request.auth!.token.name ?? "";
-    const email = request.auth!.token.email ?? "";
+    const email = normalizeEmail(request.auth!.token.email ?? "");
+    const verified = verifiedEmail(request.auth!.token);
     const photoURL = request.auth!.token.picture ?? "";
 
     const displayName = sanitizeDisplayText(typeof rawName === "string" ? rawName : "").slice(0, 50);
@@ -56,6 +58,10 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
             alreadyExists = true;
             return;
         }
+        // The address is this account's now, off any other still holding it:
+        // Auth signs in one account per address (see utils/accountEmail.ts).
+        const releaseOthers = verified ? await claimAccountEmail(txn, uid, verified) : null;
+        releaseOthers?.(displayName);
         txn.set(userRef, {
             displayName,
             email,
@@ -68,9 +74,9 @@ export const createUserProfile = onCall({maxInstances: 20}, async (request) => {
         });
     });
 
-    if (!alreadyExists && email && request.auth!.token.email_verified === true) {
+    if (!alreadyExists && verified) {
         try {
-            await creditScannedTickets(userRef, email.trim().toLowerCase());
+            await creditScannedTickets(userRef, verified);
         } catch (err) {
             // The profile exists either way; a missed credit must not fail sign-up.
             console.error(`createUserProfile: ticket credit failed for ${uid}`, err);
@@ -96,6 +102,8 @@ async function creditScannedTickets(
     const snap = await db.collectionGroup("attendees").where("email", "==", email).get();
     const eventRefs = new Map<string, FirebaseFirestore.DocumentReference>();
     for (const doc of snap.docs) {
+        // An app order is its app user's, not the account's (see creditedEmail).
+        if (isApiOrder(doc.data())) continue;
         const eventRef = doc.ref.parent.parent;
         const root = eventRef?.parent.id;
         if (!eventRef || (root !== "pastEvents" && root !== "upcomingEvents")) continue;

@@ -424,7 +424,9 @@ interface PendingEmail {
  * Marked sent, as HomeTown's are, when the seller's app delivers the tickets.
  * With sendEmail they're emailed from here once the order is in, and the
  * event's template is checked first, so such an order never goes through
- * without one. With an email, they're in that account's My Tickets too.
+ * without one. The email is only where they're sent: the buyer holds them in
+ * the app, so no account's My Tickets or attendance counts them, whatever the
+ * address (see creditedEmail).
  */
 async function createOrder(key: ApiKey, eventId: string, body: unknown): Promise<ApiReply> {
     requireScope(key, "tickets:write");
