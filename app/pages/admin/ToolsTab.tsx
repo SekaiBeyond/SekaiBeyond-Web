@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { QrCodesTool } from './tools/QrCodesTool';
 import { EmailQuotaTool } from './tools/EmailQuotaTool';
+import { WalletPassesTool } from './tools/WalletPassesTool';
 import { ApiKeysTool } from './tools/ApiKeysTool';
 import type { ShowToast } from './utils';
 
-type ToolId = 'qr-codes' | 'email-quota' | 'api-keys';
+type ToolId = 'qr-codes' | 'email-quota' | 'wallet-passes' | 'api-keys';
 
 interface ToolDef {
     id: ToolId;
@@ -33,6 +34,13 @@ const TOOLS: ToolDef[] = [
         descriptionCn: '查看外发邮件的剩余额度（超出后邮件将进入队列），以及当前排队数量。',
     },
     {
+        id: 'wallet-passes',
+        title: 'Wallet Passes',
+        titleCn: '电子钱包票券',
+        description: 'Check how many Apple and Google Wallet passes the Add to Wallet button in ticket emails can still make this month.',
+        descriptionCn: '查看本月门票邮件中的"添加到钱包"按钮还能生成多少张 Apple / Google 钱包票券。',
+    },
+    {
         id: 'api-keys',
         title: 'API Keys',
         titleCn: 'API 密钥',
@@ -57,6 +65,10 @@ export const ToolsTab = ({showToast, readOnly = false}: ToolsTabProps) => {
 
     if (activeTool === 'email-quota') {
         return <EmailQuotaTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
+    }
+
+    if (activeTool === 'wallet-passes') {
+        return <WalletPassesTool onBack={() => setActiveTool(null)} showToast={showToast}/>;
     }
 
     if (activeTool === 'api-keys') {

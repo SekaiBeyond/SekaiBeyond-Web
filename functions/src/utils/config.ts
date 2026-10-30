@@ -25,6 +25,22 @@ export const SENDER_DOMAIN = (() => {
     }
 })();
 export const DEFAULT_SENDER_PREFIX = "no-reply";
+// A whole number from the environment, 0 allowed, or `fallback` when unset.
+function envCount(name: string, fallback: number): number {
+    const raw = Number(process.env[name]);
+    return process.env[name] && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : fallback;
+}
+// Wallet passes made in a calendar month (UTC), after which Add to Wallet says
+// so until the 1st; WalletWallet's own plan limit applies too, whichever is
+// lower. Defaults to the free plan's 1,000.
+export const WALLET_PASS_MONTHLY_CAP = envCount("WALLET_PASS_MONTHLY_CAP", 1000);
+// New passes one ticket can make in a day (SITE_TIME_ZONE). Opening its link
+// again reuses its pass, so this only counts when there's none to reuse.
+export const WALLET_PASS_DAILY_CAP_PER_TICKET = envCount("WALLET_PASS_DAILY_CAP_PER_TICKET", 2);
+// Either cap at 0 turns passes off, and ticket emails leave out the button.
+export const WALLET_PASSES_ON = WALLET_PASS_MONTHLY_CAP > 0 && WALLET_PASS_DAILY_CAP_PER_TICKET > 0;
+// Who a wallet pass says issued it.
+export const WALLET_PASS_ORGANIZATION = process.env.WALLET_PASS_ORGANIZATION || "Sekai Beyond";
 export const IMPORT_MAX_ROWS = Number(process.env.IMPORT_MAX_ROWS) || 1000;
 const RECORD_RETENTION_DAYS = 30;
 

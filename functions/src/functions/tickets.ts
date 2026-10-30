@@ -34,6 +34,7 @@ import {
 import { accountByEmail, verifiedEmail } from "../utils/accountEmail";
 import { contactEmailFor, EMAIL_HTML_SANITIZE_OPTIONS, readSavedTemplate } from "../utils/emailTemplate";
 import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
+import { revokeWalletPasses, WALLETWALLET_API_KEY, type WalletPassRefusal, walletPassFor } from "../utils/walletPass";
 import { recordDoc, type RecordFields, recordRef, type RecordType } from "../utils/records";
 import {
     buildFreshTickets,
@@ -166,6 +167,70 @@ export const serveTicketQr = onRequest({maxInstances: 10, memory: "256MiB"}, asy
         console.error("[serveTicketQr] Error generating QR:", err);
         res.status(500).send("Failed to generate QR code");
     }
+});
+
+// What a ticket email's Add to Wallet opens when there's no pass to go to, by
+// status, in both languages. The QR code in the email works either way.
+const WALLET_PASS_REFUSALS: Record<WalletPassRefusal, {status: number; en: string; cn: string}> = {
+    "off": {status: 503,
+        en: "Wallet passes aren't available right now.",
+        cn: "电子钱包票券暂不可用。"},
+    "not-found": {status: 404,
+        en: "We couldn't find this ticket.",
+        cn: "找不到这张门票。"},
+    "voided": {status: 410,
+        en: "This ticket has been voided.",
+        cn: "这张门票已作废。"},
+    "ended": {status: 410,
+        en: "This event has ended.",
+        cn: "活动已结束。"},
+    "ticket-limit": {status: 429,
+        en: "This ticket has made as many wallet passes as it can today. Try again tomorrow.",
+        cn: "这张门票今天生成钱包票券的次数已达上限，请明天再试。"},
+    "month-limit": {status: 429,
+        en: "Wallet passes are unavailable for the rest of this month.",
+        cn: "本月电子钱包票券已不可用。"},
+    "failed": {status: 502,
+        en: "We couldn't make your wallet pass just now. Please try again in a moment.",
+        cn: "暂时无法生成钱包票券，请稍后再试。"},
+};
+
+function walletPassRefusalPage(refusal: WalletPassRefusal): {status: number; html: string} {
+    const {status, en, cn} = WALLET_PASS_REFUSALS[refusal];
+    const fallback = ["voided", "ended", "not-found"].includes(refusal) ? ""
+        : "<p>Your ticket's QR code in the email still works at the door.<br/>邮件中的门票二维码仍可正常入场。</p>";
+    return {
+        status,
+        html: "<!doctype html><html><head><meta charset=\"utf-8\"/>" +
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>" +
+            "<meta name=\"robots\" content=\"noindex\"/><title>Add to Wallet</title></head>" +
+            "<body style=\"font-family:system-ui,sans-serif;max-width:480px;margin:64px auto;padding:0 16px;" +
+            "line-height:1.5;color:#222;background:#fff;text-align:center;\">" +
+            `<p><strong>${en}</strong><br/>${cn}</p>${fallback}</body></html>`,
+    };
+}
+
+/**
+ * A ticket email's Add to Wallet: off to the ticket's pass, made the first time
+ * (see walletPassFor), or a page saying why there's none.
+ */
+export const serveWalletPass = onRequest({
+    maxInstances: 10,
+    memory: "256MiB",
+    secrets: [WALLETWALLET_API_KEY],
+}, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const {ticket: ticketId, event: eventId} = req.query;
+    const result = typeof ticketId === "string" && typeof eventId === "string"
+        && QR_PARAM_RE.test(ticketId) && QR_PARAM_RE.test(eventId)
+        ? await walletPassFor(eventId, ticketId)
+        : {refusal: "not-found" as const};
+    if ("shareUrl" in result) {
+        res.redirect(302, result.shareUrl);
+        return;
+    }
+    const {status, html} = walletPassRefusalPage(result.refusal);
+    res.status(status).type("html").send(html);
 });
 
 export const importEventAttendees = onCall({maxInstances: 10}, async (request) => {
@@ -1277,10 +1342,25 @@ async function editTicket<R>(
     });
 }
 
-export const voidTicket = onCall({maxInstances: 10}, async (request) => {
+export const voidTicket = onCall({maxInstances: 10, secrets: [WALLETWALLET_API_KEY]}, async (request) => {
     const uid = await requireAuth(request, "staff");
-    return editTicket(uid, ticketTarget(request.data), "ticket-void",
-        ticket => ({ticket: {...ticket, voided: true}, reply: {voided: true}}));
+    const target = ticketTarget(request.data);
+    let walletPasses: unknown;
+    const reply = await editTicket(uid, target, "ticket-void", (ticket, {data}) => {
+        walletPasses = data.walletPasses;
+        return {ticket: {...ticket, voided: true}, reply: {voided: true}};
+    });
+    // Its wallet pass too, once the void is in. Forgotten only once revoked,
+    // since a revoked pass can't be restored: unvoided, the ticket gets a new
+    // one on its next send. One that failed to revoke is kept, and works again
+    // if the ticket is unvoided.
+    const [revoked] = await revokeWalletPasses(walletPasses, [target.ticketId]);
+    if (revoked) {
+        await db.collection("upcomingEvents").doc(target.eventId).collection("attendees").doc(target.attendeeId)
+            .update(new FieldPath("walletPasses", revoked), FieldValue.delete())
+            .catch(err => console.error("voidTicket: revoked its wallet pass, but failed to drop it", err));
+    }
+    return reply;
 });
 export const unvoidTicket = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -1449,14 +1529,15 @@ export const updateTicketNotes = onCall({maxInstances: 10}, async (request) => {
         return {ticket: {...ticket, notes}, reply: {updated: true, notes}};
     });
 });
-export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) => {
+export const deleteEventAttendee = onCall({maxInstances: 10, secrets: [WALLETWALLET_API_KEY]}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
     const input = request.data as {eventId?: string; attendeeId?: string};
     const eventId = validateDocId(input.eventId, "eventId");
     const attendeeId = validateDocId(input.attendeeId, "attendeeId");
 
-    return adminTransaction(uid, async (txn, callerSnap) => {
+    let walletPasses: unknown;
+    const reply = await adminTransaction(uid, async (txn, callerSnap) => {
         const {ref: attendeeRef, data, eventTitle} = await readAttendee(txn, eventId, attendeeId);
         // Its doc is what keeps the number from getting in again, unlisted or
         // by the next import, so it's voided instead.
@@ -1479,8 +1560,14 @@ export const deleteEventAttendee = onCall({maxInstances: 10}, async (request) =>
             targetEmail: data.email ?? "",
             targetName: attendeeRecordName(data),
         }));
+        walletPasses = data.walletPasses;
         return {deleted: true};
     });
+    // Their tickets are gone, so their wallet passes go too.
+    if (walletPasses && typeof walletPasses === "object") {
+        await revokeWalletPasses(walletPasses, Object.keys(walletPasses));
+    }
+    return reply;
 });
 
 export const sendTicketEmails = onCall(

@@ -433,6 +433,37 @@ export interface EmailQuotaStatus {
 export const callGetEmailQuotaStatus = () =>
     httpsCallable<Record<string, never>, EmailQuotaStatus>(getFunctions(), 'getEmailQuotaStatus')({});
 
+export interface WalletPassStatus {
+    // A WalletWallet API key is set on the server.
+    configured: boolean;
+    // The calendar month (UTC) being counted, "2026-10".
+    month: string;
+    // Passes made this month, in flight included: this site's own count,
+    // raised to WalletWallet's when that's higher.
+    used: number;
+    // WALLET_PASS_MONTHLY_CAP; 0 turns passes off, as a per-ticket cap of 0 does.
+    cap: number;
+    // What Add to Wallet is held to: the cap, or the plan's limit if lower.
+    limit: number;
+    // WALLET_PASS_DAILY_CAP_PER_TICKET: new passes one ticket can make a day.
+    perTicketDailyCap: number;
+    observedAt: string | null;
+    // WalletWallet's own reading, null when it couldn't be read.
+    provider: {
+        count: number;
+        limit: number;
+        remaining: number;
+        resetDate: string;
+        plan: string;
+        trialExpiresAt: string | null;
+    } | null;
+    readingSource: 'live' | 'cached' | 'unavailable';
+    serverNow: string;
+}
+
+export const callGetWalletPassStatus = () =>
+    httpsCallable<Record<string, never>, WalletPassStatus>(getFunctions(), 'getWalletPassStatus')({});
+
 /** What an API key may do. Mirrors API_SCOPES in functions/src/utils/apiKeys.ts. */
 export const API_SCOPES = ['events:read', 'tickets:read', 'tickets:write'] as const;
 export type ApiScope = typeof API_SCOPES[number];
