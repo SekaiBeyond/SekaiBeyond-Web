@@ -425,6 +425,15 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     // pastEvents path.
     await requireAdmin(uid);
 
+    // Only an event that's over moves to Past Events. Checked before Phase A,
+    // so a refusal leaves no copies under pastEvents.
+    const eventSnap = await db.collection("upcomingEvents").doc(eventId).get();
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+    const endAt: number | undefined = eventSnap.data()!.endAt?.toMillis?.();
+    if (endAt !== undefined && endAt > Date.now()) {
+        throw new HttpsError("failed-precondition", "Only an event that has ended can be archived.");
+    }
+
     // ---- Phase A: stream-copy subcollections to pastEvents ----
     const attendeesSrc = db.collection("upcomingEvents").doc(eventId).collection("attendees");
     const emailTemplateSrc = db.collection("upcomingEvents").doc(eventId).collection("emailTemplate");
