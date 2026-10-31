@@ -3,8 +3,9 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { SITE_TIME_ZONE } from '~/lib/siteTime';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
+import { resolveVenueById, useVenues } from '~/lib/venues';
 import { TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
-import { DEFAULT_WALLET_HEADER, WALLET_COLOR_STYLES, type WalletPassSettings, walletTicketStyle, } from './walletPass';
+import { WALLET_COLOR_STYLES, WALLET_PASS_TOP_TEXT, type WalletPassSettings, walletTicketStyle, } from './walletPass';
 
 interface WalletPassPreviewProps {
     event: UpcomingEvent;
@@ -20,13 +21,14 @@ const SAMPLE_TICKET_ID = 'ticket-uuid-1';
  */
 export function WalletPassPreview({event, settings, contactEmail}: WalletPassPreviewProps) {
     const {isEnglish} = useLanguage();
+    const {venues} = useVenues();
     const [type, setType] = useState<TicketType>('normal');
 
     const ticket = walletTicketStyle(type);
     const colors = WALLET_COLOR_STYLES[settings.color === 'auto' ? ticket.color : settings.color];
     const title = event.title.trim() || event.titleCn.trim() || 'Event';
-    const titleCn = event.titleCn.trim();
-    const location = event.location.trim() || event.locationCn.trim();
+    const venue = resolveVenueById(event.venueId, venues);
+    const location = event.location.trim() || venue?.nameEn.trim() || event.locationCn.trim() || venue?.nameCn.trim();
     const date = event.startAt.toLocaleString('en-US', {
         timeZone: SITE_TIME_ZONE,
         year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -35,7 +37,7 @@ export function WalletPassPreview({event, settings, contactEmail}: WalletPassPre
     const claimUrl = `${window.location.origin}/claim?ticket=${SAMPLE_TICKET_ID}&event=${encodeURIComponent(event.id)}`;
     const backFields = [
         {label: 'Ticket ID', value: SAMPLE_TICKET_ID},
-        ...(titleCn && titleCn !== title ? [{label: '活动', value: titleCn}] : []),
+        {label: 'Ticket Type', value: ticket.label},
         ...(contactEmail ? [{label: 'Questions', value: contactEmail}] : []),
         ...settings.notes.filter(n => n.value.trim()),
     ];
@@ -53,10 +55,8 @@ export function WalletPassPreview({event, settings, contactEmail}: WalletPassPre
                 <figure className="admin-wallet-preview-side">
                     <div className="admin-wallet-preview-card" style={{background: colors.bg, color: colors.fg}}>
                         <div className="admin-wallet-preview-top">
-                            <span className="admin-wallet-preview-logo">
-                                {settings.headerText.trim() || DEFAULT_WALLET_HEADER}
-                            </span>
-                            {field('Ticket', ticket.label, 'admin-wallet-preview-field--end')}
+                            <span className="admin-wallet-preview-logo">{WALLET_PASS_TOP_TEXT}</span>
+                            {field('Ticket', ticket.shortLabel, 'admin-wallet-preview-field--end')}
                         </div>
                         {field('Event', title, 'admin-wallet-preview-field--primary')}
                         <div className="admin-wallet-preview-row">
@@ -66,7 +66,6 @@ export function WalletPassPreview({event, settings, contactEmail}: WalletPassPre
                         <div className="admin-wallet-preview-barcode">
                             <div className="admin-wallet-preview-qr">
                                 <QRCodeSVG value={claimUrl} size={112} level="M"/>
-                                <span>{SAMPLE_TICKET_ID}</span>
                             </div>
                         </div>
                     </div>

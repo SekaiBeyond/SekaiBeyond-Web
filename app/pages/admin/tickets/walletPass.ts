@@ -9,8 +9,8 @@ export type WalletColor = typeof WALLET_COLORS[number];
 /** Lines an event can add to the back of its passes (WALLET_PASS_MAX_NOTES). */
 export const WALLET_PASS_MAX_NOTES = 4;
 
-/** WALLET_PASS_ORGANIZATION's default, shown top-left while the event sets none. */
-export const DEFAULT_WALLET_HEADER = 'Sekai Beyond';
+/** The text top-left of every pass, for now in place of the event's headerText (WALLET_PASS_TOP_TEXT). */
+export const WALLET_PASS_TOP_TEXT = 'Sekai Beyond';
 
 export interface WalletPassNote {
     label: string;
@@ -69,25 +69,28 @@ export const WALLET_COLOR_NAMES: Record<'auto' | WalletColor, {en: string; zh: s
     orange: {en: 'Orange', zh: '橙色'},
 };
 
-/** A ticket type's label on the pass and its colour under "auto" (ticketTypeStyle on the server). */
-export function walletTicketStyle(type: string): {label: string; color: WalletColor} {
+/**
+ * A ticket type's label on the back of the pass, its short label top-right, and
+ * its colour under "auto" (ticketTypeStyle on the server).
+ */
+export function walletTicketStyle(type: string): {label: string; shortLabel: string; color: WalletColor} {
     switch (type) {
         case 'early-bird-student':
-            return {label: 'Early Bird Student', color: 'purple'};
+            return {label: 'Early Bird Student', shortLabel: 'Student EB', color: 'purple'};
         case 'early-bird':
-            return {label: 'Early Bird', color: 'blue'};
+            return {label: 'Early Bird', shortLabel: 'General EB', color: 'blue'};
         case 'student':
-            return {label: 'Student', color: 'purple'};
+            return {label: 'Student', shortLabel: 'Student', color: 'purple'};
         case 'vip':
-            return {label: 'VIP', color: 'red'};
+            return {label: 'VIP', shortLabel: 'VIP', color: 'red'};
         case 'guest':
-            return {label: 'Guest', color: 'orange'};
+            return {label: 'Guest', shortLabel: 'Guest', color: 'orange'};
         case 'Comp Ticket':
-            return {label: 'Comp Ticket', color: 'dark'};
+            return {label: 'Comp Ticket', shortLabel: 'Comp', color: 'dark'};
         case 'vendor':
-            return {label: 'Vendor', color: 'green'};
+            return {label: 'Vendor', shortLabel: 'Vendor', color: 'green'};
         default:
-            return {label: 'General Admission', color: 'blue'};
+            return {label: 'General Admission', shortLabel: 'General', color: 'blue'};
     }
 }
 

@@ -144,6 +144,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         if (editingEvent?.paid && (
             form.title !== editingEvent.title || form.titleCn !== editingEvent.titleCn
             || form.location !== editingEvent.location || form.locationCn !== editingEvent.locationCn
+            || form.venueId !== editingEvent.venueId
             || startAt.getTime() !== editingEvent.startAt.getTime() || endAt.getTime() !== editingEvent.endAt.getTime()
         )) {
             const passCount = await getDoc(doc(getFirebaseDb(), 'upcomingEvents', editingEvent.id, 'settings', 'walletPass'))

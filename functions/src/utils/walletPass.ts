@@ -187,6 +187,9 @@ export type WalletColor = typeof WALLET_COLORS[number];
 // Lines an event can add to the back of its passes: what Google Wallet's cap of
 // 10 header, secondary and back fields leaves after passBody's own 6.
 export const WALLET_PASS_MAX_NOTES = 4;
+// The text top-left of every pass, for now in place of each event's headerText.
+// Mirrored in app/pages/admin/tickets/walletPass.ts.
+export const WALLET_PASS_TOP_TEXT = "Sekai Beyond";
 
 /**
  * How an event's passes look (upcomingEvents/{id}/settings/walletPass), set in
@@ -198,7 +201,7 @@ export interface WalletPassSettings {
     enabled: boolean;
     /** "auto" colours each pass by its ticket type. */
     color: "auto" | WalletColor;
-    /** The text top-left of the pass; empty for WALLET_PASS_ORGANIZATION. */
+    /** The text top-left of the pass. Kept, but not shown for now: every pass has WALLET_PASS_TOP_TEXT. */
     headerText: string;
     /** Lines added to the back of the pass. */
     notes: {label: string; value: string}[];
@@ -248,6 +251,17 @@ export async function walletPassesOnFor(eventRef: FirebaseFirestore.DocumentRefe
     }
 }
 
+// An event's location for its passes, as the site shows it in English: its own
+// text, else its venue's name, then the same in Chinese. Empty if there's none,
+// or the venue couldn't be read.
+async function eventLocation(data: FirebaseFirestore.DocumentData): Promise<string> {
+    const venueId = str(data.venueId);
+    const venue = venueId && !str(data.location)
+        ? (await db.collection("venues").doc(venueId).get().catch(() => null))?.data()
+        : undefined;
+    return str(data.location) || str(venue?.nameEn) || str(data.locationCn) || str(venue?.nameCn);
+}
+
 // One ticket's pass, from what WalletWallet's free plan takes: no images or
 // custom colours, so a colour preset, the event's or by ticket type. The
 // holder's name and email stay out of it; WalletWallet gets the event and the
@@ -256,36 +270,38 @@ function passBody(
     event: {id: string; data: FirebaseFirestore.DocumentData},
     ticket: any,
     contactEmail: string,
+    location: string,
     settings: WalletPassSettings,
 ) {
     const id = ticketIdOf(ticket);
-    const {label, walletColor} = ticketTypeStyle(ticket);
-    const headerText = settings.headerText || WALLET_PASS_ORGANIZATION;
+    const {label, walletColor, walletLabel} = ticketTypeStyle(ticket);
     const titleCn = str(event.data.titleCn);
     const title = str(event.data.title) || titleCn || "Event";
     const date = formatEventDateForEmail(event.data.startAt);
-    const location = str(event.data.location) || str(event.data.locationCn);
     const endAt: number | undefined = event.data.endAt?.toMillis?.();
     const field = (fieldLabel: string, value: string) => ({label: fieldLabel, value: clip(value, 256)});
     return {
         organizationName: clip(WALLET_PASS_ORGANIZATION, 64),
-        logoText: clip(headerText, 64),
+        logoText: clip(WALLET_PASS_TOP_TEXT, 64),
         description: clip(`${title} ticket`, 128),
-        headerFields: [field("Ticket", label)],
+        headerFields: [field("Ticket", walletLabel)],
         primaryFields: [field("Event", title)],
         secondaryFields: [
             ...(date ? [field("Date", date)] : []),
             ...(location ? [field("Location", location)] : []),
         ],
+        // In English only, for now.
         backFields: [
             field("Ticket ID", id),
-            ...(titleCn && titleCn !== title ? [field("活动", titleCn)] : []),
+            field("Ticket Type", label),
             ...(contactEmail ? [field("Questions", contactEmail)] : []),
             ...settings.notes.map(n => ({label: clip(n.label, 64), value: clip(n.value, 256)})),
         ],
         barcodeValue: ticketClaimUrl(id, event.id),
         barcodeFormat: "QR",
-        barcodeAltText: id,
+        // Nothing under the code: the ID is on the back. Left out, Google would
+        // print the claim URL there.
+        barcodeAltText: "",
         colorPreset: settings.color === "auto" ? walletColor : settings.color,
         // Greyed out once the event is over. RFC 3339, without milliseconds as
         // WalletWallet's examples have it.
@@ -431,10 +447,12 @@ export async function walletPassFor(
     if ("waitOn" in claim) return awaitClaim(claim.waitOn, ticketId);
     if (!("ref" in claim)) return claim;
 
-    // Site Config's contact address, for the back of the pass.
-    const contactEmail = await db.collection("config").doc("main").get()
-        .then(s => str(s.get("contactEmail")), () => "");
-    const outcome = await createPass(key, passBody(claim.event, claim.ticket, contactEmail, claim.settings));
+    const [contactEmail, location] = await Promise.all([
+        // Site Config's contact address, for the back of the pass.
+        db.collection("config").doc("main").get().then(s => str(s.get("contactEmail")), () => ""),
+        eventLocation(claim.event.data),
+    ]);
+    const outcome = await createPass(key, passBody(claim.event, claim.ticket, contactEmail, location, claim.settings));
     if (outcome.kind === "made") {
         // In place of the claim. A pass that failed to be kept still goes to
         // this open; once the claim lapses, the next makes another.

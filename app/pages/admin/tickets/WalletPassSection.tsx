@@ -6,7 +6,6 @@ import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { ShowToast } from '../utils';
 import { WalletPassPreview } from './WalletPassPreview';
 import {
-    DEFAULT_WALLET_HEADER,
     sameWalletPassSettings,
     WALLET_COLOR_NAMES,
     WALLET_COLOR_STYLES,
@@ -163,30 +162,12 @@ export function WalletPassSection({
                             </div>
                         </div>
 
-                        <label className="admin-tickets-template-field">
-                            <span>{isEnglish ? 'Top text' : '顶部文字'}</span>
-                            <input
-                                className="admin-input"
-                                type="text"
-                                maxLength={64}
-                                value={draft.headerText}
-                                readOnly={readOnly}
-                                placeholder={DEFAULT_WALLET_HEADER}
-                                onChange={e => update({headerText: e.target.value})}
-                            />
-                            <small className="admin-time-hint">
-                                {isEnglish
-                                    ? `Top-left of the pass. Blank shows "${DEFAULT_WALLET_HEADER}". Keep it short: a long one is cut off.`
-                                    : `显示在票券左上角。留空则显示"${DEFAULT_WALLET_HEADER}"。请尽量简短，过长会被截断。`}
-                            </small>
-                        </label>
-
                         <div className="admin-tickets-template-field">
                             <span>{isEnglish ? 'Back of the pass' : '票券背面'}</span>
                             <small className="admin-time-hint">
                                 {isEnglish
-                                    ? `Up to ${WALLET_PASS_MAX_NOTES} lines after the ticket ID and contact: entry instructions, an address, a link. Links, phone numbers and emails can be tapped.`
-                                    : `在门票编号和联系方式之后最多添加 ${WALLET_PASS_MAX_NOTES} 行：入场须知、地址、链接等。链接、电话和邮箱可直接点击。`}
+                                    ? `Up to ${WALLET_PASS_MAX_NOTES} lines after the ticket ID, ticket type and contact: entry instructions, an address, a link. Links, phone numbers and emails can be tapped.`
+                                    : `在门票编号、门票类型和联系方式之后最多添加 ${WALLET_PASS_MAX_NOTES} 行：入场须知、地址、链接等。链接、电话和邮箱可直接点击。`}
                             </small>
                             {draft.notes.map((note, i) => (
                                 <div key={i} className="admin-wallet-note">
