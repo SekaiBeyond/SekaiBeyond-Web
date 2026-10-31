@@ -6,7 +6,7 @@ import type { ShowToast } from '../utils';
 import { SendSection } from './SendSection';
 import { TemplateSection } from './TemplateSection';
 import type { AttendeeTotals } from './types';
-import { parseWalletPassSettings, type WalletPassSettings } from './walletPass';
+import { parseWalletPassSettings, readWalletPassCount, type WalletPassSettings } from './walletPass';
 import { WalletPassSection } from './WalletPassSection';
 
 interface EmailsSectionProps {
@@ -30,11 +30,15 @@ export function EmailsSection({event, totals, readOnly, showToast, onSent, onTem
     // The stored wallet pass settings, which the template's preview follows
     // too: the button is in it while they're on.
     const [walletSettings, setWalletSettings] = useState<WalletPassSettings | null>(null);
+    const [walletPassCount, setWalletPassCount] = useState(0);
     const [walletLoadFailed, setWalletLoadFailed] = useState(false);
     useEffect(() => {
         return onSnapshot(
             doc(getFirebaseDb(), 'upcomingEvents', event.id, 'settings', 'walletPass'),
-            snap => setWalletSettings(parseWalletPassSettings(snap.data())),
+            snap => {
+                setWalletSettings(parseWalletPassSettings(snap.data()));
+                setWalletPassCount(readWalletPassCount(snap.data()));
+            },
             err => {
                 console.error('[EmailsSection] wallet pass settings', err);
                 setWalletLoadFailed(true);
@@ -63,6 +67,7 @@ export function EmailsSection({event, totals, readOnly, showToast, onSent, onTem
             <WalletPassSection
                 event={event}
                 settings={walletSettings}
+                passCount={walletPassCount}
                 loadFailed={walletLoadFailed}
                 readOnly={readOnly}
                 showToast={showToast}

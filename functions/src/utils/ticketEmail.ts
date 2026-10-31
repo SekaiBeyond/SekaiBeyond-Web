@@ -151,6 +151,9 @@ export function renderTicketEmail(
         // subjectLine, so a newline in eventTitle or attendeeName can't inject
         // headers.
         subject: subjectLine(renderTemplate(template.subject, {...fields, ticketBlock: ""}, false)),
-        html: renderTemplate(template.bodyHtml, {...fields, ticketBlock: renderTicketQrBlock(tickets, event.id, walletPass)}, true),
+        html: renderTemplate(template.bodyHtml, {
+            ...fields,
+            ticketBlock: renderTicketQrBlock(tickets, event.id, walletPass)
+        }, true),
     };
 }

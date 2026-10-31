@@ -20,6 +20,8 @@ interface WalletPassSectionProps {
     event: UpcomingEvent;
     /** The stored settings, null while they load. */
     settings: WalletPassSettings | null;
+    /** Passes made for the event and not revoked. */
+    passCount: number;
     loadFailed: boolean;
     readOnly: boolean;
     showToast: ShowToast;
@@ -29,7 +31,14 @@ interface WalletPassSectionProps {
  * How the event's Add to Wallet passes look, beside a preview. Read when each
  * pass is made, so a change reaches passes made after it.
  */
-export function WalletPassSection({event, settings, loadFailed, readOnly, showToast}: WalletPassSectionProps) {
+export function WalletPassSection({
+                                      event,
+                                      settings,
+                                      passCount,
+                                      loadFailed,
+                                      readOnly,
+                                      showToast
+                                  }: WalletPassSectionProps) {
     const {isEnglish} = useLanguage();
     const {config} = useSiteConfig();
     const [draft, setDraft] = useState<WalletPassSettings | null>(null);
@@ -93,6 +102,20 @@ export function WalletPassSection({event, settings, loadFailed, readOnly, showTo
                 {isEnglish
                     ? 'Each ticket in this event’s emails has an Add to Wallet button, whose first tap makes an Apple or Google Wallet pass like the one below. Changes reach passes made after you save; one already in someone’s wallet keeps its look, as WalletWallet’s free plan can’t update a pass.'
                     : '此活动邮件中的每张门票都有"添加到钱包"按钮，首次点击时会生成如下所示的 Apple / Google 钱包票券。修改仅对保存后生成的票券生效；已在钱包中的票券保持原样，因为 WalletWallet 免费方案无法更新票券。'}
+            </p>
+            <p className="admin-helper-text">
+                <strong>
+                    {passCount === 0
+                        ? (isEnglish ? 'No passes made yet' : '尚未生成任何票券')
+                        : isEnglish
+                            ? `${passCount} pass${passCount === 1 ? '' : 'es'} made so far`
+                            : `已生成 ${passCount} 张票券`}
+                </strong>
+                {passCount === 0
+                    ? (isEnglish ? ', so a change here reaches every pass.' : '，因此此处的修改会作用于所有票券。')
+                    : (isEnglish
+                        ? ', which keep the look and event details they were made with.'
+                        : '，这些票券将保持生成时的样式与活动信息。')}
             </p>
 
             <label className="admin-wallet-toggle">

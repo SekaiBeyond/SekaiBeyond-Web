@@ -4,12 +4,7 @@ import { useLanguage } from '~/components/LanguageContextProvider';
 import { SITE_TIME_ZONE } from '~/lib/siteTime';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import { TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
-import {
-    DEFAULT_WALLET_HEADER,
-    WALLET_COLOR_STYLES,
-    type WalletPassSettings,
-    walletTicketStyle,
-} from './walletPass';
+import { DEFAULT_WALLET_HEADER, WALLET_COLOR_STYLES, type WalletPassSettings, walletTicketStyle, } from './walletPass';
 
 interface WalletPassPreviewProps {
     event: UpcomingEvent;
@@ -91,7 +86,8 @@ export function WalletPassPreview({event, settings, contactEmail}: WalletPassPre
             </div>
             <label className="admin-wallet-preview-type">
                 <span>{isEnglish ? 'Preview as' : '预览门票类型'}</span>
-                <select className="admin-input admin-select admin-input--sm" value={type} onChange={e => setType(e.target.value as TicketType)}>
+                <select className="admin-input admin-select admin-input--sm" value={type}
+                        onChange={e => setType(e.target.value as TicketType)}>
                     {TICKET_TYPES.map(t => (
                         <option key={t.value} value={t.value}>{ticketTypeLabel(t.value, isEnglish)}</option>
                     ))}

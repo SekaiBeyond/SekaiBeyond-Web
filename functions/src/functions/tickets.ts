@@ -35,14 +35,15 @@ import { accountByEmail, verifiedEmail } from "../utils/accountEmail";
 import { contactEmailFor, EMAIL_HTML_SANITIZE_OPTIONS, readSavedTemplate } from "../utils/emailTemplate";
 import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
 import {
+    countWalletPasses,
     revokeWalletPasses,
     WALLET_COLORS,
     WALLET_PASS_MAX_NOTES,
-    WALLETWALLET_API_KEY,
-    type WalletPassRefusal,
     walletPassesOnFor,
     walletPassFor,
+    type WalletPassRefusal,
     walletPassSettingsRef,
+    WALLETWALLET_API_KEY,
 } from "../utils/walletPass";
 import { recordDoc, type RecordFields, recordRef, type RecordType } from "../utils/records";
 import {
@@ -181,27 +182,41 @@ export const serveTicketQr = onRequest({maxInstances: 10, memory: "256MiB"}, asy
 // What a ticket email's Add to Wallet opens when there's no pass to go to, by
 // status, in both languages. The QR code in the email works either way.
 const WALLET_PASS_REFUSALS: Record<WalletPassRefusal, {status: number; en: string; cn: string}> = {
-    "off": {status: 503,
+    "off": {
+        status: 503,
         en: "Wallet passes aren't available right now.",
-        cn: "电子钱包票券暂不可用。"},
-    "not-found": {status: 404,
+        cn: "电子钱包票券暂不可用。"
+    },
+    "not-found": {
+        status: 404,
         en: "We couldn't find this ticket.",
-        cn: "找不到这张门票。"},
-    "voided": {status: 410,
+        cn: "找不到这张门票。"
+    },
+    "voided": {
+        status: 410,
         en: "This ticket has been voided.",
-        cn: "这张门票已作废。"},
-    "ended": {status: 410,
+        cn: "这张门票已作废。"
+    },
+    "ended": {
+        status: 410,
         en: "This event has ended.",
-        cn: "活动已结束。"},
-    "ticket-limit": {status: 429,
+        cn: "活动已结束。"
+    },
+    "ticket-limit": {
+        status: 429,
         en: "This ticket has made as many wallet passes as it can today. Try again tomorrow.",
-        cn: "这张门票今天生成钱包票券的次数已达上限，请明天再试。"},
-    "month-limit": {status: 429,
+        cn: "这张门票今天生成钱包票券的次数已达上限，请明天再试。"
+    },
+    "month-limit": {
+        status: 429,
         en: "Wallet passes are unavailable for the rest of this month.",
-        cn: "本月电子钱包票券已不可用。"},
-    "failed": {status: 502,
+        cn: "本月电子钱包票券已不可用。"
+    },
+    "failed": {
+        status: 502,
         en: "We couldn't make your wallet pass just now. Please try again in a moment.",
-        cn: "暂时无法生成钱包票券，请稍后再试。"},
+        cn: "暂时无法生成钱包票券，请稍后再试。"
+    },
 };
 
 function walletPassRefusalPage(refusal: WalletPassRefusal): {status: number; html: string} {
@@ -231,7 +246,7 @@ export const serveWalletPass = onRequest({
     res.set("Cache-Control", "no-store");
     const {ticket: ticketId, event: eventId} = req.query;
     const result = typeof ticketId === "string" && typeof eventId === "string"
-        && QR_PARAM_RE.test(ticketId) && QR_PARAM_RE.test(eventId)
+    && QR_PARAM_RE.test(ticketId) && QR_PARAM_RE.test(eventId)
         ? await walletPassFor(eventId, ticketId)
         : {refusal: "not-found" as const};
     if ("shareUrl" in result) {
@@ -1365,9 +1380,13 @@ export const voidTicket = onCall({maxInstances: 10, secrets: [WALLETWALLET_API_K
     // if the ticket is unvoided.
     const [revoked] = await revokeWalletPasses(walletPasses, [target.ticketId]);
     if (revoked) {
-        await db.collection("upcomingEvents").doc(target.eventId).collection("attendees").doc(target.attendeeId)
-            .update(new FieldPath("walletPasses", revoked), FieldValue.delete())
-            .catch(err => console.error("voidTicket: revoked its wallet pass, but failed to drop it", err));
+        const eventRef = db.collection("upcomingEvents").doc(target.eventId);
+        await Promise.all([
+            eventRef.collection("attendees").doc(target.attendeeId)
+                .update(new FieldPath("walletPasses", revoked), FieldValue.delete())
+                .catch(err => console.error("voidTicket: revoked its wallet pass, but failed to drop it", err)),
+            countWalletPasses(eventRef, -1),
+        ]);
     }
     return reply;
 });
@@ -1574,7 +1593,8 @@ export const deleteEventAttendee = onCall({maxInstances: 10, secrets: [WALLETWAL
     });
     // Their tickets are gone, so their wallet passes go too.
     if (walletPasses && typeof walletPasses === "object") {
-        await revokeWalletPasses(walletPasses, Object.keys(walletPasses));
+        const revoked = await revokeWalletPasses(walletPasses, Object.keys(walletPasses));
+        await countWalletPasses(db.collection("upcomingEvents").doc(eventId), -revoked.length);
     }
     return reply;
 });
@@ -1994,11 +2014,12 @@ export const updateWalletPassSettings = onCall({maxInstances: 10}, async (reques
     return adminTransaction(uid, async (txn, callerSnap) => {
         const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
         if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        // Merged, so passCount, kept beside the settings, stays.
         txn.set(walletPassSettingsRef(eventSnap.ref), {
             enabled: input.enabled, color, headerText, notes,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: uid,
-        });
+        }, {merge: true});
         txn.set(recordRef(), recordDoc("upcoming-event-wallet-pass-update", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",

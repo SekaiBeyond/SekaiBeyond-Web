@@ -25,11 +25,13 @@ export const SENDER_DOMAIN = (() => {
     }
 })();
 export const DEFAULT_SENDER_PREFIX = "no-reply";
+
 // A whole number from the environment, 0 allowed, or `fallback` when unset.
 function envCount(name: string, fallback: number): number {
     const raw = Number(process.env[name]);
     return process.env[name] && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : fallback;
 }
+
 // Wallet passes made in a calendar month (UTC), after which Add to Wallet says
 // so until the 1st; WalletWallet's own plan limit applies too, whichever is
 // lower. Defaults to the free plan's 1,000.

@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { useLanguage } from '~/components/LanguageContextProvider';
-import { callSaveUpcomingEvent, callUploadAdminImage, errorMessage } from '~/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { callSaveUpcomingEvent, callUploadAdminImage, errorMessage, getFirebaseDb } from '~/lib/firebase';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
 import type { Tag } from '~/lib/tags';
 import { useVenues } from '~/lib/venues';
@@ -13,6 +14,7 @@ import { LocationFormField } from './LocationFormField';
 import { ImageUploadField } from './ImageUploadField';
 import { ImageCropModal } from './ImageCropModal';
 import { UpcomingEventDetailView } from './UpcomingEventDetailView';
+import { readWalletPassCount } from './tickets/walletPass';
 
 interface UpcomingEventsTabProps {
     upcomingEvents: UpcomingEvent[];
@@ -136,6 +138,22 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         if (endAt <= startAt) {
             showToast(isEnglish ? 'End time must be after start time.' : '结束时间必须晚于开始时间。', 'error');
             return;
+        }
+        // What a wallet pass shows of the event. One already made can't be
+        // updated, so say how many will keep the old details.
+        if (editingEvent?.paid && (
+            form.title !== editingEvent.title || form.titleCn !== editingEvent.titleCn
+            || form.location !== editingEvent.location || form.locationCn !== editingEvent.locationCn
+            || startAt.getTime() !== editingEvent.startAt.getTime() || endAt.getTime() !== editingEvent.endAt.getTime()
+        )) {
+            const passCount = await getDoc(doc(getFirebaseDb(), 'upcomingEvents', editingEvent.id, 'settings', 'walletPass'))
+                .then(snap => readWalletPassCount(snap.data()), () => 0);
+            if (passCount > 0) {
+                const ok = confirm(isEnglish
+                    ? `${passCount} wallet pass${passCount === 1 ? ' was' : 'es were'} already made for this event, and will keep showing the old title, date and location: WalletWallet's free plan can't update a pass. Passes made from now on show the change, and everyone's ticket still works at the door. Save anyway?`
+                    : `此活动已生成 ${passCount} 张钱包票券，它们将继续显示原来的标题、日期和地点，因为 WalletWallet 免费方案无法更新票券。之后生成的票券会显示新信息，所有门票仍可正常入场。仍要保存吗？`);
+                if (!ok) return;
+            }
         }
         if (editingEvent && editingEvent.paid && !form.paid) {
             const ok = confirm(isEnglish

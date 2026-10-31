@@ -91,6 +91,15 @@ export function walletTicketStyle(type: string): {label: string; color: WalletCo
     }
 }
 
+/**
+ * The event's passes made and not revoked (settings/walletPass passCount, kept
+ * by the server), which keep the details they were made with.
+ */
+export function readWalletPassCount(raw: Record<string, unknown> | undefined): number {
+    const n = raw?.passCount;
+    return typeof n === 'number' && Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
 /** Two settings the same once stored, so an edit undone doesn't read as unsaved. */
 export const sameWalletPassSettings = (a: WalletPassSettings, b: WalletPassSettings): boolean =>
     JSON.stringify(parseWalletPassSettings({...a})) === JSON.stringify(parseWalletPassSettings({...b}));

@@ -222,6 +222,18 @@ export function parseWalletPassSettings(raw: FirebaseFirestore.DocumentData | un
 }
 
 /**
+ * Adds `delta` to the event's count of passes made and not revoked
+ * (settings/walletPass passCount), which its Wallet pass card and the event
+ * editor show: those passes keep the details they were made with. Errors are
+ * logged and swallowed.
+ */
+export async function countWalletPasses(eventRef: FirebaseFirestore.DocumentReference, delta: number): Promise<void> {
+    if (delta === 0) return;
+    await walletPassSettingsRef(eventRef).set({passCount: FieldValue.increment(delta)}, {merge: true})
+        .catch(err => console.error(`countWalletPasses: ${eventRef.id} by ${delta} failed`, err));
+}
+
+/**
  * Whether an event's ticket emails carry the Add to Wallet button: passes are
  * on, and not turned off for the event. On if its settings can't be read, as
  * they are by default; serveWalletPass reads them again before making a pass.
@@ -426,9 +438,12 @@ export async function walletPassFor(
     if (outcome.kind === "made") {
         // In place of the claim. A pass that failed to be kept still goes to
         // this open; once the claim lapses, the next makes another.
-        await claim.ref.update(new FieldPath("walletPasses", ticketId),
-            {serial: outcome.serial, shareUrl: outcome.shareUrl, createdAt: FieldValue.serverTimestamp()})
-            .catch(err => console.error(`walletPassFor: made ${outcome.serial}, but failed to keep it`, err));
+        await Promise.all([
+            claim.ref.update(new FieldPath("walletPasses", ticketId),
+                {serial: outcome.serial, shareUrl: outcome.shareUrl, createdAt: FieldValue.serverTimestamp()})
+                .catch(err => console.error(`walletPassFor: made ${outcome.serial}, but failed to keep it`, err)),
+            countWalletPasses(eventRef, 1),
+        ]);
         return {shareUrl: outcome.shareUrl};
     }
     // Refused, it wasn't made, so neither cap is spent.
@@ -514,4 +529,30 @@ export async function revokeWalletPasses(walletPasses: unknown, ticketIds: strin
         return typeof serial === "string" && serial && await revokePass(key, serial) ? id : null;
     }));
     return revoked.filter((id): id is string => id !== null);
+}
+
+// Passes revoked at once when a whole event goes. Revoking doesn't count
+// against the month, and WalletWallet documents no burst limit.
+const REVOKE_CONCURRENCY = 8;
+
+/**
+ * Revokes every pass kept on an event's attendee docs, a few at a time, so a
+ * deleted event's passes show as invalid rather than as tickets to it.
+ * Returns how many are gone. Never throws.
+ */
+export async function revokeEventWalletPasses(attendees: FirebaseFirestore.QueryDocumentSnapshot[]): Promise<number> {
+    const key = apiKey();
+    if (!key) return 0;
+    const serials = attendees.flatMap(a => Object.values(a.get("walletPasses") ?? {})
+        .map(p => (p as {serial?: unknown})?.serial)
+        .filter((serial): serial is string => typeof serial === "string" && serial !== ""));
+    let next = 0;
+    let revoked = 0;
+    const worker = async () => {
+        while (next < serials.length) {
+            if (await revokePass(key, serials[next++])) revoked++;
+        }
+    };
+    await Promise.all(Array.from({length: Math.min(REVOKE_CONCURRENCY, serials.length)}, worker));
+    return revoked;
 }
