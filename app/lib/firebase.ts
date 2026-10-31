@@ -512,6 +512,15 @@ export const callUpdateEventEmailTemplate = (data: {
 }) => httpsCallable<typeof data, {saved: boolean}>(
     getFunctions(), 'updateEventEmailTemplate')(data);
 
+export const callUpdateWalletPassSettings = (data: {
+    eventId: string;
+    enabled: boolean;
+    color: string;
+    headerText: string;
+    notes: {label: string; value: string}[];
+}) => httpsCallable<typeof data, {saved: boolean}>(
+    getFunctions(), 'updateWalletPassSettings')(data);
+
 export const callAssignEventStaff = (data: {targetUid: string; eventId: string}) =>
     httpsCallable<typeof data, {added: boolean; attendeeRemoved: boolean}>(
         getFunctions(), 'assignEventStaff')(data);

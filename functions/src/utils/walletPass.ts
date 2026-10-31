@@ -181,12 +181,74 @@ export async function readWalletQuota() {
 const clip = (s: string, max: number) => s.length > max ? s.slice(0, max - 1) + "…" : s;
 const str = (v: unknown) => typeof v === "string" ? v.trim() : "";
 
+/** WalletWallet's free colour presets. Mirrored in app/pages/admin/tickets/walletPass.ts. */
+export const WALLET_COLORS = ["dark", "blue", "green", "red", "purple", "orange"] as const;
+export type WalletColor = typeof WALLET_COLORS[number];
+// Lines an event can add to the back of its passes: what Google Wallet's cap of
+// 10 header, secondary and back fields leaves after passBody's own 6.
+export const WALLET_PASS_MAX_NOTES = 4;
+
+/**
+ * How an event's passes look (upcomingEvents/{id}/settings/walletPass), set in
+ * its Emails section. Read when each pass is made: one already made keeps its
+ * look, as the free plan can't update a pass.
+ */
+export interface WalletPassSettings {
+    /** Off leaves the button out of the event's ticket emails. */
+    enabled: boolean;
+    /** "auto" colours each pass by its ticket type. */
+    color: "auto" | WalletColor;
+    /** The text top-left of the pass; empty for WALLET_PASS_ORGANIZATION. */
+    headerText: string;
+    /** Lines added to the back of the pass. */
+    notes: {label: string; value: string}[];
+}
+
+export const walletPassSettingsRef = (eventRef: FirebaseFirestore.DocumentReference) =>
+    eventRef.collection("settings").doc("walletPass");
+
+/** The stored settings, defaults for what's missing: on, coloured by ticket type, nothing added. */
+export function parseWalletPassSettings(raw: FirebaseFirestore.DocumentData | undefined): WalletPassSettings {
+    const notes: unknown[] = Array.isArray(raw?.notes) ? raw.notes : [];
+    return {
+        enabled: raw?.enabled !== false,
+        color: (WALLET_COLORS as readonly unknown[]).includes(raw?.color) ? raw!.color : "auto",
+        headerText: str(raw?.headerText),
+        notes: notes
+            .map(n => ({label: str((n as any)?.label), value: str((n as any)?.value)}))
+            .filter(n => n.value)
+            .slice(0, WALLET_PASS_MAX_NOTES),
+    };
+}
+
+/**
+ * Whether an event's ticket emails carry the Add to Wallet button: passes are
+ * on, and not turned off for the event. On if its settings can't be read, as
+ * they are by default; serveWalletPass reads them again before making a pass.
+ */
+export async function walletPassesOnFor(eventRef: FirebaseFirestore.DocumentReference): Promise<boolean> {
+    if (!WALLET_PASSES_ON) return false;
+    try {
+        return parseWalletPassSettings((await walletPassSettingsRef(eventRef).get()).data()).enabled;
+    } catch (err) {
+        console.error(`walletPassesOnFor: ${eventRef.id}'s settings couldn't be read`, err);
+        return true;
+    }
+}
+
 // One ticket's pass, from what WalletWallet's free plan takes: no images or
-// custom colours, so a colour preset by ticket type. The holder's name and
-// email stay out of it; WalletWallet gets the event and the ticket only.
-function passBody(event: {id: string; data: FirebaseFirestore.DocumentData}, ticket: any, contactEmail: string) {
+// custom colours, so a colour preset, the event's or by ticket type. The
+// holder's name and email stay out of it; WalletWallet gets the event and the
+// ticket only. The admin preview (WalletPassPreview) mirrors this layout.
+function passBody(
+    event: {id: string; data: FirebaseFirestore.DocumentData},
+    ticket: any,
+    contactEmail: string,
+    settings: WalletPassSettings,
+) {
     const id = ticketIdOf(ticket);
     const {label, walletColor} = ticketTypeStyle(ticket);
+    const headerText = settings.headerText || WALLET_PASS_ORGANIZATION;
     const titleCn = str(event.data.titleCn);
     const title = str(event.data.title) || titleCn || "Event";
     const date = formatEventDateForEmail(event.data.startAt);
@@ -195,7 +257,7 @@ function passBody(event: {id: string; data: FirebaseFirestore.DocumentData}, tic
     const field = (fieldLabel: string, value: string) => ({label: fieldLabel, value: clip(value, 256)});
     return {
         organizationName: clip(WALLET_PASS_ORGANIZATION, 64),
-        logoText: clip(WALLET_PASS_ORGANIZATION, 64),
+        logoText: clip(headerText, 64),
         description: clip(`${title} ticket`, 128),
         headerFields: [field("Ticket", label)],
         primaryFields: [field("Event", title)],
@@ -207,11 +269,12 @@ function passBody(event: {id: string; data: FirebaseFirestore.DocumentData}, tic
             field("Ticket ID", id),
             ...(titleCn && titleCn !== title ? [field("活动", titleCn)] : []),
             ...(contactEmail ? [field("Questions", contactEmail)] : []),
+            ...settings.notes.map(n => ({label: clip(n.label, 64), value: clip(n.value, 256)})),
         ],
         barcodeValue: ticketClaimUrl(id, event.id),
         barcodeFormat: "QR",
         barcodeAltText: id,
-        colorPreset: walletColor,
+        colorPreset: settings.color === "auto" ? walletColor : settings.color,
         // Greyed out once the event is over. RFC 3339, without milliseconds as
         // WalletWallet's examples have it.
         ...(endAt && endAt > Date.now()
@@ -304,15 +367,19 @@ export async function walletPassFor(
         ref: FirebaseFirestore.DocumentReference;
         ticket: any;
         event: {id: string; data: FirebaseFirestore.DocumentData};
+        settings: WalletPassSettings;
     };
     let claim: Claim;
     try {
         claim = await db.runTransaction<Claim>(async (txn) => {
-            const [eventSnap, attendees, quotaSnap] = await Promise.all([
-                txn.get(eventRef),
-                txn.get(eventRef.collection("attendees").where("ticketIds", "array-contains", ticketId).limit(1)),
-                txn.get(QUOTA_DOC),
-            ]);
+            // One at a time: taps landing together contend here, and a transaction
+            // aborted with a read still out fails that read as closed, which isn't
+            // retried, rather than as aborted, which is.
+            const eventSnap = await txn.get(eventRef);
+            const attendees = await txn.get(
+                eventRef.collection("attendees").where("ticketIds", "array-contains", ticketId).limit(1));
+            const quotaSnap = await txn.get(QUOTA_DOC);
+            const settingsSnap = await txn.get(walletPassSettingsRef(eventRef));
             const attendee = attendees.docs[0];
             const data = attendee?.data();
             const ticket = (data?.tickets as any[] | undefined)?.find(t => ticketIdOf(t) === ticketId);
@@ -323,6 +390,8 @@ export async function walletPassFor(
                 return {refusal: "not-found"};
             }
             if (ticket.voided) return {refusal: "voided"};
+            const settings = parseWalletPassSettings(settingsSnap.data());
+            if (!settings.enabled) return {refusal: "off"};
             const endAt: number | undefined = eventSnap.data()!.endAt?.toMillis?.();
             if (endAt !== undefined && endAt <= Date.now()) return {refusal: "ended"};
 
@@ -341,7 +410,7 @@ export async function walletPassFor(
             txn.update(attendee.ref,
                 new FieldPath("walletPassDaily", ticketId), {day, made: madeToday + 1},
                 new FieldPath("walletPasses", ticketId), {claim: claimId, claimedAt: Timestamp.now()});
-            return {ref: attendee.ref, ticket, event: {id: eventId, data: eventSnap.data()!}};
+            return {ref: attendee.ref, ticket, event: {id: eventId, data: eventSnap.data()!}, settings};
         });
     } catch (err) {
         console.error(`walletPassFor: ${eventId}/${ticketId} couldn't be read`, err);
@@ -353,7 +422,7 @@ export async function walletPassFor(
     // Site Config's contact address, for the back of the pass.
     const contactEmail = await db.collection("config").doc("main").get()
         .then(s => str(s.get("contactEmail")), () => "");
-    const outcome = await createPass(key, passBody(claim.event, claim.ticket, contactEmail));
+    const outcome = await createPass(key, passBody(claim.event, claim.ticket, contactEmail, claim.settings));
     if (outcome.kind === "made") {
         // In place of the claim. A pass that failed to be kept still goes to
         // this open; once the claim lapses, the next makes another.

@@ -1,5 +1,5 @@
 import type { Timestamp } from "firebase-admin/firestore";
-import { PUBLIC_ORIGIN, WALLET_PASSES_ON } from "./config";
+import { PUBLIC_ORIGIN } from "./config";
 import { CONTACT_EMAIL_PLACEHOLDER, type EmailTemplateDoc, escapeHtml, subjectLine } from "./emailTemplate";
 import { type ResendEnvelope } from "./resendClient";
 import { SITE_TIME_ZONE } from "./siteTime";
@@ -57,16 +57,16 @@ export function ticketTypeStyle(ticket: any): {label: string; bgColor: string; w
     return {label: "General Admission", bgColor: "#ff6b9d", walletColor: "red"}; // brand pink
 }
 
-function renderTicketQrBlock(tickets: any[], eventId: string): string {
+function renderTicketQrBlock(tickets: any[], eventId: string, walletPass: boolean): string {
     // One <div> per ticket. Images reference the serverless QR generation endpoint.
     return tickets.map((ticket, i) => {
         const id = ticketIdOf(ticket);
         const {label: typeLabel, bgColor} = ticketTypeStyle(ticket);
 
         const qrUrl = `${PUBLIC_ORIGIN}/api/ticket-qr?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
-        // On every ticket while passes are on; the pass is made when it's first
-        // opened (serveWalletPass).
-        const walletButton = WALLET_PASSES_ON
+        // On every ticket while the event's passes are on; the pass is made when
+        // it's first opened (serveWalletPass).
+        const walletButton = walletPass
             ? `<div style="margin-top:12px;"><a href="${escapeHtml(walletPassUrl(id, eventId))}" style="display:inline-block;background-color:#000000;color:#ffffff;font-weight:bold;font-size:14px;padding:10px 20px;border-radius:8px;text-decoration:none;">Add to Wallet</a></div>`
             : "";
         // A wide gap so framing one code doesn't also catch its neighbour.
@@ -122,7 +122,8 @@ function renderTemplate(
 
 /**
  * One attendee's ticket email. `tickets` are the ones to send, voided ones
- * already left out.
+ * already left out; `walletPass` gives each an Add to Wallet button (see
+ * walletPassesOnFor).
  */
 export function renderTicketEmail(
     template: EmailTemplateDoc,
@@ -130,6 +131,7 @@ export function renderTicketEmail(
     event: {id: string; data: FirebaseFirestore.DocumentData},
     attendee: {name?: string; email: string},
     tickets: any[],
+    walletPass: boolean,
 ): ResendEnvelope {
     const fields = {
         attendeeEmail: attendee.email,
@@ -148,6 +150,6 @@ export function renderTicketEmail(
         // subjectLine, so a newline in eventTitle or attendeeName can't inject
         // headers.
         subject: subjectLine(renderTemplate(template.subject, {...fields, ticketBlock: ""}, false)),
-        html: renderTemplate(template.bodyHtml, {...fields, ticketBlock: renderTicketQrBlock(tickets, event.id)}, true),
+        html: renderTemplate(template.bodyHtml, {...fields, ticketBlock: renderTicketQrBlock(tickets, event.id, walletPass)}, true),
     };
 }

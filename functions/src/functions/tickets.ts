@@ -34,7 +34,16 @@ import {
 import { accountByEmail, verifiedEmail } from "../utils/accountEmail";
 import { contactEmailFor, EMAIL_HTML_SANITIZE_OPTIONS, readSavedTemplate } from "../utils/emailTemplate";
 import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
-import { revokeWalletPasses, WALLETWALLET_API_KEY, type WalletPassRefusal, walletPassFor } from "../utils/walletPass";
+import {
+    revokeWalletPasses,
+    WALLET_COLORS,
+    WALLET_PASS_MAX_NOTES,
+    WALLETWALLET_API_KEY,
+    type WalletPassRefusal,
+    walletPassesOnFor,
+    walletPassFor,
+    walletPassSettingsRef,
+} from "../utils/walletPass";
 import { recordDoc, type RecordFields, recordRef, type RecordType } from "../utils/records";
 import {
     buildFreshTickets,
@@ -1602,6 +1611,7 @@ export const sendTicketEmails = onCall(
 
         const template = await readSavedTemplate(ticketTemplateRef(eventSnap.ref));
         const contactEmail = await contactEmailFor(template);
+        const walletPass = await walletPassesOnFor(eventSnap.ref);
 
         // Target attendees — capped at SEND_CHUNK_SIZE.
         const attendeesCol = eventSnap.ref.collection("attendees");
@@ -1784,7 +1794,7 @@ export const sendTicketEmails = onCall(
         for (const item of sendableTargets) {
             const {target, data, tickets, queued} = item;
             const envelope = renderTicketEmail(template, contactEmail, {id: eventId, data: eventData},
-                {name: data.name, email: data.email}, tickets);
+                {name: data.name, email: data.email}, tickets, walletPass);
             if (queued) {
                 queueItems.push({target, envelope});
             } else {
@@ -1945,6 +1955,51 @@ export const updateEventEmailTemplate = onCall({maxInstances: 10}, async (reques
             updatedBy: uid,
         }, {merge: true});
         txn.set(recordRef(), recordDoc("upcoming-event-email-template-update", {
+            performedBy: uid,
+            performedByName: callerSnap.data()?.displayName ?? "",
+            eventId,
+            eventTitle: eventSnap.data()?.title ?? eventId,
+        }));
+        return {saved: true};
+    });
+});
+
+// How the event's wallet passes look (see WalletPassSettings), from its Emails
+// section. Core staff and above, as the email template is.
+export const updateWalletPassSettings = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+
+    const input = request.data as {
+        eventId?: string;
+        enabled?: unknown;
+        color?: unknown;
+        headerText?: unknown;
+        notes?: unknown;
+    };
+    const eventId = validateDocId(input.eventId, "eventId");
+    if (typeof input.enabled !== "boolean") throw new HttpsError("invalid-argument", "Invalid enabled.");
+    const color = input.color;
+    if (color !== "auto" && !(WALLET_COLORS as readonly unknown[]).includes(color)) {
+        throw new HttpsError("invalid-argument", "Invalid color.");
+    }
+    const headerText = validateStr(input.headerText, "headerText", 64).trim();
+    if (!Array.isArray(input.notes) || input.notes.length > WALLET_PASS_MAX_NOTES) {
+        throw new HttpsError("invalid-argument", `notes must be an array of at most ${WALLET_PASS_MAX_NOTES}.`);
+    }
+    const notes = input.notes.map((n, i) => ({
+        label: validateStr((n as any)?.label, `notes[${i}].label`, 64).trim(),
+        value: validateStr((n as any)?.value, `notes[${i}].value`, 256, true).trim(),
+    }));
+
+    return adminTransaction(uid, async (txn, callerSnap) => {
+        const eventSnap = await txn.get(db.collection("upcomingEvents").doc(eventId));
+        if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+        txn.set(walletPassSettingsRef(eventSnap.ref), {
+            enabled: input.enabled, color, headerText, notes,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: uid,
+        });
+        txn.set(recordRef(), recordDoc("upcoming-event-wallet-pass-update", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             eventId,

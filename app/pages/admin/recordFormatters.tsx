@@ -511,6 +511,10 @@ export function formatRecordLabel(r: ActivityRecord, ctx: RecordFormatContext): 
             return isEnglish
                 ? <>updated the ticket email template for {event}</>
                 : <>更新了 {event} 的门票邮件模板</>;
+        case 'upcoming-event-wallet-pass-update':
+            return isEnglish
+                ? <>updated the wallet pass for {event}</>
+                : <>更新了 {event} 的钱包票券</>;
         case 'event-staff-assign':
             if (r.reason === 'staff-code') {
                 return isEnglish

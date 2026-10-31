@@ -79,7 +79,7 @@ export const RECORD_CATEGORIES = {
             'upcoming-event-create', 'upcoming-event-edit',
             'upcoming-event-deletion-requested', 'upcoming-event-deletion-cancelled', 'upcoming-event-deleted',
             'upcoming-event-archive', 'upcoming-event-publish', 'upcoming-event-unpublish',
-            'upcoming-event-email-template-update'],
+            'upcoming-event-email-template-update', 'upcoming-event-wallet-pass-update'],
     },
     ticket: {
         en: 'Ticket', zh: '门票',

@@ -11,6 +11,7 @@ import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } f
 import { recordDoc, recordRef } from "../utils/records";
 import { RESEND_API_KEY, ResendSendError, sendEmails } from "../utils/resendClient";
 import { renderTicketEmail, ticketTemplateRef } from "../utils/ticketEmail";
+import { walletPassesOnFor } from "../utils/walletPass";
 import { apiOrderAttendeeId, buildFreshTickets, isApiOrder, type NewTicket, ticketClaimUrl } from "../utils/tickets";
 import { sanitizeDisplayText, validateOptionalEmail, validateStr } from "../utils/validation";
 import { getScheduledMailQueueDepth } from "./scheduledMail";
@@ -535,8 +536,10 @@ const ORDER_EMAIL_TIMEOUT_MS = 10_000;
  */
 async function emailOrder(key: ApiKey, eventId: string, pending: PendingEmail) {
     const {ref, doc, eventData, template, contactEmail} = pending;
+    // The order's attendee doc is under its event's.
+    const walletPass = await walletPassesOnFor(ref.parent.parent!);
     const envelope = renderTicketEmail(template, contactEmail, {id: eventId, data: eventData},
-        {name: doc.name, email: doc.email}, doc.tickets);
+        {name: doc.name, email: doc.email}, doc.tickets, walletPass);
     const recordFields = {
         eventId,
         eventTitle: str(eventData.title) || eventId,

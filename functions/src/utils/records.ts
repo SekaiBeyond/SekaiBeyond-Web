@@ -54,6 +54,7 @@ export type RecordType =
     | "upcoming-event-publish"
     | "upcoming-event-unpublish"
     | "upcoming-event-email-template-update"
+    | "upcoming-event-wallet-pass-update"
     | "ticket-import"
     | "ticket-walk-in"
     | "ticket-redeem"
