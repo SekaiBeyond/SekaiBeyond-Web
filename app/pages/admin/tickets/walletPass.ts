@@ -75,19 +75,19 @@ export function walletTicketStyle(type: string): {label: string; color: WalletCo
         case 'early-bird-student':
             return {label: 'Early Bird Student', color: 'purple'};
         case 'early-bird':
-            return {label: 'Early Bird', color: 'green'};
+            return {label: 'Early Bird', color: 'blue'};
         case 'student':
             return {label: 'Student', color: 'purple'};
         case 'vip':
-            return {label: 'VIP', color: 'orange'};
+            return {label: 'VIP', color: 'red'};
         case 'guest':
-            return {label: 'Guest', color: 'blue'};
+            return {label: 'Guest', color: 'orange'};
         case 'Comp Ticket':
             return {label: 'Comp Ticket', color: 'dark'};
         case 'vendor':
-            return {label: 'Vendor', color: 'orange'};
+            return {label: 'Vendor', color: 'green'};
         default:
-            return {label: 'General Admission', color: 'red'};
+            return {label: 'General Admission', color: 'blue'};
     }
 }
 

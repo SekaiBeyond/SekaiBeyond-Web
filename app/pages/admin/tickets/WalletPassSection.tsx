@@ -129,7 +129,7 @@ export function WalletPassSection({event, settings, loadFailed, readOnly, showTo
                                             className="admin-wallet-swatch"
                                             style={{
                                                 background: color === 'auto'
-                                                    ? `conic-gradient(${['normal', 'early-bird', 'guest', 'vip', 'student']
+                                                    ? `conic-gradient(${['normal', 'vip', 'vendor', 'guest', 'student', 'Comp Ticket']
                                                         .map(t => WALLET_COLOR_STYLES[walletTicketStyle(t).color].bg).join(', ')})`
                                                     : WALLET_COLOR_STYLES[color].bg,
                                             }}

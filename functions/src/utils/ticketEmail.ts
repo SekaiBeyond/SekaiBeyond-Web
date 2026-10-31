@@ -34,27 +34,28 @@ export const ticketIdOf = (ticket: any): string =>
     typeof ticket === "string" ? ticket : (ticket?.ticketId ?? "");
 
 /**
- * How a ticket's type shows: its label, the email pill's colour, and the
- * nearest of WalletWallet's free-plan colour presets for its wallet pass.
+ * How a ticket's type shows: its label, the email pill's colour, and its wallet
+ * pass's colour, one of WalletWallet's free-plan presets. An early bird's pass
+ * is coloured as the general admission it's a cheaper kind of.
  */
 export function ticketTypeStyle(ticket: any): {label: string; bgColor: string; walletColor: string} {
     const typeRaw = typeof ticket === "string" ? "normal" : (ticket?.type ?? "normal");
     if (typeRaw === "early-bird-student" || typeRaw === "earlybirdstudent") {
         return {label: "Early Bird Student", bgColor: "#8e44ad", walletColor: "purple"}; // deep purple
     } else if (typeRaw === "early-bird" || typeRaw === "earlybird") {
-        return {label: "Early Bird", bgColor: "#1abc9c", walletColor: "green"}; // teal
+        return {label: "Early Bird", bgColor: "#1abc9c", walletColor: "blue"}; // teal
     } else if (typeRaw === "student" || typeRaw === "学生") {
         return {label: "Student", bgColor: "#9b59b6", walletColor: "purple"}; // purple
     } else if (typeRaw === "vip") {
-        return {label: "VIP", bgColor: "#f39c12", walletColor: "orange"}; // gold
+        return {label: "VIP", bgColor: "#f39c12", walletColor: "red"}; // gold
     } else if (typeRaw === "guest" || typeRaw === "嘉宾") {
-        return {label: "Guest", bgColor: "#3498db", walletColor: "blue"}; // blue
+        return {label: "Guest", bgColor: "#3498db", walletColor: "orange"}; // blue
     } else if (typeRaw === "Comp Ticket" || typeRaw === "comp" || typeRaw === "赠票") {
         return {label: "Comp Ticket", bgColor: "#95a5a6", walletColor: "dark"}; // gray
     } else if (typeRaw === "vendor" || typeRaw === "商摊") {
-        return {label: "Vendor", bgColor: "#d35400", walletColor: "orange"}; // burnt orange
+        return {label: "Vendor", bgColor: "#d35400", walletColor: "green"}; // burnt orange
     }
-    return {label: "General Admission", bgColor: "#ff6b9d", walletColor: "red"}; // brand pink
+    return {label: "General Admission", bgColor: "#ff6b9d", walletColor: "blue"}; // brand pink
 }
 
 function renderTicketQrBlock(tickets: any[], eventId: string, walletPass: boolean): string {
