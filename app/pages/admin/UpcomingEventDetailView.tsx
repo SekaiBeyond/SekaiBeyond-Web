@@ -110,6 +110,10 @@ export const UpcomingEventDetailView = ({
         }
     };
 
+    // Only an event that's over moves to Past Events; archiveUpcomingEvent
+    // refuses one still to end.
+    const ended = event.endAt <= new Date();
+
     // Derived, so switching an open event to or from paid never renders a tab it
     // doesn't have.
     const subTab = event.paid && (eventSubTab === 'codes' || eventSubTab === 'attendees') ? 'tickets'
@@ -168,6 +172,8 @@ export const UpcomingEventDetailView = ({
                         <button
                             className="admin-toggle-btn admin-toggle-archive"
                             onClick={() => setShowArchive(!showArchive)}
+                            disabled={!ended}
+                            title={ended ? undefined : (isEnglish ? 'Available once the event has ended' : '活动结束后才能归档')}
                         >
                             {isEnglish ? 'Archive to Past Events' : '归档到往期活动'}
                         </button>
@@ -176,7 +182,7 @@ export const UpcomingEventDetailView = ({
                 </>
             )}
 
-            {!readOnly && showArchive && (
+            {!readOnly && showArchive && ended && (
                 <div className="admin-create-badge-form admin-section-mb">
                     <h4 className="admin-badges-title">
                         {isEnglish ? 'Archive Event' : '归档活动'}

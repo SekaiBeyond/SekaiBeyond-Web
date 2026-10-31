@@ -231,8 +231,9 @@ export const escapeHtml = (s: string): string => s
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-// Mirrors renderTicketQrBlock on the server, with placeholders for the QRs.
-const SAMPLE_TICKET_BLOCK = [
+// Mirrors renderTicketQrBlock on the server, with placeholders for the QRs and
+// a wallet button that goes nowhere.
+const sampleTicketBlock = (walletButton: boolean) => [
     {label: 'General Admission', color: '#ff6b9d', id: 'ticket-uuid-1'},
     {label: 'VIP', color: '#f39c12', id: 'ticket-uuid-2'},
 ].map(({label, color, id}, i) =>
@@ -240,10 +241,19 @@ const SAMPLE_TICKET_BLOCK = [
     `<div style="display:inline-block;background-color:${color};color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">${label}</div><br/>` +
     `<div style="display:inline-block;width:300px;max-width:100%;height:300px;line-height:300px;border:1px dashed #aaa;box-sizing:border-box;color:#999;font-size:13px;">QR code, drawn at send time</div>` +
     `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
+    (walletButton
+        ? `<div style="margin-top:12px;"><span style="display:inline-block;background-color:#000000;color:#ffffff;font-weight:bold;font-size:14px;padding:10px 20px;border-radius:8px;text-decoration:none;">Add to Wallet</span></div>`
+        : '') +
     `</div>`,
 ).join('\n');
 
-const fillSample = (text: string, event: UpcomingEvent, contactEmail: string, htmlContext: boolean): string => {
+const fillSample = (
+    text: string,
+    event: UpcomingEvent,
+    contactEmail: string,
+    htmlContext: boolean,
+    walletButton = false,
+): string => {
     const sub = htmlContext ? escapeHtml : (s: string) => s;
     const headerImage = event.emailHeaderBg
         ? `<img src="${escapeHtml(event.emailHeaderBg)}" alt="${sub(event.title)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;"/>`
@@ -263,11 +273,15 @@ const fillSample = (text: string, event: UpcomingEvent, contactEmail: string, ht
         .replace(/{{\s*eventHeader\s*}}/g, () => headerImage)
         .replace(/{{\s*ticketCount\s*}}/g, () => '2')
         .replace(CONTACT_EMAIL_PLACEHOLDER, placeholder => contactEmail ? sub(contactEmail) : placeholder)
-        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, () => SAMPLE_TICKET_BLOCK);
+        .replace(/(<p>\s*|<div>\s*)?{{\s*ticketIds\[\]\s*}}(\s*<\/p>|\s*<\/div>)?/g, () => sampleTicketBlock(walletButton));
 };
 
 export const renderSampleSubject = (template: EmailTemplate, event: UpcomingEvent, contactEmail: string): string =>
     fillSample(template.subject, event, contactEmail, false);
 
-export const renderSamplePreview = (template: EmailTemplate, event: UpcomingEvent, contactEmail: string): string =>
-    sanitizeEmailHtml(fillSample(template.bodyHtml, event, contactEmail, true));
+export const renderSamplePreview = (
+    template: EmailTemplate,
+    event: UpcomingEvent,
+    contactEmail: string,
+    walletButton: boolean,
+): string => sanitizeEmailHtml(fillSample(template.bodyHtml, event, contactEmail, true, walletButton));

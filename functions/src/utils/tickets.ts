@@ -55,6 +55,11 @@ export function ticketClaimUrl(ticketId: string, eventId: string): string {
     return `${PUBLIC_ORIGIN}/claim?ticket=${encodeURIComponent(ticketId)}&event=${encodeURIComponent(eventId)}`;
 }
 
+/** A ticket email's Add to Wallet link: serveWalletPass, which makes or finds its pass. */
+export function walletPassUrl(ticketId: string, eventId: string): string {
+    return `${PUBLIC_ORIGIN}/api/wallet-pass?ticket=${encodeURIComponent(ticketId)}&event=${encodeURIComponent(eventId)}`;
+}
+
 /**
  * Whether a stored ticket got its holder through the door: redeemed and not
  * voided since. Both sign-up and the tickets view credit attendance from this,

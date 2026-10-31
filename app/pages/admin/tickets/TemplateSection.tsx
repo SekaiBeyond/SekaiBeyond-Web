@@ -21,9 +21,18 @@ interface TemplateSectionProps {
     onUnsavedChange: (unsaved: boolean) => void;
     /** Whether a template is saved, once the stored one has been read. */
     onSavedChange: (saved: boolean) => void;
+    /** Whether the event's emails give each ticket an Add to Wallet button. */
+    walletButton: boolean;
 }
 
-export function TemplateSection({event, readOnly, showToast, onUnsavedChange, onSavedChange}: TemplateSectionProps) {
+export function TemplateSection({
+                                    event,
+                                    readOnly,
+                                    showToast,
+                                    onUnsavedChange,
+                                    onSavedChange,
+                                    walletButton,
+                                }: TemplateSectionProps) {
     const {isEnglish} = useLanguage();
     const {config} = useSiteConfig();
     const editor = useEmailTemplate({
@@ -96,7 +105,7 @@ export function TemplateSection({event, readOnly, showToast, onUnsavedChange, on
                 readOnly={readOnly}
                 renderPreview={t => ({
                     subject: renderSampleSubject(t, event, config.contactEmail),
-                    html: renderSamplePreview(t, event, config.contactEmail),
+                    html: renderSamplePreview(t, event, config.contactEmail, walletButton),
                 })}
             />
         </div>

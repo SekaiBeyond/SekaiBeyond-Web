@@ -3,6 +3,7 @@ import { PUBLIC_ORIGIN } from "./config";
 import { CONTACT_EMAIL_PLACEHOLDER, type EmailTemplateDoc, escapeHtml, subjectLine } from "./emailTemplate";
 import { type ResendEnvelope } from "./resendClient";
 import { SITE_TIME_ZONE } from "./siteTime";
+import { walletPassUrl } from "./tickets";
 
 /**
  * The ticket email: an event's saved template filled in for one attendee, with
@@ -14,7 +15,7 @@ import { SITE_TIME_ZONE } from "./siteTime";
 export const ticketTemplateRef = (eventRef: FirebaseFirestore.DocumentReference) =>
     eventRef.collection("emailTemplate").doc("default");
 
-function formatEventDateForEmail(startAt: Timestamp | undefined): string {
+export function formatEventDateForEmail(startAt: Timestamp | undefined): string {
     if (!startAt) return "";
     try {
         return new Intl.DateTimeFormat("en-US", {
@@ -29,44 +30,58 @@ function formatEventDateForEmail(startAt: Timestamp | undefined): string {
     }
 }
 
-function renderTicketQrBlock(tickets: any[], eventId: string): string {
+export const ticketIdOf = (ticket: any): string =>
+    typeof ticket === "string" ? ticket : (ticket?.ticketId ?? "");
+
+/**
+ * How a ticket's type shows: its label, the email pill's colour, and on its
+ * wallet pass, a colour (one of WalletWallet's free-plan presets) and a label
+ * short enough for the top-right corner, where a long one is cut off. An early
+ * bird's pass is coloured as the general admission it's a cheaper kind of.
+ */
+export function ticketTypeStyle(ticket: any): {
+    label: string;
+    bgColor: string;
+    walletColor: string;
+    walletLabel: string
+} {
+    const typeRaw = typeof ticket === "string" ? "normal" : (ticket?.type ?? "normal");
+    if (typeRaw === "early-bird-student" || typeRaw === "earlybirdstudent") {
+        return {label: "Early Bird Student", bgColor: "#8e44ad", walletColor: "purple", walletLabel: "Student EB"}; // deep purple
+    } else if (typeRaw === "early-bird" || typeRaw === "earlybird") {
+        return {label: "Early Bird", bgColor: "#1abc9c", walletColor: "blue", walletLabel: "General EB"}; // teal
+    } else if (typeRaw === "student" || typeRaw === "学生") {
+        return {label: "Student", bgColor: "#9b59b6", walletColor: "purple", walletLabel: "Student"}; // purple
+    } else if (typeRaw === "vip") {
+        return {label: "VIP", bgColor: "#f39c12", walletColor: "red", walletLabel: "VIP"}; // gold
+    } else if (typeRaw === "guest" || typeRaw === "嘉宾") {
+        return {label: "Guest", bgColor: "#3498db", walletColor: "orange", walletLabel: "Guest"}; // blue
+    } else if (typeRaw === "Comp Ticket" || typeRaw === "comp" || typeRaw === "赠票") {
+        return {label: "Comp Ticket", bgColor: "#95a5a6", walletColor: "dark", walletLabel: "Comp"}; // gray
+    } else if (typeRaw === "vendor" || typeRaw === "商摊") {
+        return {label: "Vendor", bgColor: "#d35400", walletColor: "green", walletLabel: "Vendor"}; // burnt orange
+    }
+    return {label: "General Admission", bgColor: "#ff6b9d", walletColor: "blue", walletLabel: "General"}; // brand pink
+}
+
+function renderTicketQrBlock(tickets: any[], eventId: string, walletPass: boolean): string {
     // One <div> per ticket. Images reference the serverless QR generation endpoint.
     return tickets.map((ticket, i) => {
-        const id = typeof ticket === "string" ? ticket : (ticket.ticketId ?? "");
-        const typeRaw = typeof ticket === "string" ? "normal" : (ticket.type ?? "normal");
-
-        let typeLabel = "General Admission";
-        let bgColor = "#ff6b9d"; // brand pink
-
-        if (typeRaw === "early-bird-student" || typeRaw === "earlybirdstudent") {
-            typeLabel = "Early Bird Student";
-            bgColor = "#8e44ad"; // deep purple
-        } else if (typeRaw === "early-bird" || typeRaw === "earlybird") {
-            typeLabel = "Early Bird";
-            bgColor = "#1abc9c"; // teal
-        } else if (typeRaw === "student" || typeRaw === "学生") {
-            typeLabel = "Student";
-            bgColor = "#9b59b6"; // purple
-        } else if (typeRaw === "vip") {
-            typeLabel = "VIP";
-            bgColor = "#f39c12"; // gold
-        } else if (typeRaw === "guest" || typeRaw === "嘉宾") {
-            typeLabel = "Guest";
-            bgColor = "#3498db"; // blue
-        } else if (typeRaw === "Comp Ticket" || typeRaw === "comp" || typeRaw === "赠票") {
-            typeLabel = "Comp Ticket";
-            bgColor = "#95a5a6"; // gray
-        } else if (typeRaw === "vendor" || typeRaw === "商摊") {
-            typeLabel = "Vendor";
-            bgColor = "#d35400"; // burnt orange
-        }
+        const id = ticketIdOf(ticket);
+        const {label: typeLabel, bgColor} = ticketTypeStyle(ticket);
 
         const qrUrl = `${PUBLIC_ORIGIN}/api/ticket-qr?ticket=${encodeURIComponent(id)}&event=${encodeURIComponent(eventId)}`;
+        // On every ticket while the event's passes are on; the pass is made when
+        // it's first opened (serveWalletPass).
+        const walletButton = walletPass
+            ? `<div style="margin-top:12px;"><a href="${escapeHtml(walletPassUrl(id, eventId))}" style="display:inline-block;background-color:#000000;color:#ffffff;font-weight:bold;font-size:14px;padding:10px 20px;border-radius:8px;text-decoration:none;">Add to Wallet</a></div>`
+            : "";
         // A wide gap so framing one code doesn't also catch its neighbour.
         return `<div style="margin:${i === 0 ? 16 : 72}px 0 16px;text-align:center;">` +
             `<div style="display:inline-block;background-color:${bgColor};color:#ffffff;font-weight:bold;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">${typeLabel}</div><br/>` +
             `<img src="${qrUrl}" alt="Ticket ${id}" width="300" height="300" style="width:300px;max-width:100%;height:auto;display:inline-block;"/>` +
             `<div style="font-family:monospace;font-size:12px;color:#555;word-break:break-all;">${id}</div>` +
+            walletButton +
             `</div>`;
     }).join("\n");
 }
@@ -114,7 +129,8 @@ function renderTemplate(
 
 /**
  * One attendee's ticket email. `tickets` are the ones to send, voided ones
- * already left out.
+ * already left out; `walletPass` gives each an Add to Wallet button (see
+ * walletPassesOnFor).
  */
 export function renderTicketEmail(
     template: EmailTemplateDoc,
@@ -122,6 +138,7 @@ export function renderTicketEmail(
     event: {id: string; data: FirebaseFirestore.DocumentData},
     attendee: {name?: string; email: string},
     tickets: any[],
+    walletPass: boolean,
 ): ResendEnvelope {
     const fields = {
         attendeeEmail: attendee.email,
@@ -140,6 +157,9 @@ export function renderTicketEmail(
         // subjectLine, so a newline in eventTitle or attendeeName can't inject
         // headers.
         subject: subjectLine(renderTemplate(template.subject, {...fields, ticketBlock: ""}, false)),
-        html: renderTemplate(template.bodyHtml, {...fields, ticketBlock: renderTicketQrBlock(tickets, event.id)}, true),
+        html: renderTemplate(template.bodyHtml, {
+            ...fields,
+            ticketBlock: renderTicketQrBlock(tickets, event.id, walletPass)
+        }, true),
     };
 }

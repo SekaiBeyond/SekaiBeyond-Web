@@ -3250,6 +3250,256 @@ select.admin-tickets-tag:focus {
     cursor: default;
 }
 
+/* Wallet pass settings, beside a preview of the pass. */
+.admin-wallet-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.admin-wallet-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 24px;
+    align-items: start;
+}
+
+/* Front and back side by side need the width; below it, the form stacks
+   above them. */
+@media (max-width: 1200px) {
+    .admin-wallet-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.admin-wallet-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.admin-wallet-colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-wallet-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 2px solid rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--color-text);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.admin-wallet-color.is-selected {
+    border-color: var(--color-primary);
+    font-weight: 700;
+}
+
+.admin-wallet-color:disabled {
+    cursor: default;
+}
+
+.admin-wallet-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.admin-wallet-note {
+    display: grid;
+    grid-template-columns: minmax(0, 160px) minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: start;
+}
+
+@media (max-width: 600px) {
+    .admin-wallet-note {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .admin-wallet-note-text {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+}
+
+.admin-wallet-note-text {
+    font-family: inherit;
+    min-height: 0;
+}
+
+.admin-wallet-add {
+    align-self: flex-start;
+}
+
+.admin-wallet-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.admin-wallet-preview-sides {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.admin-wallet-preview-side {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-wallet-preview-side figcaption {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    text-align: center;
+}
+
+/* Apple Wallet's look and an iPhone's pass width: its system font, whatever
+   the site's. */
+.admin-wallet-preview-card,
+.admin-wallet-preview-back {
+    box-sizing: border-box;
+    width: 320px;
+    max-width: 100%;
+    min-height: 420px;
+    border-radius: 14px;
+    padding: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.admin-wallet-preview-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.admin-wallet-preview-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.admin-wallet-preview-logo {
+    flex: 1;
+    min-width: 0;
+    font-size: 17px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-wallet-preview-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.admin-wallet-preview-label {
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.admin-wallet-preview-value {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+
+.admin-wallet-preview-field--end {
+    flex-shrink: 0;
+    max-width: 55%;
+    text-align: right;
+}
+
+.admin-wallet-preview-field--primary .admin-wallet-preview-value {
+    font-size: 26px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-wallet-preview-row {
+    display: flex;
+    gap: 16px;
+}
+
+.admin-wallet-preview-row > .admin-wallet-preview-field {
+    flex: 1;
+}
+
+.admin-wallet-preview-barcode {
+    margin-top: auto;
+    display: flex;
+    justify-content: center;
+}
+
+.admin-wallet-preview-qr {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #fff;
+    color: #000;
+    font-size: 10px;
+}
+
+.admin-wallet-preview-back {
+    display: flex;
+    flex-direction: column;
+    background: #f2f2f7;
+    color: #111;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.admin-wallet-preview-back-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.admin-wallet-preview-back-label {
+    font-size: 12px;
+    color: #6b6b70;
+}
+
+.admin-wallet-preview-back-value {
+    font-size: 14px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.admin-wallet-preview-type {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--color-text);
+}
+
 .admin-tickets-edit-warning {
     padding: 10px 14px;
     background: rgba(254, 202, 87, 0.15);

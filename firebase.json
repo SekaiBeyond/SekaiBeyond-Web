@@ -72,6 +72,10 @@
         "function": "serveTicketQr"
       },
       {
+        "source": "/api/wallet-pass",
+        "function": "serveWalletPass"
+      },
+      {
         "source": "/qr",
         "function": "redirectQr"
       },

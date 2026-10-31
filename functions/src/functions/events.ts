@@ -9,6 +9,7 @@ import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
 import { recordDoc, recordRef, type RecordType } from "../utils/records";
 import { siteDay } from "../utils/siteTime";
+import { revokeEventWalletPasses, WALLETWALLET_API_KEY } from "../utils/walletPass";
 import {
     validateBoolean,
     validateDay,
@@ -302,7 +303,8 @@ export const requestUpcomingEventDeletion = onCall({maxInstances: 10},
 export const cancelUpcomingEventDeletion = onCall({maxInstances: 10},
     request => cancelDeletion(request, UPCOMING_EVENT));
 export const onUpcomingEventDeleted = onDocumentDeleted(
-    {document: "upcomingEvents/{eventId}", maxInstances: 10},
+    // The time and the key for revoking its wallet passes.
+    {document: "upcomingEvents/{eventId}", maxInstances: 10, timeoutSeconds: 300, secrets: [WALLETWALLET_API_KEY]},
     async (event) => {
         const data = event.data?.data();
         const eventId = event.params.eventId;
@@ -353,6 +355,16 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             if (staffOps.length > 0) await commitInChunks(staffOps);
         } catch (err) {
             console.error(`onUpcomingEventDeleted: eventStaffEvents cascade failed for ${eventId}`, err);
+        }
+
+        // Its tickets' wallet passes, before their attendees go: a cancelled
+        // event's would otherwise still look valid until it would have ended.
+        try {
+            const attendees = await db.collection("upcomingEvents").doc(eventId).collection("attendees").get();
+            const revoked = await revokeEventWalletPasses(attendees.docs);
+            if (revoked > 0) console.log(`onUpcomingEventDeleted: revoked ${revoked} wallet pass(es) for ${eventId}`);
+        } catch (err) {
+            console.error(`onUpcomingEventDeleted: wallet pass revoke failed for ${eventId}`, err);
         }
 
         // Firestore leaves subcollections behind. An archive never gets here:
@@ -412,6 +424,15 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
     // first: otherwise anyone signed in could copy attendees into an orphaned
     // pastEvents path.
     await requireAdmin(uid);
+
+    // Only an event that's over moves to Past Events. Checked before Phase A,
+    // so a refusal leaves no copies under pastEvents.
+    const eventSnap = await db.collection("upcomingEvents").doc(eventId).get();
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+    const endAt: number | undefined = eventSnap.data()!.endAt?.toMillis?.();
+    if (endAt !== undefined && endAt > Date.now()) {
+        throw new HttpsError("failed-precondition", "Only an event that has ended can be archived.");
+    }
 
     // ---- Phase A: stream-copy subcollections to pastEvents ----
     const attendeesSrc = db.collection("upcomingEvents").doc(eventId).collection("attendees");

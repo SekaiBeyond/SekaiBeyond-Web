@@ -6,6 +6,7 @@ import { db } from "../utils/firebase";
 import { EMAIL_PROVIDER, syncProviderUsage } from "../utils/emailProvider";
 import { computeEmailQuotaDetail } from "../utils/quota";
 import { getSenderAddress, RESEND_API_KEY } from "../utils/resendClient";
+import { readWalletQuota, syncWalletUsage, WALLETWALLET_API_KEY } from "../utils/walletPass";
 import { DRAIN_INTERVAL_MINUTES, getScheduledMailQueueStatus } from "./scheduledMail";
 import { recordDoc, recordRef } from "../utils/records";
 import {
@@ -1202,6 +1203,26 @@ export const getEmailQuotaStatus = onCall({
         ...queue,
         queueCap: RESEND_QUEUE_CAP,
         drainIntervalMinutes: DRAIN_INTERVAL_MINUTES,
+        serverNow: new Date().toISOString(),
+    };
+});
+
+// This month's wallet passes for the Wallet Passes tool: WalletWallet's own
+// count when it answers, and the cap ticket emails are held to. Staff+, like
+// getEmailQuotaStatus.
+export const getWalletPassStatus = onCall({
+    maxInstances: 5,
+    secrets: [WALLETWALLET_API_KEY],
+}, async (request) => {
+    const uid = await requireAuth(request, "staff");
+    await requireStaff(uid);
+
+    const provider = await syncWalletUsage();
+    const quota = await readWalletQuota();
+    return {
+        ...quota,
+        provider,
+        readingSource: provider !== null ? "live" : quota.observedAt !== null ? "cached" : "unavailable",
         serverNow: new Date().toISOString(),
     };
 });
