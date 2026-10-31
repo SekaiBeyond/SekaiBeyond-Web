@@ -244,8 +244,8 @@ export const WalletPassesTool = ({onBack, showToast}: WalletPassesToolProps) => 
                             </li>
                             <li>
                                 {isEnglish
-                                    ? `A ticket can make at most ${status.perTicketDailyCap} new pass${status.perTicketDailyCap === 1 ? '' : 'es'} a day (WALLET_PASS_DAILY_CAP_PER_TICKET), which only matters when it has none to reuse: after a void and unvoid, or if one couldn't be saved.`
-                                    : `每张门票每天最多生成 ${status.perTicketDailyCap} 张新票券（WALLET_PASS_DAILY_CAP_PER_TICKET），仅在没有可沿用的票券时生效：例如作废后又恢复，或票券未能保存。`}
+                                    ? `A ticket can make at most ${status.perTicketDailyCap} new pass${status.perTicketDailyCap === 1 ? '' : 'es'} a day (WALLET_PASS_DAILY_CAP_PER_TICKET), which only matters when it has none to reuse: after a void and unvoid, a retry after WalletWallet didn't answer, or if one couldn't be saved. Taps at the same moment share one pass.`
+                                    : `每张门票每天最多生成 ${status.perTicketDailyCap} 张新票券（WALLET_PASS_DAILY_CAP_PER_TICKET），仅在没有可沿用的票券时生效：例如作废后又恢复、WalletWallet 未响应后重试，或票券未能保存。同时多次点击只会生成一张票券。`}
                             </li>
                             {status.provider?.trialExpiresAt && (
                                 <li>

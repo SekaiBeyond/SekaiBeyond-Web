@@ -1,4 +1,5 @@
-import { FieldPath, FieldValue } from "firebase-admin/firestore";
+import { randomUUID } from "crypto";
+import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import {
     WALLET_PASS_DAILY_CAP_PER_TICKET,
@@ -19,10 +20,12 @@ import { isApiOrder, ticketClaimUrl } from "./tickets";
  * Every ticket in a ticket email links serveWalletPass (walletPassUrl), and a
  * pass is made the first time that link is opened (walletPassFor). It's kept on
  * the attendee doc as walletPasses.<ticketId> ({serial, shareUrl, createdAt}),
- * so opening the link again goes to the same pass. A ticket makes at most
+ * so opening the link again goes to the same pass, and opens landing together
+ * share the one the first of them makes. A ticket makes at most
  * WALLET_PASS_DAILY_CAP_PER_TICKET passes a day (walletPassDaily.<ticketId>,
  * {day, made}), which only comes into play when its pass can't be reused: once
- * revoked, or when one was made but couldn't be kept.
+ * revoked, after WalletWallet didn't answer, or when one was made but couldn't
+ * be kept.
  */
 
 // Bind to functions that make or revoke passes. Without the binding, value()
@@ -266,13 +269,23 @@ export type WalletPassRefusal =
     | "month-limit"
     | "failed";
 
+// How long a claim on a ticket holds off other opens: well past one createPass
+// and keeping its pass. One older was left by an instance that died mid-make,
+// and the next open may claim the ticket again.
+const CLAIM_TTL_MS = 30_000;
+// How long an open waits on another's claim, and how often it looks.
+const CLAIM_WAIT_MS = 15_000;
+const CLAIM_POLL_MS = 500;
+
 /**
  * The share link of a ticket's wallet pass: its kept one, or one made now while
  * the ticket's daily cap and the month's allowance allow. Never throws.
  *
- * The ticket and both caps are checked and charged in one transaction, so two
- * opens at once can't both spend the last of either. A pass made but not
- * answered for stays charged, as WalletWallet may have counted it.
+ * The ticket is claimed (walletPasses.<ticketId> = {claim, claimedAt}) and both
+ * caps charged in one transaction before its pass is made, so opens landing
+ * together make one pass between them: the rest wait for it. A claim whose pass
+ * isn't made is let go, so the ticket can try again; one not answered for stays
+ * charged, as WalletWallet may have counted it.
  */
 export async function walletPassFor(
     eventId: string,
@@ -284,8 +297,10 @@ export async function walletPassFor(
     const eventRef = db.collection("upcomingEvents").doc(eventId);
     const month = currentMonth();
     const day = siteDay(Date.now());
-    // Done in the transaction, or one pass claimed there for this ticket.
-    type Claim = {shareUrl: string} | {refusal: WalletPassRefusal} | {
+    const claimId = randomUUID();
+    // Settled in the transaction, another open's claim to wait on, or this
+    // one's own.
+    type Claim = {shareUrl: string} | {refusal: WalletPassRefusal} | {waitOn: FirebaseFirestore.DocumentReference} | {
         ref: FirebaseFirestore.DocumentReference;
         ticket: any;
         event: {id: string; data: FirebaseFirestore.DocumentData};
@@ -311,8 +326,10 @@ export async function walletPassFor(
             const endAt: number | undefined = eventSnap.data()!.endAt?.toMillis?.();
             if (endAt !== undefined && endAt <= Date.now()) return {refusal: "ended"};
 
-            const kept = data!.walletPasses?.[ticketId]?.shareUrl;
-            if (typeof kept === "string" && kept) return {shareUrl: kept};
+            const kept = data!.walletPasses?.[ticketId];
+            if (typeof kept?.shareUrl === "string" && kept.shareUrl) return {shareUrl: kept.shareUrl};
+            const claimedAt: number | undefined = kept?.claimedAt?.toMillis?.();
+            if (claimedAt !== undefined && Date.now() - claimedAt < CLAIM_TTL_MS) return {waitOn: attendee.ref};
 
             const daily = data!.walletPassDaily?.[ticketId];
             const madeToday = daily?.day === day ? count(daily.made) : 0;
@@ -321,13 +338,16 @@ export async function walletPassFor(
             if (used >= monthlyLimit(providerLimit)) return {refusal: "month-limit"};
 
             txn.set(QUOTA_DOC, {month, used: used + 1}, {merge: true});
-            txn.update(attendee.ref, new FieldPath("walletPassDaily", ticketId), {day, made: madeToday + 1});
+            txn.update(attendee.ref,
+                new FieldPath("walletPassDaily", ticketId), {day, made: madeToday + 1},
+                new FieldPath("walletPasses", ticketId), {claim: claimId, claimedAt: Timestamp.now()});
             return {ref: attendee.ref, ticket, event: {id: eventId, data: eventSnap.data()!}};
         });
     } catch (err) {
         console.error(`walletPassFor: ${eventId}/${ticketId} couldn't be read`, err);
         return {refusal: "failed"};
     }
+    if ("waitOn" in claim) return awaitClaim(claim.waitOn, ticketId);
     if (!("ref" in claim)) return claim;
 
     // Site Config's contact address, for the back of the pass.
@@ -335,19 +355,60 @@ export async function walletPassFor(
         .then(s => str(s.get("contactEmail")), () => "");
     const outcome = await createPass(key, passBody(claim.event, claim.ticket, contactEmail));
     if (outcome.kind === "made") {
+        // In place of the claim. A pass that failed to be kept still goes to
+        // this open; once the claim lapses, the next makes another.
         await claim.ref.update(new FieldPath("walletPasses", ticketId),
             {serial: outcome.serial, shareUrl: outcome.shareUrl, createdAt: FieldValue.serverTimestamp()})
             .catch(err => console.error(`walletPassFor: made ${outcome.serial}, but failed to keep it`, err));
         return {shareUrl: outcome.shareUrl};
     }
-    if (outcome.kind === "refused") {
-        // Not made, so neither cap is spent.
-        await Promise.all([
-            settlePasses(month, outcome.status === 429),
-            claim.ref.update(new FieldPath("walletPassDaily", ticketId, "made"), FieldValue.increment(-1))
-                .catch(err => console.error("walletPassFor: failed to give back the ticket's pass", err)),
-        ]);
-        if (outcome.status === 429) return {refusal: "month-limit"};
+    // Refused, it wasn't made, so neither cap is spent.
+    const refused = outcome.kind === "refused";
+    await Promise.all([
+        letClaimGo(claim.ref, ticketId, claimId, refused),
+        refused ? settlePasses(month, outcome.status === 429) : null,
+    ]);
+    return refused && outcome.status === 429 ? {refusal: "month-limit"} : {refusal: "failed"};
+}
+
+// Drops this open's claim, unless it has lapsed to another's, and with
+// `giveBack` the ticket's charge for today. Errors are logged and swallowed: a
+// claim left in place lapses after CLAIM_TTL_MS.
+async function letClaimGo(
+    ref: FirebaseFirestore.DocumentReference,
+    ticketId: string,
+    claimId: string,
+    giveBack: boolean,
+): Promise<void> {
+    try {
+        await db.runTransaction(async (txn) => {
+            const data = (await txn.get(ref)).data();
+            if (!data) return;
+            const changes: unknown[] = [];
+            if (data.walletPasses?.[ticketId]?.claim === claimId) {
+                changes.push(new FieldPath("walletPasses", ticketId), FieldValue.delete());
+            }
+            if (giveBack) changes.push(new FieldPath("walletPassDaily", ticketId, "made"), FieldValue.increment(-1));
+            if (changes.length > 0) txn.update(ref, changes[0] as FieldPath, changes[1], ...changes.slice(2));
+        });
+    } catch (err) {
+        console.error(`letClaimGo: failed for ${ticketId}`, err);
+    }
+}
+
+// The pass another open is making for this ticket, once it's kept. "failed" if
+// that open lets its claim go, or hasn't finished within CLAIM_WAIT_MS, for the
+// holder to try again.
+async function awaitClaim(
+    ref: FirebaseFirestore.DocumentReference,
+    ticketId: string,
+): Promise<{shareUrl: string} | {refusal: WalletPassRefusal}> {
+    const deadline = Date.now() + CLAIM_WAIT_MS;
+    while (Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, CLAIM_POLL_MS));
+        const entry = (await ref.get().catch(() => null))?.get(new FieldPath("walletPasses", ticketId));
+        if (typeof entry?.shareUrl === "string" && entry.shareUrl) return {shareUrl: entry.shareUrl};
+        if (!entry?.claimedAt) break;
     }
     return {refusal: "failed"};
 }
