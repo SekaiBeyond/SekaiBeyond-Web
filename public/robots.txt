@@ -1,0 +1,6 @@
+User-agent: *
+# API endpoints, and the QR redirect, which counts each visit as a scan.
+Disallow: /api/
+Disallow: /qr
+
+Sitemap: https://sekaibeyond.com/sitemap.xml

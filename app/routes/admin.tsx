@@ -1,11 +1,9 @@
 import type { Route } from "./+types/admin";
+import { unlistedMeta } from "~/lib/seo";
 import { AdminPage } from "~/pages/admin/index";
 
 export function meta({}: Route.MetaArgs) {
-    return [
-        {title: "Admin | Sekai Beyond"},
-        {name: "description", content: "Admin management panel"},
-    ];
+    return unlistedMeta("Admin | Sekai Beyond", "Admin management panel");
 }
 
 export default function Admin() {

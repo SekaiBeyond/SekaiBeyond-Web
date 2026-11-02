@@ -1,12 +1,9 @@
 import type { Route } from "./+types/passport";
+import { unlistedMeta } from "~/lib/seo";
 import { PassportPage } from "~/pages/passport";
 
 export function meta({}: Route.MetaArgs) {
-    return [
-        {title: "Passport | Sekai Beyond"},
-        {name: "description", content: "A Sekai Beyond membership passport"},
-        {name: "robots", content: "noindex, nofollow"},
-    ];
+    return unlistedMeta("Passport | Sekai Beyond", "A Sekai Beyond membership passport");
 }
 
 export default function Passport() {

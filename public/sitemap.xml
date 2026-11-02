@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The public pages. The rest are signed-in or marked noindex. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://sekaibeyond.com/</loc>
+    </url>
+    <url>
+        <loc>https://sekaibeyond.com/con</loc>
+    </url>
+    <url>
+        <loc>https://sekaibeyond.com/parking</loc>
+    </url>
+    <url>
+        <loc>https://sekaibeyond.com/policy</loc>
+    </url>
+</urlset>

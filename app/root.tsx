@@ -7,6 +7,16 @@ import { AuthProvider } from "~/components/AuthProvider";
 import { RedeemModal } from "~/components/RedeemModal";
 import type { ReactNode } from "react";
 
+// Unknown paths are still served with a 200 (the SPA fallback), so this keeps
+// them out of search results.
+export function meta({error}: Route.MetaArgs) {
+    if (!error) return [];
+    return [
+        {title: isRouteErrorResponse(error) && error.status === 404 ? "Page Not Found | Sekai Beyond" : "Error | Sekai Beyond"},
+        {name: "robots", content: "noindex"},
+    ];
+}
+
 export function Layout({children}: {children: ReactNode}) {
     return (
         <html lang="en">
