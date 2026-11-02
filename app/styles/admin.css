@@ -534,6 +534,64 @@
     background: var(--gradient-cta);
 }
 
+/* Whether the name and photo are the user's own or their Google account's. */
+.admin-detail-sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0 4px;
+}
+
+.admin-source-tag {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.admin-source-tag[data-source="custom"] {
+    background: rgba(155, 89, 182, 0.12);
+    color: #7d3c98;
+}
+
+.admin-source-tag[data-source="google"],
+.admin-source-tag[data-source="none"] {
+    background: rgba(158, 158, 158, 0.15);
+    color: #757575;
+}
+
+/* A list row doesn't wrap, so on a phone the tag would squeeze the name; the
+   user's page still shows it. */
+@media (max-width: 600px) {
+    .admin-user-row .admin-source-tag {
+        display: none;
+    }
+}
+
+.admin-detail-header .admin-detail-google {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.admin-detail-google-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.admin-detail-google-avatar.admin-user-avatar-initial {
+    font-size: 10px;
+    line-height: 1;
+}
+
 .admin-detail-header .admin-detail-joined {
     font-size: 12px;
     color: var(--color-text-light);

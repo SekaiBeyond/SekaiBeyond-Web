@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { getAuth } from "firebase-admin/auth";
+import { getAuth, type UserRecord } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     ADMIN_GROUPS,
@@ -12,6 +12,7 @@ import {
     normalizeGroup,
     requireAuth,
     requireCanManage,
+    requireStaff,
 } from "../utils/auth";
 import { claimAccountEmail, normalizeEmail, verifiedEmail } from "../utils/accountEmail";
 import { deletionExpiresAt } from "../utils/config";
@@ -177,6 +178,40 @@ export const getPublicProfile = onCall({maxInstances: 20}, async (request) => {
         title: data.title ?? "",
         titleCn: data.titleCn ?? "",
         visibility: {badges: showBadges, events: showEvents, passports: showPassports},
+    };
+});
+
+/**
+ * The name and photo a user's Google account gives, so the admin user page can
+ * tell a name or photo set on the site from the Google one the profile started
+ * with. Staff+ only, as they can already read the profile it's compared with.
+ *
+ * Two names, since the profile copied the sign-up one and Google's may have
+ * changed since: `signUpName` is the Auth record's, `name` the Google
+ * provider's latest. Both come cleaned as createUserProfile cleans them, so
+ * they compare with displayName as stored.
+ */
+export const getGoogleProfile = onCall({maxInstances: 10}, async (request) => {
+    const uid = await requireAuth(request);
+    await requireStaff(uid);
+
+    const targetUid = validateDocId((request.data as {uid?: string})?.uid, "uid");
+    let record: UserRecord;
+    try {
+        record = await getAuth().getUser(targetUid);
+    } catch (err: unknown) {
+        if ((err as {code?: string})?.code === "auth/user-not-found") {
+            throw new HttpsError("not-found", "User not found.");
+        }
+        throw err;
+    }
+
+    const google = record.providerData.find(p => p.providerId === "google.com");
+    const clean = (name: string | undefined) => sanitizeDisplayText(name ?? "").slice(0, 50);
+    return {
+        name: clean(google?.displayName ?? record.displayName),
+        signUpName: clean(record.displayName),
+        photoURL: (google?.photoURL ?? record.photoURL ?? "").slice(0, 500),
     };
 });
 

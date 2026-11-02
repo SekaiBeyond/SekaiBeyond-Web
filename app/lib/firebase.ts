@@ -775,6 +775,15 @@ export const callGetPublicProfile = (data: {uid: string}) =>
         visibility: {badges: boolean; events: boolean; passports: boolean};
     }>(getFunctions(), 'getPublicProfile')(data);
 
+/**
+ * A user's Google account name and photo, for staff+. `signUpName` is the name
+ * the profile started as, `name` Google's latest; both cleaned as a stored
+ * displayName is, so they compare directly.
+ */
+export const callGetGoogleProfile = (data: {uid: string}) =>
+    httpsCallable<typeof data, {name: string; signUpName: string; photoURL: string}>(
+        getFunctions(), 'getGoogleProfile')(data);
+
 // Callables carry JSON, so an uploaded file travels as bare base64.
 const readFileAsBase64 = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();

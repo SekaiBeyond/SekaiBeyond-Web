@@ -25,7 +25,7 @@ import type { BadgeDef } from '~/lib/badges';
 import type { UserRecord } from './types';
 import { UserRow } from './UserRow';
 import { buildUserListQuery, docToUserRecord, searchUsers, type ShowToast } from './utils';
-import { UserDetailView } from './UserDetailView';
+import { PhotoSourceTag, UserDetailView } from './UserDetailView';
 
 const PAGE_SIZE = 10;
 
@@ -63,6 +63,7 @@ const UserTags = ({user, pendingDeletion}: {user: UserRecord; pendingDeletion: b
                     {isEnglish ? 'Member' : '会员'}
                 </span>
             )}
+            <PhotoSourceTag photoURL={user.photoURL}/>
         </>
     );
 };

@@ -7,6 +7,7 @@ import {
     callChangeUserGroup,
     callDeleteAvatar,
     callDeleteBanner,
+    callGetGoogleProfile,
     callRequestAccountDeletion,
     callSetUserTitle,
     callToggleAttendance,
@@ -86,6 +87,81 @@ const GrantRow = ({image, name, detail, has, hasLabel, lacksLabel, readOnly, dis
     );
 };
 
+type GoogleProfile = Awaited<ReturnType<typeof callGetGoogleProfile>>['data'];
+
+/**
+ * Whether a photo was uploaded on the site or is the Google account's, read
+ * from its URL alone, so the user lists can show it too.
+ */
+export const PhotoSourceTag = ({photoURL}: {photoURL: string}) => {
+    const {isEnglish} = useLanguage();
+    const custom = isStorageUrl(photoURL);
+    return (
+        <span
+            className="admin-source-tag"
+            data-source={custom ? 'custom' : photoURL ? 'google' : 'none'}
+            title={custom
+                ? (isEnglish ? 'Uploaded on the site, not their Google account photo' : '在本站上传，非 Google 账户头像')
+                : photoURL
+                    ? (isEnglish ? 'Their Google account photo' : '来自其 Google 账户')
+                    : (isEnglish ? 'Their Google account has no photo' : '其 Google 账户没有头像')}
+        >
+            {custom
+                ? (isEnglish ? 'Uploaded photo' : '自定义头像')
+                : photoURL
+                    ? (isEnglish ? 'Google photo' : 'Google 头像')
+                    : (isEnglish ? 'No photo' : '无头像')}
+        </span>
+    );
+};
+
+/**
+ * Whether the name and photo shown are the user's own, set on the site, or the
+ * Google account's the profile started with. The name tag waits for the Google
+ * name and is left off if it can't be had; the photo needs only its URL.
+ */
+const ProfileSourceTags = ({displayName, photoURL, google}: {
+    displayName: string;
+    photoURL: string;
+    google: GoogleProfile | null;
+}) => {
+    const {isEnglish} = useLanguage();
+    const customPhoto = isStorageUrl(photoURL);
+    const customName = google ? displayName !== google.name && displayName !== google.signUpName : null;
+    return (
+        <>
+            <div className="admin-detail-sources">
+                {customName !== null && (
+                    <span
+                        className="admin-source-tag"
+                        data-source={customName ? 'custom' : 'google'}
+                        title={customName
+                            ? (isEnglish ? 'Set on the site, not their Google account name' : '在本站设置，非 Google 账户名称')
+                            : (isEnglish ? 'Their Google account name' : '来自其 Google 账户')}
+                    >
+                        {customName
+                            ? (isEnglish ? 'Custom name' : '自定义名称')
+                            : (isEnglish ? 'Google name' : 'Google 名称')}
+                    </span>
+                )}
+                <PhotoSourceTag photoURL={photoURL}/>
+            </div>
+            {/* The account behind a name or photo of their own, to tell who it is. */}
+            {google && (customName || customPhoto) && (
+                <p className="admin-detail-google">
+                    <span>{isEnglish ? 'Google account:' : 'Google 账户：'}</span>
+                    <UserAvatar
+                        photoURL={google.photoURL}
+                        displayName={google.name}
+                        className="admin-detail-google-avatar"
+                    />
+                    <span>{google.name || (isEnglish ? '(no name)' : '（无名称）')}</span>
+                </p>
+            )}
+        </>
+    );
+};
+
 interface UserDetailViewProps {
     userRecord: UserRecord;
     currentUser: User;
@@ -131,6 +207,20 @@ export const UserDetailView = ({
     const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [bannerBusy, setBannerBusy] = useState(false);
+    const [googleProfile, setGoogleProfile] = useState<GoogleProfile | null>(null);
+
+    useEffect(() => {
+        let stale = false;
+        setGoogleProfile(null);
+        callGetGoogleProfile({uid: userRecord.uid})
+            .then(result => !stale && setGoogleProfile(result.data))
+            .catch(() => {
+                // The name tag stays off; the photo tag doesn't need it.
+            });
+        return () => {
+            stale = true;
+        };
+    }, [userRecord.uid]);
 
     useEffect(() => {
         setTitleInput(userRecord.title ?? '');
@@ -554,6 +644,11 @@ export const UserDetailView = ({
                         </h3>
                     )}
                     <p>{userRecord.email}</p>
+                    <ProfileSourceTags
+                        displayName={userRecord.displayName}
+                        photoURL={userRecord.photoURL}
+                        google={googleProfile}
+                    />
                     <p className="admin-detail-joined">
                         {isEnglish ? 'Joined: ' : '注册日期：'}
                         {userRecord.joinedAt.toLocaleDateString(isEnglish ? 'en-US' : 'zh-CN', {
