@@ -482,7 +482,7 @@ export interface ApiKeySummary {
     scopes: ApiScope[];
     /** Empty for every event. */
     eventIds: string[];
-    /** The seller whose orders it places and reads; empty on a key made before seller IDs. */
+    /** The seller whose orders it places and reads. */
     seller: string;
     createdByName: string;
     createdAt: string | null;

@@ -332,14 +332,12 @@ export const ApiKeysTool = ({onBack, showToast}: ApiKeysToolProps) => {
                                     again, so this makes a new one.{' '}
                                     {isExpired(recreating, serverNow)
                                         ? 'Delete the expired one once the new key is in place.'
-                                        : 'The old one keeps working until you revoke it, so swap the new key in first.'}
-                                    {!recreating.seller && ' The old key has no seller ID, so the new one won\'t find orders it placed.'}</>
+                                        : 'The old one keeps working until you revoke it, so swap the new key in first.'}</>
                                 : <>已从 <strong>{recreating.name}</strong>{' '}
                                     <code className="record-code">{recreating.hint}</code> 填入设置。密钥无法再次显示，因此将创建一个新密钥。
                                     {isExpired(recreating, serverNow)
                                         ? '新密钥启用后，可删除已过期的旧密钥。'
-                                        : '旧密钥在吊销前仍然有效，请先换上新密钥。'}
-                                    {!recreating.seller && '旧密钥没有卖家 ID，新密钥将查不到它此前的订单。'}</>}
+                                        : '旧密钥在吊销前仍然有效，请先换上新密钥。'}</>}
                         </p>
                     )}
 

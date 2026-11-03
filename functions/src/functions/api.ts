@@ -65,7 +65,6 @@ class ApiError extends Error {
 interface ApiKey {
     id: string;
     name: string;
-    /** Empty for a key made before seller IDs (see apiOrderAttendeeId). */
     seller: string;
     scopes: ApiScope[];
     eventIds: string[];
@@ -138,7 +137,7 @@ async function authenticate(header: string | undefined): Promise<ApiKey> {
     return {
         id: snap.id,
         name: data.name,
-        seller: data.seller ?? "",
+        seller: data.seller,
         scopes: data.scopes ?? [],
         eventIds: data.eventIds ?? [],
     };

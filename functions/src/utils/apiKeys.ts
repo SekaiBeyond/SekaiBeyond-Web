@@ -41,11 +41,8 @@ export interface ApiKeyDoc {
     scopes: ApiScope[];
     /** The only events the key may touch; empty for all of them. */
     eventIds: string[];
-    /**
-     * Its seller's ID (see SELLER_ID_RE). Absent on a key made before seller
-     * IDs, whose orders keep their first doc IDs.
-     */
-    seller?: string;
+    /** Its seller's ID (see SELLER_ID_RE). */
+    seller: string;
     createdBy: string;
     createdByName: string;
     createdAt: Timestamp;

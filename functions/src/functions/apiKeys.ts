@@ -109,7 +109,7 @@ export const listApiKeys = onCall({maxInstances: 10}, async (request) => {
             hint: data.hint ?? "",
             scopes: data.scopes ?? [],
             eventIds: data.eventIds ?? [],
-            seller: data.seller ?? "",
+            seller: data.seller,
             createdByName: data.createdByName ?? "",
             createdAt: isoOrNull(data.createdAt),
             expiresAt: isoOrNull(data.expiresAt),
