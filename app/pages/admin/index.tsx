@@ -305,12 +305,8 @@ export const AdminPage = () => {
                             />
                         </div>
                         {isStaffOrAbove && (
-                            <div id="admin-sec-past" style={upcomingInDetail ? {display: 'none'} : undefined}>
-                                {!eventsInDetail && (
-                                    <h2 className="admin-section-header admin-section-mt">
-                                        {isEnglish ? 'Past Events' : '往期活动'}
-                                    </h2>
-                                )}
+                            // Holds the Sekai Beyond Con and Past Events sections.
+                            <div style={upcomingInDetail ? {display: 'none'} : undefined}>
                                 <EventsTab
                                     ref={eventsTabRef}
                                     pastEvents={pastEvents}
@@ -338,6 +334,10 @@ export const AdminPage = () => {
                                 sections={[
                                     {id: 'admin-sec-upcoming', label: isEnglish ? 'Upcoming Events' : '活动预告'},
                                     ...(isStaffOrAbove ? [
+                                        {
+                                            id: 'admin-sec-con',
+                                            label: isEnglish ? 'Sekai Beyond Con' : '彼世界动漫游戏展'
+                                        },
                                         {id: 'admin-sec-past', label: isEnglish ? 'Past Events' : '往期活动'},
                                         {id: 'admin-sec-tags', label: isEnglish ? 'Tags' : '标签'},
                                     ] : []),

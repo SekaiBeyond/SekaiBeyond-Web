@@ -14,7 +14,6 @@ import {
     deleteStorageFile,
     detectImageMime,
     detectVideoMime,
-    extractStoragePath,
     logStorageCleanupError,
     MAX_UPLOAD_SIZE_MB,
     MAX_VIDEO_UPLOAD_SIZE_MB,
@@ -181,10 +180,6 @@ export const savePolicy = onCall({maxInstances: 10}, async (request) => {
     });
 });
 
-// Con edition posters are config/con-<year>-<stamp>.webp, matched exactly
-// because guest photos (config/con-guest-*) share the prefix.
-const CON_EDITION_IMAGE_PATH = /^config\/con-\d+-/;
-
 // Each account's link in the one form the Site Config form builds
 // (SOCIAL_LINK_FORMATS in app/pages/admin/socialLinkInput.ts); keys mirror
 // SOCIAL_LINK_KEYS in app/lib/siteConfig.ts. Pinning the host keeps every link
@@ -264,29 +259,6 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
 
     const socialLinks = input.socialLinks === undefined ? undefined : validateSocialLinks(input.socialLinks);
 
-    const conEditionRaw = input.conEdition;
-    let conEdition: any | undefined = undefined;
-    if (conEditionRaw === null) {
-        conEdition = null;
-    } else if (conEditionRaw !== undefined) {
-        const ed = conEditionRaw as Record<string, any>;
-        conEdition = {
-            year: Number(ed.year),
-            date: validateISODate(ed.date, "date") || "",
-            location: validateStr(ed.location, "location", 200, true),
-            locationCn: validateStr(ed.locationCn, "locationCn", 200),
-            description: validateStr(ed.description, "description", 2000, true),
-            descriptionCn: validateStr(ed.descriptionCn, "descriptionCn", 2000, true),
-            image: validateStr(ed.image, "image", 500, true),
-            highlights: Array.isArray(ed.highlights) ? ed.highlights.map((h: any) => ({
-                labelEn: validateStr(h.labelEn, "highlight labelEn", 100, true),
-                labelCn: validateStr(h.labelCn, "highlight labelCn", 100, true),
-                icon: validateStr(h.icon, "highlight icon", 50, true),
-            })) : [],
-        };
-        validateStorageImageUrl(conEdition.image, "convention image");
-    }
-
     // Checked before the share-link fetch, which happens outside
     // adminTransaction; otherwise any signed-in user could trigger a server-side
     // fetch.
@@ -297,14 +269,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
     }
 
     const configRef = db.collection("config").doc("main");
-    const oldConImage = await adminTransaction(uid, async (txn, callerSnap) => {
-        // Read before the writes, as transactions require. Only a save that carries
-        // the con edition can replace or clear its image.
-        const prevConImage: string = conEdition !== undefined
-            ? (await txn.get(configRef)).data()?.conEdition?.image ?? ""
-            : "";
-        if (conEdition) await requireNewlyLinkedFilesExist([conEdition.image], [prevConImage]);
-
+    await adminTransaction(uid, async (txn, callerSnap) => {
         const updateData: Record<string, any> = {
             updatedBy: uid,
             updatedByName: callerSnap.data()?.displayName ?? "",
@@ -324,10 +289,6 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
             updateData.socialLinks = socialLinks;
             configSections.push("social-links");
         }
-        if (conEdition !== undefined) {
-            updateData.conEdition = conEdition;
-            configSections.push("con-edition");
-        }
 
         txn.set(configRef, updateData, {merge: true});
         txn.set(recordRef(), recordDoc("config-update", {
@@ -335,18 +296,7 @@ export const saveSiteConfig = onCall({maxInstances: 10}, async (request) => {
             performedByName: callerSnap.data()?.displayName ?? "",
             configSections,
         }));
-        return prevConImage;
     });
-
-    // Each upload is a new time-stamped object, so the image this save replaces
-    // or drops is deleted here.
-    const oldConImagePath = extractStoragePath(oldConImage);
-    if (oldConImagePath
-        && oldConImagePath !== extractStoragePath(conEdition?.image ?? "")
-        && CON_EDITION_IMAGE_PATH.test(oldConImagePath)) {
-        await deleteStorageFile(oldConImage)
-            .catch(logStorageCleanupError("saveSiteConfig con edition"));
-    }
 
     // The links as stored, so the form can show the profile a share link opened.
     return socialLinks ? {saved: true, socialLinks} : {saved: true};

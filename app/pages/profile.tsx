@@ -115,8 +115,9 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
     wasStaff?: boolean;
 }) => {
     const title = localized(isEnglish, event.title, event.titleCn);
+    const hasCategories = !!event.con || (!!tagLabels && tagLabels.length > 0);
     return (
-        <div className="profile-event-card">
+        <div className={`profile-event-card${event.con ? ' profile-event-card--con' : ''}`}>
             <div className="profile-event-icon-wrapper">
                 <img src={event.icon} alt={title} className="profile-event-icon"/>
                 {wasStaff && (
@@ -126,9 +127,14 @@ const EventCard = ({event, isEnglish, showAdminLink, tagLabels, wasStaff}: {
                 )}
             </div>
             <div className="profile-event-info">
-                {tagLabels && tagLabels.length > 0 ? (
+                {hasCategories ? (
                     <span className="profile-event-categories">
-                        {tagLabels.map((label, i) => (
+                        {event.con && (
+                            <span className="profile-event-category profile-event-category--con">
+                                {isEnglish ? `Con ${event.con.year}` : `${event.con.year} 漫展`}
+                            </span>
+                        )}
+                        {tagLabels?.map((label, i) => (
                             <span key={i} className="profile-event-category">{label}</span>
                         ))}
                     </span>
@@ -519,7 +525,10 @@ export const ProfilePage = () => {
     const shelf = isOwnProfile ? passports : viewedProfile!.passports;
     const staffedSet = new Set(dp.eventStaffEvents);
     const attendedSet = new Set([...dp.attendedEvents, ...dp.eventStaffEvents]);
-    const attendedEvents = pastEvents.filter(e => attendedSet.has(e.id));
+    // Each year's Sekai Beyond Con first, newest year on top; the rest stay newest first.
+    const attendedEvents = pastEvents
+        .filter(e => attendedSet.has(e.id))
+        .sort((a, b) => (b.con?.year ?? 0) - (a.con?.year ?? 0));
     const earnedBadges = (badgeDefs ?? [])
         .filter(b => dp.badges.includes(b.id))
         .sort((a, b) => (earnedDates[b.id]?.getTime() ?? 0) - (earnedDates[a.id]?.getTime() ?? 0));

@@ -18,6 +18,7 @@ const CONFIG_SECTION_LABELS: Record<string, {en: string; zh: string}> = {
     'social-links': {en: 'Social Links', zh: '社交链接'},
     sender: {en: 'Sender Email', zh: '发件邮箱'},
     team: {en: 'Our Team', zh: '我们的团队'},
+    // Nothing saves this any more, but records from before Cons became events do.
     'con-edition': {en: 'Sekai Beyond Con', zh: '彼世界动漫游戏展'},
 };
 

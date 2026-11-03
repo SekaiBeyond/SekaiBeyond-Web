@@ -55,6 +55,7 @@ const toTicketEvent = (e: PastEvent): UpcomingEvent => ({
     published: e.published,
     paid: true,
     deleteAt: e.deleteAt,
+    con: e.con,
 });
 
 export const PastEventDetailView = ({
@@ -148,6 +149,9 @@ export const PastEventDetailView = ({
                 <div>
                     <h3>{localized(isEnglish, event.title, event.titleCn)}</h3>
                     <p className="admin-event-detail-meta">
+                        {event.con && (
+                            <span>{isEnglish ? `Sekai Beyond Con ${event.con.year}` : `${event.con.year} 彼世界动漫游戏展`}</span>
+                        )}
                         <span>{event.tagIds
                             .map(id => tags.find(t => t.id === id))
                             .filter((t): t is Tag => !!t)

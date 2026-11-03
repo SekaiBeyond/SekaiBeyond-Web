@@ -13,6 +13,7 @@ import { ListCard } from './CrudShell';
 import { LocationFormField } from './LocationFormField';
 import { ImageUploadField } from './ImageUploadField';
 import { ImageCropModal } from './ImageCropModal';
+import { ConEditionField } from './ConEditionField';
 import { UpcomingEventDetailView } from './UpcomingEventDetailView';
 import { readWalletPassCount } from './tickets/walletPass';
 
@@ -48,6 +49,7 @@ interface EventForm {
     customButtonTextCn: string;
     customButtonLink: string;
     paid: boolean;
+    isCon: boolean;
 }
 
 const emptyForm: EventForm = {
@@ -56,6 +58,7 @@ const emptyForm: EventForm = {
     posterCredit: '', buyTicket: '', learnMore: '',
     customButtonText: '', customButtonTextCn: '', customButtonLink: '',
     paid: false,
+    isCon: false,
 };
 
 export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEventsTabProps>(({
@@ -122,6 +125,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             customButtonTextCn: event.customButtonTextCn,
             customButtonLink: event.customButtonLink,
             paid: event.paid,
+            isCon: !!event.con,
         });
         setEditingEvent(event);
         setPosterImage(null);
@@ -197,6 +201,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 customButtonTextCn: form.customButtonTextCn,
                 customButtonLink: form.customButtonLink,
                 paid: form.paid,
+                con: form.isCon,
             });
 
             await refreshAfterSave(refreshEvents, showToast, isEnglish);
@@ -384,6 +389,11 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                             : '切换为付费活动将删除该活动的签到码。参加者将通过门票页面管理；已有的签到记录会保留。'}
                                     </p>
                                 )}
+                                <ConEditionField
+                                    value={form.isCon}
+                                    onChange={isCon => setForm(f => ({...f, isCon}))}
+                                    date={form.startAt}
+                                />
                             </div>
                             <div className="admin-btn-row">
                                 <button
@@ -436,6 +446,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                     year: 'numeric', month: 'short', day: 'numeric',
                                 })}
                                 tags={[
+                                    !!event.con && (isEnglish ? `Con ${event.con.year}` : `${event.con.year} 漫展`),
                                     !event.published && (isEnglish ? 'Unpublished' : '未发布'),
                                     event.endAt < new Date() && (isEnglish ? 'Ended' : '已结束'),
                                     !!event.deleteAt && (isEnglish ? 'Pending deletion' : '待删除'),
