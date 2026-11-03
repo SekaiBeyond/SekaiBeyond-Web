@@ -2,6 +2,11 @@ import { doc, getDoc } from 'firebase/firestore';
 import { createValueCache } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 
+/**
+ * The home page's Con before editions came from events marked as a Con. Read
+ * only as the home page's fallback while no published event is one; nothing
+ * edits it any more.
+ */
 export interface ConEdition {
     year: number;
     date: string;
@@ -10,11 +15,6 @@ export interface ConEdition {
     description: string;
     descriptionCn: string;
     image: string;
-    highlights: {
-        labelEn: string;
-        labelCn: string;
-        icon: string;
-    }[];
 }
 
 // Mirrors SOCIAL_LINK_PATTERNS in functions/src/functions/admin.ts.

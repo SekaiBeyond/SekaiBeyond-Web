@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { doc, type DocumentData, getDoc, orderBy, where } from 'firebase/firestore';
 import { createCollectionCache, toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
+import { type ConInfo, readConInfo } from './conEditions';
 
 export interface UpcomingEvent {
     id: string;
@@ -25,6 +26,8 @@ export interface UpcomingEvent {
     published: boolean;
     paid: boolean;
     deleteAt: Date | null;
+    /** Set when this is a year's Sekai Beyond Con. */
+    con: ConInfo | null;
 }
 
 const mapDoc = (docSnap: {id: string; data: () => DocumentData}): UpcomingEvent => {
@@ -51,6 +54,7 @@ const mapDoc = (docSnap: {id: string; data: () => DocumentData}): UpcomingEvent 
         published: data.published === true,
         paid: data.paid === true,
         deleteAt: toDate(data.deleteAt),
+        con: readConInfo(data.con),
     };
 };
 

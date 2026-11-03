@@ -12,7 +12,6 @@ import {
 import { renderPolicyMarkdown, usePolicy } from '~/lib/policy';
 import { EMAIL_RE } from './tickets/helpers';
 import { TeamSection } from './TeamSection';
-import { ConEditionSection } from './ConEditionSection';
 import { SectionNav } from './SectionNav';
 import { isXiaohongshuShareLink, socialLinkInputs, socialLinkPlaceholder, toSocialLink } from './socialLinkInput';
 import { refreshAfterSave, type ShowToast } from './utils';
@@ -367,13 +366,6 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
 
             <div className="admin-divider"/>
 
-            <div id="admin-sec-con-edition">
-                <ConEditionSection conEdition={config.conEdition} refreshConfig={refreshConfig}
-                                   showToast={showToast} readOnly={readOnly}/>
-            </div>
-
-            <div className="admin-divider"/>
-
             <div id="admin-sec-policy" className="admin-section">
                 <h3 className="admin-badges-title">
                     {isEnglish ? 'Policy Content' : '政策内容'}
@@ -444,7 +436,6 @@ export const SiteConfigTab = ({showToast, readOnly = false}: SiteConfigTabProps)
                     {id: 'admin-sec-social', label: isEnglish ? 'Social Links' : '社交链接'},
                     {id: 'admin-sec-sender', label: isEnglish ? 'Sender Email' : '发件邮箱'},
                     {id: 'admin-sec-team', label: isEnglish ? 'Our Team' : '我们的团队'},
-                    {id: 'admin-sec-con-edition', label: isEnglish ? 'Sekai Beyond Con' : '彼世界动漫游戏展'},
                     {id: 'admin-sec-policy', label: isEnglish ? 'Policy Content' : '政策内容'},
                 ]}
             />

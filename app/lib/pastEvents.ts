@@ -1,5 +1,6 @@
 import { orderBy } from 'firebase/firestore';
 import { createCollectionCache, toDate } from './collectionCache';
+import { type ConInfo, readConInfo } from './conEditions';
 
 export interface PastEvent {
     id: string;
@@ -18,6 +19,8 @@ export interface PastEvent {
     published: boolean;
     paid: boolean;
     deleteAt: Date | null;
+    /** Set when this was a year's Sekai Beyond Con. */
+    con: ConInfo | null;
 }
 
 const cache = createCollectionCache<PastEvent>('pastEvents', docSnap => {
@@ -39,6 +42,7 @@ const cache = createCollectionCache<PastEvent>('pastEvents', docSnap => {
         published: data.published === true,
         paid: data.paid === true,
         deleteAt: toDate(data.deleteAt),
+        con: readConInfo(data.con),
     };
 }, orderBy('date', 'desc'));
 

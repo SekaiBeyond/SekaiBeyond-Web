@@ -1108,6 +1108,24 @@ button.profile-banner-btn--remove:hover:not(:disabled) {
     visibility: hidden;
 }
 
+/* A year's Sekai Beyond Con: the brand gradient for its edge and year chip,
+   over a faint warm wash. */
+.profile-event-card--con {
+    border-color: transparent;
+    background: linear-gradient(135deg, rgba(255, 107, 157, 0.06), rgba(255, 142, 83, 0.06)) padding-box,
+    linear-gradient(white, white) padding-box,
+    var(--gradient-primary) border-box;
+}
+
+.profile-event-card--con:hover {
+    border-color: transparent;
+}
+
+.profile-event-category--con {
+    background: var(--gradient-primary);
+    color: #fff;
+}
+
 /* Two lines, then an ellipsis; `anywhere` breaks an over-long word. */
 .profile-event-title {
     display: -webkit-box;

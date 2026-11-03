@@ -99,7 +99,8 @@ export const UpcomingEventDetailView = ({
     const archiveEvent = async () => {
         setArchiving(true);
         try {
-            await callArchiveUpcomingEvent({eventId: event.id, tagIds: archiveTagIds});
+            // A Con has no tags; the server drops any it's sent.
+            await callArchiveUpcomingEvent({eventId: event.id, tagIds: event.con ? [] : archiveTagIds});
             await refreshAfterSave(() => Promise.all([refreshEvents(), refreshPastEvents()]), showToast, isEnglish);
             onBack();
             showToast(isEnglish ? 'Event archived.' : '活动已归档。', 'success');
@@ -136,6 +137,9 @@ export const UpcomingEventDetailView = ({
                 <div>
                     <h3>{localized(isEnglish, event.title, event.titleCn)}</h3>
                     <p className="admin-event-detail-meta">
+                        {event.con && (
+                            <span>{isEnglish ? `Sekai Beyond Con ${event.con.year}` : `${event.con.year} 彼世界动漫游戏展`}</span>
+                        )}
                         <span>
                             {formatSiteTime(event.startAt, isEnglish, {
                                 year: 'numeric', month: 'long', day: 'numeric',
@@ -188,18 +192,24 @@ export const UpcomingEventDetailView = ({
                         {isEnglish ? 'Archive Event' : '归档活动'}
                     </h4>
                     <p className="admin-helper-text">
-                        {isEnglish
-                            ? 'This will move the event from Upcoming to Past Events. You can optionally add one or more labels (e.g. "Workshop", "Convention").'
-                            : '此操作会将活动从预告移到往期活动。你可以选填一个或多个标签（如"工作坊"、"展会"）。'}
+                        {event.con
+                            ? (isEnglish
+                                ? `This will move the event from Upcoming to Sekai Beyond Con in Past Events, as the ${event.con.year} edition, keeping its poster.`
+                                : `此操作会将活动从预告移到往期活动的“彼世界动漫游戏展”分组，作为 ${event.con.year} 年度，并保留其海报。`)
+                            : (isEnglish
+                                ? 'This will move the event from Upcoming to Past Events. You can optionally add one or more labels (e.g. "Workshop", "Convention").'
+                                : '此操作会将活动从预告移到往期活动。你可以选填一个或多个标签（如"工作坊"、"展会"）。')}
                     </p>
-                    <div className="admin-form-grid">
-                        <TagMultiSelect
-                            tags={tags}
-                            selected={archiveTagIds}
-                            onChange={setArchiveTagIds}
-                            isEnglish={isEnglish}
-                        />
-                    </div>
+                    {!event.con && (
+                        <div className="admin-form-grid">
+                            <TagMultiSelect
+                                tags={tags}
+                                selected={archiveTagIds}
+                                onChange={setArchiveTagIds}
+                                isEnglish={isEnglish}
+                            />
+                        </div>
+                    )}
                     <div className="admin-btn-row admin-mt-12">
                         <button
                             className="admin-toggle-btn admin-toggle-archive"

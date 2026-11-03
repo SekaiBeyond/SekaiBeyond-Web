@@ -5,7 +5,7 @@ import { checkApiKeyRateLimit } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol, type ApiScope, hashApiKey, isApiKeyShaped } from "../utils/apiKeys";
 import { RESEND_QUEUE_CAP } from "../utils/config";
 import { contactEmailFor, type EmailTemplateDoc, savedTemplate } from "../utils/emailTemplate";
-import { getEventDoc } from "../utils/events";
+import { getEventDoc, readConInfo } from "../utils/events";
 import { db } from "../utils/firebase";
 import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "../utils/quota";
 import { recordDoc, recordRef } from "../utils/records";
@@ -207,6 +207,8 @@ function eventJson(event: FoundEvent) {
         location: str(data.location),
         locationCn: str(data.locationCn),
         venueId: str(data.venueId),
+        // The year's Sekai Beyond Con, or null for any other event.
+        con: readConInfo(data.con),
     };
     if (archived) {
         return {

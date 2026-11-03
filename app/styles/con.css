@@ -39,11 +39,6 @@
     box-shadow: var(--shadow-soft);
 }
 
-/* The home page teaser's link through to /con. */
-.con-page-link {
-    margin-top: 30px;
-}
-
 /* Buttons — only the variants the main site does not already have */
 
 /* Glass, for sitting on top of the hero video. Used with `.btn`. */

@@ -16,7 +16,7 @@ import {
     getFunctions as _getFunctions,
     httpsCallable,
 } from "firebase/functions";
-import type { ConEdition, SocialLinks, TeamMemberConfig } from "./siteConfig";
+import type { SocialLinks, TeamMemberConfig } from "./siteConfig";
 import type { UploadLimits } from "./uploadLimits";
 import type { ConContent } from "./conContent";
 import type { PassportPublicProfile } from "./passports";
@@ -210,6 +210,8 @@ export const callSavePastEvent = (data: {
     location: string; locationCn: string; venueId: string;
     description: string; descriptionCn: string; icon: string;
     recapLink: string; recapLinkCn: string;
+    /** Marks it as its date's year's Sekai Beyond Con. */
+    con: boolean;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'savePastEvent')(data);
 
 export const callSetPastEventPublished = (data: {eventId: string; published: boolean}) =>
@@ -223,6 +225,8 @@ export const callSaveUpcomingEvent = (data: {
     buyTicket: string; learnMore: string;
     customButtonText: string; customButtonTextCn: string; customButtonLink: string;
     paid: boolean;
+    /** Marks it as its start's year's Sekai Beyond Con. */
+    con: boolean;
 }) => httpsCallable<typeof data, {eventId: string}>(getFunctions(), 'saveUpcomingEvent')(data);
 
 export const callRequestUpcomingEventDeletion = (data: {eventId: string}) =>
@@ -535,7 +539,6 @@ export const callSaveSiteConfig = (data: {
     contactEmail?: string;
     socialLinks?: SocialLinks;
     senderPrefix?: string;
-    conEdition?: ConEdition | null;
 }) =>
     httpsCallable<typeof data, {saved: boolean; socialLinks?: SocialLinks}>(getFunctions(), 'saveSiteConfig')(data);
 

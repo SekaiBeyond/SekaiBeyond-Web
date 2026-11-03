@@ -298,14 +298,6 @@
     text-align: center;
 }
 
-.convention-features {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 30px;
-    max-width: 800px;
-    margin: 40px auto;
-}
-
 .convention-poster img {
     transition: transform 0.3s ease;
     width: 50%;
@@ -451,17 +443,498 @@
 .con-editions {
     display: flex;
     flex-direction: column;
-    gap: 40px;
+    gap: 24px;
+}
+
+/* With years to pick, the header sits right on top of them, so the badges'
+   strings run up to the subtitle. */
+.section-header.con-header--badges {
+    margin-bottom: 0;
+}
+
+/* The Con's years as convention badges strung from the subtitle, oldest to
+   newest. The chosen badge drops lower and hangs straight; the rest tilt on
+   their clips. Selection is styled off aria-selected so the look and the
+   announced state can't drift. */
+.con-years {
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* Room for the dropped badge and its shadow, which the scroll box clips. */
+    padding-bottom: 26px;
+}
+
+.con-years::-webkit-scrollbar {
+    display: none;
+}
+
+.con-years-track {
+    width: max-content;
+    margin: 0 auto;
+    padding: 0 28px;
+}
+
+.con-badges {
+    display: flex;
+    gap: 30px;
+}
+
+.con-badge {
+    --tilt: 0deg;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+    border: none;
+    background: none;
+    font-family: inherit;
+    cursor: pointer;
+    transform: rotate(var(--tilt));
+    transform-origin: top center;
+    transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.con-badge:nth-child(odd) {
+    --tilt: -4deg;
+}
+
+.con-badge:nth-child(even) {
+    --tilt: 3deg;
+}
+
+.con-badge:hover,
+.con-badge[aria-selected='true'] {
+    --tilt: 0deg;
+}
+
+.con-badge:focus-visible {
+    outline: none;
+}
+
+.con-badge-string {
+    width: 2px;
+    height: 48px;
+    background: rgba(74, 81, 96, 0.3);
+    transition: height 0.35s ease, background 0.35s ease;
+}
+
+.con-badge[aria-selected='true'] .con-badge-string {
+    height: 68px;
+    background: var(--color-primary);
+}
+
+.con-badge-clip {
+    position: relative;
+    z-index: 1;
+    width: 18px;
+    height: 14px;
+    margin-bottom: -7px;
+    border-radius: 4px 4px 7px 7px;
+    background: linear-gradient(180deg, #e3e6ec, #a3a9b6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 1px 2px rgba(74, 81, 96, 0.25);
+}
+
+.con-badge-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 96px;
+    padding: 14px 8px 10px;
+    border: 2px solid transparent;
+    border-radius: 14px;
+    background: linear-gradient(white, white) padding-box,
+    linear-gradient(white, white) border-box;
+    box-shadow: 0 6px 16px rgba(255, 150, 200, 0.18);
+    transition: box-shadow 0.3s ease, transform 0.35s ease;
+}
+
+.con-badge[aria-selected='true'] .con-badge-card {
+    background: linear-gradient(white, white) padding-box,
+    var(--gradient-primary) border-box;
+    box-shadow: var(--shadow-primary);
+    transform: scale(1.08);
+    transform-origin: top center;
+}
+
+.con-badge:focus-visible .con-badge-card {
+    outline: 3px solid var(--color-link);
+    outline-offset: 3px;
+}
+
+/* The punched slot the clip goes through. */
+.con-badge-slot {
+    width: 24px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(74, 81, 96, 0.14);
+}
+
+.con-badge-art {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--gradient-cta);
+    font-size: 28px;
+}
+
+.con-badge-art img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(0.5);
+    transition: filter 0.3s ease;
+}
+
+.con-badge:hover .con-badge-art img,
+.con-badge[aria-selected='true'] .con-badge-art img {
+    filter: none;
+}
+
+.con-badge-year {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--color-text-muted);
+}
+
+.con-badge[aria-selected='true'] .con-badge-year {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Stuck on the corner of a Con still to come. */
+.con-badge-sticker {
+    position: absolute;
+    top: 16px;
+    right: -14px;
+    padding: 3px 9px;
+    border: 1.5px solid var(--color-primary);
+    border-radius: 999px;
+    background: #fff0f5;
+    color: #b0124f;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    transform: rotate(8deg);
+    box-shadow: 0 2px 6px rgba(255, 107, 157, 0.25);
+}
+
+.con-badge[data-status='live'] .con-badge-sticker {
+    border-color: var(--color-success);
+    background: #ecfaf1;
+    color: #1d7a3c;
+}
+
+/* The banner slides in from the side the chosen year hangs on. */
+.con-edition-panel {
+    overflow: hidden;
+}
+
+.con-edition-enter {
+    animation: con-edition-fade 0.35s ease both;
+}
+
+.con-edition-enter--newer {
+    animation-name: con-edition-from-right;
+}
+
+.con-edition-enter--older {
+    animation-name: con-edition-from-left;
+}
+
+@keyframes con-edition-fade {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes con-edition-from-right {
+    from {
+        opacity: 0;
+        transform: translateX(48px);
+    }
+}
+
+@keyframes con-edition-from-left {
+    from {
+        opacity: 0;
+        transform: translateX(-48px);
+    }
+}
+
+@media (max-width: 600px) {
+    /* Faded at both ends, so badges running off the edge read as scrollable. */
+    .con-years {
+        -webkit-mask-image: linear-gradient(to right, transparent, black 18px, black calc(100% - 18px), transparent);
+        mask-image: linear-gradient(to right, transparent, black 18px, black calc(100% - 18px), transparent);
+    }
+
+    .con-years-track {
+        padding: 0 18px;
+    }
+
+    .con-badges {
+        gap: 20px;
+    }
+
+    .con-badge-card {
+        width: 78px;
+        padding: 12px 6px 8px;
+    }
+
+    .con-badge-year {
+        font-size: 1.3rem;
+    }
+
+    .con-badge-sticker {
+        right: -10px;
+        font-size: 10px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .con-badge,
+    .con-badge-card,
+    .con-badge-string {
+        transition: none;
+    }
+
+    .con-edition-enter {
+        animation: none;
+    }
+}
+
+/* One year of the Con: its poster taped up like a flyer beside the year's
+   details, which stand alone and centered when there's no poster. Stacked, poster
+   first, on a narrow screen. */
+.convention-banner.con-edition-panel {
+    padding: 56px;
+}
+
+.con-edition {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 56px;
+    align-items: center;
+    text-align: left;
+}
+
+.con-edition--solo {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 720px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.con-edition-poster {
+    position: relative;
+    justify-self: center;
+    width: 100%;
+    max-width: 380px;
+    transform: rotate(-2.5deg);
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.con-edition-poster:hover,
+.con-edition-poster:focus-within {
+    transform: rotate(0deg) translateY(-4px);
+}
+
+/* A strip of washi tape holding it up. */
+.con-edition-poster::before {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    top: -12px;
+    left: 50%;
+    width: 112px;
+    height: 26px;
+    border-radius: 3px;
+    background: rgba(254, 202, 87, 0.6);
+    box-shadow: 0 1px 3px rgba(74, 81, 96, 0.12);
+    transform: translateX(-50%) rotate(3deg);
+    pointer-events: none;
+}
+
+.con-edition-poster img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    box-shadow: 0 18px 40px rgba(255, 107, 157, 0.22), 0 4px 12px rgba(74, 81, 96, 0.12);
+}
+
+.con-edition-info {
+    min-width: 0;
+}
+
+.con-edition-info .convention-label {
+    margin-bottom: 16px;
+}
+
+.con-edition-title {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 24px;
+    font-family: var(--font-display);
+    font-weight: 400;
+    line-height: 1;
+}
+
+.con-edition-name {
+    font-size: clamp(1.8rem, 3.2vw, 2.6rem);
+    color: var(--color-text);
+}
+
+.con-edition-year {
+    font-size: clamp(4rem, 9vw, 6.5rem);
+    line-height: 0.95;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Date and place, like the stub of a ticket. */
+.con-edition-facts {
+    display: grid;
+    margin: 0;
+    padding: 4px 20px;
+    list-style: none;
+    border-radius: 18px;
+    background: rgba(255, 182, 193, 0.12);
+    text-align: left;
+}
+
+.con-edition--solo .con-edition-facts {
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+.con-edition-fact {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+}
+
+.con-edition-fact + .con-edition-fact {
+    border-top: 2px dashed rgba(255, 107, 157, 0.22);
+}
+
+.con-edition-fact-icon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: white;
+    box-shadow: var(--shadow-soft);
+    font-size: 20px;
+}
+
+.con-edition-fact-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.con-edition-fact-label {
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+
+.con-edition-fact-value {
+    color: var(--color-text);
+    font-size: 1.05rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
 }
 
 .con-description {
+    margin: 24px 0 0;
     color: var(--color-text-body);
     line-height: 1.8;
     font-weight: 500;
     font-size: 15px;
-    max-width: 800px;
-    margin: 30px auto 0;
-    text-align: center;
+}
+
+/* Through to /con for the Con to come, or a past year's recap. */
+.con-edition-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 28px;
+}
+
+.con-edition--solo .con-edition-actions {
+    justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .convention-banner.con-edition-panel {
+        padding: 40px 24px;
+    }
+
+    .con-edition {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 36px;
+        text-align: center;
+    }
+
+    .con-edition-poster {
+        max-width: 280px;
+    }
+
+    .con-edition-actions {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .convention-banner.con-edition-panel {
+        padding: 36px 16px;
+    }
+
+    .con-edition-poster {
+        max-width: 240px;
+    }
+
+    .con-edition-facts {
+        padding: 2px 14px;
+    }
+
+    .con-edition-fact-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 17px;
+    }
+
+    .con-description {
+        font-size: 14px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .con-edition-poster {
+        transition: none;
+    }
 }
 
 .team-grid {

@@ -128,18 +128,8 @@
         min-width: 24px;
     }
 
-    .convention-features {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 15px;
-    }
-
     .convention-poster img {
         width: 90%;
-    }
-
-    .con-description {
-        font-size: 15px;
-        padding: 0 10px;
     }
 
     .stats-container {
@@ -459,18 +449,8 @@
         font-size: 1.1rem;
     }
 
-    .convention-features {
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-    }
-
     .convention-poster img {
         width: 100%;
-    }
-
-    .con-description {
-        font-size: 14px;
-        padding: 0 8px;
     }
 
     .go-to-top {

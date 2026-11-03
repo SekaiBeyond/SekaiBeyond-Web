@@ -3,7 +3,7 @@ import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth, requireCanManage } from "../utils/auth";
 import { cancelDeletion, type Deletable, requestDeletion } from "../utils/deletion";
-import { getEventDoc } from "../utils/events";
+import { conForDay, getEventDoc, readConInfo, requireConYearFree, validateConInput } from "../utils/events";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
@@ -120,6 +120,7 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     validateUrl(recapLink, "recapLink");
     const recapLinkCn = validateStr(input.recapLinkCn, "recapLinkCn", 500);
     validateUrl(recapLinkCn, "recapLinkCn");
+    const markedCon = validateConInput(input.con);
 
     const data = {
         title, titleCn, tagIds, date, location, locationCn, venueId,
@@ -129,17 +130,25 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
 
     const {result, oldIcon} = await adminTransaction(uid, async (txn, callerSnap) => {
         let prevIcon = "";
+        let wasCon = false;
         if (eventId) {
             const existing = await txn.get(db.collection("pastEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
             prevIcon = existing.data()?.icon ?? "";
+            wasCon = readConInfo(existing.data()?.con) !== null;
         }
+        // A form from before Cons leaves `con` out, which keeps the mark. The
+        // year follows the date, so moving a Con to another year moves it there.
+        const con = (markedCon ?? wasCon) ? conForDay(date) : null;
+        if (con) await requireConYearFree(txn, con.year, docId);
         await requireNewlyLinkedFilesExist([icon], [prevIcon]);
+        // A Con has no tags, also when a form from before Cons sends some.
+        const saved = {...data, con, ...(con ? {tagIds: []} : {})};
         const ref = db.collection("pastEvents").doc(docId);
         if (eventId) {
-            txn.update(ref, data);
+            txn.update(ref, saved);
         } else {
-            txn.set(ref, {...data, published: false});
+            txn.set(ref, {...saved, published: false});
         }
         txn.set(recordRef(), recordDoc(eventId ? "event-edit" : "event-create", {
             performedBy: uid,
@@ -208,6 +217,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const customButtonTextCn = validateStr(input.customButtonTextCn, "customButtonTextCn", 100);
     const customButtonLink = validateStr(input.customButtonLink, "customButtonLink", 500);
     const paid = input.paid === true;
+    const markedCon = validateConInput(input.con);
 
     validateStorageImageUrl(poster, "poster");
     validateStorageImageUrl(emailHeaderBg, "emailHeaderBg");
@@ -236,13 +246,19 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         let prevPoster = "";
         let prevEmailHeaderBg = "";
         let wasPublished = false;
+        let wasCon = false;
         if (eventId) {
             const existing = await txn.get(db.collection("upcomingEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
             prevPoster = existing.data()?.poster ?? "";
             prevEmailHeaderBg = existing.data()?.emailHeaderBg ?? "";
             wasPublished = existing.data()?.published ?? false;
+            wasCon = readConInfo(existing.data()?.con) !== null;
         }
+        // As in savePastEvent: left out keeps the mark, and the year is the
+        // start's, the day archiving gives it.
+        const con = (markedCon ?? wasCon) ? conForDay(siteDay(startAt.toMillis())) : null;
+        if (con) await requireConYearFree(txn, con.year, docId);
         await requireNewlyLinkedFilesExist([poster, emailHeaderBg], [prevPoster, prevEmailHeaderBg]);
 
         // Paid events use tickets, so purge claim codes left from a free→paid
@@ -257,9 +273,9 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
 
         const ref = db.collection("upcomingEvents").doc(docId);
         if (eventId) {
-            txn.update(ref, {...data, published: wasPublished});
+            txn.update(ref, {...data, con, published: wasPublished});
         } else {
-            txn.set(ref, {...data, published: false});
+            txn.set(ref, {...data, con, published: false});
         }
 
         for (const codeDoc of codesToDelete) {
@@ -328,20 +344,29 @@ export const onUpcomingEventDeleted = onDocumentDeleted(
             console.error(`onUpcomingEventDeleted: cascade failed for ${eventId}`, err);
         }
 
-        await deleteStorageFile(data.poster ?? "", ["upcoming-events/"])
-            .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId}`));
-        await deleteStorageFile(data.emailHeaderBg ?? "", ["upcoming-events/headers/"])
-            .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId} header`));
-
         // The tail end of an archive: archiveUpcomingEvent already wrote its
         // record, and the past event reuses this id, so eventStaffEvents must not
         // be purged.
         let archived = false;
+        // An archived Con's poster is its past event's image. Kept when the check
+        // fails too: a stray file costs less than a Con without its picture.
+        let keepPoster = false;
         try {
-            archived = (await db.collection("pastEvents").doc(eventId).get()).exists;
+            const pastSnap = await db.collection("pastEvents").doc(eventId).get();
+            archived = pastSnap.exists;
+            keepPoster = archived && !!data.poster && pastSnap.data()?.icon === data.poster;
         } catch (err) {
             console.error(`onUpcomingEventDeleted: archive check failed for ${eventId}`, err);
+            keepPoster = !!data.con;
         }
+
+        if (!keepPoster) {
+            await deleteStorageFile(data.poster ?? "", ["upcoming-events/"])
+                .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId}`));
+        }
+        await deleteStorageFile(data.emailHeaderBg ?? "", ["upcoming-events/headers/"])
+            .catch(logStorageCleanupError(`onUpcomingEventDeleted ${eventId} header`));
+
         if (archived) return;
 
         // A hard delete: purge the id from eventStaffEvents.
@@ -471,6 +496,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
 
         const startDate: Date = eventData.startAt?.toDate?.() ?? new Date();
         const dateStr = siteDay(startDate.getTime());
+        const con = readConInfo(eventData.con);
 
         txn.set(newDocRef, {
             title: eventData.title ?? "",
@@ -481,8 +507,12 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             venueId: eventData.venueId ?? "",
             description: eventData.description ?? "",
             descriptionCn: eventData.descriptionCn ?? "",
-            icon: "",
-            tagIds,
+            // A Con keeps its poster, the home page's picture of that year;
+            // onUpcomingEventDeleted then leaves the file be.
+            icon: con ? (eventData.poster ?? "") : "",
+            // A Con has no tags.
+            tagIds: con ? [] : tagIds,
+            con,
             published: false,
             // So the past-events panel shows the read-only Tickets/Stats view.
             paid: eventData.paid === true,
