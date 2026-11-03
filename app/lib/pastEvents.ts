@@ -1,6 +1,7 @@
 import { orderBy } from 'firebase/firestore';
 import { createCollectionCache, toDate } from './collectionCache';
 import { type ConInfo, readConInfo } from './conEditions';
+import { readRoomIds } from './venues';
 
 export interface PastEvent {
     id: string;
@@ -11,6 +12,8 @@ export interface PastEvent {
     location: string;
     locationCn: string;
     venueId: string;
+    /** Rooms of its venue it's in; none means the venue as a whole. */
+    roomIds: string[];
     description: string;
     descriptionCn: string;
     icon: string;
@@ -34,6 +37,7 @@ const cache = createCollectionCache<PastEvent>('pastEvents', docSnap => {
         location: data.location ?? '',
         locationCn: data.locationCn ?? '',
         venueId: data.venueId ?? '',
+        roomIds: readRoomIds(data.roomIds),
         description: data.description ?? '',
         descriptionCn: data.descriptionCn ?? '',
         icon: data.icon ?? '',

@@ -975,6 +975,7 @@ export const getMyTickets = onCall({maxInstances: 20}, async (request) => {
             location: (eventData.location as string) ?? "",
             locationCn: (eventData.locationCn as string) ?? "",
             venueId: (eventData.venueId as string) ?? "",
+            roomIds: Array.isArray(eventData.roomIds) ? eventData.roomIds : [],
             poster: (eventData.poster as string) ?? "",
             startAt: eventData.startAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
             tickets,

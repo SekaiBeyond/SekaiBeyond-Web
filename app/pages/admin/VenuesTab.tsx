@@ -16,15 +16,20 @@ import {
     type UwParkingData,
     walkMinutes
 } from '~/lib/uwParking';
-import { haversineMiles, type SuggestedLot, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
+import { haversineMiles, type Room, type SuggestedLot, UW_CAMPUS_CENTER, type Venue } from '~/lib/venues';
+import { localized } from '~/lib/localized';
 import { BilingualFormField } from './BilingualFormField';
 import { CardEditDeleteActions, CardSaveCancel, CreateSection } from './CrudShell';
+import { RowActions } from './conContentShared';
 import { MapPicker } from './MapPicker';
 import { type LocationListHandle, useCardHighlight } from './useCardHighlight';
 import { refreshAfterSave, type ShowToast } from './utils';
 
 /** The server's cap on suggested lots per venue. */
 const MAX_SUGGESTED_LOTS = 10;
+/** The server's caps on rooms per venue, and on a room's name. */
+const MAX_ROOMS = 50;
+const MAX_ROOM_NAME = 100;
 /** How many lots the editor fills in from a building lookup when the list is empty. */
 const PREFILL_COUNT = 3;
 const METERS_PER_MILE = 1609.34;
@@ -36,6 +41,7 @@ interface VenueDraft {
     lng: number;
     buildingCode: string;
     suggestedLots: SuggestedLot[];
+    rooms: Room[];
 }
 
 function venueToDraft(v: Venue): VenueDraft {
@@ -46,6 +52,7 @@ function venueToDraft(v: Venue): VenueDraft {
         lng: v.lng,
         buildingCode: v.buildingCode,
         suggestedLots: v.suggestedLots.map(s => ({...s})),
+        rooms: v.rooms.map(r => ({...r})),
     };
 }
 
@@ -57,6 +64,7 @@ function emptyDraft(): VenueDraft {
         lng: UW_CAMPUS_CENTER.lng,
         buildingCode: '',
         suggestedLots: [],
+        rooms: [],
     };
 }
 
@@ -68,6 +76,7 @@ function draftToPayload(draft: VenueDraft) {
         lng: draft.lng,
         buildingCode: draft.buildingCode.trim().toUpperCase(),
         suggestedLots: draft.suggestedLots.map(s => ({code: s.code, noteEn: s.noteEn.trim(), noteCn: s.noteCn.trim()})),
+        rooms: draft.rooms.map(r => ({id: r.id, nameEn: r.nameEn.trim(), nameCn: r.nameCn.trim()})),
     };
 }
 
@@ -100,6 +109,13 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         const code = draft.buildingCode.trim();
         if (code && !/^[A-Za-z0-9]{2,8}$/.test(code)) {
             return isEnglish ? 'A UW building code is 2–8 letters or digits, like HUB.' : 'UW 建筑代码为 2–8 位字母或数字，例如 HUB。';
+        }
+        if (draft.rooms.some(r => !r.nameEn.trim())) {
+            return isEnglish ? 'Every room needs an English name.' : '每个房间都需要英文名称。';
+        }
+        const names = draft.rooms.map(r => r.nameEn.trim().toLowerCase());
+        if (new Set(names).size < names.length) {
+            return isEnglish ? 'Two rooms have the same English name.' : '有两个房间的英文名称相同。';
         }
         return null;
     };
@@ -154,8 +170,10 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         }
         setSaving(true);
         try {
-            await callSaveVenue({venueId: editingId, ...draftToPayload(editDraft)});
+            const {data} = await callSaveVenue({venueId: editingId, ...draftToPayload(editDraft)});
             await afterSave();
+            // Rooms it dropped went off events, so the lists' copies are stale.
+            if (data.eventsChanged > 0) await refreshEvents().catch(() => undefined);
             setEditingId(null);
             showToast(isEnglish ? 'Venue updated.' : '场地已更新。', 'success');
         } catch (e) {
@@ -167,8 +185,8 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
 
     const deleteVenue = async (venue: Venue) => {
         if (!confirm(isEnglish
-            ? `Delete venue "${venue.nameEn}"? Events set to it will keep its name as their location text, but lose their parking guide.`
-            : `删除场地"${venue.nameEn}"？此场地的活动将以文字保留场地名称作为地点，但会失去停车指南。`
+            ? `Delete venue "${venue.nameEn}"? Events set to it will keep its name and their rooms as their location text, but lose their parking guide.`
+            : `删除场地"${venue.nameEn}"？此场地的活动将以文字保留场地名称和房间作为地点，但会失去停车指南。`
         )) return;
         setDeletingId(venue.id);
         try {
@@ -189,8 +207,8 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
         <div className="admin-section">
             <p className="admin-helper-text admin-section-intro">
                 {isEnglish
-                    ? 'Venues power the parking guide. Give each venue its UW building code to place it, then pick the UW lots to suggest; the guide lists them nearest first. Rates, hours and walking times come from UW data automatically. Pick a venue for an event from the Venue selector in the event editor.'
-                    : '场地数据用于停车指南。为每个场地填写 UW 建筑代码以确定位置，然后选择要推荐的 UW 停车场，停车指南将按距离由近到远列出。费率、收费时间和步行时间会自动从 UW 数据获取。在活动编辑器的“场地”选择器中为活动选择场地。'}
+                    ? 'Venues are events’ locations and power the parking guide. Give each venue its UW building code to place it, then pick the UW lots to suggest; the guide lists them nearest first. Rates, hours and walking times come from UW data automatically. Add a venue’s rooms to pick which ones an event is in. Pick a venue for an event from the Venue selector in the event editor.'
+                    : '场地即活动地点，并用于停车指南。为每个场地填写 UW 建筑代码以确定位置，然后选择要推荐的 UW 停车场，停车指南将按距离由近到远列出。费率、收费时间和步行时间会自动从 UW 数据获取。为场地添加房间后，可选择活动所在的房间。在活动编辑器的“场地”选择器中为活动选择场地。'}
             </p>
 
             {!readOnly && (
@@ -253,6 +271,11 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
                                     {venue.nameCn && (
                                         <span className="admin-event-card-date">{venue.nameCn}</span>
                                     )}
+                                    <span className="admin-helper-text admin-card-meta">
+                                        {venue.rooms.length > 0
+                                            ? `${isEnglish ? 'Rooms' : '房间'}: ${venue.rooms.map(r => localized(isEnglish, r.nameEn, r.nameCn)).join(' · ')}`
+                                            : (isEnglish ? 'No rooms' : '暂无房间')}
+                                    </span>
                                     <span className="admin-helper-text admin-card-meta">
                                         {venue.suggestedLots.length > 0
                                             ? `${isEnglish ? 'Suggested lots' : '推荐停车场'}: ${venue.suggestedLots.map(s => s.code).join(' · ')}`
@@ -453,6 +476,8 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
                 />
             </div>
 
+            <VenueRoomsField draft={draft} setDraft={setDraft} editing={venueId !== null} isEnglish={isEnglish}/>
+
             <div className="admin-venue-lots">
                 <div className="admin-venue-lots-header">
                     <span className="admin-venue-lots-title">
@@ -560,5 +585,94 @@ const VenueForm = ({draft, setDraft, venueId, parking, isEnglish}: VenueFormProp
                 )}
             </div>
         </>
+    );
+};
+
+interface VenueRoomsFieldProps {
+    draft: VenueDraft;
+    setDraft: (updater: (prev: VenueDraft) => VenueDraft) => void;
+    /** Whether the venue is saved, so its rooms may have events in them. */
+    editing: boolean;
+    isEnglish: boolean;
+}
+
+// A venue's rooms, in the order an event's location lists them.
+const VenueRoomsField = ({draft, setDraft, editing, isEnglish}: VenueRoomsFieldProps) => {
+    const {rooms} = draft;
+    const full = rooms.length >= MAX_ROOMS;
+    const setRooms = (update: (rooms: Room[]) => Room[]) => setDraft(prev => ({...prev, rooms: update(prev.rooms)}));
+    const updateRoom = (index: number, patch: Partial<Room>) =>
+        setRooms(list => list.map((r, i) => i === index ? {...r, ...patch} : r));
+    const moveRoom = (index: number, delta: number) => setRooms(list => {
+        const next = [...list];
+        [next[index], next[index + delta]] = [next[index + delta], next[index]];
+        return next;
+    });
+    // As venueLocationName shows it, with the first room.
+    const venueName = localized(isEnglish, draft.nameEn.trim() || (isEnglish ? 'Venue' : '场地'), draft.nameCn.trim());
+    const example = rooms.length > 0
+        ? `${venueName} · ${localized(isEnglish, rooms[0].nameEn.trim() || '…', rooms[0].nameCn.trim())}`
+        : '';
+
+    return (
+        <div className="admin-venue-lots">
+            <div className="admin-venue-lots-header">
+                <span className="admin-venue-lots-title">
+                    {isEnglish ? 'Rooms' : '房间'}
+                    {rooms.length > 0 && <span className="admin-venue-lots-count">{rooms.length}</span>}
+                </span>
+                <button
+                    type="button"
+                    className="admin-venue-lot-add"
+                    onClick={() => setRooms(list => [...list, {id: crypto.randomUUID(), nameEn: '', nameCn: ''}])}
+                    disabled={full}
+                >
+                    {isEnglish ? '+ Add room' : '+ 添加房间'}
+                </button>
+            </div>
+            {rooms.length === 0 ? (
+                <div className="admin-venue-lot-empty">
+                    {isEnglish
+                        ? 'No rooms. Events here show just the venue’s name; add rooms to say which ones an event is in.'
+                        : '暂无房间。此处的活动只显示场地名称；添加房间后可注明活动所在的房间。'}
+                </div>
+            ) : (
+                <>
+                    <div className="admin-venue-room-list">
+                        {rooms.map((r, i) => (
+                            <div key={r.id} className="admin-venue-room-row">
+                                <input
+                                    value={r.nameEn}
+                                    onChange={e => updateRoom(i, {nameEn: e.target.value})}
+                                    className="admin-input"
+                                    maxLength={MAX_ROOM_NAME}
+                                    placeholder={isEnglish ? 'Name (English), e.g. 214' : '名称（英文），例如：214'}
+                                    aria-label={isEnglish ? 'Room name (English)' : '房间名称（英文）'}
+                                />
+                                <input
+                                    value={r.nameCn}
+                                    onChange={e => updateRoom(i, {nameCn: e.target.value})}
+                                    className="admin-input"
+                                    maxLength={MAX_ROOM_NAME}
+                                    placeholder={isEnglish ? 'Name (Chinese), optional' : '名称（中文），可选'}
+                                    aria-label={isEnglish ? 'Room name (Chinese)' : '房间名称（中文）'}
+                                />
+                                <RowActions
+                                    index={i}
+                                    count={rooms.length}
+                                    onMove={delta => moveRoom(i, delta)}
+                                    onRemove={() => setRooms(list => list.filter((_, j) => j !== i))}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    <p className="admin-helper-text admin-mt-8">
+                        {isEnglish
+                            ? `An event in rooms shows as “${example}”, its rooms in this order.${editing ? ' Removing a room takes it off the events in it.' : ''}`
+                            : `位于房间的活动将显示为“${example}”，房间按此顺序排列。${editing ? '删除房间会将其从所在的活动中移除。' : ''}`}
+                    </p>
+                </>
+            )}
+        </div>
     );
 };

@@ -83,7 +83,7 @@ export const PastEvents = () => {
                                         })}</span>
                                     </div>
                                     {(() => {
-                                        const locationText = eventLocationDisplay(event.location, event.locationCn, event.venueId, venues, isEnglish);
+                                        const locationText = eventLocationDisplay(event, venues, isEnglish);
                                         return locationText ? (
                                             <div className="event-date">
                                                 <span>📍</span>

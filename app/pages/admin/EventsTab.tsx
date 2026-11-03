@@ -10,7 +10,7 @@ import { BilingualFormField } from './BilingualFormField';
 import { ListCard } from './CrudShell';
 import { ConEditionField } from './ConEditionField';
 import { EmptyRow } from './conContentShared';
-import { LocationFormField } from './LocationFormField';
+import { VenueFormField } from './VenueFormField';
 import { ImageUploadField } from './ImageUploadField';
 import { TagMultiSelect } from './TagMultiSelect';
 import { PastEventDetailView } from './PastEventDetailView';
@@ -34,7 +34,7 @@ type Section = 'con' | 'past';
 
 const emptyForm = () => ({
     title: '', titleCn: '', tagIds: [] as string[], date: '',
-    location: '', locationCn: '', venueId: '',
+    venueId: '', roomIds: [] as string[],
     description: '', descriptionCn: '', icon: '', recapLink: '', recapLinkCn: '',
     isCon: false,
 });
@@ -108,7 +108,7 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
         setEventForm({
             title: event.title, titleCn: event.titleCn, tagIds: event.tagIds,
             date: event.date,
-            location: event.location, locationCn: event.locationCn, venueId: event.venueId,
+            venueId: event.venueId, roomIds: event.roomIds,
             description: event.description, descriptionCn: event.descriptionCn, icon: event.icon,
             recapLink: event.recapLink, recapLinkCn: event.recapLinkCn,
             isCon: !!event.con,
@@ -138,9 +138,8 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                 titleCn: eventForm.titleCn,
                 tagIds: eventForm.isCon ? [] : eventForm.tagIds,
                 date: eventForm.date,
-                location: eventForm.location,
-                locationCn: eventForm.locationCn,
                 venueId: eventForm.venueId,
+                roomIds: eventForm.roomIds,
                 description: eventForm.description,
                 descriptionCn: eventForm.descriptionCn,
                 icon: iconUrl,
@@ -201,14 +200,10 @@ export const EventsTab = forwardRef<EventsTabHandle, EventsTabProps>(({
                         className="admin-input"
                     />
                 </label>
-                <LocationFormField
-                    value={eventForm.location} valueCn={eventForm.locationCn}
-                    venueId={eventForm.venueId}
-                    onChange={v => setEventForm(f => ({...f, location: v}))}
-                    onChangeCn={v => setEventForm(f => ({...f, locationCn: v}))}
-                    onChangeVenueId={v => setEventForm(f => ({...f, venueId: v}))}
-                    placeholder={isEnglish ? 'Event location' : '活动地点'}
-                    placeholderCn={isEnglish ? 'Location in Chinese' : '中文地点'}
+                <VenueFormField
+                    value={eventForm}
+                    onChange={({venueId, roomIds}) => setEventForm(f => ({...f, venueId, roomIds}))}
+                    location={editingEvent?.location} locationCn={editingEvent?.locationCn}
                 />
                 <ImageUploadField
                     label={eventForm.isCon ? 'Poster' : 'Event Image'}

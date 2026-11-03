@@ -7,6 +7,7 @@ import {
     WALLET_PASS_ORGANIZATION,
     WALLET_PASSES_ON,
 } from "./config";
+import { eventLocationText } from "./events";
 import { db } from "./firebase";
 import { siteDay } from "./siteTime";
 import { formatEventDateForEmail, ticketIdOf, ticketTypeStyle } from "./ticketEmail";
@@ -251,15 +252,15 @@ export async function walletPassesOnFor(eventRef: FirebaseFirestore.DocumentRefe
     }
 }
 
-// An event's location for its passes, as the site shows it in English: its own
-// text, else its venue's name, then the same in Chinese. Empty if there's none,
-// or the venue couldn't be read.
+// An event's location for its passes, as the site shows it in English: its
+// venue's name and rooms, else its own text, falling back to the Chinese. A
+// venue that couldn't be read counts as none.
 async function eventLocation(data: FirebaseFirestore.DocumentData): Promise<string> {
     const venueId = str(data.venueId);
-    const venue = venueId && !str(data.location)
+    const venue = venueId
         ? (await db.collection("venues").doc(venueId).get().catch(() => null))?.data()
         : undefined;
-    return str(data.location) || str(venue?.nameEn) || str(data.locationCn) || str(venue?.nameCn);
+    return eventLocationText(data, venue, true) || eventLocationText(data, venue, false);
 }
 
 // One ticket's pass, from what WalletWallet's free plan takes: no images or

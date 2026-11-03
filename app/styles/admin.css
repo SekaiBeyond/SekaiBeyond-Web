@@ -4578,6 +4578,41 @@ select.admin-tickets-tag:focus {
     }
 }
 
+/* A venue's rooms: English and Chinese names, then ↑ ↓ ×. */
+.admin-venue-room-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-venue-room-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-venue-room-row .admin-input {
+    min-width: 0;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+@media (max-width: 600px) {
+    .admin-venue-room-row {
+        grid-template-columns: 1fr auto;
+    }
+
+    .admin-venue-room-row .admin-input:nth-child(2) {
+        grid-column: 1;
+    }
+
+    .admin-venue-room-row .admin-con-actions {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+    }
+}
+
 /* Admin form field section heading */
 .admin-field-label {
     display: block;

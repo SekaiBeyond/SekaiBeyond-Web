@@ -212,7 +212,8 @@ export const callSetUserTitle = (data: {targetUid: string; title?: string; title
 export const callSavePastEvent = (data: {
     eventId?: string;
     title: string; titleCn: string; tagIds: string[]; date: string;
-    location: string; locationCn: string; venueId: string;
+    /** Its venue, and which of its rooms it's in, if any. */
+    venueId: string; roomIds: string[];
     description: string; descriptionCn: string; icon: string;
     recapLink: string; recapLinkCn: string;
     /** Marks it as its date's year's Sekai Beyond Con. */
@@ -225,7 +226,8 @@ export const callSetPastEventPublished = (data: {eventId: string; published: boo
 export const callSaveUpcomingEvent = (data: {
     eventId?: string;
     title: string; titleCn: string; description: string; descriptionCn: string;
-    location: string; locationCn: string; venueId: string; startAt: string; endAt: string;
+    /** Its venue, and which of its rooms it's in, if any. */
+    venueId: string; roomIds: string[]; startAt: string; endAt: string;
     poster: string; emailHeaderBg: string; posterCredit: string;
     buyTicket: string; learnMore: string;
     customButtonText: string; customButtonTextCn: string; customButtonLink: string;
@@ -332,6 +334,7 @@ export interface HeldTicketEvent {
     location: string;
     locationCn: string;
     venueId: string;
+    roomIds: string[];
     poster: string;
     startAt: string;
     tickets: HeldTicket[];
@@ -626,7 +629,13 @@ export const callSaveVenue = (data: {
     lng: number;
     buildingCode: string;
     suggestedLots: Array<{code: string; noteEn: string; noteCn: string}>;
-}) => httpsCallable<typeof data, {venueId: string}>(getFunctions(), 'saveVenue')(data);
+    /** Every room, in order. A new one's ID is made up by the editor. */
+    rooms: Array<{id: string; nameEn: string; nameCn: string}>;
+}) => httpsCallable<typeof data, {
+    venueId: string;
+    /** How many events lost a room this save removed. */
+    eventsChanged: number;
+}>(getFunctions(), 'saveVenue')(data);
 
 export interface UwBuildingLookup {
     building: {code: string; name: string; address: string; lat: number; lng: number; parkingTip: string};

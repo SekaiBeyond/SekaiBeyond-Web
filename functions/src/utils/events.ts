@@ -1,6 +1,6 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { db } from "./firebase";
-import { validateDocId, validateStr } from "./validation";
+import { validateDocId, validateStr, validateStringArray } from "./validation";
 
 /**
  * An event's doc from whichever collection holds it: upcomingEvents, or
@@ -42,16 +42,95 @@ export function validateVenueId(raw: unknown): string {
     return venueId ? validateDocId(venueId, "venueId") : "";
 }
 
+/** The most rooms a venue has. */
+export const MAX_ROOMS = 50;
+/** A room's ID, which the venue editor makes up: a UUID. */
+export const ROOM_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
+
+/** A venue's room, as saveVenue stores it. Mirrors Room in app/lib/venues.ts. */
+export interface Room {
+    id: string;
+    nameEn: string;
+    nameCn: string;
+}
+
+const text = (v: unknown): string => typeof v === "string" ? v.trim() : "";
+
+/** A venue doc's rooms, in order, skipping any without an ID. */
+export function venueRooms(venue: FirebaseFirestore.DocumentData | undefined): Room[] {
+    const raw: unknown[] = Array.isArray(venue?.rooms) ? venue.rooms : [];
+    return raw
+        .map((r: any) => ({id: text(r?.id), nameEn: text(r?.nameEn), nameCn: text(r?.nameCn)}))
+        .filter(r => r.id.length > 0);
+}
+
+/**
+ * An event's `roomIds` from a save: rooms of its venue, so none without one.
+ * null when the save sends none, as one from an editor older than rooms does
+ * (see roomIdsKept).
+ */
+export function validateRoomIds(raw: unknown, venueId: string): string[] | null {
+    if (raw === undefined) return null;
+    const roomIds = validateStringArray(raw, "roomIds", MAX_ROOMS, 64);
+    for (const id of roomIds) {
+        if (!ROOM_ID_RE.test(id)) throw new HttpsError("invalid-argument", "Invalid roomIds.");
+    }
+    if (roomIds.length > 0 && !venueId) {
+        throw new HttpsError("invalid-argument", "Pick a venue for the rooms.");
+    }
+    return roomIds;
+}
+
+/**
+ * The rooms a save that sends none keeps: the event's own, while its venue
+ * stays. `existing` is the saved event, or undefined for a new one.
+ */
+export function roomIdsKept(existing: FirebaseFirestore.DocumentData | undefined, venueId: string): string[] {
+    if (!existing || existing.venueId !== venueId || !Array.isArray(existing.roomIds)) return [];
+    return existing.roomIds.filter((id: unknown): id is string => typeof id === "string");
+}
+
 /**
  * Refuses a venue that's gone, as one deleted since the form loaded
- * (deleteVenue takes it off the events using it). "" is no venue. Reads in
- * `txn`, so call it before the transaction's writes.
+ * (deleteVenue takes it off the events using it), or a room it no longer has
+ * (saveVenue takes a removed room off them). Returns `roomIds` in the venue's
+ * order. "" is no venue. Reads in `txn`, so call it before the transaction's
+ * writes.
  */
-export async function requireVenueExists(txn: FirebaseFirestore.Transaction, venueId: string): Promise<void> {
-    if (!venueId) return;
-    if (!(await txn.get(db.collection("venues").doc(venueId))).exists) {
+export async function requireVenueRooms(
+    txn: FirebaseFirestore.Transaction,
+    venueId: string,
+    roomIds: string[],
+): Promise<string[]> {
+    if (!venueId) return [];
+    const snap = await txn.get(db.collection("venues").doc(venueId));
+    if (!snap.exists) {
         throw new HttpsError("not-found", "That venue has been deleted. Reload and pick another.");
     }
+    const rooms = venueRooms(snap.data()).map(r => r.id);
+    if (roomIds.some(id => !rooms.includes(id))) {
+        throw new HttpsError("not-found", "A room you picked has been removed from that venue. Reload and pick again.");
+    }
+    return rooms.filter(id => roomIds.includes(id));
+}
+
+/**
+ * An event's location in one language, as the site shows it
+ * (eventLocationDisplay in app/lib/venues.ts): its venue's name and rooms,
+ * "Husky Union Building · 214, 250", else its own text. Chinese falls back to
+ * English piece by piece. `venue` is the event's venue doc, or undefined for none.
+ */
+export function eventLocationText(
+    event: FirebaseFirestore.DocumentData,
+    venue: FirebaseFirestore.DocumentData | undefined,
+    isEnglish: boolean,
+): string {
+    const pick = (en: unknown, cn: unknown) => isEnglish ? text(en) : (text(cn) || text(en));
+    if (!venue) return pick(event.location, event.locationCn);
+    const roomIds: unknown[] = Array.isArray(event.roomIds) ? event.roomIds : [];
+    const rooms = venueRooms(venue).filter(r => roomIds.includes(r.id)).map(r => pick(r.nameEn, r.nameCn));
+    const name = pick(venue.nameEn, venue.nameCn);
+    return rooms.length > 0 ? `${name} · ${rooms.join(isEnglish ? ", " : "、")}` : name;
 }
 
 /**

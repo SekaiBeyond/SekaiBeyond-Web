@@ -5,7 +5,7 @@ import { checkApiKeyRateLimit } from "../utils/auth";
 import { type ApiKeyDoc, apiKeysCol, type ApiScope, hashApiKey, isApiKeyShaped } from "../utils/apiKeys";
 import { RESEND_QUEUE_CAP } from "../utils/config";
 import { contactEmailFor, type EmailTemplateDoc, savedTemplate } from "../utils/emailTemplate";
-import { getEventDoc, readConInfo } from "../utils/events";
+import { eventLocationText, getEventDoc, readConInfo } from "../utils/events";
 import { db } from "../utils/firebase";
 import { computeEmailQuotaInTxn, reserveQuotaInTxn, rollbackQuotaReservation } from "../utils/quota";
 import { recordDoc, recordRef } from "../utils/records";
@@ -187,14 +187,26 @@ function whyNotOnSale(event: FoundEvent): ApiError | null {
     return null;
 }
 
+/** The events' venues' docs by ID: what their locations show. */
+type Venues = Map<string, FirebaseFirestore.DocumentData>;
+
+async function venuesOf(events: FirebaseFirestore.DocumentSnapshot[]): Promise<Venues> {
+    const ids = [...new Set(events.map(snap => str(snap.data()?.venueId)).filter(Boolean))];
+    if (ids.length === 0) return new Map();
+    const snaps = await db.getAll(...ids.map(id => db.collection("venues").doc(id)));
+    return new Map(snaps.filter(snap => snap.exists).map(snap => [snap.id, snap.data()!]));
+}
+
 /**
  * An event as the site reads it: the fields of app/lib/upcomingEvents.ts for
  * an unarchived one, of app/lib/pastEvents.ts for an archived one, with the
- * same defaults.
+ * same defaults. Its location is the one the site shows, not the stored text.
  */
-function eventJson(event: FoundEvent) {
+function eventJson(event: FoundEvent, venues: Venues) {
     const {snap, archived} = event;
     const data = snap.data()!;
+    // Its venue's name and rooms, else its text.
+    const venue = venues.get(str(data.venueId));
     const shared = {
         id: snap.id,
         archived,
@@ -203,8 +215,8 @@ function eventJson(event: FoundEvent) {
         titleCn: str(data.titleCn),
         description: str(data.description),
         descriptionCn: str(data.descriptionCn),
-        location: str(data.location),
-        locationCn: str(data.locationCn),
+        location: eventLocationText(data, venue, true),
+        locationCn: eventLocationText(data, venue, false),
         venueId: str(data.venueId),
         // The year's Sekai Beyond Con, or null for any other event.
         con: readConInfo(data.con),
@@ -322,9 +334,10 @@ async function listEvents(key: ApiKey): Promise<ApiReply> {
             db.collection("upcomingEvents").orderBy("startAt", "asc").get().then(snap => snap.docs),
             db.collection("pastEvents").orderBy("date", "desc").get().then(snap => snap.docs),
         ]);
+    const venues = await venuesOf([...upcoming, ...past]);
     const events = [
-        ...upcoming.map(snap => eventJson({archived: false, snap})),
-        ...past.map(snap => eventJson({archived: true, snap})),
+        ...upcoming.map(snap => eventJson({archived: false, snap}, venues)),
+        ...past.map(snap => eventJson({archived: true, snap}, venues)),
     ];
     return {status: 200, body: {events}};
 }
@@ -332,7 +345,8 @@ async function listEvents(key: ApiKey): Promise<ApiReply> {
 async function getEvent(key: ApiKey, eventId: string): Promise<ApiReply> {
     requireScope(key, "events:read");
     requireEventAccess(key, eventId);
-    return {status: 200, body: eventJson(await findEvent(eventId))};
+    const event = await findEvent(eventId);
+    return {status: 200, body: eventJson(event, await venuesOf([event.snap]))};
 }
 
 interface OrderInput {

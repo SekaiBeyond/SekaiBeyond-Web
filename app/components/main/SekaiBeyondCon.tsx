@@ -25,6 +25,7 @@ interface Edition {
     location: string;
     locationCn: string;
     venueId: string;
+    roomIds: string[];
     description: string;
     descriptionCn: string;
     image: string;
@@ -82,6 +83,7 @@ export const SekaiBeyondCon = () => {
                 location: event.location,
                 locationCn: event.locationCn,
                 venueId: event.venueId,
+                roomIds: event.roomIds,
                 description: event.description,
                 descriptionCn: event.descriptionCn,
                 image: event.poster,
@@ -100,6 +102,7 @@ export const SekaiBeyondCon = () => {
                 location: event.location,
                 locationCn: event.locationCn,
                 venueId: event.venueId,
+                roomIds: event.roomIds,
                 description: event.description,
                 descriptionCn: event.descriptionCn,
                 image: event.icon,
@@ -150,7 +153,7 @@ export const SekaiBeyondCon = () => {
         ? (edition.recapLink || edition.recapLinkCn)
         : (edition.recapLinkCn || edition.recapLink);
     const showRecap = edition.status === 'past' && isValidHttpUrl(recapHref);
-    const location = eventLocationDisplay(edition.location, edition.locationCn, edition.venueId, venues, isEnglish);
+    const location = eventLocationDisplay(edition, venues, isEnglish);
     const description = localized(isEnglish, edition.description, edition.descriptionCn);
     const conName = isEnglish ? "Sekai Beyond Con" : "彼世界动漫游戏展";
 

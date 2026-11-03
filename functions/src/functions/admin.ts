@@ -33,6 +33,7 @@ import {
     validateUrl
 } from "../utils/validation";
 import { UW_BUILDING_CODE_RE, UW_LOT_CODE_RE } from "../utils/uwParking";
+import { eventLocationText, MAX_ROOMS, type Room, ROOM_ID_RE, venueRooms } from "../utils/events";
 import { dropVenueParking, refreshVenueParking } from "./parking";
 
 export const uploadAdminImage = onCall({maxInstances: 10}, async (request) => {
@@ -872,6 +873,29 @@ function venueUwFields(input: Record<string, unknown>): {
     return {buildingCode, suggestedLots};
 }
 
+/**
+ * A venue's rooms from a save, in order: each with an ID the editor made up, an
+ * English name and an optional Chinese one. Two can't share an English name.
+ */
+function venueRoomsInput(raw: unknown): Room[] {
+    if (!Array.isArray(raw)) throw new HttpsError("invalid-argument", "rooms must be a list.");
+    if (raw.length > MAX_ROOMS) throw new HttpsError("invalid-argument", `Too many rooms (max ${MAX_ROOMS}).`);
+    const ids = new Set<string>();
+    const names = new Set<string>();
+    return raw.map((room: any, i: number) => {
+        const id = validateStr(room?.id, `rooms[${i}].id`, 64, true);
+        if (!ROOM_ID_RE.test(id)) throw new HttpsError("invalid-argument", `Invalid rooms[${i}].id.`);
+        if (ids.has(id)) throw new HttpsError("invalid-argument", `Duplicate room ID: ${id}.`);
+        ids.add(id);
+        const nameEn = sanitizeDisplayText(validateStr(room?.nameEn, `rooms[${i}].nameEn`, 100, true));
+        if (!nameEn) throw new HttpsError("invalid-argument", `rooms[${i}].nameEn is required.`);
+        const key = nameEn.toLowerCase();
+        if (names.has(key)) throw new HttpsError("invalid-argument", `Two rooms are named ${nameEn}.`);
+        names.add(key);
+        return {id, nameEn, nameCn: sanitizeDisplayText(validateStr(room?.nameCn, `rooms[${i}].nameCn`, 100))};
+    });
+}
+
 export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
@@ -883,28 +907,49 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     const lng = validateCoordinate(input.lng, "lng", -180, 180);
 
     const {buildingCode, suggestedLots} = venueUwFields(input);
+    // A save from an editor older than rooms sends none, and keeps the venue's.
+    const roomsSent = input.rooms === undefined ? null : venueRoomsInput(input.rooms);
 
     const docId = venueId ?? db.collection("venues").doc().id;
 
-    await adminTransaction(uid, async (txn, callerSnap) => {
+    const eventsChanged = await adminTransaction(uid, async (txn, callerSnap) => {
+        // The events in a room this save removes, which lose it; a past event
+        // too, which then shows the venue's name without that room.
+        const losing: {ref: FirebaseFirestore.DocumentReference; roomIds: string[]}[] = [];
+        let rooms = roomsSent ?? [];
         if (venueId) {
             const existing = await txn.get(db.collection("venues").doc(venueId));
             if (!existing.exists) throw new HttpsError("not-found", "Venue not found.");
+            const before = venueRooms(existing.data());
+            rooms = roomsSent ?? before;
+            const kept = new Set(rooms.map(r => r.id));
+            const removed = before.some(r => !kept.has(r.id));
+            if (removed) {
+                const using = await Promise.all(["upcomingEvents", "pastEvents"].map(col =>
+                    txn.get(db.collection(col).where("venueId", "==", venueId))));
+                for (const doc of using.flatMap(snap => snap.docs)) {
+                    const roomIds: unknown[] = Array.isArray(doc.data().roomIds) ? doc.data().roomIds : [];
+                    const left = roomIds.filter((id): id is string => typeof id === "string" && kept.has(id));
+                    if (left.length < roomIds.length) losing.push({ref: doc.ref, roomIds: left});
+                }
+            }
         }
 
         const ref = db.collection("venues").doc(docId);
-        const data = {nameEn, nameCn, lat, lng, buildingCode, suggestedLots};
+        const data = {nameEn, nameCn, lat, lng, buildingCode, suggestedLots, rooms};
         if (venueId) {
             txn.update(ref, data);
         } else {
             txn.set(ref, data);
         }
+        for (const {ref: eventRef, roomIds} of losing) txn.update(eventRef, {roomIds});
         txn.set(recordRef(), recordDoc(venueId ? "venue-edit" : "venue-create", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
             venueId: docId,
             venueName: nameEn,
         }));
+        return losing.length;
     });
 
     // A new, moved or re-coded venue gets walking times and its outline now rather
@@ -912,7 +957,7 @@ export const saveVenue = onCall({maxInstances: 10}, async (request) => {
     // refreshes them anyway.
     await refreshVenueParking(docId, {lat, lng, buildingCode})
         .catch(err => console.error("saveVenue: parking data not refreshed for", docId, err));
-    return {venueId: docId};
+    return {venueId: docId, eventsChanged};
 });
 export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
@@ -927,18 +972,17 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
             txn.get(db.collection(col).where("venueId", "==", venueId))));
 
         txn.delete(venueRef);
-        // Off every event set to it. Where an event had no location text in a
-        // language, it showed the venue's name (eventLocationDisplay in
-        // app/lib/venues.ts), so it keeps that name as its text.
-        const nameEn = String(venueSnap.data()?.nameEn ?? "");
-        const nameCn = String(venueSnap.data()?.nameCn ?? "");
+        // Off every event set to it, rooms and all. An event shows its venue's
+        // name and rooms as its location, else its location text
+        // (eventLocationDisplay in app/lib/venues.ts), so it keeps what it
+        // showed as its text.
         for (const doc of using.flatMap(snap => snap.docs)) {
-            const update: Record<string, string> = {venueId: ""};
-            if (!String(doc.data().location ?? "").trim()) {
-                update.location = nameEn;
-                if (!String(doc.data().locationCn ?? "").trim()) update.locationCn = nameCn;
-            }
-            txn.update(doc.ref, update);
+            txn.update(doc.ref, {
+                venueId: "",
+                roomIds: [],
+                location: eventLocationText(doc.data(), venueSnap.data(), true),
+                locationCn: eventLocationText(doc.data(), venueSnap.data(), false),
+            });
         }
         txn.set(recordRef(), recordDoc("venue-delete", {
             performedBy: uid,

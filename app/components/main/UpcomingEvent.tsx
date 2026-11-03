@@ -62,7 +62,7 @@ const EventCard = ({event, isEnglish, onPosterClick}: EventCardProps) => {
                     minute: 'numeric',
                 })}</p>
                 <div className="convention-location">
-                    {eventLocationDisplay(event.location, event.locationCn, event.venueId, venues, isEnglish)}
+                    {eventLocationDisplay(event, venues, isEnglish)}
                 </div>
                 <p className="event-description-text">
                     {localized(isEnglish, event.description, event.descriptionCn)}

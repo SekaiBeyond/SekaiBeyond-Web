@@ -8,6 +8,13 @@ export interface SuggestedLot {
     noteCn: string;
 }
 
+/** A room in a venue, which an event can be held in, or several of. */
+export interface Room {
+    id: string;
+    nameEn: string;
+    nameCn: string;
+}
+
 export interface Venue {
     id: string;
     nameEn: string;
@@ -18,6 +25,8 @@ export interface Venue {
     buildingCode: string;
     /** UW lots the parking guide suggests for the venue, best first. */
     suggestedLots: SuggestedLot[];
+    /** Its rooms, in the order events list them. */
+    rooms: Room[];
 }
 
 // These are the values to change if the parking guide is ever used off the UW campus.
@@ -75,6 +84,14 @@ const cache = createCollectionCache<Venue>('venues', docSnap => {
             noteCn: typeof s?.noteCn === 'string' ? s.noteCn : '',
         }))
         .filter(s => s.code.length > 0);
+    const rawRooms: (Partial<Record<keyof Room, unknown>> | null)[] = Array.isArray(data.rooms) ? data.rooms : [];
+    const rooms: Room[] = rawRooms
+        .map(r => ({
+            id: typeof r?.id === 'string' ? r.id : '',
+            nameEn: typeof r?.nameEn === 'string' ? r.nameEn : '',
+            nameCn: typeof r?.nameCn === 'string' ? r.nameCn : '',
+        }))
+        .filter(r => r.id.length > 0);
     return {
         id: docSnap.id,
         nameEn: data.nameEn ?? '',
@@ -83,6 +100,7 @@ const cache = createCollectionCache<Venue>('venues', docSnap => {
         lng: typeof data.lng === 'number' ? data.lng : 0,
         buildingCode: typeof data.buildingCode === 'string' ? data.buildingCode : '',
         suggestedLots,
+        rooms,
     };
 });
 
@@ -101,18 +119,40 @@ export function resolveVenueById(venueId: string | undefined, venues: Venue[]): 
     return venues.find(v => v.id === venueId) ?? null;
 }
 
-/**
- * An event's location for display: its free-text location, else its venue's name, else ''.
- */
-export function eventLocationDisplay(
-    location: string | undefined,
-    locationCn: string | undefined,
-    venueId: string | undefined,
-    venues: Venue[],
-    isEnglish: boolean,
-): string {
-    const text = localized(isEnglish, location ?? '', locationCn);
-    if (text.trim()) return text;
-    const venue = resolveVenueById(venueId, venues);
-    return venue ? localizedVenueName(venue, isEnglish) : '';
+/** The fields an event's location is made from, which upcoming and past events share. */
+export interface EventLocationFields {
+    location: string;
+    locationCn: string;
+    venueId: string;
+    /** Rooms of its venue it's in; none means the venue as a whole. */
+    roomIds: string[];
 }
+
+/**
+ * A venue's name and, if any, the rooms of it in `roomIds`, in the venue's order:
+ * "Husky Union Building · 214, 250". Mirrors eventLocationText in
+ * functions/src/utils/events.ts.
+ */
+export function venueLocationName(venue: Venue, roomIds: string[], isEnglish: boolean): string {
+    const name = localizedVenueName(venue, isEnglish);
+    const rooms = venue.rooms
+        .filter(r => roomIds.includes(r.id))
+        .map(r => localized(isEnglish, r.nameEn, r.nameCn));
+    return rooms.length > 0 ? `${name} · ${rooms.join(isEnglish ? ', ' : '、')}` : name;
+}
+
+/**
+ * An event's location for display: its venue's name and rooms, else its location
+ * text, else ''. The text is never typed in: it's what a deleted venue showed
+ * (deleteVenue), or a custom location from before venues set the location, kept
+ * until the event gets a venue.
+ */
+export function eventLocationDisplay(event: EventLocationFields, venues: Venue[], isEnglish: boolean): string {
+    const venue = resolveVenueById(event.venueId, venues);
+    if (venue) return venueLocationName(venue, event.roomIds, isEnglish);
+    return localized(isEnglish, event.location, event.locationCn).trim();
+}
+
+/** An event's `roomIds` as read from Firestore: [] when missing. */
+export const readRoomIds = (raw: unknown): string[] =>
+    Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string') : [];

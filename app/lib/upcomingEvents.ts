@@ -3,6 +3,7 @@ import { doc, type DocumentData, getDoc, orderBy, where } from 'firebase/firesto
 import { createCollectionCache, toDate } from './collectionCache';
 import { getFirebaseDb } from './firebase';
 import { type ConInfo, readConInfo } from './conEditions';
+import { readRoomIds } from './venues';
 
 export interface UpcomingEvent {
     id: string;
@@ -13,6 +14,8 @@ export interface UpcomingEvent {
     location: string;
     locationCn: string;
     venueId: string;
+    /** Rooms of its venue it's in; none means the venue as a whole. */
+    roomIds: string[];
     startAt: Date;
     endAt: Date;
     poster: string;
@@ -41,6 +44,7 @@ const mapDoc = (docSnap: {id: string; data: () => DocumentData}): UpcomingEvent 
         location: data.location ?? '',
         locationCn: data.locationCn ?? '',
         venueId: data.venueId ?? '',
+        roomIds: readRoomIds(data.roomIds),
         startAt: toDate(data.startAt) ?? new Date(),
         endAt: toDate(data.endAt) ?? new Date(),
         poster: data.poster ?? '',

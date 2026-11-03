@@ -146,7 +146,7 @@ export const UpcomingEventDetailView = ({
                                 hour: 'numeric', minute: 'numeric',
                             })}
                         </span>
-                        <span>{eventLocationDisplay(event.location, event.locationCn, event.venueId, venues, isEnglish)}</span>
+                        <span>{eventLocationDisplay(event, venues, isEnglish)}</span>
                     </p>
                     <p className="admin-description-text">
                         {localized(isEnglish, event.description, event.descriptionCn)}

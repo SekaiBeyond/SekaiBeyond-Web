@@ -42,6 +42,7 @@ const toTicketEvent = (e: PastEvent): UpcomingEvent => ({
     location: e.location,
     locationCn: e.locationCn,
     venueId: e.venueId,
+    roomIds: e.roomIds,
     startAt: e.date ? new Date(e.date) : new Date(),
     endAt: e.date ? new Date(e.date) : new Date(),
     poster: '',
@@ -158,7 +159,7 @@ export const PastEventDetailView = ({
                             .map(t => localized(isEnglish, t.name, t.nameCn))
                             .join(', ')}</span>
                         <span>{event.date}</span>
-                        <span>{eventLocationDisplay(event.location, event.locationCn, event.venueId, venues, isEnglish)}</span>
+                        <span>{eventLocationDisplay(event, venues, isEnglish)}</span>
                     </p>
                 </div>
             </div>

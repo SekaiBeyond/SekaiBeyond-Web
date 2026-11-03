@@ -237,9 +237,7 @@ export const ProfileTickets = ({ticketEvents}: {ticketEvents: HeldTicketEvent[]}
             <div className="profile-ticket-events">
                 {ticketEvents.map(event => {
                     const title = localized(isEnglish, event.title, event.titleCn);
-                    const where = eventLocationDisplay(
-                        event.location, event.locationCn, event.venueId, venues, isEnglish,
-                    );
+                    const where = eventLocationDisplay(event, venues, isEnglish);
                     return (
                         <article key={event.eventId} className="profile-ticket-event">
                             <header className="profile-ticket-event-head">

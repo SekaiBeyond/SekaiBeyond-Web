@@ -10,7 +10,7 @@ import { localized } from '~/lib/localized';
 import { refreshAfterSave, type ShowToast } from './utils';
 import { BilingualFormField } from './BilingualFormField';
 import { ListCard } from './CrudShell';
-import { LocationFormField } from './LocationFormField';
+import { VenueFormField } from './VenueFormField';
 import { ImageUploadField } from './ImageUploadField';
 import { ImageCropModal } from './ImageCropModal';
 import { ConEditionField } from './ConEditionField';
@@ -37,9 +37,8 @@ interface EventForm {
     titleCn: string;
     description: string;
     descriptionCn: string;
-    location: string;
-    locationCn: string;
     venueId: string;
+    roomIds: string[];
     startAt: string;
     endAt: string;
     posterCredit: string;
@@ -54,7 +53,7 @@ interface EventForm {
 
 const emptyForm: EventForm = {
     title: '', titleCn: '', description: '', descriptionCn: '',
-    location: '', locationCn: '', venueId: '', startAt: '', endAt: '',
+    venueId: '', roomIds: [], startAt: '', endAt: '',
     posterCredit: '', buyTicket: '', learnMore: '',
     customButtonText: '', customButtonTextCn: '', customButtonLink: '',
     paid: false,
@@ -113,9 +112,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
             titleCn: event.titleCn,
             description: event.description,
             descriptionCn: event.descriptionCn,
-            location: event.location,
-            locationCn: event.locationCn,
             venueId: event.venueId,
+            roomIds: event.roomIds,
             startAt: toDatetimeLocal(event.startAt),
             endAt: toDatetimeLocal(event.endAt),
             posterCredit: event.posterCredit,
@@ -147,8 +145,7 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
         // updated, so say how many will keep the old details.
         if (editingEvent?.paid && (
             form.title !== editingEvent.title || form.titleCn !== editingEvent.titleCn
-            || form.location !== editingEvent.location || form.locationCn !== editingEvent.locationCn
-            || form.venueId !== editingEvent.venueId
+            || form.venueId !== editingEvent.venueId || form.roomIds.join() !== editingEvent.roomIds.join()
             || startAt.getTime() !== editingEvent.startAt.getTime() || endAt.getTime() !== editingEvent.endAt.getTime()
         )) {
             const passCount = await getDoc(doc(getFirebaseDb(), 'upcomingEvents', editingEvent.id, 'settings', 'walletPass'))
@@ -187,9 +184,8 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                 titleCn: form.titleCn,
                 description: form.description,
                 descriptionCn: form.descriptionCn,
-                location: form.location,
-                locationCn: form.locationCn,
                 venueId: form.venueId,
+                roomIds: form.roomIds,
                 startAt: startAt.toISOString(),
                 endAt: endAt.toISOString(),
                 poster: posterUrl,
@@ -261,14 +257,10 @@ export const UpcomingEventsTab = forwardRef<UpcomingEventsTabHandle, UpcomingEve
                                         className="admin-input"
                                     />
                                 </label>
-                                <LocationFormField
-                                    value={form.location} valueCn={form.locationCn}
-                                    venueId={form.venueId}
-                                    onChange={v => setForm(f => ({...f, location: v}))}
-                                    onChangeCn={v => setForm(f => ({...f, locationCn: v}))}
-                                    onChangeVenueId={v => setForm(f => ({...f, venueId: v}))}
-                                    placeholder={isEnglish ? 'Event location' : '活动地点'}
-                                    placeholderCn={isEnglish ? 'Location in Chinese' : '中文地点'}
+                                <VenueFormField
+                                    value={form}
+                                    onChange={({venueId, roomIds}) => setForm(f => ({...f, venueId, roomIds}))}
+                                    location={editingEvent?.location} locationCn={editingEvent?.locationCn}
                                 />
                                 <ImageUploadField
                                     label="Poster Image" labelCn="海报图片"

@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '~/components/LanguageContextProvider';
 import { SITE_TIME_ZONE } from '~/lib/siteTime';
 import type { UpcomingEvent } from '~/lib/upcomingEvents';
-import { resolveVenueById, useVenues } from '~/lib/venues';
+import { eventLocationDisplay, useVenues } from '~/lib/venues';
 import { TICKET_TYPES, type TicketType, ticketTypeLabel } from './types';
 import { WALLET_COLOR_STYLES, WALLET_PASS_TOP_TEXT, type WalletPassSettings, walletTicketStyle, } from './walletPass';
 
@@ -27,8 +27,8 @@ export function WalletPassPreview({event, settings, contactEmail}: WalletPassPre
     const ticket = walletTicketStyle(type);
     const colors = WALLET_COLOR_STYLES[settings.color === 'auto' ? ticket.color : settings.color];
     const title = event.title.trim() || event.titleCn.trim() || 'Event';
-    const venue = resolveVenueById(event.venueId, venues);
-    const location = event.location.trim() || venue?.nameEn.trim() || event.locationCn.trim() || venue?.nameCn.trim();
+    // In English, falling back to the Chinese, as eventLocation on the server.
+    const location = eventLocationDisplay(event, venues, true) || eventLocationDisplay(event, venues, false);
     const date = event.startAt.toLocaleString('en-US', {
         timeZone: SITE_TIME_ZONE,
         year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',

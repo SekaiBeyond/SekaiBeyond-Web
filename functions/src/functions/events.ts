@@ -9,8 +9,10 @@ import {
     getEventDoc,
     readConInfo,
     requireConYearFree,
-    requireVenueExists,
+    requireVenueRooms,
+    roomIdsKept,
     validateConInput,
+    validateRoomIds,
     validateVenueId,
 } from "../utils/events";
 import { db } from "../utils/firebase";
@@ -109,6 +111,17 @@ export const onPastEventDeleted = onDocumentDeleted(
         }
     }
 );
+/**
+ * An event's location is its venue's name and rooms, so saves take no location
+ * text. The text an event has is what a deleted venue showed (deleteVenue) or a
+ * custom location from before venues set the location; the site shows it only
+ * while the event has no venue (eventLocationDisplay in app/lib/venues.ts).
+ */
+const NO_LOCATION_TEXT = {location: "", locationCn: ""};
+
+/** Picking a venue clears the text, which no longer shows; without one, it stays. */
+const locationTextUpdate = (venueId: string) => venueId ? NO_LOCATION_TEXT : {};
+
 export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const uid = await requireAuth(request, "staff");
 
@@ -118,9 +131,8 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const titleCn = validateStr(input.titleCn, "titleCn", 200);
     const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128).map(id => validateDocId(id, "tagId"));
     const date = validateDay(input.date, "date");
-    const location = validateStr(input.location, "location", 200);
-    const locationCn = validateStr(input.locationCn, "locationCn", 200);
     const venueId = validateVenueId(input.venueId);
+    const roomIds = validateRoomIds(input.roomIds, venueId);
     const description = validateStr(input.description, "description", 2000);
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const icon = validateStr(input.icon, "icon", 500);
@@ -132,31 +144,33 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const markedCon = validateConInput(input.con);
 
     const data = {
-        title, titleCn, tagIds, date, location, locationCn, venueId,
+        title, titleCn, tagIds, date, venueId,
         description, descriptionCn, icon, recapLink, recapLinkCn,
     };
     const docId = eventId ?? db.collection("pastEvents").doc().id;
 
     const {result, oldIcon} = await adminTransaction(uid, async (txn, callerSnap) => {
         let prevIcon = "";
+        let stored: FirebaseFirestore.DocumentData | undefined;
         if (eventId) {
             const existing = await txn.get(db.collection("pastEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
-            prevIcon = existing.data()?.icon ?? "";
+            stored = existing.data();
+            prevIcon = stored?.icon ?? "";
         }
         // The year follows the date, so moving a Con to another year moves it there.
         const con = markedCon ? conForDay(date) : null;
         if (con) await requireConYearFree(txn, con.year, docId);
-        await requireVenueExists(txn, venueId);
+        const venueRoomIds = await requireVenueRooms(txn, venueId, roomIds ?? roomIdsKept(stored, venueId));
         // A Con has no tags.
         const keptTagIds = con ? [] : await existingTagIds(txn, tagIds);
         await requireNewlyLinkedFilesExist([icon], [prevIcon]);
-        const saved = {...data, con, tagIds: keptTagIds};
+        const saved = {...data, roomIds: venueRoomIds, con, tagIds: keptTagIds};
         const ref = db.collection("pastEvents").doc(docId);
         if (eventId) {
-            txn.update(ref, saved);
+            txn.update(ref, {...saved, ...locationTextUpdate(venueId)});
         } else {
-            txn.set(ref, {...saved, published: false});
+            txn.set(ref, {...saved, ...NO_LOCATION_TEXT, published: false});
         }
         txn.set(recordRef(), recordDoc(eventId ? "event-edit" : "event-create", {
             performedBy: uid,
@@ -213,9 +227,8 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const titleCn = validateStr(input.titleCn, "titleCn", 200);
     const description = validateStr(input.description, "description", 2000);
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
-    const location = validateStr(input.location, "location", 200);
-    const locationCn = validateStr(input.locationCn, "locationCn", 200);
     const venueId = validateVenueId(input.venueId);
+    const roomIds = validateRoomIds(input.roomIds, venueId);
     const poster = validateStr(input.poster, "poster", 500);
     const emailHeaderBg = validateStr(input.emailHeaderBg, "emailHeaderBg", 500);
     const posterCredit = validateStr(input.posterCredit, "posterCredit", 200);
@@ -244,7 +257,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     }
 
     const data = {
-        title, titleCn, description, descriptionCn, location, locationCn, venueId,
+        title, titleCn, description, descriptionCn, venueId,
         startAt, endAt, poster, emailHeaderBg, posterCredit, buyTicket, learnMore,
         customButtonText, customButtonTextCn, customButtonLink, paid,
     };
@@ -254,9 +267,11 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         let prevPoster = "";
         let prevEmailHeaderBg = "";
         let wasPublished = false;
+        let stored: FirebaseFirestore.DocumentData | undefined;
         if (eventId) {
             const existing = await txn.get(db.collection("upcomingEvents").doc(eventId));
             if (!existing.exists) throw new HttpsError("not-found", "Event not found.");
+            stored = existing.data();
             prevPoster = existing.data()?.poster ?? "";
             prevEmailHeaderBg = existing.data()?.emailHeaderBg ?? "";
             wasPublished = existing.data()?.published ?? false;
@@ -264,7 +279,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         // The year is the start's, the day archiving gives it.
         const con = markedCon ? conForDay(siteDay(startAt.toMillis())) : null;
         if (con) await requireConYearFree(txn, con.year, docId);
-        await requireVenueExists(txn, venueId);
+        const venueRoomIds = await requireVenueRooms(txn, venueId, roomIds ?? roomIdsKept(stored, venueId));
         await requireNewlyLinkedFilesExist([poster, emailHeaderBg], [prevPoster, prevEmailHeaderBg]);
 
         // Paid events use tickets, so purge claim codes left from a free→paid
@@ -279,9 +294,14 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
 
         const ref = db.collection("upcomingEvents").doc(docId);
         if (eventId) {
-            txn.update(ref, {...data, con, published: wasPublished});
+            txn.update(ref, {
+                ...data, ...locationTextUpdate(venueId),
+                roomIds: venueRoomIds,
+                con,
+                published: wasPublished
+            });
         } else {
-            txn.set(ref, {...data, con, published: false});
+            txn.set(ref, {...data, ...NO_LOCATION_TEXT, roomIds: venueRoomIds, con, published: false});
         }
 
         for (const codeDoc of codesToDelete) {
@@ -514,6 +534,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             location: eventData.location ?? "",
             locationCn: eventData.locationCn ?? "",
             venueId: eventData.venueId ?? "",
+            roomIds: Array.isArray(eventData.roomIds) ? eventData.roomIds : [],
             description: eventData.description ?? "",
             descriptionCn: eventData.descriptionCn ?? "",
             // A Con keeps its poster, the home page's picture of that year;
