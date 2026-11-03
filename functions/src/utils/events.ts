@@ -1,5 +1,6 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { db } from "./firebase";
+import { validateDocId, validateStr } from "./validation";
 
 /**
  * An event's doc from whichever collection holds it: upcomingEvents, or
@@ -17,6 +18,40 @@ export async function getEventDoc(
         read(db.collection("pastEvents").doc(eventId)),
     ]);
     return upcoming.exists ? {snap: upcoming, archived: false} : {snap: past, archived: true};
+}
+
+/**
+ * `tagIds` without the ones whose tag is gone, so a tag deleted since the form
+ * loaded isn't saved back onto an event (deleteTag takes it off the events
+ * holding it). Reads in `txn`, so call it before the transaction's writes.
+ */
+export async function existingTagIds(
+    txn: FirebaseFirestore.Transaction,
+    tagIds: string[],
+): Promise<string[]> {
+    const unique = [...new Set(tagIds)];
+    if (unique.length === 0) return [];
+    const snaps = await txn.getAll(...unique.map(id => db.collection("eventLabels").doc(id)));
+    const found = new Set(snaps.filter(s => s.exists).map(s => s.id));
+    return unique.filter(id => found.has(id));
+}
+
+/** An event's `venueId` from a save: "" for none, else a venue's doc ID. */
+export function validateVenueId(raw: unknown): string {
+    const venueId = validateStr(raw, "venueId", 128);
+    return venueId ? validateDocId(venueId, "venueId") : "";
+}
+
+/**
+ * Refuses a venue that's gone, as one deleted since the form loaded
+ * (deleteVenue takes it off the events using it). "" is no venue. Reads in
+ * `txn`, so call it before the transaction's writes.
+ */
+export async function requireVenueExists(txn: FirebaseFirestore.Transaction, venueId: string): Promise<void> {
+    if (!venueId) return;
+    if (!(await txn.get(db.collection("venues").doc(venueId))).exists) {
+        throw new HttpsError("not-found", "That venue has been deleted. Reload and pick another.");
+    }
 }
 
 /**

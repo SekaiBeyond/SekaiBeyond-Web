@@ -145,10 +145,15 @@ export const deleteTag = onCall({maxInstances: 10}, async (request) => {
     const tagId = validateDocId((request.data as {tagId?: string})?.tagId, "tagId");
 
     return adminTransaction(uid, async (txn, callerSnap) => {
-        const tagSnap = await txn.get(db.collection("eventLabels").doc(tagId));
+        const tagRef = db.collection("eventLabels").doc(tagId);
+        const tagSnap = await txn.get(tagRef);
         if (!tagSnap.exists) throw new HttpsError("not-found", "Tag not found.");
+        // Off every event holding it, so none names a tag that's gone. Only
+        // past events have tags; an upcoming one gets them on archive.
+        const holding = await txn.get(db.collection("pastEvents").where("tagIds", "array-contains", tagId));
 
-        txn.delete(db.collection("eventLabels").doc(tagId));
+        txn.delete(tagRef);
+        for (const doc of holding.docs) txn.update(doc.ref, {tagIds: FieldValue.arrayRemove(tagId)});
         txn.set(recordRef(), recordDoc("tag-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",
@@ -915,10 +920,26 @@ export const deleteVenue = onCall({maxInstances: 10}, async (request) => {
     const venueId = validateDocId((request.data as {venueId?: string})?.venueId, "venueId");
 
     await adminTransaction(uid, async (txn, callerSnap) => {
-        const venueSnap = await txn.get(db.collection("venues").doc(venueId));
+        const venueRef = db.collection("venues").doc(venueId);
+        const venueSnap = await txn.get(venueRef);
         if (!venueSnap.exists) throw new HttpsError("not-found", "Venue not found.");
+        const using = await Promise.all(["upcomingEvents", "pastEvents"].map(col =>
+            txn.get(db.collection(col).where("venueId", "==", venueId))));
 
-        txn.delete(db.collection("venues").doc(venueId));
+        txn.delete(venueRef);
+        // Off every event set to it. Where an event had no location text in a
+        // language, it showed the venue's name (eventLocationDisplay in
+        // app/lib/venues.ts), so it keeps that name as its text.
+        const nameEn = String(venueSnap.data()?.nameEn ?? "");
+        const nameCn = String(venueSnap.data()?.nameCn ?? "");
+        for (const doc of using.flatMap(snap => snap.docs)) {
+            const update: Record<string, string> = {venueId: ""};
+            if (!String(doc.data().location ?? "").trim()) {
+                update.location = nameEn;
+                if (!String(doc.data().locationCn ?? "").trim()) update.locationCn = nameCn;
+            }
+            txn.update(doc.ref, update);
+        }
         txn.set(recordRef(), recordDoc("venue-delete", {
             performedBy: uid,
             performedByName: callerSnap.data()?.displayName ?? "",

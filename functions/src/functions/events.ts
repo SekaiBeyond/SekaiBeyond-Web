@@ -3,7 +3,16 @@ import { onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminTransaction, requireAdmin, requireAuth, requireCanManage } from "../utils/auth";
 import { cancelDeletion, type Deletable, requestDeletion } from "../utils/deletion";
-import { conForDay, getEventDoc, readConInfo, requireConYearFree, validateConInput } from "../utils/events";
+import {
+    conForDay,
+    existingTagIds,
+    getEventDoc,
+    readConInfo,
+    requireConYearFree,
+    requireVenueExists,
+    validateConInput,
+    validateVenueId,
+} from "../utils/events";
 import { db } from "../utils/firebase";
 import { commitInChunks } from "../utils/helpers";
 import { deleteStorageFile, logStorageCleanupError, requireNewlyLinkedFilesExist } from "../utils/storage";
@@ -107,11 +116,11 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
     const eventId = input.eventId ? validateDocId(input.eventId, "eventId") : null;
     const title = validateStr(input.title, "title", 200, true);
     const titleCn = validateStr(input.titleCn, "titleCn", 200);
-    const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128);
+    const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128).map(id => validateDocId(id, "tagId"));
     const date = validateDay(input.date, "date");
     const location = validateStr(input.location, "location", 200);
     const locationCn = validateStr(input.locationCn, "locationCn", 200);
-    const venueId = validateStr(input.venueId, "venueId", 128);
+    const venueId = validateVenueId(input.venueId);
     const description = validateStr(input.description, "description", 2000);
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const icon = validateStr(input.icon, "icon", 500);
@@ -138,9 +147,11 @@ export const savePastEvent = onCall({maxInstances: 10}, async (request) => {
         // The year follows the date, so moving a Con to another year moves it there.
         const con = markedCon ? conForDay(date) : null;
         if (con) await requireConYearFree(txn, con.year, docId);
-        await requireNewlyLinkedFilesExist([icon], [prevIcon]);
+        await requireVenueExists(txn, venueId);
         // A Con has no tags.
-        const saved = {...data, con, ...(con ? {tagIds: []} : {})};
+        const keptTagIds = con ? [] : await existingTagIds(txn, tagIds);
+        await requireNewlyLinkedFilesExist([icon], [prevIcon]);
+        const saved = {...data, con, tagIds: keptTagIds};
         const ref = db.collection("pastEvents").doc(docId);
         if (eventId) {
             txn.update(ref, saved);
@@ -204,7 +215,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
     const descriptionCn = validateStr(input.descriptionCn, "descriptionCn", 2000);
     const location = validateStr(input.location, "location", 200);
     const locationCn = validateStr(input.locationCn, "locationCn", 200);
-    const venueId = validateStr(input.venueId, "venueId", 128);
+    const venueId = validateVenueId(input.venueId);
     const poster = validateStr(input.poster, "poster", 500);
     const emailHeaderBg = validateStr(input.emailHeaderBg, "emailHeaderBg", 500);
     const posterCredit = validateStr(input.posterCredit, "posterCredit", 200);
@@ -253,6 +264,7 @@ export const saveUpcomingEvent = onCall({maxInstances: 10}, async (request) => {
         // The year is the start's, the day archiving gives it.
         const con = markedCon ? conForDay(siteDay(startAt.toMillis())) : null;
         if (con) await requireConYearFree(txn, con.year, docId);
+        await requireVenueExists(txn, venueId);
         await requireNewlyLinkedFilesExist([poster, emailHeaderBg], [prevPoster, prevEmailHeaderBg]);
 
         // Paid events use tickets, so purge claim codes left from a free→paid
@@ -436,7 +448,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
 
     const input = request.data as {eventId?: string; tagIds?: unknown};
     const eventId = validateDocId(input.eventId, "eventId");
-    const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128);
+    const tagIds = validateStringArray(input.tagIds, "tagIds", 20, 128).map(id => validateDocId(id, "tagId"));
     const newDocRef = db.collection("pastEvents").doc(eventId);
 
     // Phase A writes before Phase B's transaction checks the caller, so check
@@ -491,6 +503,9 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
         const startDate: Date = eventData.startAt?.toDate?.() ?? new Date();
         const dateStr = siteDay(startDate.getTime());
         const con = readConInfo(eventData.con);
+        // A Con has no tags. Any deleted since the dialog loaded are dropped,
+        // not refused: Phase A's copies are already made.
+        const keptTagIds = con ? [] : await existingTagIds(txn, tagIds);
 
         txn.set(newDocRef, {
             title: eventData.title ?? "",
@@ -504,8 +519,7 @@ export const archiveUpcomingEvent = onCall({maxInstances: 10}, async (request) =
             // A Con keeps its poster, the home page's picture of that year;
             // onUpcomingEventDeleted then leaves the file be.
             icon: con ? (eventData.poster ?? "") : "",
-            // A Con has no tags.
-            tagIds: con ? [] : tagIds,
+            tagIds: keptTagIds,
             con,
             published: false,
             // So the past-events panel shows the read-only Tickets/Stats view.

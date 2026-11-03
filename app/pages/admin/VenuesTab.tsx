@@ -77,12 +77,14 @@ const metersBetween = (a: {lat: number; lng: number}, b: {lat: number; lng: numb
 interface VenuesTabProps {
     venues: Venue[];
     refreshVenues: () => Promise<void>;
+    /** Reloads the event lists, whose events a deleted venue is taken off. */
+    refreshEvents: () => Promise<unknown>;
     showToast: ShowToast;
     readOnly?: boolean;
 }
 
 export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
-    {venues, refreshVenues, showToast, readOnly = false}, ref) => {
+    {venues, refreshVenues, refreshEvents, showToast, readOnly = false}, ref) => {
     const {isEnglish} = useLanguage();
     const {parking, refresh: refreshParking} = useUwParking();
     const {highlightedId, registerCard, highlight} = useCardHighlight();
@@ -165,13 +167,15 @@ export const VenuesTab = forwardRef<LocationListHandle, VenuesTabProps>((
 
     const deleteVenue = async (venue: Venue) => {
         if (!confirm(isEnglish
-            ? `Delete venue "${venue.nameEn}"? Events at this location will lose their parking guide.`
-            : `删除场地"${venue.nameEn}"？此场地的活动将失去停车指南。`
+            ? `Delete venue "${venue.nameEn}"? Events set to it will keep its name as their location text, but lose their parking guide.`
+            : `删除场地"${venue.nameEn}"？此场地的活动将以文字保留场地名称作为地点，但会失去停车指南。`
         )) return;
         setDeletingId(venue.id);
         try {
             await callDeleteVenue({venueId: venue.id});
             await afterSave();
+            // Their venue went with it, so the lists' copies are stale.
+            await refreshEvents().catch(() => undefined);
             if (editingId === venue.id) setEditingId(null);
             showToast(isEnglish ? 'Venue deleted.' : '场地已删除。', 'warning');
         } catch {

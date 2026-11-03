@@ -374,6 +374,7 @@ export const AdminPage = () => {
                                 ref={venuesTabRef}
                                 venues={venues}
                                 refreshVenues={refreshVenues}
+                                refreshEvents={() => Promise.all([refreshEvents(), refreshUpcoming()])}
                                 showToast={showToast}
                                 readOnly={isStaffGroup}
                             />

@@ -75,8 +75,8 @@ export const TagsTab = ({tags, refreshTags, showToast, readOnly = false}: TagsTa
 
     const deleteTag = async (tag: Tag) => {
         if (!confirm(isEnglish
-            ? `Delete tag "${tag.name}"? Events using this tag will show no tag.`
-            : `删除标签"${tag.name}"？使用此标签的活动将不显示标签。`
+            ? `Delete tag "${tag.name}"? It will be taken off every event that has it.`
+            : `删除标签"${tag.name}"？所有使用此标签的活动都将移除该标签。`
         )) return;
         setDeletingId(tag.id);
         try {
